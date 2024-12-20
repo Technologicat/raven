@@ -17,6 +17,8 @@
   - Vendor our fixed wosfile library?
   - `vis_data` should really be called `entries` everywhere in this app constellation, also in importers and in the preprocessor.
 
+- Investigate file dialog bug: dataset files show the modification date of their folder, not the actual file modification date.
+
 - Make the Refresh and Go back buttons of the file dialog flash when clicked, to indicate that the action did indeed take.
 
 - Word boundary mark (\b) for search.
