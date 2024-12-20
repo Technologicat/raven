@@ -83,13 +83,13 @@
     - Progress bar in DPG: https://github.com/my1e5/dpg-examples/blob/main/threading/progress_bar.py
 
 - **More import sources**.
- - We currently have:
-   - Web of Science (working).
-     - Fix a bug with character escapes that's currently breaking the import for one file in our test set.
-   - PDF conference abstracts (WIP, in beta).
-     - Improve robustness.
- - Could be useful:
-   - arXiv, to stay on top of developments in AI.
+  - We currently have:
+    - Web of Science (working).
+      - Fix a bug with character escapes that's currently breaking the import for one file in our test set.
+    - PDF conference abstracts (WIP, in beta).
+      - Improve robustness.
+  - Could be useful:
+    - arXiv, to stay on top of developments in AI.
 
 - **More flexible preprocessing**.
   - Rethink what our native input format should be. BibTeX is nice for research literature, but the Raven core could be applicable to so much more: patent databases, Wikipedia, news articles, arbitrary text files, Linux system logs, ...
