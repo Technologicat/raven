@@ -5106,7 +5106,7 @@ def make_help_window():
                 dpg_markdown.add_text(f"{c_dim}[Press Esc to close. For a handy reference, screenshot this!]{c_end}")
                 dpg.add_spacer(width=1, height=gui_config.font_size // 2)
 
-                # Table of hotkeys. Render the specified laydataset.
+                # Table of hotkeys. Render the specified layout.
                 with dpg.table(header_row=True, borders_innerV=True, sortable=False):
                     for _ in range(ncols):
                         dpg.add_table_column(label="Key or combination")  # key
