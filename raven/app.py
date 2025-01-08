@@ -931,6 +931,7 @@ class Animation:
 
         An `Animation` can be added to an `Animator`.
         """
+        super().__init__()
         # Keep this simple to avoid ravioli code.
         # `t0` should be pretty much the only attribute defined in the base class.
         self.reset()
@@ -980,6 +981,7 @@ class Overlay:
         `target`: DPG ID or tag. The child window for which to build the overlay.
         `tag`: DPG tag, for naming the overlay.
         """
+        super().__init__()
         # Keep this simple to avoid ravioli code.
         # `target`, `tag` and `overlay_update_lock` should be pretty much the only attributes defined in the base class.
         self.target = target
@@ -1404,6 +1406,8 @@ def hide_info_panel_dimmer_overlay():
     info_panel_dimmer_overlay.hide()
 
 
+# Inherit from `Overlay` first, so that `super().__init__(...)` passes its arguments where we want it to.
+# Then the `super().__init__()` call inside `Overlay.__init__` will initialize the `Animation` part.
 class ScrollEndFlasher(Overlay, Animation):
     def __init__(self, target, tag, duration):
         """Flasher to indicate when the end of a scrollable area has been reached.
