@@ -13,6 +13,8 @@ import psutil
 import platform
 from glob import glob
 
+from ... import animation
+
 
 class FileDialog:
     """
@@ -471,7 +473,7 @@ class FileDialog:
             if self.file_filter == ".*" or item.endswith(self.file_filter):
                 file_name = os.path.basename(item)
 
-                creation_time = os.path.getctime(item)
+                creation_time = os.path.getmtime(item)
                 creation_time = time.ctime(creation_time)
 
                 item_type = "File"
@@ -731,15 +733,32 @@ class FileDialog:
                     # main explorer header
                     with dpg.group():
                         with dpg.group(horizontal=True):
+                            button_refresh = dpg.add_image_button(self.img_refresh)
+                            button_goback = dpg.add_image_button(self.img_back)
                             def refresh():
                                 cwd = os.getcwd()
                                 logger.debug(f"refresh: refreshing at cwd = '{cwd}'")
                                 reset_dir(default_path=cwd)
+                                # Raven: Acknowledge the action in the GUI.
+                                animation.animator.add(animation.ButtonFlash(message="",
+                                                                             target_button=button_refresh,
+                                                                             target_tooltip=None,
+                                                                             target_text=None,
+                                                                             original_theme=dpg.get_item_theme(button_refresh),
+                                                                             duration=1.0))
                             def goback():
                                 logger.debug(f"goback: going back to default path '{self.default_path}'")
                                 chdir(self.default_path)
-                            dpg.add_image_button(self.img_refresh, callback=refresh)
-                            dpg.add_image_button(self.img_back, callback=goback)
+                                # Raven: Acknowledge the action in the GUI.
+                                animation.animator.add(animation.ButtonFlash(message="",
+                                                                             target_button=button_goback,
+                                                                             target_tooltip=None,
+                                                                             target_text=None,
+                                                                             original_theme=dpg.get_item_theme(button_goback),
+                                                                             duration=1.0))
+                            dpg.set_item_callback(button_refresh, refresh)
+                            dpg.set_item_callback(button_goback, goback)
+
                             dpg.add_input_text(hint="Path", on_enter=True, callback=on_path_enter, default_value=os.getcwd(), width=-1, tag="ex_path_input")
 
                         with dpg.group(horizontal=True):

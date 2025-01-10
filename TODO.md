@@ -6,20 +6,8 @@
 *Preliminary plan, not final. Details may change.*
 
 - Improve codebase maintainability:
-  - Move the reusable animation components into their own module.
-  - Move the background task manager into its own module.
-  - The "General utilities" section could live in a separate module
-  - Other generic utilities:
-    - `compute_tooltip_position_scalar`
-    - `_mouse_inside_widget`
-  - `binary_search_item` and its friends could live in a separate module
-  - Plotter utilities: `get_pixels_per_plotter_data_unit`, `get_data_idxs_at_mouse` (though the second one needs the KDtree, so maybe not that?)
   - Vendor our fixed wosfile library?
   - `vis_data` should really be called `entries` everywhere in this app constellation, also in importers and in the preprocessor.
-
-- Investigate file dialog bug: dataset files show the modification date of their folder, not the actual file modification date.
-
-- Make the Refresh and Go back buttons of the file dialog flash when clicked, to indicate that the action did indeed take.
 
 - Word boundary mark (\b) for search.
 
@@ -33,6 +21,21 @@
 ## v0.2 and later
 
 ### Large new features
+
+- **Integrated preprocessor**. Access the preprocessor from the GUI app, to quickly import small datasets with minimal fuss.
+  - APIfy the preprocessor. Make it callable from the GUI app.
+  - Make the preprocessor run in a background thread/process, to allow the user to explore previous existing datasets in the GUI while the preprocess is running. Notify when complete.
+  - While a preprocess is running, show a progress bar in the GUI.
+    - Progress bar in DPG: https://github.com/my1e5/dpg-examples/blob/main/threading/progress_bar.py
+
+- **More import sources**.
+  - We currently have:
+    - Web of Science (working).
+      - Fix a bug with character escapes that's currently breaking the import for one file in our test set.
+    - PDF conference abstracts (WIP, in beta).
+      - Improve robustness.
+  - Could be useful:
+    - arXiv, to stay on top of developments in AI.
 
 - **Filtering**. Real-time view filtering, e.g. by authors or year range.
   - Needs the full list of authors ("Author, Other, Someone"), not just the summarized version ("Author et al."). The proprocessor doesn't currently save that to the dataset.
@@ -55,6 +58,12 @@
     - Convert selection to filter
       - Needs some thinking how to display the result in the GUI; an arbitrary selection is not a year-range filter.
 
+- **AI summarize**: call an LLM to generate a summary report of items currently shown in info panel (or of the full selection).
+  - Preprocess the per-datapoint summarization.
+    - Condense each abstract into one sentence with just the most important main point.
+    - Is it better to make abstractive summaries with an LLM, or a summarization-specific AI?
+    - To evaluate summary accuracy, `seahorse-large` based on `mT5-Large` (6 models, 5 GB each)? https://github.com/google-research-datasets/seahorse
+
 - **Extend existing dataset**.
   - Two separate new features:
      - 1) Update an existing semantic map, adding new datapoints to it (easy to implement).
@@ -69,27 +78,6 @@
      - 2) Comparative analysis between datasets on the same topic (maybe more difficult).
           - E.g. see how the set of studies from one's own research group locates itself in the wider field of science.
           - This requires using two or more different color schemes in the plotter simultaneously. Also, which dataset should go on top (more visible)?
-
-- **AI summarize**: call an LLM to generate a summary report of items currently shown in info panel (or of the full selection).
-  - Preprocess the per-datapoint summarization.
-    - Condense each abstract into one sentence with just the most important main point.
-    - Is it better to make abstractive summaries with an LLM, or a summarization-specific AI?
-    - To evaluate summary accuracy, `seahorse-large` based on `mT5-Large` (6 models, 5 GB each)? https://github.com/google-research-datasets/seahorse
-
-- **Integrated preprocessor**. Access the preprocessor from the GUI app, to quickly import small datasets with minimal fuss.
-  - APIfy the preprocessor. Make it callable from the GUI app.
-  - Make the preprocessor run in a background thread/process, to allow the user to explore previous existing datasets in the GUI while the preprocess is running. Notify when complete.
-  - While a preprocess is running, show a progress bar in the GUI.
-    - Progress bar in DPG: https://github.com/my1e5/dpg-examples/blob/main/threading/progress_bar.py
-
-- **More import sources**.
-  - We currently have:
-    - Web of Science (working).
-      - Fix a bug with character escapes that's currently breaking the import for one file in our test set.
-    - PDF conference abstracts (WIP, in beta).
-      - Improve robustness.
-  - Could be useful:
-    - arXiv, to stay on top of developments in AI.
 
 - **More flexible preprocessing**.
   - Rethink what our native input format should be. BibTeX is nice for research literature, but the Raven core could be applicable to so much more: patent databases, Wikipedia, news articles, arbitrary text files, Linux system logs, ...
@@ -116,6 +104,10 @@
 ### Small improvements
 
 - Publish a ready-made dataset to allow users to quickly try out the tool, e.g. AI papers from arXiv.
+
+- Find a good font for rendering scientific Unicode text.
+  - InterTight renders subscript numbers as superscript numbers, which breaks the rendering of chemistry formulas.
+  - OpenSans is missing the subscript-x glyph, which also breaks the rendering of chemistry formulas (e.g. "NOₓ").
 
 - Fragment search for authors, year, abstract, ...so maybe make configurable which fields to search in. Add checkboxes (and a select/unselect all button) below the search bar?
 

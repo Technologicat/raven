@@ -31,7 +31,10 @@ class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?
         return any(f.filter(record) for f in self.filters)
 for handler in logging.root.handlers:
     handler.addFilter(UnionFilter(logging.Filter(__name__),
-                                  logging.Filter("file_dialog.fdialog")))
+                                  logging.Filter("raven.animation"),
+                                  logging.Filter("raven.bgtask"),
+                                  logging.Filter("raven.utils"),
+                                  logging.Filter("raven.vendor.file_dialog.fdialog")))
 
 logger.info(f"Raven version {__version__} starting.")
 
@@ -47,14 +50,10 @@ with timer() as tim:
     import itertools
     import math
     import os
-    import pathlib
     import pickle
     import re
     import threading
     import time
-    import traceback
-    import unicodedata
-    import warnings
 
     import numpy as np
 
@@ -66,7 +65,7 @@ with timer() as tim:
 
     from unpythonic.env import env
     envcls = env  # for functions that need an `env` parameter due to `@dlet`, so that they can also instantiate env objects (oops)
-    from unpythonic import window, dlet, call, box, unbox, sym, gensym, islice
+    from unpythonic import window, dlet, call, box, unbox, sym, islice
 
     import dearpygui.dearpygui as dpg
 
@@ -74,142 +73,24 @@ with timer() as tim:
     from .vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
     from .vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     from .vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
+
+    from . import animation
+    from . import bgtask
+    from .config import gui_config
+    from . import utils
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
-from . import config
-
-# TODO: Section this into subnamespaces?
-gui_config = env(  # ----------------------------------------
-                 # GUI element sizes, in pixels.
-                 main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
-                 help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
-                 info_panel_w=600,
-                 info_panel_header_h=40,  # The title section and the navigation controls section both have this height.
-                 title_wrap_w=500,  # Note there will be two columns of buttons to the left of each item title.
-                 main_text_wrap_w=540,  # For wrapping the abstract.
-                 info_panel_reserved_h=230,  # In the left part of the app window, how much vertical space to leave to GUI elements *other than* the item info content area.
-                 toolbar_inner_w=36,  # Width of the content area of the "Tools" toolbar.
-                 toolbar_separator_h=12,  # Height of a section separator spacer in the toolbar.
-                 toolbutton_w=30,  # Width of a toolbutton in the "Tools" toolbar.
-                 toolbutton_indent=None,  # The default `None` means "centered" (the value is then computed and stored while setting up the GUI).
-                 info_panel_button_w=26,  # Width of the inline buttons in the info panel. Same width as a DPG arrow button so all buttons align properly.
-                 annotation_tooltip_w=800,  # Just the width; height is automatic depending on content.
-                 font_size=20,  # Also in pixels.
-                 # ----------------------------------------
-                 # Animations
-                 n_many_searchresults=200,  # Number of data points to reach minimum per-datapoint glow highlight brightness for search results.
-                 n_many_selection=30,  # Number of data points to reach minimum per-datapoint glow highlight brightness for selection.
-                 glow_cycle_duration=2.0,  # seconds, for glow animations.
-                 acknowledgment_duration=1.0,  # seconds, for button flashes upon clicking/hotkey.
-                 scroll_ends_here_duration=0.5,  # seconds, for scrolling-past-end animation fadeout.
-                 smooth_scrolling=True,  # whether to animate scrolling (all info panel scrolling, except scrollbar and mouse wheel, which are handled internally by DPG)
-                 smooth_scrolling_step_parameter=0.8,  # Essentially, a nondimensional rate in the half-open interval (0, 1]; see math comment after `SmoothScrolling`.
-                 # ----------------------------------------
-                 # Mouse
-                 selection_brush_radius_pixels=10,
-                 datapoints_at_mouse_max_neighbors=100,  # affects performance
-                 # ----------------------------------------
-                 # Max numbers of dynamic stuff to put into GUI.
-                 # Approximate; we always show at least one item per cluster.
-                 max_titles_in_tooltip=10,
-                 max_items_in_info_panel=100)
-
 # --------------------------------------------------------------------------------
-# General utilities
+# Utilities for working with the plotter
 
-def clamp(x, ell=0.0, u=1.0):  # not the manga studio
-    """Clamp value `x` between `ell` and `u`. Return clamped value."""
-    return min(max(ell, x), u)
+def get_visible_datapoints():
+    """Return a list of all data points (indices to `sorted_xxx`) currently visible in the plotter."""
+    global dataset  # only for documenting intent (we don't write to it)
+    if dataset is None:  # nothing plotted when no dataset loaded
+        return utils.make_blank_index_array()
 
-def nonanalytic_smooth_transition(x, m=1.0):  # extrafeathers.pdes.numutil
-    """Non-analytic smooth transition from 0 to 1, on interval x ∈ [0, 1].
-
-    The transition is reflection-symmetric through the point (1/2, 1/2).
-
-    Outside the interval:
-        s(x, m) = 0  for x < 0
-        s(x, m) = 1  for x > 1
-
-    The parameter `m` controls the steepness of the transition region.
-    Larger `m` packs the transition closer to `x = 1/2`, making it
-    more abrupt (although technically, still infinitely smooth).
-
-    `m` is passed to `psi`, which see.
-    """
-    p = psi(x, m)
-    return p / (p + psi(1.0 - x, m))
-
-def psi(x, m=1.0):  # extrafeathers.pdes.numutil
-    """Building block for non-analytic smooth functions.
-
-        psi(x, m) := exp(-1 / x^m) χ(0, ∞)(x)
-
-    where χ is the indicator function (1 if x is in the set, 0 otherwise).
-
-    Suppresses divide by zero warnings and errors, so can be evaluated
-    also at `x = 0`.
-
-    This is the helper function used in the construction of the standard
-    mollifier in PDE theory.
-    """
-    with warnings.catch_warnings():  # for NumPy arrays
-        warnings.filterwarnings(action="ignore",
-                                message="^divide by zero .*$",
-                                category=RuntimeWarning,
-                                module="__main__")
-        try:
-            return np.exp(-1.0 / x**m) * (x > 0.0)
-        except ZeroDivisionError:  # for scalar x
-            return 0.0
-
-def make_blank_index_array():
-    """Make a blank array of the same type as that used for slicing an array in NumPy."""
-    return np.array([], dtype=np.int64)
-
-def normalize_string(s):
-    """Normalize a string for searching.
-
-    This converts subscripts and superscripts into their regular equivalents.
-    """
-    s = " ".join(unicodedata.normalize("NFKC", s).strip().split())
-    for k, v in config.subscript_to_regular.items():
-        s = s.replace(k, v)
-    for k, v in config.superscript_to_regular.items():
-        s = s.replace(k, v)
-    return s
-
-def search_string_to_fragments(s):
-    """Convert search string `s` into `(case_sensitive_fragments, case_insensitive_fragments)`.
-
-    Incremental fragment search, like in Emacs HELM (or in Firefox address bar):
-      - "cat photo" matches "photocatalytic".
-      - Lowercase search term means case-insensitive for that term (handled in functions
-        that perform search, such as `update_search` and `update_info_panel`).
-    """
-    search_terms = [normalize_string(x.strip()) for x in s.split()]
-    is_case_sensitive = [x.lower() != x for x in search_terms]
-    case_sensitive_fragments = [x for x, sens in zip(search_terms, is_case_sensitive) if sens]
-    case_insensitive_fragments = [x for x, sens in zip(search_terms, is_case_sensitive) if not sens]
-    return case_sensitive_fragments, case_insensitive_fragments
-
-def get_main_window_size():
-    """Return `(width, height), the size of the main window (and thus also the viewport), in pixels.`"""
-    config = dpg.get_item_configuration(main_window)
-    w = config["width"]
-    h = config["height"]
-    return w, h
-
-def has_child_items(item):
-    """Return whether DPG item `item` has child items in any of its slots."""
-    for slot in range(4):
-        if len(dpg.get_item_children(item, slot=slot)):
-            return True
-    return False
-
-def get_visible_datapoints():  # for `sorted_xxx`, see further below
-    """Return indices (in `sorted_xxx`) of all datapoints currently visible in the plotter."""
-    xmin, xmax = dpg.get_axis_limits("axis0")  # in data space
-    ymin, ymax = dpg.get_axis_limits("axis1")  # in data space
+    xmin, xmax = dpg.get_axis_limits("axis0")  # in data space  # tag
+    ymin, ymax = dpg.get_axis_limits("axis1")  # in data space  # tag
     filtxmin = dataset.sorted_lowdim_data[:, 0] >= xmin
     filtxmax = dataset.sorted_lowdim_data[:, 0] <= xmax
     filtx = filtxmin * filtxmax
@@ -219,10 +100,50 @@ def get_visible_datapoints():  # for `sorted_xxx`, see further below
     filt = filtx * filty
     return np.where(filt)[0]
 
+def get_data_idxs_at_mouse():
+    """Return a list of data points (indices to `sorted_xxx`) that are currently under the mouse cursor."""
+    global dataset  # only for documenting intent (we don't write to it)
+    if dataset is None:  # nothing plotted when no dataset loaded
+        return utils.make_blank_index_array()
+    pixels_per_data_unit_x, pixels_per_data_unit_y = utils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
+    if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:
+        return utils.make_blank_index_array()
+
+    # FIXME: DPG BUG WORKAROUND: when not initialized yet, `get_plot_mouse_pos` returns `[0, 0]`.
+    # This happens especially if the mouse cursor starts outside the plot area when the app starts.
+    # For many t-SNE plots, there are likely some data points near the origin.
+    p = np.array(dpg.get_plot_mouse_pos())
+    first_time = (p == np.array([0.0, 0.0])).all()  # exactly zero - unlikely to happen otherwise (since we likely get asymmetric axis limits from t-SNE)
+    if first_time:
+        return utils.make_blank_index_array()
+
+    # Find `k` data points nearest to the mouse cursor.
+    # Since the plot aspect ratio is not necessarily square, we need x/y distances separately to judge the pixel distance.
+    # Hence the data space distances the `kdtree` gives us are not meaningful for our purposes.
+    data_space_distances_, data_idxs = dataset.kdtree.query(p, k=gui_config.datapoints_at_mouse_max_neighbors)  # `data_idxs`: item indices into `sorted_xxx`
+
+    # Compute pixel distance, from mouse cursor, of each matched data point.
+    deltas = dataset.sorted_lowdim_data[data_idxs, :] - p  # Distances from mouse cursor in data space, tensor of shape [k, 2].
+    deltas[:, 0] *= pixels_per_data_unit_x  # pixel distance, x
+    deltas[:, 1] *= pixels_per_data_unit_y  # pixel distance, y
+    pixel_distance = (deltas[:, 0]**2 + deltas[:, 1]**2)**0.5
+
+    # Filter for data points within the maximum allowed pixel distance (selection brush size).
+    filt = (pixel_distance <= gui_config.selection_brush_radius_pixels)
+
+    # logger.debug(f"get_data_idxs_at_mouse: p = {p}, data_idxs[filt] = {data_idxs[filt]}, pixel_distance = {pixel_distance[filt]}")
+
+    return data_idxs[filt]
+
+def reset_plotter_zoom():
+    """Reset the plotter's zoom level to show all data."""
+    dpg.fit_axis_data("axis0")  # tag
+    dpg.fit_axis_data("axis1")  # tag
+
 # --------------------------------------------------------------------------------
 # Selection management (related to datapoints in the plotter)
 
-def reset_undo_history(_update_gui=True):
+def reset_undo_history(_update_gui=True):  # This creates the global variables.
     """Reset the selection undo history. Used when loading a new dataset.
 
     `_update_gui`: internal, used during app initialization.
@@ -233,7 +154,7 @@ def reset_undo_history(_update_gui=True):
     global selection_undo_pos
     global selection_changed
     global selection_anchor_data_idxs_set
-    selection_data_idxs_box = box(make_blank_index_array())
+    selection_data_idxs_box = box(utils.make_blank_index_array())
     selection_undo_stack = [unbox(selection_data_idxs_box)]
     selection_undo_pos = 0
     selection_changed = False  # ...after last completed info panel update (that was finalized); used for scroll anchoring
@@ -426,7 +347,7 @@ def update_selection_highlight():
         dpg.set_value("my_selection_scatter_series", [[], []])  # tag
 
 def keyboard_state_to_selection_mode():
-    """Map current keyboard modifier state (Shift, Ctrl) to selection mode (replace, add, subtract).
+    """Map current keyboard modifier state (Shift, Ctrl) to selection mode (replace, add, subtract, intersect).
 
     Helper for features that call `update_selection`.
     """
@@ -462,7 +383,7 @@ def exit_modal_mode():
     """
     logger.debug("exit_modal_mode: App returning to main window mode.")
     dpg.split_frame()
-    _info_panel_scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` re-enables its highlight
+    _info_panel_scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` enables its highlight
     update_mouse_hover(force=True, wait=False)  # show annotation if relevant
 
 def is_any_modal_window_visible():
@@ -475,57 +396,24 @@ def is_any_modal_window_visible():
 # --------------------------------------------------------------------------------
 # Set up DPG - basic startup, load fonts, set up global theme
 
-# We do this as early as possible, because before the startup is complete,
-# trying to `dpg.add_xxx` or `with dpg.xxx:` anything will segfault the app.
-
-def setup_font_ranges():
-    """Set up special characters for a font.
-
-    The price of GPU-accelerated rendering - font textures. In DPG, only Latin is enabled by default.
-    We add anything that `extract.py` may introduce from its LaTeX and HTML conversions.
-    """
-    # # Maybe just this?
-    # dpg.add_font_range(0x300, 0x2fff)
-    # return
-
-    dpg.add_font_range_hint(dpg.mvFontRangeHint_Default)
-    # Greek for math
-    dpg.add_font_range(0x370, 0x3ff)
-    # subscripts
-    dpg.add_font_range(0x2080, 0x2089)  # zero through nine
-    dpg.add_font_range(0x1d62, 0x1d65)  # i, r, u, v
-    dpg.add_font_range(0x2090, 0x209c)  # a, e, o, x, schwa, h, k, l, m, n, p, s, t
-    dpg.add_font_range(0x1d66, 0x1d6a)  # β, γ, ρ, φ, χ
-    dpg.add_font_range(0x208a, 0x208e)  # +, -, =, (, )
-    dpg.add_font_chars([0x2c7c])  # j
-    # superscripts
-    dpg.add_font_chars([0x2070, 0x00b9, 0x00b2, 0x00b3, 0x2074, 0x2075, 0x2076, 0x2077, 0x2078, 0x2079])  # zero through nine
-    dpg.add_font_chars([0x2071, 0x207f])  # i, n
-    dpg.add_font_range(0x207a, 0x207e)  # +, -, =, (, )
-
-def markdown_add_font_callback(file, size: int | float, parent=0, **kwargs) -> int:  # IMPORTANT: parameter names as in `dpg_markdown`, arguments are sent in by name.
-    """dpg_markdown callback to load a font. Called whenever a new font size or family is needed."""
-    if not isinstance(size, (int, float)):
-        raise ValueError(f"markdown_add_font_callback: `size`: expected `int` or `float`, got `{type(size)}`")
-    with dpg.font(file, size, parent=parent, **kwargs) as font:
-        setup_font_ranges()
-    return font
+# We do this as early as possible, because before the startup is complete, trying to `dpg.add_xxx` or `with dpg.xxx:` anything will segfault the app.
 
 logger.info("DPG bootup...")
 with timer() as tim:
     dpg.create_context()
 
-    # Initialize fonts. Must be done after `dpg.create_context`.
+    # Initialize fonts. Must be done after `dpg.create_context`, or the app will just segfault at startup.
     # https://dearpygui.readthedocs.io/en/latest/documentation/fonts.html
     with dpg.font_registry() as the_font_registry:
         # Change the default font to something that looks clean and has good on-screen readability.
         # https://fonts.google.com/specimen/Open+Sans
         with dpg.font(os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Regular.ttf"),
                       gui_config.font_size) as default_font:
-            setup_font_ranges()
+            utils.setup_font_ranges()
         dpg.bind_font(default_font)
 
         # FontAwesome 6 for symbols (toolbar button icons etc.).
+        # We bind this font to individual GUI widgets as needed.
         with dpg.font(os.path.join(os.path.dirname(__file__), "fonts", fa.FONT_ICON_FILE_NAME_FAR),
                       gui_config.font_size) as icon_font_regular:
             dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
@@ -534,24 +422,9 @@ with timer() as tim:
             dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
 
     # Configure fonts for the Markdown renderer.
-    # https://github.com/IvanNazaruk/DearPyGui-Markdown
-    # https://fonts.google.com/specimen/Inter+Tight
-    dpg_markdown.set_font_registry(the_font_registry)
-    dpg_markdown.set_add_font_function(markdown_add_font_callback)
-    # TODO: Find the best font for rendering scientific Unicode text.
-    #   - InterTight renders subscript numbers as superscript numbers, which breaks the rendering of chemistry formulas.
-    #   - OpenSans is missing the subscript-x glyph, which also breaks the rendering of chemistry formulas.
-    # dpg_markdown.set_font(font_size=gui_config.font_size,
-    #                       default=os.path.join(os.path.dirname(__file__), "fonts", "InterTight-Regular.ttf"),
-    #                       bold=os.path.join(os.path.dirname(__file__), "fonts", "InterTight-Bold.ttf"),
-    #                       italic=os.path.join(os.path.dirname(__file__), "fonts", "InterTight-Italic.ttf"),
-    #                       italic_bold=os.path.join(os.path.dirname(__file__), "fonts", "InterTight-BoldItalic.ttf"))
-    dpg_markdown.set_font(font_size=gui_config.font_size,
-                          default=os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Regular.ttf"),
-                          bold=os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Bold.ttf"),
-                          italic=os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Italic.ttf"),
-                          italic_bold=os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-BoldItalic.ttf"))
-    # USAGE: dpg_markdown.add_text(some_markdown_string)
+    #     https://github.com/IvanNazaruk/DearPyGui-Markdown
+    #
+    # USAGE: `dpg_markdown.add_text(some_markdown_string)`
     #
     # For font color/size, use these syntaxes:
     #     <font color="(255, 0, 0)">Test</font>
@@ -559,6 +432,27 @@ with timer() as tim:
     #     <font size="50">Test</font>
     #     <font size=50>Test</font>
     # color/size can be used in the same font tag.
+    #
+    # The first use (during an app session) of a particular font size/family loads the font into the renderer.
+    #
+    # During app startup (first frame?), don't call `dpg_markdown.add_text` more than once, or it'll crash the app (some kind of race condition in font loading?).
+    # After the app has started, it's fine to call it as often as needed.
+    #
+    dpg_markdown.set_font_registry(the_font_registry)
+    dpg_markdown.set_add_font_function(utils.markdown_add_font_callback)
+    # Set a font that renders scientific Unicode text acceptably.
+    # # https://fonts.google.com/specimen/Inter+Tight
+    # dpg_markdown.set_font(font_size=gui_config.font_size,
+    #                       default=os.path.join(os.path.dirname(__file__), "fonts", "InterTight-Regular.ttf"),
+    #                       bold=os.path.join(os.path.dirname(__file__), "fonts", "InterTight-Bold.ttf"),
+    #                       italic=os.path.join(os.path.dirname(__file__), "fonts", "InterTight-Italic.ttf"),
+    #                       italic_bold=os.path.join(os.path.dirname(__file__), "fonts", "InterTight-BoldItalic.ttf"))
+    # https://fonts.google.com/specimen/Open+Sans
+    dpg_markdown.set_font(font_size=gui_config.font_size,
+                          default=os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Regular.ttf"),
+                          bold=os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Bold.ttf"),
+                          italic=os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Italic.ttf"),
+                          italic_bold=os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-BoldItalic.ttf"))
 
     # Modify global theme
     with dpg.theme() as global_theme:
@@ -602,15 +496,11 @@ logger.info(f"    Done in {tim.dt:0.6g}s.")
 # --------------------------------------------------------------------------------
 # Dataset loading
 
-dataset = None  # currently loaded dataset (as an `unpythonic.env`)
-dynamically_created_cluster_color_coding_themes = []  # for cleaning them up when another dataset is loaded
+dataset = None  # currently loaded dataset (as an `unpythonic.env.env`)
+dynamically_created_cluster_color_coding_themes = []  # for cleaning up old cluster coloring themes when another dataset is loaded
 
-def _to_absolute(filename):
-    """Convert `filename` to an absolute filename."""
-    return str(pathlib.Path(filename).expanduser().resolve())
-
-def _read_pickle(filename):
-    """Load a visualization dataset. Low-level helper."""
+def _read_dataset_file(filename):
+    """Load a dataset file. Low-level helper."""
     with open(filename, "rb") as visdata_file:
         data = pickle.load(visdata_file)
     if data["version"] != 1:
@@ -623,21 +513,24 @@ def parse_dataset_file(filename):
     Returns a dataset: `unpythonic.env` with the datafile contents, and some preprocessed fields to facilitate visualization.
     """
     dataset = env()
-    absolute_filename = _to_absolute(filename)
+    absolute_filename = utils.absolutize_filename(filename)
     dataset.filename = filename
     dataset.absolute_filename = absolute_filename
 
     logger.info(f"Reading visualization dataset '{filename}' (resolved to '{absolute_filename}')...")
     with timer() as tim:
-        dataset.file_content = _read_pickle(absolute_filename)
+        dataset.file_content = _read_dataset_file(absolute_filename)
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
-    # In DPG, one scatter series has only a single global color, which for our application is unfortunate.
+    # In DPG (as of this writing, DPG v2.0), one scatter series has only a single global color.
     #
     # To color the data by cluster ID, we create a separate scatter plot for each cluster.
     # Fortunately, DPG is fast enough that it can render hundreds of scatter plots in realtime.
     #
     # For this we need to sort the data by label (cluster ID).
+    #
+    # An easy way is to argsort the labels and make a copy of the data, so we get logically contiguous blocks
+    # of data for each label. The O(n log(n)) sorting cost upon dataset loading is cheap enough.
     #
     logger.info("Sorting data by cluster...")
     with timer() as tim:  # set up `sorted_xxx`
@@ -650,7 +543,7 @@ def parse_dataset_file(filename):
             # Compute normalized titles for searching, and insert a reverse lookup for the item's index in `sorted_xxx`.
             for data_idx, entry in enumerate(dataset.sorted_entries):
                 entry.data_idx = data_idx  # index to `sorted_xxx`
-                entry.normalized_title = normalize_string(entry.title.strip())  # for searching
+                entry.normalized_title = utils.normalize_string(entry.title.strip())  # for searching
 
         # for k, v in dataset.sorted_entries[0].items():  # DEBUG: print one input data record (it's a dict)
         #     print(f"{k}: {v}")
@@ -702,18 +595,18 @@ def reset_app_state(_update_gui=True):
     clear_background_tasks()
 
     # Stop animations
-    animator.clear()
-
-    # These should always be present in the animator.
-    # These monitor the app state and live-update at every frame.
-    animator.add(PlotterPulsatingGlow(cycle_duration=gui_config.glow_cycle_duration))
-    animator.add(CurrentItemControlsGlow(cycle_duration=gui_config.glow_cycle_duration))
+    animation.animator.clear()
 
     # Only update the GUI elements if not exiting, because when exiting, the GUI is already being deleted.
     if _update_gui:
+        # Re-add the background animations that should always be present in the animator.
+        # These monitor the app state and live-update at every frame.
+        animation.animator.add(PlotterPulsatingGlow(cycle_duration=gui_config.glow_cycle_duration))
+        animation.animator.add(CurrentItemControlsGlow(cycle_duration=gui_config.glow_cycle_duration))
+
         # Clear undo history and selection
         reset_undo_history()
-        update_selection(make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
+        update_selection(utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
 
         # Clear the search
         dpg.set_value("search_field", "")  # tag
@@ -730,11 +623,6 @@ def reset_app_state(_update_gui=True):
             dpg.delete_item(theme)
 
         dpg.set_item_label("plot", "Semantic map [no dataset loaded]")  # tag  # TODO: DRY duplicate definitions for labels
-
-def reset_plotter_zoom():
-    """Reset the plotter's zoom level to show all data."""
-    dpg.fit_axis_data("axis0")  # tag
-    dpg.fit_axis_data("axis1")  # tag
 
 def load_data_into_plotter(dataset):
     """Load `dataset` (see `parse_dataset_file`) to the plotter.
@@ -753,12 +641,36 @@ def load_data_into_plotter(dataset):
 
         max_label = dataset.sorted_labels[-1]  # The labels have been sorted in ascending order so the largest one is last.
         for label, xs, ys in datas:
-            # Render the series, placing it before the first highlight series so that all highlights render on top.
-            series_tag = f"my_scatter_series_{label}"
-            dpg.add_scatter_series(xs, ys, tag=series_tag, parent="axis1", before="my_mouse_hover_scatter_series")  # tag
-
+            series_tag = f"my_scatter_series_{label}"  # tag
             series_theme = f"my_plot_theme_{label}"  # tag
-            color = dpg.sample_colormap(dpg.mvPlotColormap_Viridis, t=(label + 1) / (max_label + 1))
+            colormap = dpg.mvPlotColormap_Viridis
+
+            # Colormaps provided by DPG:
+            #     https://dearpygui.readthedocs.io/en/1.x/_modules/dearpygui/dearpygui.html?highlight=colormap#
+            #
+            # From section "Constants":
+            #     mvPlotColormap_Default=internal_dpg.mvPlotColormap_Default
+            #     mvPlotColormap_Deep=internal_dpg.mvPlotColormap_Deep
+            #     mvPlotColormap_Dark=internal_dpg.mvPlotColormap_Dark
+            #     mvPlotColormap_Pastel=internal_dpg.mvPlotColormap_Pastel
+            #     mvPlotColormap_Paired=internal_dpg.mvPlotColormap_Paired
+            #     mvPlotColormap_Viridis=internal_dpg.mvPlotColormap_Viridis
+            #     mvPlotColormap_Plasma=internal_dpg.mvPlotColormap_Plasma
+            #     mvPlotColormap_Hot=internal_dpg.mvPlotColormap_Hot
+            #     mvPlotColormap_Cool=internal_dpg.mvPlotColormap_Cool
+            #     mvPlotColormap_Pink=internal_dpg.mvPlotColormap_Pink
+            #     mvPlotColormap_Jet=internal_dpg.mvPlotColormap_Jet
+            #     mvPlotColormap_Twilight=internal_dpg.mvPlotColormap_Twilight
+            #     mvPlotColormap_RdBu=internal_dpg.mvPlotColormap_RdBu
+            #     mvPlotColormap_BrBG=internal_dpg.mvPlotColormap_BrBG
+            #     mvPlotColormap_PiYG=internal_dpg.mvPlotColormap_PiYG
+            #     mvPlotColormap_Spectral=internal_dpg.mvPlotColormap_Spectral
+            #     mvPlotColormap_Greys=internal_dpg.mvPlotColormap_Greys
+
+            # Render the series, placing it before the first highlight series so that all highlights render on top.
+            dpg.add_scatter_series(xs, ys, tag=series_tag, parent="axis1", before="my_mouse_hover_scatter_series")  # tag
+            # https://dearpygui.readthedocs.io/en/1.x/reference/dearpygui.html?highlight=colormap#dearpygui.dearpygui.sample_colormap
+            color = dpg.sample_colormap(colormap, t=(label + 1) / (max_label + 1))
             color = [int(255 * component) for component in color]  # RGBA
             color[-1] = int(0.5 * color[-1])  # A; make translucent
 
@@ -778,7 +690,7 @@ def load_data_into_plotter(dataset):
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
     # Trigger an info panel update
-    update_selection(make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
+    update_selection(utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
 
 def open_file(filename):
     """Load new data into the GUI. Public API."""
@@ -793,7 +705,7 @@ def open_file(filename):
 
 filedialog = None
 
-def initialize_filedialog(default_path):
+def initialize_filedialog(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
     """Create the "open file" dialog."""
     global filedialog
     filedialog = FileDialog(title="Open dataset",
@@ -840,159 +752,18 @@ def is_file_dialog_visible():
     return dpg.is_item_visible("open_file_dialog")  # tag
 
 # --------------------------------------------------------------------------------
-# Animation mechanism
-
-animation_action_continue = sym("continue")  # keep rendering
-animation_action_finish = sym("finish")  # end animation, call the `finish` method
-animation_action_cancel = sym("cancel")  # end animation without calling the `finish` method
-class Animator:
-    def __init__(self):
-        """A simple animation manager.
-
-        Raven's customized render loop calls our `render_frame` once per frame,
-        to update any animations that are running.
-        """
-        self.animations = []
-        self.animation_list_lock = threading.RLock()
-
-    def add(self, animation):
-        """Register a new `Animation` instance, so that our `render_frame` will call its `render_frame` method.
-
-        Its start time `animation.t0` is set automatically to the current time as returned by `time.time_ns()`.
-        """
-        with self.animation_list_lock:
-            animation.reset()  # set the animation start time
-            self.animations.append(animation)
-        return animation
-
-    def cancel(self, animation, finalize=True):
-        """Terminate a running `Animation` instance.
-
-        `animation`: One of the animations registered using `add`.
-
-        `finalize`: If `True` (default), call the `finish` method of the animation before removing it.
-
-                    In some special cases, it can be useful to set this to `False` to reduce flicker,
-                    if the old animation is immediately replaced by a new one of the same type,
-                    targeting the same GUI element (so no need to hide/re-show).
-
-        Note that when an animation finishes normally, it is automatically removed. This is meant for
-        immediately stopping and removing an animation that has not finished yet.
-        """
-        with self.animation_list_lock:
-            if finalize:
-                animation.finish()
-            try:
-                self.animations.remove(animation)  # uses default comparison by `id()` since `Animation` has no `__eq__` operator
-            except ValueError:  # not in list
-                logger.debug(f"Animator.cancel: specified {animation} is not in the animation registry (maybe already finished?), skipping removal.")
-        return animation
-
-    def render_frame(self):
-        """Render one frame of each registered animation, in the order they were registered.
-
-        Each animation whose `render_frame` returns `animation_action_finish` is considered finished.
-        Each finished animation gets its `finish` method called automatically.
-
-        After all registered animations have had a frame rendered, the animation registry is updated
-        to remove any animations that are no longer running.
-        """
-        with self.animation_list_lock:
-            time_now = time.time_ns()
-            running_animations = []
-            for animation in self.animations:
-                action = animation.render_frame(t=time_now)
-                if action is animation_action_continue:
-                    running_animations.append(animation)
-                elif action is animation_action_finish:
-                    animation.finish()
-                elif action is animation_action_cancel:
-                    pass  # when cancelled, do nothing, just remove the animation
-                else:
-                    raise ValueError(f"Animator.render_frame: unknown action {action}, expected one of the `animation_action_X` constants (where X is 'continue', 'finish', or 'cancel').")
-            self.animations.clear()
-            self.animations.extend(running_animations)
-
-    def clear(self):
-        """Terminate all registered animations and clear the list of registered animations.
-
-        To terminate a specific animation (by object instance), see `cancel`.
-        """
-        with self.animation_list_lock:
-            for animation in self.animations:
-                animation.finish()
-            self.animations.clear()
-animator = Animator()
-
-
-class Animation:
-    def __init__(self):
-        """Base class for Raven's animations.
-
-        An `Animation` can be added to an `Animator`.
-        """
-        super().__init__()
-        # Keep this simple to avoid ravioli code.
-        # `t0` should be pretty much the only attribute defined in the base class.
-        self.reset()
-
-    def reset(self):
-        """Semantically: (re-)start the animation from the beginning.
-
-        Technically, in this base class: Set the animation start time `self.t0` to the current time,
-        as given by `time.time_ns()`.
-        """
-        self.t0 = time.time_ns()
-
-    def render_frame(self, t):
-        """Override this in a derived class to render one frame of your animation.
-
-        `t`: int; time at start of current frame as returned by `time.time_ns()`.
-
-        The animation start time is available in `self.t0`.
-
-        It is also allowed to write to `self.t0`, e.g. for a cyclic animation
-        so as not to lose float accuracy in long sessions.
-
-        Return value must be one of:
-            `animation_action_continue` if the animation should continue,
-            `animation_action_finish` if the animation should end, automatically calling its `finish` method.
-            `animation_action_cancel` if the animation should end, *without* calling its `finish` method
-                                      (useful if the animation determined it didn't need to start,
-                                       e.g. if another copy was already running on the same GUI element).
-
-        The animator automatically removes (from its animation registry) any animations that return
-        anything other than `animation_action_continue`.
-        """
-        return animation_action_finish
-
-    def finish(self):
-        """Override this in a derived class to clean up any state for your animation when it finishes normally."""
-
-# --------------------------------------------------------------------------------
-# Overlay window support
-
-# Currently used by the info panel dimmer and the "scroll ends here" animation.
-
-class Overlay:
-    def __init__(self, target, tag):
-        """Base class for Raven's overlay windows (currently the dimmer, and the scroll end animation).
-
-        `target`: DPG ID or tag. The child window for which to build the overlay.
-        `tag`: DPG tag, for naming the overlay.
-        """
-        super().__init__()
-        # Keep this simple to avoid ravioli code.
-        # `target`, `tag` and `overlay_update_lock` should be pretty much the only attributes defined in the base class.
-        self.target = target
-        self.tag = tag
-        self.overlay_update_lock = threading.Lock()
-
-# --------------------------------------------------------------------------------
 # Animations, live updates
 
+info_panel_scroll_end_flasher = animation.ScrollEndFlasher(target="item_information_panel",
+                                                           tag="scroll_end_flasher",
+                                                           duration=gui_config.scroll_ends_here_duration,
+                                                           custom_finish_pred=lambda self: is_any_modal_window_visible(),
+                                                           font=icon_font_solid,
+                                                           text_top=fa.ICON_ARROWS_UP_TO_LINE,
+                                                           text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
+
 search_string_box = box("")
-search_result_data_idxs_box = box(make_blank_index_array())
+search_result_data_idxs_box = box(utils.make_blank_index_array())
 
 def update_search(wait=True):
     """Perform search and update the search results.
@@ -1006,9 +777,9 @@ def update_search(wait=True):
     """
     search_string = dpg.get_value("search_field")  # tag
     if not search_string:
-        search_result_data_idxs = make_blank_index_array()
+        search_result_data_idxs = utils.make_blank_index_array()
     else:
-        case_sensitive_fragments, case_insensitive_fragments = search_string_to_fragments(search_string)
+        case_sensitive_fragments, case_insensitive_fragments = utils.search_string_to_fragments(search_string, sort=False)  # minor speedup: don't need to sort, since all must match
         search_result_data_idxs = []
         for data_idx, entry in enumerate(dataset.sorted_entries):  # `data_idx`: index to `sorted_xxx`
             text = entry.normalized_title
@@ -1044,144 +815,7 @@ def update_search(wait=True):
     update_mouse_hover(force=True, wait=wait)
 
 
-class ButtonFlash(Animation):
-    # For some animation types, such as this one, for any given GUI element, at most one instance
-    # of the animation should be active at a time.
-    #
-    # Thus we need some instance management. We handle this as follows.
-    #
-    # An instance of a given animation type only becomes *reified* if it's the only one on that
-    # GUI element (at the point in time when the new instance is being created).
-    #
-    # Only a reified instance actually starts animating.
-    #
-    # If the instance cannot be reified (i.e. there is already a previous instance on the same GUI element),
-    # it enters *ghost mode*, where it only updates the existing instance (in some way appropriate for the
-    # specific animation type), and then exits at the next frame.
-    class_lock = threading.RLock()
-    id_counter = 0  # for generating unique DPG IDs
-    instances = {}  # DPG tag or ID (of `target_button`) -> animation instance
-
-    # TODO: We could also customize `__new__` to return the existing instance, see `unpythpnic.symbol.sym`.
-    def __init__(self, message, target_button, target_tooltip, target_text, duration):
-        """Animation to flash a button (and its tooltip, if visible) to draw the user's attention.
-
-        This is useful to let the user know that pressing the button actually took,
-        when its action has no other immediately visible effects.
-
-        Each GUI element (determined by `target_button`) can only have one `ButtonFlash`
-        animation running at a time. If an instance already exists, trying to create the animation
-        will restart the existing instance instead (and update its message to `message`).
-
-        `message`: str, text to show in the `target_text` widget while the animation is running.
-                   Original content will be restored automatically when the animation finishes normally.
-                   Can be `None` for "don't change", or also when `target_text is None`.
-        `target_button`: DPG tag or ID, the button to animate.
-        `target_tooltip`: DPG tag or ID, the tooltip to animate. Can be `None`.
-        `target_text`: DPG tag or ID, the text widget inside the tooltip to animate. Can be `None`.
-        """
-        super().__init__()
-        self.instance_lock = threading.Lock()
-
-        self.message = message
-        self.target_button = target_button
-        self.target_tooltip = target_tooltip
-        self.target_text = target_text
-        self.duration = duration
-
-        # These are used during animation
-        self.theme = None
-        self.original_message = None
-        self.reified = False  # `True`: running; `False`: ghost mode, update other instance and exit.
-
-        self.start()
-
-    def render_frame(self, t):
-        if not self.reified:  # ghost mode
-            return animation_action_cancel
-
-        dt = (t - self.t0) / 10**9  # seconds since t0
-        animation_pos = dt / self.duration
-
-        if animation_pos >= 1.0:
-            return animation_action_finish
-
-        r = clamp(animation_pos)
-        r = nonanalytic_smooth_transition(r)
-
-        R0, G0, B0 = 96, 128, 96  # light green
-        R1, G1, B1 = 45, 45, 48  # default button background color  TODO: read from global theme
-        R = R0 * (1.0 - r) + R1 * r
-        G = G0 * (1.0 - r) + G1 * r
-        B = B0 * (1.0 - r) + B1 * r
-        dpg.set_value(self.highlight_button_color, (R, G, B))
-        dpg.set_value(self.highlight_hovered_color, (R, G, B))
-        dpg.set_value(self.highlight_active_color, (R, G, B))
-        dpg.set_value(self.highlight_popupbg_color, (R, G, B))
-
-        return animation_action_continue
-
-    def start(self):
-        """Internal method, called automatically by constructor.
-
-        Manages de-duplication (when added to the same GUI element as an existing animation of this type)
-        as well as resource allocation. The resources are released by `finish` (called by `Animator`
-        when the animation ends).
-        """
-        with self.instance_lock:
-            if self.reified:  # already running (avoid double resource allocation and registration)
-                self.reset()
-                return
-
-            with type(self).class_lock:
-                # If an instance is already running on this GUI element, just restart it (and update its message).
-                if self.target_button in type(self).instances:
-                    other = type(self).instances[self.target_button]
-                    other.message = self.message
-                    dpg.set_value(other.target_text, other.message)
-                    other.reset()
-                    return
-
-                with dpg.theme(tag=f"acknowledgement_highlight_theme_{type(self).id_counter}") as self.theme:  # create unique DPG ID each time
-                    with dpg.theme_component(dpg.mvAll):
-                        # common
-                        dpg.add_theme_color(dpg.mvThemeCol_Text, (180, 255, 180))
-                        # button
-                        self.highlight_button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, (96, 128, 96))
-                        self.highlight_hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (96, 128, 96))
-                        self.highlight_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (96, 128, 96))
-                        # tooltip
-                        self.highlight_popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (96, 128, 96))
-                type(self).id_counter += 1
-
-                dpg.bind_item_theme(self.target_button, self.theme)
-                if self.target_tooltip is not None:
-                    dpg.bind_item_theme(self.target_tooltip, self.theme)
-                if self.target_text is not None:
-                    self.original_message = dpg.get_value(self.target_text)
-                    dpg.set_value(self.target_text, self.message)
-                    # dpg.bind_item_theme(self.target_text, self.theme)
-
-                type(self).instances[self.target_button] = self
-                self.reified = True  # This is the instance that animates `self.target_button`.
-
-    def finish(self):
-        with self.instance_lock:
-            dpg.bind_item_theme(self.target_button, "disablable_button_theme")  # tag
-            if self.target_tooltip is not None:
-                dpg.bind_item_theme(self.target_tooltip, global_theme)
-            if self.target_text is not None:
-                dpg.set_value(self.target_text, self.original_message)
-                # dpg.bind_item_theme(self.target_text, global_theme)
-            dpg.delete_item(self.theme)
-            self.theme = None
-            self.reified = False
-
-            with type(self).class_lock:
-                type(self).instances.pop(self.target_button)
-
-
-class PlotterPulsatingGlow(Animation):
+class PlotterPulsatingGlow(animation.Animation):  # this animation is set up by `reset_app_state`
     def __init__(self, cycle_duration):
         """Cyclic animation to pulsate the glow highlight for search result datapoints and selected datapoints."""
         super().__init__()
@@ -1207,8 +841,8 @@ class PlotterPulsatingGlow(Animation):
         a0_dim = 32
         a1_dim = 64
         # Interpolate the coefficients from bright to dim, smoothly, depending on relative data mass.
-        relative_data_mass = clamp(n_data / n_many)  # 0 ... 1, linear clamp
-        r = nonanalytic_smooth_transition(relative_data_mass, m=2.0)  # 0 ... 1, smoothed
+        relative_data_mass = utils.clamp(n_data / n_many)  # 0 ... 1, linear clamp
+        r = utils.nonanalytic_smooth_transition(relative_data_mass, m=2.0)  # 0 ... 1, smoothed
         a0 = a0_bright * (1.0 - r) + a0_dim * r
         a1 = a1_bright * (1.0 - r) + a1_dim * r
         # Compute the final alpha using the interpolated coefficients.
@@ -1243,10 +877,10 @@ class PlotterPulsatingGlow(Animation):
         dpg.set_value(search_results_highlight_color, (255, 96, 96, alpha_search))  # red
         dpg.set_value(selection_highlight_color, (96, 255, 255, alpha_selection))  # cyan
 
-        return animation_action_continue
+        return animation.action_continue
 
 
-class CurrentItemControlsGlow(Animation):
+class CurrentItemControlsGlow(animation.Animation):  # this animation is set up by `reset_app_state`
     def __init__(self, cycle_duration):
         """Cyclic animation to pulsate the current item controls.
 
@@ -1267,7 +901,7 @@ class CurrentItemControlsGlow(Animation):
         """
         if not current_item_info_lock.acquire(blocking=False):
             # If we didn't get the lock, it means `current_item` is being updated. Never mind, we can try again next frame.
-            return animation_action_continue
+            return animation.action_continue
         try:  # ok, got the lock
             have_current_item = False
             if current_item_info.item is not None:
@@ -1311,90 +945,17 @@ class CurrentItemControlsGlow(Animation):
         else:
             dpg.delete_item("viewport_drawlist", children_only=True)  # tag  # delete old draw items
 
-        return animation_action_continue
+        return animation.action_continue
 
-
-class Dimmer(Overlay):
-    def __init__(self, target, tag):
-        """Dimmer for a child window. Can be used e.g. to indicate that the window is updating.
-
-        `target`: DPG ID or tag. The child window for which to build the overlay.
-        `tag`: DPG tag, for naming the overlay.
-        """
-        super().__init__(target, tag)
-        self.window = None
-        self.drawlist = None
-
-    def build(self, rebuild=False):
-        # Ensure stuff we depend on is initialized before we try to create this
-        if dpg.get_frame_count() < 10:
-            return None
-
-        # dimmer_color = (0, 0, 0, 128)
-        dimmer_color = (37, 37, 38, 255)  # TODO: This is the info panel content area background color in the default theme. Figure out how to get colors from a theme.
-
-        with self.overlay_update_lock:  # This prevents a crash upon hammering F11 (toggle fullscreen) while the info panel is updating (causing lots of rebuilds)
-            if not rebuild and (self.window is not None):  # Avoid unnecessary rebuilding
-                return
-
-            # We want 8 pixels of rounding on each side (like window rounding),
-            # so we must make the overlay window 16 pixels larger in each direction.
-            config = dpg.get_item_configuration(self.target)
-            w = config["width"]
-            h = config["height"]
-            w += 16
-            h += 16
-
-            # Child windows don't have a `rect_min`; instead, they have `pos`.
-            pos = dpg.get_item_pos(self.target)
-            # Center the overlay on the target. Now this window covers the target child window.
-            pos = [pos[0] - 8, pos[1] - 8]
-
-            if self.window is None:  # create only once ("rebuild" here actually means "reconfigure")
-                logger.debug(f"Dimmer.build: frame {dpg.get_frame_count()}: instance '{self.tag}' creating overlay")
-                with dpg.window(show=False, modal=False, no_title_bar=True, tag=self.tag,
-                                pos=pos,
-                                width=w, height=h,
-                                no_collapse=True,
-                                no_focus_on_appearing=True,
-                                # no_bring_to_front_on_focus=True,  # for some reason, prevents displaying the window at all
-                                no_resize=True,
-                                no_move=True,
-                                no_background=True,
-                                no_scrollbar=True,
-                                no_scroll_with_mouse=True) as self.window:
-                    self.drawlist = dpg.add_drawlist(width=w, height=h)
-                rebuild = True
-
-            if rebuild:
-                logger.debug(f"Dimmer.build: frame {dpg.get_frame_count()}: instance '{self.tag}' updating drawlist")
-                dpg.delete_item(self.drawlist, children_only=True)
-                dpg.configure_item(self.window, width=w, height=h)
-                dpg.configure_item(self.drawlist, width=w, height=h)
-                dpg.draw_rectangle((0, 0), (w - 16, h - 16), color=dimmer_color, fill=dimmer_color, rounding=8, parent=self.drawlist)
-
-    def show(self):
-        """Dim the target window (e.g. to show that it is updating)."""
-        self.build()
-        try:  # EAFP to avoid TOCTTOU
-            dpg.show_item(self.window)
-        except SystemError:  # does not exist
-            pass
-
-    def hide(self):
-        """Un-dim the target window."""
-        try:  # EAFP to avoid TOCTTOU
-            dpg.hide_item(self.window)
-        except SystemError:  # does not exist
-            pass
 
 info_panel_dimmer_overlay = None
 def create_info_panel_dimmer_overlay():
     """Create a dimmer for the info panel. Used for indicating that the info panel is updating."""
     global info_panel_dimmer_overlay
     if info_panel_dimmer_overlay is None:
-        info_panel_dimmer_overlay = Dimmer(target="item_information_panel",
-                                           tag="dimmer_overlay_window")
+        info_panel_dimmer_overlay = animation.Dimmer(target="item_information_panel",
+                                                     tag="dimmer_overlay_window",
+                                                     color=(37, 37, 38, 255))   # TODO: This is the info panel content area background color in the default theme. Figure out how to get colors from a theme.
         info_panel_dimmer_overlay.build()
 def show_info_panel_dimmer_overlay():
     """Dim the info panel."""
@@ -1406,546 +967,13 @@ def hide_info_panel_dimmer_overlay():
     info_panel_dimmer_overlay.hide()
 
 
-# Inherit from `Overlay` first, so that `super().__init__(...)` passes its arguments where we want it to.
-# Then the `super().__init__()` call inside `Overlay.__init__` will initialize the `Animation` part.
-class ScrollEndFlasher(Overlay, Animation):
-    def __init__(self, target, tag, duration):
-        """Flasher to indicate when the end of a scrollable area has been reached.
-
-        `target`: DPG ID or tag. The child window for which to build the overlay.
-        `tag`: DPG tag, for naming the overlay.
-        `duration`: float, fadeout animation duration in seconds.
-        """
-        super().__init__(target, tag)
-
-        self.duration = duration
-
-        self.window_top = None
-        self.drawlist_top = None
-        self.window_bottom = None
-        self.drawlist_bottom = None
-
-        self.animation_running = False
-        self.where = None  # the kind of the currently running animation: "top", "bottom", or "both"
-
-    def show_by_position(self, target_y_scroll):
-        """Like `show`, but determine position automatically.
-
-        `target_y_scroll`: int, target scroll position, in scrollbar coordinates of `self.target`.
-                           Special value -1 means the end position.
-
-        The scroll position is parameterized to allow animated scrolling to work;
-        if you get it from the scrollbar (`dpg.get_y_scroll(some_child_window)`),
-        the value may be out of date if it is being updated during the current frame.
-
-        This allows dispatching the flashing animation immediately, without waiting
-        for one frame (or sometimes several frames; see source code of `SmoothScrolling`)
-        for the scrollbar position to update.
-
-        Returns which end was flashed (one of "top", "bottom", "both"),
-        or `None` if `target_y_scroll` was not at either end.
-        """
-        max_y_scroll = dpg.get_y_scroll_max(self.target)  # tag
-
-        if target_y_scroll == -1:  # end?
-            target_y_scroll = max_y_scroll
-
-        where = None
-        if max_y_scroll > 0:
-            if target_y_scroll == 0:
-                where = "top"
-            elif target_y_scroll == max_y_scroll:
-                where = "bottom"
-        else:  # less than a screenful of data -> reached both ends.
-            if target_y_scroll == 0:
-                where = "both"
-
-        logger.debug(f"ScrollEndFlasher.show_by_position: target_y_scroll = {target_y_scroll}, max_y_scroll = {max_y_scroll}, where = {where}")
-
-        if where is not None:
-            self.show(where)
-
-        return where
-
-    def show(self, where):
-        """Dispatch the animation.
-
-        This indicates in the GUI that the target child window cannot scroll any further
-        in the specified direction.
-
-        `where`: str, the extremity that has been reached. One of "top", "bottom", "both".
-                 Here "both" is useful if there is less than one screenful of data
-
-                 Sometimes using "both" is also easier, when there is no meaningful delta
-                 from which to compute the direction the user is scrolling to, such as
-                 with an instant programmatic jump to the scroll target position.
-        """
-        if self.animation_running:  # only one simultaneous animation per instance; replace old animation if it exists (effectively restarting the animation).
-            animator.cancel(self, finalize=False)  # no need to call `finish` since we'll start a new animation of the same type on the same GUI element right away.
-        self.animation_running = True
-        self.where = where
-        animator.add(self)
-
-    def hide(self):
-        """Hide the overlay immediately. Called automatically by `finish` when the animation ends."""
-        dpg.hide_item(self.window_top)
-        dpg.hide_item(self.window_bottom)
-
-    def render_frame(self, t):
-        """Called automatically by `Animator`."""
-        if dpg.get_frame_count() < 10:
-            return None
-
-        dt = (t - self.t0) / 10**9  # seconds since t0
-        animation_pos = dt / self.duration
-
-        if animation_pos >= 1.0:
-            return animation_action_finish
-        if is_any_modal_window_visible():
-            return animation_action_finish
-
-        scroll_ends_here_color = [196, 196, 255, 64]
-
-        r = clamp(animation_pos)
-        r = nonanalytic_smooth_transition(r)
-        alpha = (1.0 - r) * scroll_ends_here_color[3]
-        scroll_ends_here_color[3] = alpha
-
-        with self.overlay_update_lock:
-            # We want 8 pixels of rounding on each side (like window rounding),
-            # so we must make the overlay window 16 pixels larger in each direction.
-            config = dpg.get_item_configuration(self.target)
-            w = config["width"]
-            h = config["height"]
-            w += 16
-            h += 16
-
-            # Child windows don't have a `rect_min`; instead, they have `pos`.
-            pos = dpg.get_item_pos(self.target)
-            # Center the overlay on the target. Now this window covers the target child window.
-            pos = [pos[0] - 8, pos[1] - 8]
-
-            # Use two windows, one for each end, to avoid the overlay capturing mouse input (especially the wheel) while it is shown.
-            # We create these just once.
-            if self.window_top is None:
-                logger.debug(f"ScrollEndFlasher.build: frame {dpg.get_frame_count()}: instance '{self.tag}' creating overlay (top)")
-                with dpg.window(show=False, modal=False, no_title_bar=True, tag=f"{self.tag}_window_top",
-                                pos=pos,
-                                width=w, height=48,
-                                no_collapse=True,
-                                no_focus_on_appearing=True,
-                                no_resize=True,
-                                no_move=True,
-                                no_background=True,
-                                no_scrollbar=True,
-                                no_scroll_with_mouse=True) as self.window_top:
-                    self.drawlist_top = dpg.add_drawlist(width=w, height=48)
-            if self.window_bottom is None:
-                logger.debug(f"ScrollEndFlasher.build: frame {dpg.get_frame_count()}: instance '{self.tag}' creating overlay (bottom)")
-                with dpg.window(show=False, modal=False, no_title_bar=True, tag=f"{self.tag}_window_bottom",
-                                pos=[pos[0], pos[1] + h - 48],
-                                width=w, height=48,
-                                no_collapse=True,
-                                no_focus_on_appearing=True,
-                                no_resize=True,
-                                no_move=True,
-                                no_background=True,
-                                no_scrollbar=True,
-                                no_scroll_with_mouse=True) as self.window_bottom:
-                    self.drawlist_bottom = dpg.add_drawlist(width=w, height=48)
-
-            # logger.debug(f"Dimmer.build: frame {dpg.get_frame_count()}: instance '{self.tag}' updating geometry and drawing")  # too spammy
-
-            dpg.delete_item(self.drawlist_top, children_only=True)
-            dpg.configure_item(self.window_top, width=w, height=48)
-            dpg.configure_item(self.drawlist_top, width=w, height=48)
-
-            dpg.delete_item(self.drawlist_bottom, children_only=True)
-            dpg.configure_item(self.window_bottom, width=w, height=48)
-            dpg.configure_item(self.drawlist_bottom, width=w, height=48)
-            dpg.set_item_pos(self.window_bottom, [pos[0], pos[1] + h - 48])
-
-            icon_size = 24
-            def draw_on(parent, icon_text):
-                # TODO: Improve the visual look (a cap of a circle would look better than a rounded rectangle)
-                dpg.draw_rectangle((0, 0), (w - 16, 32), color=(0, 0, 0, 0), fill=scroll_ends_here_color, rounding=8, parent=parent)
-                # TODO: Get rid of the kluge offsets.
-                icon_upper_left = ((w - icon_size) // 2 - 12 + 3, 3)  # make the icon exactly centered on the rounded rectangle (this was measured in GIMP)  # 3 px: inner padding?
-                t = dpg.draw_text(icon_upper_left, icon_text, size=icon_size, color=scroll_ends_here_color, parent=parent)
-                dpg.bind_item_font(t, icon_font_solid)
-            if self.where in ("top", "both"):
-                draw_on(self.drawlist_top, icon_text=fa.ICON_ARROWS_UP_TO_LINE)
-            if self.where in ("bottom", "both"):
-                draw_on(self.drawlist_bottom, icon_text=fa.ICON_ARROWS_DOWN_TO_LINE)
-
-            # # Draw a "no" symbol (crossed-out circle). (See also `fa.ICON_BAN`.)
-            # circle_center = (w / 2 - 8, 14)
-            # circle_radius = 12
-            # line_thickness = 4
-            # offs_45deg = circle_radius * 0.5**0.5
-            # dpg.draw_circle(circle_center, circle_radius,
-            #                 thickness=line_thickness, color=(120, 180, 255, alpha),  # blue, with alpha
-            #                 parent=self.drawlist_top)
-            # dpg.draw_line((circle_center[0] - offs_45deg, circle_center[1] - offs_45deg),
-            #               (circle_center[0] + offs_45deg, circle_center[1] + offs_45deg),
-            #               thickness=line_thickness, color=(120, 180, 255, alpha),  # blue, with alpha
-            #               parent=self.drawlist_top)
-
-            dpg.show_item(self.window_top)
-            dpg.show_item(self.window_bottom)
-
-        return animation_action_continue
-
-    def finish(self):
-        """Animation finish callback for `Animator`.
-
-        Called when the animation finishes normally.
-        """
-        self.animation_running = False
-        self.where = None
-        self.hide()
-
-info_panel_scroll_end_flasher = ScrollEndFlasher(target="item_information_panel",
-                                                 tag="scroll_end_flasher",
-                                                 duration=gui_config.scroll_ends_here_duration)
-
-
-class SmoothScrolling(Animation):
-    class_lock = threading.RLock()
-    instances = {}  # DPG tag or ID (of `target_child_window`) -> animation instance
-
-    def __init__(self, target_child_window, target_y_scroll, smooth=True, smooth_step=0.8, flasher=None, finish_callback=None):
-        """Scroll a child window smoothly.
-
-        Each GUI element (determined by `target_child_window`) can only have one `SmoothScrolling`
-        animation running at a time. If an instance already exists, trying to create the animation
-        will update its `target_y_scroll` instead.
-
-        `target_child_window`: DPG tag or ID, the child window to scroll.
-        `target_y_scroll`: int, target scroll position in scrollbar coordinates.
-        `smooth`: bool.
-                  If `True`, will animate a smooth scroll.
-                  If `False`, will jump to target position instantly (the point is to offer the same API).
-        `smooth_step`: float, a nondimensional rate in the half-open interval (0, 1].
-                       Independent of the render FPS.
-        `flasher`: `ScrollEndFlasher` instance, optional.
-                   Automatically activated when the top/bottom is reached.
-        `finish_callback`: 0-argument callable. Run some custom code when the animation finishes normally.
-                           Keep it minimal; trying to instantiate a new scroll animation will block while
-                           the callback is running (because a new instance might target the same GUI element,
-                           and we guarantee the teardown to be atomic).
-
-        Note that mouse wheel and scrollbar dragging do not invoke the scroll animation; for those,
-        the scroll position is handled internally by DPG. Hence those don't cause a flash here.
-        If you want, you can handle the mouse wheel case separately in a global mouse wheel callback.
-
-        This is pretty sophisticated, to make the movement smooth, but also keep things working as expected
-        when the target position changes on the fly.
-
-        The animation depends only on the current and target positions, and has a reference rate,
-        no reference duration. Essentially, we use Newton's law of cooling (first-order ODE),
-        and apply its analytical solution.
-
-        For the math details, see the detailed comment below the source code of this class.
-        """
-        super().__init__()
-        self.instance_lock = threading.Lock()
-
-        self.target_child_window = target_child_window
-        self.target_y_scroll = target_y_scroll
-        self.smooth = smooth
-        self.smooth_step = smooth_step
-        self.flasher = flasher
-        self.finish_callback = finish_callback
-
-        self.prev_frame_new_y_scroll = None  # target position of last frame, for monitoring of stuck animation
-        self.update_pending_frames = 0
-        self.fracpart = 0.0  # fractional part of position, for subpixel correction
-        self.reified = False  # `True`: running; `False`: ghost mode, update other instance and exit.
-
-        self.start()
-
-    def render_frame(self, t):
-        if not self.reified:  # ghost mode
-            return animation_action_cancel
-
-        update_pending_threshold = 4  # Frames. Smaller threshold looks better, but may fire prematurely if a GUI update takes too many frames.
-        action = animation_action_continue
-
-        with self.instance_lock:
-            current_y_scroll = dpg.get_y_scroll(self.target_child_window)
-            if not self.smooth:
-                if current_y_scroll == self.target_y_scroll:
-                    action = animation_action_finish
-                    # If we reach the start or the end of the scrollable, flash it.
-                    if self.flasher is not None:
-                        self.flasher.show_by_position(self.target_y_scroll)
-                # First frame in this scroll? -> do it
-                elif self.prev_frame_new_y_scroll is None:
-                    new_y_scroll = self.target_y_scroll
-                    self.prev_frame_new_y_scroll = new_y_scroll  # No longer first frame (in non-smooth mode, doesn't matter what value we store here as long as it's not `None`).
-                    dpg.set_y_scroll(self.target_child_window, new_y_scroll)
-                # Waited for a short timeout? -> time to check for end of scrollbar (but this shouldn't happen now that `scroll_info_panel_to_position` clamps the value to the max allowed by the scrollbar)
-                elif self.update_pending_frames >= update_pending_threshold:
-                    action = animation_action_finish
-                    if current_y_scroll != self.target_y_scroll:
-                        logger.debug(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': did not reach target position (target position past end of scrollbar?)")
-                        if self.flasher is not None:
-                            self.flasher.show(where="bottom")
-                # Waiting for the timeout?
-                else:
-                    self.update_pending_frames = self.update_pending_frames + 1
-            else:
-                # Only proceed if DPG has actually applied our previous update, or if this is the first update since this scroll animation was started.
-                # This prevents stuttering, as well as keeps our subpixel calculations correct.
-                if self.prev_frame_new_y_scroll is None or current_y_scroll == self.prev_frame_new_y_scroll:
-                    self.update_pending_frames = 0
-
-                    # Magic section -->
-                    # Framerate correction for rate-based animation, to reach a constant animation rate per unit of wall time, regardless of render FPS.
-                    CALIBRATION_FPS = 25  # FPS for which `step` was calibrated
-                    xrel = 0.5  # just some convenient value
-                    step = self.smooth_step
-                    alpha_orig = 1.0 - step
-                    if 0 < alpha_orig < 1:
-                        avg_render_fps = dpg.get_frame_rate()
-
-                        # For a constant target position and original `α`, compute the number of animation frames to cover `xrel` of distance from initial position to final position.
-                        # This is how many frames we need at `CALIBRATION_FPS`.
-                        n_orig = math.log(1.0 - xrel) / math.log(alpha_orig)
-                        # Compute the scaled `n`, to account for `avg_render_fps`. Note the direction: we need a smaller `n` (fewer animation frames) if the render runs slower than `CALIBRATION_FPS`.
-                        n_scaled = (avg_render_fps / CALIBRATION_FPS) * n_orig
-                        # Then compute the `α` that reaches `xrel` distance in `n_scaled` animation frames.
-                        alpha_scaled = (1.0 - xrel)**(1 / n_scaled)
-                    else:  # avoid some divisions by zero at the extremes
-                        alpha_scaled = alpha_orig
-                    step_scaled = 1.0 - alpha_scaled
-                    # <-- End magic section
-
-                    # Calculate old and new positions, with subpixel correction (IMPORTANT!).
-                    subpixel_corrected_current_y_scroll = current_y_scroll + self.fracpart  # NOTE: float
-                    remaining = self.target_y_scroll - subpixel_corrected_current_y_scroll  # remaining distance, float
-                    delta = step_scaled * remaining  # distance to cover in this frame, float
-
-                    subpixel_corrected_new_y_scroll = subpixel_corrected_current_y_scroll + delta
-                    fracpart = subpixel_corrected_new_y_scroll - int(subpixel_corrected_new_y_scroll)
-                    new_y_scroll = int(subpixel_corrected_new_y_scroll)  # NOTE: truncate, no rounding of any kind
-
-                    logger.debug(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': old raw = {current_y_scroll}, old subpixel = {subpixel_corrected_current_y_scroll}, delta = {delta}, new subpixel = {subpixel_corrected_new_y_scroll}, target = {self.target_y_scroll}, start-of-frame remaining distance = {remaining}")
-
-                    # Once we reach less than one pixel of distance from the final position, just snap there and end the animation.
-                    # We jump at <= 1.0, not < 1.0, to avoid some roundoff trouble.
-                    if abs(self.target_y_scroll - subpixel_corrected_current_y_scroll) <= 1.0:
-                        new_y_scroll = self.target_y_scroll
-                        action = animation_action_finish
-                        logger.debug(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': scrolling completed")
-
-                        # If we reach the start or the end of the scrollable, flash it.
-                        if self.flasher is not None:
-                            self.flasher.show_by_position(self.target_y_scroll)
-
-                    if action is animation_action_continue:
-                        self.prev_frame_new_y_scroll = new_y_scroll
-                        self.fracpart = fracpart
-
-                    dpg.set_y_scroll(self.target_child_window, new_y_scroll)
-
-                # Timeout waiting for DPG to update the position? -> probably end of scrollbar (but shouldn't happen now that `scroll_info_panel_to_position` clamps the value to the max allowed by the scrollbar)
-                elif self.update_pending_frames >= update_pending_threshold:
-                    action = animation_action_finish
-                    logger.debug(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': timeout waiting for scrollbar to update its scroll position (target position past end of scrollbar?)")
-                    if self.flasher is not None:
-                        self.flasher.show(where="bottom")
-
-                # Waiting for DPG to update the position?
-                else:
-                    self.update_pending_frames = self.update_pending_frames + 1
-
-        return action
-
-    def start(self):
-        """Internal method, called automatically by constructor.
-
-        Manages de-duplication (when added to the same GUI element as an existing animation of this type).
-        """
-        with self.instance_lock:
-            if self.reified:  # already running (avoid double resource allocation and registration)
-                return
-
-            with type(self).class_lock:
-                # If an instance is already running on this GUI element, just update its target scroll position.
-                # This allows a seamless transition to the new scroll animation, retaining the subpixel position.
-                if self.target_child_window in type(self).instances:
-                    other = type(self).instances[self.target_child_window]
-                    with other.instance_lock:
-                        other.target_y_scroll = self.target_y_scroll
-                    return
-
-                type(self).instances[self.target_child_window] = self
-                self.reified = True  # This is the instance that animates `self.target_child_window`.
-
-    def finish(self):
-        with type(self).class_lock:
-            if self.finish_callback is not None:
-                self.finish_callback()
-            type(self).instances.pop(self.target_child_window)
-
-# The math for the scroll animation comes from SillyTavern-extras, `talkinghead.tha3.app`, function `interpolate_pose`.
-# This depends only on the current and target positions, and has a reference *rate*, no reference duration.
-# This allows us to change the target position while the animation is running, and it'll adapt.
-#
-# Pasting this comment as-is. Here in Raven, the equivalent of "pose" is the scroll position.
-#
-# ---8<---8<---8<---
-#
-# The `step` parameter is calibrated against animation at 25 FPS, so we must scale it appropriately, taking
-# into account the actual FPS.
-#
-# How to do this requires some explanation. Numericist hat on. Let's do a quick back-of-the-envelope calculation.
-# This pose interpolator is essentially a solver for the first-order ODE:
-#
-#   u' = f(u, t)
-#
-# Consider the most common case, where the target pose remains constant over several animation frames.
-# Furthermore, consider just one morph (they all behave similarly). Then our ODE is Newton's law of cooling:
-#
-#   u' = -β [u - u∞]
-#
-# where `u = u(t)` is the temperature, `u∞` is the constant temperature of the external environment,
-# and `β > 0` is a material-dependent cooling coefficient.
-#
-# But instead of numerical simulation at a constant timestep size, as would be typical in computational science,
-# we instead read off points off the analytical solution curve. The `step` parameter is *not* the timestep size;
-# instead, it controls the relative distance along the *u* axis that should be covered in one simulation step,
-# so it is actually related to the cooling coefficient β.
-#
-# (How exactly: write the left-hand side as `[unew - uold] / Δt + O([Δt]²)`, drop the error term, and decide
-#  whether to use `uold` (forward Euler) or `unew` (backward Euler) as `u` on the right-hand side. Then compare
-#  to our update formula. But those details don't matter here.)
-#
-# To match the notation in the rest of this code, let us denote the temperature (actually pose morph value) as `x`
-# (instead of `u`). And to keep notation shorter, let `β := step` (although it's not exactly the `β` of the
-# continuous-in-time case above).
-#
-# To scale the animation speed linearly with regard to FPS, we must invert the relation between simulation step
-# number `n` and the solution value `x`. For an initial value `x0`, a constant target value `x∞`, and constant
-# step `β ∈ (0, 1]`, the pose interpolator produces the sequence:
-#
-#   x1 = x0 + β [x∞ - x0] = [1 - β] x0 + β x∞
-#   x2 = x1 + β [x∞ - x1] = [1 - β] x1 + β x∞
-#   x3 = x2 + β [x∞ - x2] = [1 - β] x2 + β x∞
-#   ...
-#
-# Note that with exact arithmetic, if `β < 1`, the final value is only reached in the limit `n → ∞`.
-# For floating point, this is not the case. Eventually the increment becomes small enough that when
-# it is added, nothing happens. After sufficiently many steps, in practice `x` will stop just slightly
-# short of `x∞` (on the side it approached the target from).
-#
-# (For performance reasons, when approaching zero, one may need to beware of denormals, because those
-#  are usually implemented in (slow!) software on modern CPUs. So especially if the target is zero,
-#  it is useful to have some very small cutoff (inside the normal floating-point range) after which
-#  we make `x` instantly jump to the target value.)
-#
-# Inserting the definition of `x1` to the formula for `x2`, we can express `x2` in terms of `x0` and `x∞`:
-#
-#   x2 = [1 - β] ([1 - β] x0 + β x∞) + β x∞
-#      = [1 - β]² x0 + [1 - β] β x∞ + β x∞
-#      = [1 - β]² x0 + [[1 - β] + 1] β x∞
-#
-# Then inserting this to the formula for `x3`:
-#
-#   x3 = [1 - β] ([1 - β]² x0 + [[1 - β] + 1] β x∞) + β x∞
-#      = [1 - β]³ x0 + [1 - β]² β x∞ + [1 - β] β x∞ + β x∞
-#
-# To simplify notation, define:
-#
-#   α := 1 - β
-#
-# We have:
-#
-#   x1 = α  x0 + [1 - α] x∞
-#   x2 = α² x0 + [1 - α] [1 + α] x∞
-#      = α² x0 + [1 - α²] x∞
-#   x3 = α³ x0 + [1 - α] [1 + α + α²] x∞
-#      = α³ x0 + [1 - α³] x∞
-#
-# This suggests that the general pattern is (as can be proven by induction on `n`):
-#
-#   xn = α**n x0 + [1 - α**n] x∞
-#
-# This allows us to determine `x` as a function of simulation step number `n`. Now the scaling question becomes:
-# if we want to reach a given value `xn` by some given step `n_scaled` (instead of the original step `n`),
-# how must we change the step size `β` (or equivalently, the parameter `α`)?
-#
-# To simplify further, observe:
-#
-#   x1 = α x0 + [1 - α] [[x∞ - x0] + x0]
-#      = [α + [1 - α]] x0 + [1 - α] [x∞ - x0]
-#      = x0 + [1 - α] [x∞ - x0]
-#
-# Rearranging yields:
-#
-#   [x1 - x0] / [x∞ - x0] = 1 - α
-#
-# which gives us the relative distance from `x0` to `x∞` that is covered in one step. This isn't yet much
-# to write home about (it's essentially just a rearrangement of the definition of `x1`), but next, let's
-# treat `x2` the same way:
-#
-#   x2 = α² x0 + [1 - α] [1 + α] [[x∞ - x0] + x0]
-#      = [α² x0 + [1 - α²] x0] + [1 - α²] [x∞ - x0]
-#      = [α² + 1 - α²] x0 + [1 - α²] [x∞ - x0]
-#      = x0 + [1 - α²] [x∞ - x0]
-#
-# We obtain
-#
-#   [x2 - x0] / [x∞ - x0] = 1 - α²
-#
-# which is the relative distance, from the original `x0` toward the final `x∞`, that is covered in two steps
-# using the original step size `β = 1 - α`. Next up, `x3`:
-#
-#   x3 = α³ x0 + [1 - α³] [[x∞ - x0] + x0]
-#      = α³ x0 + [1 - α³] [x∞ - x0] + [1 - α³] x0
-#      = x0 + [1 - α³] [x∞ - x0]
-#
-# Rearranging,
-#
-#   [x3 - x0] / [x∞ - x0] = 1 - α³
-#
-# which is the relative distance covered in three steps. Hence, we have:
-#
-#   xrel := [xn - x0] / [x∞ - x0] = 1 - α**n
-#
-# so that
-#
-#   α**n = 1 - xrel              (**)
-#
-# and (taking the natural logarithm of both sides)
-#
-#   n log α = log [1 - xrel]
-#
-# Finally,
-#
-#   n = [log [1 - xrel]] / [log α]
-#
-# Given `α`, this gives the `n` where the interpolator has covered the fraction `xrel` of the original distance.
-# On the other hand, we can also solve (**) for `α`:
-#
-#   α = (1 - xrel)**(1 / n)
-#
-# which, given desired `n`, gives us the `α` that makes the interpolator cover the fraction `xrel` of the original distance in `n` steps.
-#
-# ---8<---8<---8<---
-
-task_status_stopped = sym("stopped")
-task_status_pending = sym("pending")
-task_status_running = sym("running")
-
-scroll_animation = None  # keep a reference so that we can stop the scroll animation, and only that animation
+scroll_animation = None  # keep a reference to the current scroll animation (if any), so that we can stop the scroll animation, and only that animation.
 scroll_animation_lock = threading.RLock()
-def clear_global_scroll_animation_reference():  # used as finish callback for `SmoothScrolling`
+def clear_global_scroll_animation_reference():  # clear the global reference to the current scroll animation; used as finish callback for `SmoothScrolling`.
     global scroll_animation
     with scroll_animation_lock:
         scroll_animation = None
+
 
 def update_animations():
     # # Resize the search field dynamically. We don't need this with the current layout; keeping for documentation only.
@@ -1965,13 +993,13 @@ def update_animations():
     # ----------------------------------------
     # Show loading spinner when info panel is refreshing
 
-    if unbox(info_panel_render_status_box) is task_status_pending:
+    if unbox(info_panel_render_status_box) is bgtask.status_pending:
         dpg.hide_item("info_panel_rendering_spinner")  # tag
         dpg.show_item("info_panel_pending_spinner")  # tag
-    elif unbox(info_panel_render_status_box) is task_status_running:
+    elif unbox(info_panel_render_status_box) is bgtask.status_running:
         dpg.hide_item("info_panel_pending_spinner")  # tag
         dpg.show_item("info_panel_rendering_spinner")  # tag
-    else:  # task_status_stopped
+    else:  # bgtask.status_stopped
         dpg.hide_item("info_panel_pending_spinner")  # tag
         dpg.hide_item("info_panel_rendering_spinner")  # tag
 
@@ -1999,7 +1027,8 @@ def update_animations():
     # ----------------------------------------
     # Render all currently running animations
 
-    animator.render_frame()
+    animation.animator.render_frame()
+
 
 current_item_info = env(item=None, x0=None, y0=None, w=None, h=None)  # `item`: GUI widget DPG tag or ID; `x0`, `y0`: screen space coordinates, in pixels; `w`, `h`: in pixels
 current_item_info_lock = threading.Lock()
@@ -2447,304 +1476,10 @@ with timer() as tim:
                                 dpg.add_theme_style(dpg.mvPlotStyleVar_MarkerSize, 6, category=dpg.mvThemeCat_Plots)
 
                         _create_highlight_scatter_series()  # some utilities may access the highlight series before the app has completely booted up
-
-                        # https://dearpygui.readthedocs.io/en/1.x/reference/dearpygui.html?highlight=colormap#dearpygui.dearpygui.sample_colormap
-                        # # From section "Constants" in: https://dearpygui.readthedocs.io/en/1.x/_modules/dearpygui/dearpygui.html?highlight=colormap#
-                        # mvPlotColormap_Default=internal_dpg.mvPlotColormap_Default
-                        # mvPlotColormap_Deep=internal_dpg.mvPlotColormap_Deep
-                        # mvPlotColormap_Dark=internal_dpg.mvPlotColormap_Dark
-                        # mvPlotColormap_Pastel=internal_dpg.mvPlotColormap_Pastel
-                        # mvPlotColormap_Paired=internal_dpg.mvPlotColormap_Paired
-                        # mvPlotColormap_Viridis=internal_dpg.mvPlotColormap_Viridis
-                        # mvPlotColormap_Plasma=internal_dpg.mvPlotColormap_Plasma
-                        # mvPlotColormap_Hot=internal_dpg.mvPlotColormap_Hot
-                        # mvPlotColormap_Cool=internal_dpg.mvPlotColormap_Cool
-                        # mvPlotColormap_Pink=internal_dpg.mvPlotColormap_Pink
-                        # mvPlotColormap_Jet=internal_dpg.mvPlotColormap_Jet
-                        # mvPlotColormap_Twilight=internal_dpg.mvPlotColormap_Twilight
-                        # mvPlotColormap_RdBu=internal_dpg.mvPlotColormap_RdBu
-                        # mvPlotColormap_BrBG=internal_dpg.mvPlotColormap_BrBG
-                        # mvPlotColormap_PiYG=internal_dpg.mvPlotColormap_PiYG
-                        # mvPlotColormap_Spectral=internal_dpg.mvPlotColormap_Spectral
-                        # mvPlotColormap_Greys=internal_dpg.mvPlotColormap_Greys
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
-# Background task manager
-
-class SequentialTaskManager:
-    def __init__(self, name, executor):
-        """Simple manager for there-can-be-only-one (of each kind) background tasks, for GUI updates.
-
-        Tasks can be submitted concurrently, but when a new one is submitted, all previous tasks are automatically cancelled.
-        If you have several kinds of background tasks, create one `SequentialTaskManager` instance for each kind.
-        You can use the same `ThreadPoolExecutor` in all of them.
-
-        This is useful when the underlying data changes so that completing the old, running GUI update task
-        no longer makes sense. Raven uses this for handling annotation tooltip and info panel updates.
-
-        In practice this is a rather thin wrapper over `ThreadPoolExecutor`, adding the auto-cancel mechanism.
-
-        See also our friend function `make_managed_task`.
-
-        `name`: Name for this task manager, lowercase with underscores recommended.
-                This is included in the automatically generated names for the tasks,
-                to easily distinguish tasks from different managers in log messages.
-        `executor`: A `ThreadPoolExecutor` that actually manages the concurrent execution.
-        """
-        self.name = name  # used in generated task names
-        self.executor = executor
-        self.tasks = {}  # task name (unique) -> (future, env)
-        self.lock = threading.RLock()
-
-    def submit(self, function, env):
-        """Submit a new task.
-
-        `function`: callable, must take one positional argument.
-        `env`: `unpythonic.env.env`, passed to `function` as the only argument.
-
-               When `submit` returns, `env` will contain two new attributes:
-
-                   `task_name`: str, unique name of the task, for use in log messages.
-
-                   `cancelled`: bool. This flag signals task cancellation.
-
-                                The `function` must monitor this flag, and terminate
-                                as soon as conveniently possible if the flag ever
-                                becomes `True`.
-
-                                Note that a task may become cancelled before it even starts,
-                                if there are not enough resources (threads in the pool) to
-                                attempt to start them all simultaneously. This happens
-                                especially often if `function` needs to wait internally
-                                before it can actually start doing its job.
-
-                                Then both the task that is actively waiting, and any tasks
-                                added later to the queue (waiting for a free thread in the pool)
-                                may have their `cancelled` flags set to `True`.
-
-        Returns an `unpythonic.gsym` representing the task name. Task names are unique.
-        """
-        with self.lock:
-            self.clear()
-            env.task_name = gensym(f"{self.name}_task")
-            env.cancelled = False
-            future = self.executor.submit(function, env)
-            self.tasks[env.task_name] = (future, env)  # store a reference to `env` so we have access to the `cancelled` flag
-            future.add_done_callback(self._done_callback)  # autoremove the task when it exits (we don't need its return value)
-            return env.task_name
-
-    def _find_task_by_future(self, future):
-        """Internal method. Find the `task_name` for a given `future`. Return `task_name`, or `None` if not found."""
-        with self.lock:
-            for task_name, (f, e) in self.tasks.items():
-                if f is future:
-                    return task_name
-            return None
-
-    def _done_callback(self, future):
-        """Internal method. Remove a completed task, by a reference to its `future` (that we get from `ThreadPoolExecutor`)."""
-        with self.lock:
-            task_name = self._find_task_by_future(future)
-            if task_name is not None:  # not removed already? (`cancel` might have removed it)
-                self.tasks.pop(task_name)
-
-    def cancel(self, task_name, pop=True):
-        """Cancel a specific task, by name.
-
-        Usually there is no need to call this manually.
-
-        `task_name`: `unpythonic.gsym`, the return value from `submit`.
-        `pop`: bool, whether to remove the task from `self.tasks`.
-               Default is `True`, which is almost always the right thing to do.
-               The option is provided mainly for internal use by `clear`.
-        """
-        with self.lock:
-            if task_name not in self.tasks:
-                raise ValueError(f"SequentialTaskManager.cancel_task: instance '{self.name}': no such task '{task_name}'")
-            if pop:
-                future, e = self.tasks.pop(task_name)
-            else:
-                future, e = self.tasks[task_name]
-            future.cancel()  # in case it's still queued in the executor (don't start it)
-            e.cancelled = True  # in case it's running (pythonic co-operative cancellation)
-
-    def clear(self, wait=False):
-        """Cancel all tasks.
-
-        During normal operation, usually there is no need to call this manually, but can be useful during app shutdown.
-
-        `wait`: Whether to wait for all tasks to exit before returning.
-        """
-        with self.lock:
-            for task_name in list(self.tasks.keys()):
-                self.cancel(task_name, pop=False)
-            if wait:
-                while not all(future.done() for future, e in self.tasks.values()):
-                    time.sleep(0.01)
-            self.tasks.clear()
-
-def make_managed_task(*, status_box, lock, entrypoint, running_poll_interval, pending_wait_duration):
-    """Make a background task that makes double-sure that only one instance is running at a time.
-
-    This works together with `SequentialTaskManager`, adding on top of it mechanisms to track the status for
-    the same kind of tasks (for displaying spinners in the GUI), as well as a lock to ensure that only one call
-    to `entrypoint` can be running at a time.
-
-    `status_box`: An `unpythonic.box` that stores the task status flag. At any one time, the flag itself is one of:
-                  `task_status_stopped`: No task (of this kind) in progress.
-                  `task_status_pending`: A task has entered the pending state (see below).
-                  `task_status_running`: A task is currently running.
-    `lock`: A `threading.Lock`, to control that at most one call to `entrypoint` is running at a time.
-    `entrypoint`: callable, the task itself. It must accept a kwarg `task_env`, used for sending in the task environment
-                  (`unpythonic.env.env`), see below.
-    `running_poll_interval`: float, when the task starts, it polls for the task status flag until there is no previous task running.
-                             This parameter sets the poll interval.
-    `pending_wait_duration`: float, once the polling finishes, the task enters the pending state.
-
-                             This parameter sets how long the task waits in the pending state before it starts running.
-
-                             This mechanism is used by e.g. the search field to wait for more keyboard input before starting to update
-                             the info panel. Each keystroke in the search field submits a new managed task to the relevant
-                             `SequentialTaskManager`. If more input occurs during the pending state, the manager cancels any
-                             previous tasks, so that only the most recently submitted one remains.
-
-                             Only if the pending step completes successfully (task not cancelled during `pending_wait_duration`),
-                             the manager proceeds to acquire `lock`, changes the task status to `running`, and calls the task's
-                             `entrypoint`.
-
-                             Once `entrypoint` exits:
-
-                                 If the `cancelled` flag is not set in the task environment (i.e. the task ran to completion),
-                                 the manager changes the task status to `stopped`.
-
-                                 If the `cancelled` flag is set in the task environment, the manager changes the task status
-                                 to pending (because in Raven, cancellation only occurs when replaced by a new task of the same kind).
-
-    Returns a 1-argument function, which can be submitted to a `SequentialTaskManager`.
-    The function's argument is an `unpythonic.env.env`, representing the task environment.
-
-    The environment has one mandatory attribute, `wait` (bool), that MUST be filled in by the task submitter:
-        If `wait=True`, the task uses the pending state mechanism as described above.
-        If `wait=False`, the pending state is skipped, and the task starts running as soon as all previous tasks
-                         of the same kind have exited.
-
-    When `entrypoint` is entered, the task environment (sent in as the kwarg `task_env`) will contain two more attributes,
-    filled in by `SequentialTaskManager`:
-        `task_name`: `unpythonic.gsym`, unique task name. This is the return value from `SequentialTaskManager.submit`,
-                      thereby made visible for the task itself, for use in log messages.
-        `cancelled`: bool, co-operative cancellation flag. The task must monitor this flag, and if it ever becomes `True`,
-                     exit as soon as reasonably possible.
-
-    Currently, the task submitter is allowed to create and use any other attributes to pass custom data into the task.
-    """
-    # TODO: This function is too spammy even for debug logging, needs a "detailed debug" log level.
-    def _managed_task(env):
-        # logger.debug(f"_managed_task: {env.task_name}: setup")
-        # The task might be cancelled before this function is even entered. This happens if there are many tasks
-        # (more than processing threads) in the queue, since submitting a new task to a `SequentialTaskManager` cancels all previous ones.
-        if env.cancelled:
-            # logger.debug(f"_managed_task: {env.task_name}: cancelled (from task queue)")
-            return
-        while unbox(status_box) is task_status_running:  # wait for the previous task of the same kind to finish, if already running
-            time.sleep(running_poll_interval)
-        if env.cancelled:
-            # logger.debug(f"_managed_task: {env.task_name}: cancelled (from initial wait state)")
-            return
-        if env.wait:  # The pending mechanism is optional, so it can be disabled in use cases where "wait for more input" doesn't make sense.
-            # logger.debug(f"_managed_task: {env.task_name}: pending")
-            status_box << task_status_pending
-            time.sleep(pending_wait_duration)  # [s], cancellation period
-            if env.cancelled:  # Note we only cancel a task when it has been obsoleted by a newer one. So the task status is still pending.
-                # logger.debug(f"_managed_task: {env.task_name}: cancelled (from pending state)")
-                return
-        # logger.debug(f"_managed_task: {env.task_name}: acquiring lock for this kind of task")
-        with lock:
-            try:
-                # logger.debug(f"_managed_task: {env.task_name}: starting")
-                status_box << task_status_running
-                entrypoint(task_env=env)
-            except Exception as exc:  # VERY IMPORTANT, to not silently swallow uncaught exceptions from background tasks
-                logger.warning(f"_managed_task: {env.task_name}: exited with exception {type(exc)}: {exc}")
-                traceback.print_exc()  # DEBUG
-                raise
-            # else:
-            #     logger.debug(f"_managed_task: {env.task_name}: exited with status {'OK' if not env.cancelled else 'CANCELLED (from running state)'}")
-            finally:
-                if not env.cancelled:
-                    status_box << task_status_stopped
-                else:
-                    status_box << task_status_pending
-        # logger.debug(f"_managed_task: {env.task_name}: all done")
-    return _managed_task
-
-# --------------------------------------------------------------------------------
 # Helpers common for the annotation tooltip and the info panel
-
-def get_pixels_per_plotter_data_unit():
-    """Estimate pixels per plotter data unit, for conversion between viewport space and data space.
-
-    This is subtly wrong, because the plot widget includes also the space for the axis labels and such.
-    But there seems to be no way to get pixels per data unit from a plot in DPG (unless using a custom series,
-    which we don't).
-
-    We use this for estimation of on-screen distances in data space. For that purpose this is good enough.
-
-    Returns the tuple `(pixels_per_data_unit_x, pixels_per_data_unit_y)`.
-
-    Note that if axes are not equal aspect, the x/y results may be different.
-    """
-    # x0, y0 = dpg.get_item_rect_min("plot")
-    pixels_w, pixels_h = dpg.get_item_rect_size("plot")  # tag
-    xmin, xmax = dpg.get_axis_limits("axis0")  # tag  # in data space
-    ymin, ymax = dpg.get_axis_limits("axis1")  # tag  # in data space
-    data_w = xmax - xmin
-    data_h = ymax - ymin
-    if data_w == 0 or data_h == 0:  # no data in view (can happen e.g. if the plot hasn't been rendered yet)
-        return [0.0, 0.0]
-    pixels_per_data_unit_x = pixels_w / data_w
-    pixels_per_data_unit_y = pixels_h / data_h
-    return pixels_per_data_unit_x, pixels_per_data_unit_y
-
-def get_data_idxs_at_mouse():
-    """Return a list of data points (indices to `sorted_xxx`) that are currently under the mouse cursor.
-
-    Helper for mouse hover and mouse click handlers.
-    """
-    global dataset  # only for documenting intent (we don't write to it)
-    if dataset is None:  # nothing plotted when no dataset loaded
-        return make_blank_index_array()
-
-    # Find `k` data points nearest to the mouse cursor.
-    p = np.array(dpg.get_plot_mouse_pos())
-
-    # FIXME: DPG BUG WORKAROUND: when not initialized yet, `get_plot_mouse_pos` returns `[0, 0]`.
-    # This happens especially if the mouse cursor starts outside the plot area when the app starts.
-    # For many t-SNE plots, there are likely some data points near the origin.
-    first_time = (p == np.array([0.0, 0.0])).all()  # exactly zero - unlikely to happen otherwise (since we likely get asymmetric axis limits from t-SNE)
-    if first_time:
-        return make_blank_index_array()
-
-    # Since the plot aspect ratio is not necessarily square, we need x/y distances separately to judge the pixel distance.
-    # Hence the data space distances from the `kdtree` are not meaningful for our purposes.
-    data_space_distances_, data_idxs = dataset.kdtree.query(p, k=gui_config.datapoints_at_mouse_max_neighbors)  # `ks`: item indices into `sorted_xxx`
-    deltas = dataset.sorted_lowdim_data[data_idxs, :] - p  # [#k, 2].
-
-    pixels_per_data_unit_x, pixels_per_data_unit_y = get_pixels_per_plotter_data_unit()
-    if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:
-        return make_blank_index_array()
-
-    # Compute pixel distance, from mouse cursor, of each matched data point.
-    deltas[:, 0] *= pixels_per_data_unit_x
-    deltas[:, 1] *= pixels_per_data_unit_y
-    pixel_distance = (deltas[:, 0]**2 + deltas[:, 1]**2)**0.5
-
-    # Filter for data points within the maximum allowed pixel distance.
-    filt = (pixel_distance <= gui_config.selection_brush_radius_pixels)
-
-    # logger.debug(f"get_data_idxs_at_mouse: p = {p}, data_idxs[filt] = {data_idxs[filt]}, pixel_distance = {pixel_distance[filt]}")
-
-    return data_idxs[filt]
 
 def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
     """Gather item data for visualization, sorting by cluster.
@@ -2806,11 +1541,10 @@ def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
 
     return entries_by_cluster, format_cluster_annotation
 
-
 # --------------------------------------------------------------------------------
 # Annotation tooltip for mouse hover on the plotter
 
-annotation_render_status_box = box(task_status_stopped)
+annotation_render_status_box = box(bgtask.status_stopped)
 annotation_render_lock = threading.Lock()  # Render access - only one copy of the renderer may be rebuilding the annotation tooltip at any given time.
 annotation_content_lock = threading.RLock()  # Content double buffering (swap). Allowing the same thread to enter multiple nested critical sections makes some checks simpler here.
 
@@ -2860,11 +1594,11 @@ def update_mouse_hover(*, force=False, wait=True, wait_duration=0.05, env=None):
         dpg.hide_item(annotation_window)
     env.m_prev = m
 
-    annotation_render_task = make_managed_task(status_box=annotation_render_status_box,
-                                               lock=annotation_render_lock,
-                                               entrypoint=_update_annotation,
-                                               running_poll_interval=0.01,
-                                               pending_wait_duration=wait_duration)
+    annotation_render_task = bgtask.make_managed_task(status_box=annotation_render_status_box,
+                                                      lock=annotation_render_lock,
+                                                      entrypoint=_update_annotation,
+                                                      running_poll_interval=0.01,
+                                                      pending_wait_duration=wait_duration)
     annotation_task_manager.submit(annotation_render_task, envcls(wait=wait))
 
 # Worker.
@@ -3053,52 +1787,6 @@ def _update_annotation(*, task_env, env=None):
                         dpg.bind_item_font(search_mark_widget, icon_font_solid)
                     dpg.add_text("item listed]", color=hint_color, tag=f"annotation_help_notjumpable_explanation_right_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
 
-                # Position the tooltip elegantly, trying to keep the whole tooltip within the viewport area.
-                #
-                # IMPORTANT: Draw the tooltip a bit off from the mouse cursor position so that the cursor won't hover over it.
-                # This keeps `get_plot_mouse_pos` working, as well as improves tooltip readability since the mouse cursor doesn't cover part of it.
-
-                def compute_tooltip_position_scalar(*, algorithm, cursor_pos, tooltip_size, viewport_size, offset=20):
-                    """Compute x or y position for the annotation tooltip."""
-                    if algorithm not in ("snap", "snap_old", "smooth"):
-                        raise ValueError(f"Unknown `algorithm` '{algorithm}'; supported: 'snap', 'snap_old', 'smooth'.")
-
-                    if algorithm == "snap":  # Right/bottom side if the tooltip fits there, else left/top side.
-                        if cursor_pos + offset + tooltip_size < viewport_size:  # does it fit?
-                            return cursor_pos + offset
-                        elif cursor_pos - offset - tooltip_size >= 0:  # does it fit?
-                            return cursor_pos - offset - tooltip_size
-                        else:  # as far as it can go to the right/below while the right/bottom edge remains inside the viewport
-                            return viewport_size - tooltip_size
-
-                    elif algorithm == "snap_old":  # Right/bottom side when the cursor is at the left/top side of viewport, else left/top side.
-                        if cursor_pos < viewport_size / 2:
-                            return cursor_pos + offset
-                        else:
-                            return cursor_pos - offset - tooltip_size
-
-                    elif algorithm == "smooth":  # Cursor at left edge -> right/bottom side; cursor at right edge -> left/top side; in between, smoothly varying as a function of the cursor position.
-                        # Candidate position to the right/below (preferable in the left/top half of the viewport)
-                        if cursor_pos + offset + tooltip_size < viewport_size:  # does it fit?
-                            pos1 = cursor_pos + offset
-                        else:  # as far as it can go to the right/below while the right/bottom edge remains inside the viewport
-                            pos1 = viewport_size - tooltip_size
-
-                        # Candidate position to the left/above (preferable in the right/bottom half of the viewport)
-                        if cursor_pos - offset - tooltip_size >= 0:  # does it fit?
-                            pos2 = cursor_pos - offset - tooltip_size
-                        else:  # as far as it can go to the left/above while the left/top edge remains inside the viewport
-                            pos2 = 0
-
-                        # Weighted average of the two candidates, with a smooth transition.
-                        # This makes the tooltip x position vary smoothly as a function of the data point location in the plot window.
-                        # Due to symmetry, this places the tooltip exactly at the middle when the mouse is at the midpoint of the viewport (not necessarily at an axis line; that depends on axis limits).
-                        r = clamp(cursor_pos / viewport_size)  # relative coordinate, [0, 1]
-                        s = nonanalytic_smooth_transition(r, m=2.0)
-                        pos = (1.0 - s) * pos1 + s * pos2
-
-                        return pos
-
                 # Swap the new content in ("double-buffering")
                 # logger.debug(f"_update_annotation: {task_env.task_name}: Swapping in new content (old GUI widget ID {annotation_group}; new GUI widget ID {annotation_target_group}).")
                 mouse_hover_set_changed = (set(annotation_data_idxs) != old_mouse_hover_data_idxs_set)
@@ -3121,29 +1809,21 @@ def _update_annotation(*, task_env, env=None):
                     dpg.show_item(annotation_window)
 
                     # Tooltip window dimensions after autosizing not available yet, so we need to wait until we can compute the final position the tooltip.
-                    # TODO: Do we need a general utility to wait until a given GUI element updates?
-                    wait_frames_max = 10
-                    waited = 0
-                    old_tooltip_size = dpg.get_item_rect_size(annotation_window)
-                    while waited < wait_frames_max:
-                        dpg.split_frame()  # let the autosize happen
-                        waited += 1
+                    utils.wait_for_resize(annotation_window)
+                    tooltip_size = dpg.get_item_rect_size(annotation_window)
 
-                        tooltip_size = dpg.get_item_rect_size(annotation_window)
-                        if tooltip_size != old_tooltip_size:
-                            # logger.debug(f"_update_annotation: {task_env.task_name}: waited {waited} frame{'s' if waited != 1 else ''} for annotation window autosizing")
-                            break
-                    # else:
-                    #     logger.debug(f"_update_annotation: {task_env.task_name}: timeout ({wait_frames_max} frames) when waiting for annotation window autosizing")
-
-                    xpos = compute_tooltip_position_scalar(algorithm="snap",
-                                                           cursor_pos=mouse_pos[0],
-                                                           tooltip_size=tooltip_size[0],
-                                                           viewport_size=w)
-                    ypos = compute_tooltip_position_scalar(algorithm="smooth",
-                                                           cursor_pos=mouse_pos[1],
-                                                           tooltip_size=tooltip_size[1],
-                                                           viewport_size=h)
+                    # Position the tooltip elegantly, trying to keep the whole tooltip within the viewport area.
+                    #
+                    # IMPORTANT: This automatically positions the tooltip a bit off from the mouse cursor position so that the cursor won't hover over it.
+                    # This keeps `get_plot_mouse_pos` working, as well as improves tooltip readability since the mouse cursor doesn't cover part of it.
+                    xpos = utils.compute_tooltip_position_scalar(algorithm="snap",
+                                                                 cursor_pos=mouse_pos[0],
+                                                                 tooltip_size=tooltip_size[0],
+                                                                 viewport_size=w)
+                    ypos = utils.compute_tooltip_position_scalar(algorithm="smooth",
+                                                                 cursor_pos=mouse_pos[1],
+                                                                 tooltip_size=tooltip_size[1],
+                                                                 viewport_size=h)
 
                     dpg.set_item_pos(annotation_window, [xpos, ypos])
                 dpg.show_item(annotation_window)  # just in case it's hidden
@@ -3195,7 +1875,7 @@ def clear_mouse_hover():
 #
 # NOTE: Fasten your seatbelt, everything related to the info panel makes up ~half of the entire program.
 
-info_panel_render_status_box = box(task_status_stopped)
+info_panel_render_status_box = box(bgtask.status_stopped)
 info_panel_render_lock = threading.Lock()  # Render access - only one copy of the renderer may be rebuilding the info panel at any given time.
 info_panel_content_lock = threading.RLock()  # Content double buffering (swap). Allowing the same thread to enter multiple nested critical sections makes some checks simpler here.
 
@@ -3220,7 +1900,7 @@ report_markdown = box("")  # Text report of full content of info panel, in Markd
 def get_info_panel_content_area_start_pos():
     """Return `(x0, y0)`, the upper left corner of the content area of the info panel, in viewport coordinates."""
     # Item info panel starts at, in viewport coordinates:
-    x0, y0 = dpg.get_item_pos("item_information_panel")  # tag
+    x0, y0 = utils.get_widget_pos("item_information_panel")  # tag
     # Its content area starts at, in viewport coordinates:
     x0_content = x0 + 8 + 3  # 8px outer padding + 3px inner padding
     y0_content = y0 + 8 + 3  # 8px outer padding + 3px inner padding
@@ -3229,11 +1909,7 @@ def get_info_panel_content_area_start_pos():
 def get_info_panel_content_area_size():
     """Return `(width, height), the size of the content area of the info panel, in pixels.`"""
     _update_info_panel_height()  # HACK: at app startup, the main window thinks it has height=100, which is wrong.
-    # Child windows store width/height in their config.
-    config = dpg.get_item_configuration("item_information_panel")  # tag
-    w = config["width"]
-    h = config["height"]
-    return w, h
+    return utils.get_widget_size("item_information_panel")  # tag
 
 # ----------------------------------------
 # Info panel updater: task submitter.
@@ -3271,11 +1947,11 @@ def update_info_panel(*, wait=True, wait_duration=0.25):
     Note that *running* tasks are never cancelled, so if a previous update was already in progress, it will still
     complete, and then a new update will be triggered by the latest search input.
     """
-    info_panel_render_task = make_managed_task(status_box=info_panel_render_status_box,
-                                               lock=info_panel_render_lock,
-                                               entrypoint=_update_info_panel,
-                                               running_poll_interval=0.1,
-                                               pending_wait_duration=wait_duration)
+    info_panel_render_task = bgtask.make_managed_task(status_box=info_panel_render_status_box,
+                                                      lock=info_panel_render_lock,
+                                                      entrypoint=_update_info_panel,
+                                                      running_poll_interval=0.1,
+                                                      pending_wait_duration=wait_duration)
     info_panel_task_manager.submit(info_panel_render_task, envcls(wait=wait))
 
 # ----------------------------------------
@@ -3283,15 +1959,15 @@ def update_info_panel(*, wait=True, wait_duration=0.25):
 
 # In this section, `item` is a GUI widget's DPG tag or ID.
 #
-# NOTE: zero is a valid DPG ID. Hence in our filter functions, we use `None` to mean "no match", and otherwise return the item (DPG tag or ID) as-is.
+# NOTE: Zero is a valid DPG ID. Hence in our filter functions, we use `None` to mean "no match", and otherwise return the item (DPG tag or ID) as-is.
 
 def get_user_data(item):
     """Return a DPG widget's user data. Return `None` if not present."""
     if item is None:
         return None
-    config = dpg.get_item_configuration(item)  # no `try`, because we want this to fail-fast (and loud) in case of bugs in our code.
+    item_config = dpg.get_item_configuration(item)  # no `try`, because we want this to fail-fast (and loud) in case of bugs in our code.
     try:
-        return config["user_data"]
+        return item_config["user_data"]
     except KeyError:
         pass
     return None
@@ -3299,7 +1975,7 @@ def get_user_data(item):
 def is_user_data_kind(value, item):
     """Check a DPG widget's user data, and return the item if the user data `kind == value`. Else return `None`.
 
-    We always store user data as `(kind, data)`, where `kind` is str, and `data` is arbitrary (depending on `kind`).
+    Raven stores user data as `(kind, data)`, where `kind` is str, and `data` is arbitrary (depending on `kind`).
     """
     if item is None:
         return None
@@ -3319,6 +1995,7 @@ def is_cluster_title(item):  # e.g. "#42"
 def is_copy_entry_to_clipboard_button(item):
     return is_user_data_kind("copy_entry_to_clipboard_button", item)
 
+# # How to create an inverted predicate:
 # def is_not_entry_title_container_group(item):
 #     if is_entry_title_container_group(item) is None:
 #         return item
@@ -3340,356 +2017,16 @@ def is_non_blank_text_item(item):
 #         return item
 #     return None
 
-def is_completely_below_target_y(item, *, target_y):  # in viewport coordinates
-    if item is None:
-        return None
-    try:
-        x0, y0 = dpg.get_item_rect_min(item)
-    except KeyError:  # some items don't have `rect_min` (e.g. child windows)
-        x0, y0 = dpg.get_item_pos(item)
-
-    # logger.debug(f"is_completely_below_target_y: item {item} (tag '{dpg.get_item_alias(item)}', type {dpg.get_item_type(item)}): x0, y0 = {x0}, {y0}, target_y = {target_y}, match = {y0 >= target_y}")
-
-    if y0 >= target_y:
-        return item
-    return None
-
-def is_completely_above_target_y(item, *, target_y):  # in viewport coordinates
-    if item is None:
-        return None
-    try:
-        x0, y0 = dpg.get_item_rect_min(item)
-    except KeyError:  # some items don't have `rect_min` (e.g. child windows)
-        x0, y0 = dpg.get_item_pos(item)
-
-    try:
-        w, h = dpg.get_item_rect_size(item)
-    except KeyError:  # e.g. child window
-        config = dpg.get_item_configuration(item)
-        # w = config["width"]
-        h = config["height"]
-
-    item_y_last = y0 + h - 1
-    if item_y_last < target_y:
-        return item
-    return None
-
-def is_partially_below_target_y(item, *, target_y):  # in viewport coordinates
-    if item is None:
-        return None
-    try:
-        x0, y0 = dpg.get_item_rect_min(item)
-    except KeyError:  # some items don't have `rect_min` (e.g. child windows)
-        x0, y0 = dpg.get_item_pos(item)
-
-    try:
-        w, h = dpg.get_item_rect_size(item)
-    except KeyError:  # e.g. child window
-        config = dpg.get_item_configuration(item)
-        # w = config["width"]
-        h = config["height"]
-
-    item_y_last = y0 + h - 1
-    if item_y_last >= target_y:
-        return item
-    return None
-
-def is_partially_above_target_y(item, *, target_y):  # in viewport coordinates
-    if item is None:
-        return None
-    try:
-        x0, y0 = dpg.get_item_rect_min(item)
-    except KeyError:  # some items don't have `rect_min` (e.g. child windows)
-        x0, y0 = dpg.get_item_pos(item)
-
-    # logger.debug(f"is_partially_above_target_y: item {item} (tag '{dpg.get_item_alias(item)}', type {dpg.get_item_type(item)}): x0, y0 = {x0}, {y0}, target_y = {target_y}, match = {y0 >= target_y}")
-
-    if y0 < target_y:
-        return item
-    return None
-
-# ----------------------------------------
-# GUI widget search utilities
-
-def find_item_depth_first(root, *, accept, skip=None, _indent=0):
-    """Find a specific DPG GUI widget by depth-first recursion.
-
-    `root`: Widget to start in. DPG tag or ID.
-    `accept`: 1-arg callable. The argument is a DPG tag or ID.
-              Should return its input if the item should be accepted (thus terminating the search), or `None` otherwise.
-    `skip`: 1-arg callable, optional. The argument is a DPG tag or ID.
-            Should return its input if the item should be skipped (thus moving on), or `None` otherwise.
-            This is applied first, before testing `accept` or descending (if the item is a group).
-    `_indent`: For debug messages. Managed internally. Currently unused.
-
-    Skipping is especially useful to ignore non-relevant containers (group items) as early as possible,
-    without descending into them. (To make them easily detectable, use the `user_data` feature of DPG
-    to store something for your detector.)
-    """
-    # logger.debug(f"find_item_depth_first: {' ' * _indent}{root} (tag '{dpg.get_item_alias(root)}', type {dpg.get_item_type(root)}): should skip = {(skip(root) is not None) if skip is not None else 'n/a'}, acceptable = {accept(root) is not None}, #children = {len(dpg.get_item_children(root, slot=1))}")
-    if root is None:  # Should not happen during recursion, but can happen if accidentally manually called with `root=None`.
-        return None
-    if (skip is not None) and (skip(root) is not None):
-        return None
-    if (result := accept(root)) is not None:
-        # logger.debug(f"find_item_depth_first: {' ' * _indent}match found")
-        return result
-    if dpg.get_item_type(root) == "mvAppItemType::mvGroup":
-        for item in dpg.get_item_children(root, slot=1):
-            if (result := find_item_depth_first(item, accept=accept, skip=skip, _indent=_indent + 2)) is not None:
-                return result
-    return None
-
-def binary_search_item(items, *, accept, consider, skip=None, direction="right"):
-    """Binary-search a list of DPG GUI widgets to find the first one in the list that satisfies a monotonic criterion.
-
-    The main use case is to quickly (O(log(n))) find the first item that is currently on-screen in a scrollable window
-    that has lots (thousands or more) of widgets.
-
-    `items`: List of GUI widgets to be searched (DPG tag or ID for each).
-
-    `accept`: 1-arg callable. The argument is a DPG tag or ID.
-              Should return its input if the item is acceptable as the search result, or `None` otherwise.
-
-              When a visited item is a group, this is automatically recursively applied depth-first to find any acceptable item at any level.
-
-    Additionally, `items` may contain *confounders*, which are uninteresting items we don't want to accept as search results.
-    This typically happens when you `items = dpg.get_item_children(some_root_item, slot=1)` - beside the items you want,
-    the GUI may have separators and such.
-
-    The definition of a confounder is controlled by the following two parameters:
-
-    `consider`: 1-arg callable, optional. The argument is a DPG tag or ID.
-                Should return its input if the item merits looking into as a possible search result, or `None` otherwise.
-
-                This is needed when confounders are present in the data. If you know there are no confounders, use `consider=None`
-                to make the search faster. Then also the tree search will be disabled; we only look at the explicitly listed `items`.
-
-                If `consider is None`, then `skip` must also be `None`.
-
-                When confounders are present, `consider` is used to give the binary search useful intermediate candidates
-                so that the search can proceed.
-
-                When `consider is not None`, and a visited child of `root` is a group, this is automatically recursively
-                applied depth-first to find any item that could be considered, at any level.
-
-                Technically, this is the accept condition for the non-confounder scan (thus terminating the scan, accepting the item),
-                which is tested *after* the `skip` condition below.
-
-                For example, when looking for text, `consider` may accept any non-blank text item (that was not skipped by `skip`).
-                This way any blank (useless) texts as well as e.g. drawlist widgets are not considered.
-
-    `skip`: 1-arg callable, optional. The argument is a DPG tag or ID.
-            Should return its input if the item should be skipped (thus moving on), or `None` otherwise.
-
-            This is used to avoid giving the binary search intermediate candidates that we do not want as a search result.
-
-            Technically, this is the skip condition for the non-confounder scan (confounders should be skipped).
-            Skipping an item skips also its children.
-
-            Items that were not skipped are then checked using the `consider` condition, descending into children depth-first.
-
-            This can be used to skip confounder items, such as drawlists if interested in text items only.
-
-    `direction`: str. Return the item on which side of the discontinuity, like taking a one-sided limit in mathematics. One of:
-        "right": Return the first item that satisfies `accept(item)`.
-        "left": Return the last item that does *not* satisfy `accept(item)`.
-
-    **IMPORTANT**:
-
-    For binary search to work, the acceptability criterion must be monotonic. Without loss of generality, we assume that
-    `items[0]` is not acceptable, `items[-1]` is acceptable, and that there is exactly one jump from unacceptable to acceptable
-    somewhere in the list `items`.
-
-    Rather than looking for a specific item, this finds the minimal `j` such that none of `root.children[<j]` are acceptable,
-    whereas one of the items contained (recursively) somewhere in `root.children[j]` is acceptable.
-
-    Essentially, we look for a jump of the step function where the item kind changes from unacceptable to acceptable.
-    But we allow the list of children to have confounders sprinkled amid the items we are actually interested in.
-    """
-    # search_kind = "first acceptable item" if direction == "right" else "last non-acceptable item"
-    # logger.debug(f"binary_search_item: starting, direction = '{direction}'; searching for {search_kind}.")
-
-    # sanity check
-    if consider is None and skip is not None:
-        raise ValueError(f"When `consider is None`, the `skip` parameter must also be `None`; got skip = {skip}")
-
-    # Trivial case: no items
-    if not len(items):
-        # logger.debug("binary_search_item: `items` is empty; no match.")
-        return None
-
-    if consider is not None:  # confounders present in data?
-        def scan_for_non_confounder(start, *, step, jend=None):  # `step`: the only useful values are +1 (toward right) or -1 (toward left)
-            # logger.debug(f"binary_search_item: non-confounder scan, start = {start}, step = {step}, jend = {jend}")
-            if jend is None:
-                if step > 0:
-                    jend = len(items)
-                else:
-                    jend = 0
-            j = start
-            while (result := find_item_depth_first(items[j],
-                                                   accept=consider,  # NOTE the accept condition - looking for any non-confounder.
-                                                   skip=skip)) is None:
-                j += step
-                if (step > 0 and j >= jend) or (step < 0 and j < jend) or (step == 0):
-                    return None, None
-            # logger.debug(f"binary_search_item: non-confounder scan, final j = {j}, result = {result}")
-            return j, result
-        scan_for_non_confounder_toward_right = functools.partial(scan_for_non_confounder, step=+1)
-        scan_for_non_confounder_toward_left = functools.partial(scan_for_non_confounder, step=-1)
-    else:
-        def no_scan(start, *args, **kwargs):
-            return start, items[start]
-        scan_for_non_confounder_toward_right = no_scan
-        scan_for_non_confounder_toward_left = no_scan
-
-    if direction == "right":
-        # Trivial case: the first non-confounder item is acceptable.
-        j_left, item_left = scan_for_non_confounder_toward_right(start=0)
-        if (item_left is not None) and (accept(item_left) is not None):  # NOTE: `item_left` may be `None` if no non-confounder was found.
-            # logger.debug(f"binary_search_item: trivial case, direction = 'right': first item {item_left} is acceptable; returning that item.")
-            return item_left
-
-        # Trivial case: no acceptable item exists.
-        j_right, item_right = scan_for_non_confounder_toward_left(start=len(items) - 1)
-        if j_left == j_right:
-            # logger.debug("binary_search_item: trivial case, direction = 'right': search collapsed, no acceptable item; no match.")
-            return None
-        if (item_right is None) or (accept(item_right) is None):
-            # logger.debug("binary_search_item: trivial case, direction = 'right': no acceptable item exists; no match.")
-            return None
-    elif direction == "left":  # Mirror-symmetric to the previous case.
-        # If the last non-confounder item is not acceptable, it is the last item in the dataset that is not acceptable, so we return it.
-        j_right, item_right = scan_for_non_confounder_toward_left(start=len(items) - 1)
-        if (item_right is not None) and (accept(item_right) is None):
-            # logger.debug(f"binary_search_item: trivial case, direction = 'left': last item {item_right} is not acceptable; returning that item.")
-            return item_right
-
-        # If all non-confounder items are acceptable (or if there are non non-confounders), no "last unacceptable item" exists.
-        j_left, item_left = scan_for_non_confounder_toward_right(start=0)
-        if j_left == j_right:
-            # logger.debug("binary_search_item: trivial case, direction = 'left': search collapsed, all items are acceptable; no match.")
-            return None
-        if (item_left is None) or (accept(item_left) is not None):
-            # logger.debug("binary_search_item: trivial case, direction = 'left': no non-acceptable item exists; no match.")
-            return None
-    else:
-        raise ValueError(f"Unknown value for `direction` parameter: {direction}. Valid values are 'right' (return first acceptable item) or 'left' (return last non-acceptable item).")
-
-    # General case
-    #
-    # The idea is to have the right (as opposed to left) goalpost to land on the target item.
-
-    # Preconditions for general case (as well as invariant during iteration)
-    assert accept(item_left) is None, "binary_search_item: left item should not be acceptable"
-    assert accept(item_right) is not None, "binary_search_item: right item should be acceptable"
-
-    if consider is None:  # no confounders - use a classical binary search.
-        iteration = 0  # DEBUG
-        while True:
-            iteration += 1  # DEBUG
-            # logger.debug(f"binary_search_item: classical mode, iteration {iteration}, j_left = {j_left}, j_right = {j_right}")
-
-            jmid = (j_left + j_right) // 2
-            item_mid = items[jmid]
-            mid_acceptable = (accept(item_mid) is not None)
-            if mid_acceptable and jmid < j_right:
-                # logger.debug("binary_search_item:        moving right goalpost to mid")
-                j_right = jmid
-                continue
-            if (not mid_acceptable) and jmid > j_left:
-                # logger.debug("binary_search_item:        moving left goalpost to mid")
-                j_left = jmid
-                continue
-
-            break
-
-    else:  # with confounders
-        iteration = 0  # DEBUG
-        while True:
-            iteration += 1  # DEBUG
-            # logger.debug(f"binary_search_item: confounder mode, iteration {iteration}, j_left = {j_left}, j_right = {j_right}")
-
-            # The classical binary search would test just at this index:
-            jmid = (j_left + j_right) // 2
-
-            # But in this case, because we have confounders, we must scan a short distance linearly in both directions to find an item that is not a confounder.
-            jmid_right, item_right = scan_for_non_confounder_toward_right(start=jmid)
-            mid_right_acceptable = (accept(item_right) is not None)
-            jmid_left, item_left = scan_for_non_confounder_toward_left(start=jmid)
-            mid_left_acceptable = (accept(item_left) is not None)
-
-            # NOTE: To be safe, the right goalpost only goes as far as the *right-side* mid-item, and the left goalpost as far as the *left-side* mid-item.
-            # Once we have a (very small) range that cannot be safely collapsed further in this manner, we stop the binary search, and perform a final linear scan in that range.
-            # logger.debug(f"binary_search_item:    jmid_left = {jmid_left} (item {item_left}, acceptable: {mid_left_acceptable})")
-            # logger.debug(f"binary_search_item:    jmid_right = {jmid_right} (item {item_right}, acceptable: {mid_right_acceptable})")
-            if mid_right_acceptable and jmid_right < j_right:
-                # logger.debug("binary_search_item:        moving right goalpost to mid-right")
-                j_right = jmid_right
-                continue
-            if (not mid_left_acceptable) and jmid_left > j_left:
-                # logger.debug("binary_search_item:        moving left goalpost to mid-left")
-                j_left = jmid_left
-                continue
-
-            break
-
-    # Scan the final interval (a few items at most) linearly to find the first acceptable one (it's usually the one at `j_right`)
-    # logger.debug(f"binary_search_item: final j_left = {j_left}, j_right = {j_right}")
-
-    # I'm tempted to check the invariant (left item is not acceptable; right is acceptable),
-    # but the matching item might actually be somewhere inside `items[j_right]`, and the whole tree
-    # for `items[j_left]` should be non-acceptable. No point in an extra recursive search here.
-
-    if consider is None:
-        if direction == "right":
-            # logger.debug(f"binary_search_item: found first acceptable item j = {j_right}, item {items[j_right]}")
-            return items[j_right]
-        elif direction == "left":
-            # logger.debug(f"binary_search_item: found last non-acceptable item j = {j_left}, item {items[j_left]}")
-            return items[j_left]
-    else:
-        def consider_and_accept(item):
-            """Check whether `item` passes both `consider` and `accept` conditions."""
-            if (result := consider(item)) is not None:
-                # It is possible that `result is not item`, in case the actual non-confounder `result` was found somewhere inside the original `item`.
-                return accept(result)
-            return None
-
-        # logger.debug("binary_search_item: final linear scan for result in the detected range")
-        if direction == "right":
-            for j in range(j_left, j_right + 1):
-                item = items[j]
-                # logger.debug(f"binary_search_item: final linear scan: index j = {j}, item {item}")
-                if (result := find_item_depth_first(item,
-                                                    accept=consider_and_accept,  # NOTE the accept condition - looking for an item satisfying the actual search criterion (but is also a non-confounder).
-                                                    skip=skip)) is not None:
-                    # logger.debug(f"binary_search_item: final result: found first acceptable item {result}, returning that item.")
-                    return result
-        elif direction == "left":
-            for j in range(j_right, j_left - 1, -1):
-                item = items[j]
-                # logger.debug(f"binary_search_item: final linear scan: index j = {j}, item {item}")
-                if find_item_depth_first(item,
-                                         accept=consider_and_accept,  # NOTE the accept condition - looking for an item satisfying the actual search criterion (but is also a non-confounder).
-                                         skip=skip) is None:
-                    # logger.debug(f"binary_search_item: final result: found last non-acceptable item {item}, returning that item.")
-                    return item
-        # the "else" case was checked at the beginning
-
-    raise RuntimeError("binary_search_item: did not find anything; this should not happen. Maybe preconditions not satisfied, or `accept` function not monotonic?")
-
 # ----------------------------------------
 # Programmatic control of scroll position
 
-def info_panel_find_next_or_prev_item(items, *, _next=True, kluge=True, extra_y_offset=0):
-    """Find the next/previous GUI widget in `items`, in relation to the current position of the top of the info panel content area.
+def info_panel_find_next_or_prev_item(widgets, *, _next=True, kluge=True, extra_y_offset=0):
+    """Find the next/previous GUI widget in `widgets`, in relation to the current position of the top of the info panel content area.
 
-    Note `items` must contain only valid items, no confounders. This allows us to use a faster classical binary search.
+    Note `widgets` must contain only valid items, no confounders. This allows us to use a faster classical binary search.
 
-    `items` is parameterized so that this can be used both for the full set of items shown in the info panel
-    (`items=list(info_panel_entry_title_widgets.values())`) as well as for search results only (`items=info_panel_search_result_widgets`).
+    `widgets` is parameterized so that this can be used both for the full set of items shown in the info panel
+    (`widgets=list(info_panel_entry_title_widgets.values())`) as well as for search results only (`widgets=info_panel_search_result_widgets`).
 
     `_next`: bool, If `True`, find the next item, else find the previous item.
     `kluge`: bool. If `True`, reject any item too near the top of the content area, to look for the really next/previous one,
@@ -3697,9 +2034,9 @@ def info_panel_find_next_or_prev_item(items, *, _next=True, kluge=True, extra_y_
     `extra_y_offset`: int. This is useful e.g. for checking for first item *out of view* below the bottom of the content area
                       (by setting this offset to the content area height).
 
-    Returns the DPG ID or tag for the item, or `None` if no such item exists.
+    Returns the DPG ID or tag for the widget containing the next/previous item, or `None` if no such item exists.
     """
-    if not len(items):
+    if not len(widgets):
         return None
 
     _, y0_content = get_info_panel_content_area_start_pos()  # The "current match" is positioned at the top of the content area.
@@ -3707,16 +2044,16 @@ def info_panel_find_next_or_prev_item(items, *, _next=True, kluge=True, extra_y_
         kluge = (+1 if _next else -1) * gui_config.font_size  # Pixels. We arbitrarily use one line of text as a guideline.
     else:
         kluge = 0
-    def is_completely_below_top_of_content_area(item):
-        if is_completely_below_target_y(item, target_y=y0_content + kluge + extra_y_offset) is not None:
-            return item
+    def is_completely_below_top_of_content_area(widget):
+        if utils.is_completely_below_target_y(widget, target_y=y0_content + kluge + extra_y_offset) is not None:
+            return widget
         return None
     # logger.debug(f"info_panel_find_next_or_prev_item: frame {dpg.get_frame_count()}: searching (_next = {_next}, kluge = {kluge}, extra_y_offset = {extra_y_offset}).")
-    return binary_search_item(items=items,
-                              accept=is_completely_below_top_of_content_area,
-                              consider=None,
-                              skip=None,
-                              direction=("right" if _next else "left"))
+    return utils.binary_search_widget(widgets=widgets,
+                                      accept=is_completely_below_top_of_content_area,
+                                      consider=None,
+                                      skip=None,
+                                      direction=("right" if _next else "left"))
 
 def scroll_info_panel_to_position(target_y_scroll):
     """Scroll the info panel to given position.
@@ -3744,7 +2081,7 @@ def scroll_info_panel_to_position(target_y_scroll):
     max_y_scroll = dpg.get_y_scroll_max("item_information_panel")  # tag
     if target_y_scroll is None:
         target_y_scroll = max_y_scroll
-    target_y_scroll = clamp(target_y_scroll, min_y_scroll, max_y_scroll)
+    target_y_scroll = utils.clamp(target_y_scroll, min_y_scroll, max_y_scroll)
 
     # Dispatch the animation.
     #
@@ -3754,14 +2091,14 @@ def scroll_info_panel_to_position(target_y_scroll):
     # it is just updated instead of creating a new one.
     global scroll_animation
     with scroll_animation_lock:
-        with SmoothScrolling.class_lock:
-            animator.add(SmoothScrolling(target_child_window="item_information_panel",
-                                         target_y_scroll=target_y_scroll,
-                                         smooth=gui_config.smooth_scrolling,
-                                         smooth_step=gui_config.smooth_scrolling_step_parameter,
-                                         flasher=info_panel_scroll_end_flasher,
-                                         finish_callback=clear_global_scroll_animation_reference))
-            scroll_animation = SmoothScrolling.instances["item_information_panel"]  # get the reified instance
+        with animation.SmoothScrolling.class_lock:
+            animation.animator.add(animation.SmoothScrolling(target_child_window="item_information_panel",
+                                                             target_y_scroll=target_y_scroll,
+                                                             smooth=gui_config.smooth_scrolling,
+                                                             smooth_step=gui_config.smooth_scrolling_step_parameter,
+                                                             flasher=info_panel_scroll_end_flasher,
+                                                             finish_callback=clear_global_scroll_animation_reference))
+            scroll_animation = animation.SmoothScrolling.instances["item_information_panel"]  # get the reified instance
 
     return target_y_scroll
 
@@ -3770,7 +2107,7 @@ def scroll_info_panel_to_item(item):
 
     `item`: DPG ID or tag of the target GUI widget.
 
-    Returns the new final scroll position.
+    Returns the target scroll position (new final position, which will be reached later, when the scrolling completes).
     """
     # Old scroll position. The scroll position is in coordinates of *the item info panel* (not viewport coordinates).
     y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
@@ -3867,11 +2204,12 @@ def _copy_report_to_clipboard(*, report_format):
     dpg.set_clipboard_text(report_text)
 
     # Acknowledge the action in the GUI.
-    animator.add(ButtonFlash(message=f"Copied to clipboard! ({'plain text' if report_format == 'txt' else 'Markdown'})",
-                             target_button=copy_report_button,
-                             target_tooltip=copy_report_tooltip,
-                             target_text=copy_report_tooltip_text,
-                             duration=gui_config.acknowledgment_duration))
+    animation.animator.add(animation.ButtonFlash(message=f"Copied to clipboard! ({'plain text' if report_format == 'txt' else 'Markdown'})",
+                                                 target_button=copy_report_button,
+                                                 target_tooltip=copy_report_tooltip,
+                                                 target_text=copy_report_tooltip_text,
+                                                 original_theme=global_theme,
+                                                 duration=gui_config.acknowledgment_duration))
 
 def copy_current_entry_to_clipboard():
     """Copy the authors, year and title of the current item to the clipboard.
@@ -3901,7 +2239,7 @@ def _copy_entry_to_clipboard(item):
         data_idx = info_panel_widget_to_data_idx[item]
         entry = dataset.sorted_entries[data_idx]
 
-        button = find_item_depth_first(item, accept=is_copy_entry_to_clipboard_button)
+        button = utils.find_widget_depth_first(item, accept=is_copy_entry_to_clipboard_button)
         user_data = get_user_data(button)
         kind_, data = user_data
         tooltip, tooltip_text = data
@@ -3909,11 +2247,12 @@ def _copy_entry_to_clipboard(item):
     dpg.set_clipboard_text(f"{entry.author} ({entry.year}): {entry.title}")
 
     # Acknowledge the action in the GUI.
-    animator.add(ButtonFlash(message="Copied to clipboard!",
-                             target_button=button,
-                             target_tooltip=tooltip,
-                             target_text=tooltip_text,
-                             duration=gui_config.acknowledgment_duration))
+    animation.animator.add(animation.ButtonFlash(message="Copied to clipboard!",
+                                                 target_button=button,
+                                                 target_tooltip=tooltip,
+                                                 target_text=tooltip_text,
+                                                 original_theme=global_theme,
+                                                 duration=gui_config.acknowledgment_duration))
 
 def search_or_select_current_entry():
     """Search for the current item in the plotter, or change the selection.
@@ -4029,7 +2368,7 @@ def update_current_search_result_status():
         # logger.debug(f"update_current_search_result_status: frame {dpg.get_frame_count()}: updating")
 
         # Find the topmost search result below the top of the content area.
-        search_result_item = info_panel_find_next_or_prev_item(items=info_panel_search_result_widgets, kluge=False)
+        search_result_item = info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets, kluge=False)
         if search_result_item is None:  # all search results are above the visible area (scroll position is past the last result)
             dpg.hide_item("item_information_search_controls_current_item")  # tag
             dpg.enable_item("prev_search_match_button")  # tag
@@ -4074,8 +2413,8 @@ def update_next_prev_search_result_buttons():
             dpg.disable_item("prev_search_match_button")  # tag
             return
         # we have at least one search result shown in the info panel
-        next_match = info_panel_find_next_or_prev_item(items=info_panel_search_result_widgets)
-        prev_match = info_panel_find_next_or_prev_item(items=info_panel_search_result_widgets, _next=False)
+        next_match = info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets)
+        prev_match = info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets, _next=False)
         if next_match is not None:
             dpg.enable_item("next_search_match_button")  # tag
         else:
@@ -4102,7 +2441,7 @@ def scroll_info_panel_to_next_search_match():
     # so we don't need to do that here. It would have the same race condition issue - also the button updater calls the item search.
     try:
         with info_panel_content_lock:
-            if (next_match := info_panel_find_next_or_prev_item(items=info_panel_search_result_widgets)) is not None:
+            if (next_match := info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets)) is not None:
                 scroll_info_panel_to_item(next_match)
     except RuntimeError:
         pass
@@ -4111,7 +2450,7 @@ def scroll_info_panel_to_prev_search_match():
     """Scroll the info panel to the previous item matching the current search."""
     try:
         with info_panel_content_lock:
-            if (prev_match := info_panel_find_next_or_prev_item(items=info_panel_search_result_widgets, _next=False)) is not None:
+            if (prev_match := info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets, _next=False)) is not None:
                 scroll_info_panel_to_item(prev_match)
     except RuntimeError:
         pass
@@ -4129,7 +2468,7 @@ def _get_current_info_panel_item():
     """
     with info_panel_content_lock:
         # TODO: Performance: `update_current_search_result_status` may need to call us per-frame while scrolling. Maybe store the list too (in `_update_info_panel`) so we don't need to reconstruct it every time.
-        return info_panel_find_next_or_prev_item(items=list(info_panel_entry_title_widgets.values()), kluge=False)
+        return info_panel_find_next_or_prev_item(widgets=list(info_panel_entry_title_widgets.values()), kluge=False)
 
 def _get_cluster_of_current_info_panel_item():
     """Return the cluster ID of the current item.
@@ -4297,38 +2636,16 @@ def _update_info_panel(*, task_env=None, env=None):
         # Use the same approach as SillyTavern-Timelines. See `highlightTextSearchMatches`
         # in https://github.com/SillyTavern/SillyTavern-Timelines/blob/master/index.js
         #
-        # We match the fragments from longest to shortest. This prefers
-        # the longest match when the fragments have common substrings.
-        # For example, "laser las".
-        #
-        # TODO: Currently we sort here, although it should arguably be the job of `search_string_to_fragments`.
-        # However, doing it this way is faster, because that runs whenever each individual letter is typed
-        # into the search field, whereas this runs only when the info panel updates.
-        #
-        # Also we must match all fragments simultaneously, to avoid e.g. "col" matching
+        # We sort, i.e. we match the fragments from longest to shortest. This prefers the longest match
+        # when the fragments have common substrings. For example, "laser las".
+        case_sensitive_fragments, case_insensitive_fragments = utils.search_string_to_fragments(search_string, sort=True)
+
+        # Convert the raw fragments into a format suitable for use in regexes (escaping special characters; matching superscript/subscript digits).
+        case_sensitive_fragments = [utils.search_fragment_to_highlight_regex_fragment(x) for x in case_sensitive_fragments]
+        case_insensitive_fragments = [utils.search_fragment_to_highlight_regex_fragment(x) for x in case_insensitive_fragments]
+
+        # When highlighting, we must match all fragments simultaneously, to avoid e.g. "col" matching
         # the "<font color=...>" inserted by this highlighter when it first highlights "col".
-        case_sensitive_fragments, case_insensitive_fragments = search_string_to_fragments(search_string)
-        case_sensitive_fragments = list(sorted(case_sensitive_fragments, key=lambda x: -len(x)))  # longest to shortest
-        case_insensitive_fragments = list(sorted(case_insensitive_fragments, key=lambda x: -len(x)))  # longest to shortest
-
-        def search_fragment_to_highlight_regex_fragment(s):
-            """Make a search fragment usable in a regex for search highlighting."""
-            # Escape regex special characters.  TODO: ^, $, others?
-            s = s.replace("(", r"\(")
-            s = s.replace(")", r"\)")
-            s = s.replace("[", r"\[")
-            s = s.replace("]", r"\]")
-            s = s.replace("{", r"\{")
-            s = s.replace("}", r"\}")
-            s = s.replace(".", r"\.")
-            # Look also for superscript and subscript variants of numbers.
-            # We can't do this for letters, because there are simply too many letters in each item title. :)
-            for digit in "0123456789":
-                s = s.replace(digit, f"({digit}|{config.regular_to_subscript_numbers[digit]}|{config.regular_to_superscript_numbers[digit]})")
-            return s
-        case_sensitive_fragments = [search_fragment_to_highlight_regex_fragment(x) for x in case_sensitive_fragments]
-        case_insensitive_fragments = [search_fragment_to_highlight_regex_fragment(x) for x in case_insensitive_fragments]
-
         if case_sensitive_fragments:
             regex_case_sensitive = re.compile(f"({'|'.join(case_sensitive_fragments)})")
         if case_insensitive_fragments:
@@ -4348,8 +2665,8 @@ def _update_info_panel(*, task_env=None, env=None):
 
     def get_scroll_anchor_item_data(item):  # DEBUG only
         try:
-            config = dpg.get_item_configuration(item)
-            user_data = config["user_data"]
+            item_config = dpg.get_item_configuration(item)
+            user_data = item_config["user_data"]
             if user_data is not None:
                 kind_, data_idx = user_data  # `data_idx`: index to `sorted_xxx`
                 entry = dataset.sorted_entries[data_idx]
@@ -4396,12 +2713,12 @@ def _update_info_panel(*, task_env=None, env=None):
             else:
                 logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Selection not changed; can anchor on any info panel item.")
                 possible_anchors_only = list(info_panel_entry_title_widgets.values())
-            is_partially_below_top_of_viewport = functools.partial(is_partially_below_target_y, target_y=0)
-            item = binary_search_item(items=possible_anchors_only,
-                                      accept=is_partially_below_top_of_viewport,
-                                      consider=None,
-                                      skip=None,
-                                      direction="right")
+            is_partially_below_top_of_viewport = functools.partial(utils.is_partially_below_target_y, target_y=0)
+            item = utils.binary_search_widget(widgets=possible_anchors_only,
+                                              accept=is_partially_below_top_of_viewport,
+                                              consider=None,
+                                              skip=None,
+                                              direction="right")
 
             # Multi-anchor: anchor using any item visible in viewport.
             #
@@ -4412,7 +2729,7 @@ def _update_info_panel(*, task_env=None, env=None):
                 # There are only a few due to screen estate being limited (even at 4k resolution), so we can linearly scan them.
                 start_display_idx = info_panel_widget_to_display_idx[item]  # how-manyth item in the info panel
                 _, info_panel_h = get_info_panel_content_area_size()
-                is_partially_above_bottom_of_viewport = functools.partial(is_partially_above_target_y, target_y=info_panel_h)
+                is_partially_above_bottom_of_viewport = functools.partial(utils.is_partially_above_target_y, target_y=info_panel_h)
                 visible_items = []
                 for item_ in islice(info_panel_entry_title_widgets.values())[start_display_idx:]:
                     if not is_partially_above_bottom_of_viewport(item_):
@@ -5162,7 +3479,7 @@ def recenter_help_window():
     if help_window is None:
         return
 
-    main_window_w, main_window_h = get_main_window_size()
+    main_window_w, main_window_h = utils.get_widget_size(main_window)  # Get the size of the main window, and hence also the viewport, in pixels.
     logger.debug(f"recenter_help_window: Main window size is {main_window_w}x{main_window_h}.")
 
     # # Render offscreen so we get the final size. Only needed if the size can change.
@@ -5175,9 +3492,7 @@ def recenter_help_window():
     #
     # logger.debug(f"recenter_help_window: After wait for render: Help window is visible? {dpg.is_item_visible(help_window)}.")
 
-    config = dpg.get_item_configuration(help_window)
-    w = config["width"]
-    h = config["height"]
+    w, h = utils.get_widget_size(help_window)
     logger.debug(f"recenter_help_window: Help window size is {w}x{h}.")
 
     # Center the help window in the viewport
@@ -5219,28 +3534,6 @@ def is_help_window_visible():
 # --------------------------------------------------------------------------------
 # GUI resizing handler
 
-def wait_for_viewport_size_change(wait_frames_max):
-    """Wait for the viewport size to actually change.
-
-    `wait_frames_max`: int or `None`.
-       int: How many frames to wait at most. Return `True` if the viewport size changed, `False` otherwise.
-       `None`: Wait indefinitely. Return `True` once the viewport size has changed.
-    """
-    waited = 0
-    w0, h0 = get_main_window_size()
-    while True:
-        dpg.split_frame()
-        waited += 1
-
-        w, h = get_main_window_size()
-        if w != w0 or h != h0:
-            logger.debug(f"wait_for_viewport_size_change: viewport resized after waiting for {waited} frame{'s' if waited != 1 else ''}")
-            return True
-
-        if (wait_frames_max is not None) and (waited >= wait_frames_max):
-            logger.debug(f"wait_for_viewport_size_change: timeout ({wait_frames_max} frame{'s' if wait_frames_max != 1 else ''}) while waiting for viewport to resize")
-            return False
-
 def resize_gui():
     """Wait for the viewport size to actually change, then resize dynamically sized GUI elements.
 
@@ -5248,14 +3541,13 @@ def resize_gui():
     For the viewport resize callback, that one fires (*almost* always?) after the size has already changed.
     """
     logger.debug("resize_gui: Entered. Waiting for viewport size change.")
-    if wait_for_viewport_size_change(wait_frames_max=10):
+    if utils.wait_for_resize(main_window):
         _resize_gui()
     logger.debug("resize_gui: Done.")
 
 def _update_info_panel_height():
     """Resize the info panel content area RIGHT NOW, based on main window height."""
-    config = dpg.get_item_configuration(main_window)
-    h = config["height"]
+    w, h = utils.get_widget_size(main_window)
     dpg.set_item_height("item_information_panel", h - gui_config.info_panel_reserved_h)  # tag
 
 def _resize_gui():
@@ -5267,12 +3559,14 @@ def _resize_gui():
     update_current_item_info()
     logger.debug("_resize_gui: Recentering help window.")
     recenter_help_window()
+    logger.debug("_resize_gui: Updating annotation tooltip.")
+    update_mouse_hover(force=True, wait=False)
     logger.debug("_resize_gui: Rebuilding dimmer overlay.")
     info_panel_dimmer_overlay.build(rebuild=True)
     logger.debug("_resize_gui: Done.")
 
 
-# Old versions of DPG have a bug where they don't always call the viewport resize callback, but it seems to work in 1.11.
+# Old versions of DPG have a bug where they don't always call the viewport resize callback, but it seems to work in 1.11 and later.
 # https://github.com/hoffstadt/DearPyGui/issues/1896
 dpg.set_viewport_resize_callback(_resize_gui)
 
@@ -5308,7 +3602,7 @@ def draw_select_radius_indicator():
 
     # Avoid unnecessary clear/redraw to prevent flickering
     p = dpg.get_plot_mouse_pos()
-    pixels_per_data_unit_x, pixels_per_data_unit_y = get_pixels_per_plotter_data_unit()
+    pixels_per_data_unit_x, pixels_per_data_unit_y = utils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")
     if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:  # no dataset open?
         clear_select_radius_indicator()
         return
@@ -5340,28 +3634,12 @@ def draw_select_radius_indicator():
                                                    fill=(0, 0, 0, 0),
                                                    parent="plot")  # tag
 
-def _mouse_inside_widget(item):
-    """Return whether the mouse cursor is inside the given widget (DPG ID or tag)."""
-    try:
-        x0, y0 = dpg.get_item_rect_min(item)
-    except KeyError:  # some items don't have `rect_min` (e.g. child windows)
-        x0, y0 = dpg.get_item_pos(item)
-    try:
-        w, h = dpg.get_item_rect_size(item)
-    except KeyError:  # e.g. child window
-        config = dpg.get_item_configuration(item)
-        w = config["width"]
-        h = config["height"]
-    m = dpg.get_mouse_pos(local=False)  # in viewport coordinates
-    if m[0] < x0 or m[0] >= x0 + w or m[1] < y0 or m[1] >= y0 + h:
-        return False
-    return True
 def mouse_inside_plot_widget():
     """Return whether the mouse cursor is inside the plot widget."""
-    return _mouse_inside_widget("plot")  # tag
+    return utils.is_mouse_inside_widget("plot")  # tag
 def mouse_inside_info_panel():
     """Return whether the mouse cursor is inside the info panel."""
-    return _mouse_inside_widget("item_information_panel")  # tag
+    return utils.is_mouse_inside_widget("item_information_panel")  # tag
 
 def mouse_wheel_callback(sender, app_data):
     """Update the plotter data tooltip when the user zooms with the mouse wheel.
@@ -5648,10 +3926,10 @@ parser.add_argument(dest='filename', nargs='?', default=None, type=str, metavar=
 opts = parser.parse_args()
 
 bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
-annotation_task_manager = SequentialTaskManager(name="annotation_update",
-                                                executor=bg)
-info_panel_task_manager = SequentialTaskManager(name="info_panel_update",
-                                                executor=bg)  # can re-use the same executor here to place both kinds of tasks in the same thread pool.
+annotation_task_manager = bgtask.SequentialTaskManager(name="annotation_update",
+                                                       executor=bg)
+info_panel_task_manager = bgtask.SequentialTaskManager(name="info_panel_update",
+                                                       executor=bg)  # can re-use the same executor here to place both kinds of tasks in the same thread pool.
 
 # import sys
 # print(dir(sys.modules["__main__"]))  # DEBUG: Check this occasionally to make sure we don't accidentally store any temporary variables in the module-level namespace.
@@ -5662,7 +3940,7 @@ dpg.show_viewport()
 
 # Load the file optionally provided on the command line
 if opts.filename:
-    _default_path = os.path.dirname(_to_absolute(opts.filename))
+    _default_path = os.path.dirname(utils.absolutize_filename(opts.filename))
     open_file(opts.filename)
 else:
     _default_path = os.getcwd()
