@@ -10,6 +10,7 @@ from glob import glob
 import os
 import platform
 import psutil
+import threading
 import time
 
 import dearpygui.dearpygui as dpg
@@ -41,6 +42,173 @@ class FileDialog:
     Returns:
         None
     """
+    _asset_loading_lock = threading.Lock()  # thread-safe asset loading
+    _assets_loaded = False
+
+    @classmethod
+    def _load_assets(cls):
+        with cls._asset_loading_lock:
+            if cls._assets_loaded:
+                return
+
+            cls._assets_loaded = True
+
+            cls.fd_img_path = os.path.join(os.path.dirname(__file__), "images")
+
+            # file dialog theme
+
+            with dpg.theme() as cls.selec_alignt:
+                with dpg.theme_component(dpg.mvThemeCat_Core):
+                    dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=0, y=.5)
+
+            with dpg.theme() as cls.size_alignt:
+                with dpg.theme_component(dpg.mvThemeCat_Core):
+                    dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=1, y=.5)
+
+            # texture loading
+            diwidth, diheight, _, didata = dpg.load_image(os.path.join(cls.fd_img_path, "document.png"))
+            hwidth, hheight, _, hdata = dpg.load_image(os.path.join(cls.fd_img_path, "home.png"))
+            afiwidth, afiheight, _, afidata = dpg.load_image(os.path.join(cls.fd_img_path, "add_folder.png"))
+            afwidth, afheight, _, afdata = dpg.load_image(os.path.join(cls.fd_img_path, "add_file.png"))
+            mfwidth, mfheight, _, mfdata = dpg.load_image(os.path.join(cls.fd_img_path, "mini_folder.png"))
+            fiwidth, fiheight, _, fidata = dpg.load_image(os.path.join(cls.fd_img_path, "folder.png"))
+            mdwidth, mdheight, _, mddata = dpg.load_image(os.path.join(cls.fd_img_path, "mini_document.png"))
+            mewidth, meheight, _, medata = dpg.load_image(os.path.join(cls.fd_img_path, "mini_error.png"))
+            rwidth, rheight, _, rdata = dpg.load_image(os.path.join(cls.fd_img_path, "refresh.png"))
+            hdwidth, hdheight, _, hddata = dpg.load_image(os.path.join(cls.fd_img_path, "hd.png"))
+            pwidth, pheight, _, pdata = dpg.load_image(os.path.join(cls.fd_img_path, "picture.png"))
+            bpwidth, bpheight, _, bpdata = dpg.load_image(os.path.join(cls.fd_img_path, "big_picture.png"))
+            pfwidth, pfheight, _, pfdata = dpg.load_image(os.path.join(cls.fd_img_path, "picture_folder.png"))
+            dwidth, dheight, _, ddata = dpg.load_image(os.path.join(cls.fd_img_path, "desktop.png"))
+            vwidth, vheight, _, vdata = dpg.load_image(os.path.join(cls.fd_img_path, "videos.png"))
+            mwidth, mheight, _, mdata = dpg.load_image(os.path.join(cls.fd_img_path, "music.png"))
+            dfwidth, dfheight, _, dfdata = dpg.load_image(os.path.join(cls.fd_img_path, "downloads.png"))
+            dcfwidth, dcfheight, _, dcfdata = dpg.load_image(os.path.join(cls.fd_img_path, "documents.png"))
+            swidth, sheight, _, sdata = dpg.load_image(os.path.join(cls.fd_img_path, "search.png"))
+            bwidth, bheight, _, bdata = dpg.load_image(os.path.join(cls.fd_img_path, "back.png"))
+            cwidth, cheight, _, cdata = dpg.load_image(os.path.join(cls.fd_img_path, "c.png"))
+            gwidth, gheight, _, gdata = dpg.load_image(os.path.join(cls.fd_img_path, "gears.png"))
+            mnwidth, mnheight, _, mndata = dpg.load_image(os.path.join(cls.fd_img_path, "music_note.png"))
+            nwidth, nheight, _, ndata = dpg.load_image(os.path.join(cls.fd_img_path, "note.png"))
+            owidth, oheight, _, odata = dpg.load_image(os.path.join(cls.fd_img_path, "object.png"))
+            pywidth, pyheight, _, pydata = dpg.load_image(os.path.join(cls.fd_img_path, "python.png"))
+            scwidth, scheight, _, scdata = dpg.load_image(os.path.join(cls.fd_img_path, "script.png"))
+            vfwidth, vfheight, _, vfdata = dpg.load_image(os.path.join(cls.fd_img_path, "video.png"))
+            lwidth, lheight, _, ldata = dpg.load_image(os.path.join(cls.fd_img_path, "link.png"))
+            uwidth, uheight, _, udata = dpg.load_image(os.path.join(cls.fd_img_path, "url.png"))
+            vewidth, veheight, _, vedata = dpg.load_image(os.path.join(cls.fd_img_path, "vector.png"))
+            zwidth, zheight, _, zdata = dpg.load_image(os.path.join(cls.fd_img_path, "zip.png"))
+            awidth, aheight, _, adata = dpg.load_image(os.path.join(cls.fd_img_path, "app.png"))
+            iwidth, iheight, _, idata = dpg.load_image(os.path.join(cls.fd_img_path, "iso.png"))
+
+            # low-level
+            cls.ico_document = [diwidth, diheight, didata]
+            cls.ico_home = [hwidth, hheight, hdata]
+            cls.ico_add_folder = [afiwidth, afiheight, afidata]
+            cls.ico_add_file = [afwidth, afheight, afdata]
+            cls.ico_mini_folder = [mfwidth, mfheight, mfdata]
+            cls.ico_folder = [fiwidth, fiheight, fidata]
+            cls.ico_mini_document = [mdwidth, mdheight, mddata]
+            cls.ico_mini_error = [mewidth, meheight, medata]
+            cls.ico_refresh = [rwidth, rheight, rdata]
+            cls.ico_hard_disk = [hdwidth, hdheight, hddata]
+            cls.ico_picture = [pwidth, pheight, pdata]
+            cls.ico_big_picture = [bpwidth, bpheight, bpdata]
+            cls.ico_picture_folder = [pfwidth, pfheight, pfdata]
+            cls.ico_desktop = [dwidth, dheight, ddata]
+            cls.ico_videos = [vwidth, vheight, vdata]
+            cls.ico_music_folder = [mwidth, mheight, mdata]
+            cls.ico_downloads = [dfwidth, dfheight, dfdata]
+            cls.ico_document_folder = [dcfwidth, dcfheight, dcfdata]
+            cls.ico_search = [swidth, sheight, sdata]
+            cls.ico_back = [bwidth, bheight, bdata]
+            cls.ico_c = [cwidth, cheight, cdata]
+            cls.ico_gears = [gwidth, gheight, gdata]
+            cls.ico_music_note = [mnwidth, mnheight, mndata]
+            cls.ico_note = [nwidth, nheight, ndata]
+            cls.ico_object = [owidth, oheight, odata]
+            cls.ico_python = [pywidth, pyheight, pydata]
+            cls.ico_script = [scwidth, scheight, scdata]
+            cls.ico_video = [vfwidth, vfheight, vfdata]
+            cls.ico_link = [lwidth, lheight, ldata]
+            cls.ico_url = [uwidth, uheight, udata]
+            cls.ico_vector = [vewidth, veheight, vedata]
+            cls.ico_zip = [zwidth, zheight, zdata]
+            cls.ico_app = [awidth, aheight, adata]
+            cls.ico_iso = [iwidth, iheight, idata]
+
+            # high-level
+            with dpg.texture_registry():
+                dpg.add_static_texture(width=cls.ico_document[0], height=cls.ico_document[1], default_value=cls.ico_document[2], tag="ico_document")
+                dpg.add_static_texture(width=cls.ico_home[0], height=cls.ico_home[1], default_value=cls.ico_home[2], tag="ico_home")
+                dpg.add_static_texture(width=cls.ico_add_folder[0], height=cls.ico_add_folder[1], default_value=cls.ico_add_folder[2], tag="ico_add_folder")
+                dpg.add_static_texture(width=cls.ico_add_file[0], height=cls.ico_add_file[1], default_value=cls.ico_add_file[2], tag="ico_add_file")
+                dpg.add_static_texture(width=cls.ico_mini_folder[0], height=cls.ico_mini_folder[1], default_value=cls.ico_mini_folder[2], tag="ico_mini_folder")
+                dpg.add_static_texture(width=cls.ico_folder[0], height=cls.ico_folder[1], default_value=cls.ico_folder[2], tag="ico_folder")
+                dpg.add_static_texture(width=cls.ico_mini_document[0], height=cls.ico_mini_document[1], default_value=cls.ico_mini_document[2], tag="ico_mini_document")
+                dpg.add_static_texture(width=cls.ico_mini_error[0], height=cls.ico_mini_error[1], default_value=cls.ico_mini_error[2], tag="ico_mini_error")
+                dpg.add_static_texture(width=cls.ico_refresh[0], height=cls.ico_refresh[1], default_value=cls.ico_refresh[2], tag="ico_refresh")
+                dpg.add_static_texture(width=cls.ico_hard_disk[0], height=cls.ico_hard_disk[1], default_value=cls.ico_hard_disk[2], tag="ico_hard_disk")
+                dpg.add_static_texture(width=cls.ico_picture[0], height=cls.ico_picture[1], default_value=cls.ico_picture[2], tag="ico_picture")
+                dpg.add_static_texture(width=cls.ico_big_picture[0], height=cls.ico_big_picture[1], default_value=cls.ico_big_picture[2], tag="ico_big_picture")
+                dpg.add_static_texture(width=cls.ico_picture_folder[0], height=cls.ico_picture_folder[1], default_value=cls.ico_picture_folder[2], tag="ico_picture_folder")
+                dpg.add_static_texture(width=cls.ico_desktop[0], height=cls.ico_desktop[1], default_value=cls.ico_desktop[2], tag="ico_desktop")
+                dpg.add_static_texture(width=cls.ico_videos[0], height=cls.ico_videos[1], default_value=cls.ico_videos[2], tag="ico_videos")
+                dpg.add_static_texture(width=cls.ico_music_folder[0], height=cls.ico_music_folder[1], default_value=cls.ico_music_folder[2], tag="ico_music_folder")
+                dpg.add_static_texture(width=cls.ico_downloads[0], height=cls.ico_downloads[1], default_value=cls.ico_downloads[2], tag="ico_downloads")
+                dpg.add_static_texture(width=cls.ico_document_folder[0], height=cls.ico_document_folder[1], default_value=cls.ico_document_folder[2], tag="ico_document_folder")
+                dpg.add_static_texture(width=cls.ico_search[0], height=cls.ico_search[1], default_value=cls.ico_search[2], tag="ico_search")
+                dpg.add_static_texture(width=cls.ico_back[0], height=cls.ico_back[1], default_value=cls.ico_back[2], tag="ico_back")
+                dpg.add_static_texture(width=cls.ico_c[0], height=cls.ico_c[1], default_value=cls.ico_c[2], tag="ico_c")
+                dpg.add_static_texture(width=cls.ico_gears[0], height=cls.ico_gears[1], default_value=cls.ico_gears[2], tag="ico_gears")
+                dpg.add_static_texture(width=cls.ico_music_note[0], height=cls.ico_music_note[1], default_value=cls.ico_music_note[2], tag="ico_music_note")
+                dpg.add_static_texture(width=cls.ico_note[0], height=cls.ico_note[1], default_value=cls.ico_note[2], tag="ico_note")
+                dpg.add_static_texture(width=cls.ico_object[0], height=cls.ico_object[1], default_value=cls.ico_object[2], tag="ico_object")
+                dpg.add_static_texture(width=cls.ico_python[0], height=cls.ico_python[1], default_value=cls.ico_python[2], tag="ico_python")
+                dpg.add_static_texture(width=cls.ico_script[0], height=cls.ico_script[1], default_value=cls.ico_script[2], tag="ico_script")
+                dpg.add_static_texture(width=cls.ico_video[0], height=cls.ico_video[1], default_value=cls.ico_video[2], tag="ico_video")
+                dpg.add_static_texture(width=cls.ico_link[0], height=cls.ico_link[1], default_value=cls.ico_link[2], tag="ico_link")
+                dpg.add_static_texture(width=cls.ico_url[0], height=cls.ico_url[1], default_value=cls.ico_url[2], tag="ico_url")
+                dpg.add_static_texture(width=cls.ico_vector[0], height=cls.ico_vector[1], default_value=cls.ico_vector[2], tag="ico_vector")
+                dpg.add_static_texture(width=cls.ico_zip[0], height=cls.ico_zip[1], default_value=cls.ico_zip[2], tag="ico_zip")
+                dpg.add_static_texture(width=cls.ico_app[0], height=cls.ico_app[1], default_value=cls.ico_app[2], tag="ico_app")
+                dpg.add_static_texture(width=cls.ico_iso[0], height=cls.ico_iso[1], default_value=cls.ico_iso[2], tag="ico_iso")
+
+                cls.img_document = "ico_document"
+                cls.img_home = "ico_home"
+                cls.img_add_folder = "ico_add_folder"
+                cls.img_add_file = "ico_add_file"
+                cls.img_mini_folder = "ico_mini_folder"
+                cls.img_folder = "ico_folder"
+                cls.img_mini_document = "ico_mini_document"
+                cls.img_mini_error = "ico_mini_error"
+                cls.img_refresh = "ico_refresh"
+                cls.img_hard_disk = "ico_hard_disk"
+                cls.img_picture = "ico_picture"
+                cls.img_big_picture = "ico_big_picture"
+                cls.img_picture_folder = "ico_picture_folder"
+                cls.img_desktop = "ico_desktop"
+                cls.img_videos = "ico_videos"
+                cls.img_music_folder = "ico_music_folder"
+                cls.img_downloads = "ico_downloads"
+                cls.img_document_folder = "ico_document_folder"
+                cls.img_search = "ico_search"
+                cls.img_back = "ico_back"
+                cls.img_c = "ico_c"
+                cls.img_gears = "ico_gears"
+                cls.img_music_note = "ico_music_note"
+                cls.img_note = "ico_note"
+                cls.img_object = "ico_object"
+                cls.img_python = "ico_python"
+                cls.img_script = "ico_script"
+                cls.img_video = "ico_video"
+                cls.img_link = "ico_link"
+                cls.img_url = "ico_url"
+                cls.img_vector = "ico_vector"
+                cls.img_zip = "ico_zip"
+                cls.img_app = "ico_app"
+                cls.img_iso = "ico_iso"
+
     def __init__(
         self,
         title="File dialog",
@@ -84,6 +252,8 @@ class FileDialog:
         self.show_hidden_files = show_hidden_files
         self.user_style = user_style
 
+        self.instance_tag = f"0x{id(self):x}"  # for making unique DPG tags
+
         self.PAYLOAD_TYPE = 'ws_' + self.tag
         self.selected_files = []
         self.selec_height = 16
@@ -91,161 +261,7 @@ class FileDialog:
         self.last_click_time = 0
         self.double_click_threshold = 0.25  # seconds; adjust the time as needed.  # TODO: should really get this from OS if possible in a cross-platform way
 
-        self.fd_img_path = os.path.join(os.path.dirname(__file__), "images")
-
-        # file dialog theme
-
-        with dpg.theme() as selec_alignt:
-            with dpg.theme_component(dpg.mvThemeCat_Core):
-                dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=0, y=.5)
-
-        with dpg.theme() as size_alignt:
-            with dpg.theme_component(dpg.mvThemeCat_Core):
-                dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=1, y=.5)
-
-        # texture loading
-        diwidth, diheight, _, didata = dpg.load_image(os.path.join(self.fd_img_path, "document.png"))
-        hwidth, hheight, _, hdata = dpg.load_image(os.path.join(self.fd_img_path, "home.png"))
-        afiwidth, afiheight, _, afidata = dpg.load_image(os.path.join(self.fd_img_path, "add_folder.png"))
-        afwidth, afheight, _, afdata = dpg.load_image(os.path.join(self.fd_img_path, "add_file.png"))
-        mfwidth, mfheight, _, mfdata = dpg.load_image(os.path.join(self.fd_img_path, "mini_folder.png"))
-        fiwidth, fiheight, _, fidata = dpg.load_image(os.path.join(self.fd_img_path, "folder.png"))
-        mdwidth, mdheight, _, mddata = dpg.load_image(os.path.join(self.fd_img_path, "mini_document.png"))
-        mewidth, meheight, _, medata = dpg.load_image(os.path.join(self.fd_img_path, "mini_error.png"))
-        rwidth, rheight, _, rdata = dpg.load_image(os.path.join(self.fd_img_path, "refresh.png"))
-        hdwidth, hdheight, _, hddata = dpg.load_image(os.path.join(self.fd_img_path, "hd.png"))
-        pwidth, pheight, _, pdata = dpg.load_image(os.path.join(self.fd_img_path, "picture.png"))
-        bpwidth, bpheight, _, bpdata = dpg.load_image(os.path.join(self.fd_img_path, "big_picture.png"))
-        pfwidth, pfheight, _, pfdata = dpg.load_image(os.path.join(self.fd_img_path, "picture_folder.png"))
-        dwidth, dheight, _, ddata = dpg.load_image(os.path.join(self.fd_img_path, "desktop.png"))
-        vwidth, vheight, _, vdata = dpg.load_image(os.path.join(self.fd_img_path, "videos.png"))
-        mwidth, mheight, _, mdata = dpg.load_image(os.path.join(self.fd_img_path, "music.png"))
-        dfwidth, dfheight, _, dfdata = dpg.load_image(os.path.join(self.fd_img_path, "downloads.png"))
-        dcfwidth, dcfheight, _, dcfdata = dpg.load_image(os.path.join(self.fd_img_path, "documents.png"))
-        swidth, sheight, _, sdata = dpg.load_image(os.path.join(self.fd_img_path, "search.png"))
-        bwidth, bheight, _, bdata = dpg.load_image(os.path.join(self.fd_img_path, "back.png"))
-        cwidth, cheight, _, cdata = dpg.load_image(os.path.join(self.fd_img_path, "c.png"))
-        gwidth, gheight, _, gdata = dpg.load_image(os.path.join(self.fd_img_path, "gears.png"))
-        mnwidth, mnheight, _, mndata = dpg.load_image(os.path.join(self.fd_img_path, "music_note.png"))
-        nwidth, nheight, _, ndata = dpg.load_image(os.path.join(self.fd_img_path, "note.png"))
-        owidth, oheight, _, odata = dpg.load_image(os.path.join(self.fd_img_path, "object.png"))
-        pywidth, pyheight, _, pydata = dpg.load_image(os.path.join(self.fd_img_path, "python.png"))
-        scwidth, scheight, _, scdata = dpg.load_image(os.path.join(self.fd_img_path, "script.png"))
-        vfwidth, vfheight, _, vfdata = dpg.load_image(os.path.join(self.fd_img_path, "video.png"))
-        lwidth, lheight, _, ldata = dpg.load_image(os.path.join(self.fd_img_path, "link.png"))
-        uwidth, uheight, _, udata = dpg.load_image(os.path.join(self.fd_img_path, "url.png"))
-        vewidth, veheight, _, vedata = dpg.load_image(os.path.join(self.fd_img_path, "vector.png"))
-        zwidth, zheight, _, zdata = dpg.load_image(os.path.join(self.fd_img_path, "zip.png"))
-        awidth, aheight, _, adata = dpg.load_image(os.path.join(self.fd_img_path, "app.png"))
-        iwidth, iheight, _, idata = dpg.load_image(os.path.join(self.fd_img_path, "iso.png"))
-
-        # low-level
-        self.ico_document = [diwidth, diheight, didata]
-        self.ico_home = [hwidth, hheight, hdata]
-        self.ico_add_folder = [afiwidth, afiheight, afidata]
-        self.ico_add_file = [afwidth, afheight, afdata]
-        self.ico_mini_folder = [mfwidth, mfheight, mfdata]
-        self.ico_folder = [fiwidth, fiheight, fidata]
-        self.ico_mini_document = [mdwidth, mdheight, mddata]
-        self.ico_mini_error = [mewidth, meheight, medata]
-        self.ico_refresh = [rwidth, rheight, rdata]
-        self.ico_hard_disk = [hdwidth, hdheight, hddata]
-        self.ico_picture = [pwidth, pheight, pdata]
-        self.ico_big_picture = [bpwidth, bpheight, bpdata]
-        self.ico_picture_folder = [pfwidth, pfheight, pfdata]
-        self.ico_desktop = [dwidth, dheight, ddata]
-        self.ico_videos = [vwidth, vheight, vdata]
-        self.ico_music_folder = [mwidth, mheight, mdata]
-        self.ico_downloads = [dfwidth, dfheight, dfdata]
-        self.ico_document_folder = [dcfwidth, dcfheight, dcfdata]
-        self.ico_search = [swidth, sheight, sdata]
-        self.ico_back = [bwidth, bheight, bdata]
-        self.ico_c = [cwidth, cheight, cdata]
-        self.ico_gears = [gwidth, gheight, gdata]
-        self.ico_music_note = [mnwidth, mnheight, mndata]
-        self.ico_note = [nwidth, nheight, ndata]
-        self.ico_object = [owidth, oheight, odata]
-        self.ico_python = [pywidth, pyheight, pydata]
-        self.ico_script = [scwidth, scheight, scdata]
-        self.ico_video = [vfwidth, vfheight, vfdata]
-        self.ico_link = [lwidth, lheight, ldata]
-        self.ico_url = [uwidth, uheight, udata]
-        self.ico_vector = [vewidth, veheight, vedata]
-        self.ico_zip = [zwidth, zheight, zdata]
-        self.ico_app = [awidth, aheight, adata]
-        self.ico_iso = [iwidth, iheight, idata]
-
-        # high-level
-        with dpg.texture_registry():
-            dpg.add_static_texture(width=self.ico_document[0], height=self.ico_document[1], default_value=self.ico_document[2], tag="ico_document")
-            dpg.add_static_texture(width=self.ico_home[0], height=self.ico_home[1], default_value=self.ico_home[2], tag="ico_home")
-            dpg.add_static_texture(width=self.ico_add_folder[0], height=self.ico_add_folder[1], default_value=self.ico_add_folder[2], tag="ico_add_folder")
-            dpg.add_static_texture(width=self.ico_add_file[0], height=self.ico_add_file[1], default_value=self.ico_add_file[2], tag="ico_add_file")
-            dpg.add_static_texture(width=self.ico_mini_folder[0], height=self.ico_mini_folder[1], default_value=self.ico_mini_folder[2], tag="ico_mini_folder")
-            dpg.add_static_texture(width=self.ico_folder[0], height=self.ico_folder[1], default_value=self.ico_folder[2], tag="ico_folder")
-            dpg.add_static_texture(width=self.ico_mini_document[0], height=self.ico_mini_document[1], default_value=self.ico_mini_document[2], tag="ico_mini_document")
-            dpg.add_static_texture(width=self.ico_mini_error[0], height=self.ico_mini_error[1], default_value=self.ico_mini_error[2], tag="ico_mini_error")
-            dpg.add_static_texture(width=self.ico_refresh[0], height=self.ico_refresh[1], default_value=self.ico_refresh[2], tag="ico_refresh")
-            dpg.add_static_texture(width=self.ico_hard_disk[0], height=self.ico_hard_disk[1], default_value=self.ico_hard_disk[2], tag="ico_hard_disk")
-            dpg.add_static_texture(width=self.ico_picture[0], height=self.ico_picture[1], default_value=self.ico_picture[2], tag="ico_picture")
-            dpg.add_static_texture(width=self.ico_big_picture[0], height=self.ico_big_picture[1], default_value=self.ico_big_picture[2], tag="ico_big_picture")
-            dpg.add_static_texture(width=self.ico_picture_folder[0], height=self.ico_picture_folder[1], default_value=self.ico_picture_folder[2], tag="ico_picture_folder")
-            dpg.add_static_texture(width=self.ico_desktop[0], height=self.ico_desktop[1], default_value=self.ico_desktop[2], tag="ico_desktop")
-            dpg.add_static_texture(width=self.ico_videos[0], height=self.ico_videos[1], default_value=self.ico_videos[2], tag="ico_videos")
-            dpg.add_static_texture(width=self.ico_music_folder[0], height=self.ico_music_folder[1], default_value=self.ico_music_folder[2], tag="ico_music_folder")
-            dpg.add_static_texture(width=self.ico_downloads[0], height=self.ico_downloads[1], default_value=self.ico_downloads[2], tag="ico_downloads")
-            dpg.add_static_texture(width=self.ico_document_folder[0], height=self.ico_document_folder[1], default_value=self.ico_document_folder[2], tag="ico_document_folder")
-            dpg.add_static_texture(width=self.ico_search[0], height=self.ico_search[1], default_value=self.ico_search[2], tag="ico_search")
-            dpg.add_static_texture(width=self.ico_back[0], height=self.ico_back[1], default_value=self.ico_back[2], tag="ico_back")
-            dpg.add_static_texture(width=self.ico_c[0], height=self.ico_c[1], default_value=self.ico_c[2], tag="ico_c")
-            dpg.add_static_texture(width=self.ico_gears[0], height=self.ico_gears[1], default_value=self.ico_gears[2], tag="ico_gears")
-            dpg.add_static_texture(width=self.ico_music_note[0], height=self.ico_music_note[1], default_value=self.ico_music_note[2], tag="ico_music_note")
-            dpg.add_static_texture(width=self.ico_note[0], height=self.ico_note[1], default_value=self.ico_note[2], tag="ico_note")
-            dpg.add_static_texture(width=self.ico_object[0], height=self.ico_object[1], default_value=self.ico_object[2], tag="ico_object")
-            dpg.add_static_texture(width=self.ico_python[0], height=self.ico_python[1], default_value=self.ico_python[2], tag="ico_python")
-            dpg.add_static_texture(width=self.ico_script[0], height=self.ico_script[1], default_value=self.ico_script[2], tag="ico_script")
-            dpg.add_static_texture(width=self.ico_video[0], height=self.ico_video[1], default_value=self.ico_video[2], tag="ico_video")
-            dpg.add_static_texture(width=self.ico_link[0], height=self.ico_link[1], default_value=self.ico_link[2], tag="ico_link")
-            dpg.add_static_texture(width=self.ico_url[0], height=self.ico_url[1], default_value=self.ico_url[2], tag="ico_url")
-            dpg.add_static_texture(width=self.ico_vector[0], height=self.ico_vector[1], default_value=self.ico_vector[2], tag="ico_vector")
-            dpg.add_static_texture(width=self.ico_zip[0], height=self.ico_zip[1], default_value=self.ico_zip[2], tag="ico_zip")
-            dpg.add_static_texture(width=self.ico_app[0], height=self.ico_app[1], default_value=self.ico_app[2], tag="ico_app")
-            dpg.add_static_texture(width=self.ico_iso[0], height=self.ico_iso[1], default_value=self.ico_iso[2], tag="ico_iso")
-
-            self.img_document = "ico_document"
-            self.img_home = "ico_home"
-            self.img_add_folder = "ico_add_folder"
-            self.img_add_file = "ico_add_file"
-            self.img_mini_folder = "ico_mini_folder"
-            self.img_folder = "ico_folder"
-            self.img_mini_document = "ico_mini_document"
-            self.img_mini_error = "ico_mini_error"
-            self.img_refresh = "ico_refresh"
-            self.img_hard_disk = "ico_hard_disk"
-            self.img_picture = "ico_picture"
-            self.img_big_picture = "ico_big_picture"
-            self.img_picture_folder = "ico_picture_folder"
-            self.img_desktop = "ico_desktop"
-            self.img_videos = "ico_videos"
-            self.img_music_folder = "ico_music_folder"
-            self.img_downloads = "ico_downloads"
-            self.img_document_folder = "ico_document_folder"
-            self.img_search = "ico_search"
-            self.img_back = "ico_back"
-            self.img_c = "ico_c"
-            self.img_gears = "ico_gears"
-            self.img_music_note = "ico_music_note"
-            self.img_note = "ico_note"
-            self.img_object = "ico_object"
-            self.img_python = "ico_python"
-            self.img_script = "ico_script"
-            self.img_video = "ico_video"
-            self.img_link = "ico_link"
-            self.img_url = "ico_url"
-            self.img_vector = "ico_vector"
-            self.img_zip = "ico_zip"
-            self.img_app = "ico_app"
-            self.img_iso = "ico_iso"
+        self._load_assets()
 
         # low-level functions
         def _get_all_drives():
@@ -263,7 +279,7 @@ class FileDialog:
             return drive_list
 
         def delete_table():
-            for child in dpg.get_item_children("explorer", 1):
+            for child in dpg.get_item_children(f"explorer_{self.instance_tag}", 1):
                 dpg.delete_item(child)
 
         def get_file_size(file_path):
@@ -306,7 +322,7 @@ class FileDialog:
 
         def on_path_enter():
             try:
-                chdir(dpg.get_value("ex_path_input"))
+                chdir(dpg.get_value(f"ex_path_input_{self.instance_tag}"))
             except FileNotFoundError:
                 message_box("Invalid path", "No such file or directory")
 
@@ -364,7 +380,7 @@ class FileDialog:
                         if os.path.isdir(user_data[1]):
                             logger.debug(f"open_file: Content: {dpg.get_item_label(sender)}, files: {user_data}")
                             chdir(user_data[1])
-                            dpg.set_value("ex_search", "")
+                            dpg.set_value(f"ex_search_{self.instance_tag}", "")
                         elif os.path.isfile(user_data[1]):
                             if len(self.selected_files) < 1:
                                 self.selected_files.append(user_data[1])
@@ -372,13 +388,13 @@ class FileDialog:
                             return user_data[1]
                 else:
                     if os.path.isfile(user_data[1]):
-                        _deselect_recursive("explorer")  # unselect others
+                        _deselect_recursive(f"explorer_{self.instance_tag}")  # unselect others
                         dpg.set_value(sender, True)  # and select this item
                         self.selected_files.clear()
                         self.selected_files.append(user_data[1])
 
         def _search():
-            res = dpg.get_value("ex_search")
+            res = dpg.get_value(f"ex_search_{self.instance_tag}")
             reset_dir(default_path=os.getcwd(), file_name_filter=res)
 
         def get_directory_path(directory_name):
@@ -425,7 +441,7 @@ class FileDialog:
             except:  # TODO: Catch which types exactly? `Exception`? `BaseException`?
                 return False
 
-        def _makedir(item, callback, parent="explorer", size=False):
+        def _makedir(item, callback, parent=f"explorer_{self.instance_tag}", size=False):
             file_name = os.path.basename(item)
 
             creation_time = os.path.getctime(item)
@@ -458,10 +474,10 @@ class FileDialog:
 
                 if self.allow_drag is True:
                     drag_payload = dpg.add_drag_payload(parent=cell_name, payload_type=self.PAYLOAD_TYPE)
-                dpg.bind_item_theme(cell_name, selec_alignt)
-                dpg.bind_item_theme(cell_time, selec_alignt)
-                dpg.bind_item_theme(cell_type, selec_alignt)
-                dpg.bind_item_theme(cell_size, size_alignt)
+                dpg.bind_item_theme(cell_name, self.selec_alignt)
+                dpg.bind_item_theme(cell_time, self.selec_alignt)
+                dpg.bind_item_theme(cell_type, self.selec_alignt)
+                dpg.bind_item_theme(cell_size, self.size_alignt)
                 if self.allow_drag is True:
                     if file_name.endswith((".png", ".jpg")):
                         dpg.add_image(self.img_big_picture, parent=drag_payload)
@@ -470,7 +486,7 @@ class FileDialog:
                     elif item_type == "File":
                         dpg.add_image(self.img_document, parent=drag_payload)
 
-        def _makefile(item, callback, parent="explorer"):
+        def _makefile(item, callback, parent=f"explorer_{self.instance_tag}"):
             if self.file_filter == ".*" or item.endswith(self.file_filter):
                 file_name = os.path.basename(item)
 
@@ -550,10 +566,10 @@ class FileDialog:
 
                     if self.allow_drag is True:
                         drag_payload = dpg.add_drag_payload(parent=cell_name, payload_type=self.PAYLOAD_TYPE)
-                    dpg.bind_item_theme(cell_name, selec_alignt)
-                    dpg.bind_item_theme(cell_time, selec_alignt)
-                    dpg.bind_item_theme(cell_type, selec_alignt)
-                    dpg.bind_item_theme(cell_size, size_alignt)
+                    dpg.bind_item_theme(cell_name, self.selec_alignt)
+                    dpg.bind_item_theme(cell_time, self.selec_alignt)
+                    dpg.bind_item_theme(cell_type, self.selec_alignt)
+                    dpg.bind_item_theme(cell_size, self.size_alignt)
                     if self.allow_drag is True:
                         if file_name.endswith((".png", ".jpg")):
                             dpg.add_image(self.img_big_picture, parent=drag_payload)
@@ -574,7 +590,7 @@ class FileDialog:
             if ctrl_pressed:
                 return
             if double_clicked:
-                dpg.set_value("ex_search", "")
+                dpg.set_value(f"ex_search_{self.instance_tag}", "")
                 chdir("..")
 
         def filter_combo_selector(sender, app_data):
@@ -596,7 +612,7 @@ class FileDialog:
         def reset_dir(file_name_filter=None, default_path=self.default_path):
             self.selected_files.clear()
             try:
-                dpg.configure_item("ex_path_input", default_value=os.getcwd())
+                dpg.configure_item(f"ex_path_input_{self.instance_tag}", default_value=os.getcwd())
                 _dir = os.listdir(default_path)
                 delete_table()
 
@@ -605,7 +621,7 @@ class FileDialog:
                 files = [file for file in _dir if os.path.isfile(file)]
 
                 # 'special directory' that sends back to the previous directory
-                with dpg.table_row(parent="explorer"):
+                with dpg.table_row(parent=f"explorer_{self.instance_tag}"):
                     with dpg.group(horizontal=True):
                         kwargs_file = {'tint_color': [255, 255, 255, 255]}
                         dpg.add_image(self.img_mini_folder, **kwargs_file)
@@ -615,7 +631,7 @@ class FileDialog:
                     for _dir in dirs:
                         if not _is_hidden(_dir) or self.show_hidden_files:
                             if file_name_filter:
-                                if dpg.get_value("ex_search") in _dir:
+                                if dpg.get_value(f"ex_search_{self.instance_tag}") in _dir:
                                     _makedir(_dir, open_file)
                             else:
                                 _makedir(_dir, open_file)
@@ -625,7 +641,7 @@ class FileDialog:
                         for file in files:
                             if (not _is_hidden(file)) or self.show_hidden_files:
                                 if file_name_filter:
-                                    if dpg.get_value("ex_search") in file:
+                                    if dpg.get_value(f"ex_search_{self.instance_tag}") in file:
                                         _makefile(file, open_file)
                                 else:
                                     _makefile(file, open_file)
@@ -664,7 +680,7 @@ class FileDialog:
             with dpg.group(horizontal=True):
                 # shortcut menu
                 if (self.user_style == 0):
-                    with dpg.child_window(tag="shortcut_menu", width=200, resizable_x=True, show=self.show_shortcuts_menu, height=-info_px):
+                    with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=200, resizable_x=True, show=self.show_shortcuts_menu, height=-info_px):
                         home = get_directory_path("Home")
                         desktop = get_directory_path("Desktop")
                         downloads = get_directory_path("Downloads")
@@ -706,7 +722,7 @@ class FileDialog:
                                     dpg.add_menu_item(label=drive, user_data=drive, callback=open_drive)
 
                 elif (self.user_style == 1):
-                    with dpg.child_window(tag="shortcut_menu", width=40, show=self.show_shortcuts_menu, height=-info_px):
+                    with dpg.child_window(tag=f"shortcut_menu_{self.instance_tag}", width=40, show=self.show_shortcuts_menu, height=-info_px):
                         home = get_directory_path("Home")
                         desktop = get_directory_path("Desktop")
                         downloads = get_directory_path("Downloads")
@@ -760,14 +776,14 @@ class FileDialog:
                             dpg.set_item_callback(button_refresh, refresh)
                             dpg.set_item_callback(button_goback, goback)
 
-                            dpg.add_input_text(hint="Path", on_enter=True, callback=on_path_enter, default_value=os.getcwd(), width=-1, tag="ex_path_input")
+                            dpg.add_input_text(hint="Path", on_enter=True, callback=on_path_enter, default_value=os.getcwd(), width=-1, tag=f"ex_path_input_{self.instance_tag}")
 
                         with dpg.group(horizontal=True):
-                            dpg.add_input_text(hint="Search files", callback=_search, tag="ex_search", width=-1)
+                            dpg.add_input_text(hint="Search files", callback=_search, tag=f"ex_search_{self.instance_tag}", width=-1)
 
                         # main explorer table header
                         with dpg.table(
-                            tag='explorer',
+                            tag=f'explorer_{self.instance_tag}',
                             height=-1,
                             width=-1,
                             resizable=True,
@@ -783,10 +799,10 @@ class FileDialog:
                             iwow_date = 50
                             iwow_type = 10
                             iwow_size = 10
-                            dpg.add_table_column(label='Name', init_width_or_weight=iwow_name, tag="ex_name")
-                            dpg.add_table_column(label='Date', init_width_or_weight=iwow_date, tag="ex_date")
-                            dpg.add_table_column(label='Type', init_width_or_weight=iwow_type, tag="ex_type")
-                            dpg.add_table_column(label='Size', init_width_or_weight=iwow_size, width=10, tag="ex_size")
+                            dpg.add_table_column(label='Name', init_width_or_weight=iwow_name, tag=f"ex_name_{self.instance_tag}")
+                            dpg.add_table_column(label='Date', init_width_or_weight=iwow_date, tag=f"ex_date_{self.instance_tag}")
+                            dpg.add_table_column(label='Type', init_width_or_weight=iwow_type, tag=f"ex_type_{self.instance_tag}")
+                            dpg.add_table_column(label='Size', init_width_or_weight=iwow_size, width=10, tag=f"ex_size_{self.instance_tag}")
 
             with dpg.group(horizontal=True):
                 dpg.add_spacer(width=480)
