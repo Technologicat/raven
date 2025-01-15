@@ -5,13 +5,14 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-import dearpygui.dearpygui as dpg
 import functools
-import os
-import time
-import psutil
-import platform
 from glob import glob
+import os
+import platform
+import psutil
+import time
+
+import dearpygui.dearpygui as dpg
 
 from ... import animation
 
