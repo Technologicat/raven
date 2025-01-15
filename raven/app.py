@@ -3566,7 +3566,8 @@ def _resize_gui():
     logger.debug("_resize_gui: Updating annotation tooltip.")
     update_mouse_hover(force=True, wait=False)
     logger.debug("_resize_gui: Rebuilding dimmer overlay.")
-    info_panel_dimmer_overlay.build(rebuild=True)
+    if info_panel_dimmer_overlay is not None:
+        info_panel_dimmer_overlay.build(rebuild=True)
     logger.debug("_resize_gui: Done.")
 
 
