@@ -263,7 +263,7 @@ def update_selection(new_selection_data_idxs, mode="replace", *, force=False, wa
         "intersect" (`new_selection_data_idxs` with current selection)
     `force`: if `True`, don't care whether the selection set actually changes, but update the GUI regardless.
              Used when loading a new dataset.
-    `wait`: whether to wait for more keyboard/mouse input before starting the info panel update.
+    `wait`: bool, whether to wait for more keyboard/mouse input before starting long-running GUI updates.
             Used by mouse-draw select.
     `update_selection_undo_history`: as it says on the tin. Mouse-draw mode sets this to `False` so that
                                      every small movement of the mouse won't emit a separate undo entry.
@@ -666,16 +666,18 @@ def load_data_into_plotter(dataset):
             #     mvPlotColormap_PiYG=internal_dpg.mvPlotColormap_PiYG
             #     mvPlotColormap_Spectral=internal_dpg.mvPlotColormap_Spectral
             #     mvPlotColormap_Greys=internal_dpg.mvPlotColormap_Greys
+            #
+            # See also:
+            #     https://dearpygui.readthedocs.io/en/1.x/reference/dearpygui.html?highlight=colormap#dearpygui.dearpygui.sample_colormap
+            #     https://dearpygui.readthedocs.io/en/1.x/documentation/themes.html
 
-            # Render the series, placing it before the first highlight series so that all highlights render on top.
+            # Render this data series, placing it before the first highlight series so that all highlights render on top.
             dpg.add_scatter_series(xs, ys, tag=series_tag, parent="axis1", before="my_mouse_hover_scatter_series")  # tag
-            # https://dearpygui.readthedocs.io/en/1.x/reference/dearpygui.html?highlight=colormap#dearpygui.dearpygui.sample_colormap
+
+            # Compute the color for this series, and create a theme for it.
             color = dpg.sample_colormap(colormap, t=(label + 1) / (max_label + 1))
             color = [int(255 * component) for component in color]  # RGBA
             color[-1] = int(0.5 * color[-1])  # A; make translucent
-
-            # Create a separate theme for each scatter series to set its color.
-            # https://dearpygui.readthedocs.io/en/1.x/documentation/themes.html
             with dpg.theme(tag=series_theme) as this_scatterplot_theme:
                 with dpg.theme_component(dpg.mvScatterSeries):
                     dpg.add_theme_color(dpg.mvPlotCol_Line, color, category=dpg.mvThemeCat_Plots)
@@ -768,7 +770,8 @@ search_result_data_idxs_box = box(utils.make_blank_index_array())
 def update_search(wait=True):
     """Perform search and update the search results.
 
-    Note this search callback only gets called when the content of the search field actually changes.
+    This gets called automatically when the content of the search field changes via keyboard input.
+    This is also explicitly called by a few other use sites, which modify the search field content.
 
     `wait`: Whether to wait for more keyboard input before starting to render the info panel and
             tooltip annotation updates.
@@ -1386,6 +1389,7 @@ with timer() as tim:
                     dpg.add_text("Toggle fullscreen [F11]")
 
                 toolbar_separator()
+
                 # We'll define and bind the callback later, when we set up the help window.
                 dpg.add_button(label=fa.ICON_QUESTION,
                                tag="help_button",
