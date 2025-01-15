@@ -1412,7 +1412,7 @@ with timer() as tim:
 
                     def clear_search():
                         dpg.set_value("search_field", "")  # tag
-                        update_search()
+                        update_search(wait=False)
                         dpg.focus_item("search_field")  # tag
                     dpg.add_button(label=fa.ICON_X, callback=clear_search, tag="clear_search_button")
                     dpg.bind_item_font("clear_search_button", icon_font_solid)  # tag
