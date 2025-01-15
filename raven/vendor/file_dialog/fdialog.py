@@ -230,8 +230,6 @@ class FileDialog:
         show_hidden_files=False,
         user_style=0
     ):
-        global chdir
-
         # args
         self.title = title
         self.tag = tag
@@ -365,7 +363,7 @@ class FileDialog:
 
             dpg.set_value(sender, False)  # unselect this item  (TODO: why? double-click handling?)
 
-            logger.debug(f"open_file: sender is {sender} (tag '{dpg.get_item_alias(sender)}', type {dpg.get_item_type(sender)}), app_data = {app_data}, user_data = {user_data}, ctrl = {ctrl_pressed}, doubleclick = {double_clicked}")
+            logger.debug(f"open_file: instance '{self.tag}' ({self.instance_tag}), sender is {sender} (tag '{dpg.get_item_alias(sender)}', type {dpg.get_item_type(sender)}), app_data = {app_data}, user_data = {user_data}, ctrl = {ctrl_pressed}, doubleclick = {double_clicked}")
 
             # Multi selection
             if self.multi_selection and ctrl_pressed:
@@ -378,7 +376,7 @@ class FileDialog:
                 if double_clicked:
                     if user_data is not None and user_data[1] is not None:
                         if os.path.isdir(user_data[1]):
-                            logger.debug(f"open_file: Content: {dpg.get_item_label(sender)}, files: {user_data}")
+                            logger.debug(f"open_file: instance '{self.tag}' ({self.instance_tag}), Content: {dpg.get_item_label(sender)}, files: {user_data}")
                             chdir(user_data[1])
                             dpg.set_value(f"ex_search_{self.instance_tag}", "")
                         elif os.path.isfile(user_data[1]):
@@ -442,6 +440,8 @@ class FileDialog:
                 return False
 
         def _makedir(item, callback, parent=f"explorer_{self.instance_tag}", size=False):
+            logger.debug(f"_makedir: instance '{self.tag}' ({self.instance_tag}), making table entry for directory '{item}' with callback {callback}")
+
             file_name = os.path.basename(item)
 
             creation_time = os.path.getctime(item)
@@ -487,6 +487,8 @@ class FileDialog:
                         dpg.add_image(self.img_document, parent=drag_payload)
 
         def _makefile(item, callback, parent=f"explorer_{self.instance_tag}"):
+            logger.debug(f"_makefile: instance '{self.tag}' ({self.instance_tag}), making table entry for file '{item}' with callback {callback}")
+
             if self.file_filter == ".*" or item.endswith(self.file_filter):
                 file_name = os.path.basename(item)
 
@@ -610,6 +612,7 @@ class FileDialog:
                 message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
 
         def reset_dir(file_name_filter=None, default_path=self.default_path):
+            logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
             self.selected_files.clear()
             try:
                 dpg.configure_item(f"ex_path_input_{self.instance_tag}", default_value=os.getcwd())
@@ -648,7 +651,7 @@ class FileDialog:
 
             # exceptions
             except FileNotFoundError:
-                logger.error(f"reset_dir: Invalid path: '{str(default_path)}'")
+                logger.error(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), invalid path: '{str(default_path)}'")
             except Exception as e:
                 message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{e}")
 
@@ -660,6 +663,13 @@ class FileDialog:
             else:
                 reset_dir(file_name_filter)
         type(self).reset_dir = reset_dir_instance_method  # Manually define an instance method (NOTE: instance methods live in the *class* scope)
+
+        # Same with `chdir`. The original fdialog declared `chdir` global (so the `def` wrote to the module top-level scope),
+        # but then the latest definition overwrites, whereas we need one definition per instance.
+        @functools.wraps(chdir)
+        def chdir_instance_method(self, path):
+            chdir(path)
+        type(self).chdir = chdir_instance_method
 
         """ def explorer_order(sender, user_data):
             thingforsort = dpg.get_item_children(sender, 0).index(user_data[0][0])
@@ -751,10 +761,14 @@ class FileDialog:
                     with dpg.group():
                         with dpg.group(horizontal=True):
                             button_refresh = dpg.add_image_button(self.img_refresh)
+                            with dpg.tooltip(button_refresh):
+                                dpg.add_text("Refresh the current folder listing")
                             button_goback = dpg.add_image_button(self.img_back)
+                            with dpg.tooltip(button_goback):
+                                dpg.add_text("Go back to the default path")
                             def refresh():
                                 cwd = os.getcwd()
-                                logger.debug(f"refresh: refreshing at cwd = '{cwd}'")
+                                logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
                                 reset_dir(default_path=cwd)
                                 # Raven: Acknowledge the action in the GUI.
                                 animation.animator.add(animation.ButtonFlash(message="",
@@ -764,7 +778,7 @@ class FileDialog:
                                                                              original_theme=dpg.get_item_theme(button_refresh),
                                                                              duration=1.0))
                             def goback():
-                                logger.debug(f"goback: going back to default path '{self.default_path}'")
+                                logger.debug(f"goback: instance '{self.tag}' ({self.instance_tag}), going back to default path '{self.default_path}'")
                                 chdir(self.default_path)
                                 # Raven: Acknowledge the action in the GUI.
                                 animation.animator.add(animation.ButtonFlash(message="",
@@ -822,7 +836,7 @@ class FileDialog:
 
     # high-level functions
     def show_file_dialog(self):
-        chdir(os.getcwd())
+        self.chdir(os.getcwd())
         dpg.show_item(self.tag)
 
         # Align the OK/Cancel buttons to the right
@@ -831,7 +845,7 @@ class FileDialog:
         new_width = self.width - (dpg.get_item_width(self.btn_ok) +
                                   dpg.get_item_width(self.btn_cancel) +
                                   33)  # 33: magical constant matching the default theme, to align the buttons to the right edge of the file type picker. 3 * (8 (outer padding) + 3 (inner padding))?
-        logger.debug(f"show_file_dialog: window width = {self.width}, spacer old width = {old_width}, new width = {new_width}")
+        logger.debug(f"show_file_dialog: instance '{self.tag}' ({self.instance_tag}), window width = {self.width}, spacer old width = {old_width}, new width = {new_width}")
         dpg.set_item_width(self.btn_ret_spacer, new_width)
 
     def ok(self):
@@ -839,7 +853,7 @@ class FileDialog:
 
         The list of selected files is sent to `callback`.
         """
-        logger.debug(f"ok: hiding dialog and returning {self.selected_files}")
+        logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}")
         dpg.hide_item(self.tag)
         if self.callback is not None:
             self.callback(self.selected_files)
@@ -852,7 +866,7 @@ class FileDialog:
         An empty list is sent to `callback`, so that your app can trigger any cleanup actions needed
         (e.g. re-enabling certain GUI elements or animations after a modal dialog exits).
         """
-        logger.debug("cancel: hiding dialog and returning empty list")
+        logger.debug("cancel: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning empty list")
         dpg.hide_item(self.tag)
         if self.callback is not None:
             self.callback([])
