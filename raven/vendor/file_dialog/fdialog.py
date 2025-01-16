@@ -255,6 +255,7 @@ class FileDialog:
 
         self.PAYLOAD_TYPE = 'ws_' + self.tag
         self.selected_files = []
+        self.shown_items = []  # for selection by search filter upon pressing ok
         self.selec_height = 16
         self.image_transparency = 100
         self.last_click_time = 0
@@ -444,6 +445,8 @@ class FileDialog:
             # logger.debug(f"_makedir: instance '{self.tag}' ({self.instance_tag}), making table entry for directory '{item}' with callback {callback}")  # don't keep enabled, to avoid leaking user private data to debug log
 
             file_name = os.path.basename(item)
+            full_path = os.path.join(os.getcwd(), file_name)
+            self.shown_items.append(full_path)
 
             creation_time = os.path.getctime(item)
             creation_time = time.ctime(creation_time)
@@ -452,7 +455,7 @@ class FileDialog:
 
             item_size = get_file_size(item)
 
-            kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': [file_name, os.path.join(os.getcwd(), file_name)]}
+            kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': [file_name, full_path]}
             kwargs_file = {'tint_color': [255, 255, 255, 255]}
             with dpg.table_row(parent=parent):
                 with dpg.group(horizontal=True):
@@ -491,6 +494,8 @@ class FileDialog:
 
             if self.file_filter == ".*" or item.endswith(self.file_filter):
                 file_name = os.path.basename(item)
+                full_path = os.path.join(os.getcwd(), file_name)
+                self.shown_items.append(full_path)
 
                 creation_time = os.path.getmtime(item)
                 creation_time = time.ctime(creation_time)
@@ -498,7 +503,7 @@ class FileDialog:
                 item_type = "File"
 
                 item_size = get_file_size(item)
-                kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': [file_name, os.path.join(os.getcwd(), file_name)]}
+                kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': [file_name, full_path]}
                 kwargs_file = {'tint_color': [255, 255, 255, self.image_transparency]}
 
                 with dpg.table_row(parent=parent):
@@ -615,6 +620,7 @@ class FileDialog:
         def reset_dir(file_name_filter=None, default_path=self.default_path):
             logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
             self.selected_files.clear()
+            self.shown_items.clear()
             try:
                 dpg.configure_item(f"ex_path_input_{self.instance_tag}", default_value=os.getcwd())
                 _dir = os.listdir(default_path)
@@ -846,16 +852,32 @@ class FileDialog:
 
         The list of selected files is sent to `callback`.
         """
-        if self.save_mode:
-            logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), this dialog is in save mode")
-            if not self.selected_files:
-                logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no file selected for overwriting; using content of search field as the filename")
+        if not self.selected_files:
+            logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no file(s) selected from the GUI table; figuring out what to do.")
+
+            if self.save_mode:
+                logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), this dialog is in save mode; using content of search field as the 'save as' filename.")
                 save_as_file_name = dpg.get_value(f"ex_search_{self.instance_tag}")
                 if not save_as_file_name:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), search field is empty, cannot save with empty filename; rejecting the ok.")
                     return
                 full_path = os.path.join(os.getcwd(), save_as_file_name)
                 self.selected_files.append(full_path)
+            else:  # "open file" (or directory) mode
+                logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), this dialog is in 'open file' mode; checking if we can select all item(s) shown.")
+                if len(self.shown_items) == 1:  # This allows typing into search until there is a unique match, and then pressing ok to open that item.
+                    logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), exactly one item is shown; selecting that item.")
+                    self.selected_files.append(self.shown_items[0])
+                elif len(self.shown_items) > 1:  # ...and the same for multiple items in `multi_selection` mode.
+                    if self.multi_selection:
+                        logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), multiple items are shown, multi_selection is enabled; selecting all of them.")
+                        self.selected_files.extend(self.shown_items)
+                    else:
+                        logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), multiple items are shown, multi_selection is disabled; rejecting the ok.")
+                        return
+                else:
+                    logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no items shown (maybe nothing matches the search?); rejecting the ok.")
+                    return
 
         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}.")
         dpg.hide_item(self.tag)
