@@ -580,8 +580,8 @@ class FileDialog:
                         elif item_type == "File":
                             dpg.add_image(self.img_document, parent=drag_payload)
 
-        def _back(sender, app_data, user_data):
-            """Go up one level."""
+        def _go_up_one_level(sender, app_data, user_data):
+            """GUI callback: if this item double-clicked, go up one level."""
             ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
             current_time = time.time()
             double_clicked = (current_time - self.last_click_time < self.double_click_threshold)
@@ -629,7 +629,7 @@ class FileDialog:
                     with dpg.group(horizontal=True):
                         kwargs_file = {'tint_color': [255, 255, 255, 255]}
                         dpg.add_image(self.img_mini_folder, **kwargs_file)
-                        dpg.add_selectable(label="..", callback=_back, span_columns=True, height=self.selec_height)
+                        dpg.add_selectable(label="..", callback=_go_up_one_level, span_columns=True, height=self.selec_height)
 
                     # dir list
                     for _dir in dirs:
