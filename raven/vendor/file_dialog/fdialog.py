@@ -393,10 +393,6 @@ class FileDialog:
                         self.selected_files.clear()
                         self.selected_files.append(user_data[1])
 
-        def _search():
-            res = dpg.get_value(f"ex_search_{self.instance_tag}")
-            reset_dir(default_path=os.getcwd(), file_name_filter=res)
-
         def get_directory_path(directory_name):
             try:
                 # Check for Linux or MacOS
