@@ -15,9 +15,11 @@
    https://github.com/hoffstadt/DearPyGui/discussions/1688
    https://dearpygui.readthedocs.io/en/1.x/reference/dearpygui.html#dearpygui.dearpygui.create_viewport
 
-- Flash search field (both in main window and in file dialogs) when focused by hotkey. Need to generalize `ButtonFlash` for GUI elements other than buttons.
+- fdialog: Sorting not working, or not supported. Fix this.
 
-- Word cloud currently shown under the toolbutton highlight, because the highlight is in a viewport overlay. Also sometimes below info panel dimmer.  Figure out if we can fix this and how.
+- Flash the search field (both in main window and in file dialogs) when focused by hotkey. Need to generalize `ButtonFlash` for GUI elements other than buttons.
+
+- Move the fdialog hotkey handler to inside the fdialog module if possible. Does DPG support having several hotkey handlers at once?
 
 
 ## v0.2 and later
@@ -199,3 +201,7 @@
 - Test again in DPG 2.0.0: At least with 1.x, there was a very rare race condition that crashed `hotkeys_callback`: looking up the search field failed, as if the GUI widget didn't exist. DPG attempted to look up widget 0, and it doesn't exist.
 
 - Test again in DPG 2.0.0: DPG crash: App sometimes crashes if Ctrl+Z is pressed in the search bar, especially after clearing the search.
+
+- The word cloud window is currently shown under the toolbutton highlight, because the highlight is in a viewport overlay. Also sometimes below info panel dimmer.  Figure out if we can fix this and how.
+
+- fdialog: Ctrl+F hotkey to focus the file name field is not always working. Figure out the exact conditions and see if we can fix this.
