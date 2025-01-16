@@ -190,6 +190,7 @@ class FileDialog:
         min_size=(460, 320),
         dirs_only=False,
         save_mode=False,
+        default_file_extension=None,
         default_path=os.getcwd(),
         filter_list=[".*", ".exe", ".bat", ".sh", ".msi", ".apk", ".bin", ".cmd", ".com", ".jar", ".out", ".py", ".pyl", ".phs", ".js", ".json", ".java", ".c", ".cpp", ".cs", ".h", ".rs", ".vbs", ".php", ".pl", ".rb", ".go", ".swift", ".ts", ".asm", ".lua", ".sh", ".bat", ".r", ".dart", ".ps1", ".html", ".htm", ".xml", ".css", ".ini", ".yaml", ".yml", ".config", ".md", ".rst", ".txt", ".rtf", ".doc", ".docx", ".pdf", ".odt", ".tex", ".log", ".csv", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".svg", ".webp", ".ico", ".psd", ".ai", ".eps", ".tga", ".wav", ".mp3", ".ogg", ".flac", ".aac", ".m4a", ".wma", ".aiff", ".mid", ".midi", ".opus", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpeg", ".mpg", ".3gp", ".m4v", ".blend", ".fbx", ".obj", ".stl", ".3ds", ".dae", ".ply", ".glb", ".gltf", ".csv", ".sql", ".db", ".dbf", ".mdb", ".accdb", ".sqlite", ".xml", ".json", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".bz2", ".xz", ".tgz", ".cab", ".vdi", ".vmdk", ".vhd", ".vhdx", ".ova", ".ovf", ".qcow2", ".dockerfile", ".bak", ".old", ".sav", ".tmp", ".bk", ".ppack", ".mlt", ".torrent", ".ics"],
         file_filter=".*",
@@ -213,6 +214,7 @@ class FileDialog:
             dirs_only:              When True, only directories will be listed.
             save_mode:              When True, asks for a filename to save as, instead of selecting file(s) to open.
                                     In the GUI, the "Search files" field becomes the filename field. (Searching is still enabled, to help avoid accidental overwriting.)
+            default_file_extension: Only used when save_mode is True. If not None, and the user specifies no file extension for the "save as" filename, this extension (e.g. ".png") is automatically added.
             default_path:           str, The default path when file_dialog starts, if it's the string 'cwd', the default path will be the current working directory.
             filter_list:            [str, ...], A list of different file extensions, for the user to choose in the file type filter. E.g. [".png", ".jpg"].
             file_filter:            str, The value of the file type filter when the dialog is opened, e.g. ".py".
@@ -238,6 +240,7 @@ class FileDialog:
         self.min_size = min_size
         self.dirs_only = dirs_only
         self.save_mode = save_mode
+        self.default_file_extension = default_file_extension
         self.default_path = default_path
         self.filter_list = filter_list
         self.file_filter = file_filter
@@ -874,6 +877,17 @@ class FileDialog:
                 else:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no items shown (maybe nothing matches the search?); rejecting the ok.")
                     return
+
+        # Ensure presence of file extension in save mode
+        if self.save_mode and self.default_file_extension is not None:
+            def ensure_ext(path):
+                if not any(path.endswith(ext) for ext in self.filter_list):
+                    logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), automatically adding default file extension '{self.default_file_extension}' to '{path}'.")
+                    return path + self.default_file_extension
+                return path
+            new_selected_files = [ensure_ext(path) for path in self.selected_files]
+            self.selected_files.clear()
+            self.selected_files.extend(new_selected_files)
 
         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}.")
         dpg.hide_item(self.tag)
