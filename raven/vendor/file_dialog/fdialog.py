@@ -861,6 +861,8 @@ class FileDialog:
         dpg.hide_item(self.tag)
         if self.callback is not None:
             self.callback(self.selected_files)
+        dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting
+        self._update_search()  # note this clears `selected_files` because refreshing the view, so should be called *after* the callback.
         self.selected_files.clear()
         self.reset_dir(default_path=self.default_path)
 
@@ -874,6 +876,8 @@ class FileDialog:
         dpg.hide_item(self.tag)
         if self.callback is not None:
             self.callback([])
+        dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting
+        self._update_search()
 
     def change_callback(self, callback):
         self.callback = callback
