@@ -759,7 +759,7 @@ class FileDialog:
 
                         with dpg.group(horizontal=True):
                             search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"  # TODO: move the hotkey handler for this dialog here
-                            self.search_field = dpg.add_input_text(hint=search_hint, callback=_search, tag=f"ex_search_{self.instance_tag}", width=-1)
+                            self.search_field = dpg.add_input_text(hint=search_hint, callback=self._update_search, tag=f"ex_search_{self.instance_tag}", width=-1)
 
                         # main explorer table header
                         with dpg.table(
@@ -825,6 +825,7 @@ class FileDialog:
                                                      target_text=None,
                                                      original_theme=dpg.get_item_theme(self.button_refresh),
                                                      duration=1.0))
+
     def back_to_default_path(self):
         logger.debug(f"back_to_default_path: instance '{self.tag}' ({self.instance_tag}), going back to '{self.default_path}'")
         self.chdir(self.default_path)
@@ -835,6 +836,10 @@ class FileDialog:
                                                      target_text=None,
                                                      original_theme=dpg.get_item_theme(self.button_back_to_default_path),
                                                      duration=1.0))
+
+    def _update_search(self):
+        res = dpg.get_value(f"ex_search_{self.instance_tag}")
+        self.reset_dir(default_path=os.getcwd(), file_name_filter=res)
 
     def ok(self):
         """Close dialog and accept currently selected files.
