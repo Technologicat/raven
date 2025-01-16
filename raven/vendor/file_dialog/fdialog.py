@@ -852,12 +852,12 @@ class FileDialog:
                 logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no file selected for overwriting; using content of search field as the filename")
                 save_as_file_name = dpg.get_value(f"ex_search_{self.instance_tag}")
                 if not save_as_file_name:
-                    logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), search field is empty, cannot save with empty filename; rejecting the ok")
+                    logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), search field is empty, cannot save with empty filename; rejecting the ok.")
                     return
                 full_path = os.path.join(os.getcwd(), save_as_file_name)
                 self.selected_files.append(full_path)
 
-        logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}")
+        logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}.")
         dpg.hide_item(self.tag)
         if self.callback is not None:
             self.callback(self.selected_files)
@@ -872,7 +872,7 @@ class FileDialog:
         An empty list is sent to `callback`, so that your app can trigger any cleanup actions needed
         (e.g. re-enabling certain GUI elements or animations after a modal dialog exits).
         """
-        logger.debug("cancel: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning empty list")
+        logger.debug("cancel: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning empty list.")
         dpg.hide_item(self.tag)
         if self.callback is not None:
             self.callback([])
