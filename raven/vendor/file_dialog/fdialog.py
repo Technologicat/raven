@@ -262,6 +262,7 @@ class FileDialog:
         self.selec_height = 16
         self.image_transparency = 100
         self.last_click_time = 0
+        self.last_ok_time = 0
         self.double_click_threshold = 0.25  # seconds; adjust the time as needed.  # TODO: should really get this from OS if possible in a cross-platform way
 
         self._load_assets()
@@ -679,7 +680,7 @@ class FileDialog:
 
         # main file dialog header
         with dpg.window(label=self.title, tag=self.tag, on_close=self.cancel, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50, 50)):
-            info_px = 60
+            info_px = 90
 
             # horizontal group (shot_menu + dir_list)
             with dpg.group(horizontal=True):
@@ -800,7 +801,11 @@ class FileDialog:
                               callback=filter_combo_selector, default_value=self.file_filter, width=-1)
 
             with dpg.group(horizontal=True):
-                self.btn_ret_spacer = dpg.add_spacer(width=int(self.width * 0.831))
+                self.spacer_notification = dpg.add_spacer(width=int(self.width * 0.5))
+                self.text_notification = dpg.add_text("")
+
+            with dpg.group(horizontal=True):
+                self.spacer_okcancel = dpg.add_spacer(width=int(self.width * 0.5))
                 self.btn_ok = dpg.add_button(label="OK", width=100, tag=self.tag + "_return", callback=self.ok)
                 self.btn_cancel = dpg.add_button(label="Cancel", width=100, callback=self.cancel)
 
@@ -816,12 +821,13 @@ class FileDialog:
 
         # Align the OK/Cancel buttons to the right
         dpg.split_frame()
-        old_width = dpg.get_item_width(self.btn_ret_spacer)
+        old_width = dpg.get_item_width(self.spacer_okcancel)
         new_width = self.width - (dpg.get_item_width(self.btn_ok) +
                                   dpg.get_item_width(self.btn_cancel) +
                                   33)  # 33: magical constant matching the default theme, to align the buttons to the right edge of the file type picker. 3 * (8 (outer padding) + 3 (inner padding))?
         logger.debug(f"show_file_dialog: instance '{self.tag}' ({self.instance_tag}), window width = {self.width}, spacer old width = {old_width}, new width = {new_width}")
-        dpg.set_item_width(self.btn_ret_spacer, new_width)
+        dpg.set_item_width(self.spacer_okcancel, new_width)
+        dpg.set_item_width(self.spacer_notification, new_width)
 
     def refresh(self):
         cwd = os.getcwd()
@@ -863,6 +869,14 @@ class FileDialog:
                 save_as_file_name = dpg.get_value(f"ex_search_{self.instance_tag}")
                 if not save_as_file_name:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), search field is empty, cannot save with empty filename; rejecting the ok.")
+                    animation.animator.add(animation.ButtonFlash(message="Please enter a filename",
+                                                                 target_button=self.btn_ok,
+                                                                 target_tooltip=None,
+                                                                 target_text=self.text_notification,
+                                                                 original_theme=dpg.get_item_theme(self.btn_ok),
+                                                                 flash_color=(255, 32, 32),  # orange for warning
+                                                                 text_color=(255, 255, 255),
+                                                                 duration=1.0))
                     return
                 full_path = os.path.join(os.getcwd(), save_as_file_name)
                 self.selected_files.append(full_path)
@@ -877,9 +891,25 @@ class FileDialog:
                         self.selected_files.extend(self.shown_items)
                     else:
                         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), multiple items are shown, multi_selection is disabled; rejecting the ok.")
+                        animation.animator.add(animation.ButtonFlash(message="Please select an item",
+                                                                     target_button=self.btn_ok,
+                                                                     target_tooltip=None,
+                                                                     target_text=self.text_notification,
+                                                                     original_theme=dpg.get_item_theme(self.btn_ok),
+                                                                     flash_color=(255, 32, 32),  # orange for warning
+                                                                     text_color=(255, 255, 255),
+                                                                     duration=1.0))
                         return
                 else:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no items shown (maybe nothing matches the search?); rejecting the ok.")
+                    animation.animator.add(animation.ButtonFlash(message="Please select an item",
+                                                                 target_button=self.btn_ok,
+                                                                 target_tooltip=None,
+                                                                 target_text=self.text_notification,
+                                                                 original_theme=dpg.get_item_theme(self.btn_ok),
+                                                                 flash_color=(255, 32, 32),  # orange for warning
+                                                                 text_color=(255, 255, 255),
+                                                                 duration=1.0))
                     return
         assert len(self.selected_files)  # at least one file selected if we get here
 
@@ -894,6 +924,24 @@ class FileDialog:
             new_selected_files = [ensure_ext(path) for path in self.selected_files]
             self.selected_files.clear()
             self.selected_files.extend(new_selected_files)
+
+        # Save mode: Require another click of OK (within a short time) (or a triple-click, or two double-clicks, of the filename in the list) to confirm overwrite.
+        # This is a non-intrusive UI that doesn't need another modal dialog.
+        confirm_duration = 2.0
+        current_time = time.time()
+        double_okd = (current_time - self.last_ok_time < confirm_duration)
+        self.last_ok_time = current_time
+        if self.save_mode and os.path.exists(self.selected_files[0]) and not double_okd:
+            # Raven: Acknowledge the action in the GUI.
+            animation.animator.add(animation.ButtonFlash(message="Press again to overwrite file",
+                                                         target_button=self.btn_ok,
+                                                         target_tooltip=None,
+                                                         target_text=self.text_notification,
+                                                         original_theme=dpg.get_item_theme(self.btn_ok),
+                                                         flash_color=(255, 32, 32),  # orange for warning
+                                                         text_color=(255, 255, 255),
+                                                         duration=confirm_duration))
+            return
 
         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}.")
         dpg.hide_item(self.tag)
