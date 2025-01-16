@@ -457,7 +457,6 @@ class FileDialog:
             with dpg.table_row(parent=parent):
                 with dpg.group(horizontal=True):
                     if item_type == "Dir":
-
                         if _is_hidden(file_name):
                             kwargs_file = {'tint_color': [255, 255, 255, self.image_transparency]}
                         else:
