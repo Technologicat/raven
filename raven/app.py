@@ -42,6 +42,7 @@ logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
     import argparse
+    import array
     import collections
     import concurrent.futures
     import functools
@@ -66,6 +67,8 @@ with timer() as tim:
     from unpythonic.env import env
     envcls = env  # for functions that need an `env` parameter due to `@dlet`, so that they can also instantiate env objects (oops)
     from unpythonic import window, dlet, call, box, unbox, sym, islice
+
+    from wordcloud import WordCloud
 
     import dearpygui.dearpygui as dpg
 
@@ -221,6 +224,7 @@ def selection_undo():
     update_selection_highlight()
     update_info_panel(wait=True)  # wait, because undo may be clicked/hotkeyed several times quickly in succession
     update_mouse_hover(force=True, wait=True)
+    update_word_cloud(new_selection_data_idxs, only_if_visible=True, wait=True)
 
 def selection_redo():
     """Walk one step forward in the selection undo history, and update the state of the undo/redo GUI buttons.
@@ -251,6 +255,7 @@ def selection_redo():
     update_selection_highlight()
     update_info_panel(wait=True)  # wait, because redo may be clicked/hotkeyed several times quickly in succession
     update_mouse_hover(force=True, wait=True)
+    update_word_cloud(new_selection_data_idxs, only_if_visible=True, wait=True)
 
 def update_selection(new_selection_data_idxs, mode="replace", *, force=False, wait=False, update_selection_undo_history=True):
     """Update `selection_data_idxs_box`, updating also the selection undo stack (optionally) and the GUI.
@@ -328,6 +333,7 @@ def update_selection(new_selection_data_idxs, mode="replace", *, force=False, wa
     # mouse-draw select, which calls us with `wait=True`.
     update_info_panel(wait=wait)
     update_mouse_hover(force=True, wait=wait)
+    update_word_cloud(new_selection_data_idxs, only_if_visible=True, wait=wait)
 
     return True  # the selection has changed (or `force=True`)
 
@@ -389,9 +395,170 @@ def exit_modal_mode():
 def is_any_modal_window_visible():
     """Return whether *some* modal window is open.
 
-    Currently these are the help card and the "open file" dialog.
+    Currently these are the help card, the "open file" dialog, and the "save word cloud" dialog.
     """
-    return is_file_dialog_visible() or is_help_window_visible()
+    return is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible() or is_help_window_visible()
+
+# --------------------------------------------------------------------------------
+# Word cloud
+
+# See also `initialize_filedialogs` further below.
+
+word_cloud_render_status_box = box(bgtask.status_stopped)
+word_cloud_render_lock = threading.Lock()
+word_cloud_last_dataset_addr = None
+word_cloud_last_data_idxs = set()
+word_cloud_image_box = box(np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4],  # For texture data. We currently mutate the array, although we could avoid that since it's boxed.
+                                    dtype=np.float64))
+word_cloud_data_box = box(None)
+
+def update_word_cloud(data_idxs, *, only_if_visible=False, wait=False):
+    """Compute a word cloud for the given data points, updating the texture.
+
+    We only actually update the word cloud if the selection has changed or a new dataset has been loaded;
+    otherwise we just (re-)show the existing word cloud.
+
+    `data_idxs`: rank-1 np.array, indices into `sorted_xxx`.
+    `only_if_visible`: bool. If `True`, only actually run the update if the word cloud window is already visible.
+                       Used for live-updating when the selection changes.
+    `wait`: bool, whether to wait for more keyboard/mouse input before starting the update.
+    """
+    doit = True
+    if only_if_visible and not dpg.is_item_visible(word_cloud_window):
+        doit = False
+    if not doit:
+        return
+
+    word_cloud_render_task = bgtask.make_managed_task(status_box=word_cloud_render_status_box,
+                                                      lock=word_cloud_render_lock,
+                                                      entrypoint=_update_word_cloud,
+                                                      running_poll_interval=0.1,
+                                                      pending_wait_duration=0.1)
+    word_cloud_task_manager.submit(word_cloud_render_task, envcls(wait=wait,
+                                                                  data_idxs=data_idxs))
+
+def _update_word_cloud(*, task_env):
+    """Update and show the word cloud.
+
+    `task_env`: Handled by `update_word_cloud`. Importantly, contains the `cancelled` flag for the task.
+                Also contains `data_idxs`, specifying which entries to render the word cloud for.
+    """
+    global word_cloud_last_dataset_addr
+    global word_cloud_last_data_idxs
+    global dataset  # document intent only
+
+    logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task running.")
+    try:
+        if dataset is None:
+            logger.debug(f"_update_word_cloud: {task_env.task_name}: No dataset loaded. Clearing texture.")
+            arr = unbox(word_cloud_image_box)
+            arr[:, :, :3] = 0.0
+        else:
+            assert task_env is not None
+            if task_env.cancelled:
+                logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task cancelled (before starting).")
+                return
+
+            data_idxs = task_env.data_idxs
+
+            # No need to recompute -> just show the window.
+            if id(dataset) == word_cloud_last_dataset_addr and set(data_idxs) == word_cloud_last_data_idxs:
+                logger.debug(f"_update_word_cloud: {task_env.task_name}: Same dataset and same selection as last time. Showing word cloud window. Task completed.")
+                dpg.show_item(word_cloud_window)
+                return
+
+            arr = unbox(word_cloud_image_box)
+            if not len(data_idxs):  # no selected data points?
+                logger.debug(f"_update_word_cloud: {task_env.task_name}: No data points selected. Clearing texture.")
+                arr[:, :, :3] = 0.0
+            else:
+                dpg.set_item_label("word_cloud_window", "Word cloud [updating]")  # tag
+                dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD_BOLT)
+                dpg.set_value("word_cloud_button_tooltip_text", "Generating word cloud, just for you. Please wait. [F10]")
+
+                # Combine keyword counts of the specified items
+                logger.debug(f"_update_word_cloud: {task_env.task_name}: Collecting keywords for selected data points.")
+                keywords = collections.defaultdict(lambda: 0)
+                for data_idx in data_idxs:
+                    if task_env.cancelled:
+                        logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task cancelled (while collecting keywords).")
+                        return
+                    for kw, count in dataset.sorted_entries[data_idx].keywords.items():
+                        keywords[kw] += count
+
+                logger.debug(f"_update_word_cloud: {task_env.task_name}: Invoking word cloud generator.")
+                wc = WordCloud(width=gui_config.word_cloud_w, height=gui_config.word_cloud_h, background_color="black", max_words=1000)
+                wc.generate_from_frequencies(keywords)  # -> RGB tensor of shape [h, w, 3]
+                word_cloud_data_box << wc
+
+                logger.debug(f"_update_word_cloud: {task_env.task_name}: Updating texture.")
+                arr[:, :, :3] = wc.to_array() / 255  # RGB, range [0, 255] -> RGBA, range [0, 1]
+
+        logger.debug(f"_update_word_cloud: {task_env.task_name}: Sending updated texture to GUI. Showing word cloud window.")
+        raw_data = array.array('f', arr.ravel())  # shape [h, w, c] -> linearly indexed
+        dpg.set_value(word_cloud_texture, raw_data)
+        dpg.show_item(word_cloud_window)
+
+        word_cloud_last_dataset_addr = id(dataset)  # Conserve RAM by not storing the actual dataset object, but only its memory address. If this changes, it means that the dataset has changed.
+        word_cloud_last_data_idxs = set(data_idxs)
+
+        logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task completed.")
+
+    finally:
+        dpg.set_item_label("word_cloud_window", "Word cloud")  # tag  # TODO: DRY duplicate definitions for labels
+        dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD)
+        dpg.set_value("word_cloud_button_tooltip_text", "Toggle word cloud window [F10]")  # TODO: DRY duplicate definitions for labels
+
+def toggle_word_cloud_window():
+    if dpg.is_item_visible("word_cloud_window"):
+        dpg.hide_item("word_cloud_window")
+    else:
+        update_word_cloud(unbox(selection_data_idxs_box))  # will show the window when done
+
+def show_save_word_cloud_dialog():
+    logger.debug("show_save_word_cloud_dialog: Showing save word cloud dialog.")
+    filedialog_save.show_file_dialog()
+    enter_modal_mode()
+    logger.debug("show_save_word_cloud_dialog: Done.")
+
+def _save_word_cloud_callback(selected_files):
+    logger.debug("_save_word_cloud_callback: Save word cloud dialog callback triggered.")
+    if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
+        raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
+    exit_modal_mode()
+    if selected_files:
+        selected_file = selected_files[0]
+        logger.debug(f"_save_word_cloud_callback: User selected the file '{selected_file}'.")
+        write_word_cloud(selected_file)  # Overwrite warning is handled on the file dialog side.
+    else:  # empty selection -> cancelled
+        logger.debug("_save_word_cloud_callback: Cancelled.")
+
+def write_word_cloud(filename):
+    logger.debug(f"write_word_cloud: Dispatching a save to '{filename}', and acknowledging in GUI.")
+
+    # The animation can run while we're saving.
+    animation.animator.add(animation.ButtonFlash(message=f"Saved to '{filename}'!",
+                                                 target_button="word_cloud_save_button",
+                                                 target_tooltip="word_cloud_save_tooltip",
+                                                 target_text="word_cloud_save_tooltip_text",
+                                                 original_theme=global_theme,
+                                                 duration=gui_config.acknowledgment_duration))
+
+    def write_task():
+        logger.debug(f"write_word_cloud.write_task: Saving word cloud image to '{filename}'.")
+        wc = unbox(word_cloud_data_box)
+        wc.to_file(filename)
+        logger.debug("write_word_cloud.write_task: Done.")
+    bg.submit(write_task)  # just add it manually to the thread pool executor; we don't need any fancy management here.
+
+def is_save_word_cloud_dialog_visible():
+    """Return whether the "save word cloud" dialog is open.
+
+    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
+    """
+    if filedialog_save is None:
+        return False
+    return dpg.is_item_visible("save_word_cloud_dialog")  # tag
 
 # --------------------------------------------------------------------------------
 # Set up DPG - basic startup, load fonts, set up global theme
@@ -487,6 +654,14 @@ with timer() as tim:
             dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
 
+    # Initialize textures.
+    with dpg.texture_registry(tag="app_textures"):
+        word_cloud_texture = dpg.add_raw_texture(width=gui_config.word_cloud_w,  # TODO: once we add a settings dialog, we may need to change the texture size while the app is running.
+                                                 height=gui_config.word_cloud_h,
+                                                 default_value=unbox(word_cloud_image_box),
+                                                 format=dpg.mvFormat_Float_rgba,
+                                                 tag="word_cloud_texture")
+
     dpg.create_viewport(title=f"Raven {__version__}",
                         width=gui_config.main_window_w,
                         height=gui_config.main_window_h)  # OS window (DPG "viewport")
@@ -581,6 +756,7 @@ def clear_background_tasks():
     """Stop (cancel) and delete all background tasks."""
     info_panel_task_manager.clear(wait=True)
     annotation_task_manager.clear(wait=True)
+    word_cloud_task_manager.clear(wait=True)
 
 def reset_app_state(_update_gui=True):
     """Reset everything, to prepare for loading new data to the GUI.
@@ -705,36 +881,48 @@ def open_file(filename):
 # --------------------------------------------------------------------------------
 # "Open file" dialog
 
-filedialog = None
+filedialog_open = None
+filedialog_save = None
 
-def initialize_filedialog(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
+def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
     """Create the "open file" dialog."""
-    global filedialog
-    filedialog = FileDialog(title="Open dataset",
-                            tag="open_file_dialog",
-                            callback=_open_file_callback,
-                            modal=True,
-                            filter_list=[".pickle"],
-                            file_filter=".pickle",
-                            multi_selection=False,
-                            allow_drag=False,
-                            default_path=default_path)
+    global filedialog_open
+    global filedialog_save
+    filedialog_open = FileDialog(title="Open dataset",
+                                 tag="open_file_dialog",
+                                 callback=_open_file_callback,
+                                 modal=True,
+                                 filter_list=[".pickle"],
+                                 file_filter=".pickle",
+                                 multi_selection=False,
+                                 allow_drag=False,
+                                 default_path=default_path)
+    filedialog_save = FileDialog(title="Save word cloud as PNG",
+                                 tag="save_word_cloud_dialog",
+                                 callback=_save_word_cloud_callback,
+                                 modal=True,
+                                 filter_list=[".png"],
+                                 file_filter=".png",
+                                 save_mode=True,
+                                 default_file_extension=".png",  # used if the user does not provide a file extension when naming the save-as
+                                 allow_drag=False,
+                                 default_path=default_path)
 
 def show_open_file_dialog():
     """Show the "open file" dialog.
 
     (And prepare the GUI for it: hide annotation, disable current item button glow, ...)
-    If you need to close it programmatically, call `filedialog.cancel()` so it'll trigger the callback (necessary to restore the GUI back into main window mode).
+    If you need to close it programmatically, call `filedialog_open.cancel()` so it'll trigger the callback (necessary to restore the GUI back into main window mode).
     """
     logger.debug("show_open_file_dialog: Showing open file dialog.")
-    filedialog.show_file_dialog()
+    filedialog_open.show_file_dialog()
     enter_modal_mode()
     logger.debug("show_open_file_dialog: Done.")
 
 def _open_file_callback(selected_files):
     """Callback that fires when the "open file" dialog closes."""
     logger.debug("_open_file_callback: Open file dialog callback triggered.")
-    if len(selected_files) > 1:
+    if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
         raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
     exit_modal_mode()
     if selected_files:
@@ -744,12 +932,12 @@ def _open_file_callback(selected_files):
     else:  # empty selection -> cancelled
         logger.debug("_open_file_callback: Cancelled.")
 
-def is_file_dialog_visible():
+def is_open_file_dialog_visible():
     """Return whether the "open file" dialog is open.
 
     We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
     """
-    if filedialog is None:
+    if filedialog_open is None:
         return False
     return dpg.is_item_visible("open_file_dialog")  # tag
 
@@ -759,7 +947,7 @@ def is_file_dialog_visible():
 info_panel_scroll_end_flasher = animation.ScrollEndFlasher(target="item_information_panel",
                                                            tag="scroll_end_flasher",
                                                            duration=gui_config.scroll_ends_here_duration,
-                                                           custom_finish_pred=lambda self: is_any_modal_window_visible(),
+                                                           custom_finish_pred=lambda self: is_any_modal_window_visible(),  # end animation (and hide the flasher) immediately if any modal window becomes visible
                                                            font=icon_font_solid,
                                                            text_top=fa.ICON_ARROWS_UP_TO_LINE,
                                                            text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
@@ -1092,10 +1280,10 @@ with timer() as tim:
             with dpg.group(tag="info_and_help"):
                 # Title
                 with dpg.child_window(tag="item_information_header",
-                                      width=gui_config.info_panel_w,
-                                      height=gui_config.info_panel_header_h,
-                                      no_scrollbar=True,  # we want to hide the "hello"
-                                      no_scroll_with_mouse=True):
+                                        width=gui_config.info_panel_w,
+                                        height=gui_config.info_panel_header_h,
+                                        no_scrollbar=True,  # we want to hide the "hello"
+                                        no_scroll_with_mouse=True):
                     with dpg.group(horizontal=True, tag="item_information_header_group"):
                         # Copy report to clipboard button
                         # The callback function is defined (and bound) later when we define the info panel.
@@ -1375,6 +1563,17 @@ with timer() as tim:
                 with dpg.tooltip("select_visible_all_button"):  # tag
                     dpg.add_text("Select items currently on-screen in the plotter [F9]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect")
 
+                dpg.add_button(label=fa.ICON_CLOUD,
+                               tag="word_cloud_button",
+                               callback=toggle_word_cloud_window,
+                               indent=gui_config.toolbutton_indent,
+                               width=gui_config.toolbutton_w)
+                dpg.bind_item_font("word_cloud_button", icon_font_solid)  # tag
+                with dpg.tooltip("word_cloud_button"):  # tag
+                    dpg.add_text("Toggle word cloud window [F10]", tag="word_cloud_button_tooltip_text")
+
+                # Miscellaneous controls
+
                 toolbar_separator()
                 def toggle_fullscreen():
                     dpg.toggle_viewport_fullscreen()
@@ -1480,6 +1679,22 @@ with timer() as tim:
                                 dpg.add_theme_style(dpg.mvPlotStyleVar_MarkerSize, 6, category=dpg.mvThemeCat_Plots)
 
                         _create_highlight_scatter_series()  # some utilities may access the highlight series before the app has completely booted up
+
+    with dpg.window(show=False, modal=False, no_title_bar=False, tag="word_cloud_window",
+                    label="Word cloud",
+                    no_scrollbar=True, autosize=True) as word_cloud_window:
+        dpg.add_image(word_cloud_texture, tag="word_cloud_image")
+        with dpg.group(horizontal=True, tag="word_cloud_toolbar"):
+            dpg.add_button(label=fa.ICON_HARD_DRIVE,
+                           tag="word_cloud_save_button",
+                           callback=show_save_word_cloud_dialog,
+                           indent=gui_config.toolbutton_indent,
+                           width=gui_config.toolbutton_w)
+            dpg.bind_item_font("word_cloud_save_button", icon_font_solid)  # tag
+            with dpg.tooltip("word_cloud_save_button", tag="word_cloud_save_tooltip"):  # tag
+                dpg.add_text("Save word cloud as PNG [Ctrl+S]", tag="word_cloud_save_tooltip_text")
+
+
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
@@ -3365,10 +3580,10 @@ hotkey_help = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=1, key="Shift+F9", action_indent=1, action="Same, but add to selection", notes=""),
                env(key_indent=1, key="Ctrl+F9", action_indent=1, action="Same, but subtract from selection", notes=""),
                env(key_indent=1, key="Ctrl+Shift+F9", action_indent=1, action="Same, but intersect with selection", notes=""),
+               env(key_indent=0, key="F10", action_indent=0, action="Toggle word cloud window", notes="From keywords of selected items"),
                env(key_indent=0, key="Ctrl+Shift+C", action_indent=0, action="Copy current item to clipboard", notes="As plain text, for web search"),
                env(key_indent=0, key="Ctrl+Shift+Z", action_indent=0, action="Undo last selection change", notes=""),
                env(key_indent=0, key="Ctrl+Shift+Y", action_indent=0, action="Redo last selection change", notes=""),
-               hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+Home", action_indent=0, action="Reset plotter zoom", notes=""),
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
@@ -3782,6 +3997,8 @@ def mouse_release_callback(sender, app_data):
 def hotkeys_callback(sender, app_data):
     """Handle hotkeys."""
     key = app_data  # for documentation only
+    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
     # NOTE: If you update this, to make the hotkeys discoverable, update also:
     #  - The tooltips wherever the GUI elements are created or updated (search for e.g. "[F9]", may appear in multiple places)
@@ -3797,13 +4014,40 @@ def hotkeys_callback(sender, app_data):
         return
 
     # Hotkeys while the "open file" dialog is shown
-    elif is_file_dialog_visible():
+    elif is_open_file_dialog_visible():
         # TODO: Add hotkeys to navigate up/down in the "open file" view, descend into folder, go one level up, go back to default path, ...
         if key == dpg.mvKey_Return:
-            filedialog.ok()
+            filedialog_open.ok()
         elif key == dpg.mvKey_Escape:
-            filedialog.cancel()
+            filedialog_open.cancel()
+        elif key == dpg.mvKey_F5:
+            filedialog_open.refresh()
+        elif ctrl_pressed and key == dpg.mvKey_Home:
+            filedialog_open.back_to_default_path()
+        elif ctrl_pressed and key == dpg.mvKey_F:
+            dpg.focus_item(filedialog_open.search_field)
         return
+
+    # Hotkeys while the "save word cloud" dialog is shown
+    elif is_save_word_cloud_dialog_visible():
+        # TODO: Add hotkeys to navigate up/down in the "save file" view, descend into folder, go one level up, go back to default path, ...
+        if key == dpg.mvKey_Return:
+            filedialog_save.ok()
+        elif key == dpg.mvKey_Escape:
+            filedialog_save.cancel()
+        elif key == dpg.mvKey_F5:
+            filedialog_save.refresh()
+        elif ctrl_pressed and key == dpg.mvKey_Home:
+            filedialog_save.back_to_default_path()
+        elif ctrl_pressed and key == dpg.mvKey_F:
+            dpg.focus_item(filedialog_save.search_field)
+        return
+
+    # Hotkeys while the word cloud viewer is shown
+    elif dpg.is_item_visible(word_cloud_window):
+        if ctrl_pressed and key == dpg.mvKey_S:
+            show_save_word_cloud_dialog()
+            return
 
     # Hotkeys for main window, while no modal window is shown
     if dpg.is_item_focused("search_field") and key == dpg.mvKey_Return:  # tag  # regardless of modifier state, to allow Shift+Enter and Ctrl+Enter.
@@ -3829,9 +4073,10 @@ def hotkeys_callback(sender, app_data):
         copy_report_to_clipboard()
     elif key == dpg.mvKey_F9:  # Use an F-key, because this too needs selection mode modifiers.
         select_visible_all()
-    # Ctrl+Shift+...
-    elif ((dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)) and
-          (dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift))):
+    elif key == dpg.mvKey_F10:
+        toggle_word_cloud_window()
+        # Ctrl+Shift+...
+    elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_Z and dpg.is_item_enabled("selection_undo_button"):  # tag
             selection_undo()
         elif key == dpg.mvKey_Y and dpg.is_item_enabled("selection_redo_button"):  # tag
@@ -3839,7 +4084,7 @@ def hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_C:
             copy_current_entry_to_clipboard()
     # Ctrl+...
-    elif dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl):
+    elif ctrl_pressed:
         if key == dpg.mvKey_F:
             dpg.focus_item("search_field")  # tag
         elif key == dpg.mvKey_O:
@@ -3934,7 +4179,9 @@ bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annot
 annotation_task_manager = bgtask.SequentialTaskManager(name="annotation_update",
                                                        executor=bg)
 info_panel_task_manager = bgtask.SequentialTaskManager(name="info_panel_update",
-                                                       executor=bg)  # can re-use the same executor here to place both kinds of tasks in the same thread pool.
+                                                       executor=bg)  # can re-use the same executor to place tasks in the same thread pool.
+word_cloud_task_manager = bgtask.SequentialTaskManager(name="word_cloud_update",
+                                                       executor=bg)
 
 # import sys
 # print(dir(sys.modules["__main__"]))  # DEBUG: Check this occasionally to make sure we don't accidentally store any temporary variables in the module-level namespace.
@@ -3950,7 +4197,7 @@ if opts.filename:
 else:
     _default_path = os.getcwd()
     reset_app_state()  # effectively, open a blank dataset
-initialize_filedialog(_default_path)
+initialize_filedialogs(_default_path)
 
 # HACK: Create the dimmer as soon as possible (some time after the first frame so that other GUI elements initialize their sizes).
 # The window for the "scroll ends here" animation is also created at frame 10, but via another mechanism (trying to create it each frame, but the implementation blocks it until frame 10).

@@ -296,6 +296,7 @@ gui_config = env(  # ----------------------------------------
                  # GUI element sizes, in pixels.
                  main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
                  help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
+                 word_cloud_w=768, word_cloud_h=768,
                  info_panel_w=600,
                  info_panel_header_h=40,  # The title section and the navigation controls section both have this height.
                  title_wrap_w=500,  # Note there will be two columns of buttons to the left of each item title.

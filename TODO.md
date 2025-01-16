@@ -15,7 +15,9 @@
    https://github.com/hoffstadt/DearPyGui/discussions/1688
    https://dearpygui.readthedocs.io/en/1.x/reference/dearpygui.html#dearpygui.dearpygui.create_viewport
 
-- Word cloud from selection? Render as image, display in a separate DPG window, offering a "save as PNG" button.
+- Flash search field (both in main window and in file dialogs) when focused by hotkey. Need to generalize `ButtonFlash` for GUI elements other than buttons.
+
+- Word cloud currently shown under the toolbutton highlight, because the highlight is in a viewport overlay. Also sometimes below info panel dimmer.  Figure out if we can fix this and how.
 
 
 ## v0.2 and later
