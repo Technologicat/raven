@@ -760,35 +760,14 @@ class FileDialog:
                     # main explorer header
                     with dpg.group():
                         with dpg.group(horizontal=True):
-                            button_refresh = dpg.add_image_button(self.img_refresh)
-                            with dpg.tooltip(button_refresh):
-                                dpg.add_text("Refresh the current folder listing")
-                            button_goback = dpg.add_image_button(self.img_back)
-                            with dpg.tooltip(button_goback):
-                                dpg.add_text("Go back to the default path")
-                            def refresh():
-                                cwd = os.getcwd()
-                                logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
-                                reset_dir(default_path=cwd)
-                                # Raven: Acknowledge the action in the GUI.
-                                animation.animator.add(animation.ButtonFlash(message="",
-                                                                             target_button=button_refresh,
-                                                                             target_tooltip=None,
-                                                                             target_text=None,
-                                                                             original_theme=dpg.get_item_theme(button_refresh),
-                                                                             duration=1.0))
-                            def goback():
-                                logger.debug(f"goback: instance '{self.tag}' ({self.instance_tag}), going back to default path '{self.default_path}'")
-                                chdir(self.default_path)
-                                # Raven: Acknowledge the action in the GUI.
-                                animation.animator.add(animation.ButtonFlash(message="",
-                                                                             target_button=button_goback,
-                                                                             target_tooltip=None,
-                                                                             target_text=None,
-                                                                             original_theme=dpg.get_item_theme(button_goback),
-                                                                             duration=1.0))
-                            dpg.set_item_callback(button_refresh, refresh)
-                            dpg.set_item_callback(button_goback, goback)
+                            self.button_refresh = dpg.add_image_button(self.img_refresh, tag=f"button_refresh_{self.instance_tag}")
+                            with dpg.tooltip(self.button_refresh):
+                                dpg.add_text("Refresh the current folder listing [F5]")  # TODO: move the hotkey handler for this dialog here
+                            self.button_back_to_default_path = dpg.add_image_button(self.img_back, tag=f"button_back_to_default_path_{self.instance_tag}")
+                            with dpg.tooltip(self.button_back_to_default_path):
+                                dpg.add_text("Go back to the default path [Ctrl+Home]")  # TODO: move the hotkey handler for this dialog here
+                            dpg.set_item_callback(self.button_refresh, self.refresh)
+                            dpg.set_item_callback(self.button_back_to_default_path, self.back_to_default_path)
 
                             dpg.add_input_text(hint="Path", on_enter=True, callback=on_path_enter, default_value=os.getcwd(), width=-1, tag=f"ex_path_input_{self.instance_tag}")
 
@@ -847,6 +826,28 @@ class FileDialog:
                                   33)  # 33: magical constant matching the default theme, to align the buttons to the right edge of the file type picker. 3 * (8 (outer padding) + 3 (inner padding))?
         logger.debug(f"show_file_dialog: instance '{self.tag}' ({self.instance_tag}), window width = {self.width}, spacer old width = {old_width}, new width = {new_width}")
         dpg.set_item_width(self.btn_ret_spacer, new_width)
+
+    def refresh(self):
+        cwd = os.getcwd()
+        logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
+        self.reset_dir(default_path=cwd)
+        # Raven: Acknowledge the action in the GUI.
+        animation.animator.add(animation.ButtonFlash(message="",
+                                                     target_button=self.button_refresh,
+                                                     target_tooltip=None,
+                                                     target_text=None,
+                                                     original_theme=dpg.get_item_theme(self.button_refresh),
+                                                     duration=1.0))
+    def back_to_default_path(self):
+        logger.debug(f"back_to_default_path: instance '{self.tag}' ({self.instance_tag}), going back to '{self.default_path}'")
+        self.chdir(self.default_path)
+        # Raven: Acknowledge the action in the GUI.
+        animation.animator.add(animation.ButtonFlash(message="",
+                                                     target_button=self.button_back_to_default_path,
+                                                     target_tooltip=None,
+                                                     target_text=None,
+                                                     original_theme=dpg.get_item_theme(self.button_back_to_default_path),
+                                                     duration=1.0))
 
     def ok(self):
         """Close dialog and accept currently selected files.
