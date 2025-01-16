@@ -635,7 +635,7 @@ class FileDialog:
                     for _dir in dirs:
                         if not _is_hidden(_dir) or self.show_hidden_files:
                             if file_name_filter:
-                                if dpg.get_value(f"ex_search_{self.instance_tag}") in _dir:
+                                if file_name_filter in _dir:
                                     _makedir(_dir, open_file)
                             else:
                                 _makedir(_dir, open_file)
@@ -645,7 +645,7 @@ class FileDialog:
                         for file in files:
                             if (not _is_hidden(file)) or self.show_hidden_files:
                                 if file_name_filter:
-                                    if dpg.get_value(f"ex_search_{self.instance_tag}") in file:
+                                    if file_name_filter in file:
                                         _makefile(file, open_file)
                                 else:
                                     _makefile(file, open_file)
