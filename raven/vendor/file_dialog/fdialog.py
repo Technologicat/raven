@@ -5,7 +5,6 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-import functools
 from glob import glob
 import os
 import platform
