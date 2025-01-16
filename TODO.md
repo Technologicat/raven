@@ -17,6 +17,12 @@
 
 - fdialog: Sorting not working, or not supported. Fix this.
 
+- Mention the word cloud feature in README, and add an example image.
+
+- Flash the word cloud button when starting to generate.
+
+- Flash other toolbar buttons, too, to indicate that the action took?
+
 - Flash the search field (both in main window and in file dialogs) when focused by hotkey. Need to generalize `ButtonFlash` for GUI elements other than buttons.
 
 - Move the fdialog hotkey handler to inside the fdialog module if possible. Does DPG support having several hotkey handlers at once?
