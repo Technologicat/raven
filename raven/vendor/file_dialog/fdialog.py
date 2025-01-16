@@ -882,11 +882,11 @@ class FileDialog:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no items shown (maybe nothing matches the search?); rejecting the ok.")
                     return
 
-        # Ensure presence of file extension in save mode
+        # Save mode: Ensure presence of file extension.
         if self.save_mode and self.default_file_extension is not None:
             def ensure_ext(path):
                 path_lower = path.lower()
-                if not any(path_lower.endswith(ext.lower()) for ext in self.filter_list):
+                if not any(path_lower.endswith(ext.lower()) for ext in self.filter_list):  # any valid ext is fine, but if none match, add the default ext.
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), automatically adding default file extension '{self.default_file_extension}' to '{path}'.")
                     return path + self.default_file_extension
                 return path
