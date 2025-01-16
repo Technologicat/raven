@@ -611,6 +611,7 @@ class FileDialog:
                 message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
             except NotADirectoryError as e:
                 message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
+        self.chdir = chdir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
         def reset_dir(file_name_filter=None, default_path=self.default_path):
             logger.debug(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), called with file_name_filter = {file_name_filter}, default_path = '{str(default_path)}'")
@@ -655,22 +656,7 @@ class FileDialog:
                 logger.error(f"reset_dir: instance '{self.tag}' ({self.instance_tag}), invalid path: '{str(default_path)}'")
             except Exception as e:
                 message_box("File dialog - Error", f"An unknown error has occured when listing the items, More info:\n{e}")
-
-        # Ugh, but we need `reset_dir` to be accessible from the outside. Cleanest to inject an instance method here, since the implementation needs closure data from this scope.
-        @functools.wraps(reset_dir)
-        def reset_dir_instance_method(self, file_name_filter=None, default_path=None):
-            if default_path is not None:
-                reset_dir(file_name_filter, default_path)
-            else:
-                reset_dir(file_name_filter)
-        type(self).reset_dir = reset_dir_instance_method  # Manually define an instance method (NOTE: instance methods live in the *class* scope)
-
-        # Same with `chdir`. The original fdialog declared `chdir` global (so the `def` wrote to the module top-level scope),
-        # but then the latest definition overwrites, whereas we need one definition per instance.
-        @functools.wraps(chdir)
-        def chdir_instance_method(self, path):
-            chdir(path)
-        type(self).chdir = chdir_instance_method
+        self.reset_dir = reset_dir  # needs to be accessible from the outside; uses closure data from this scope, so shouldn't be injected as an instance method (on the class); inject as a regular function *on the instance*.
 
         """ def explorer_order(sender, user_data):
             thingforsort = dpg.get_item_children(sender, 0).index(user_data[0][0])
