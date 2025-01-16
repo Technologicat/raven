@@ -27,6 +27,8 @@
 
 - Move the fdialog hotkey handler to inside the fdialog module if possible. Does DPG support having several hotkey handlers at once?
 
+- Fdialog performance: is it necessary to `reset_dir` after every click in the item list?
+
 
 ## v0.2 and later
 
