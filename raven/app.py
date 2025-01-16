@@ -406,21 +406,23 @@ def is_any_modal_window_visible():
 
 word_cloud_render_status_box = box(bgtask.status_stopped)
 word_cloud_render_lock = threading.Lock()
-word_cloud_last_dataset_addr = None
-word_cloud_last_data_idxs = set()
+word_cloud_last_dataset_addr = None  # for storing the `id()` of the last dataset the word cloud was generated for (to detect the user opening a different file)
+word_cloud_last_data_idxs = set()  # for detecting selection changes
 word_cloud_image_box = box(np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4],  # For texture data. We currently mutate the array, although we could avoid that since it's boxed.
                                     dtype=np.float64))
-word_cloud_data_box = box(None)
+word_cloud_data_box = box(None)  # the last generated `WordCloud` object
 
 def update_word_cloud(data_idxs, *, only_if_visible=False, wait=False):
-    """Compute a word cloud for the given data points, updating the texture.
+    """Compute a word cloud for the given data points, updating the texture. Show the window when done.
+
+    Task submitter.
 
     We only actually update the word cloud if the selection has changed or a new dataset has been loaded;
     otherwise we just (re-)show the existing word cloud.
 
     `data_idxs`: rank-1 np.array, indices into `sorted_xxx`.
     `only_if_visible`: bool. If `True`, only actually run the update if the word cloud window is already visible.
-                       Used for live-updating when the selection changes.
+                       Used for live-updating when the selection changes (no point in updating if hidden).
     `wait`: bool, whether to wait for more keyboard/mouse input before starting the update.
     """
     doit = True
@@ -438,7 +440,12 @@ def update_word_cloud(data_idxs, *, only_if_visible=False, wait=False):
                                                                   data_idxs=data_idxs))
 
 def _update_word_cloud(*, task_env):
-    """Update and show the word cloud.
+    """Compute a word cloud for the given data points, updating the texture. Show the window when done.
+
+    Worker.
+
+    This handles also updating the GUI, to indicate that the word cloud is being updated,
+    as well as resetting those notifications when done.
 
     `task_env`: Handled by `update_word_cloud`. Importantly, contains the `cancelled` flag for the task.
                 Also contains `data_idxs`, specifying which entries to render the word cloud for.
@@ -510,18 +517,24 @@ def _update_word_cloud(*, task_env):
         dpg.set_value("word_cloud_button_tooltip_text", "Toggle word cloud window [F10]")  # TODO: DRY duplicate definitions for labels
 
 def toggle_word_cloud_window():
+    """Show/hide the "save word cloud" window.
+
+    Will update the word cloud first if necessary.
+    """
     if dpg.is_item_visible("word_cloud_window"):
         dpg.hide_item("word_cloud_window")
     else:
         update_word_cloud(unbox(selection_data_idxs_box))  # will show the window when done
 
 def show_save_word_cloud_dialog():
+    """Button callback. Invoke the save-as dialog to ask the user for a filename to save the word cloud image as."""
     logger.debug("show_save_word_cloud_dialog: Showing save word cloud dialog.")
     filedialog_save.show_file_dialog()
     enter_modal_mode()
     logger.debug("show_save_word_cloud_dialog: Done.")
 
 def _save_word_cloud_callback(selected_files):
+    """Callback that fires when the "save word cloud" dialog closes."""
     logger.debug("_save_word_cloud_callback: Save word cloud dialog callback triggered.")
     if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
         raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
@@ -529,11 +542,15 @@ def _save_word_cloud_callback(selected_files):
     if selected_files:
         selected_file = selected_files[0]
         logger.debug(f"_save_word_cloud_callback: User selected the file '{selected_file}'.")
-        write_word_cloud(selected_file)  # Overwrite warning is handled on the file dialog side.
+        write_word_cloud(selected_file)  # Overwrite confirmation is handled on the file dialog side. If the target file already exists, we only get here when the user already allowed the overwrite.
     else:  # empty selection -> cancelled
         logger.debug("_save_word_cloud_callback: Cancelled.")
 
 def write_word_cloud(filename):
+    """Dispatch a background task to save the word cloud image to a file, and acknowledge the action in the GUI.
+
+    This is called *after* the "save word cloud" dialog closes.
+    """
     logger.debug(f"write_word_cloud: Dispatching a save to '{filename}', and acknowledging in GUI.")
 
     # The animation can run while we're saving.
@@ -885,7 +902,7 @@ filedialog_open = None
 filedialog_save = None
 
 def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
-    """Create the "open file" dialog."""
+    """Create the "open file" and "save word cloud" dialogs."""
     global filedialog_open
     global filedialog_save
     filedialog_open = FileDialog(title="Open dataset",
