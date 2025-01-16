@@ -19,29 +19,6 @@ from ... import animation
 
 
 class FileDialog:
-    """
-    Arguments:
-        title:                  str, File dialog window title.
-        tag:                    str, File dialog window DPG tag.
-        width:                  int, File dialog window width (pixels).
-        height:                 int, File dialog window height (pixels).
-        min_size:               (int, int), File dialog minimum size.
-        dirs_only:              When True, only directories will be listed.
-        default_path:           str, The default path when file_dialog starts, if it's the string 'cwd', the default path will be the current working directory.
-        filter_list:            [str, ...], A list of different file extensions, for the user to choose in the file type filter. E.g. [".png", ".jpg"].
-        file_filter:            str, The value of the file type filter when the dialog is opened, e.g. ".py".
-        callback:               callable, When the OK or Cancel button is pressed, the file dialog will call this, sending the list of selected files. Upon cancel, the list is empty.
-        show_dir_size:          If True, directories will be listed with the size of the directory and its sub-directories and files. Not recommended.
-        allow_drag:             If True, the files and folders in the dialog act as a DPG drag source, so you can set up a drop target to accept them as drag'n'drops in your app. See source code for details.
-        multi_selection:        If True, the user can select multiple files and folders by holding down Ctrl and clicking. If False, only one file/folder can be selected, and Ctrl does nothing.
-        show_shortcuts_menu:    if True, show a child window (side panel) containing different shortcuts (like desktop and downloads), and the external and internal drives.
-        no_resize:              If True, the window will not be resizable.
-        modal:                  If True, use DPG modal mode; a sort of popup effect. Can cause problems if the file dialog is opened by a modal window.
-        show_hidden_files:      If True, the dialog shows also hidden files and folders.
-        user_style:             int, different graphical styles for file_dialog. Currently available values: 0 (full), 1 (compact).
-    Returns:
-        None
-    """
     _asset_loading_lock = threading.Lock()  # thread-safe asset loading
     _assets_loaded = False
 
@@ -50,13 +27,11 @@ class FileDialog:
         with cls._asset_loading_lock:
             if cls._assets_loaded:
                 return
-
             cls._assets_loaded = True
 
             cls.fd_img_path = os.path.join(os.path.dirname(__file__), "images")
 
             # file dialog theme
-
             with dpg.theme() as cls.selec_alignt:
                 with dpg.theme_component(dpg.mvThemeCat_Core):
                     dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=0, y=.5)
@@ -101,7 +76,6 @@ class FileDialog:
             awidth, aheight, _, adata = dpg.load_image(os.path.join(cls.fd_img_path, "app.png"))
             iwidth, iheight, _, idata = dpg.load_image(os.path.join(cls.fd_img_path, "iso.png"))
 
-            # low-level
             cls.ico_document = [diwidth, diheight, didata]
             cls.ico_home = [hwidth, hheight, hdata]
             cls.ico_add_folder = [afiwidth, afiheight, afidata]
@@ -137,7 +111,6 @@ class FileDialog:
             cls.ico_app = [awidth, aheight, adata]
             cls.ico_iso = [iwidth, iheight, idata]
 
-            # high-level
             with dpg.texture_registry():
                 dpg.add_static_texture(width=cls.ico_document[0], height=cls.ico_document[1], default_value=cls.ico_document[2], tag="ico_document")
                 dpg.add_static_texture(width=cls.ico_home[0], height=cls.ico_home[1], default_value=cls.ico_home[2], tag="ico_home")
@@ -217,6 +190,7 @@ class FileDialog:
         height=650,
         min_size=(460, 320),
         dirs_only=False,
+        save_mode=False,
         default_path=os.getcwd(),
         filter_list=[".*", ".exe", ".bat", ".sh", ".msi", ".apk", ".bin", ".cmd", ".com", ".jar", ".out", ".py", ".pyl", ".phs", ".js", ".json", ".java", ".c", ".cpp", ".cs", ".h", ".rs", ".vbs", ".php", ".pl", ".rb", ".go", ".swift", ".ts", ".asm", ".lua", ".sh", ".bat", ".r", ".dart", ".ps1", ".html", ".htm", ".xml", ".css", ".ini", ".yaml", ".yml", ".config", ".md", ".rst", ".txt", ".rtf", ".doc", ".docx", ".pdf", ".odt", ".tex", ".log", ".csv", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".svg", ".webp", ".ico", ".psd", ".ai", ".eps", ".tga", ".wav", ".mp3", ".ogg", ".flac", ".aac", ".m4a", ".wma", ".aiff", ".mid", ".midi", ".opus", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpeg", ".mpg", ".3gp", ".m4v", ".blend", ".fbx", ".obj", ".stl", ".3ds", ".dae", ".ply", ".glb", ".gltf", ".csv", ".sql", ".db", ".dbf", ".mdb", ".accdb", ".sqlite", ".xml", ".json", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".bz2", ".xz", ".tgz", ".cab", ".vdi", ".vmdk", ".vhd", ".vhdx", ".ova", ".ovf", ".qcow2", ".dockerfile", ".bak", ".old", ".sav", ".tmp", ".bk", ".ppack", ".mlt", ".torrent", ".ics"],
         file_filter=".*",
@@ -230,6 +204,33 @@ class FileDialog:
         show_hidden_files=False,
         user_style=0
     ):
+        """
+        Arguments:
+            title:                  str, File dialog window title.
+            tag:                    str, File dialog window DPG tag.
+            width:                  int, File dialog window width (pixels).
+            height:                 int, File dialog window height (pixels).
+            min_size:               (int, int), File dialog minimum size.
+            dirs_only:              When True, only directories will be listed.
+            save_mode:              When True, asks for a filename to save as, instead of selecting file(s) to open.
+                                    In the GUI, the "Search files" field becomes the filename field. (Searching is still enabled, to help avoid accidental overwriting.)
+            default_path:           str, The default path when file_dialog starts, if it's the string 'cwd', the default path will be the current working directory.
+            filter_list:            [str, ...], A list of different file extensions, for the user to choose in the file type filter. E.g. [".png", ".jpg"].
+            file_filter:            str, The value of the file type filter when the dialog is opened, e.g. ".py".
+            callback:               callable, When the OK or Cancel button is pressed, the file dialog will call this, sending the list of selected files. Upon cancel, the list is empty.
+            show_dir_size:          If True, directories will be listed with the size of the directory and its sub-directories and files. Not recommended.
+            allow_drag:             If True, the files and folders in the dialog act as a DPG drag source, so you can set up a drop target to accept them as drag'n'drops in your app. See source code for details.
+            multi_selection:        If True, the user can select multiple files and folders by holding down Ctrl and clicking. If False, only one file/folder can be selected, and Ctrl does nothing.
+                                    Ignored when save_mode is True.
+            show_shortcuts_menu:    if True, show a child window (side panel) containing different shortcuts (like desktop and downloads), and the external and internal drives.
+            no_resize:              If True, the window will not be resizable.
+            modal:                  If True, use DPG modal mode; a sort of popup effect. Can cause problems if the file dialog is opened by a modal window.
+            show_hidden_files:      If True, the dialog shows also hidden files and folders.
+            user_style:             int, different graphical styles for file_dialog. Currently available values: 0 (full), 1 (compact).
+        Returns:
+            None
+        """
+
         # args
         self.title = title
         self.tag = tag
@@ -237,13 +238,14 @@ class FileDialog:
         self.height = height
         self.min_size = min_size
         self.dirs_only = dirs_only
+        self.save_mode = save_mode
         self.default_path = default_path
         self.filter_list = filter_list
         self.file_filter = file_filter
         self.callback = callback
         self.show_dir_size = show_dir_size
         self.allow_drag = allow_drag
-        self.multi_selection = multi_selection
+        self.multi_selection = (not save_mode) and multi_selection
         self.show_shortcuts_menu = show_shortcuts_menu
         self.no_resize = no_resize
         self.modal = modal
@@ -772,7 +774,8 @@ class FileDialog:
                             dpg.add_input_text(hint="Path", on_enter=True, callback=on_path_enter, default_value=os.getcwd(), width=-1, tag=f"ex_path_input_{self.instance_tag}")
 
                         with dpg.group(horizontal=True):
-                            dpg.add_input_text(hint="Search files", callback=_search, tag=f"ex_search_{self.instance_tag}", width=-1)
+                            search_hint = "Search files [Ctrl+F]" if not save_mode else "Filename to save as [Ctrl+F]"  # TODO: move the hotkey handler for this dialog here
+                            self.search_field = dpg.add_input_text(hint=search_hint, callback=_search, tag=f"ex_search_{self.instance_tag}", width=-1)
 
                         # main explorer table header
                         with dpg.table(
@@ -854,6 +857,17 @@ class FileDialog:
 
         The list of selected files is sent to `callback`.
         """
+        if self.save_mode:
+            logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), this dialog is in save mode")
+            if not self.selected_files:
+                logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no file selected for overwriting; using content of search field as the filename")
+                save_as_file_name = dpg.get_value(f"ex_search_{self.instance_tag}")
+                if not save_as_file_name:
+                    logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), search field is empty, cannot save with empty filename; rejecting the ok")
+                    return
+                full_path = os.path.join(os.getcwd(), save_as_file_name)
+                self.selected_files.append(full_path)
+
         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}")
         dpg.hide_item(self.tag)
         if self.callback is not None:
