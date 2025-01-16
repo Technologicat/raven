@@ -909,7 +909,7 @@ class FileDialog:
         An empty list is sent to `callback`, so that your app can trigger any cleanup actions needed
         (e.g. re-enabling certain GUI elements or animations after a modal dialog exits).
         """
-        logger.debug("cancel: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning empty list.")
+        logger.debug(f"cancel: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning empty list.")
         dpg.hide_item(self.tag)
         if self.callback is not None:
             self.callback([])
