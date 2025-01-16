@@ -881,7 +881,8 @@ class FileDialog:
         # Ensure presence of file extension in save mode
         if self.save_mode and self.default_file_extension is not None:
             def ensure_ext(path):
-                if not any(path.endswith(ext) for ext in self.filter_list):
+                path_lower = path.lower()
+                if not any(path_lower.endswith(ext.lower()) for ext in self.filter_list):
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), automatically adding default file extension '{self.default_file_extension}' to '{path}'.")
                     return path + self.default_file_extension
                 return path
