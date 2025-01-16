@@ -440,7 +440,7 @@ class FileDialog:
                 return False
 
         def _makedir(item, callback, parent=f"explorer_{self.instance_tag}", size=False):
-            logger.debug(f"_makedir: instance '{self.tag}' ({self.instance_tag}), making table entry for directory '{item}' with callback {callback}")
+            # logger.debug(f"_makedir: instance '{self.tag}' ({self.instance_tag}), making table entry for directory '{item}' with callback {callback}")  # don't keep enabled, to avoid leaking user private data to debug log
 
             file_name = os.path.basename(item)
 
@@ -487,7 +487,7 @@ class FileDialog:
                         dpg.add_image(self.img_document, parent=drag_payload)
 
         def _makefile(item, callback, parent=f"explorer_{self.instance_tag}"):
-            logger.debug(f"_makefile: instance '{self.tag}' ({self.instance_tag}), making table entry for file '{item}' with callback {callback}")
+            # logger.debug(f"_makefile: instance '{self.tag}' ({self.instance_tag}), making table entry for file '{item}' with callback {callback}")  # don't keep enabled, to avoid leaking user private data to debug log
 
             if self.file_filter == ".*" or item.endswith(self.file_filter):
                 file_name = os.path.basename(item)
