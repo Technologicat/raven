@@ -270,7 +270,7 @@ class ButtonFlash(Animation):
     instances = {}  # DPG tag or ID (of `target_button`) -> animation instance
 
     # TODO: We could also customize `__new__` to return the existing instance, see `unpythpnic.symbol.sym`.
-    def __init__(self, message, target_button, target_tooltip, target_text, original_theme, duration):
+    def __init__(self, message, target_button, target_tooltip, target_text, original_theme, duration, flash_color=(96, 128, 96), text_color=(180, 255, 180)):
         """Animation to flash a button (and its tooltip, if visible) to draw the user's attention.
 
         This is useful to let the user know that pressing the button actually took,
@@ -288,6 +288,9 @@ class ButtonFlash(Animation):
         `target_text`: DPG tag or ID, the text widget inside the tooltip to animate. Can be `None`.
         `original_theme`: DPG tag or ID, the theme to restore when the flashing ends.
                           Mandatory when `target_tooltip is not None`, and only used in that case.
+        `duration`: float, animation duration in seconds.
+        `flash_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
+        `text_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
         """
         super().__init__()
         self.instance_lock = threading.Lock()
@@ -298,6 +301,8 @@ class ButtonFlash(Animation):
         self.target_text = target_text
         self.original_theme = original_theme
         self.duration = duration
+        self.flash_color = flash_color
+        self.text_color = text_color
 
         # These are used during animation
         self.theme = None
@@ -319,7 +324,7 @@ class ButtonFlash(Animation):
         r = utils.clamp(animation_pos)
         r = utils.nonanalytic_smooth_transition(r)
 
-        R0, G0, B0 = 96, 128, 96  # light green
+        R0, G0, B0 = self.flash_color
         R1, G1, B1 = 45, 45, 48  # default button background color  TODO: read from global theme
         R = R0 * (1.0 - r) + R1 * r
         G = G0 * (1.0 - r) + G1 * r
@@ -356,13 +361,13 @@ class ButtonFlash(Animation):
                 with dpg.theme(tag=f"acknowledgement_highlight_theme_{type(self).id_counter}") as self.theme:  # create unique DPG ID each time
                     with dpg.theme_component(dpg.mvAll):
                         # common
-                        dpg.add_theme_color(dpg.mvThemeCol_Text, (180, 255, 180))
+                        dpg.add_theme_color(dpg.mvThemeCol_Text, self.text_color)
                         # button
-                        self.highlight_button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, (96, 128, 96))
-                        self.highlight_hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (96, 128, 96))
-                        self.highlight_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (96, 128, 96))
+                        self.highlight_button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color)
+                        self.highlight_hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color)
+                        self.highlight_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color)
                         # tooltip
-                        self.highlight_popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (96, 128, 96))
+                        self.highlight_popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, self.flash_color)
                 type(self).id_counter += 1
 
                 dpg.bind_item_theme(self.target_button, self.theme)
@@ -371,7 +376,7 @@ class ButtonFlash(Animation):
                 if self.target_text is not None:
                     self.original_message = dpg.get_value(self.target_text)
                     dpg.set_value(self.target_text, self.message)
-                    # dpg.bind_item_theme(self.target_text, self.theme)
+                    dpg.bind_item_theme(self.target_text, self.theme)
 
                 type(self).instances[self.target_button] = self
                 self.reified = True  # This is the instance that animates `self.target_button`.
@@ -383,7 +388,7 @@ class ButtonFlash(Animation):
                 dpg.bind_item_theme(self.target_tooltip, self.original_theme)
             if self.target_text is not None:
                 dpg.set_value(self.target_text, self.original_message)
-                # dpg.bind_item_theme(self.target_text, self.original_theme)
+                dpg.bind_item_theme(self.target_text, self.original_theme)
             dpg.delete_item(self.theme)
             self.theme = None
             self.reified = False
