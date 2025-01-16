@@ -881,6 +881,7 @@ class FileDialog:
                 else:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no items shown (maybe nothing matches the search?); rejecting the ok.")
                     return
+        assert len(self.selected_files)  # at least one file selected if we get here
 
         # Save mode: Ensure presence of file extension.
         if self.save_mode and self.default_file_extension is not None:
