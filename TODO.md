@@ -15,8 +15,6 @@
    https://github.com/hoffstadt/DearPyGui/discussions/1688
    https://dearpygui.readthedocs.io/en/1.x/reference/dearpygui.html#dearpygui.dearpygui.create_viewport
 
-- fdialog: Sorting not working, or not supported. Fix this.
-
 - Mention the word cloud feature in README, and add an example image.
 
 - Flash the word cloud button when starting to generate.
