@@ -1,6 +1,8 @@
 # file_dialog 3.1
 # MIT licensed
 
+__all__ = ["FileDialog"]
+
 import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -17,16 +19,43 @@ import dearpygui.dearpygui as dpg
 from ... import animation
 
 
+# Hotkey support
+visible_dialog_instance = None  # fdialog is modal so There Can Be Only One (TM). If needed, could use a list, and check which one has keyboard focus, but that might not always work.
+def fdialog_hotkeys_callback(sender, app_data):
+    if visible_dialog_instance is None:
+        return
+
+    key = app_data  # for documentation only
+    # shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+
+    # TODO: Add hotkeys to navigate up/down in the table, descend into folder, ...
+    if key == dpg.mvKey_Return:
+        visible_dialog_instance.ok()
+    elif key == dpg.mvKey_Escape:
+        visible_dialog_instance.cancel()
+    elif key == dpg.mvKey_F5:
+        visible_dialog_instance.refresh()
+    elif ctrl_pressed and key == dpg.mvKey_Home:
+        visible_dialog_instance.back_to_default_path()
+    elif ctrl_pressed and key == dpg.mvKey_F:
+        dpg.focus_item(visible_dialog_instance.search_field)
+
+
 class FileDialog:
-    _asset_loading_lock = threading.Lock()  # thread-safe asset loading
-    _assets_loaded = False
+    _class_init_lock = threading.Lock()  # thread-safe asset loading
+    _class_initialized = False
 
     @classmethod
-    def _load_assets(cls):
-        with cls._asset_loading_lock:
-            if cls._assets_loaded:
+    def _initialize_class(cls):
+        with cls._class_init_lock:
+            if cls._class_initialized:
                 return
-            cls._assets_loaded = True
+            cls._class_initialized = True
+
+            # register our hotkey handler
+            with dpg.handler_registry(tag="fdialog_handler_registry"):  # global (whole viewport)
+                dpg.add_key_press_handler(tag="fdialog_hotkeys_handler", callback=fdialog_hotkeys_callback)
 
             cls.fd_img_path = os.path.join(os.path.dirname(__file__), "images")
 
@@ -265,7 +294,7 @@ class FileDialog:
         self.last_ok_time = 0
         self.double_click_threshold = 0.25  # seconds; adjust the time as needed.  # TODO: should really get this from OS if possible in a cross-platform way
 
-        self._load_assets()
+        self._initialize_class()
 
         # low-level functions
         def _get_all_drives():
@@ -898,6 +927,9 @@ class FileDialog:
         self.chdir(os.getcwd())
         dpg.show_item(self.tag)
 
+        global visible_dialog_instance
+        visible_dialog_instance = self
+
         # Align the OK/Cancel buttons to the right
         dpg.split_frame()
         old_width = dpg.get_item_width(self.spacer_okcancel)
@@ -1024,6 +1056,8 @@ class FileDialog:
 
         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}.")
         dpg.hide_item(self.tag)
+        global visible_dialog_instance
+        visible_dialog_instance = None
         if self.callback is not None:
             self.callback(self.selected_files)
         dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting
@@ -1039,6 +1073,8 @@ class FileDialog:
         """
         logger.debug(f"cancel: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning empty list.")
         dpg.hide_item(self.tag)
+        global visible_dialog_instance
+        visible_dialog_instance = None
         if self.callback is not None:
             self.callback([])
         dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting

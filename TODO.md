@@ -19,8 +19,6 @@
 
 - Flash the search field (both in main window and in file dialogs) when focused by hotkey. Need to generalize `ButtonFlash` for GUI elements other than buttons.
 
-- Move the fdialog hotkey handler to inside the fdialog module if possible. Does DPG support having several hotkey handlers at once?
-
 
 ## v0.2 and later
 

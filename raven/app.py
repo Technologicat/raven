@@ -4036,34 +4036,8 @@ def hotkeys_callback(sender, app_data):
             hide_help_window()
         return
 
-    # Hotkeys while the "open file" dialog is shown
-    elif is_open_file_dialog_visible():
-        # TODO: Add hotkeys to navigate up/down in the "open file" view, descend into folder, go one level up, go back to default path, ...
-        if key == dpg.mvKey_Return:
-            filedialog_open.ok()
-        elif key == dpg.mvKey_Escape:
-            filedialog_open.cancel()
-        elif key == dpg.mvKey_F5:
-            filedialog_open.refresh()
-        elif ctrl_pressed and key == dpg.mvKey_Home:
-            filedialog_open.back_to_default_path()
-        elif ctrl_pressed and key == dpg.mvKey_F:
-            dpg.focus_item(filedialog_open.search_field)
-        return
-
-    # Hotkeys while the "save word cloud" dialog is shown
-    elif is_save_word_cloud_dialog_visible():
-        # TODO: Add hotkeys to navigate up/down in the "save file" view, descend into folder, go one level up, go back to default path, ...
-        if key == dpg.mvKey_Return:
-            filedialog_save.ok()
-        elif key == dpg.mvKey_Escape:
-            filedialog_save.cancel()
-        elif key == dpg.mvKey_F5:
-            filedialog_save.refresh()
-        elif ctrl_pressed and key == dpg.mvKey_Home:
-            filedialog_save.back_to_default_path()
-        elif ctrl_pressed and key == dpg.mvKey_F:
-            dpg.focus_item(filedialog_save.search_field)
+    # Hotkeys while the "open file" dialog is shown - fdialog handles its own hotkeys
+    elif is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible():
         return
 
     # Hotkeys while the word cloud viewer is shown
