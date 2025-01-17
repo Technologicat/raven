@@ -482,6 +482,12 @@ def _update_word_cloud(*, task_env):
                 dpg.set_item_label("word_cloud_window", "Word cloud [updating]")  # tag
                 dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD_BOLT)
                 dpg.set_value("word_cloud_button_tooltip_text", "Generating word cloud, just for you. Please wait. [F10]")
+                animation.animator.add(animation.ButtonFlash(message=None,
+                                                             target_button="word_cloud_button",
+                                                             target_tooltip=None,  # we handle the tooltip manually
+                                                             target_text=None,
+                                                             original_theme=global_theme,
+                                                             duration=gui_config.acknowledgment_duration))
 
                 # Combine keyword counts of the specified items
                 logger.debug(f"_update_word_cloud: {task_env.task_name}: Collecting keywords for selected data points.")
