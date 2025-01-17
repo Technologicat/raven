@@ -394,9 +394,10 @@ class FileDialog:
                     if os.path.isfile(user_data[1]):
                         _deselect_recursive(f"explorer_{self.instance_tag}")  # unselect others
                         dpg.set_value(sender, True)  # and select this item
-                        # Save mode: populate file name field from clicked file
+                        # Save mode: populate file name field from clicked file, without file extension
                         if self.save_mode:
-                            dpg.set_value(f"ex_search_{self.instance_tag}", user_data[0])
+                            basename, ext = os.path.splitext(user_data[0])
+                            dpg.set_value(f"ex_search_{self.instance_tag}", basename)
                             self._update_search()
                         self.selected_files.clear()
                         self.selected_files.append(user_data[1])
