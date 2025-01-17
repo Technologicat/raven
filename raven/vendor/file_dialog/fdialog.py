@@ -702,55 +702,55 @@ class FileDialog:
             # print([dpg.get_item_type(x) for x in dpg.get_item_children(sender, 0)])  # table columns use slot 0  # DEBUG
 
             column_id, direction = sort_specs[0]
-            columns = dpg.get_item_children(sender, 0)  # table columns use slot 0
+            columns = dpg.get_item_children(sender, 0)  # -> list of DPG IDs; table columns use slot 0
             rows = dpg.get_item_children(sender, 1)  # -> list of DPG IDs
 
             do_reverse = sort_specs[0][1] < 0
             if not do_reverse:
-                item_type_to_sort_tag = {"Dir": 0, "File": 1}
+                item_type_to_sort_key = {"Dir": 0, "File": 1}
             else:
-                item_type_to_sort_tag = {"Dir": 1, "File": 0}  # make directories go first also in reversed sort order
+                item_type_to_sort_key = {"Dir": 1, "File": 0}  # make directories go first also in reversed sort order
             column_idx = columns.index(column_id)
 
-            # create a list that can be sorted based on a cell value,
-            # keeping track of row and value used to sort
+            # Create a list that can be sorted based on a cell value, keeping track of row and value used to sort.
             sortable_list = []
             for row in rows[1:]:  # ignore the magic "..", it always goes first
-                # for the ".." magic entry: ['mvAppItemType::mvGroup'] (only one cell in this row!)
-                # for others:               ['mvAppItemType::mvGroup', 'mvAppItemType::mvSelectable', 'mvAppItemType::mvSelectable', 'mvAppItemType::mvSelectable']
+                # for the magic "..": ['mvAppItemType::mvGroup']
+                # for all others:     ['mvAppItemType::mvGroup', 'mvAppItemType::mvSelectable', 'mvAppItemType::mvSelectable', 'mvAppItemType::mvSelectable']
                 # print([dpg.get_item_type(x) for x in dpg.get_item_children(row, 1)])  # DEBUG
-                cells = dpg.get_item_children(row, 1)
-                icon, filename_widget = dpg.get_item_children(cells[0], 1)
-                item_type = dpg.get_item_user_data(icon)  # `reset_dir`, `_makedir`, `_makefile` stash the item type here
+                cells = dpg.get_item_children(row, 1)  # in this row
 
+                icon_widget, filename_widget = dpg.get_item_children(cells[0], 1)  # unpack the group widget
+                item_type = dpg.get_item_user_data(icon_widget)  # `reset_dir`, `_makedir`, `_makefile` stash the item type here
                 if column_idx == 0:  # name
                     file_name, full_path, modification_time_value, item_size_value = dpg.get_item_user_data(filename_widget)  # see `_makedir`, `_makefile`; for column 0, this is inside the group
                 else:
-                    file_name, full_path, modification_time_value, item_size_value = dpg.get_item_user_data(cells[column_idx])
+                    file_name, full_path, modification_time_value, item_size_value = dpg.get_item_user_data(cells[column_idx])  # for other columns, the selectable is the only widget in the table cell
 
                 # pick the sort key
                 if column_idx == 0:  # name
-                    data = file_name
+                    data_sort_key = file_name
                 elif column_idx == 1:  # date
-                    data = modification_time_value
+                    data_sort_key = modification_time_value
                 elif column_idx == 2:  # type
-                    data = item_type
+                    data_sort_key = item_type
                 elif column_idx == 3:  # size
-                    data = item_size_value
+                    data_sort_key = item_size_value
 
                 # print(icon, dpg.get_item_type(icon), dpg.get_item_user_data(icon))  # DEBUG
-                sortable_list.append([row, item_type_to_sort_tag[item_type], data])
+                sortable_list.append([row, item_type_to_sort_key[item_type], data_sort_key])
 
+            # We'll read off the rows after we're done.
             def _sorter(elt):
-                row, item_type_sort_tag, filename = elt
-                return (item_type_sort_tag, filename)
+                row, item_type_sort_key, data_sort_key = elt
+                return (item_type_sort_key, data_sort_key)
 
             sortable_list.sort(key=_sorter, reverse=do_reverse)
 
             # create list of just sorted row ids
             new_order = [rows[0]]  # the magic ".."
             for elt in sortable_list:
-                row, item_type_sort_tag, filename = elt
+                row, item_type_sort_key, filename = elt
                 new_order.append(row)
 
             dpg.reorder_items(sender, 1, new_order)
