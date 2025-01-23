@@ -456,18 +456,18 @@ def _update_word_cloud(*, task_env):
 
     logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task running.")
     try:
+        assert task_env is not None
+        if task_env.cancelled:
+            logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task cancelled (before starting).")
+            return
+
+        data_idxs = task_env.data_idxs
+
         if dataset is None:
             logger.debug(f"_update_word_cloud: {task_env.task_name}: No dataset loaded. Clearing texture.")
             arr = unbox(word_cloud_image_box)
             arr[:, :, :3] = 0.0
         else:
-            assert task_env is not None
-            if task_env.cancelled:
-                logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task cancelled (before starting).")
-                return
-
-            data_idxs = task_env.data_idxs
-
             # No need to recompute -> just show the window.
             if id(dataset) == word_cloud_last_dataset_addr and set(data_idxs) == word_cloud_last_data_idxs:
                 logger.debug(f"_update_word_cloud: {task_env.task_name}: Same dataset and same selection as last time. Showing word cloud window. Task completed.")
