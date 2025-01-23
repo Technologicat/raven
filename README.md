@@ -311,6 +311,7 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
   - "Open"/"Save as" dialog: [file_dialog](https://github.com/totallynotdrait/file_dialog), but customized.
   - Markdown renderer: [DearPyGui-Markdown](https://github.com/IvanNazaruk/DearPyGui-Markdown).
   - Toolbutton icons: [Font Awesome](https://github.com/FortAwesome/Font-Awesome) v6.6.0.
+  - Word cloud renderer: [word_cloud](https://github.com/amueller/word_cloud).
 
 Note that installing Raven will auto-install dependencies into the same `conda` environment. This list is here just to provide a flavor of the kinds of parts needed to build a tool like this.
 
