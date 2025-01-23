@@ -50,6 +50,8 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
             - [How it works](#how-it-works)
             - [LLM requirements](#llm-requirements)
 - [Visualize an imported dataset](#visualize-an-imported-dataset)
+    - [Load a file in the GUI](#load-a-file-in-the-gui)
+    - [Load a file from the command line, when starting the app](#load-a-file-from-the-command-line-when-starting-the-app)
 - [Install & uninstall](#install--uninstall)
     - [From PyPI](#from-pypi)
     - [From source](#from-source)
@@ -177,6 +179,8 @@ Support for LLM authentication (API key) has not been implemented yet, so curren
 
 # Visualize an imported dataset
 
+First, if raven-visualizer is not yet running, start it:
+
 ```bash
 conda activate raven  # see Installation below
 python -m raven.app
@@ -184,14 +188,30 @@ python -m raven.app
 
 Instead of `python -m raven.app`, you can also just use the command `raven-visualizer` (installed when you install the software).
 
-To load your dataset file, you can then click on the *Open dataset* button in the toolbar, or press Ctrl+O:
+For details on how to use the app, see the built-in Help card. To show the help, click the "?" button in the toolbar, or press F1.
+
+## Load a file in the GUI
+
+To load your dataset file, you can then click on the *Open dataset* button in the toolbar, or press Ctrl+O, thus bringing up this dialog:
 
 <p align="center">
 <img src="img/screenshot-open-file.png" alt="Screenshot of Raven's open dataset dialog" width="800"/> <br/>
 <i>Opening an imported dataset for visualization.</i>
 </p>
 
-**:exclamation: The open dataset dialog currently requires using the mouse to pick the file. This is a known issue. :exclamation:**
+Double-clicking a directory in the list changes to that directory. Double-clicking the ".." directory goes one level up.
+
+The buttons at the top of the dialog refresh the view of the current directory, and jump back to the default directory, respectively.
+
+You can focus the *Search files* field by pressing Ctrl+F. Searching filters the view live, as you type. If the search has exactly one match in the current directory (i.e. when only one file is shown in the list, not counting the ".."), that file can then be opened by pressing Enter.
+
+So in this example, to open `out.pickle`, you can press Ctrl+O, then Ctrl+F, type "out" (so that the other file `100.pickle` does not match the search filter), and press Enter.
+
+Pressing Esc cancels the dialog.
+
+**:exclamation: With exception to the search functionality, the open dataset dialog currently requires using the mouse to pick the file. This is a known issue. :exclamation:**
+
+## Load a file from the command line, when starting the app
 
 Raven can also open a dataset file when the app starts:
 
@@ -199,7 +219,12 @@ Raven can also open a dataset file when the app starts:
 python -m raven.app mydata.pickle
 ```
 
-For further details on how to use the app, see the built-in Help card. To show the help, click the "?" button in the toolbar, or press F1.
+or
+
+```bash
+raven-visualizer mydata.pickle
+```
+
 
 
 # Install & uninstall
