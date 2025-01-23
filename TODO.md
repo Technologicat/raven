@@ -15,8 +15,6 @@
    https://github.com/hoffstadt/DearPyGui/discussions/1688
    https://dearpygui.readthedocs.io/en/1.x/reference/dearpygui.html#dearpygui.dearpygui.create_viewport
 
-- Mention the word cloud feature in README, and add an example image.
-
 - Flash the search field (both in main window and in file dialogs) when focused by hotkey. Need to generalize `ButtonFlash` for GUI elements other than buttons.
 
 
