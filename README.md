@@ -204,6 +204,8 @@ Double-clicking a directory in the list changes to that directory. Double-clicki
 
 The buttons at the top of the dialog refresh the view of the current directory, and jump back to the default directory, respectively.
 
+As usual, the list can be sorted by clicking on the column headers. The date shown is the mtime (modification time).
+
 You can focus the *Search files* field by pressing Ctrl+F. Searching filters the view live, as you type. If the search has exactly one match in the current directory (i.e. when only one file is shown in the list, not counting the ".."), that file can then be opened by pressing Enter.
 
 So in this example, to open `out.pickle`, you can press Ctrl+O, then Ctrl+F, type "out" (so that the other file `100.pickle` does not match the search filter), and press Enter.
