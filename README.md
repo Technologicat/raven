@@ -308,6 +308,9 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
   - BibTeX: [BibtexParser](https://bibtexparser.readthedocs.io/en/main/).
   - Web of Science: [wosfile](https://github.com/rafguns/wosfile).
 - Graphical user interface: [DearPyGUI](https://github.com/hoffstadt/DearPyGui/).
+  - "Open"/"Save as" dialog: [file_dialog](https://github.com/totallynotdrait/file_dialog), but customized.
+  - Markdown renderer: [DearPyGui-Markdown](https://github.com/IvanNazaruk/DearPyGui-Markdown).
+  - Toolbutton icons: [Font Awesome](https://github.com/FortAwesome/Font-Awesome) v6.6.0.
 
 Note that installing Raven will auto-install dependencies into the same `conda` environment. This list is here just to provide a flavor of the kinds of parts needed to build a tool like this.
 
