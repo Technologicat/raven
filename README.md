@@ -255,7 +255,7 @@ The word cloud renderer is Python-based, so it can be rather slow for large sele
 
 In the word cloud window, the "hard disk" toolbutton (hotkey Ctrl+S when the word cloud window is open) opens a *Save as* dialog to save the word cloud image as PNG.
 
-The dialog otherwise works the same as the *Open dataset* dialog, except that the search filter field is replaced by a save-as filename field.
+The dialog otherwise works the same as the *Open dataset* dialog, except that the search filter field is replaced by a save-as filename field. This filename field also acts as a search filter, so you can see what existing files in the current directory have names similar to the one you are saving.
 
 The file extension (`.png`) is added automatically to the filename you specify.
 
