@@ -53,6 +53,7 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
     - [Load a file in the GUI](#load-a-file-in-the-gui)
     - [Load a file from the command line, when starting the app](#load-a-file-from-the-command-line-when-starting-the-app)
     - [Create a word cloud](#create-a-word-cloud)
+        - [Save a word cloud as PNG](#save-a-word-cloud-as-png)
 - [Install & uninstall](#install--uninstall)
     - [From PyPI](#from-pypi)
     - [From source](#from-source)
@@ -240,8 +241,6 @@ Here is an example:
 <i>Word cloud window.</i>
 </p>
 
-The "hard disk" toolbutton (hotkey Ctrl+S) opens a "save as" dialog to save the word cloud image as PNG.
-
 The word cloud window hotkey (F10) toggles the window. Note this window is **not** modal, so you can continue working with the app while the window is open, and pressing Esc will not close it.
 
 If the word cloud window is open, it updates automatically whenever the selection changes. Just like in the info panel, the old content remains in the window until the new rendering finishes.
@@ -251,6 +250,22 @@ When the word cloud window is opened, Raven checks whether the selection has cha
 The rendering algorithm allocates regions and colors randomly, so even re-rendering with the same data (e.g. in another session later), you will get a different-looking result each time.
 
 The word cloud renderer is Python-based, so it can be rather slow for large selections containing very many data points. The render runs in the background, so you can continue working with your data while the word cloud is being rendered.
+
+### Save a word cloud as PNG
+
+In the word cloud window, the "hard disk" toolbutton (hotkey Ctrl+S when the word cloud window is open) opens a *Save as* dialog to save the word cloud image as PNG.
+
+The dialog otherwise works the same as the *Open dataset* dialog, except that the search filter field is replaced by a save-as filename field.
+
+The file extension (`.png`) is added automatically to the filename you specify.
+
+You can also pre-populate the filename by clicking a file in the list. This can be useful if you want to overwrite a file, or if you are saving a series of related files (`something.png`, `something2.png`, ...).
+
+If a file would be overwritten, the OK button flashes red, and the dialog asks to press it again (before the flash ends) to confirm.
+
+Pressing Enter is the same as clicking the OK button. To overwrite a file, press Enter again (before the flash ends).
+
+Pressing Esc cancels the dialog.
 
 
 # Install & uninstall
@@ -310,7 +325,7 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
   - BibTeX: [BibtexParser](https://bibtexparser.readthedocs.io/en/main/).
   - Web of Science: [wosfile](https://github.com/rafguns/wosfile).
 - Graphical user interface: [DearPyGUI](https://github.com/hoffstadt/DearPyGui/).
-  - "Open"/"Save as" dialog: [file_dialog](https://github.com/totallynotdrait/file_dialog), but customized.
+  - "Open"/"Save as" dialog: [file_dialog](https://github.com/totallynotdrait/file_dialog), but customized for Raven, and some features added.
   - Markdown renderer: [DearPyGui-Markdown](https://github.com/IvanNazaruk/DearPyGui-Markdown).
   - Toolbutton icons: [Font Awesome](https://github.com/FortAwesome/Font-Awesome) v6.6.0.
   - Word cloud renderer: [word_cloud](https://github.com/amueller/word_cloud).
