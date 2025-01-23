@@ -17,6 +17,8 @@
 
 - Flash the search field (both in main window and in file dialogs) when focused by hotkey. Need to generalize `ButtonFlash` for GUI elements other than buttons.
 
+- fdialog: least surprise: if the user has picked a unique file extension in the file extension filter combo, use that as the default file extension when in save mode. If the current choice in that combo has several file extensions, and/or has one or more wildcards, then use the API-provided default file extension.
+
 
 ## v0.2 and later
 
