@@ -52,6 +52,7 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
 - [Visualize an imported dataset](#visualize-an-imported-dataset)
     - [Load a file in the GUI](#load-a-file-in-the-gui)
     - [Load a file from the command line, when starting the app](#load-a-file-from-the-command-line-when-starting-the-app)
+    - [Create a word cloud](#create-a-word-cloud)
 - [Install & uninstall](#install--uninstall)
     - [From PyPI](#from-pypi)
     - [From source](#from-source)
@@ -225,6 +226,29 @@ or
 raven-visualizer mydata.pickle
 ```
 
+
+## Create a word cloud
+
+You can make a word cloud from the auto-detected keywords of the studies in the current selection. The size of each word in the picture represents its relative number of occurrences within the selection.
+
+Here is an example:
+
+<p align="center">
+<img src="img/screenshot-wordcloud.png" alt="Screenshot of Raven's wordcloud window" width="600"/> <br/>
+<i>Word cloud window.</i>
+</p>
+
+The "hard disk" toolbutton (hotkey Ctrl+S) opens a "save as" dialog to save the word cloud image as PNG.
+
+The word cloud window hotkey (F10) toggles the window. Note this window is **not** modal, so you can continue working with the app while the window is open, and pressing Esc will not close it.
+
+If the word cloud window is open, it updates automatically whenever the selection changes. Just like in the info panel, the old content remains in the window until the new rendering finishes.
+
+When the word cloud window is opened, Raven checks whether the selection has changed since the last word cloud was rendered. If there are no changes, the latest already rendered word cloud is just re-shown.
+
+The rendering algorithm allocates regions and colors randomly, so even re-rendering with the same data (e.g. in another session later), you will get a different-looking result each time.
+
+The word cloud renderer is Python-based, so it can be rather slow for large selections containing very many data points. The render runs in the background, so you can continue working with your data while the word cloud is being rendered.
 
 
 # Install & uninstall
