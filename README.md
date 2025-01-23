@@ -287,7 +287,7 @@ pip uninstall raven-visualizer
 - Hyperparameters of the clustering algorithm in the preprocessor may be dataset-dependent, but are not yet configurable. This will change in the future.
 - Dataset files are currently **not** portable across different Python versions.
 - We attempt to provide keyboard access to GUI features whenever reasonably possible, but there are currently some features where this is not reasonably possible; notably the plotter, and navigation within the *Open dataset* dialog window.
-- Configuration is currently hardcoded. See `config.py` for the preprocessor, and the `gui_config` data structure in `main.py` for the app itself. We believe that `.py` files are as good a plaintext configuration format as any, but in the long term, we aim to have a GUI to configure at least the most important parts.
+- Configuration is currently hardcoded. See `config.py`. We believe that `.py` files are as good a plaintext configuration format as any, but in the long term, we aim to have a GUI to configure at least the most important parts.
 
 
 # Technologies
