@@ -301,7 +301,7 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
 - High-dimensional clustering: [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/index.html).
 - Dimension reduction: [OpenTSNE](https://opentsne.readthedocs.io/en/stable/).
 - AI-powered PDF import
-  - AI model: a large language model (LLM), such as [Llama 3.1 8B](https://huggingface.co/meta-llama/Llama-3.1-8B).
+  - AI model: a large language model (LLM), such as [Llama 3.1 8B](https://huggingface.co/meta-llama/Llama-3.1-8B) or [Sky-T1 32B](https://huggingface.co/NovaSky-AI/Sky-T1-32B-Preview).
   - Engine for running LLMs: an LLM server such as [Oobabooga](https://github.com/oobabooga/text-generation-webui).
   - Communication with the LLM server: [sseclient-py](https://github.com/mpetazzoni/sseclient).
 - File format support
