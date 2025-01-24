@@ -283,13 +283,25 @@ class ButtonFlash(Animation):
         `message`: str, text to show in the `target_text` widget while the animation is running.
                    Original content will be restored automatically when the animation finishes normally.
                    Can be `None` for "don't change", or also when `target_text is None`.
-        `target_button`: DPG tag or ID, the button to animate.
-        `target_tooltip`: DPG tag or ID, the tooltip to animate. Can be `None`.
-        `target_text`: DPG tag or ID, the text widget inside the tooltip to animate. Can be `None`.
+
+        `target_button`: DPG tag or ID, the button to animate (by flashing its background).
+
+        `target_tooltip`: DPG tag or ID, the tooltip to animate (by flashing its background).
+                          Can be `None`.
+
+        `target_text`: DPG tag or ID, the text widget to animate (by changing the text content,
+                       and the text color, for the duration of the animation). Can be `None`.
+
+                       The text can be inside the tooltip (when `target_tooltip is not None`),
+                       but is really completely independent of `target_button` and `target_tooltip`.
+
         `original_theme`: DPG tag or ID, the theme to restore when the flashing ends.
                           Mandatory when `target_tooltip is not None`, and only used in that case.
+
         `duration`: float, animation duration in seconds.
+
         `flash_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
+
         `text_color`: tuple `(R, G, B)`, each component in [0, 255]. Default is light green.
         """
         super().__init__()
