@@ -117,8 +117,7 @@
   - Embed the input text, dimension-reduce it, highlight the resulting virtual datapoint in the plotter.
   - Later: add support for doing this for a user-given BibTeX entry or PDF file.
 
-- Import also items that have no abstract. We only really need a title to compute the embedding.
-  - Think of how to generalize this (to arbitrary missing fields) when we allow the user to choose which fields to embed.
+- We can now import items that have no abstract. Think of how to generalize this to arbitrary missing fields, when we eventually allow the user to choose which fields to embed in the preprocessing step.
 
 - Generate report of full selection (without rendering it into the info panel).
   - Hotkey: add Ctrl to the current hotkeys: Ctrl+F8 for plain text (whole selection), Ctrl+Shift+F8 for Markdown (whole selection)?
