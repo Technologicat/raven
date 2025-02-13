@@ -734,7 +734,7 @@ def parse_dataset_file(filename):
             # Compute normalized titles for searching, and insert a reverse lookup for the item's index in `sorted_xxx`.
             for data_idx, entry in enumerate(dataset.sorted_entries):
                 entry.data_idx = data_idx  # index to `sorted_xxx`
-                entry.normalized_title = utils.normalize_string(entry.title.strip())  # for searching
+                entry.normalized_title = utils.normalize_search_string(entry.title.strip())  # for searching
 
         # for k, v in dataset.sorted_entries[0].items():  # DEBUG: print one input data record (it's a dict)
         #     print(f"{k}: {v}")
