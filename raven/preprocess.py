@@ -164,7 +164,11 @@ def main(opts) -> None:
 
                 year = fields["year"].value
                 title = utils.unicodize_basic_markup(fields["title"].value)
-                abstract = utils.unicodize_basic_markup(fields["abstract"].value)
+
+                if "abstract" in fields and fields["abstract"].value:  # abstract is optional
+                    abstract = utils.unicodize_basic_markup(fields["abstract"].value)
+                else:
+                    abstract = None
 
                 # TODO: "keywords" may be populated (though it always isn't)
                 # TODO: WOS exports may also have "keywords-plus"
@@ -234,7 +238,7 @@ def main(opts) -> None:
 
             logger.info("        Encoding...")
             with timer() as tim:
-                all_inputs = [entry.title for entry in entries]  # with mpnet, this works best
+                all_inputs = [entry.title for entry in entries]  # with mpnet, this works best (and we don't always necessarily have an abstract)
                 # all_inputs = [entry.abstract for entry in entries]  # testing with snowflake
                 # all_inputs = [" ".join(entry.keywords) for entry in entries]
                 all_vectors = sentence_embedder.encode(all_inputs,
@@ -431,7 +435,10 @@ def main(opts) -> None:
 
                 def format_entry_for_keyword_extraction(entry: env) -> str:
                     # return entry.title
-                    return entry.title + ".\n\n" + entry.abstract
+                    if entry.abstract:
+                        return entry.title + ".\n\n" + entry.abstract
+                    else:
+                        return entry.title
 
                 logger.info("        Computing keyword set...")
                 logger.info(f"            Running NLP pipeline for data from {filename}...")
@@ -467,7 +474,7 @@ def main(opts) -> None:
                 # alphabetized_keywords_debug = dict(sorted(all_keywords_for_this_file.items(), key=lambda kv: kv[0]))
                 # logger.info(", ".join(alphabetized_keywords_debug.keys()))  # DEBUG
 
-                # Tag the abstracts.
+                # Tag the entries.
                 logger.info(f"        Trimming word counts and tagging named entities for data from {filename}...")
                 fa_times = []
                 ner_times = []
@@ -585,11 +592,7 @@ def main(opts) -> None:
         # for filename, entries in parsed_data_by_filename.items():  # DEBUG - prints the full dataset!
         #    for entry in entries:
         #        logger.info(f"{entry.author} ({entry.year}): {entry.title}")
-        #        logger.info(f"    {entry.abstract}")
-        #
-        #        # with timer() as tim:
-        #        #     logger.info(f"    TL;DR: {tldr(entry.abstract)}")  # DEBUG / EXPERIMENTAL / EXPENSIVE
-        #        # logger.info(f"    TL;DR done in {tim.dt:0.6g}s.")
+        #        logger.info(f"    {entry.abstract}" if entry.abstract else "[no abstract]")
         #
         #        logger.info(f"    {entry.vis_keywords}")
         #        logger.info("")
@@ -606,7 +609,10 @@ def main(opts) -> None:
             logger.info(f"    Summarizing abstracts from {filename}...")
             with timer() as tim:
                 for entry in entries:
-                    summary = tldr(entry.abstract)
+                    if entry.abstract:
+                        summary = tldr(entry.abstract)
+                    else:
+                        summary = None  # no abstract to summarize
                     entry.summary = summary
             logger.info(f"        Done in {tim.dt:0.6g}s [avg {len(entries) / tim.dt:0.6g} entries/s].")
     else:
@@ -789,7 +795,7 @@ def main(opts) -> None:
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="""Extract relevant fields from BibTeX file(s), for abstract summarization.""",
+    parser = argparse.ArgumentParser(description="""Extract relevant fields from BibTeX file(s), for semantic visualization.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest="output_filename", type=str, metavar="out", help="Output file to save analysis data in")
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="bib", help="BibTeX file(s) to parse")

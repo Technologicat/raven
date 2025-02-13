@@ -3249,7 +3249,7 @@ def _update_info_panel(*, task_env=None, env=None):
 
                 # ----------------------------------------
                 # Containers
-                entry_container_group = dpg.add_group(parent=info_panel_content_target, tag=f"cluster_{cluster_id}_entry_{data_idx}_build{env.internal_build_number}")  # entry container: title + abstract
+                entry_container_group = dpg.add_group(parent=info_panel_content_target, tag=f"cluster_{cluster_id}_entry_{data_idx}_build{env.internal_build_number}")  # entry container: title + optional abstract
 
                 entry_title_container_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_entry_{data_idx}_header_group_build{env.internal_build_number}", parent=entry_container_group)  # title container: buttons + the actual title text
 
@@ -3369,12 +3369,17 @@ def _update_info_panel(*, task_env=None, env=None):
                 # ----------------------------------------
                 # Item abstract (optional)
 
-                dpg.add_text(entry.abstract, color=abstract_color, wrap=gui_config.main_text_wrap_w, tag=f"cluster_{cluster_id}_entry_{data_idx}_abstract_build{env.internal_build_number}", parent=entry_container_group)
+                if entry.abstract:
+                    dpg.add_text(entry.abstract, color=abstract_color, wrap=gui_config.main_text_wrap_w, tag=f"cluster_{cluster_id}_entry_{data_idx}_abstract_build{env.internal_build_number}", parent=entry_container_group)
                 dpg.add_text("", tag=f"cluster_{cluster_id}_entry_{data_idx}_end_blank_text_build{env.internal_build_number}", parent=entry_container_group)
 
                 # Report: write item
-                report_text.write(f"{entry.author} ({entry.year}): {entry.title}\n\n{entry.abstract.strip()}\n\n")
-                report_md.write(f"### {entry.author} ({entry.year}): {entry.title}\n\n{entry.abstract.strip()}\n\n")
+                if entry.abstract:
+                    report_text.write(f"{entry.author} ({entry.year}): {entry.title}\n\n{entry.abstract.strip()}\n\n")
+                    report_md.write(f"### {entry.author} ({entry.year}): {entry.title}\n\n{entry.abstract.strip()}\n\n")
+                else:
+                    report_text.write(f"{entry.author} ({entry.year}): {entry.title}\n\n")  # TODO: tag as "[no abstract]" or some such?
+                    report_md.write(f"### {entry.author} ({entry.year}): {entry.title}\n\n")  # TODO: tag as "[no abstract]" or some such?
 
             if task_env is None or not task_env.cancelled:
                 if more:

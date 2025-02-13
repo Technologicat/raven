@@ -37,7 +37,7 @@ def bibtex_escape(s: str):
     return s
 
 def main():
-    parser = argparse.ArgumentParser(description="""Convert Web of Science plain text export to BibTeX, for abstract summarization.""",
+    parser = argparse.ArgumentParser(description="""Convert Web of Science plain text export (.wos/.txt) to BibTeX.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="bib", help="Web of Science (WOS) plain text file(s) to parse")
     opts = parser.parse_args()
@@ -135,9 +135,10 @@ def main():
 
             abstract = rec.get("AB")
             if abstract is None:
-                logger.warning(f"    Skipping entry '{accession_number}', reason: no abstract (not useful for detailed analysis)")
-                n_skipped += 1
-                continue
+                logger.warning(f"    Entry '{accession_number}' has no abstract. Including anyway.")
+                # # TODO: optionally skip entries with no abstract?
+                # n_skipped += 1
+                # continue
 
             # author_keywords = rec.get("DE")  # often there seem to be no keywords
 
