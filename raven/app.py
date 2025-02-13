@@ -3310,7 +3310,7 @@ def _update_info_panel(*, task_env=None, env=None):
                 dpg.set_item_callback(b, make_select_cluster(cluster_id))
 
                 # ----------------------------------------
-                # item authors, year, title (with search result highlight, if any)
+                # Item authors, year, title (with search result highlight, if any)
 
                 entry_title_text = entry.title
                 if search_string:  # search active?
@@ -3367,7 +3367,7 @@ def _update_info_panel(*, task_env=None, env=None):
                 dpg.set_item_user_data(entry_title_group, ("entry_title_text", data_idx))  # for `is_entry_title_text_item`  # `data_idx`: index to `sorted_xxx`
 
                 # ----------------------------------------
-                # item abstract
+                # Item abstract (optional)
 
                 dpg.add_text(entry.abstract, color=abstract_color, wrap=gui_config.main_text_wrap_w, tag=f"cluster_{cluster_id}_entry_{data_idx}_abstract_build{env.internal_build_number}", parent=entry_container_group)
                 dpg.add_text("", tag=f"cluster_{cluster_id}_entry_{data_idx}_end_blank_text_build{env.internal_build_number}", parent=entry_container_group)
