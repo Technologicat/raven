@@ -13,11 +13,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# # Output log messages only from this module. Handy for debugging.
-# # https://stackoverflow.com/questions/17275334/what-is-a-correct-way-to-filter-different-loggers-using-python-logging
-# for handler in logging.root.handlers:
-#     handler.addFilter(logging.Filter(__name__))
-
 import argparse
 import collections
 import functools
