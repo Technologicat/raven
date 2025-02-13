@@ -1,6 +1,7 @@
 __all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
            "absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime",
            "make_blank_index_array",
+           "UnionFilter",
            "format_bibtex_author_name", "unicodize_basic_markup",
            "normalize_search_string", "search_string_to_fragments", "search_fragment_to_highlight_regex_fragment",
            "setup_font_ranges", "markdown_add_font_callback",
@@ -111,6 +112,33 @@ def validate_cache_mtime(cachefullpath, origfullpath):
 def make_blank_index_array():
     """Make a blank array of the same type as that used for slicing an array in NumPy."""
     return np.array([], dtype=np.int64)
+
+class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?  TODO: general utility, move to `unpythonic`
+    def __init__(self, *filters):
+        """A `logging.Filter` that matches a record if at least one of the given `*filters` matches it.
+
+        Based on:
+            https://stackoverflow.com/questions/17275334/what-is-a-correct-way-to-filter-different-loggers-using-python-logging
+            https://docs.python.org/3/library/logging.html#logging.Filter
+
+        For just the current module, one would::
+
+            for handler in logging.root.handlers:
+                handler.addFilter(logging.Filter(__name__))
+
+        For more than one module, enter `UnionFilter`. For example::
+
+            for handler in logging.root.handlers:
+                handler.addFilter(UnionFilter(logging.Filter(__name__),
+                                              logging.Filter("raven.animation"),
+                                              logging.Filter("raven.bgtask"),
+                                              logging.Filter("raven.preprocess"),
+                                              logging.Filter("raven.utils"),
+                                              logging.Filter("raven.vendor.file_dialog.fdialog")))
+        """
+        self.filters = filters
+    def filter(self, record):
+        return any(f.filter(record) for f in self.filters)
 
 # --------------------------------------------------------------------------------
 # String utilities

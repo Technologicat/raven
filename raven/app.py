@@ -20,22 +20,6 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Based on:
-#    https://stackoverflow.com/questions/17275334/what-is-a-correct-way-to-filter-different-loggers-using-python-logging
-#    https://docs.python.org/3/library/logging.html#logging.Filter
-class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?
-    def __init__(self, *filters):
-        """A `logging.Filter` that matches a record if at least one of the given `*filters` matches it."""
-        self.filters = filters
-    def filter(self, record):
-        return any(f.filter(record) for f in self.filters)
-for handler in logging.root.handlers:
-    handler.addFilter(UnionFilter(logging.Filter(__name__),
-                                  logging.Filter("raven.animation"),
-                                  logging.Filter("raven.bgtask"),
-                                  logging.Filter("raven.utils"),
-                                  logging.Filter("raven.vendor.file_dialog.fdialog")))
-
 logger.info(f"Raven version {__version__} starting.")
 
 logger.info("Loading libraries...")
@@ -81,6 +65,15 @@ with timer() as tim:
     from . import bgtask
     from .config import gui_config
     from . import utils
+
+    # Emit further log messages only from a few select modules
+    for handler in logging.root.handlers:
+        handler.addFilter(utils.UnionFilter(logging.Filter(__name__),
+                                            logging.Filter("raven.animation"),
+                                            logging.Filter("raven.bgtask"),
+                                            logging.Filter("raven.preprocess"),
+                                            logging.Filter("raven.utils"),
+                                            logging.Filter("raven.vendor.file_dialog.fdialog")))
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
