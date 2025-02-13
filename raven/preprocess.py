@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Extract BibTeX data for visualization. This can put an entire field of science into one picture.
 
-This script performs analysis and writes the visualization data file. See `visualize.py` to plot the results.
+This script performs analysis and writes the visualization data file. See `app.py` to plot the results.
 
 We use `bibtexparser` v2.x. To install, e.g.::
     pip install bibtexparser --pre --upgrade --user
@@ -56,7 +56,7 @@ import transformers
 import config  # TODO: convert the whole project into a Python package
 
 
-# TODO: spacy doesn't support NumPy 2.0 yet (August 2024), so staying with 1.26 for now.
+# TODO: spacy doesn't support NumPy 2.0 yet (August 2024), so staying with NumPy 1.26 for now.
 # stopwords = nltk.corpus.stopwords.words("english")
 from spacy.lang.en import English
 nlp_en = English()
