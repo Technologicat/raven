@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 import argparse
 import collections
 import functools
-import io
 import itertools
 import math
 import os
@@ -30,7 +29,6 @@ import pickle
 import re
 import sys
 from typing import Dict, List, Union
-import unicodedata
 
 import bibtexparser
 
@@ -53,8 +51,8 @@ import numpy as np
 import torch
 import transformers
 
-import config  # TODO: convert the whole project into a Python package
-
+from . import config
+from . import utils
 
 # TODO: spacy doesn't support NumPy 2.0 yet (August 2024), so staying with NumPy 1.26 for now.
 # stopwords = nltk.corpus.stopwords.words("english")
@@ -81,9 +79,9 @@ def tldr(text: str) -> str:
     The input must fit into the model's context window.
     """
     # Produce raw summary
-    summary = normalize_string(summarization_pipeline(f"{config.summarization_prefix}{text}",
-                                                      min_length=50,  # tokens
-                                                      max_length=100)[0]["summary_text"])
+    summary = utils.unicodize_basic_markup(summarization_pipeline(f"{config.summarization_prefix}{text}",
+                                                                  min_length=50,  # tokens
+                                                                  max_length=100)[0]["summary_text"])
 
     # Postprocess the summary
 
@@ -109,116 +107,6 @@ def tldr(text: str) -> str:
 
     return summary
 
-# --------------------------------------------------------------------------------
-# utilities
-
-# # https://stackoverflow.com/questions/46501292/normalize-whitespace-with-python
-# def normalize_whitespace(s):
-#     return " ".join(s.split())
-
-def substitute_chars(mapping, html_tag_name, match_obj):
-    """Substitute characters in a regex match.
-
-    This can be used as a replacer in `re.sub`, e.g. for replacing HTML with Unicode
-    in chemical formulas ("CO₂", "NOₓ") and math (e.g. "x²").
-
-    `mapping`: e.g. `regular_to_subscript`; see `config.py`.
-    `html_tag_name`: str or None. Name of HTML tag to strip (e.g. "sub").
-                     If `None`, omit HTML processing.
-    `match_obj`: provided by `re.sub`.
-
-    Example::
-
-        substitute_sub = functools.partial(config.substitute_chars, config.regular_to_subscript, "sub")
-        text = re.sub(r"<sub>(.*?)</sub>", substitute_sub, text, flags=re.IGNORECASE)
-    """
-    s = match_obj.group()
-
-    # Strip HTML tag: "<sub>123</sub>" -> "123"
-    if html_tag_name is not None:
-        tag_start = f"<{html_tag_name}>"
-        tag_end = f"</{html_tag_name}>"
-        s = s[len(tag_start):-len(tag_end)]
-
-    sio = io.StringIO()
-    for c in s:
-        sio.write(mapping.get(c, c))  # if `c` in `mapping`, use that, else use `c` itself.
-    return sio.getvalue()
-
-def normalize_string(s: str) -> str:  # SillyTavern-extras/server.py
-    """Normalize a string.
-
-    Also convert applicable parts of HTML and LaTeX to Unicode.
-    """
-    s = " ".join(unicodedata.normalize("NFKC", s).strip().split())
-
-    # Remove some common LaTeX encodings
-    s = s.replace(r"\%", "%")
-    s = s.replace(r"\$", "$")
-
-    # Replace some HTML entities
-    s = s.replace(r"&apos;", "'")
-    s = s.replace(r"&quot;", '"')
-    s = s.replace(r"&Auml;", "Ä")
-    s = s.replace(r"&auml;", "ä")
-    s = s.replace(r"&Ouml;", "Ö")
-    s = s.replace(r"&ouml;", "ö")
-    s = s.replace(r"&Aring;", "Å")
-    s = s.replace(r"&aring;", "å")
-
-    # Replace HTML with Unicode in chemical formulas (e.g. "CO₂", "NOₓ") and math (e.g. "x²")s
-    substitute_sub = functools.partial(substitute_chars, config.regular_to_subscript, "sub")
-    substitute_sup = functools.partial(substitute_chars, config.regular_to_superscript, "sup")
-    s = re.sub(r"<sub>(.*?)</sub>", substitute_sub, s, flags=re.IGNORECASE)
-    s = re.sub(r"<sup>(.*?)</sup>", substitute_sup, s, flags=re.IGNORECASE)
-
-    # for char, sub in subscript_chars.items():
-    #     s = s.replace(f"<sub>{char}</sub>", sub)
-
-    # Prettify some HTML for better plaintext readability
-    s = re.sub(r"<b>(.*?)</b>", r"*\1*", s, flags=re.IGNORECASE)  # bold
-    s = re.sub(r"<i>(.*?)</i>", r"/\1/", s, flags=re.IGNORECASE)  # italic
-    s = re.sub(r"<u>(.*?)</u>", r"_\1_", s, flags=re.IGNORECASE)  # underline
-
-    # Replace < and > entities last
-    s = s.replace(r"&lt;", "<")
-    s = s.replace(r"&gt;", ">")
-
-    return s
-
-def format_bibtex_author_name(author):
-    """Format an author name for use in a citation.
-
-    `author`: output of `bibtexparser.middlewares.SplitNameParts`.
-
-    Examples of `author` format, from `bibtexparser/middlewares/names.py`:
-
-        >>> parse_single_name_into_parts("Donald E. Knuth")
-        {'last': ['Knuth'], 'von': [], 'first': ['Donald', 'E.'], 'jr': []}
-
-        >>> parse_single_name_into_parts("Brinch Hansen, Per")
-        {'last': ['Brinch', 'Hansen'], 'von': [], 'first': ['Per'], 'jr': []}
-
-        >>> parse_single_name_into_parts("Beeblebrox, IV, Zaphod")
-        {'last': ['Beeblebrox'], 'von': [], 'first': ['Zaphod'], 'jr': ['IV']}
-
-        >>> parse_single_name_into_parts("Ludwig van Beethoven")
-        {'last': ['Beethoven'], 'von': ['van'], 'first': ['Ludwig'], 'jr': []}
-
-    In these examples, we return:
-
-        "Knuth"
-        "Brinch Hansen"
-        "Beeblebrox IV"
-        "van Beethoven"
-    """
-    if not author.last:
-        raise ValueError(f"missing last name in author {author}")
-    von_part = f"{' '.join(author.von)} " if author.von else ""
-    last_part = f"{' '.join(author.last)}"
-    jr_part = f" {' '.join(author.jr)}" if author.jr else ""
-    return f"{von_part}{last_part}{jr_part}"
-
 # # https://github.com/sciunto-org/python-bibtexparser/issues/467
 # from bibtexparser.library import Library
 # from bibtexparser.model import Block, Entry
@@ -231,28 +119,6 @@ def format_bibtex_author_name(author):
 #         for field in entry.fields:
 #             field.key = field.key.lower()
 #         return entry
-
-
-def strip_ext(filename):
-    """/foo/bar.bib -> /foo/bar"""
-    return os.path.splitext(filename)[0]
-
-def make_filename(origfullpath, base, ext):
-    """foo/bar.bib -> foo/bar_<base>.<ext>
-
-    Useful e.g. for naming a cache file based on the input filename.
-    """
-    origdirname = os.path.dirname(origfullpath)  # "foo/bar.bib" -> "foo"
-    origfilename = strip_ext(os.path.basename(origfullpath))  # "foo/bar.bib" -> "bar"
-    return os.path.join(origdirname, f"{origfilename}_{base}.{ext}")
-
-def validate_cache_mtime(cachefullpath, origfullpath):
-    """Return whether a cache file at `cachefullpath` is valid, by comparing its mtime to that of the original file at `origfullpath`."""
-    stat_result_cache = os.stat(cachefullpath)
-    stat_result_orig = os.stat(origfullpath)
-    if stat_result_orig.st_mtime_ns <= stat_result_cache.st_mtime_ns:
-        return True
-    return False
 
 # --------------------------------------------------------------------------------
 # Main program
@@ -286,7 +152,7 @@ def main(opts) -> None:
                 fields = entry.fields_dict
 
                 try:
-                    authors_list = [format_bibtex_author_name(author) for author in fields["author"].value]
+                    authors_list = [utils.format_bibtex_author_name(author) for author in fields["author"].value]
                 except ValueError as exc:
                     logger.warning(f"Skipping entry '{entry.key}', reason: {str(exc)}")
                     continue
@@ -302,8 +168,8 @@ def main(opts) -> None:
                     continue
 
                 year = fields["year"].value
-                title = normalize_string(fields["title"].value)
-                abstract = normalize_string(fields["abstract"].value)
+                title = utils.unicodize_basic_markup(fields["title"].value)
+                abstract = utils.unicodize_basic_markup(fields["abstract"].value)
 
                 # TODO: "keywords" may be populated (though it always isn't)
                 # TODO: WOS exports may also have "keywords-plus"
@@ -320,13 +186,13 @@ def main(opts) -> None:
     # Prepare filenames
 
     # Caches are per input file, so that it is fast to concatenate new files to the dataset.
-    embeddings_cache_filenames = {fn: make_filename(fn, "embeddings_cache", "npz") for fn in resolved_filenames}
-    nlp_cache_filenames = {fn: make_filename(fn, "nlp_cache", "pickle") for fn in resolved_filenames}
+    embeddings_cache_filenames = {fn: utils.make_cache_filename(fn, "embeddings_cache", "npz") for fn in resolved_filenames}
+    nlp_cache_filenames = {fn: utils.make_cache_filename(fn, "nlp_cache", "pickle") for fn in resolved_filenames}
     nlp_cache_version = 1
 
     # Figures are for the whole input dataset, which consists of all input files.
     # For the visualizer, gather all input filenames into a string that can be used in the filenames of the output figures to easily identify where they came from.
-    all_input_filenames_list = [strip_ext(os.path.basename(fn)) for fn in resolved_filenames]
+    all_input_filenames_list = [utils.strip_ext(os.path.basename(fn)) for fn in resolved_filenames]
     all_input_filenames_str = "_".join(all_input_filenames_list)
 
     # --------------------------------------------------------------------------------
@@ -345,7 +211,7 @@ def main(opts) -> None:
         cache_state = "unknown"
         if os.path.exists(embeddings_cache_filename):
             logger.info(f"        Checking cached embeddings '{embeddings_cache_filename}'...")
-            if validate_cache_mtime(embeddings_cache_filename, filename):  # is cache valid, judging by mtime
+            if utils.validate_cache_mtime(embeddings_cache_filename, filename):  # is cache valid, judging by mtime
                 with timer() as tim:
                     embeddings_cached_data = np.load(embeddings_cache_filename)
                 logger.info(f"            Done in {tim.dt:0.6g}s.")
@@ -451,7 +317,7 @@ def main(opts) -> None:
             cache_state = "unknown"
             if os.path.exists(nlp_cache_filename):
                 logger.info(f"        Checking cached NLP data '{nlp_cache_filename}'...")
-                if validate_cache_mtime(nlp_cache_filename, filename):  # is cache valid, judging by mtime
+                if utils.validate_cache_mtime(nlp_cache_filename, filename):  # is cache valid, judging by mtime
                     with timer() as tim:
                         with open(nlp_cache_filename, "rb") as nlp_cache_file:
                             nlp_cached_data = pickle.load(nlp_cache_file)
