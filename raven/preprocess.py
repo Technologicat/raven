@@ -795,6 +795,18 @@ def main(opts) -> None:
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 if __name__ == "__main__":
+    logger.info("Settings:")
+    logger.info(f"    Device '{config.device_string}' ({torch.cuda.get_device_name(config.device_string)}), data type {config.torch_dtype}")
+    logger.info(f"        {torch.cuda.get_device_properties(config.device_string)}")
+    logger.info(f"        Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(config.device_string))}")
+    logger.info(f"        Detected CUDA version {torch.version.cuda}")
+    logger.info(f"    Embedding model: {config.embedding_model}")
+    logger.info(f"        Dimension reduction method: {config.vis_method}")
+    logger.info(f"    Extract keywords: {config.extract_keywords}")
+    logger.info(f"        NLP model (spaCy): {config.spacy_model}")
+    logger.info(f"    Summarize via AI: {config.summarize}")
+    logger.info(f"        AI summarization model: {config.summarization_model}")
+
     parser = argparse.ArgumentParser(description="""Extract relevant fields from BibTeX file(s), for semantic visualization.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest="output_filename", type=str, metavar="out", help="Output file to save analysis data in")
@@ -806,17 +818,6 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # --------------------------------------------------------------------------------
-
-    logger.info("Settings:")
-    logger.info(f"    Device '{config.device_string}' ({torch.cuda.get_device_name(config.device_string)}), data type {config.torch_dtype}")
-    logger.info(f"        {torch.cuda.get_device_properties(config.device_string)}")
-    # logger.info(f"        Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(device_string))}")
-    logger.info(f"    Embedding model: {config.embedding_model}")
-    logger.info(f"        Dimension reduction method: {config.vis_method}")
-    logger.info(f"    Extract keywords: {config.extract_keywords}")
-    logger.info(f"        NLP model (spaCy): {config.spacy_model}")
-    logger.info(f"    Summarize via AI: {config.summarize}")
-    logger.info(f"        AI summarization model: {config.summarization_model}")
 
     with timer() as tim:
         main(opts)
