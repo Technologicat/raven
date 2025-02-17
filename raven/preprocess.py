@@ -915,7 +915,7 @@ def main(opts) -> None:
     # --------------------------------------------------------------------------------
     # Prepare input data
 
-    input_data = parse_input_files(opts.filenames)
+    input_data = parse_input_files(*opts.filenames)
 
     # --------------------------------------------------------------------------------
     # Prepare filenames
