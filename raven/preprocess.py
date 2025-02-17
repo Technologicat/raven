@@ -802,7 +802,7 @@ if __name__ == "__main__":
     opts = parser.parse_args()
 
     if opts.output_filename.endswith(".bib"):
-        print(f"Output filename '{opts.output_filename}' looks like an input file. Cancelling. Please check up-to-date usage summary by running this script with the '-h' option.")
+        print(f"Output filename '{opts.output_filename}' looks like an input file. Cancelling. Please check usage summary by running this script with the '-h' option.")
         sys.exit(1)
 
     # --------------------------------------------------------------------------------
