@@ -775,12 +775,14 @@ def extract_keywords(input_data, max_vis_kw=6):
 
     return all_keywords
 
-def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, fraction=0.1):
+def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=6, fraction=0.1):
     """Collect a set of keywords for each visualization cluster (2D), based on the per-entry detected keywords.
 
     `vis_data`: output of `cluster_lowdim_data`, which see.
     `n_vis_clusters`: output of `cluster_lowdim_data`, which see.
     `all_keywords`: output of `extract_keywords`, which see.
+
+    `max_vis_kw`: how many keywords to keep for each cluster.
 
     `fraction`: float, cleaning parameter, important.
 
@@ -806,6 +808,9 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, fraction=0.
                      threshold_n = max(min(5, n_vis_clusters), math.ceil(fraction * n_vis_clusters))
 
                  Any keyword that appears in `threshold_n` or more clusters is ignored.
+
+    Returns `vis_keywords_by_cluster`, a list, where the `k`th item is a list of keywords (`str`) for cluster ID `k`.
+    For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
     """
     logger.info("    Extracting keywords for each cluster...")
     with timer() as tim:
@@ -850,7 +855,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, fraction=0.
             kws = kws.difference(keywords_common_to_most_clusters)
 
             kws = list(sorted(kws, key=functools.partial(rank_keyword, counts=all_keywords)))
-            kws = kws[:6]
+            kws = kws[:max_vis_kw]
             vis_keywords_by_cluster.append(kws)
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
