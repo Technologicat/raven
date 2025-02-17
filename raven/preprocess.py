@@ -576,6 +576,25 @@ def extract_keywords(input_data, max_vis_kw=6):
                     def filter_tokens(tokens):
                         out = []
                         for x in tokens:
+                            # https://spacy.io/usage/linguistic-features
+                            # https://universaldependencies.org/u/pos/
+                            #     ADJ: adjective
+                            #     ADP: adposition
+                            #     ADV: adverb
+                            #     AUX: auxiliary
+                            #     CCONJ: coordinating conjunction
+                            #     DET: determiner
+                            #     INTJ: interjection
+                            #     NOUN: noun
+                            #     NUM: numeral
+                            #     PART: particle
+                            #     PRON: pronoun
+                            #     PROPN: proper noun
+                            #     PUNCT: punctuation
+                            #     SCONJ: subordinating conjunction
+                            #     SYM: symbol
+                            #     VERB: verb
+                            #     X: other
                             if x.pos_ in ("ADP", "AUX", "CCONJ", "DET", "NUM", "PRON", "PUNCT", "SCONJ"):  # filter out parts of speech that are useless as keywords
                                 continue
                             if not x.lemma_.isalnum():  # filter out punctuation
