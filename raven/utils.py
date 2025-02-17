@@ -2,7 +2,7 @@ __all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
            "absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime",
            "make_blank_index_array",
            "UnionFilter",
-           "format_bibtex_author_name", "unicodize_basic_markup",
+           "format_bibtex_author", "format_bibtex_authors", "unicodize_basic_markup",
            "normalize_search_string", "search_string_to_fragments", "search_fragment_to_highlight_regex_fragment",
            "setup_font_ranges", "markdown_add_font_callback",
            "has_child_items", "get_widget_pos", "get_widget_size", "is_mouse_inside_widget", "wait_for_resize",
@@ -143,7 +143,7 @@ class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?  TODO:
 # --------------------------------------------------------------------------------
 # String utilities
 
-def format_bibtex_author_name(author):
+def format_bibtex_author(author):
     """Format an author name for use in a citation.
 
     `author`: output of `bibtexparser.middlewares.SplitNameParts`.
@@ -175,6 +175,35 @@ def format_bibtex_author_name(author):
     last_part = f"{' '.join(author.last)}"
     jr_part = f" {' '.join(author.jr)}" if author.jr else ""
     return f"{von_part}{last_part}{jr_part}"
+
+def format_bibtex_authors(authors):
+    """Format an author name for use in a citation.
+
+    `author`: a list, where each element is an outputs of `bibtexparser.middlewares.SplitNameParts`.
+              For details of that format, see the docstring of `format_bibtex_author`.
+
+    Returns an `str` suitable for use in a citation:
+        - One author: "Author"
+        - Two authors: "Author and Other"
+        - Three or more: "Author et al."
+
+    The authors are kept in the same order as in the original list.
+    """
+    try:
+        authors_list = [format_bibtex_author(author) for author in authors]
+    except ValueError as exc:
+        logger.warning(f"format_bibtex_authors: failed, reason: {str(exc)}")
+        return ""
+    if len(authors_list) >= 3:
+        authors_str = f"{authors_list[0]} et al."
+    elif len(authors_list) == 2:
+        authors_str = f"{authors_list[0]} and {authors_list[1]}"
+    elif len(authors_list) == 1:
+        authors_str = authors_list[0]
+    else:  # empty author list
+        logger.warning("format_bibtex_authors: got an empty authors list")
+        authors_str = ""
+    return authors_str
 
 # # https://stackoverflow.com/questions/46501292/normalize-whitespace-with-python
 # def normalize_whitespace(s):
