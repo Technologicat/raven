@@ -75,6 +75,7 @@ setup(
         "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Utilities"
     ],
-    entry_points={"console_scripts": ["raven-visualizer=raven.app:main"]},
+    entry_points={"console_scripts": ["raven-visualizer=raven.app:main",
+                                      "raven-preprocess=raven.preprocess:main"]},
     zip_safe=True
 )
