@@ -9,6 +9,8 @@ For more, see::
     https://github.com/sciunto-org/python-bibtexparser
 """
 
+__all__ = ["preprocess"]
+
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +25,7 @@ import pathlib
 import pickle
 import re
 import sys
+import traceback
 from typing import Dict, List, Union
 
 import bibtexparser
@@ -36,7 +39,6 @@ from unpythonic import timer
 from unpythonic import uniqify
 
 # # To connect to the live REPL:  python -m unpythonic.net.client localhost
-# import sys
 # from unpythonic.net import server
 # server.start(locals={"main": sys.modules["__main__"]})
 
@@ -191,8 +193,8 @@ def get_highdim_semantic_vectors(input_data):
     `input_data`: output of `parse_input_files`, which see.
 
     NOTE: The semantic vectors produced by the embedder live on the surface of the unit hypersphere
-    in the hiD space - i.e., each vector is a direction in that space. If you need to compare them,
-    you can use cosine similarity.
+    in the high-dimensional space - i.e., each vector is a direction in that space. If you need to
+    compare them, you can use cosine similarity.
     """
     logger.info("Preparing semantic space...")
 
@@ -286,8 +288,10 @@ def cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
 
           This data is better than using just the cluster medoids for training the dimension reduction mapping.
           The `max_n` limit keeps the dimension reduction training reasonably fast.
+
+    Raises `RuntimeError` if the high-dimensional vectors are so spread out that not even one cluster is detected.
     """
-    logger.info("    Seeding clusters in hiD...")
+    logger.info("    Seeding clusters in the high-dimensional space...")
     logger.info(f"        Full dataset has {len(all_vectors)} data points.")
     with timer() as tim:
         # The semantic vectors represent directions in the latent space, so we can compare them using the cosine metric.
@@ -310,7 +314,7 @@ def cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
 
         # Pick representative points for training the dimension reduction.
         if n_clusters > 0:
-            logger.info(f"        Detected {n_clusters} seed clusters in hiD, with {n_outliers} outlier data points (out of {len(fit_vectors)} data points used).")
+            logger.info(f"        Detected {n_clusters} seed clusters in high-dimensional space, with {n_outliers} outlier data points (out of {len(fit_vectors)} data points used).")
 
             # Instead of using the medoids, pick a few random representative points from each cluster. We just take the first up-to-k points for now.
             # TODO: This discards the medoids (`clusterer.medoids_`). Include them, too?
@@ -319,10 +323,8 @@ def cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
             unique_vs = np.concatenate(samples_by_cluster)
             logger.info(f"        Picked a total of {len(unique_vs)} representative points from the detected seed clusters.")
         else:
-            logger.info("        No clusters detected in hiD data. Don't know how to visualize this dataset. Canceling.")
-            import sys
-            sys.exit(1)  # TODO: Fail gracefully when called from GUI app
-            unique_vs = all_vectors
+            logger.info("        No clusters detected in high-dimensional data. Cannot train dimension reduction for this dataset. Canceling.")
+            raise RuntimeError("No clusters detected in high-dimensional data. Cannot train dimension reduction for this dataset. Canceling.")
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
     return unique_vs, n_clusters
@@ -347,6 +349,8 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
           representation of a given dataset. Essentially, the high-dimensional data manifold
           (in this case, hypersphere surface) is forcibly crumpled into a planar 2D representation,
           using the available plot area efficiently.
+
+    The dimension reducer runs in a single thread on CPU and may take a long time (minutes).
     """
     logger.info("Dimension reduction for visualization...")
     logger.info(f"    Loading dimension reduction library for '{config.vis_method}'...")
@@ -391,8 +395,15 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
             # on a Riemannian manifold; the Riemannian metric is locally constant (at least approximately);
             # and that the manifold is locally connected. It attempts to preserve the topological structure
             # of this manifold.
+            #
+            # When the assumptions hold, it typically produces very nice-looking results, but it is
+            # very, very much (multiple times) slower than t-SNE. See the link to Böhm et al. (2022) above;
+            # with appropriate hyperparameter values, t-SNE can produce results that look like those from UMAP.
+            #
             # See McInnes et al. (2020, revised v3 of paper originally published in 2018):
             #   https://arxiv.org/abs/1802.03426
+            #
+            # NOTE: UMAP needs to load TensorFlow, whereas the rest of the preprocessor uses PyTorch.
             import umap
             trans = umap.UMAP(n_components=2,
                               # n_neighbors=max(1, len(unique_vs) // 2),
@@ -433,9 +444,9 @@ def cluster_lowdim_data(input_data, lowdim_data):
 
     Mutates `input_data`, adding the fields `item.cluster_id` and `item.cluster_probability` (confidence value).
     """
-    # Judging by paper titles in the test dataset, the initial hiD clustering (and then training the dimension reduction using those points)
-    # seems to "seed" the 2D clusters reasonably, so that the t-SNE fit, using the representative points only, maps the full dataset into
-    # the 2D space in a semantically sensible manner.
+    # Judging by paper titles in the test dataset, the initial high-dimensional clustering (and then training the dimension reduction using those points)
+    # seems to "seed" the 2D clusters reasonably, so that the t-SNE fit, using the representative points only, maps the full dataset into the 2D space
+    # in a semantically sensible manner.
     logger.info("    Clustering [final, in 2D]...")
 
     # Concatenate data from individual input files into one large dataset. This is what we will visualize.
@@ -909,13 +920,13 @@ def summarize(input_data):
         logger.info(f"        Done in {tim.dt:0.6g}s [avg {len(entries) / tim.dt:0.6g} entries/s].")
 
 # --------------------------------------------------------------------------------
-# Main program
+# High-level library routine
 
-def main(opts) -> None:
+def preprocess(output_filename, *input_filenames) -> None:
     # --------------------------------------------------------------------------------
     # Prepare input data
 
-    input_data = parse_input_files(*opts.filenames)
+    input_data = parse_input_files(*input_filenames)
 
     # --------------------------------------------------------------------------------
     # Prepare filenames
@@ -933,11 +944,7 @@ def main(opts) -> None:
     # --------------------------------------------------------------------------------
     # Dimension reduction hiD -> 2D
 
-    # TODO: Split dimension reduction and visualization into a separate program?
-    # UMAP needs to load TensorFlow, and after this point this preprocessor no longer needs the PyTorch stuff.
-    # OTOH, shouldn't be a problem if we use t-SNE.
-
-    unique_vs, n_clusters = cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in hiD, for training
+    unique_vs, n_clusters = cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in the high-dimensional space, for training
     lowdim_data = reduce_dimension(unique_vs, n_clusters, all_vectors)  # train the dimension reduction mapping, map the full dataset
     vis_data, labels, n_vis_clusters, n_vis_outliers = cluster_lowdim_data(input_data, lowdim_data)  # find visualization clusters in 2D
 
@@ -969,7 +976,7 @@ def main(opts) -> None:
     # --------------------------------------------------------------------------------
     # Save the resulting visualization dataset file
 
-    logger.info(f"Saving visualization datafile {opts.output_filename}...")
+    logger.info(f"Saving visualization datafile {output_filename}...")
 
     # Be sure to save the values of any settings that affect data availability and interpretation! (E.g. `extract_keywords` -> whether annotations and word cloud can be plotted from this data.)
 
@@ -989,11 +996,14 @@ def main(opts) -> None:
                        "keywords_available": config.extract_keywords,
                        "all_keywords": all_keywords,
                        "vis_keywords_by_cluster": vis_keywords_by_cluster}
-        with open(opts.output_filename, "wb") as output_file:
+        with open(output_filename, "wb") as output_file:
             pickle.dump(output_data, output_file)
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
-if __name__ == "__main__":
+# --------------------------------------------------------------------------------
+# Main program (when run as a standalone command-line tool)
+
+def main() -> None:
     logger.info("Settings:")
     logger.info(f"    Device '{config.device_string}' ({torch.cuda.get_device_name(config.device_string)}), data type {config.torch_dtype}")
     logger.info(f"        {torch.cuda.get_device_properties(config.device_string)}")
@@ -1016,8 +1026,14 @@ if __name__ == "__main__":
         print(f"Output filename '{opts.output_filename}' looks like an input file. Cancelling. Please check usage summary by running this script with the '-h' option.")
         sys.exit(1)
 
-    # --------------------------------------------------------------------------------
+    try:
+        with timer() as tim:
+            preprocess(opts.output_filename, *opts.input_filenames)
+    except Exception:
+        logger.info(f"Error after {tim.dt:0.6g}s total:")
+        traceback.print_exc()
+    else:
+        logger.info(f"All done in {tim.dt:0.6g}s total.")
 
-    with timer() as tim:
-        main(opts)
-    logger.info(f"All done in {tim.dt:0.6g}s total.")
+if __name__ == "__main__":
+    main()
