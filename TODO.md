@@ -25,17 +25,16 @@
 ### Large new features
 
 - **Integrated preprocessor**. Access the preprocessor from the GUI app, to quickly import small datasets with minimal fuss.
-  - APIfy the preprocessor. Make it callable from the GUI app.
-  - Make the preprocessor run in a background thread/process, to allow the user to explore previous existing datasets in the GUI while the preprocess is running. Notify when complete.
+  - Add a GUI to call the preprocessor and show its status.
   - While a preprocess is running, show a progress bar in the GUI.
     - Progress bar in DPG: https://github.com/my1e5/dpg-examples/blob/main/threading/progress_bar.py
 
 - **More import sources**.
   - We currently have:
     - Web of Science (working).
-      - Fix a bug with character escapes that's currently breaking the import for one file in our test set.
+      - Fix a bug with character escapes (quotes, braces, etc.) that's currently breaking the import for several files in our test set.
     - PDF conference abstracts (WIP, in beta).
-      - Improve robustness.
+      - Improve robustness. Maybe needs a bigger LLM?
   - Could be useful:
     - arXiv, to stay on top of developments in AI.
 
