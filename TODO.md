@@ -21,6 +21,7 @@
 
 - **Integrated preprocessor**. Access the preprocessor from the GUI app, to quickly import small datasets with minimal fuss.
   - Add a GUI to call the preprocessor and show its status.
+    - For choosing the input files, use an fdialog in `multi_select` mode.
   - While a preprocess is running, show a progress bar in the GUI.
     - Progress bar in DPG: https://github.com/my1e5/dpg-examples/blob/main/threading/progress_bar.py
 
