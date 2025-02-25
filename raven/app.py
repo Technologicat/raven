@@ -959,6 +959,58 @@ def is_open_file_dialog_visible():
     return dpg.is_item_visible("open_file_dialog")  # tag
 
 # --------------------------------------------------------------------------------
+# Preprocessor integration (BibTeX import)
+
+# TODO: WIP. Finish the preprocessor integration:
+#   - For selecting input BibTeX files, use an fdialog with `multi_select` mode.
+#     - List the currently selected input files. -> Table, with icons?
+#     - GUI controls to unselect individual files from the current set, or to clear the list? -> Is it more common to extend the current set by another file, or import something completely different?
+#   - For picking the output file, use another fdialog in save mode.
+#     - Show the currently selected output file name.
+#   - Monitor the `cancelled` flag in the various functions in `preprocess.py`, so that the task actually exits when we send a request to cancel.
+#   - While an import is running, show the progress percentage also in the window title of `preprocessor_window`, so that the percentage is visible also when that window is minimized.
+
+def update_preprocessor_status():
+    """Update the preprocessor (BibTeX import) status in the GUI.
+
+    This is called automatically every frame while the preprocessor task is running.
+
+    This is also called one more time when the task exits, via the `done_callback` mechanism.
+    """
+    dpg.set_value("preprocessor_status_text", unbox(preprocess.status_box))
+    # TODO: update the preprocessor progress bar
+    #     dpg.set_value("preprocessor_progress_bar", 1/100 * (i))
+    #     dpg.configure_item("preprocessor_progress_bar", overlay=f"{i}%")
+
+def start_preprocessor(output_file, *input_files):
+    if preprocess.has_task():
+        return
+    try:
+        preprocess.start_task(preprocessor_done_callback, output_file, *input_files)
+    except Exception:
+        raise
+    else:  # request to start the task was sent successfully
+        dpg.disable_item("preprocessor_start_button")
+        dpg.enable_item("preprocessor_stop_button")
+
+def stop_preprocessor():
+    if not preprocess.has_task():
+        return
+    try:
+        preprocess.cancel_task()
+    except Exception:
+        raise
+    else:  # request to cancel the task was sent successfully
+        # We can't enable the start button yet; we must wait until the task actually exits until we can allow starting a new one.
+        dpg.disable_item("preprocessor_stop_button")
+
+def preprocessor_done_callback(task_env):
+    """Clean up the preprocessor GUI state. Used as the `done_callback` for the preprocessor (BibTeX import) task."""
+    # TODO: Could use `task_env.cancelled` here to check whether the import was successful. Could also pass custom data from the task (by adding arbitrary attributes to `task_env` from the task body).
+    update_preprocessor_status()
+    dpg.enable_item("preprocessor_start_button")
+
+# --------------------------------------------------------------------------------
 # Animations, live updates
 
 info_panel_scroll_end_flasher = animation.ScrollEndFlasher(target="item_information_panel",
@@ -1232,6 +1284,9 @@ def update_animations():
     # Update various other things that need per-frame updates
 
     update_info_panel_navigation_controls()  # Info panel top/bottom/pageup/pagedown buttons
+
+    if preprocess.has_task():
+        update_preprocessor_status()
 
     # ----------------------------------------
     # Render all currently running animations
@@ -1720,6 +1775,53 @@ with timer() as tim:
             with dpg.tooltip("word_cloud_save_button", tag="word_cloud_save_tooltip"):  # tag
                 dpg.add_text("Save word cloud as PNG [Ctrl+S]", tag="word_cloud_save_tooltip_text")
 
+    # TODO: WIP: Preprocessor integration (for importing BibTeX files from the GUI). Mockup, hidden, inaccessible for now.
+    with dpg.window(show=False, modal=False, no_title_bar=False, tag="preprocessor_window",
+                    label="BibTeX import",
+                    no_scrollbar=True, autosize=True) as preprocessor_window:
+        with dpg.group(horizontal=False):
+            dpg.add_spacer(width=gui_config.preprocessor_w)  # ensure window width
+            dpg.add_progress_bar(default_value=0, width=-1, overlay="0%", tag="preprocessor_progress_bar")
+            dpg.add_text("Lorem ipsum dolor sit amet.", tag="preprocessor_status_text")
+
+            dpg.add_spacer(width=gui_config.preprocessor_w, height=2)  # leave some vertical space
+            with dpg.drawlist(width=gui_config.preprocessor_w, height=1, tag="preprocessor_toolbar_separator"):
+                dpg.draw_line((0, 0), (gui_config.preprocessor_w - 1, 0), color=(140, 140, 140, 255), thickness=1)
+            dpg.add_spacer(width=gui_config.preprocessor_w, height=1)  # leave some vertical space
+
+            with dpg.group(horizontal=True):
+                # TODO: wire the preprocessor callbacks
+                dpg.add_button(label=fa.ICON_FOLDER,
+                               tag="preprocessor_select_input_files_button",
+                               width=gui_config.toolbutton_w)
+                dpg.bind_item_font("preprocessor_select_input_files_button", icon_font_solid)  # tag
+                with dpg.tooltip("preprocessor_select_input_files_button", tag="preprocessor_select_input_files_tooltip"):  # tag
+                    dpg.add_text("Select input BibTeX files", tag="preprocessor_select_input_files_tooltip_text")
+
+                dpg.add_button(label=fa.ICON_HARD_DRIVE,
+                               tag="preprocessor_save_button",
+                               width=gui_config.toolbutton_w)
+                dpg.bind_item_font("preprocessor_save_button", icon_font_solid)  # tag
+                with dpg.tooltip("preprocessor_save_button", tag="preprocessor_save_tooltip"):  # tag
+                    dpg.add_text("Select output file to save as", tag="preprocessor_save_tooltip_text")
+
+                dpg.add_button(label=fa.ICON_PLAY,
+                               tag="preprocessor_start_button",
+                               width=gui_config.toolbutton_w,
+                               enabled=True)
+                dpg.bind_item_font("preprocessor_start_button", icon_font_solid)  # tag
+                dpg.bind_item_theme("preprocessor_start_button", "disablable_button_theme")  # tag
+                with dpg.tooltip("preprocessor_start_button", tag="preprocessor_start_tooltip"):  # tag
+                    dpg.add_text("Start BibTeX import", tag="preprocessor_start_tooltip_text")
+
+                dpg.add_button(label=fa.ICON_STOP,
+                               tag="preprocessor_stop_button",
+                               width=gui_config.toolbutton_w,
+                               enabled=False)
+                dpg.bind_item_font("preprocessor_stop_button", icon_font_solid)  # tag
+                dpg.bind_item_theme("preprocessor_stop_button", "disablable_button_theme")  # tag
+                with dpg.tooltip("preprocessor_stop_button", tag="preprocessor_stop_tooltip"):  # tag
+                    dpg.add_text("Cancel BibTeX import", tag="preprocessor_stop_tooltip_text")
 
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
