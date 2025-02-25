@@ -1497,8 +1497,8 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("open_file_button", icon_font_solid)  # tag
-                with dpg.tooltip("open_file_button"):  # tag
-                    dpg.add_text("Open dataset [Ctrl+O]")
+                with dpg.tooltip("open_file_button", tag="open_file_tooltip"):  # tag
+                    dpg.add_text("Open dataset [Ctrl+O]", tag="open_file_tooltip_text")
 
                 toolbar_separator()
 
@@ -1510,8 +1510,8 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("zoom_reset_button", icon_font_solid)  # tag
-                with dpg.tooltip("zoom_reset_button"):  # tag
-                    dpg.add_text("Reset zoom [Ctrl+Home]")
+                with dpg.tooltip("zoom_reset_button", tag="zoom_reset_tooltip"):  # tag
+                    dpg.add_text("Reset zoom [Ctrl+Home]", tag="zoom_reset_tooltip_text")
 
                 # # TODO: Does not work currently (tested: DPG 1.11, 2.0.0), sets constraints too so zoom/pan no longer works. Wait for new DPG version?
                 # def zoom_to_selection():
@@ -1541,8 +1541,9 @@ with timer() as tim:
                                enabled=False)
                 dpg.bind_item_font("selection_undo_button", icon_font_solid)  # tag
                 dpg.bind_item_theme("selection_undo_button", "disablable_button_theme")  # tag
-                with dpg.tooltip("selection_undo_button"):  # tag
-                    dpg.add_text("Undo selection change [Ctrl+Shift+Z]")
+                with dpg.tooltip("selection_undo_button", tag="selection_undo_tooltip"):  # tag
+                    dpg.add_text("Undo selection change [Ctrl+Shift+Z]",
+                                 tag="selection_undo_tooltip_text")
 
                 dpg.add_button(label=fa.ICON_ARROW_ROTATE_RIGHT,
                                tag="selection_redo_button",
@@ -1552,8 +1553,9 @@ with timer() as tim:
                                enabled=False)
                 dpg.bind_item_font("selection_redo_button", icon_font_solid)  # tag
                 dpg.bind_item_theme("selection_redo_button", "disablable_button_theme")  # tag
-                with dpg.tooltip("selection_redo_button"):  # tag
-                    dpg.add_text("Redo selection change [Ctrl+Shift+Y]")
+                with dpg.tooltip("selection_redo_button", tag="selection_redo_tooltip"):  # tag
+                    dpg.add_text("Redo selection change [Ctrl+Shift+Y]",
+                                 tag="selection_redo_tooltip_text")
 
                 def select_search_results():
                     """Select all datapoints matching the current search."""
@@ -1565,8 +1567,9 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("select_search_results_button", icon_font_solid)  # tag
-                with dpg.tooltip("select_search_results_button"):  # tag
-                    dpg.add_text("Select items matched by current search [Enter, while the search field has focus]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect")
+                with dpg.tooltip("select_search_results_button", tag="select_search_results_tooltip"):  # tag
+                    dpg.add_text("Select items matched by current search [Enter, while the search field has focus]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
+                                 tag="select_search_results_tooltip_text")
 
                 def select_visible_all():
                     """Select those datapoints that are currently visible in the plotter view."""
@@ -1578,8 +1581,9 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("select_visible_all_button", icon_font_regular)  # tag
-                with dpg.tooltip("select_visible_all_button"):  # tag
-                    dpg.add_text("Select items currently on-screen in the plotter [F9]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect")
+                with dpg.tooltip("select_visible_all_button", tag="select_visible_all_tooltip"):  # tag
+                    dpg.add_text("Select items currently on-screen in the plotter [F9]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
+                                 tag="select_visible_all_tooltip_text")
 
                 dpg.add_button(label=fa.ICON_CLOUD,
                                tag="word_cloud_button",
@@ -1587,8 +1591,9 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("word_cloud_button", icon_font_solid)  # tag
-                with dpg.tooltip("word_cloud_button"):  # tag
-                    dpg.add_text("Toggle word cloud window [F10]", tag="word_cloud_button_tooltip_text")
+                with dpg.tooltip("word_cloud_button", tag="word_cloud_tooltip"):  # tag
+                    dpg.add_text("Toggle word cloud window [F10]",
+                                 tag="word_cloud_button_tooltip_text")
 
                 # Miscellaneous controls
 
@@ -1602,8 +1607,9 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("fullscreen_button", icon_font_solid)  # tag
-                with dpg.tooltip("fullscreen_button"):  # tag
-                    dpg.add_text("Toggle fullscreen [F11]")
+                with dpg.tooltip("fullscreen_button", tag="fullscreen_tooltip"):  # tag
+                    dpg.add_text("Toggle fullscreen [F11]",
+                                 tag="fullscreen_tooltip_text")
 
                 toolbar_separator()
 
@@ -1613,8 +1619,9 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("help_button", icon_font_solid)  # tag
-                with dpg.tooltip("help_button"):  # tag
-                    dpg.add_text("Open the Help card [F1]")
+                with dpg.tooltip("help_button", tag="help_tooltip"):  # tag
+                    dpg.add_text("Open the Help card [F1]",
+                                 tag="help_tooltip_text")
 
             # Search and plotter
             with dpg.child_window(tag="search_and_plotter_panel",
@@ -1633,8 +1640,9 @@ with timer() as tim:
                         dpg.focus_item("search_field")  # tag
                     dpg.add_button(label=fa.ICON_X, callback=clear_search, tag="clear_search_button")
                     dpg.bind_item_font("clear_search_button", icon_font_solid)  # tag
-                    with dpg.tooltip("clear_search_button"):  # tag
-                        dpg.add_text("Clear the search")
+                    with dpg.tooltip("clear_search_button", tag="clear_search_tooltip"):  # tag
+                        dpg.add_text("Clear the search",
+                                     tag="clear_search_tooltip_text")
                     with dpg.theme(tag="clear_search_theme"):  # tag
                         with dpg.theme_component(dpg.mvAll):
                             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # make the icon on the "clear search" button red
