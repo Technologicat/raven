@@ -135,7 +135,7 @@ class TaskManager:
                 try:
                     # Call the custom done callback if provided.
                     future, e = self.tasks[task_name]
-                    if "done_callback" in e:
+                    if "done_callback" in e and e.done_callback is not None:
                         e.done_callback(e)
                 finally:
                     # Remove the task *after* calling the custom `done_callback`, so that the task still shows as running
