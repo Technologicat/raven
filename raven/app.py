@@ -1177,7 +1177,8 @@ def hide_info_panel_dimmer_overlay():
 
 scroll_animation = None  # keep a reference to the current scroll animation (if any), so that we can stop the scroll animation, and only that animation.
 scroll_animation_lock = threading.RLock()
-def clear_global_scroll_animation_reference():  # clear the global reference to the current scroll animation; used as finish callback for `SmoothScrolling`.
+def clear_global_scroll_animation_reference():
+    """Clear the global reference to the current scroll animation; used as finish callback for `SmoothScrolling`."""
     global scroll_animation
     with scroll_animation_lock:
         scroll_animation = None
