@@ -4035,7 +4035,7 @@ def hotkeys_callback(sender, app_data):
             hide_help_window()
         return
 
-    # Hotkeys while the "open file" dialog is shown - fdialog handles its own hotkeys
+    # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
     elif is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible():
         return
 
