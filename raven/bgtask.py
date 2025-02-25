@@ -83,20 +83,36 @@ class TaskManager:
                                 added later to the queue (waiting for a free thread in the pool)
                                 may have their `cancelled` flags set to `True`.
 
-               When `function` exits or the task is cancelled (thus completing the future),
+               When `function` exits or the task is cancelled (i.e. when the future becomes done),
                if `env` contains an attribute `done_callback` at that time, that function
-               will be called with `env` as its only argument. This can be used as a return
-               value mechanism.
+               will be called with `env` as its only argument. This mechanism has two primary uses:
+
+                 1) Returning a value from the task asynchronously, with convenient instance tracking
+                    (each activation of `function` has its own `env`).
+
+                 2) Division of responsibilities. For example, `function` may live in a backend module,
+                    while a GUI module that calls into that backend needs to perform its own cleanup
+                    (e.g. reset the state of some GUI widgets) when the background task exits.
+
+               Note that any cleanup of resources used by the task internally is better done
+               in the task body (as usual, using a `try/finally` or a `with`).
 
                To return a value from the background task, provide an `env.done_callback`
                when calling `submit`. Then, in `function`, stash the return value as,
                for example, `env.ret`. The done callback will have access to `env`,
                so it can get the return value from there, and do what it wants with it.
 
-               To check in your `done_callback` whether the task completed normally or
-               was cancelled, check the `env.cancelled` flag.
+               To check in your `done_callback` whether the task completed or was cancelled,
+               check the `env.cancelled` flag. If you need more fine-grained status (e.g.
+               exception info if the task exited due to an exception), you can stash that
+               in `env` manually, from the task body.
 
                The return value of `done_callback` itself is ignored.
+
+               For the purpose of tracking tasks in this manager, `done_callback` is considered
+               to be part of the dynamic extent of the task. That is, for a task that has a
+               `done_callback`, upon the completion or cancellation of that task, the reference
+               to that task is only removed from the manager *after* the `done_callback` exits.
 
         Returns an `unpythonic.gsym` representing the task name. Task names are unique.
         """
@@ -132,22 +148,16 @@ class TaskManager:
         with self.lock:
             task_name = self._find_task_by_future(future)
             if task_name is not None:  # not removed already? (`cancel` might have removed it)
+                # Call the custom done callback if provided.
+                #
+                # NOTE: We remove the task *after* calling the custom `done_callback`, so that the task still shows as running
+                # in our status until the `done_callback` has exited. The `done_callback` is considered to be part of the task.
+                # Strictly speaking, it is - it's a CPS continuation.
                 try:
-                    # Call the custom done callback if provided.
                     future, e = self.tasks[task_name]
                     if "done_callback" in e and e.done_callback is not None:
                         e.done_callback(e)
                 finally:
-                    # Remove the task *after* calling the custom `done_callback`, so that the task still shows as running
-                    # in our status until the `done_callback` has exited. The `done_callback` considered to be part of the task;
-                    # and strictly speaking, it is - it's a CPS continuation.
-                    #
-                    # Why have a separate continuation at all? Why not just stash the return value somewhere external, from the submitted
-                    # task body itself? The primary reason for providing this custom `done_callback` mechanism is that it automatically
-                    # tracks instances (function activations) - the callback gets the `env` for the task instance that completed.
-                    #
-                    # Task-specific resource cleanup is better done in the task body (in a `finally` clause). The `done_callback` mechanism
-                    # is intended for returning a value asynchronously.
                     self.tasks.pop(task_name)
 
     def cancel(self, task_name, pop=True):
