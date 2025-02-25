@@ -978,8 +978,18 @@ def init(executor):
         task_manager = None
         raise
 
-def start_task(output_filename, *input_filenames) -> bool:
+def start_task(done_callback, output_filename, *input_filenames) -> bool:
     """Spawn a background task to convert BibTeX files into a visualization dataset file.
+
+    `done_callback`: callable or `None`.
+
+                     If provided, must take a single `unpythonic.env.env` argument.
+                     Called when the task exits.
+
+                     If the task completed successfully, `env.cancelled` will be `False`.
+                     If the task errored out or was cancelled, `env.cancelled` will be `True`.
+
+                     Return value is ignored.
 
     `output_filename`: The name of the visualization dataset file to write.
 
@@ -1014,7 +1024,7 @@ def start_task(output_filename, *input_filenames) -> bool:
             update_status("")
 
     update_status("Preprocessor task queued, waiting to start.")
-    task_manager.submit(preprocessor_task, env())
+    task_manager.submit(preprocessor_task, env(done_callback=done_callback))
     return True
 
 def has_task():
