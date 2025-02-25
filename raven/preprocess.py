@@ -1163,21 +1163,21 @@ def main() -> None:
     logger.info(f"    Summarize via AI: {config.summarize}")
     logger.info(f"        AI summarization model: {config.summarization_model}")
 
-    parser = argparse.ArgumentParser(description="""Extract relevant fields from BibTeX file(s), for semantic visualization.""",
+    parser = argparse.ArgumentParser(description="""Convert BibTeX file(s) into a Raven visualization dataset file.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(dest="output_filename", type=str, metavar="out", help="Output file to save analysis data in")
-    parser.add_argument(dest="input_filenames", nargs="+", default=None, type=str, metavar="bib", help="BibTeX file(s) to parse")
+    parser.add_argument(dest="output_filename", type=str, metavar="out", help="Output, visualization dataset file")
+    parser.add_argument(dest="input_filenames", nargs="+", default=None, type=str, metavar="bib", help="Input, BibTeX file(s) to parse")
     opts = parser.parse_args()
 
     if opts.output_filename.endswith(".bib"):
-        print(f"Output filename '{opts.output_filename}' looks like an input file. Cancelling. Please check usage summary by running this script with the '-h' option.")
+        print(f"Output filename '{opts.output_filename}' looks like an input filename. Cancelling. Please check usage summary by running this prorgram with the '-h' option.")
         sys.exit(1)
 
     try:
         with timer() as tim:
             preprocess(None, opts.output_filename, *opts.input_filenames)
     except Exception:
-        logger.info(f"Error after {tim.dt:0.6g}s total:")
+        logger.warning(f"Error after {tim.dt:0.6g}s total:")
         traceback.print_exc()
     else:
         logger.info(f"All done in {tim.dt:0.6g}s total.")
