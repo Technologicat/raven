@@ -64,6 +64,7 @@ with timer() as tim:
     from . import animation
     from . import bgtask
     from .config import gui_config
+    from . import preprocess
     from . import utils
 
     # Emit further log messages only from a few select modules
@@ -4180,6 +4181,7 @@ info_panel_task_manager = bgtask.TaskManager(name="info_panel_update",
 word_cloud_task_manager = bgtask.TaskManager(name="word_cloud_update",
                                              mode="sequential",
                                              executor=bg)
+preprocess.init(executor=bg)
 
 # import sys
 # print(dir(sys.modules["__main__"]))  # DEBUG: Check this occasionally to make sure we don't accidentally store any temporary variables in the module-level namespace.
