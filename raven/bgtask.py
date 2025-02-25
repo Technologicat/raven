@@ -1,4 +1,4 @@
-__all__ = ["SequentialTaskManager",
+__all__ = ["TaskManager",
            "make_managed_task",
            "status_stopped", "status_pending", "status_running"]
 
@@ -19,27 +19,40 @@ status_stopped = sym("stopped")
 status_pending = sym("pending")
 status_running = sym("running")
 
-class SequentialTaskManager:
-    def __init__(self, name, executor):
-        """Simple manager for there-can-be-only-one (of each kind) background tasks, for GUI updates.
+class TaskManager:
+    def __init__(self, name, mode, executor):
+        """Simple background task manager.
 
-        Tasks can be submitted concurrently, but when a new one is submitted, all previous tasks are automatically cancelled.
-        If you have several kinds of background tasks, create one `SequentialTaskManager` instance for each kind.
-        You can use the same `ThreadPoolExecutor` in all of them.
+        In practice this is a rather thin wrapper over `ThreadPoolExecutor`, adding task tracking
+        and an optional auto-cancel mechanism.
 
-        This is useful when the underlying data changes so that completing the old, running GUI update task
+        When using the auto-cancel mechanism, tasks can be submitted concurrently, but when a new one
+        is submitted, all previous tasks are automatically cancelled. If you have several kinds of
+        background tasks, create one `TaskManager` instance for each kind. You can use the same
+        `ThreadPoolExecutor` in all of them.
+
+        This is useful when the underlying data changes so that completing an old, running GUI update task
         no longer makes sense. Raven uses this for handling annotation tooltip and info panel updates.
-
-        In practice this is a rather thin wrapper over `ThreadPoolExecutor`, adding the auto-cancel mechanism.
 
         See also our friend function `make_managed_task`.
 
         `name`: Name for this task manager, lowercase with underscores recommended.
                 This is included in the automatically generated names for the tasks,
                 to easily distinguish tasks from different managers in log messages.
+        `mode`: str, one of:
+                    "concurrent": Plain task manager, just add task tracking on top of the executor.
+                    "sequential": There Can Be Only One background task. Useful for GUI updates,
+                                  where submitting a new task invalidates (and should cancel)
+                                  any earlier ones. In this mode, `TaskManager` takes care of
+                                  cancelling the old tasks.
+
         `executor`: A `ThreadPoolExecutor` that actually manages the concurrent execution.
         """
+        if mode not in ("concurrent", "sequential"):
+            raise ValueError(f"Unknown mode '{mode}'; valid values: 'concurrent', 'sequential'.")
+
         self.name = name  # used in generated task names
+        self.mode = mode
         self.executor = executor
         self.tasks = {}  # task name (unique) -> (future, env)
         self.lock = threading.RLock()
@@ -73,13 +86,19 @@ class SequentialTaskManager:
         Returns an `unpythonic.gsym` representing the task name. Task names are unique.
         """
         with self.lock:
-            self.clear()
+            if self.mode == "sequential":  # There Can Be Only One background task in this manager
+                self.clear()
             env.task_name = gensym(f"{self.name}_task")
             env.cancelled = False
             future = self.executor.submit(function, env)
             self.tasks[env.task_name] = (future, env)  # store a reference to `env` so we have access to the `cancelled` flag
             future.add_done_callback(self._done_callback)  # autoremove the task when it exits (we don't need its return value)
             return env.task_name
+
+    def has_tasks(self):
+        """Return whether this task manager is currently tracking any tasks."""
+        with self.lock:
+            return len(self.tasks)
 
     def _find_task_by_future(self, future):
         """Internal method. Find the `task_name` for a given `future`. Return `task_name`, or `None` if not found."""
@@ -108,7 +127,7 @@ class SequentialTaskManager:
         """
         with self.lock:
             if task_name not in self.tasks:
-                raise ValueError(f"SequentialTaskManager.cancel_task: instance '{self.name}': no such task '{task_name}'")
+                raise ValueError(f"TaskManager.cancel_task: instance '{self.name}': no such task '{task_name}'")
             if pop:
                 future, e = self.tasks.pop(task_name)
             else:
@@ -134,7 +153,7 @@ class SequentialTaskManager:
 def make_managed_task(*, status_box, lock, entrypoint, running_poll_interval, pending_wait_duration):
     """Create a background task that makes double-sure that only one instance is running at a time.
 
-    This works together with `SequentialTaskManager`, adding on top of it mechanisms to track the status for
+    This works together with `TaskManager`, adding on top of it mechanisms to track the status for
     the same kind of tasks (for displaying spinners in the GUI), as well as a lock to ensure that only one call
     to `entrypoint` can be running at a time.
 
@@ -153,7 +172,7 @@ def make_managed_task(*, status_box, lock, entrypoint, running_poll_interval, pe
 
                              This mechanism is used by e.g. the search field to wait for more keyboard input before starting to update
                              the info panel. Each keystroke in the search field submits a new managed task to the relevant
-                             `SequentialTaskManager`. If more input occurs during the pending state, the manager cancels any
+                             `TaskManager`. If more input occurs during the pending state, the manager cancels any
                              previous tasks, so that only the most recently submitted one remains.
 
                              Only if the pending step completes successfully (task not cancelled during `pending_wait_duration`),
@@ -168,7 +187,7 @@ def make_managed_task(*, status_box, lock, entrypoint, running_poll_interval, pe
                                  If the `cancelled` flag is set in the task environment, the manager changes the task status
                                  to pending (because in Raven, cancellation only occurs when replaced by a new task of the same kind).
 
-    Returns a 1-argument function, which can be submitted to a `SequentialTaskManager`.
+    Returns a 1-argument function, which can be submitted to a `TaskManager`.
     The function's argument is an `unpythonic.env.env`, representing the task environment.
 
     The environment has one mandatory attribute, `wait` (bool), that MUST be filled in by the task submitter:
@@ -177,8 +196,8 @@ def make_managed_task(*, status_box, lock, entrypoint, running_poll_interval, pe
                          of the same kind have exited.
 
     When `entrypoint` is entered, the task environment (sent in as the kwarg `task_env`) will contain two more attributes,
-    filled in by `SequentialTaskManager`:
-        `task_name`: `unpythonic.gsym`, unique task name. This is the return value from `SequentialTaskManager.submit`,
+    filled in by `TaskManager`:
+        `task_name`: `unpythonic.gsym`, unique task name. This is the return value from `TaskManager.submit`,
                       thereby made visible for the task itself, for use in log messages.
         `cancelled`: bool, co-operative cancellation flag. The task must monitor this flag, and if it ever becomes `True`,
                      exit as soon as reasonably possible.
@@ -189,7 +208,8 @@ def make_managed_task(*, status_box, lock, entrypoint, running_poll_interval, pe
     def _managed_task(env):
         # logger.debug(f"_managed_task: {env.task_name}: setup")
         # The task might be cancelled before this function is even entered. This happens if there are many tasks
-        # (more than processing threads) in the queue, since submitting a new task to a `SequentialTaskManager` cancels all previous ones.
+        # (more than processing threads) in the queue, since submitting a new task to a `TaskManager` in sequential mode
+        # cancels all previous ones.
         if env.cancelled:
             # logger.debug(f"_managed_task: {env.task_name}: cancelled (from task queue)")
             return

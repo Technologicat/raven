@@ -4171,12 +4171,15 @@ parser.add_argument(dest='filename', nargs='?', default=None, type=str, metavar=
 opts = parser.parse_args()
 
 bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
-annotation_task_manager = bgtask.SequentialTaskManager(name="annotation_update",
-                                                       executor=bg)
-info_panel_task_manager = bgtask.SequentialTaskManager(name="info_panel_update",
-                                                       executor=bg)  # can re-use the same executor to place tasks in the same thread pool.
-word_cloud_task_manager = bgtask.SequentialTaskManager(name="word_cloud_update",
-                                                       executor=bg)
+annotation_task_manager = bgtask.TaskManager(name="annotation_update",
+                                             mode="sequential",
+                                             executor=bg)
+info_panel_task_manager = bgtask.TaskManager(name="info_panel_update",
+                                             mode="sequential",
+                                             executor=bg)  # can re-use the same executor to place tasks in the same thread pool.
+word_cloud_task_manager = bgtask.TaskManager(name="word_cloud_update",
+                                             mode="sequential",
+                                             executor=bg)
 
 # import sys
 # print(dir(sys.modules["__main__"]))  # DEBUG: Check this occasionally to make sure we don't accidentally store any temporary variables in the module-level namespace.
