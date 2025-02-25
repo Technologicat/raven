@@ -66,6 +66,21 @@ def isstopword(word: str) -> bool:
     return word in stopwords or word in config.custom_stopwords
 
 # --------------------------------------------------------------------------------
+# Common helpers
+
+def update_status_and_log(msg, *, log_indent=0):
+    """Log `msg` at info level.
+
+    Additionally, if the optional GUI status update function has been set,
+    call that function with `msg` as only argument.
+
+    `msg`: str, the message to display/log.
+    `log_indent`: int, indent level for the log message (4 spaces per level).
+    """
+    dyn.maybe_update_status(msg)  # see the `make_dynvar` call further below; the default behavior is a no-op
+    logger.info((4 * log_indent * " ") + msg)
+
+# --------------------------------------------------------------------------------
 # TL;DR: AI-based summarization
 
 if config.summarize:
@@ -121,18 +136,6 @@ def tldr(text: str) -> str:
 #         return entry
 
 # --------------------------------------------------------------------------------
-
-def update_status_and_log(msg, *, log_indent=0):
-    """Log `msg` at info level.
-
-    Additionally, if the optional status update function has been set,
-    call that function with `msg` as only argument.
-
-    `msg`: str, the message to display/log.
-    `log_indent`: int, indent level for the log message (4 spaces per level).
-    """
-    dyn.maybe_update_status(msg)
-    logger.info((4 * log_indent * " ") + msg)
 
 def parse_input_files(*filenames):
     """Read in and parse BibTeX files `filenames`, and return an `unpythonic.env` containing the parsed data."""
