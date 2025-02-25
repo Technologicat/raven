@@ -9,7 +9,8 @@ For more, see::
     https://github.com/sciunto-org/python-bibtexparser
 """
 
-__all__ = ["preprocess"]
+__all__ = ["init",
+           "start_task", "has_task", "cancel_task"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -25,6 +26,7 @@ import pathlib
 import pickle
 import re
 import sys
+import threading
 import traceback
 from typing import Dict, List, Union
 
@@ -34,9 +36,7 @@ import bibtexparser
 import spacy
 
 from unpythonic.env import env
-from unpythonic import islice
-from unpythonic import timer
-from unpythonic import uniqify
+from unpythonic import box, dyn, islice, make_dynvar, timer, uniqify
 
 # # To connect to the live REPL:  python -m unpythonic.net.client localhost
 # from unpythonic.net import server
@@ -50,6 +50,7 @@ import transformers
 
 from sklearn.cluster import HDBSCAN
 
+from . import bgtask
 from . import config
 from . import utils
 
@@ -121,6 +122,18 @@ def tldr(text: str) -> str:
 
 # --------------------------------------------------------------------------------
 
+def update_status_and_log(msg, *, log_indent=0):
+    """Log `msg` at info level.
+
+    Additionally, if the optional status update function has been set,
+    call that function with `msg` as only argument.
+
+    `msg`: str, the message to display/log.
+    `log_indent`: int, indent level for the log message (4 spaces per level).
+    """
+    dyn.maybe_update_status(msg)
+    logger.info((4 * log_indent * " ") + msg)
+
 def parse_input_files(*filenames):
     """Read in and parse BibTeX files `filenames`, and return an `unpythonic.env` containing the parsed data."""
     resolved_filenames = list(uniqify(str(pathlib.Path(fn).expanduser().resolve()) for fn in filenames))
@@ -128,8 +141,8 @@ def parse_input_files(*filenames):
     logger.info(f"Reading input file{'s' if len(resolved_filenames) != 1 else ''}...")
     bibtex_entries_by_filename = {}
     with timer() as tim:
-        for filename in resolved_filenames:
-            logger.info(f"    Reading {filename}...")
+        for j, filename in enumerate(resolved_filenames, start=1):
+            update_status_and_log(f"[{j} out of {len(resolved_filenames)}] Reading {filename}...", log_indent=1)
             filename = str(pathlib.Path(filename).expanduser().resolve())
             library = bibtexparser.parse_file(filename,
                                               append_middleware=[bibtexparser.middlewares.NormalizeFieldKeys(),
@@ -138,11 +151,11 @@ def parse_input_files(*filenames):
             bibtex_entries_by_filename[filename] = library.entries
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
-    logger.info("Extracting fields from each entry...")
+    logger.info("Extracting data from input records...")
     parsed_data_by_filename = {}
     with timer() as tim:
-        for filename, entries in bibtex_entries_by_filename.items():
-            logger.info(f"    Extracting from {filename}...")
+        for j, (filename, entries) in enumerate(bibtex_entries_by_filename.items(), start=1):
+            update_status_and_log(f"[{j} out of {len(bibtex_entries_by_filename)}] Extracting data from {filename}...", log_indent=1)
             parsed_data_by_filename[filename] = []
             for entry in entries:
                 fields = entry.fields_dict
@@ -203,8 +216,8 @@ def get_highdim_semantic_vectors(input_data):
 
     all_vectors_by_filename = {}
     sentence_embedder = None
-    for filename, entries in input_data.parsed_data_by_filename.items():
-        logger.info(f"    Preparing semantic space for {filename}...")
+    for j, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
+        update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] Preparing semantic vectors for {filename}...", log_indent=1)
 
         # TODO: clear memory between input files to avoid running out of RAM/VRAM when we have lots of files
 
@@ -291,7 +304,7 @@ def cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
 
     Raises `RuntimeError` if the high-dimensional vectors are so spread out that not even one cluster is detected.
     """
-    logger.info("    Seeding clusters in the high-dimensional space...")
+    update_status_and_log("Detecting semantic clusters...", log_indent=1)
     logger.info(f"        Full dataset has {len(all_vectors)} data points.")
     with timer() as tim:
         # The semantic vectors represent directions in the latent space, so we can compare them using the cosine metric.
@@ -307,6 +320,8 @@ def cluster_highdim_semantic_vectors(all_vectors, max_n=10000):
             logger.info(f"        Dataset is large ({len(all_vectors)} > {max_n}), picking {max_n} random entries for cluster detection.")
             fit_idxs = np.random.randint(len(all_vectors), size=max_n)
             fit_vectors = all_vectors[fit_idxs]
+
+        dyn.maybe_update_status(f"Detecting semantic clusters using {len(fit_vectors)} samples...")
         clusterer.fit(fit_vectors)
         unique_vs = clusterer.medoids_
         n_clusters = np.shape(unique_vs)[0]
@@ -353,7 +368,7 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
     The dimension reducer runs in a single thread on CPU and may take a long time (minutes).
     """
     logger.info("Dimension reduction for visualization...")
-    logger.info(f"    Loading dimension reduction library for '{config.vis_method}'...")
+    update_status_and_log(f"Loading dimension reduction library for '{config.vis_method}'...", log_indent=1)
     with timer() as tim:
         if config.vis_method == "tsne":
             # t-distributed Stochastic Neighbor Embedding
@@ -417,12 +432,12 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
             assert False
     logger.info(f"        Done in {tim.dt:0.6g}s.")
     with timer() as tim:
-        logger.info(f"    Learning hiD->2D dimension reduction from the detected {n_clusters} clusters, using {len(unique_vs)} representative points...")
+        update_status_and_log(f"Learning dimension reduction into 2D from the detected {n_clusters} semantic clusters, using {len(unique_vs)} representative points...", log_indent=1)
         trans = trans.fit(unique_vs)
         # trans = trans.fit(all_vectors)  # DEBUG: high quality result, but extremely expensive! (several minutes for 5k points)
     logger.info(f"        Done in {tim.dt:0.6g}s.")
     with timer() as tim:
-        logger.info(f"    Applying learned dimension reduction to full dataset [n = {len(all_vectors)}]...")
+        update_status_and_log(f"Applying learned dimension reduction to full dataset [n = {len(all_vectors)}]...", log_indent=1)
         lowdim_data = trans.transform(all_vectors)
         # lowdim_reprs = trans.transform(unique_vs)  # DEBUG: where did our representative points end up in the 2D representation?
     logger.info(f"        Done in {tim.dt:0.6g}s.")
@@ -447,7 +462,7 @@ def cluster_lowdim_data(input_data, lowdim_data):
     # Judging by paper titles in the test dataset, the initial high-dimensional clustering (and then training the dimension reduction using those points)
     # seems to "seed" the 2D clusters reasonably, so that the t-SNE fit, using the representative points only, maps the full dataset into the 2D space
     # in a semantically sensible manner.
-    logger.info("    Clustering [final, in 2D]...")
+    update_status_and_log("Detecting clusters in 2D semantic map...", log_indent=1)
 
     # Concatenate data from individual input files into one large dataset. This is what we will visualize.
     vis_data = list(itertools.chain.from_iterable(input_data.parsed_data_by_filename.values()))
@@ -505,8 +520,8 @@ def extract_keywords(input_data, max_vis_kw=6):
 
     all_keywords_by_filename = {}
     nlp_pipeline = None
-    for filename, entries in input_data.parsed_data_by_filename.items():
-        logger.info(f"    NLP analysis for {filename}...")
+    for j, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
+        update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)
 
         nlp_cache_filename = nlp_cache_filenames[filename]
         cache_state = "unknown"
@@ -753,7 +768,7 @@ def extract_keywords(input_data, max_vis_kw=6):
 
     # Merge the keyword data from all input files.
     #
-    logger.info("    Combining keywords from all input files...")
+    update_status_and_log("Combining keywords from all input files...", log_indent=1)
     with timer() as tim:
         all_keywords = collections.defaultdict(lambda: 0)
         for filename, kws in all_keywords_by_filename.items():
@@ -774,7 +789,7 @@ def extract_keywords(input_data, max_vis_kw=6):
     #
     # TODO: Currently the visualization keywords for individual entries (`entry.vis_keywords`) are unused. We use vis keywords for clusters, computed further below.
     #
-    logger.info("    Tagging data with visualization keywords...")
+    update_status_and_log("Tagging data with visualization keywords...", log_indent=1)
     with timer() as tim:
         for filename, entries in input_data.parsed_data_by_filename.items():
             logger.info(f"        Tagging visualization keywords for {filename}...")
@@ -842,7 +857,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
     Returns `vis_keywords_by_cluster`, a list, where the `k`th item is a list of keywords (`str`) for cluster ID `k`.
     For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
     """
-    logger.info("    Extracting keywords for each cluster...")
+    update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
     with timer() as tim:
         logger.info("        Collecting keywords from data points in each cluster...")
         keywords_by_cluster = [collections.Counter() for _ in range(n_vis_clusters)]
@@ -905,100 +920,229 @@ def summarize(input_data):
         - `str`, the summary, if there was an abstract (so a summary could be created).
         - `None`, if there was no abstract (so a summary could not be created).
     """
-    logger.info("Summarizing each abstract using AI...")
-    for filename, entries in input_data.parsed_data_by_filename.items():
-        logger.info(f"    Summarizing abstracts from {filename}...")
+    logger.info("Summarizing abstracts using AI...")
+    for k, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
+        logger.info(f"    [input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing abstracts from {filename}...")
         with timer() as tim:
             for j, entry in enumerate(entries, start=1):
                 if entry.abstract:
-                    logger.info(f"    Summarizing entry {j} out of {len(entries)}: {entry.author} ({entry.year}): {entry.title}")
+                    update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing entry {j} out of {len(entries)}: {entry.author} ({entry.year}): {entry.title}",
+                                          log_indent=2)
                     summary = tldr(entry.abstract)
                 else:
-                    logger.info(f"    Skipping entry {j} out of {len(entries)} (no abstract to summarize): {entry.author} ({entry.year}): {entry.title}")
+                    update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Skipping entry {j} out of {len(entries)} (no abstract to summarize): {entry.author} ({entry.year}): {entry.title}",
+                                          log_indent=2)
                     summary = None
                 entry.summary = summary
         logger.info(f"        Done in {tim.dt:0.6g}s [avg {len(entries) / tim.dt:0.6g} entries/s].")
 
 # --------------------------------------------------------------------------------
-# High-level library routine
+# Background task management
 
-def preprocess(output_filename, *input_filenames) -> None:
-    # --------------------------------------------------------------------------------
-    # Prepare input data
+# TODO: Return value for whether the background task succeeded or failed?
 
-    input_data = parse_input_files(*input_filenames)
+# TODO: Progress counter for background task
+#  - Total number of micro-steps (one input record during one loop = one micro-step), we'll know this once the input has been parsed.
+#  - Current micro-step number (increase by one at strategic locations).
+#  - Use this information to update progress bar in GUI.
 
-    # --------------------------------------------------------------------------------
-    # Prepare filenames
+status_box = box("")  # status message for GUI to pull
+status_lock = threading.Lock()
 
-    # Figures are for the whole input dataset, which consists of all input files.
-    # For the visualizer, gather all input filenames into a string that can be used in the filenames of the output figures to easily identify where they came from.
-    all_input_filenames_list = [utils.strip_ext(os.path.basename(fn)) for fn in input_data.resolved_filenames]
-    all_input_filenames_str = "_".join(all_input_filenames_list)
+def discard_message(new_msg):
+    pass
+make_dynvar(maybe_update_status=discard_message)
 
-    # --------------------------------------------------------------------------------
-    # Prepare the high-dimensional semantic space (embedding space, latent space)
+bg = None
+task_manager = None
+def init(executor):
+    """Initialize this module. Must be called before `start_task` can be used.
 
-    all_vectors = get_highdim_semantic_vectors(input_data)
+    `executor`: A `ThreadPoolExecutor` or something duck-compatible with it.
+                Used for running the background task.
+    """
+    global bg
+    global task_manager
+    if bg is not None:  # already initialized?
+        return
+    bg = executor
+    try:
+        task_manager = bgtask.TaskManager(name="preprocessor",  # TODO: name, clarity: "data_import"?
+                                          mode="concurrent",
+                                          executor=bg)
+    except Exception:
+        bg = None
+        task_manager = None
+        raise
 
-    # --------------------------------------------------------------------------------
-    # Dimension reduction hiD -> 2D
+def start_task(output_filename, *input_filenames) -> bool:
+    """Spawn a background task to convert BibTeX files into a visualization dataset file.
 
-    unique_vs, n_clusters = cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in the high-dimensional space, for training
-    lowdim_data = reduce_dimension(unique_vs, n_clusters, all_vectors)  # train the dimension reduction mapping, map the full dataset
-    vis_data, labels, n_vis_clusters, n_vis_outliers = cluster_lowdim_data(input_data, lowdim_data)  # find visualization clusters in 2D
+    `output_filename`: The name of the visualization dataset file to write.
 
-    # --------------------------------------------------------------------------------
-    # Find representative keywords via NLP analysis over the whole dataset
+    `input_filenames`: The name(s) of the input BibTeX file(s)
+                       from which to create the visualization dataset.
 
-    if config.extract_keywords:
-        all_keywords = extract_keywords(input_data)
+    Return value is `True` if the task was successfully submitted, and `False` otherwise.
+    Task submission may fail if the module has not been initialized, or if a preprocessor
+    task is already running.
+
+    The task proceeds asynchronously. To check if it is still running, call `has_task`.
+    """
+    if task_manager is None:
+        return False
+    if has_task():  # Only allow one preprocessor task to be spawned simultaneously, because it takes a lot of GPU resources.
+        return False
+
+    def update_status(new_msg):
+        with status_lock:
+            status_box << new_msg
+
+    def preprocessor_task(*, task_env):
+        if task_env.cancelled:  # if cancelled while waiting in queue -> we're done.
+            return
+        try:
+            preprocess(update_status, output_filename, *input_filenames)  # get args from closure, no need to have them in `task_env`
+        except Exception as exc:  # VERY IMPORTANT, to not silently swallow uncaught exceptions from background task
+            logger.warning(f"preprocessor_task: {task_env.task_name}: exited with exception {type(exc)}: {exc}")
+            traceback.print_exc()  # DEBUG
+            raise
+        finally:
+            update_status("")
+
+    update_status("Preprocessor task queued, waiting to start.")
+    task_manager.submit(preprocessor_task, env())
+    return True
+
+def has_task():
+    """Return whether a preprocessor task currently exists.
+
+    This is useful for e.g. enabling/disabling the GUI button to start the preprocessor.
+    We only allow one preprocessor task to be spawned simultaneously, because it takes
+    a lot of GPU resources.
+    """
+    if task_manager is None:
+        return False
+    return task_manager.has_tasks()
+
+def cancel_task():
+    """Cancel the running preprocessor task, if any."""
+    if task_manager is None:
+        return
+    task_manager.clear()
+
+# --------------------------------------------------------------------------------
+# The actual preprocessing function (data importer that creates the visualization dataset)
+
+def preprocess(status_update_callback, output_filename, *input_filenames) -> None:
+    """Preprocess input files into a visualization dataset.
+
+    This is the synchronous, foreground function that actually performs the task.
+    To process in the background, use `start_task` instead.
+
+    `status_update_callback`: callable or `None`.
+
+                              If provided, must take a single `str` argument.
+                              Used for sending human-readable status messages
+                              while the preprocessor runs.
+
+                              When the preprocessor finishes, it will send a
+                              blank string as the final status update.
+
+                              Return value is ignored.
+
+    `output_filename`: The name of the visualization dataset file to write.
+
+    `input_filenames`: The name(s) of the input BibTeX file(s)
+                       from which to create the visualization dataset.
+
+    No return value.
+
+    Filenames are automatically converted to absolute paths via `parse_input_files`,
+    which see.
+    """
+    if status_update_callback is not None:
+        maybe_update_status = status_update_callback
     else:
-        logger.info("Keyword extraction disabled, skipping NLP analysis.")
-        all_keywords = {}
+        maybe_update_status = discard_message
 
-    # --------------------------------------------------------------------------------
-    # Find a set of keywords for each cluster
+    with dyn.let(maybe_update_status=maybe_update_status):  # dynamic assignment is the clean solution to pass the status update function to anything we call while this block is running.
+        # --------------------------------------------------------------------------------
+        # Prepare input data
 
-    if config.extract_keywords:
-        vis_keywords_by_cluster = collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords)
-    else:
-        vis_keywords_by_cluster = []
+        input_data = parse_input_files(*input_filenames)
 
-    # --------------------------------------------------------------------------------
-    # Write AI summary for each item (EXPERIMENTAL / EXPENSIVE)
+        # --------------------------------------------------------------------------------
+        # Prepare filenames
 
-    if config.summarize:
-        summarize(input_data)  # mutates its input
-    else:
-        logger.info("AI summarization disabled, skipping.")
+        # Figures are for the whole input dataset, which consists of all input files.
+        # For the visualizer, gather all input filenames into a string that can be used in the filenames of the output figures to easily identify where they came from.
+        all_input_filenames_list = [utils.strip_ext(os.path.basename(fn)) for fn in input_data.resolved_filenames]
+        all_input_filenames_str = "_".join(all_input_filenames_list)
 
-    # --------------------------------------------------------------------------------
-    # Save the resulting visualization dataset file
+        # --------------------------------------------------------------------------------
+        # Prepare the high-dimensional semantic space (embedding space, latent space)
 
-    logger.info(f"Saving visualization datafile {output_filename}...")
+        all_vectors = get_highdim_semantic_vectors(input_data)
 
-    # Be sure to save the values of any settings that affect data availability and interpretation! (E.g. `extract_keywords` -> whether annotations and word cloud can be plotted from this data.)
+        # --------------------------------------------------------------------------------
+        # Dimension reduction hiD -> 2D
 
-    output_file_version = 1  # must be a version supported by the visualizer
-    with timer() as tim:
-        output_data = {"version": output_file_version,
-                       "all_input_filenames_raw": input_data.resolved_filenames,  # actual paths
-                       "all_input_filenames_list": all_input_filenames_list,  # just the filenames (no path)
-                       "all_input_filenames_str": all_input_filenames_str,  # concatenated, "file1_file2_..._fileN", for naming output figures for this combination of input files
-                       "embedding_model": config.embedding_model,
-                       "vis_method": config.vis_method,  # dimension reduction method
-                       "n_vis_clusters": n_vis_clusters,  # number of clusters detected
-                       "n_vis_outliers": n_vis_outliers,  # number of outlier points, not belonging to any cluster
-                       "labels": labels,
-                       "vis_data": vis_data,  # list, concatenated entries from all input files
-                       "lowdim_data": lowdim_data,  # rank-2 `np.array` of shape `[N, 2]`, 2D points from the semantic mapping, after dimension reduction
-                       "keywords_available": config.extract_keywords,
-                       "all_keywords": all_keywords,
-                       "vis_keywords_by_cluster": vis_keywords_by_cluster}
-        with open(output_filename, "wb") as output_file:
-            pickle.dump(output_data, output_file)
-    logger.info(f"    Done in {tim.dt:0.6g}s.")
+        unique_vs, n_clusters = cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in the high-dimensional space, for training
+        lowdim_data = reduce_dimension(unique_vs, n_clusters, all_vectors)  # train the dimension reduction mapping, map the full dataset
+        vis_data, labels, n_vis_clusters, n_vis_outliers = cluster_lowdim_data(input_data, lowdim_data)  # find visualization clusters in 2D
+
+        # --------------------------------------------------------------------------------
+        # Find representative keywords via NLP analysis over the whole dataset
+
+        if config.extract_keywords:
+            all_keywords = extract_keywords(input_data)
+        else:
+            logger.info("Keyword extraction disabled, skipping NLP analysis.")
+            all_keywords = {}
+
+        # --------------------------------------------------------------------------------
+        # Find a set of keywords for each cluster
+
+        if config.extract_keywords:
+            vis_keywords_by_cluster = collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords)
+        else:
+            vis_keywords_by_cluster = []
+
+        # --------------------------------------------------------------------------------
+        # Write AI summary for each item (EXPERIMENTAL / EXPENSIVE)
+
+        if config.summarize:
+            summarize(input_data)  # mutates its input
+        else:
+            logger.info("AI summarization disabled, skipping.")
+
+        # --------------------------------------------------------------------------------
+        # Save the resulting visualization dataset file
+
+        logger.info(f"Saving visualization datafile {output_filename}...")
+
+        # Be sure to save the values of any settings that affect data availability and interpretation! (E.g. `extract_keywords` -> whether annotations and word cloud can be plotted from this data.)
+
+        output_file_version = 1  # must be a version supported by the visualizer
+        with timer() as tim:
+            output_data = {"version": output_file_version,
+                           "all_input_filenames_raw": input_data.resolved_filenames,  # actual paths
+                           "all_input_filenames_list": all_input_filenames_list,  # just the filenames (no path)
+                           "all_input_filenames_str": all_input_filenames_str,  # concatenated, "file1_file2_..._fileN", for naming output figures for this combination of input files
+                           "embedding_model": config.embedding_model,
+                           "vis_method": config.vis_method,  # dimension reduction method
+                           "n_vis_clusters": n_vis_clusters,  # number of clusters detected
+                           "n_vis_outliers": n_vis_outliers,  # number of outlier points, not belonging to any cluster
+                           "labels": labels,
+                           "vis_data": vis_data,  # list, concatenated entries from all input files
+                           "lowdim_data": lowdim_data,  # rank-2 `np.array` of shape `[N, 2]`, 2D points from the semantic mapping, after dimension reduction
+                           "keywords_available": config.extract_keywords,
+                           "all_keywords": all_keywords,
+                           "vis_keywords_by_cluster": vis_keywords_by_cluster}
+            with open(output_filename, "wb") as output_file:
+                pickle.dump(output_data, output_file)
+        logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
 # Main program (when run as a standalone command-line tool)
@@ -1019,7 +1163,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="""Extract relevant fields from BibTeX file(s), for semantic visualization.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest="output_filename", type=str, metavar="out", help="Output file to save analysis data in")
-    parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="bib", help="BibTeX file(s) to parse")
+    parser.add_argument(dest="input_filenames", nargs="+", default=None, type=str, metavar="bib", help="BibTeX file(s) to parse")
     opts = parser.parse_args()
 
     if opts.output_filename.endswith(".bib"):
@@ -1028,7 +1172,7 @@ def main() -> None:
 
     try:
         with timer() as tim:
-            preprocess(opts.output_filename, *opts.input_filenames)
+            preprocess(None, opts.output_filename, *opts.input_filenames)
     except Exception:
         logger.info(f"Error after {tim.dt:0.6g}s total:")
         traceback.print_exc()
