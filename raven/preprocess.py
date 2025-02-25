@@ -942,7 +942,7 @@ def summarize(input_data):
 # --------------------------------------------------------------------------------
 # Background task management
 
-# TODO: Return value for whether the background task succeeded or failed?
+# TODO: Return value for whether the background task succeeded or failed? (Can use the `task_env.done_callback` mechanism for this.)
 
 # TODO: Progress counter for background task
 #  - Total number of micro-steps (one input record during one loop = one micro-step), we'll know this once the input has been parsed.

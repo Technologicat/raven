@@ -83,6 +83,21 @@ class TaskManager:
                                 added later to the queue (waiting for a free thread in the pool)
                                 may have their `cancelled` flags set to `True`.
 
+               When `function` exits or the task is cancelled (thus completing the future),
+               if `env` contains an attribute `done_callback` at that time, that function
+               will be called with `env` as its only argument. This can be used as a return
+               value mechanism.
+
+               To return a value from the background task, provide an `env.done_callback`
+               when calling `submit`. Then, in `function`, stash the return value as,
+               for example, `env.ret`. The done callback will have access to `env`,
+               so it can get the return value from there, and do what it wants with it.
+
+               To check in your `done_callback` whether the task completed normally or
+               was cancelled, check the `env.cancelled` flag.
+
+               The return value of `done_callback` itself is ignored.
+
         Returns an `unpythonic.gsym` representing the task name. Task names are unique.
         """
         with self.lock:
@@ -91,8 +106,8 @@ class TaskManager:
             env.task_name = gensym(f"{self.name}_task")
             env.cancelled = False
             future = self.executor.submit(function, env)
-            self.tasks[env.task_name] = (future, env)  # store a reference to `env` so we have access to the `cancelled` flag
-            future.add_done_callback(self._done_callback)  # autoremove the task when it exits (we don't need its return value)
+            self.tasks[env.task_name] = (future, env)  # store a reference to `env` so we have access to the `cancelled` flag and the custom `done_callback`, if any
+            future.add_done_callback(self._done_callback)  # autoremove the task when it exits (and let the user handle its return value, if any)
             return env.task_name
 
     def has_tasks(self):
@@ -109,11 +124,31 @@ class TaskManager:
             return None
 
     def _done_callback(self, future):
-        """Internal method. Remove a completed task, by a reference to its `future` (that we get from `ThreadPoolExecutor`)."""
+        """Internal method. Remove a completed task, by a reference to its `future` (that we get from `ThreadPoolExecutor`).
+
+        Before removing the task, automatically call the custom `done_callback`, if it was provided.
+        Note that this triggers also when the task is cancelled, triggering the custom callback also in that case.
+        """
         with self.lock:
             task_name = self._find_task_by_future(future)
             if task_name is not None:  # not removed already? (`cancel` might have removed it)
-                self.tasks.pop(task_name)
+                try:
+                    # Call the custom done callback if provided.
+                    future, e = self.tasks[task_name]
+                    if "done_callback" in e:
+                        e.done_callback(e)
+                finally:
+                    # Remove the task *after* calling the custom `done_callback`, so that the task still shows as running
+                    # in our status until the `done_callback` has exited. The `done_callback` considered to be part of the task;
+                    # and strictly speaking, it is - it's a CPS continuation.
+                    #
+                    # Why have a separate continuation at all? Why not just stash the return value somewhere external, from the submitted
+                    # task body itself? The primary reason for providing this custom `done_callback` mechanism is that it automatically
+                    # tracks instances (function activations) - the callback gets the `env` for the task instance that completed.
+                    #
+                    # Task-specific resource cleanup is better done in the task body (in a `finally` clause). The `done_callback` mechanism
+                    # is intended for returning a value asynchronously.
+                    self.tasks.pop(task_name)
 
     def cancel(self, task_name, pop=True):
         """Cancel a specific task, by name.
@@ -132,8 +167,8 @@ class TaskManager:
                 future, e = self.tasks.pop(task_name)
             else:
                 future, e = self.tasks[task_name]
-            future.cancel()  # in case it's still queued in the executor (don't start it)
-            e.cancelled = True  # in case it's running (pythonic co-operative cancellation)
+            e.cancelled = True  # In case it's running (pythonic co-operative cancellation). Do this first, so the custom `done_callback` (if any) sees the `cancelled` flag when we cancel the future.
+            future.cancel()  # In case it's still queued in the executor, don't start it.
 
     def clear(self, wait=False):
         """Cancel all tasks.
