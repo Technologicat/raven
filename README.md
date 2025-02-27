@@ -45,6 +45,7 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
 - [Import a dataset](#import-a-dataset)
     - [BibTeX](#bibtex)
     - [Other formats](#other-formats)
+        - [arXiv](#arxiv)
         - [WOS (Web of Science)](#wos-web-of-science)
         - [PDF (human-readable abstracts)](#pdf-human-readable-abstracts)
             - [How it works](#how-it-works)
@@ -113,7 +114,12 @@ Currently, it is not possible to add new data into an existing visualization dat
 
 First import your data into BibTeX, then preprocess the BibTeX data as above.
 
-We plan to add more importers in the future. Particularly, an arXiv importer would be useful for following AI/CS research.
+We plan to add more importers in the future.
+
+
+### arXiv
+
+You can use the [arxiv2bib](https://github.com/nathangrigg/arxiv2bib) external tool to produce a BibTeX bibliography.
 
 
 ### WOS (Web of Science)
