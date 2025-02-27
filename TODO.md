@@ -20,10 +20,6 @@
 - fdialog: least surprise: if the user has picked a unique file extension in the file extension filter combo, use that as the default file extension when in save mode. If the current choice in that combo has several file extensions, and/or has one or more wildcards, then use the API-provided default file extension.
 
 - **Integrated preprocessor**. Access the preprocessor from the GUI app, to quickly import small datasets with minimal fuss.
-  - Add a GUI to call the preprocessor and show its status.
-    - For choosing the input files, use an fdialog in `multi_select` mode.
-  - While a preprocess is running, show a progress bar in the GUI.
-    - Progress bar in DPG: https://github.com/my1e5/dpg-examples/blob/main/threading/progress_bar.py
 
 
 ## v0.2 and later
