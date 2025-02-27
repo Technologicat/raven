@@ -182,7 +182,7 @@ def setup(backend_url: str) -> env:
     # Generation settings for the LLM backend.
     request_data = {
         "mode": "instruct",
-        "max_tokens": 800,
+        "max_tokens": 1600,  # 800 is usually good, but thinking models may need more
         "temperature": 0,  # T = 0 for fact extraction
         "min_p": 0.02,  # good value for LLaMA 3.1
         "seed": -1,  # 558614238,  # -1 = random; unused if T = 0
@@ -675,11 +675,11 @@ def setup_prompts(settings: env) -> None:
 
     You can find the keywords on a separate line that starts with "Keywords:" or "Key words:".
 
-    Please reply only with a list of keywords.
+    Please reply only with a comma-separated list of keywords.
 
     Use plain text, no formatting.
 
-    IMPORTANT: Only copy the existing list of keywords from the abstract; do NOT add your own.
+    IMPORTANT: Only copy the existing list of keywords from the abstract; do NOT add your own keywords.
 
     IMPORTANT: The list of keywords in the original abstract may end abruptly. This is fine. Do NOT add additional keywords from the main text.
     """)
@@ -881,6 +881,13 @@ def invoke_llm(settings: env, history: List[Dict[str, str]], progress_symbol="."
     # e.g. "AI: blah" -> "blah"
     if llm_output.startswith(f"{settings.char}: "):
         llm_output = llm_output[len(settings.char) + 2:]
+
+    # Support thinking models (such as DeepSeek-R1-Distill-Qwen-32B).
+    # Drop "<think>...</think>" sections from the output, and then strip whitespace.
+    #
+    # logger.debug("Before think strip: " + llm_output)
+    llm_output = re.sub(r"<think>(.*?)</think>", "", llm_output, flags=re.IGNORECASE | re.DOTALL).strip()
+    # logger.debug("After  think strip: " + llm_output)
 
     n_tokens = n_chunks - 2  # No idea why, but that's how it empirically is (see ooba server terminal output). Investigate later.
 
