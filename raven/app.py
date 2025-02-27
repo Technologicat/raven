@@ -1816,6 +1816,7 @@ with timer() as tim:
             dpg.add_spacer(width=gui_config.preprocessor_w)  # ensure window width
 
             with dpg.group(horizontal=True):
+                # TODO: wire the preprocessor "save as" callback
                 dpg.add_button(label=fa.ICON_HARD_DRIVE,
                                tag="preprocessor_save_button",
                                width=gui_config.toolbutton_w)
@@ -1829,6 +1830,7 @@ with timer() as tim:
                         dpg.add_text("[not selected]", color=(140, 140, 140, 255))
 
             with dpg.group(horizontal=True):
+                # TODO: wire the preprocessor "select input files" callback
                 dpg.add_button(label=fa.ICON_FOLDER,
                                tag="preprocessor_select_input_files_button",
                                width=gui_config.toolbutton_w)
@@ -1844,7 +1846,6 @@ with timer() as tim:
             dpg.add_spacer(width=gui_config.preprocessor_w, height=2)  # leave some vertical space
 
             with dpg.group(horizontal=True):
-                # TODO: wire the preprocessor callbacks
                 dpg.add_button(label=fa.ICON_PLAY,
                                tag="preprocessor_startstop_button",
                                width=gui_config.toolbutton_w,
