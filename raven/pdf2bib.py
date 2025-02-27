@@ -35,7 +35,6 @@ import pathlib
 import re
 import requests
 import shutil
-import string
 import subprocess
 import sys
 from textwrap import dedent
