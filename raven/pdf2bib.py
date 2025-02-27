@@ -998,8 +998,14 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument(dest="backend_url", nargs="?", default=default_backend_url, type=str, metavar="url", help="where to access the LLM API")
-    parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="directory", help="directory to move done files into (optional; allows easily continuing later)")
+    parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="output_dir", help="directory to move done files into (optional; allows easily continuing later)")
+    parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing PDF file(s) to import (will be scanned recursively)")
     opts = parser.parse_args()
+
+    if opts.input_dir is None:
+        opts.input_dir = "."
+    opts.input_dir = str(pathlib.Path(opts.input_dir).expanduser().resolve())
+    logger.info(f"Processing PDF files from {opts.input_dir}.")
 
     if opts.output_dir is not None:
         opts.output_dir = str(pathlib.Path(opts.output_dir).expanduser().resolve())
@@ -1008,7 +1014,7 @@ def main():
 
     blacklist = []
     paths = []
-    for root, dirs, files in os.walk("."):
+    for root, dirs, files in os.walk(opts.input_dir):
         paths.append(root)
         for x in blacklist:
             if x in dirs:
