@@ -147,16 +147,25 @@ To import PDF into BibTeX:
 
 ```bash
 conda activate raven
-python -m raven.pdf2bib http://127.0.0.1:5000 -o done 1>output.bib 2>log.txt
+python -m raven.pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>output.bib 2>log.txt
 ```
 
 The "*http://...*" argument is the URL of an LLM serving an OpenAI-compatible API (streaming mode).
 
-The command imports all PDF files in the current directory, descending into subdirectories. The files are processed one directory at a time, in Unicode lexicographical order by filename. Output is written to `output.bib`, and log messages to `log.txt`.
+The command imports all PDF files in `some_input_directory` (which can be a relative or absolute path), automatically descending into subdirectories. The files are processed one directory at a time, in Unicode lexicographical order by filename. Output is written to `output.bib`, and log messages to `log.txt`.
 
-The `-o done` moves each PDF file into a subdirectory named `done` after the file has been processed. This allows canceling the job and easily continuing it later, which is useful if there are lots of input files; the LLM analysis can be slow. An input PDF file is moved if and only if it was successfully processed, **after** printing its BibTeX entry.
+The `-o done` moves each PDF file into directory named `done` after the file has been processed. This allows canceling the job and easily continuing it later, which is useful if there are lots of input files; the LLM analysis can be slow. An input PDF file is moved if and only if it was successfully processed, **after** printing the generated BibTeX entry.
 
-The directory specified by `-o` is ignored while descending into subdirectories.
+The directory specified by `-o` is ignored while descending into subdirectories of the input directory, so it is possible to use e.g. `-o some_input_directory/done`.
+
+To continue a partial import (with some files already having been moved into `done`, and some remaining):
+
+```bash
+conda activate raven
+python -m raven.pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>>output.bib 2>>log.txt
+```
+
+That is, just use the append mode (`>>` instead of `>`) for redirecting the output into files.
 
 #### How it works
 
@@ -176,7 +185,9 @@ The PDF importer has been tested on a local Llama 3.1 8B instance running on [Oo
 
 Based on our own testing, accuracy with this LLM is ~80%, or in other words, on average, 8 out of 10 abstracts import without warnings (and also look correct by manual inspection).
 
-Support for LLM authentication (API key) has not been implemented yet, so currently the LLM needs to be local (on the same network, no API key). Also, the importer expects the LLM to accept a custom system prompt (unlike cloud LLMs, whose system prompts are hidden and uneditable). Supporting cloud LLMs is not a high priority, but PRs are welcome.
+As of February 2025, we are currently re-testing this on a Q4_K_M of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), running the model on an eGPU with 24GB of VRAM.
+
+Support for LLM authentication (API key) has not been implemented yet, so whichever LLM is used, currently it must be local (on the same network, no API key). Also, the importer expects the LLM to accept a custom system prompt (unlike cloud LLMs, whose system prompts are hidden and uneditable). Supporting cloud LLMs is not a high priority, but PRs are welcome.
 
 
 # Visualize an imported dataset
