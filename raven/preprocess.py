@@ -157,11 +157,16 @@ def parse_input_files(*filenames):
     logger.info("Extracting data from input records...")
     parsed_data_by_filename = {}
     with timer() as tim:
+        n_total_entries = sum(len(entries) for entries in bibtex_entries_by_filename.values())
+        progress.set_micro_count(n_total_entries)
         for j, (filename, entries) in enumerate(bibtex_entries_by_filename.items(), start=1):
             update_status_and_log(f"[{j} out of {len(bibtex_entries_by_filename)}] Extracting data from {filename}...", log_indent=1)
             parsed_data_by_filename[filename] = []
             for entry in entries:
                 fields = entry.fields_dict
+
+                if _is_cancelled():
+                    return
 
                 # Validate presence of mandatory fields
                 entry_valid = True
@@ -171,6 +176,7 @@ def parse_input_files(*filenames):
                         entry_valid = False
                         break
                 if not entry_valid:
+                    progress.tick()
                     continue
 
                 authors_str = utils.format_bibtex_authors(fields["author"].value)
@@ -194,6 +200,7 @@ def parse_input_files(*filenames):
                                                              year=year,
                                                              title=title,
                                                              abstract=abstract))
+                progress.tick()
     n_entries_total = sum(len(entries) for entries in bibtex_entries_by_filename.values())
     logger.info(f"    {n_entries_total} total entries processed.")
     logger.info(f"    Done in {tim.dt:0.6g}s [avg {n_entries_total / tim.dt:0.6g} entries/s].")
@@ -219,7 +226,11 @@ def get_highdim_semantic_vectors(input_data):
 
     all_vectors_by_filename = {}
     sentence_embedder = None
+    progress.set_micro_count(len(input_data.parsed_data_by_filename))
     for j, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
+        if _is_cancelled():
+            return
+
         update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] Preparing semantic vectors for {filename}...", log_indent=1)
 
         # TODO: clear memory between input files to avoid running out of RAM/VRAM when we have lots of files
@@ -275,6 +286,7 @@ def get_highdim_semantic_vectors(input_data):
                 np.savez_compressed(embeddings_cache_filename, all_vectors=all_vectors, embedding_model=config.embedding_model)
             logger.info(f"            Done in {tim.dt:0.6g}s.")
         all_vectors_by_filename[filename] = all_vectors
+        progress.tick()
     all_vectors = np.concatenate(list(all_vectors_by_filename.values()))
 
     return all_vectors
@@ -372,6 +384,7 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
     """
     logger.info("Dimension reduction for visualization...")
     update_status_and_log(f"Loading dimension reduction library for '{config.vis_method}'...", log_indent=1)
+    progress.set_micro_count(3)  # load library, train mapping, apply mapping
     with timer() as tim:
         if config.vis_method == "tsne":
             # t-distributed Stochastic Neighbor Embedding
@@ -433,16 +446,27 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
                               low_memory=False)
         else:
             assert False
+    progress.tick()
     logger.info(f"        Done in {tim.dt:0.6g}s.")
+
+    if _is_cancelled():
+        return
+
     with timer() as tim:
         update_status_and_log(f"Learning dimension reduction into 2D from the detected {n_clusters} semantic clusters, using {len(unique_vs)} representative points...", log_indent=1)
         trans = trans.fit(unique_vs)
         # trans = trans.fit(all_vectors)  # DEBUG: high quality result, but extremely expensive! (several minutes for 5k points)
+    progress.tick()
     logger.info(f"        Done in {tim.dt:0.6g}s.")
+
+    if _is_cancelled():
+        return
+
     with timer() as tim:
         update_status_and_log(f"Applying learned dimension reduction to full dataset [n = {len(all_vectors)}]...", log_indent=1)
         lowdim_data = trans.transform(all_vectors)
         # lowdim_reprs = trans.transform(unique_vs)  # DEBUG: where did our representative points end up in the 2D representation?
+    progress.tick()
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
     return lowdim_data
@@ -523,7 +547,11 @@ def extract_keywords(input_data, max_vis_kw=6):
 
     all_keywords_by_filename = {}
     nlp_pipeline = None
+    progress.set_micro_count(len(input_data.parsed_data_by_filename))
     for j, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
+        if _is_cancelled():
+            return
+
         update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)
 
         nlp_cache_filename = nlp_cache_filenames[filename]
@@ -715,6 +743,9 @@ def extract_keywords(input_data, max_vis_kw=6):
                 entry_keywords_for_this_file = []
                 entry_entities_for_this_file = []
                 for entry, doc in zip(entries, all_docs_for_this_file):
+                    if _is_cancelled():
+                        return
+
                     with timer() as tim2:
                         kws = trim_word_counts(extract_word_counts(doc))
                     fa_times.append(tim2.dt)
@@ -768,6 +799,7 @@ def extract_keywords(input_data, max_vis_kw=6):
                 entry.keywords = kws  # counter
                 entry.entities = ents  # no frequency information, so just a set
         logger.info(f"            Done in {tim.dt:0.6g}s.")
+        progress.tick()
 
     # Merge the keyword data from all input files.
     #
@@ -861,6 +893,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
     For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
     """
     update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
+    progress.set_micro_count(n_vis_clusters)
     with timer() as tim:
         logger.info("        Collecting keywords from data points in each cluster...")
         keywords_by_cluster = [collections.Counter() for _ in range(n_vis_clusters)]
@@ -905,6 +938,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
             kws = list(sorted(kws, key=functools.partial(rank_keyword, counts=all_keywords)))
             kws = kws[:max_vis_kw]
             vis_keywords_by_cluster.append(kws)
+            progress.tick()
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
     return vis_keywords_by_cluster
@@ -924,10 +958,15 @@ def summarize(input_data):
         - `None`, if there was no abstract (so a summary could not be created).
     """
     logger.info("Summarizing abstracts using AI...")
+    n_total_entries = sum(len(entries) for entries in input_data.parsed_data_by_filename.values())
+    progress.set_micro_count(n_total_entries)
     for k, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
         logger.info(f"    [input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing abstracts from {filename}...")
         with timer() as tim:
             for j, entry in enumerate(entries, start=1):
+                if _is_cancelled():
+                    return
+
                 if entry.abstract:
                     update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing entry {j} out of {len(entries)}: {entry.author} ({entry.year}): {entry.title}",
                                           log_indent=2)
@@ -937,6 +976,7 @@ def summarize(input_data):
                                           log_indent=2)
                     summary = None
                 entry.summary = summary
+                progress.tick()
         logger.info(f"        Done in {tim.dt:0.6g}s [avg {len(entries) / tim.dt:0.6g} entries/s].")
 
 # --------------------------------------------------------------------------------
@@ -951,6 +991,38 @@ def summarize(input_data):
 
 status_box = box("")  # status message for GUI to pull
 status_lock = threading.Lock()
+
+class Progress:
+    def __init__(self):
+        """Progress counter for currently running import task."""
+        self.reset()
+
+    def reset(self):
+        self._macrosteps_done = 0
+        self._macrosteps_count = 8  # parse, hiD vectors, hiD cluster, reduce, 2D cluster, entry keywords, cluster keywords, summarize.
+
+        # Microsteps take place within the current macrostep.
+        self._microsteps_done = 0
+        self._microsteps_count = 1
+
+    def tick(self):
+        self._microsteps_done += 1
+
+    def tock(self):
+        self._macrosteps_done += 1
+        self._microsteps_done = 0
+        self._microsteps_count = 1
+
+    def set_micro_count(self, newcount):
+        self._microsteps_count = newcount
+
+    def _get(self):
+        if has_task():
+            # We partition the progress bar so that each macrostep gets the same amount of space; the microsteps within the current macrostep then contribute a fractional part.
+            return (self._macrosteps_done + (self._microsteps_done / self._microsteps_count)) / self._macrosteps_count
+        return None
+    value = property(_get, doc="Progress of currently running import task as a float in [0, 1], or `None` when no task is running.")
+progress = Progress()
 
 def discard_message(new_msg):
     pass
@@ -978,8 +1050,19 @@ def init(executor):
         task_manager = None
         raise
 
-def start_task(done_callback, output_filename, *input_filenames) -> bool:
+def start_task(started_callback, done_callback, output_filename, *input_filenames) -> bool:
     """Spawn a background task to convert BibTeX files into a visualization dataset file.
+
+    `started_callback`: callable or `None`.
+
+                       If provided, must take a single `unpythonic.env.env` argument.
+                       Called when the task actually starts running (it may first
+                       have to wait in the queue for a short while, depending on
+                       available resources in the executor).
+
+                       Return value is ignored.
+
+                       Useful e.g. for updating GUI status to show the task has started.
 
     `done_callback`: callable or `None`.
 
@@ -1002,30 +1085,49 @@ def start_task(done_callback, output_filename, *input_filenames) -> bool:
 
     The task proceeds asynchronously. To check if it is still running, call `has_task`.
     """
+    logger.info("start_task: entered.")
     if task_manager is None:
+        logger.warning("start_task: no `task_manager`, canceling. Maybe `preprocess.init()` has not been called?")
         return False
     if has_task():  # Only allow one preprocessor task to be spawned simultaneously, because it takes a lot of GPU resources.
+        logger.info("start_task: a preprocessor task is already running, canceling.")
         return False
 
     def update_status(new_msg):
         with status_lock:
             status_box << new_msg
 
-    def preprocessor_task(*, task_env):
+    def preprocessor_task(task_env):
+        logger.info(f"preprocessor_task: {task_env.task_name}: entered.")
         if task_env.cancelled:  # if cancelled while waiting in queue -> we're done.
+            logger.info(f"preprocessor_task: {task_env.task_name}: cancelled (from task queue)")
             return
         try:
-            preprocess(update_status, output_filename, *input_filenames)  # get args from closure, no need to have them in `task_env`
+            if started_callback is not None:
+                logger.info(f"preprocessor_task: {task_env.task_name}: `started_callback` exists, calling it now.")
+                started_callback(task_env)
+            with dyn.let(task_env=task_env):
+                logger.info(f"preprocessor_task: {task_env.task_name}: entering `preprocess` function.")
+                preprocess(update_status, output_filename, *input_filenames)  # get args from closure, no need to have them in `task_env`
+                logger.info(f"preprocessor_task: {task_env.task_name}: done.")
         except Exception as exc:  # VERY IMPORTANT, to not silently swallow uncaught exceptions from background task
             logger.warning(f"preprocessor_task: {task_env.task_name}: exited with exception {type(exc)}: {exc}")
             traceback.print_exc()  # DEBUG
             raise
         finally:
             update_status("")
+            progress.reset()
 
     update_status("Preprocessor task queued, waiting to start.")
-    task_manager.submit(preprocessor_task, env(done_callback=done_callback))
+    task_manager.submit(preprocessor_task, env(done_callback=done_callback))  # `task_manager` needs the `done_callback` to be in the `task_env`.
+    logger.info("start_task: preprocessor task submitted.")
     return True
+
+def _is_cancelled():
+    """Internal function, for the task to check whether it has been cancelled while it is still running."""
+    if "task_env" in dyn and dyn.task_env.cancelled:
+        return True
+    return False
 
 def has_task():
     """Return whether a preprocessor task currently exists.
@@ -1042,7 +1144,7 @@ def cancel_task():
     """Cancel the running preprocessor task, if any."""
     if task_manager is None:
         return
-    task_manager.clear()
+    task_manager.clear(wait=True)  # we must wait for the task to exit so that its `done_callback` gets triggered
 
 # --------------------------------------------------------------------------------
 # The actual preprocessing function (data importer that creates the visualization dataset)
@@ -1084,6 +1186,10 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
         # Prepare input data
 
         input_data = parse_input_files(*input_filenames)
+        progress.tock()
+
+        if _is_cancelled():
+            return False
 
         # --------------------------------------------------------------------------------
         # Prepare filenames
@@ -1097,13 +1203,26 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
         # Prepare the high-dimensional semantic space (embedding space, latent space)
 
         all_vectors = get_highdim_semantic_vectors(input_data)
+        progress.tock()
+
+        if _is_cancelled():
+            return False
 
         # --------------------------------------------------------------------------------
         # Dimension reduction hiD -> 2D
 
         unique_vs, n_clusters = cluster_highdim_semantic_vectors(all_vectors)  # find a stratified sample in the high-dimensional space, for training
+        progress.tock()
+        if _is_cancelled():
+            return False
         lowdim_data = reduce_dimension(unique_vs, n_clusters, all_vectors)  # train the dimension reduction mapping, map the full dataset
+        progress.tock()
+        if _is_cancelled():
+            return False
         vis_data, labels, n_vis_clusters, n_vis_outliers = cluster_lowdim_data(input_data, lowdim_data)  # find visualization clusters in 2D
+        progress.tock()
+        if _is_cancelled():
+            return False
 
         # --------------------------------------------------------------------------------
         # Find representative keywords via NLP analysis over the whole dataset
@@ -1113,6 +1232,9 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
         else:
             logger.info("Keyword extraction disabled, skipping NLP analysis.")
             all_keywords = {}
+        progress.tock()
+        if _is_cancelled():
+            return False
 
         # --------------------------------------------------------------------------------
         # Find a set of keywords for each cluster
@@ -1121,6 +1243,9 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
             vis_keywords_by_cluster = collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords)
         else:
             vis_keywords_by_cluster = []
+        progress.tock()
+        if _is_cancelled():
+            return False
 
         # --------------------------------------------------------------------------------
         # Write AI summary for each item (EXPERIMENTAL / EXPENSIVE)
@@ -1129,6 +1254,9 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
             summarize(input_data)  # mutates its input
         else:
             logger.info("AI summarization disabled, skipping.")
+        progress.tock()
+
+        # Do not need to allow cancellation after this point, because all that is left is to save the results.
 
         # --------------------------------------------------------------------------------
         # Save the resulting visualization dataset file
@@ -1156,6 +1284,8 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
             with open(output_filename, "wb") as output_file:
                 pickle.dump(output_data, output_file)
         logger.info(f"    Done in {tim.dt:0.6g}s.")
+
+        return True
 
 # --------------------------------------------------------------------------------
 # Main program (when run as a standalone command-line tool)
