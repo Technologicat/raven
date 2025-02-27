@@ -1802,7 +1802,7 @@ with timer() as tim:
                 dpg.add_text("Save word cloud as PNG [Ctrl+S]", tag="word_cloud_save_tooltip_text")
 
     # TODO: WIP: Preprocessor integration (for importing BibTeX files from the GUI). Mockup, hidden, inaccessible for now.
-    with dpg.window(show=True, modal=False, no_title_bar=False, tag="preprocessor_window",
+    with dpg.window(show=False, modal=False, no_title_bar=False, tag="preprocessor_window",
                     label="BibTeX import",
                     no_scrollbar=True, autosize=True) as preprocessor_window:
         with dpg.group(horizontal=False):
