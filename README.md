@@ -185,7 +185,7 @@ The PDF importer has been tested on a local Llama 3.1 8B instance running on [Oo
 
 Based on our own testing, accuracy with this LLM is ~80%, or in other words, on average, 8 out of 10 abstracts import without warnings (and also look correct by manual inspection).
 
-As of February 2025, we are currently re-testing this on a Q4_K_M of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), running the model on an eGPU with 24GB of VRAM.
+As of February 2025, support for thinking models has been added (by automatically stripping `<think>...</think>` sections from the LLM output). We are currently testing this on a Q4_K_M quant of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), with 65536 (64k) tokens of context, running the model on an eGPU with 24GB of VRAM.
 
 Support for LLM authentication (API key) has not been implemented yet, so whichever LLM is used, currently it must be local (on the same network, no API key). Also, the importer expects the LLM to accept a custom system prompt (unlike cloud LLMs, whose system prompts are hidden and uneditable). Supporting cloud LLMs is not a high priority, but PRs are welcome.
 
@@ -329,7 +329,7 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
 - High-dimensional clustering: [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/index.html).
 - Dimension reduction: [OpenTSNE](https://opentsne.readthedocs.io/en/stable/).
 - AI-powered PDF import
-  - AI model: a large language model (LLM), such as [Llama 3.1 8B](https://huggingface.co/meta-llama/Llama-3.1-8B) or [Sky-T1 32B](https://huggingface.co/NovaSky-AI/Sky-T1-32B-Preview).
+  - AI model: a large language model (LLM), such as [Llama 3.1 8B](https://huggingface.co/meta-llama/Llama-3.1-8B), [Sky-T1 32B](https://huggingface.co/NovaSky-AI/Sky-T1-32B-Preview), or [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B).
   - Engine for running LLMs: an LLM server such as [Oobabooga](https://github.com/oobabooga/text-generation-webui).
   - Communication with the LLM server: [sseclient-py](https://github.com/mpetazzoni/sseclient).
 - File format support
