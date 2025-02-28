@@ -943,9 +943,9 @@ def show_open_file_dialog():
 def _open_file_callback(selected_files):
     """Callback that fires when the "open file" dialog closes."""
     logger.debug("_open_file_callback: Open file dialog callback triggered.")
+    exit_modal_mode()
     if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
         raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
-    exit_modal_mode()
     if selected_files:
         selected_file = selected_files[0]
         logger.debug(f"_open_file_callback: User selected the file '{selected_file}'.")
