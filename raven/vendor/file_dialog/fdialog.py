@@ -1013,7 +1013,11 @@ class FileDialog:
                         return
                 else:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no items shown (maybe nothing matches the search?); rejecting the ok.")
-                    animation.animator.add(animation.ButtonFlash(message="Please select an item",
+                    if self.multi_selection:
+                        msg = "Please select at least one item"
+                    else:
+                        msg = "Please select an item"
+                    animation.animator.add(animation.ButtonFlash(message=msg,
                                                                  target_button=self.btn_ok,
                                                                  target_tooltip=None,
                                                                  target_text=self.text_notification,
