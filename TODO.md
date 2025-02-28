@@ -19,8 +19,6 @@
 
 - fdialog: least surprise: if the user has picked a unique file extension in the file extension filter combo, use that as the default file extension when in save mode. If the current choice in that combo has several file extensions, and/or has one or more wildcards, then use the API-provided default file extension.
 
-- **Integrated preprocessor**. Access the preprocessor from the GUI app, to quickly import small datasets with minimal fuss.
-
 
 ## v0.2 and later
 

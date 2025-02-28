@@ -29,6 +29,7 @@ with timer() as tim:
     import array
     import collections
     import concurrent.futures
+    from copy import deepcopy
     import functools
     import gc
     from io import StringIO
@@ -395,7 +396,40 @@ def is_any_modal_window_visible():
 
     Currently these are the help card, the "open file" dialog, and the "save word cloud" dialog.
     """
-    return is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible() or is_help_window_visible()
+    return (is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible() or
+            is_open_import_dialog_visible() or is_save_import_dialog_visible() or
+            is_help_window_visible())
+
+def recenter_window(thewindow):  # TODO: fix regression: currently doesn't place correctly the first time a given window is opened.
+    """Reposition `thewindow` (DPG ID or tag), if visible, so that it is centered in the viewport."""
+    if thewindow is None:  # Some windows in Raven are created on the fly, and the handle is `None` until the window has been created.
+        return
+    # Sanity check. Just try to call *some* DPG function with `thewindow` to check that the handle is valid.
+    try:
+        dpg.get_item_alias(thewindow)
+    except Exception:
+        logger.debug(f"recenter_window: {thewindow} does not exist, skipping.")
+        return
+
+    main_window_w, main_window_h = utils.get_widget_size(main_window)  # Get the size of the main window, and hence also the viewport, in pixels.
+    logger.debug(f"recenter_window: Main window size is {main_window_w}x{main_window_h}.")
+
+    # # Render offscreen so we get the final size. Only needed if the size can change.
+    # dpg.set_item_pos(thewindow,
+    #                  (main_window_w,
+    #                   main_window_h))
+    # dpg.show_item(thewindow)
+    # logger.debug(f"recenter_window: After show command: Window is visible? {dpg.is_item_visible(thewindow)}.")
+    # dpg.split_frame()  # wait for render
+    # logger.debug(f"recenter_window: After wait for render: Window is visible? {dpg.is_item_visible(thewindow)}.")
+
+    w, h = utils.get_widget_size(thewindow)
+    logger.debug(f"recenter_window: window {thewindow} (tag '{dpg.get_item_alias(thewindow)}', type {dpg.get_item_type(thewindow)}) size is {w}x{h}.")
+
+    # Center the window in the viewport
+    dpg.set_item_pos(thewindow,
+                     (max(0, (main_window_w - w) // 2),
+                      max(0, (main_window_h - h) // 2)))
 
 # --------------------------------------------------------------------------------
 # Word cloud
@@ -531,7 +565,7 @@ def toggle_word_cloud_window():
         update_word_cloud(unbox(selection_data_idxs_box))  # will show the window when done
 
 def show_save_word_cloud_dialog():
-    """Button callback. Invoke the save-as dialog to ask the user for a filename to save the word cloud image as."""
+    """Button callback. Show the save word cloud file dialog, to ask the user for a filename to save the word cloud image as."""
     logger.debug("show_save_word_cloud_dialog: Showing save word cloud dialog.")
     filedialog_save.show_file_dialog()
     enter_modal_mode()
@@ -900,15 +934,19 @@ def open_file(filename):
     load_data_into_plotter(dataset)
 
 # --------------------------------------------------------------------------------
-# "Open file" dialog
+# File dialog init
 
 filedialog_open = None
 filedialog_save = None
+filedialog_open_import = None
+filedialog_save_import = None
 
 def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
-    """Create the "open file" and "save word cloud" dialogs."""
+    """Create the file dialogs."""
     global filedialog_open
     global filedialog_save
+    global filedialog_open_import
+    global filedialog_save_import
     filedialog_open = FileDialog(title="Open dataset",
                                  tag="open_file_dialog",
                                  callback=_open_file_callback,
@@ -928,9 +966,31 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                  default_file_extension=".png",  # used if the user does not provide a file extension when naming the save-as
                                  allow_drag=False,
                                  default_path=default_path)
+    filedialog_open_import = FileDialog(title="Choose BibTeX file(s) to import [Ctrl+click to multi-select]",
+                                        tag="open_import_dialog",
+                                        callback=_open_import_callback,
+                                        modal=True,
+                                        filter_list=[".bib"],
+                                        file_filter=".bib",
+                                        multi_selection=True,
+                                        allow_drag=False,
+                                        default_path=default_path)
+    filedialog_save_import = FileDialog(title="Save imported dataset as",
+                                        tag="save_import_dialog",
+                                        callback=_save_import_callback,
+                                        modal=True,
+                                        filter_list=[".pickle"],
+                                        file_filter=".pickle",
+                                        save_mode=True,
+                                        default_file_extension=".pickle",  # used if the user does not provide a file extension when naming the save-as
+                                        allow_drag=False,
+                                        default_path=default_path)
+
+# --------------------------------------------------------------------------------
+# "Open file" dialog
 
 def show_open_file_dialog():
-    """Show the "open file" dialog.
+    """Button callback. Show the open file dialog, for the user to pick a dataset to open.
 
     (And prepare the GUI for it: hide annotation, disable current item button glow, ...)
     If you need to close it programmatically, call `filedialog_open.cancel()` so it'll trigger the callback (necessary to restore the GUI back into main window mode).
@@ -941,7 +1001,7 @@ def show_open_file_dialog():
     logger.debug("show_open_file_dialog: Done.")
 
 def _open_file_callback(selected_files):
-    """Callback that fires when the "open file" dialog closes."""
+    """Callback that fires when the open file dialog closes."""
     logger.debug("_open_file_callback: Open file dialog callback triggered.")
     exit_modal_mode()
     if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
@@ -954,7 +1014,7 @@ def _open_file_callback(selected_files):
         logger.debug("_open_file_callback: Cancelled.")
 
 def is_open_file_dialog_visible():
-    """Return whether the "open file" dialog is open.
+    """Return whether the open file dialog is open.
 
     We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
     """
@@ -965,22 +1025,88 @@ def is_open_file_dialog_visible():
 # --------------------------------------------------------------------------------
 # Preprocessor integration (BibTeX import)
 
-# TODO: WIP. Finish the preprocessor integration:
-#   - For selecting input BibTeX files, use an fdialog with `multi_select` mode.
-#     - List the currently selected input files. -> Table, with icons?
-#     - GUI controls to unselect individual files from the current set, or to clear the list? -> Is it more common to extend the current set by another file, or import something completely different?
-#   - For picking the output file, use another fdialog in save mode.
-#     - Show the currently selected output file name.
+preprocessor_input_files_box = box([])
+preprocessor_output_file_box = box("")
+
+preprocessor_action_start = sym("start")
+preprocessor_action_stop = sym("stop")
+
+def toggle_preprocessor_window():
+    """Show/hide the preprocessor (BibTeX import) window."""
+    if dpg.is_item_visible("preprocessor_window"):
+        dpg.hide_item("preprocessor_window")
+    else:
+        dpg.show_item("preprocessor_window")
+        recenter_window("preprocessor_window")
+
+def show_open_import_dialog():
+    """Button callback. Show the open import file dialog, for the user to pick which BibTeX files to import."""
+    logger.debug("show_open_import_dialog: Showing open import dialog.")
+    filedialog_open_import.show_file_dialog()
+    enter_modal_mode()
+    logger.debug("show_open_import_dialog: Done.")
+
+def _open_import_callback(selected_files):
+    """Callback that fires when the open import file dialog closes."""
+    logger.debug("_open_import_callback: Open import dialog callback triggered.")
+    exit_modal_mode()
+    if selected_files:
+        logger.debug(f"_open_import_callback: User selected the file(s) {selected_files}.")
+        preprocessor_input_files_box << deepcopy(selected_files)  # Make a copy of the filename list, so that the GUI dialog can clear its own list without affecting ours.
+        update_open_import_gui_table()
+    else:  # empty selection -> cancelled
+        logger.debug("_open_import_callback: Cancelled.")
+
+def is_open_import_dialog_visible():
+    """Return whether the open import file dialog is open.
+
+    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
+    """
+    if filedialog_open_import is None:
+        return False
+    return dpg.is_item_visible("open_import_dialog")  # tag
+
+def show_save_import_dialog():
+    """Button callback. Show the save import file dialog, to ask the user for a filename to save the imported dataset as."""
+    logger.debug("show_save_import_dialog: Showing save import dialog.")
+    filedialog_save_import.show_file_dialog()
+    enter_modal_mode()
+    logger.debug("show_save_import_dialog: Done.")
+
+def _save_import_callback(selected_files):
+    """Callback that fires when the save import file dialog closes."""
+    logger.debug("_save_import_callback: Save import dialog callback triggered.")
+    exit_modal_mode()
+    if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
+        raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
+    if selected_files:
+        selected_file = selected_files[0]
+        logger.debug(f"_save_import_callback: User selected the file '{selected_file}'.")
+        preprocessor_output_file_box << selected_file
+        update_save_import_gui_table()
+    else:  # empty selection -> cancelled
+        logger.debug("_save_import_callback: Cancelled.")
+
+def is_save_import_dialog_visible():
+    """Return whether the save import file dialog is open.
+
+    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
+    """
+    if filedialog_save_import is None:
+        return False
+    return dpg.is_item_visible("save_import_dialog")  # tag
 
 def update_preprocessor_status():
     """Update the preprocessor (BibTeX import) status in the GUI.
 
     This is called automatically every frame while the preprocessor task is running.
 
-    This is also called one more time when the task exits, via the `done_callback` mechanism.
+    This is also called one more time when the preprocessor task exits, via the `done_callback` mechanism.
     """
+    # The preprocessor generates the GUI messages. We only need to get them from there.
     dpg.set_value("preprocessor_status_text", unbox(preprocess.status_box))
-    # update the preprocessor progress bar
+
+    # Update the preprocessor progress bar.
     if preprocess.progress is not None:
         progress_value = preprocess.progress.value
     else:
@@ -991,52 +1117,69 @@ def update_preprocessor_status():
     # dpg.set_item_label("preprocessor_window", f"BibTeX import [running, {percentage}%]")  # TODO: would be nice to see status while minimized, but prevents dragging the window for some reason.
 
 def start_preprocessor(output_file, *input_files):
+    """Start the preprocessor (BibTeX import) to import `input_files` (.bib) into `output_file` (visualization dataset format, currently .pickle)."""
     if preprocess.has_task():
         return
     dpg.show_item("preprocessor_progress_bar")
-    dpg.disable_item("preprocessor_startstop_button")  # Prevent multiple clicks: wait until the task actually starts before allowing the user to tell it to stop. The button will be re-enabled by the started_callback.
+    dpg.disable_item("preprocessor_startstop_button")  # Prevent multiple clicks: wait until the task actually starts before allowing the user to tell it to stop. The button will be re-enabled by the `started_callback`.
     preprocess.start_task(preprocessor_started_callback, preprocessor_done_callback, output_file, *input_files)
 
 def preprocessor_started_callback(task_env):
+    """Callback that fires when the preprocessor task (BibTeX import) actually starts.
+
+    We use this to update the GUI state.
+    """
     dpg.set_item_label("preprocessor_startstop_button", fa.ICON_STOP)
-    dpg.set_value("preprocessor_startstop_tooltip_text", "Cancel BibTeX import")
+    dpg.set_value("preprocessor_startstop_tooltip_text", "Cancel BibTeX import [Ctrl+Enter]")
     dpg.enable_item("preprocessor_startstop_button")
 
 def stop_preprocessor():
+    """Stop (cancel) the preprocessor task (BibTeX import), if any is running."""
     if not preprocess.has_task():
         return
-    dpg.disable_item("preprocessor_startstop_button")  # must wait until the previous task actually exits before we can start a new one (the button will be re-enabled by the done_callback)
+    dpg.disable_item("preprocessor_startstop_button")  # We must wait until the previous task actually exits before we can start a new one. The button will be re-enabled by the `done_callback`.
     preprocess.cancel_task()
 
 def preprocessor_done_callback(task_env):
-    """Clean up the preprocessor GUI state. Used as the `done_callback` for the preprocessor (BibTeX import) task."""
+    """Callback that fires when the preprocessor (BibTeX import) task actually exits, via the `done_callback` mechanism.
+
+    The callback fires regardless of whether the task completed successfully, errored out, or was cancelled.
+
+    We use this to update the GUI state.
+    """
     update_preprocessor_status()
     dpg.set_value("preprocessor_progress_bar", 0.0)
     dpg.configure_item("preprocessor_progress_bar", overlay="")
     dpg.hide_item("preprocessor_progress_bar")
     dpg.set_item_label("preprocessor_startstop_button", fa.ICON_PLAY)
-    dpg.set_value("preprocessor_startstop_tooltip_text", "Start BibTeX import")  # TODO: DRY duplicate definitions for labels
+    dpg.set_value("preprocessor_startstop_tooltip_text", "Start BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
     dpg.enable_item("preprocessor_startstop_button")
     if not task_env.cancelled:
-        # TODO: get filenames from GUI
-        finished = "Imported to temp.pickle."
+        finished = "complete"
     else:
-        finished = "Import cancelled."
-    dpg.set_value("preprocessor_status_text", f"[{finished} To start a new one, select files, and then click the play button.]")
+        finished = "cancelled"
+    dpg.set_value("preprocessor_status_text", f"[Import {finished}. To start a new one, select files, and then click the play button.]")
     # dpg.set_item_label("preprocessor_window", "BibTeX import")  # TODO: DRY duplicate definitions for labels
 
-preprocessor_action_start = sym("start")
-preprocessor_action_stop = sym("stop")
-def startstop_preprocessor():
+def start_or_stop_preprocessor():
+    """Button callback. Start or stop the preprocessor task (BibTeX import), using the input/output filenames currently selected in the GUI."""
+    logger.info("start_or_stop_preprocessor: called.")
     if preprocess.has_task():
+        logger.info("start_or_stop_preprocessor: preprocessor task is running, so we will stop it.")
         action = preprocessor_action_stop
     else:
+        logger.info("start_or_stop_preprocessor: no preprocessor task running, so we will start one.")
         action = preprocessor_action_start
 
     if action is preprocessor_action_start:
-        # TODO: get filenames from GUI
-        # start_preprocessor(output_file, *input_files)
-        start_preprocessor("temp.pickle", "rawdata/100000_most_relevant_refs_of_hydrogen_productionzip/savedrecs.bib")
+        output_file = unbox(preprocessor_output_file_box)
+        input_files = unbox(preprocessor_input_files_box)
+        logger.info(f"start_or_stop_preprocessor: output file is '{output_file}', input files are '{input_files}'.")
+        if output_file and input_files:  # filenames specified?
+            logger.info("start_or_stop_preprocessor: filenames have been specified. Invoking preprocessor.")
+            start_preprocessor(output_file, *input_files)
+        else:
+            logger.info("start_or_stop_preprocessor: input, output or both filenames missing. Cannot start preprocessor.")
     else:
         stop_preprocessor()
 
@@ -1585,6 +1728,15 @@ with timer() as tim:
                 with dpg.tooltip("open_file_button", tag="open_file_tooltip"):  # tag
                     dpg.add_text("Open dataset [Ctrl+O]", tag="open_file_tooltip_text")
 
+                dpg.add_button(label=fa.ICON_DOWNLOAD,
+                               tag="open_preprocessor_window_button",
+                               callback=toggle_preprocessor_window,
+                               indent=gui_config.toolbutton_indent,
+                               width=gui_config.toolbutton_w)
+                dpg.bind_item_font("open_preprocessor_window_button", icon_font_solid)  # tag
+                with dpg.tooltip("open_preprocessor_window_button", tag="open_preprocessor_window_tooltip"):  # tag
+                    dpg.add_text("Import BibTeX files [Ctrl+I]", tag="open_preprocessor_window_tooltip_text")
+
                 toolbar_separator()
 
                 # Zoom controls
@@ -1791,6 +1943,7 @@ with timer() as tim:
 
                         _create_highlight_scatter_series()  # some utilities may access the highlight series before the app has completely booted up
 
+    # Word cloud display.
     with dpg.window(show=False, modal=False, no_title_bar=False, tag="word_cloud_window",
                     label="Word cloud",
                     no_scrollbar=True, autosize=True) as word_cloud_window:
@@ -1805,12 +1958,13 @@ with timer() as tim:
             with dpg.tooltip("word_cloud_save_button", tag="word_cloud_save_tooltip"):  # tag
                 dpg.add_text("Save word cloud as PNG [Ctrl+S]", tag="word_cloud_save_tooltip_text")
 
-    # TODO: WIP: Preprocessor integration (for importing BibTeX files from the GUI). Mockup, hidden, inaccessible for now.
+    # Preprocessor (BibTeX import) integration. This allows invoking the BibTeX importer from the GUI.
     with dpg.window(show=False, modal=False, no_title_bar=False, tag="preprocessor_window",
                     label="BibTeX import",
                     no_scrollbar=True, autosize=True) as preprocessor_window:
         with dpg.group(horizontal=False):
             def preprocessor_separator():
+                """Add a horizontal line with a good-looking amount of vertical space around it. Used in the preprocessor (BibTeX import) window."""
                 dpg.add_spacer(width=gui_config.preprocessor_w, height=2)  # leave some vertical space
                 with dpg.drawlist(width=gui_config.preprocessor_w, height=1):
                     dpg.draw_line((0, 0), (gui_config.preprocessor_w - 1, 0), color=(140, 140, 140, 255), thickness=1)
@@ -1819,33 +1973,63 @@ with timer() as tim:
             # dpg.add_text("[To start, select files, and then click the play button.]", color=(140, 140, 140, 255))
             dpg.add_spacer(width=gui_config.preprocessor_w)  # ensure window width
 
+            def update_save_import_gui_table():
+                """In the preprocessor (BibTeX import) window, update the output filename in the GUI.
+
+                Called by `_save_import_callback` when the save import file dialog closes.
+                """
+                for child in dpg.get_item_children("save_import_table", slot=1):  # This won't affect table columns, because they live in a different slot.
+                    dpg.delete_item(child)
+
+                preprocessor_output_file = unbox(preprocessor_output_file_box)
+                with dpg.table_row(parent="save_import_table"):
+                    if preprocessor_output_file:
+                        dpg.add_text(os.path.basename(preprocessor_output_file), color=(140, 140, 140, 255))
+                    else:
+                        dpg.add_text("[not selected]", color=(140, 140, 140, 255))
+
+            def update_open_import_gui_table():
+                """In the preprocessor (BibTeX import) window, update the input filenames in the GUI.
+
+                Called by `_open_import_callback` when the open import file dialog closes.
+                """
+                for child in dpg.get_item_children("open_import_table", slot=1):  # This won't affect table columns, because they live in a different slot.
+                    dpg.delete_item(child)
+
+                preprocessor_input_files = unbox(preprocessor_input_files_box)
+                if preprocessor_input_files:
+                    for preprocessor_input_file in preprocessor_input_files:
+                        with dpg.table_row(parent="open_import_table"):
+                            dpg.add_text(os.path.basename(preprocessor_input_file), color=(140, 140, 140, 255))
+                else:
+                    with dpg.table_row(parent="open_import_table"):
+                        dpg.add_text("[not selected]", color=(140, 140, 140, 255))
+
             with dpg.group(horizontal=True):
-                # TODO: wire the preprocessor "save as" callback
                 dpg.add_button(label=fa.ICON_HARD_DRIVE,
                                tag="preprocessor_save_button",
-                               width=gui_config.toolbutton_w)
+                               width=gui_config.toolbutton_w,
+                               callback=show_save_import_dialog)
                 dpg.bind_item_font("preprocessor_save_button", icon_font_solid)  # tag
                 with dpg.tooltip("preprocessor_save_button", tag="preprocessor_save_tooltip"):  # tag
-                    dpg.add_text("Select output file to save as", tag="preprocessor_save_tooltip_text")
+                    dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="preprocessor_save_tooltip_text")
 
-                with dpg.table(header_row=True, sortable=False, width=gui_config.preprocessor_w - gui_config.toolbutton_w - 11):
-                    dpg.add_table_column(label="Output file")
-                    with dpg.table_row():
-                        dpg.add_text("[not selected]", color=(140, 140, 140, 255))
+                with dpg.table(header_row=True, sortable=False, width=gui_config.preprocessor_w - gui_config.toolbutton_w - 11, tag="save_import_table"):
+                    dpg.add_table_column(label="Output dataset file")
+                update_save_import_gui_table()
 
             with dpg.group(horizontal=True):
-                # TODO: wire the preprocessor "select input files" callback
                 dpg.add_button(label=fa.ICON_FOLDER,
                                tag="preprocessor_select_input_files_button",
-                               width=gui_config.toolbutton_w)
+                               width=gui_config.toolbutton_w,
+                               callback=show_open_import_dialog)
                 dpg.bind_item_font("preprocessor_select_input_files_button", icon_font_solid)  # tag
                 with dpg.tooltip("preprocessor_select_input_files_button", tag="preprocessor_select_input_files_tooltip"):  # tag
-                    dpg.add_text("Select input BibTeX files", tag="preprocessor_select_input_files_tooltip_text")
+                    dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="preprocessor_select_input_files_tooltip_text")
 
-                with dpg.table(header_row=True, sortable=False, width=gui_config.preprocessor_w - gui_config.toolbutton_w - 11):
+                with dpg.table(header_row=True, sortable=False, width=gui_config.preprocessor_w - gui_config.toolbutton_w - 11, tag="open_import_table"):
                     dpg.add_table_column(label="Input BibTeX files")
-                    with dpg.table_row():
-                        dpg.add_text("[not selected]", color=(140, 140, 140, 255))
+                update_open_import_gui_table()
 
             dpg.add_spacer(width=gui_config.preprocessor_w, height=2)  # leave some vertical space
 
@@ -1853,12 +2037,12 @@ with timer() as tim:
                 dpg.add_button(label=fa.ICON_PLAY,
                                tag="preprocessor_startstop_button",
                                width=gui_config.toolbutton_w,
-                               callback=startstop_preprocessor,
+                               callback=start_or_stop_preprocessor,
                                enabled=True)
                 dpg.bind_item_font("preprocessor_startstop_button", icon_font_solid)  # tag
                 dpg.bind_item_theme("preprocessor_startstop_button", "disablable_button_theme")  # tag
                 with dpg.tooltip("preprocessor_startstop_button", tag="preprocessor_startstop_tooltip"):  # tag
-                    dpg.add_text("Start BibTeX import", tag="preprocessor_startstop_tooltip_text")  # TODO: DRY duplicate definitions for labels
+                    dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="preprocessor_startstop_tooltip_text")  # TODO: DRY duplicate definitions for labels
 
             preprocessor_separator()
 
@@ -3721,6 +3905,7 @@ def _update_info_panel(*, task_env=None, env=None):
 hotkey_new_column = sym("next_column")
 hotkey_blank_entry = env(key_indent=0, key="", action_indent=0, action="", notes="")
 hotkey_help = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a dataset", notes=""),
+               env(key_indent=0, key="Ctrl+I", action_indent=0, action="Import BibTeX files", notes="Use this to create a dataset"),
                env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus search field", notes=""),
                env(key_indent=1, key="Enter", action_indent=0, action="Select search matches, and unfocus", notes="When search field focused"),
                env(key_indent=2, key="Shift+Enter", action_indent=1, action="Same, but add to selection", notes="When search field focused"),
@@ -3733,7 +3918,6 @@ hotkey_help = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="Ctrl+U", action_indent=0, action="Scroll to start of current cluster", notes='"up"'),
                env(key_indent=1, key="Ctrl+N", action_indent=0, action="Scroll to next cluster", notes=""),
                env(key_indent=1, key="Ctrl+P", action_indent=0, action="Scroll to previous cluster", notes=""),
-               hotkey_blank_entry,
                env(key_indent=0, key="Home", action_indent=0, action="Scroll to top", notes="When search field NOT focused"),
                env(key_indent=1, key="End", action_indent=0, action="Scroll to bottom", notes="When search field NOT focused"),
                env(key_indent=1, key="Page Up", action_indent=0, action="Scroll up", notes="When search field NOT focused"),
@@ -3867,41 +4051,14 @@ def make_help_window():
                 dpg_markdown.add_text(f'- {c_txt}You can use regular numbers in place of subscript/superscript numbers. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*. {c_end}')
                 dpg_markdown.add_text(f"{c_txt}When the search field is focused, the usual text editing keys are available (*Enter, Esc, Home, End, Shift-select, Ctrl+Left, Ctrl+Right, Ctrl+A, Ctrl+Z, Ctrl+Y*).{c_end}")
 
-def recenter_help_window():
-    """Reposition the built-in help card (if visible) so that it is centered in the viewport."""
-
-    if help_window is None:
-        return
-
-    main_window_w, main_window_h = utils.get_widget_size(main_window)  # Get the size of the main window, and hence also the viewport, in pixels.
-    logger.debug(f"recenter_help_window: Main window size is {main_window_w}x{main_window_h}.")
-
-    # # Render offscreen so we get the final size. Only needed if the size can change.
-    # dpg.set_item_pos(help_window,
-    #                  (main_window_w,
-    #                   main_window_h))
-    # dpg.show_item(help_window)
-    # logger.debug(f"recenter_help_window: After show command: Help window is visible? {dpg.is_item_visible(help_window)}.")
-    # dpg.split_frame()  # wait for render
-    #
-    # logger.debug(f"recenter_help_window: After wait for render: Help window is visible? {dpg.is_item_visible(help_window)}.")
-
-    w, h = utils.get_widget_size(help_window)
-    logger.debug(f"recenter_help_window: Help window size is {w}x{h}.")
-
-    # Center the help window in the viewport
-    dpg.set_item_pos(help_window,
-                     (max(0, (main_window_w - w) // 2),
-                      max(0, (main_window_h - h) // 2)))
-
 def show_help_window():
     """Show the built-in help card."""
     logger.debug("show_help_window: Ensuring help window exists.")
     make_help_window()
     logger.debug("show_help_window: Recentering help window.")
-    recenter_help_window()
+    recenter_window(help_window)
     logger.debug("show_help_window: Showing help window.")
-    dpg.show_item(help_window)  # For some reason, we need to do this *after* `set_item_pos` in modal mode, or this works only every other time (1, 3, 5, ...). Maybe a modal must be inside the viewport to successfully show it?
+    dpg.show_item(help_window)  # For some reason, we need to do this *after* `set_item_pos` for a modal window, or this works only every other time (1, 3, 5, ...). Maybe a modal must be inside the viewport to successfully show it?
     enter_modal_mode()
     logger.debug("show_help_window: Done.")
 dpg.set_item_callback("help_button", show_help_window)  # tag
@@ -3952,7 +4109,7 @@ def _resize_gui():
     logger.debug("_resize_gui: Updating info panel current item on-screen coordinates.")
     update_current_item_info()
     logger.debug("_resize_gui: Recentering help window.")
-    recenter_help_window()
+    recenter_window(help_window)
     logger.debug("_resize_gui: Updating annotation tooltip.")
     update_mouse_hover(force=True, wait=False)
     logger.debug("_resize_gui: Rebuilding dimmer overlay.")
@@ -4179,7 +4336,8 @@ def hotkeys_callback(sender, app_data):
     #  - The tooltips wherever the GUI elements are created or updated (search for e.g. "[F9]", may appear in multiple places)
     #  - The help window
 
-    if key == dpg.mvKey_F11:  # de facto standard hotkey for toggle fullscreen. Should be available whether or not a modal window is open.
+    # Hotkeys that are always available, regardless of any dialogs (even if modal)
+    if key == dpg.mvKey_F11:  # de facto standard hotkey for toggle fullscreen
         toggle_fullscreen()
 
     # Hotkeys while the Help card is shown
@@ -4189,7 +4347,8 @@ def hotkeys_callback(sender, app_data):
         return
 
     # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
-    elif is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible():
+    elif (is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible() or
+          is_open_import_dialog_visible() or is_save_import_dialog_visible()):
         return
 
     # Hotkeys while the word cloud viewer is shown
@@ -4197,6 +4356,19 @@ def hotkeys_callback(sender, app_data):
         if ctrl_pressed and key == dpg.mvKey_S:
             show_save_word_cloud_dialog()
             return
+
+    # Hotkeys while the "import bibTeX files" window is shown
+    elif dpg.is_item_visible("preprocessor_window"):  # tag
+        if ctrl_pressed:
+            if key == dpg.mvKey_O:
+                show_open_import_dialog()
+                return
+            elif key == dpg.mvKey_S:
+                show_save_import_dialog()
+                return
+            elif key == dpg.mvKey_Return:
+                start_or_stop_preprocessor()
+                return
 
     # Hotkeys for main window, while no modal window is shown
     if dpg.is_item_focused("search_field") and key == dpg.mvKey_Return:  # tag  # regardless of modifier state, to allow Shift+Enter and Ctrl+Enter.
@@ -4238,6 +4410,8 @@ def hotkeys_callback(sender, app_data):
             dpg.focus_item("search_field")  # tag
         elif key == dpg.mvKey_O:
             show_open_file_dialog()
+        elif key == dpg.mvKey_I:
+            toggle_preprocessor_window()
         elif key == dpg.mvKey_Home:
             reset_plotter_zoom()
         elif key == dpg.mvKey_N:
