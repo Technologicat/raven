@@ -14,7 +14,7 @@ This GUI app performs visualization only. See `extract.py` to analyze your data 
 # Any line with at least one string-literal reference to any DPG GUI widget tag is commented with "tag" (no quotes), to facilitate searching.
 # To find all, search for both "# tag" (the comment) and "tag=" (widget definitions).
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
