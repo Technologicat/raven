@@ -387,7 +387,7 @@ class FileDialog:
             for item in dpg.get_item_children(root, slot=1):
                 _deselect_recursive(item)
 
-        def open_file(sender, app_data, user_data):
+        def open_file(sender, app_data, user_data):  # `user_data`: [name, fullpath, timestamp, size]
             ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
             # Detect double-click.
