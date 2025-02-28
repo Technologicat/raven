@@ -19,6 +19,8 @@
 
 - fdialog: least surprise: if the user has picked a unique file extension in the file extension filter combo, use that as the default file extension when in save mode. If the current choice in that combo has several file extensions, and/or has one or more wildcards, then use the API-provided default file extension.
 
+- Import BibTeX: use multiple columns for input file table in the GUI if we have very many input files.
+
 
 ## v0.2 and later
 
@@ -31,7 +33,9 @@
     - PDF conference abstracts (WIP, in beta).
       - Improve robustness. Maybe needs a bigger LLM?
   - Could be useful:
-    - arXiv, to stay on top of developments in AI.
+    - Semantic Scholar
+    - Scopus
+    - ERIC (educational sciences / didactics)
 
 - **Filtering**. Real-time view filtering, e.g. by authors or year range.
   - Needs the full list of authors ("Author, Other, Someone"), not just the summarized version ("Author et al."). The proprocessor doesn't currently save that to the dataset.
@@ -86,6 +90,7 @@
   - Images.
     - Use filename as title, generate text description via an AI model. Compute the sentence embedding from the generated text description.
     - Can use the same AI models that Stable Diffusion frontends do; CLIP to describe photos, and Deepbooru to describe anime/cartoon art. Make this configurable.
+    - Could also use a multimodal embedding model (text/images → latent), if available.
     - Show the generated text description as the abstract. Show the images, too: in the info panel, and as a thumbnail (Lanczos downscaled for best quality) in the annotation tooltip.
     - This allows us to go truly multimodal: now, add to the same dataset some text datapoints that talk of the same topics that are shown in the images... if the text embedding model is good, then e.g. a Wikipedia article for "Apollo program" and an image of a Saturn V rocket should automatically end up near each other on the semantic map.
   - Audio.
@@ -95,6 +100,9 @@
   - To check: has anyone trained an embedder for mathematical equations?
   - Need a document type field, and GUI support for showing different kinds of assets in the annotation tooltip and in the info panel.
   - Large files (images, audio, full PDFs) shouldn't be embedded into the dataset file, but rather just linked to.
+
+- Chatbot integration.
+  - Would be useful to have a RAG-enabled LLM to "talk with the dataset". Needs major GUI work, though (to have usability on par with existing solutions such as SillyTavern).
 
 
 ### Small improvements
@@ -113,7 +121,9 @@
 
 - We can now import items that have no abstract. Think of how to generalize this to arbitrary missing fields, when we eventually allow the user to choose which fields to embed in the preprocessing step.
 
-- Generate report of full selection (without rendering it into the info panel).
+- The importer should detect duplicates (if reasonably possible), emit a warning, and ignore (or merge?) the duplicate entry.
+
+- Generate report of full selection (without rendering it into the info panel). The info panel is currently a bottleneck for large selections of data.
   - Hotkey: add Ctrl to the current hotkeys: Ctrl+F8 for plain text (whole selection), Ctrl+Shift+F8 for Markdown (whole selection)?
   - Need to separate the report generator from the info panel renderer (`_update_info_panel`) so that we can easily get data in the same format for the full selection.
 
