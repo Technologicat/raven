@@ -396,18 +396,18 @@ class FileDialog:
             double_clicked = (current_time - self.last_click_time < self.double_click_threshold)
             self.last_click_time = current_time
 
-            dpg.set_value(sender, False)  # unselect this item  (TODO: why? double-click handling?)
-
-            logger.debug(f"open_file: instance '{self.tag}' ({self.instance_tag}), sender is {sender} (tag '{dpg.get_item_alias(sender)}', type {dpg.get_item_type(sender)}), app_data = {app_data}, user_data = {user_data}, ctrl = {ctrl_pressed}, doubleclick = {double_clicked}")
+            logger.debug(f"open_file: instance '{self.tag}' ({self.instance_tag}), sender is {sender} (tag '{dpg.get_item_alias(sender)}', type {dpg.get_item_type(sender)}, value = {dpg.get_value(sender)}), app_data = {app_data}, user_data = {user_data}, ctrl = {ctrl_pressed}, doubleclick = {double_clicked}")
 
             # Multi selection
             if self.multi_selection and ctrl_pressed:
                 if dpg.get_value(sender) is True:
                     self.selected_files.append(user_data[1])
-                else:
+                elif user_data[1] in self.selected_files:
                     self.selected_files.remove(user_data[1])
             # Single selection
             else:
+                dpg.set_value(sender, False)  # unselect this item  (TODO: why? double-click handling?)
+
                 if double_clicked:
                     if user_data is not None and user_data[1] is not None:
                         if os.path.isdir(user_data[1]):
