@@ -19,7 +19,7 @@
 - **Semantic clustering**. Discover **vertically**: See how a field of science splits into topic groups. Explore similar papers.
 - **Fragment search**. Discover **horizontally**: E.g. find studies (across all topics) where some particular method has been used.
 - **Info panel**. Read the abstracts (if available) of the studies you discover, right there in the GUI.
-- **Open source**. 3-clause BSD license.
+- **Open source**. 2-clause BSD license.
 
 *Fragment search* means that e.g. *"cat photo"* matches *"photocatalytic"*. This is the same kind of search provided by the Firefox address bar, or by the `helm-swoop` function in Emacs. Currently the search looks only in the title field of the data; this may change in the future.
 
