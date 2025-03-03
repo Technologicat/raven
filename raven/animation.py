@@ -833,8 +833,10 @@ class ScrollEndFlasher(Overlay, Animation):
 
     def hide(self):
         """Hide the overlay immediately. Called automatically by `finish` when the animation ends."""
-        dpg.hide_item(self.window_top)
-        dpg.hide_item(self.window_bottom)
+        if self.window_top is not None:
+            dpg.hide_item(self.window_top)
+        if self.window_bottom is not None:
+            dpg.hide_item(self.window_bottom)
 
     def render_frame(self, t):
         """Called automatically by `Animator`."""
