@@ -23,6 +23,8 @@
 
 - Import BibTeX: indicate in the GUI if the import raised an exception (e.g. CuPy failed to load for NLP analysis because `env.sh` hadn't been sourced).
 
+- Vendor the `arxiv2bib` tool? As of early 2025, it hasn't been updated in 8 years.
+
 
 ## v0.2 and later
 
