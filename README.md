@@ -223,6 +223,20 @@ Useful especially for AI/CS topics.
 
 The external [arxiv2bib](https://github.com/nathangrigg/arxiv2bib) tool produces a BibTeX bibliography, when given a list of arXiv document IDs. It will pull the relevant data from arXiv.
 
+If you have a directory full of PDFs downloaded from arXiv, with the identifier somewhere in the filename, see `python -m raven.arxiv2id -h`. This tool, included with Raven, can extract the arXiv identifiers from the filenames, in a format suitable for handing over to `arxiv2bib`. Only unique identifiers will be returned.
+
+Example:
+
+```bash
+conda activate raven
+python -m raven.arxiv2id >arxiv_ids.txt  # run this in a directory that has arXiv PDF files
+arxiv2bib <arxiv_ids.txt >arxiv_papers.bib
+```
+
+This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into Raven.
+
+**NOTE**: if you have very many arXiv papers in the same directory, `arxiv2bib` may fail with an HTTP 414 error (URI too long). In that case, splitting the input into smaller filesets helps.
+
 
 ### WOS (Web of Science)
 
