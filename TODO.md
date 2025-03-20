@@ -67,6 +67,16 @@
     - Condense each abstract into one sentence with just the most important main point.
     - Is it better to make abstractive summaries with an LLM, or a summarization-specific AI?
     - To evaluate summary accuracy, `seahorse-large` based on `mT5-Large` (6 models, 5 GB each)? https://github.com/google-research-datasets/seahorse
+  - Scaffold to produce guaranteed-correct citations.
+    - In AI summarization, process each document separately to eliminate cross-contamination.
+     - Check each summary via LLM to guard against hallucinations. Does all the information in the summary come from the original text? (It's not published yet, but we already have a prototype prompt to do this.)
+    - Whenever we perform a search (whether keyword-based on semantic vector lookup), we know which items matched. Keep track of their IDs in the scaffold.
+    - When answering a question based on documents:
+      - Single source document: in the scaffold, collect that document to an internal reference list. Paste the document to the LLM context and ask the question. Append a citation to the end of the text produced by the LLM. (e.g. "[1]")
+      - Multiple source documents: in the scaffold, collect those documents to an internal reference list. Paste their *summaries* into the LLM context (to save on amount of context used) and ask the question. Append a citation to *all those documents* to the end of the text produced by the LLM. (e.g. "[1, 2, 3]")
+      - Validate aggressively. Use heuristics in scaffold, plus LLM analysis. Use techniques from literature to improve quality of LLM analysis (ensembles, debate, multi-persona analysis, ...).
+    - At the end, use the collected internal reference list to write the actual list of cited documents programmatically.
+      - For each citation, show the matched fragment somewhere?
 
 - **Extend existing dataset**.
   - Two separate new features:
@@ -108,6 +118,8 @@
 - Chatbot integration.
   - Would be useful to have a RAG-enabled LLM to "talk with the dataset". Needs major GUI work, though (to have usability on par with existing solutions such as SillyTavern).
 
+- PDF import: OCR. Shop around for AI models.
+
 
 ### Small improvements
 
@@ -116,6 +128,11 @@
 - Find a good font for rendering scientific Unicode text.
   - InterTight renders subscript numbers as superscript numbers, which breaks the rendering of chemistry formulas.
   - OpenSans is missing the subscript-x glyph, which also breaks the rendering of chemistry formulas (e.g. "NOₓ").
+
+- Importer/preprocessor:
+  - Make it configurable which fields to use for the semantic embedding.
+  - Make the stopword list configurable (text file).
+  - Investigate more advanced NLP methods to improve the quality of the automatically extracted keyword list.
 
 - Fragment search for authors, year, abstract, ...so maybe make configurable which fields to search in. Add checkboxes (and a select/unselect all button) below the search bar?
 
@@ -170,6 +187,8 @@
 
 - Drag'n'drop from the OS file manager into the Raven window to open a dataset.
   - As of DPG 2.0.0, drag'n'drop from an external application doesn't seem to be implemented for Linux. For Windows there's an add-on. We need a cross-platform solution. Keep an eye on this.
+
+- Detect novelty of research, to automatically identify promising research directions. Maybe something like the inverse of the number of semantically nearby items in dataset? (Dense regions, less novelty; sparse regions, more novelty.)
 
 
 ### Technical improvements
