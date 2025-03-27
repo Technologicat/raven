@@ -587,7 +587,15 @@ def extract_keywords(input_data, max_vis_kw=6):
                 with timer() as tim2:
                     # NOTE: make sure to `source env.sh` first, or this won't find the CUDA runtime.
                     spacy.require_gpu()
-                    nlp_pipeline = spacy.load(config.spacy_model)
+                    try:
+                        nlp_pipeline = spacy.load(config.spacy_model)
+                    except OSError:
+                        # https://stackoverflow.com/questions/62728854/how-to-place-spacy-en-core-web-md-model-in-python-package
+                        update_status_and_log("Downloading language model for spaCy (don't worry, this will only happen once)...", log_indent=2)
+                        from spacy.cli import download
+                        download(config.spacy_model)
+                        nlp_pipeline = spacy.load(config.spacy_model)
+                        update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
                     # analysis = nlp_pipeline.analyze_pipes(pretty=True)  # print pipeline overview
                     # nlp_pipeline.disable_pipe("parser")
                     # nlp_pipeline.enable_pipe("senter")
