@@ -186,14 +186,14 @@ If you prefer to run your BibTeX imports without opening the GUI (on a headless 
 To preprocess one or more BibTeX databases into a dataset file named `mydata.pickle`:
 
 ```bash
-conda activate raven
+$(pdm venv activate)
 python -m raven.preprocess mydata.pickle file1.bib file2.bib ...
 ```
 
 Instead of `python -m raven.preprocess`, you can also just use the command `raven-preprocess` (installed when you install the software):
 
 ```bash
-conda activate raven
+$(pdm venv activate)
 raven-preprocess mydata.pickle file1.bib file2.bib ...
 ```
 
@@ -228,7 +228,7 @@ If you have a directory full of PDFs downloaded from arXiv, with the identifier 
 Example:
 
 ```bash
-conda activate raven
+$(pdm venv activate)
 python -m raven.arxiv2id >arxiv_ids.txt  # run this in a directory that has arXiv PDF files
 arxiv2bib <arxiv_ids.txt >arxiv_papers.bib
 ```
@@ -247,7 +247,7 @@ Useful for the engineering sciences.
 To import WOS into BibTeX, Raven provides a custom command-line tool. To use it:
 
 ```bash
-conda activate raven
+$(pdm venv activate)
 python -m raven.wos2bib input1.txt ... inputn.txt 1>output.bib 2>log.txt
 ```
 
@@ -274,7 +274,7 @@ For this use case, we include a custom AI-based command-line tool.
 To import PDF into BibTeX:
 
 ```bash
-conda activate raven
+$(pdm venv activate)
 python -m raven.pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>output.bib 2>log.txt
 ```
 
@@ -289,7 +289,7 @@ The directory specified by `-o` is ignored while descending into subdirectories 
 To continue a partial import (with some files already having been moved into `done`, and some remaining):
 
 ```bash
-conda activate raven
+$(pdm venv activate)
 python -m raven.pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>>output.bib 2>>log.txt
 ```
 
@@ -323,14 +323,14 @@ Support for LLM authentication (API key) has not been implemented yet, so whiche
 First, if the `raven-visualizer` app is not yet running, start it:
 
 ```bash
-conda activate raven  # see Installation below
+$(pdm venv activate)  # see Installation below
 python -m raven.app
 ```
 
 Instead of `python -m raven.app`, you can also just use the command `raven-visualizer` (installed when you install the software):
 
 ```bash
-conda activate raven  # see Installation below
+$(pdm venv activate)  # see Installation below
 raven-visualizer
 ```
 
@@ -400,9 +400,9 @@ The file extension (`.png`) is added automatically to the filename you specify.
 
 Raven is a traditional desktop app. It needs to be installed.
 
-Currently, this takes the form of installing a `conda` environment, and then installing the app via PyPI. At least at this stage of development, app packaging into a single executable is not a priority.
+Currently, this takes the form of installing the app and dependencies into a venv (virtual environment). At least at this stage of development, app packaging into a single executable is not a priority.
 
-Raven has been developed and tested on Linux Mint. It should work in any environment that has `bash` and `conda` ([miniconda](https://docs.anaconda.com/miniconda/) recommended), including Windows and Mac OS X.
+Raven has been developed and tested on Linux Mint. It should work in any environment that has `bash` and `pdm`.
 
 ## From PyPI
 
@@ -410,11 +410,74 @@ Raven has been developed and tested on Linux Mint. It should work in any environ
 
 ## From source
 
+Raven uses [PDM](https://pdm-project.org/en/latest/) to manage its dependencies. This allows easy installation of the app and its dependencies into a venv (virtual environment) that is local to this one app, so that installing Raven will not break your other apps that use machine-learning libraries (which tend to be very version-sensitive).
+
+If you do not have PDM, you will need to install it first (don't worry; it won't break `pip`, `poetry`, or other similar tools):
+
 ```bash
-conda create -n "raven" python=3.10
-conda activate raven
-pip install -r requirements.txt
-pip install .
+pip install pdm
+```
+
+Then, to install Raven, go into the Raven folder in a terminal. Initialize the new venv, installing the required Python version into it:
+
+```bash
+pdm python install --min
+```
+
+The venv will be installed in the `.venv` hidden subfolder of the Raven folder.
+
+Then, install the dependencies (there is no `requirements.txt`; the dependency list lives in `pyproject.toml`):
+
+```bash
+pdm sync
+```
+
+Installing dependencies may take a long time (up to 15 minutes), because `torch` and the NVIDIA packages (for CUDA support) are rather large.
+
+You will need the proprietary NVIDIA drivers to enable CUDA. How to install them depends on your OS.
+
+**:exclamation: Currently Raven uses CUDA 12.x. Make sure your NVIDIA drivers support this version. :exclamation:**
+
+Once you have the NVIDIA drivers, you can check if Raven detects your CUDA installation:
+
+```bash
+python -m raven.check_cuda
+```
+
+This command will print some system info into the terminal, saying whether it found CUDA, and if it did, which device CUDA is running on.
+
+Now the installation should be complete.
+
+In a terminal in the Raven folder, Raven's venv can be activated with the command:
+
+```bash
+$(pdm venv activate)
+```
+
+Note the exec syntax `$(...)`; the command `pdm venv activate` just prints the actual internal activation command.
+
+With the venv loaded, you can enable CUDA support by:
+
+```bash
+source env.sh
+```
+
+This sets up the library paths and `$PATH` so that Raven finds the CUDA libraries.
+
+If you have multiple GPUs, use the `CUDA_VISIBLE_DEVICES` environment variable to set which GPU Raven should use. We provide an example script [`run-on-internal-gpu.sh`](run-on-internal-gpu.sh), meant for a laptop with a Thunderbolt eGPU (external GPU), that should force Raven to run on the *internal* GPU (useful e.g. if your eGPU is in use by a self-hosted LLM). Usage is:
+
+```bash
+source run-on-internal-gpu.sh
+```
+
+**:exclamation: This is the (early) state of things as of March 2025. We aim to provide easier startup scripts in the future. :exclamation:**
+
+Whenever Raven's venv is active, you can call the entrypoints such as `raven-visualizer`.
+
+To deactivate the venv (to exit from the Raven environment, without exiting your terminal session), you can use the command:
+
+```bash
+deactivate
 ```
 
 ### Uninstall
@@ -423,7 +486,8 @@ pip install .
 pip uninstall raven-visualizer
 ```
 
-Or just delete the `raven` venv.
+Or just delete the venv, located in the `.venv` subfolder of the Raven folder.
+
 
 # Limitations
 
@@ -459,7 +523,7 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
   - Toolbutton icons: [Font Awesome](https://github.com/FortAwesome/Font-Awesome) v6.6.0.
   - Word cloud renderer: [word_cloud](https://github.com/amueller/word_cloud).
 
-Note that installing Raven will auto-install dependencies into the same `conda` environment. This list is here just to provide a flavor of the kinds of parts needed to build a tool like this.
+Note that installing Raven will auto-install dependencies into the same venv (virtual environment). This list is here just to provide a flavor of the kinds of parts needed to build a tool like this.
 
 
 # Other similar tools
