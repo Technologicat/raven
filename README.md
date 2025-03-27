@@ -235,7 +235,9 @@ arxiv2bib <arxiv_ids.txt >arxiv_papers.bib
 
 This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into Raven.
 
-**NOTE**: If you have hundreds or more of arXiv papers in the same directory, `arxiv2bib` may fail with an HTTP 414 error (URI too long). In that case, splitting the input into smaller filesets helps.
+**NOTE**: If you have hundreds or more of arXiv papers in the same directory, `arxiv2bib` may fail with an HTTP 414 error (URI too long). In that case, splitting the input into smaller filesets (about 100 each) helps.
+
+I have [sent a PR](https://github.com/nathangrigg/arxiv2bib/pull/12) to fix the issue in `arxiv2bib`. In the meantime, it is possibly to use [this fork](https://github.com/Technologicat/arxiv2bib/) of the tool.
 
 
 ### WOS (Web of Science)
