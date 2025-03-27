@@ -1,4 +1,4 @@
-"""Get the arXiv identifiers for all arXiv PDF files in the current directory.
+"""Get the arXiv identifiers for all arXiv PDF files in the given directory.
 
 We assume that the identifier (yymm.xxxxx) is somewhere in the filename.
 
