@@ -1,57 +1,64 @@
 #!/bin/bash
 #
 # Set up CUDA paths, required for some Python libraries such as spaCy in GPU mode.
-
-# source ~/Documents/JAMK/fenics-stuff/extrafeathers/demo/vae/env.sh
-
-# We need some pip packages from NVIDIA:
-# https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html
-#   nvidia-tensorrt  (should pull in cuda_runtime, cuda_nvrtc, cublas, cudnn)
-#      nvidia_cuda_nvrtc_cu11  (in case it doesn't, this is the package name)
-#      nvidia_cuda_runtime_cu11
-#      nvidia_cublas_cu11
-#      nvidia_cudnn_cu11
-#   nvidia_cufft_cu11  (with appropriate cuda version; check ~/.local/lib/python3.10/site-packages/nvidia*)
-#   nvidia_curand_cu11
-#   nvidia_cusolver_cu11
-#   nvidia_cusparse_cu11
-#   nvidia_cuda_nvcc_cu11
+# To use:
 #
-# or ..._cu12, or whatever the current version is.
-#
-# May need to install specific versions, e.g.
-#   pip install nvidia_cudnn_cu11==8.6.0.163
-# (see error messages, if any, produced when running TensorFlow; should say if there is a version mismatch)
-#
-# Here is a semi-recent all-in-one install command:
-#     pip install nvidia_cuda_nvrtc_cu12 nvidia_cuda_runtime_cu12 nvidia_cublas_cu12 nvidia_cudnn_cu12 nvidia_cufft_cu12 nvidia_curand_cu12 nvidia_cusolver_cu12 nvidia_cusparse_cu12 nvidia_cuda_nvcc_cu12
+#     $(pdm venv activate)
+#     source env.sh
 
-# ptxas
-export PATH=$PATH:~/.local/lib/python3.10/site-packages/nvidia/cuda_nvcc/bin
-# cuda directory containing nvvm/libdevice/libdevice.10.bc
-export XLA_FLAGS=--xla_gpu_cuda_data_dir=/home/jje/.local/lib/python3.10/site-packages/nvidia/cuda_nvcc
+# Get the directory of this script
+# https://stackoverflow.com/a/246128
+SOURCE=${BASH_SOURCE[0]}
+while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+    DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+    SOURCE=$(readlink "$SOURCE")
+    [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
 
-# libcuda.so.1
-# This is the system libcuda from libnvidia-compute-xxx, where xxx is the version number (e.g. 525).
+# --------------------------------------------------------------------------------
+# Config
+
+# Location of Raven's venv, installed by PDM when you "pdm update".
+VENV_BASE="$DIR/.venv"
+
+# The version of Python installed in that venv.
+PYTHON_VERSION="3.10"
+
+# Where that Python's packages reside.
+SITE_PACKAGES="$VENV_BASE/lib/python3.10/site-packages"
+
+# --------------------------------------------------------------------------------
+# Set up the environment variables
+
+# Add `ptxas` executable to path
+export PATH=$PATH:$SITE_PACKAGES/nvidia/cuda_nvcc/bin
+
+# The CUDA directory that contains `nvvm/libdevice/libdevice.10.bc`
+export XLA_FLAGS=--xla_gpu_cuda_data_dir=$SITE_PACKAGES/nvidia/cuda_nvcc
+
+# Where to find `libcuda.so.1`
+# This is the system `libcuda` from OS package `libnvidia-compute-xxx`, where xxx is the version number (e.g. 545).
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/nvidia/cuda_runtime/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/nvidia/cublas/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/nvidia/cuda_nvrtc/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/nvidia/cudnn/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/nvidia/cufft/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/nvidia/curand/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/nvidia/cusolver/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/nvidia/cusparse/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/tensorrt/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.local/lib/python3.10/site-packages/tensorrt_libs/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cuda_runtime/lib/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cuda_nvrtc/lib/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cublas/lib/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cudnn/lib/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cufft/lib/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/curand/lib/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cusolver/lib/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cusparse/lib/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/tensorrt/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/tensorrt_libs/
 
 CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))
 export LD_LIBRARY_PATH=$CUDNN_PATH/lib:$LD_LIBRARY_PATH
 
-
 # Test if we set up everything correctly
 python -c "import cupy; import cupyx"
 if [ $? -ne 0 ]; then
-    echo -ne "Error setting up CUDA\n"
+    echo -ne "Error setting up CUDA; please check the contents of `env.sh`.\n"
+else
+    echo -ne "Environment setup complete. You can now start Raven.\n"
 fi
