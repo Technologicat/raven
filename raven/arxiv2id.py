@@ -1,6 +1,6 @@
 """Get the arXiv identifiers for all arXiv PDF files in the current directory.
 
-We assume that the identifier (yymm.xxxix) is somewhere in the filename.
+We assume that the identifier (yymm.xxxxx) is somewhere in the filename.
 
 The non-verbose (default) output can be handed to `arxiv2bib` (https://github.com/nathangrigg/arxiv2bib)
 to create a BibTeX bibliography of those papers (by auto-downloading metadata from arXiv).
