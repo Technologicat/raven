@@ -26,39 +26,39 @@ VENV_BASE="$DIR/.venv"
 PYTHON_VERSION="3.10"
 
 # Where that Python's packages reside.
-SITE_PACKAGES="$VENV_BASE/lib/python3.10/site-packages"
+SITE_PACKAGES="${VENV_BASE}/lib/python${PYTHON_VERSION}/site-packages"
 
 # --------------------------------------------------------------------------------
 # Set up the environment variables
 
 # Add `ptxas` executable to path
-export PATH=$PATH:$SITE_PACKAGES/nvidia/cuda_nvcc/bin
+export PATH=$PATH:${SITE_PACKAGES}/nvidia/cuda_nvcc/bin
 
 # The CUDA directory that contains `nvvm/libdevice/libdevice.10.bc`
-export XLA_FLAGS=--xla_gpu_cuda_data_dir=$SITE_PACKAGES/nvidia/cuda_nvcc
+export XLA_FLAGS=--xla_gpu_cuda_data_dir=${SITE_PACKAGES}/nvidia/cuda_nvcc
 
 # Where to find `libcuda.so.1`
-# This is the system `libcuda` from OS package `libnvidia-compute-xxx`, where xxx is the version number (e.g. 545).
+# This is the system `libcuda` from OS package `libnvidia-compute-xxx`, where xxx is the major version number of your NVIDIA drivers (e.g. 545).
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cuda_runtime/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cuda_nvrtc/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cublas/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cudnn/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cufft/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/curand/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cusolver/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/nvidia/cusparse/lib/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/tensorrt/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SITE_PACKAGES/tensorrt_libs/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/nvidia/cuda_runtime/lib/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/nvidia/cuda_nvrtc/lib/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/nvidia/cublas/lib/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/nvidia/cudnn/lib/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/nvidia/cufft/lib/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/nvidia/curand/lib/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/nvidia/cusolver/lib/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/nvidia/cusparse/lib/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/tensorrt/
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${SITE_PACKAGES}/tensorrt_libs/
 
-CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))
-export LD_LIBRARY_PATH=$CUDNN_PATH/lib:$LD_LIBRARY_PATH
+CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn; print(nvidia.cudnn.__file__)"))
+export LD_LIBRARY_PATH=${CUDNN_PATH}/lib:${LD_LIBRARY_PATH}
 
 # Test if we set up everything correctly
 python -c "import cupy; import cupyx"
 if [ $? -ne 0 ]; then
     echo -ne "Error setting up CUDA; please check the contents of `env.sh`.\n"
 else
-    echo -ne "Environment setup complete. You can now start Raven.\n"
+    echo -ne "CUDA environment setup complete. You can now start Raven.\n"
 fi
