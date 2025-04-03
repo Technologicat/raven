@@ -17,7 +17,7 @@ def is_command_available(command):
     except Exception:
         return False
 
-def check_cuda():
+def main():
     print("CUDA Setup Checker")
     print("Checking dependencies...")
 
@@ -80,4 +80,4 @@ def check_cuda():
     print(f"   PyTorch version: {torch.__version__}")
 
 if __name__ == "__main__":
-    check_cuda()
+    main()

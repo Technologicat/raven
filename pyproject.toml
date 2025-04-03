@@ -74,7 +74,7 @@ Repository = "https://github.com/Technologicat/raven"
 
 [project.scripts]
 raven-arxiv2id = "raven.arxiv2id:main"
-raven-check-cuda = "raven.check_cuda:check_cuda"
+raven-check-cuda = "raven.check_cuda:main"
 raven-preprocess = "raven.preprocess:main"
 raven-wos2bib = "raven.wos2bib:main"
 raven-visualizer = "raven.app:main"
