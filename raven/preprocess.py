@@ -1045,7 +1045,7 @@ def init(executor):
         return
     bg = executor
     try:
-        task_manager = bgtask.TaskManager(name="preprocessor",  # TODO: name, clarity: "data_import"?
+        task_manager = bgtask.TaskManager(name="bibtex_importer",
                                           mode="concurrent",
                                           executor=bg)
     except Exception:
