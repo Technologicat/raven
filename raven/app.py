@@ -1116,14 +1116,6 @@ def update_preprocessor_status():
     dpg.configure_item("preprocessor_progress_bar", overlay=f"{percentage}%")
     # dpg.set_item_label("preprocessor_window", f"BibTeX import [running, {percentage}%]")  # TODO: would be nice to see status while minimized, but prevents dragging the window for some reason.
 
-def start_preprocessor(output_file, *input_files):
-    """Start the preprocessor (BibTeX import) to import `input_files` (.bib) into `output_file` (visualization dataset format, currently .pickle)."""
-    if preprocess.has_task():
-        return
-    dpg.show_item("preprocessor_progress_bar")
-    dpg.disable_item("preprocessor_startstop_button")  # Prevent multiple clicks: wait until the task actually starts before allowing the user to tell it to stop. The button will be re-enabled by the `started_callback`.
-    preprocess.start_task(preprocessor_started_callback, preprocessor_done_callback, output_file, *input_files)
-
 def preprocessor_started_callback(task_env):
     """Callback that fires when the preprocessor task (BibTeX import) actually starts.
 
@@ -1132,13 +1124,6 @@ def preprocessor_started_callback(task_env):
     dpg.set_item_label("preprocessor_startstop_button", fa.ICON_STOP)
     dpg.set_value("preprocessor_startstop_tooltip_text", "Cancel BibTeX import [Ctrl+Enter]")
     dpg.enable_item("preprocessor_startstop_button")
-
-def stop_preprocessor():
-    """Stop (cancel) the preprocessor task (BibTeX import), if any is running."""
-    if not preprocess.has_task():
-        return
-    dpg.disable_item("preprocessor_startstop_button")  # We must wait until the previous task actually exits before we can start a new one. The button will be re-enabled by the `done_callback`.
-    preprocess.cancel_task()
 
 def preprocessor_done_callback(task_env):
     """Callback that fires when the preprocessor (BibTeX import) task actually exits, via the `done_callback` mechanism.
@@ -1160,6 +1145,21 @@ def preprocessor_done_callback(task_env):
         finished = "cancelled"
     dpg.set_value("preprocessor_status_text", f"[Import {finished}. To start a new one, select files, and then click the play button.]")
     # dpg.set_item_label("preprocessor_window", "BibTeX import")  # TODO: DRY duplicate definitions for labels
+
+def start_preprocessor(output_file, *input_files):
+    """Start the preprocessor (BibTeX import) to import `input_files` (.bib) into `output_file` (visualization dataset format, currently .pickle)."""
+    if preprocess.has_task():
+        return
+    dpg.show_item("preprocessor_progress_bar")
+    dpg.disable_item("preprocessor_startstop_button")  # Prevent multiple clicks: wait until the task actually starts before allowing the user to tell it to stop. The button will be re-enabled by the `started_callback`.
+    preprocess.start_task(preprocessor_started_callback, preprocessor_done_callback, output_file, *input_files)
+
+def stop_preprocessor():
+    """Stop (cancel) the preprocessor task (BibTeX import), if any is running."""
+    if not preprocess.has_task():
+        return
+    dpg.disable_item("preprocessor_startstop_button")  # We must wait until the previous task actually exits before we can start a new one. The button will be re-enabled by the `done_callback`.
+    preprocess.cancel_task()
 
 def start_or_stop_preprocessor():
     """Button callback. Start or stop the preprocessor task (BibTeX import), using the input/output filenames currently selected in the GUI."""
