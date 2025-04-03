@@ -237,7 +237,7 @@ This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into 
 
 **NOTE**: If you have hundreds or more of arXiv papers in the same directory, `arxiv2bib` may fail with an HTTP 414 error (URI too long). In that case, splitting the input into smaller filesets (about 100 each) helps.
 
-I have [sent a PR](https://github.com/nathangrigg/arxiv2bib/pull/12) to fix the issue in `arxiv2bib`. In the meantime, it is possibly to use [this fork](https://github.com/Technologicat/arxiv2bib/) of the tool.
+The issue has been fixed, but the updated package has not been released yet. In the meantime, it is preferred to install the tool from [the `arxiv2bib` GitHub repo](https://github.com/nathangrigg/arxiv2bib).
 
 
 ### WOS (Web of Science)
