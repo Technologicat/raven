@@ -992,11 +992,6 @@ def summarize(input_data):
 
 # TODO: Return value for whether the background task succeeded or failed? (Can use the `task_env.done_callback` mechanism for this.)
 
-# TODO: Progress counter for background task
-#  - Total number of micro-steps (one input record during one loop = one micro-step), we'll know this once the input has been parsed.
-#  - Current micro-step number (increase by one at strategic locations).
-#  - Use this information to update progress bar in GUI.
-
 status_box = box("")  # status message for GUI to pull
 status_lock = threading.Lock()
 
