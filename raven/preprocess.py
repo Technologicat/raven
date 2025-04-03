@@ -10,7 +10,8 @@ For more, see::
 """
 
 __all__ = ["init",
-           "start_task", "has_task", "cancel_task"]
+           "start_task", "has_task", "cancel_task",
+           "result_successful", "result_cancelled", "result_errored"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +37,7 @@ import bibtexparser
 import spacy
 
 from unpythonic.env import env
-from unpythonic import box, dyn, islice, make_dynvar, timer, uniqify
+from unpythonic import box, dyn, islice, make_dynvar, sym, timer, uniqify
 
 # # To connect to the live REPL:  python -m unpythonic.net.client localhost
 # from unpythonic.net import server
@@ -445,7 +446,7 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
                               random_state=42,
                               low_memory=False)
         else:
-            assert False
+            raise ValueError(f"Unknown `config.vis_method` '{config.vis_method}'; valid: 'tsne', 'umap'; please check your `raven/config.py` and restart the app.")
     progress.tick()
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
@@ -995,6 +996,10 @@ def summarize(input_data):
 status_box = box("")  # status message for GUI to pull
 status_lock = threading.Lock()
 
+result_successful = sym("successful")
+result_cancelled = sym("cancelled")
+result_errored = sym("errored")
+
 class Progress:
     def __init__(self):
         """Progress counter for currently running import task."""
@@ -1063,7 +1068,7 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
                        have to wait in the queue for a short while, depending on
                        available resources in the executor).
 
-                       Return value is ignored.
+                       The return value of `started_callback` is ignored.
 
                        Useful e.g. for updating GUI status to show the task has started.
 
@@ -1072,10 +1077,20 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
                      If provided, must take a single `unpythonic.env.env` argument.
                      Called when the task exits.
 
-                     If the task completed successfully, `env.cancelled` will be `False`.
-                     If the task errored out or was cancelled, `env.cancelled` will be `True`.
+                     If the task completed successfully:
+                       - `env.result_code` will be `result_successful`.
+                       - `env.cancelled` will be `False`.
 
-                     Return value is ignored.
+                     If the task was cancelled (by calling `cancel_task`):
+                       - `env.result_code` will be `result_cancelled`.
+                       - `env.cancelled` will be `True`.
+
+                     If the task completed successfully:
+                       - `env.result_code` will be `result_errored`.
+                       - `env.cancelled` will be `True` (since the task did not run to completion).
+                       - `env.exc` will contain the exception instance.
+
+                     The return value of `done_callback` is ignored.
 
     `output_filename`: The name of the visualization dataset file to write.
 
@@ -1116,9 +1131,20 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
         except Exception as exc:  # VERY IMPORTANT, to not silently swallow uncaught exceptions from background task
             logger.warning(f"preprocessor_task: {task_env.task_name}: exited with exception {type(exc)}: {exc}")
             traceback.print_exc()  # DEBUG
+            exc_msg = exc.args[0] if (hasattr(exc, "args") and exc.args and exc.args[0]) else f"{type(exc)} (see log for details)"  # show exception message if available, else the type
+            update_status(f"Error during import: {exc_msg}")
+            task_env.result_code = result_errored
+            task_env.exc = exc  # for debugging
             raise
+        else:
+            if not task_env.cancelled:
+                task_env.result_code = result_successful
+                finished = "complete"
+            else:
+                task_env.result_code = result_cancelled
+                finished = "cancelled"
+            update_status(f"[Import {finished}. To start a new one, select files, and then click the play button.]")
         finally:
-            update_status("")
             progress.reset()
 
     update_status("Preprocessor task queued, waiting to start.")

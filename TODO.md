@@ -21,8 +21,6 @@
 
 - Import BibTeX: use multiple columns for input file table in the GUI if we have very many input files.
 
-- Import BibTeX: indicate in the GUI if the import raised an exception (e.g. CuPy failed to load for NLP analysis because `env.sh` hadn't been sourced).
-
 
 ## v0.2 and later
 

@@ -1129,21 +1129,16 @@ def preprocessor_done_callback(task_env):
     """Callback that fires when the preprocessor (BibTeX import) task actually exits, via the `done_callback` mechanism.
 
     The callback fires regardless of whether the task completed successfully, errored out, or was cancelled.
+    See `start_task` for details how to use the `task_env.cancelled`, `task_env.result_code` and `task_env.exc` attributes.
 
     We use this to update the GUI state.
     """
     update_preprocessor_status()
-    dpg.set_value("preprocessor_progress_bar", 0.0)
     dpg.configure_item("preprocessor_progress_bar", overlay="")
     dpg.hide_item("preprocessor_progress_bar")
     dpg.set_item_label("preprocessor_startstop_button", fa.ICON_PLAY)
     dpg.set_value("preprocessor_startstop_tooltip_text", "Start BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
     dpg.enable_item("preprocessor_startstop_button")
-    if not task_env.cancelled:
-        finished = "complete"
-    else:
-        finished = "cancelled"
-    dpg.set_value("preprocessor_status_text", f"[Import {finished}. To start a new one, select files, and then click the play button.]")
     # dpg.set_item_label("preprocessor_window", "BibTeX import")  # TODO: DRY duplicate definitions for labels
 
 def start_preprocessor(output_file, *input_files):
@@ -1162,7 +1157,7 @@ def stop_preprocessor():
     preprocess.cancel_task()
 
 def start_or_stop_preprocessor():
-    """Button callback. Start or stop the preprocessor task (BibTeX import), using the input/output filenames currently selected in the GUI."""
+    """The actual GUI button callback. Start or stop the preprocessor task (BibTeX import), using the input/output filenames currently selected in the GUI."""
     logger.info("start_or_stop_preprocessor: called.")
     if preprocess.has_task():
         logger.info("start_or_stop_preprocessor: preprocessor task is running, so we will stop it.")
