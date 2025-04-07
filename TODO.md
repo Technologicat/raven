@@ -21,6 +21,7 @@
 
 - Import BibTeX: use multiple columns for input file table in the GUI if we have very many input files.
 
+- Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven/config.py`.
 
 
 ## v0.2 and later
