@@ -35,6 +35,17 @@ def main():
     if torch.cuda.is_available():
         device = torch.cuda.get_device_name()
         print_success(f"✅ (Using {device})")
+
+        print("3. CuPy & CuPyX (for spaCy NLP)", end=" ")
+        try:
+            import cupy  # noqa: F401, only for checking.
+            import cupyx  # noqa: F401, only for checking.
+            print_success("✅")
+        except ImportError:
+            print_error("❌")
+            print("   Install CuPy first with: pdm update")
+            return
+
     else:
         print_error("❌")
         print("   Your system does not have accessible GPU resources")
