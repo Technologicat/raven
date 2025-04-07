@@ -7,8 +7,10 @@ from unpythonic.env import env
 # --------------------------------------------------------------------------------
 # Torch config
 
-# see SillyTavern-extras/server.py
+# Which GPU to use in the preprocessor (BibTeX import), if available. If not available, CPU fallback is used automatically.
+# See also `run-on-internal-gpu.sh` for another way to select the GPU when starting the app, without modifying any files.
 device_string = "cuda:0"
+
 torch_dtype = torch.float16 if device_string.startswith("cuda") else torch.float32
 
 # --------------------------------------------------------------------------------

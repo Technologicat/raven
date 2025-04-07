@@ -264,10 +264,20 @@ def get_highdim_semantic_vectors(input_data):
                 logger.info("        Loading SentenceTransformer...")
                 with timer() as tim:
                     from sentence_transformers import SentenceTransformer
-                    sentence_embedder = SentenceTransformer(config.embedding_model, device=config.device_string)
+                    try:
+                        sentence_embedder = SentenceTransformer(config.embedding_model, device=config.device_string)
+                        final_device = config.device_string
+                    except RuntimeError as exc:
+                        logger.warning(f"get_highdim_semantic_vectors: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
+                        try:
+                            sentence_embedder = SentenceTransformer(config.embedding_model, device="cpu")
+                            final_device = "cpu"
+                        except RuntimeError as exc:
+                            logger.warning(f"get_highdim_semantic_vectors: failed to load SentenceTransformer: {type(exc)}: {exc}")
+                            raise
                 logger.info(f"            Done in {tim.dt:0.6g}s.")
 
-            logger.info("        Encoding...")
+            logger.info(f"        Encoding (on device '{final_device}')...")
             with timer() as tim:
                 all_inputs = [entry.title for entry in entries]  # with mpnet, this works best (and we don't always necessarily have an abstract)
                 # all_inputs = [entry.abstract for entry in entries]  # testing with snowflake
@@ -587,7 +597,13 @@ def extract_keywords(input_data, max_vis_kw=6):
                 logger.info("        Loading spaCy...")
                 with timer() as tim2:
                     # NOTE: make sure to `source env.sh` first, or this won't find the CUDA runtime.
-                    spacy.require_gpu()
+                    try:
+                        spacy.require_gpu()
+                        update_status_and_log("NLP model will run on GPU.", log_indent=2)
+                    except Exception as exc:
+                        logger.warning(f"extract_keywords: exception while enabling GPU: {type(exc)}: {exc}")
+                        spacy.require_cpu()
+                        update_status_and_log("NLP model will run on CPU.", log_indent=2)
                     try:
                         nlp_pipeline = spacy.load(config.spacy_model)
                     except OSError:
@@ -596,7 +612,7 @@ def extract_keywords(input_data, max_vis_kw=6):
                         from spacy.cli import download
                         download(config.spacy_model)
                         nlp_pipeline = spacy.load(config.spacy_model)
-                        update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
+                    update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
                     # analysis = nlp_pipeline.analyze_pipes(pretty=True)  # print pipeline overview
                     # nlp_pipeline.disable_pipe("parser")
                     # nlp_pipeline.enable_pipe("senter")
@@ -1107,7 +1123,7 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
     if task_manager is None:
         logger.warning("start_task: no `task_manager`, canceling. Maybe `preprocess.init()` has not been called?")
         return False
-    if has_task():  # Only allow one preprocessor task to be spawned simultaneously, because it takes a lot of GPU resources.
+    if has_task():  # Only allow one preprocessor task to be spawned simultaneously, because it takes a lot of GPU/CPU resources.
         logger.info("start_task: a preprocessor task is already running, canceling.")
         return False
 
@@ -1163,7 +1179,7 @@ def has_task():
 
     This is useful for e.g. enabling/disabling the GUI button to start the preprocessor.
     We only allow one preprocessor task to be spawned simultaneously, because it takes
-    a lot of GPU resources.
+    a lot of GPU/CPU resources.
     """
     if task_manager is None:
         return False

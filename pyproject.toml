@@ -15,27 +15,11 @@ license = { text = "BSD" }
 # Details for how we instruct pdm to find the version are in `[tool.pdm.version]` below.
 dynamic = ["version"]
 
-# We need some `nvidia-*` pip packages from NVIDIA:
-#   https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#pip-wheels
-# with the appropriate cuda version; see the output of your `nvidia-smi`.
-# This is currently configured for CUDA 12.x.
-#
-# The NVIDIA packages will be installed into `.venv/lib/python3.10/site-packages/nvidia*`.
 dependencies = [
     "bibtexparser>=2.0.0b8",
-    "cupy-cuda12x>=13.2.0",
     "dearpygui>=2.0.0",
     "mistletoe>=1.4.0",  # for vendored dpg-markdown
     "numpy>=1.26.4,<2.0",
-    "nvidia-cuda-nvcc-cu12",
-    "nvidia-cuda-nvrtc-cu12",
-    "nvidia-cuda-runtime-cu12",
-    "nvidia-cublas-cu12",
-    "nvidia-cudnn-cu12",
-    "nvidia-cufft-cu12",
-    "nvidia-curand-cu12",
-    "nvidia-cusolver-cu12",
-    "nvidia-cusparse-cu12",
     "openTSNE>=1.0.2",
     "pip==24.3.1",  # for spaCy language model auto-install  # TODO: version?
     "psutil>=5.9.0",  # for vendored file_dialog
@@ -44,7 +28,6 @@ dependencies = [
     "sentence_transformers>=3.4.1",
     "spacy>=3.7.5",
     "sseclient-py>=1.8.0",
-    "tensorrt>=8.5.2.2",  # for NVIDIA acceleration; should pull in the relevant package
     "torch>=2.4.0",
     "unpythonic>=0.15.3",
     "wordcloud>=1.9.3",
@@ -67,6 +50,27 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
     "Topic :: Utilities"
+]
+
+# For CUDA, we need some `nvidia-*` pip packages from NVIDIA:
+#   https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#pip-wheels
+# with the appropriate cuda version; see the output of your `nvidia-smi`.
+# This is currently configured for CUDA 12.x.
+#
+# The NVIDIA packages will be installed into `.venv/lib/python3.10/site-packages/nvidia*`.
+[project.optional-dependencies]
+cuda = [
+    "cupy-cuda12x>=13.2.0",
+    "nvidia-cuda-nvcc-cu12",
+    "nvidia-cuda-nvrtc-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cublas-cu12",
+    "nvidia-cudnn-cu12",
+    "nvidia-cufft-cu12",
+    "nvidia-curand-cu12",
+    "nvidia-cusolver-cu12",
+    "nvidia-cusparse-cu12",
+    "tensorrt>=8.5.2.2",  # for NVIDIA acceleration; should pull in the relevant package
 ]
 
 [project.urls]

@@ -21,7 +21,6 @@
 
 - Import BibTeX: use multiple columns for input file table in the GUI if we have very many input files.
 
-- Make GPU mode optional, as a temporary fix to be able to run the importer on non-NVIDIA systems.
 
 
 ## v0.2 and later
