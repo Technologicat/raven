@@ -61,10 +61,15 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
     - [Load a dataset file from the command line, when starting the app](#load-a-dataset-file-from-the-command-line-when-starting-the-app)
     - [Create a word cloud](#create-a-word-cloud)
         - [Save the word cloud as PNG](#save-the-word-cloud-as-png)
-- [Install & uninstall](#install--uninstall)
+- [Install & run](#install--run)
     - [From PyPI](#from-pypi)
     - [From source](#from-source)
-        - [Uninstall](#uninstall)
+        - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
+        - [Install Raven via PDM](#install-raven-via-pdm)
+        - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
+        - [Activate the Raven venv (to run Raven commands such as `raven-visualizer`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer)
+        - [Exit from the Raven venv (optional)](#exit-from-the-raven-venv-optional)
+- [Uninstall](#uninstall)
 - [Limitations](#limitations)
 - [Technologies](#technologies)
 - [Other similar tools](#other-similar-tools)
@@ -100,22 +105,26 @@ The preprocessing step produces a **dataset file**, which can then be opened and
 
 BibTeX is considered the native input format of Raven.
 
+You can import BibTeX files in Raven's GUI, as well as from the command line.
+
 ### In the GUI
 
-To preprocess one or more BibTeX databases into a dataset file, click on the *Import BibTeX files* button or press Ctrl+I. Doing so opens the following **BibTeX import window**:
+To preprocess one or more BibTeX databases into a dataset file, click on the *Import BibTeX files* button, or press Ctrl+I. Doing so opens the following **BibTeX import window**:
 
 <p align="center">
 <img src="img/screenshot-import-bibtex.png" alt="Screenshot of Raven's BibTeX importer" width="630"/> <br/>
-<i>The preprocessor. This functionality converts BibTeX files into a dataset.</i>
+<i>The preprocessor. This functionality converts BibTeX files into a Raven dataset.</i>
 </p>
+
+Importing several *input BibTeX files* at once combines the data from all of them into the same *output dataset file*.
 
 Note this window is **not** modal, so you can continue working with the app while the window is open, and pressing Esc will not close it.
 
-Pressing Ctrl+I again closes the window.
+Pressing the Ctrl+I hotkey again closes the window.
 
 #### Save imported dataset as
 
-Click on the hard disk icon in the *BibTeX import window*, or press Ctrl+S while the *BibTeX import window* is open. A **save-as dialog** opens:
+Click on the hard disk icon (next to the heading "*Output dataset file*") in the *BibTeX import window*, or press Ctrl+S while the *BibTeX import window* is open. A **save-as dialog** opens:
 
 <p align="center">
 <img src="img/screenshot-save-dataset-as.png" alt="Screenshot of Raven's save-as dialog" width="800"/> <br/>
@@ -144,16 +153,16 @@ Pressing Esc cancels the save-as dialog.
 
 #### Select input BibTeX files
 
-To select input files, click the folder icon, or press Ctrl+O while the *BibTeX import window* is open. A **file picker dialog** opens:
+To select input files, click the folder icon (next to the heading "*Input BibTeX files*"), or press Ctrl+O while the *BibTeX import window* is open. A **file picker dialog** opens:
 
 <p align="center">
 <img src="img/screenshot-select-bibtex-files.png" alt="Screenshot of Raven's file picker" width="800"/> <br/>
 <i>The file picker for input BibTeX files.</i>
 </p>
 
-The file picker works similarly to the save-as dialog, but with a *Search files* field replacing the save-as filename field.
+The file picker works similarly to the save-as dialog, but with a **Search files** field replacing the save-as filename field.
 
-You can focus the *Search files* field by pressing Ctrl+F. The search filters the view live, as you type. All files matching the current search can be accepted by pressing Enter.
+You can focus the *Search files* field by pressing Ctrl+F. The search filters the view live, as you type. All files matching the current search can be accepted by pressing Enter, or by clicking the OK button.
 
 So for example, in the situation shown in the screenshot, to open `savedrecs-3.bib`, you can press Ctrl+F, type "-3" (so that only this one file matches the search filter), and press Enter.
 
@@ -181,16 +190,9 @@ The import process runs in the background, so you can continue working while you
 
 ### From the command line
 
-If you prefer to run your BibTeX imports without opening the GUI (on a headless server, perhaps?), Raven provides a command-line frontend for this task.
+You can also run BibTeX imports without opening the Raven GUI (e.g. on a headless server). Raven provides a command-line tool for this task. It uses the exact same mechanism as the GUI importer; only the user interface is different.
 
-To preprocess one or more BibTeX databases into a dataset file named `mydata.pickle`:
-
-```bash
-$(pdm venv activate)
-python -m raven.preprocess mydata.pickle file1.bib file2.bib ...
-```
-
-Instead of `python -m raven.preprocess`, you can also just use the command `raven-preprocess` (installed when you install the software):
+To preprocess one or more BibTeX files into a dataset file named `mydata.pickle`:
 
 ```bash
 $(pdm venv activate)
@@ -223,13 +225,13 @@ Useful especially for AI/CS topics.
 
 The external [arxiv2bib](https://github.com/nathangrigg/arxiv2bib) tool produces a BibTeX bibliography, when given a list of arXiv document IDs. It will pull the relevant data from arXiv.
 
-If you have a directory full of PDFs downloaded from arXiv, with the identifier somewhere in the filename, see `python -m raven.arxiv2id -h`. This tool, included with Raven, can extract the arXiv identifiers from the filenames, in a format suitable for handing over to `arxiv2bib`. Only unique identifiers will be returned.
+If you have a directory full of PDFs downloaded from arXiv, with the identifier somewhere in the filename, see the `raven-arxiv2id` command-line tool provided with Raven. This tool can extract the arXiv identifiers from the filenames, in a format suitable for handing over to `arxiv2bib`. Only unique identifiers will be returned. For a short help message, run `raven-arxiv2id -h`.
 
-Example:
+Usage:
 
 ```bash
 $(pdm venv activate)
-python -m raven.arxiv2id >arxiv_ids.txt  # run this in a directory that has arXiv PDF files
+raven-arxiv2id >arxiv_ids.txt  # run this in a directory that has arXiv PDF files
 arxiv2bib <arxiv_ids.txt >arxiv_papers.bib
 ```
 
@@ -237,18 +239,33 @@ This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into 
 
 **NOTE**: If you have hundreds or more of arXiv papers in the same directory, `arxiv2bib` may fail with an HTTP 414 error (URI too long). In that case, splitting the input into smaller filesets (about 100 each) helps.
 
-The issue has been fixed, but the updated package has not been released yet. In the meantime, it is preferred to install the tool from [the `arxiv2bib` GitHub repo](https://github.com/nathangrigg/arxiv2bib).
+The issue has been fixed in the `arxiv2bib` source code, but the updated package has not been released yet. In the meantime, it is preferred to install the tool from [the `arxiv2bib` GitHub repo](https://github.com/nathangrigg/arxiv2bib).
+
+You can install it e.g. in the same venv as Raven:
+
+```bash
+$(pdm venv activate)
+python -m pip install git+https://github.com/nathangrigg/arxiv2bib.git@master
+```
+
+Alternatively, if you want, you can install it into the same Python environment as PDM, so that using `arxiv2bib` does not require activating Raven's venv.
+
+To do that, make sure that Raven's venv is **not** active, and then run the install command in your Python environment:
+
+```bash
+python -m pip install git+https://github.com/nathangrigg/arxiv2bib.git@master
+```
 
 
 ### WOS (Web of Science)
 
 Useful for the engineering sciences.
 
-To import WOS into BibTeX, Raven provides a custom command-line tool. To use it:
+To import WOS into BibTeX, see the `raven-wos2bib` command-line tool provided with Raven. Usage:
 
 ```bash
 $(pdm venv activate)
-python -m raven.wos2bib input1.txt ... inputn.txt 1>output.bib 2>log.txt
+raven-wos2bib input1.txt ... inputn.txt 1>output.bib 2>log.txt
 ```
 
 where the input `.txt` files are WOS files exported from Web of Science.
@@ -260,9 +277,7 @@ In the example, the output is written to `output.bib`, and any log messages (suc
 
 Abstract submissions to scientific conferences sometimes arrive as free-form, human-readable PDF files.
 
-For this use case, we include a custom AI-based command-line tool.
-
-**:exclamation: This functionality is currently in beta. :exclamation:**
+So if you are a conference organizer, and would like to semantically visualize the set of abstracts sent to you, see the `raven-pdf2bib` command-line tool provided with Raven.
 
 - The text content of the PDF is analyzed via an LLM (large language model).
 - The PDF must have its text content readable by `pdftotext` (from `poppler-utils`).
@@ -271,11 +286,15 @@ For this use case, we include a custom AI-based command-line tool.
 - The abstract should have a human-recognizable title, authors, and main text. Exact formatting does not matter.
 - If the abstract contains a line beginning with "*keywords:*" or "*key words:*", the importer will attempt to also extract keywords.
 
+**:exclamation: This functionality is currently in beta. :exclamation:**
+
+**:exclamation: This functionality requires a locally hosted LLM. :exclamation:**
+
 To import PDF into BibTeX:
 
 ```bash
 $(pdm venv activate)
-python -m raven.pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>output.bib 2>log.txt
+raven-pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>output.bib 2>log.txt
 ```
 
 The "*http://...*" argument is the URL of an LLM serving an OpenAI-compatible API (streaming mode).
@@ -290,7 +309,7 @@ To continue a partial import (with some files already having been moved into `do
 
 ```bash
 $(pdm venv activate)
-python -m raven.pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>>output.bib 2>>log.txt
+raven-pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>>output.bib 2>>log.txt
 ```
 
 That is, just use the append mode (`>>` instead of `>`) for redirecting the output into files.
@@ -301,7 +320,7 @@ The PDF importer analyzes the human-readable text content of the PDF via an LLM.
 
 To improve reliability, the fields are processed one at a time. Some prompt engineering has gone both into the system prompt as well as each individual data-extracting prompt. The prompts have been engineered manually; we have not yet looked at automatic prompt optimization.
 
-The extracted data is double-checked by some heuristics for fields for which this is reasonably possible. Any suspicious-looking LLM responses are flagged with a warning. It is **very strongly recommended** to manually double-check any entries that were flagged by comparing the generated BibTeX entry to the human-readable content of the original PDF file, because any flagged entries are **very likely** to be incorrect in one or more ways.
+The extracted data is automatically double-checked via heuristics, for fields for which this is reasonably possible. Any suspicious-looking LLM responses are flagged with a warning. It is **very strongly recommended** to manually double-check any entries that were flagged by comparing the generated BibTeX entry to the human-readable content of the original PDF file, because any flagged entries are **very likely** to be incorrect in one or more ways.
 
 Note that people do actually sometimes submit PDF abstracts with no author list, or even no title. The importer attempts to catch such cases, but is not always successful at doing so.
 
@@ -309,13 +328,13 @@ As is well known, LLMs may make things up, may respond incorrectly, or may occas
 
 #### LLM requirements
 
-The PDF importer has been tested on a local Llama 3.1 8B instance running on [Oobabooga](https://github.com/oobabooga/text-generation-webui). This model fits into a laptop's 8 GB VRAM at 4 bits, e.g. in a Q4_K_M quantized format, while leaving enough VRAM for 24576 (24k) tokens of context.
+The `raven-pdf2bib` tool requires a locally hosted LLM (on the same network as Raven, or even on the same machine), with an OpenAI compatible API. Some LLM backends suitable for this are e.g. [AnythingLLM](https://anythingllm.com/) or [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui). The main advantages of a local LLM are full privacy, since the data never leaves the local network, and full customizability (including the system prompt).
 
-Based on our own testing, accuracy with this LLM is ~80%, or in other words, on average, 8 out of 10 abstracts import without warnings (and also look correct by manual inspection).
+The PDF importer has been tested on a local Llama 3.1 8B instance running on Oobabooga. This model fits into a laptop's 8 GB VRAM at 4 bits, e.g. in a Q4_K_M quantized format, while leaving enough VRAM for 24576 (24k) tokens of context. Based on our own testing, accuracy with this LLM is ~80%, or in other words, on average, 8 out of 10 abstracts import without warnings (and also look correct by manual inspection).
 
-As of February 2025, support for thinking LLMs has been added. This is done by automatically stripping `<think>...</think>` sections from the LLM output. We are currently testing this on a Q4_K_M quant of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), with 65536 (64k) tokens of context, running the model on an eGPU with 24GB of VRAM.
+As of February 2025, support for thinking LLMs has been added. This is done by automatically stripping `<think>...</think>` sections from the LLM output. We are currently testing this on a Q4_K_M quant of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), with 65536 (64k) tokens of context, running the model on an eGPU with 24GB of VRAM. This increases the accuracy by a couple of percentage points, but makes the import much slower. The newer [QwQ 32B](https://huggingface.co/Qwen/QwQ-32B) model (March 2025, Alibaba, *Qwen with Questions*) can run with similar specs, but has not been tested yet for this.
 
-Support for LLM authentication (API key) has not been implemented yet, so whichever LLM is used, currently it must be local (on the same network, no API key). Also, the importer expects the LLM to accept a custom system prompt (unlike cloud LLMs, whose system prompts are hidden and uneditable). Supporting cloud LLMs is not a high priority, but PRs are welcome.
+Supporting cloud LLMs is not a high priority, but PRs are welcome. The main issues here are that LLM API keys are not currently supported, and that the importer expects the LLM to accept a custom system prompt. Cloud LLMs could probably run without the customized system prompt, as this is a fairly standard instruction-following task.
 
 
 # Visualize
@@ -324,21 +343,14 @@ First, if the `raven-visualizer` app is not yet running, start it:
 
 ```bash
 $(pdm venv activate)  # see Installation below
-python -m raven.app
-```
-
-Instead of `python -m raven.app`, you can also just use the command `raven-visualizer` (installed when you install the software):
-
-```bash
-$(pdm venv activate)  # see Installation below
 raven-visualizer
 ```
 
-For details on how to use the app, see the built-in Help card. To show the help, click the "?" button in the toolbar, or press F1.
+**:exclamation: For details on how to use the app (including a list of hotkeys), see the built-in Help card. To show the help, click the "?" button in the toolbar, or press F1. :exclamation:**
 
 ## Load a dataset file in the GUI
 
-To load your dataset file, you can then click on the *Open dataset* button in the toolbar, or press Ctrl+O, thus bringing up this dialog:
+To load your dataset file, click on the *Open dataset* button in the toolbar, or press Ctrl+O, thus bringing up this dialog:
 
 <p align="center">
 <img src="img/screenshot-open-file.png" alt="Screenshot of Raven's open dataset dialog" width="800"/> <br/>
@@ -356,12 +368,6 @@ If you use the search feature (Ctrl+F) to open a file by typing a part of its na
 ## Load a dataset file from the command line, when starting the app
 
 Like many GUI apps, Raven also accepts a dataset file from the command line, when the app starts:
-
-```bash
-python -m raven.app mydata.pickle
-```
-
-or
 
 ```bash
 raven-visualizer mydata.pickle
@@ -396,7 +402,7 @@ This dialog works similarly to the dataset save-as dialog in the *BibTeX import 
 The file extension (`.png`) is added automatically to the filename you specify.
 
 
-# Install & uninstall
+# Install & run
 
 Raven is a traditional desktop app. It needs to be installed.
 
@@ -410,15 +416,30 @@ Raven has been developed and tested on Linux Mint. It should work in any environ
 
 ## From source
 
+Raven has the following requirements:
+
+ - A Python environment for running the [PDM](https://pdm-project.org/en/latest/) installer. Linux OSs have one built-in; on other OSs it is possible to use tools such as [Conda](https://www.anaconda.com/docs/getting-started/miniconda/main) to install one.
+ - An NVIDIA GPU for running AI models via CUDA. (This is subject to change in the future.)
+
+### Install PDM in your Python environment
+
 Raven uses [PDM](https://pdm-project.org/en/latest/) to manage its dependencies. This allows easy installation of the app and its dependencies into a venv (virtual environment) that is local to this one app, so that installing Raven will not break your other apps that use machine-learning libraries (which tend to be very version-sensitive).
 
-If you do not have PDM, you will need to install it first (don't worry; it won't break `pip`, `poetry`, or other similar tools):
+If your Python environment does not have PDM, you will need to install it first:
 
 ```bash
-pip install pdm
+python -m pip install pdm
 ```
 
-Then, to install Raven, go into the Raven folder in a terminal. Initialize the new venv, installing the required Python version into it:
+Don't worry; it won't break `pip`, `poetry`, or other similar tools.
+
+### Install Raven via PDM
+
+Then, to install Raven, in a terminal that sees your Python environment, navigate to the Raven folder.
+
+We will next initialize the new venv, installing the required Python version into it. This Python will be available for PDM venvs, and is independent of Python that PDM itself runs on.
+
+Raven is currently developed against the minimum supported Python version, so we recommend to install that version, like this:
 
 ```bash
 pdm python install --min
@@ -426,64 +447,93 @@ pdm python install --min
 
 The venv will be installed in the `.venv` hidden subfolder of the Raven folder.
 
-Then, install the dependencies (there is no `requirements.txt`; the dependency list lives in `pyproject.toml`):
+Then, install Raven's dependencies as follows. (If you are a seasoned pythonista, note that there is no `requirements.txt`; the dependency list lives in `pyproject.toml`.)
+
+**Basic install without GPU compute support**:
 
 ```bash
 pdm sync
 ```
 
-Installing dependencies may take a long time (up to 15 minutes), because `torch` and the NVIDIA packages (for CUDA support) are rather large.
+**Install with GPU compute support**:
 
-You will need the proprietary NVIDIA drivers to enable CUDA. How to install them depends on your OS.
-
-**:exclamation: Currently Raven uses CUDA 12.x. Make sure your NVIDIA drivers support this version. :exclamation:**
-
-Once you have the NVIDIA drivers, you can check if Raven detects your CUDA installation:
+This requires an NVIDIA GPU, the proprietary NVIDIA drivers, and CUDA. The GPU will be used for accelerating BibTeX imports.
 
 ```bash
-python -m raven.check_cuda
+pdm sync --prod -G cuda
 ```
 
-This command will print some system info into the terminal, saying whether it found CUDA, and if it did, which device CUDA is running on.
+If you want to add GPU compute support later, you can run this install command on top of an already installed Raven.
+
+Installing dependencies may take a long time (up to 15-30 minutes, depending on your internet connection), because `torch` and the NVIDIA packages are rather large (my `.venv` shows 11.1 GB in total).
 
 Now the installation should be complete.
 
-In a terminal in the Raven folder, Raven's venv can be activated with the command:
+### Check that CUDA works (optional)
+
+If you want to use the optional GPU compute support, you will need an NVIDIA GPU and the proprietary NVIDIA drivers (which provide CUDA). How to install them depends on your OS.
+
+Currently Raven uses GPU compute only in the preprocessor (BibTeX import), to accelerate the computation of semantic vectors and the NLP analysis. For large datasets, using a GPU can make these steps much faster.
+
+**:exclamation: Currently Raven uses CUDA 12.x. Make sure your NVIDIA drivers support this version. :exclamation:**
+
+Once you have the NVIDIA drivers, and you have installed Raven with GPU compute support, you can check if Raven detects your CUDA installation:
+
+```bash
+raven-check-cuda
+```
+
+This command will print some system info into the terminal, saying whether it found CUDA, and if it did, which device CUDA is running on. It will also check whether the `cupy` library loads successfully.
+
+### Activate the Raven venv (to run Raven commands such as `raven-visualizer`)
+
+**:exclamation: This is the (early) state of things as of April 2025. We aim to provide easier startup scripts in the future. :exclamation:**
+
+In a terminal that sees your Python environment, navigate to the Raven folder.
+
+Then, activate Raven's venv with the command:
 
 ```bash
 $(pdm venv activate)
 ```
 
-Note the exec syntax `$(...)`; the command `pdm venv activate` just prints the actual internal activation command.
+Note the Bash exec syntax `$(...)`; the command `pdm venv activate` just prints the actual internal activation command.
 
-With the venv loaded, you can enable CUDA support by:
+With the venv activated, and the terminal still in the Raven folder, you can enable CUDA support by:
 
 ```bash
 source env.sh
 ```
 
-This sets up the library paths and `$PATH` so that Raven finds the CUDA libraries.
+This sets up the library paths and `$PATH` so that Raven finds the CUDA libraries. This script is coded to look for them in Raven's `.venv` subfolder.
 
-If you have multiple GPUs, use the `CUDA_VISIBLE_DEVICES` environment variable to set which GPU Raven should use. We provide an example script [`run-on-internal-gpu.sh`](run-on-internal-gpu.sh), meant for a laptop with a Thunderbolt eGPU (external GPU), that should force Raven to run on the *internal* GPU (useful e.g. if your eGPU is in use by a self-hosted LLM). Usage is:
+If you have multiple GPUs, you can use the `CUDA_VISIBLE_DEVICES` environment variable to set which GPU Raven should use. We provide an example script [`run-on-internal-gpu.sh`](run-on-internal-gpu.sh), meant for a laptop with a Thunderbolt eGPU (external GPU), when we want to force Raven to run on the *internal* GPU (useful e.g. if your eGPU is in use by a self-hosted LLM).
+
+With the terminal still in the Raven folder, usage is:
 
 ```bash
 source run-on-internal-gpu.sh
 ```
 
-**:exclamation: This is the (early) state of things as of March 2025. We aim to provide easier startup scripts in the future. :exclamation:**
+Whenever Raven's venv is active, you can use Raven commands. Most of the time you'll want `raven-visualizer`, which opens the GUI app.
 
-Whenever Raven's venv is active, you can call the entrypoints such as `raven-visualizer`.
+### Exit from the Raven venv (optional)
 
-To deactivate the venv (to exit from the Raven environment, without exiting your terminal session), you can use the command:
+If you want to exit from the Raven venv without exiting your terminal session, you can deactivate the venv like this:
 
 ```bash
 deactivate
 ```
 
-### Uninstall
+After this command completes, `python` again points to the Python in your Python environment (where e.g. PDM runs), **not** to Raven's app-local Python.
+
+If you want to also exit your terminal session, you can just close the terminal window as usual; there is no need to deactivate the venv unless you want to continue working in the same terminal session.
+
+
+# Uninstall
 
 ```bash
-pip uninstall raven-visualizer
+python -m pip uninstall raven-visualizer
 ```
 
 Or just delete the venv, located in the `.venv` subfolder of the Raven folder.
