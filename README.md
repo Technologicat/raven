@@ -500,9 +500,11 @@ $(pdm venv activate)
 
 Note the Bash exec syntax `$(...)`; the command `pdm venv activate` just prints the actual internal activation command.
 
+Whenever Raven's venv is active, you can use Raven commands. Most of the time you'll want `raven-visualizer`, which opens the GUI app.
+
 ### Activate GPU compute support (optional)
 
-With the venv activated, and the terminal still in the Raven folder, you can enable CUDA support by:
+With the venv activated, and the terminal in the Raven folder, you can enable CUDA support by:
 
 ```bash
 source env.sh
@@ -518,7 +520,7 @@ With the terminal still in the Raven folder, usage is:
 source run-on-internal-gpu.sh
 ```
 
-Whenever Raven's venv is active, you can use Raven commands. Most of the time you'll want `raven-visualizer`, which opens the GUI app.
+Then you can use Raven commands as usual.
 
 ### Exit from the Raven venv (optional)
 
