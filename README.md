@@ -68,6 +68,7 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
         - [Install Raven via PDM](#install-raven-via-pdm)
         - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
         - [Activate the Raven venv (to run Raven commands such as `raven-visualizer`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer)
+        - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
         - [Exit from the Raven venv (optional)](#exit-from-the-raven-venv-optional)
 - [Uninstall](#uninstall)
 - [Limitations](#limitations)
@@ -498,6 +499,8 @@ $(pdm venv activate)
 ```
 
 Note the Bash exec syntax `$(...)`; the command `pdm venv activate` just prints the actual internal activation command.
+
+### Activate GPU compute support (optional)
 
 With the venv activated, and the terminal still in the Raven folder, you can enable CUDA support by:
 
