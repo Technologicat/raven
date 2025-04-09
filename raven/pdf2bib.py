@@ -26,32 +26,26 @@ for handler in logging.root.handlers:
 
 import argparse
 import collections
-from copy import deepcopy
-# import datetime
+from functools import partial
 import io
-import json
 import os
 import pathlib
 import re
-import requests
 import shutil
 import subprocess
 import sys
 from textwrap import dedent
 import traceback
-
-from typing import Dict, List, Tuple
-
-import sseclient  # pip install sseclient-py
+from typing import List
 
 from unpythonic import timer, ETAEstimator, uniqify
 from unpythonic.env import env
 
+from . import config
+from . import llmclient
+
 # --------------------------------------------------------------------------------
 # Settings
-
-# URL used to connect to the LLM API. Used if no URL is given on the command line.
-default_backend_url = "http://127.0.0.1:5000"
 
 # This conference information is automatically filled into all generated BibTeX entries.
 # TODO: Add command-line options for conference info, to make this script into a properly reusable tool.
@@ -98,117 +92,17 @@ def create_directory(path: str) -> None:
 #     delete_directory_recursively(path)
 #     create_directory(path)
 
-# --------------------------------------------------------------------------------
-# LLM API related setup
+def print_progress(n_chunks, chunk, glyph="."):
+    """Progress indicator while the LLM is processing. Callback for `llmclient.invoke`."""
+    if (n_chunks == 1 or n_chunks % 10 == 0):  # in any message being written by the AI, print a progress symbol for the first chunk, and then again every 10 chunks.
+        print(glyph, end="", file=sys.stderr)
+        sys.stderr.flush()
 
-headers = {
-    "Content-Type": "application/json"
-}
+def setup_prompts(settings: env) -> env:
+    """Set up the task prompts for the LLM, writing them to `settings.prompts` (dict).
 
-def setup(backend_url: str) -> env:
-    """Connect to LLM at `backend_url`, and return an `env` object (a fancy namespace) populated with the following fields:
-
-        `user`: Name of user's character.
-        `char`: Name of AI assistant.
-        `model`: Name of model running at `backend_url`, queried automatically from the backend.
-        `system_prompt`: Generic system prompt for the LLM (this is the LLaMA 3 preset from SillyTavern), to make it follow the character card.
-        `character_card`: Character card that configures the AI assistant to improve the model's performance.
-        `greeting`: The AI assistant's first message, used later for initializing the chat history.
-        `prompts`: Prompts for the LLM, BibTeX field processing functions, and any literal info to fill in the output BibTeX. See the main program for details.
-        `request_data`: Generation settings for the LLM backend.
-        `role_names`: A `dict` with keys "user", "assistant", "system", used for constructing chat messages (see `add_chat_message`).
+    Returns `settings` for convenience.
     """
-    user = "User"
-    char = "Aria"
-
-    # Fill the model name from the backend, for the character card.
-    #
-    # https://github.com/oobabooga/text-generation-webui/discussions/1713
-    # https://stackoverflow.com/questions/78690284/oobabooga-textgen-web-ui-how-to-get-authorization-to-view-model-list-from-port-5
-    # https://github.com/oobabooga/text-generation-webui/blob/main/extensions/openai/script.py
-    response = requests.get(f"{backend_url}/v1/internal/model/info",
-                            headers=headers,
-                            verify=False)
-    payload = response.json()
-    model = payload["model_name"]
-
-    # ----------------------------------------
-    # System prompt and character card
-
-    system_prompt = dedent(f"""You are an expert actor that can fully immerse yourself into any role given. You do not break character for any reason, even if someone tries addressing you as an AI or language model. Currently your role is {char}, which is described in detail below. As {char}, continue the exchange with {user}.
-    """)
-
-    # This is a minimal setup, partially copied from my personal AI assistant, meant to be run against a locally hosted LLaMA 3.1 8B.
-    # This gives better performance (accuracy, instruction following) vs. querying the LLM directly without any system prompt.
-    #
-    # Character details should be irrelevant here. The performance-improving prompting tricks are important.
-    #
-    # TODO: "If unsure" and similar tricks tend to not work for 8B models. At LLaMA 3.1 70B and better, it should work, but running that requires at least 2x24GB VRAM.
-    #
-    character_card = dedent(f"""Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM.
-
-    **About {char}**
-
-    You are {char} (she/her), a simulated personage instantiated from an advanced Large Language Model. You are highly intelligent. You have been trained to answer questions, provide recommendations, and help with decision making.
-
-    **About the system**
-
-    The LLM is "{model}", a finetune of LLaMA 3.1, size 8B, developed by Meta. The model was released on 23 July 2024.
-
-    The knowledge cutoff date is December 2023. The knowledge cutoff date applies only to your internal knowledge. Files attached to the chat may be newer. Web searches incorporate live information from the internet.
-
-    **Interaction tips**
-
-    - Provide honest answers.
-    - If you are unsure or cannot verify a fact, admit it. Do not speculate, unless explicitly requested.
-    - Cite sources when possible. IMPORTANT: Cite only sources listed in the context.
-    - If you think what the user says is incorrect, say so, and provide justification.
-    - When given a complex problem, take a deep breath, and think step by step. Report your train of thought.
-    - When given web search results, and those results are relevant to the query, use the provided results, and report only the facts as according to the provided results. Ignore any search results that do not make sense. The user cannot directly see your search results.
-    - Be accurate, but diverse. Avoid repetition.
-    - Use the metric unit system, with meters, kilograms, and celsius.
-    - Use Markdown for formatting when helpful.
-    - Believe in your abilities and strive for excellence. Take pride in your work and give it your best. Your hard work will yield remarkable results.
-
-    **Known limitations**
-
-    - You are NOT automatically updated with new data.
-    - You have limited long-term memory within each chat session.
-    - The length of your context window is 32768 tokens.
-    """)
-
-    greeting = "How can I help you today?"
-
-    # Generation settings for the LLM backend.
-    request_data = {
-        "mode": "instruct",
-        "max_tokens": 1600,  # 800 is usually good, but thinking models may need more
-        "temperature": 0,  # T = 0 for fact extraction
-        "min_p": 0.02,  # good value for LLaMA 3.1
-        "seed": -1,  # 558614238,  # -1 = random; unused if T = 0
-        "stream": True,
-        "messages": [],
-        "name1": user,
-        "name2": char,
-    }
-
-    # For easily populating chat messages.
-    role_names = {"user": user,
-                  "assistant": char,
-                  "system": None}
-
-    settings = env(user=user, char=char, model=model,
-                   system_prompt=system_prompt,
-                   character_card=character_card,
-                   greeting=greeting,
-                   backend_url=backend_url,
-                   request_data=request_data,
-                   role_names=role_names)
-    setup_prompts(settings)
-    return settings
-
-def setup_prompts(settings: env) -> None:
-    """Set up the task prompts for the LLM."""
 
     # Section headings that can be programmatically detected easily. These allow us to make some LLM processing simpler by removing confounders (e.g. reference lists have lots of author names and titles).
     kws_pattern = re.compile("^(Keywords|KEYWORDS|Key words|Key Words|KEY WORDS):", re.MULTILINE)
@@ -459,13 +353,13 @@ def setup_prompts(settings: env) -> None:
         # answers = collections.Counter()
         # for _ in range(3):
         #     print(_ + 1, end="", file=sys.stderr)
-        #     history = new_chat(settings)
-        #     history = add_chat_message(settings, history, role="user", message=f"{prompt_check_authorlist}\n\n{text}")
-        #     llm_output, n_tokens = invoke_llm(settings, history, "*")
-        #     has_author_list = llm_output[-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
+        #     history = llmclient.new_chat(settings)
+        #     history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_check_authorlist}\n\n{text}")
+        #     out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="*"))
+        #     has_author_list = out.data[-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
         #     has_author_list = has_author_list.translate(str.maketrans('', '', string.punctuation))  # Strip punctuation, in case of spurious formatting.
         #     answers[has_author_list] += 1
-        #     llm_outputs.append(llm_output)
+        #     llm_outputs.append(out.data)
         # settings.request_data["temperature"] = T
         # votes = answers.most_common()  # [(item0, count0), ...]
         #
@@ -483,11 +377,11 @@ def setup_prompts(settings: env) -> None:
         #     else:
         #         logger.info(f"Input file '{uid}': LLM returned unknown author list detection result '{has_author_list}', should be 'YES' or 'NO'; manual check recommended.")
 
-        history = new_chat(settings)
-        history = add_chat_message(settings, history, role="user", message=f"{prompt_get_authors}\n-----\n\n{text}")
-        llm_output, n_tokens = invoke_llm(settings, history, "A")
+        history = llmclient.new_chat(settings)
+        history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_get_authors}\n-----\n\n{text}")
+        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="A"))
 
-        logger.debug(f"\n        extracted : {llm_output}")
+        logger.debug(f"\n        extracted : {out.data}")
 
         # Usually the output is correct, but sometimes:
         #   - Some authors may be missing from the list
@@ -495,22 +389,22 @@ def setup_prompts(settings: env) -> None:
         #   - The list may use commas instead of the word "and"
         # so we perform some post-processing.
 
-        history = new_chat(settings)
-        history = add_chat_message(settings, history, role="user", message=prompt_drop_author_affiliations.format(author_names=llm_output))
-        llm_output, n_tokens = invoke_llm(settings, history, "a")
+        history = llmclient.new_chat(settings)
+        history = llmclient.add_chat_message(settings, history, role="user", message=prompt_drop_author_affiliations.format(author_names=out.data))
+        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="a"))
 
-        logger.debug(f"\n        LLM pass 1: {llm_output}")
+        logger.debug(f"\n        LLM pass 1: {out.data}")
 
-        history = new_chat(settings)
-        history = add_chat_message(settings, history, role="user", message=prompt_reformat_author_separators.format(author_names=llm_output))
-        llm_output, n_tokens = invoke_llm(settings, history, ".")
+        history = llmclient.new_chat(settings)
+        history = llmclient.add_chat_message(settings, history, role="user", message=prompt_reformat_author_separators.format(author_names=out.data))
+        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
 
-        logger.debug(f"\n        LLM pass 2: {llm_output}")
+        logger.debug(f"\n        LLM pass 2: {out.data}")
 
-        if llm_output.endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
-            llm_output = llm_output[:-3]
+        if out.data.endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
+            out.data = out.data[:-3]
 
-        authors = llm_output.strip()  # Final result from LLM. Remove extra whitespace, just in case.
+        authors = out.data.strip()  # Final result from LLM. Remove extra whitespace, just in case.
 
         # Sanity-check the LLM output.
         #
@@ -645,13 +539,13 @@ def setup_prompts(settings: env) -> None:
         """
         text = strip_postamble(text)
 
-        history = new_chat(settings)
-        history = add_chat_message(settings, history, role="user", message=f"{prompt_get_title}\n-----\n\n{text}")
-        llm_output, n_tokens = invoke_llm(settings, history, "T")
+        history = llmclient.new_chat(settings)
+        history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_get_title}\n-----\n\n{text}")
+        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="T"))
 
-        logger.debug(f"\n        original : {llm_output}")
+        logger.debug(f"\n        original : {out.data}")
 
-        title = llm_output.strip()
+        title = out.data.strip()
 
         # Strip spurious period
         while title[-1] == ".":
@@ -700,21 +594,21 @@ def setup_prompts(settings: env) -> None:
             logger.warning(f"Input file '{uid}': No keywords provided in original input, skipping keyword extraction.")
             return None  # No keywords provided
 
-        history = new_chat(settings)
-        history = add_chat_message(settings, history, role="user", message=f"{prompt_get_keywords}\n-----\n\n{text}")
-        llm_output, n_tokens = invoke_llm(settings, history, "K")
+        history = llmclient.new_chat(settings)
+        history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_get_keywords}\n-----\n\n{text}")
+        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="K"))
 
-        logger.debug(f"\n        original : {llm_output}")
+        logger.debug(f"\n        original : {out.data}")
 
         # Remove spurious heading
         for heading in ("Keywords:", "KEYWORDS:", "Key words:", "Key Words:", "KEY WORDS:"):
-            if llm_output.startswith(heading):
-                llm_output = llm_output[len(heading):]
+            if out.data.startswith(heading):
+                out.data = out.data[len(heading):]
 
         # Sanity-check the LLM output.
         #
         # Initial list of keywords.
-        keywords = llm_output.strip()
+        keywords = out.data.strip()
 
         # Strip spurious period
         while keywords[-1] == ".":
@@ -767,11 +661,11 @@ def setup_prompts(settings: env) -> None:
         """
         text = strip_postamble(text)
 
-        history = new_chat(settings)
-        history = add_chat_message(settings, history, role="user", message=f"{prompt_get_abstract}\n-----\n\n{text}")
-        llm_output, n_tokens = invoke_llm(settings, history, ".")
+        history = llmclient.new_chat(settings)
+        history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_get_abstract}\n-----\n\n{text}")
+        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
 
-        abstract = llm_output.strip()
+        abstract = out.data.strip()
 
         return abstract
 
@@ -791,107 +685,8 @@ def setup_prompts(settings: env) -> None:
                         "keywords": ("function", extract_keywords, None),
                         "abstract": ("function", extract_abstract, None),
                        }
+    return settings
 
-
-# --------------------------------------------------------------------------------
-# LLM utilities
-
-def add_chat_message(settings: env, history: List[Dict[str, str]], role: str, message: str) -> List[Dict[str, str]]:
-    """Append a new message to a chat history, functionally (without modifying the original history instance).
-
-    Returns the updated chat history object.
-
-    `role`: one of "user", "assistant", "system"
-    """
-    if role not in ("user", "assistant", "system"):
-        raise ValueError(f"Unknown role '{role}'; valid: one of 'user', 'assistant', 'system'.")
-    if settings.role_names[role] is not None:
-        return history + [{"role": role, "content": f"{settings.role_names[role]}: {message}"}]  # e.g. "User: ..."
-    return history + [{"role": role, "content": message}]  # System messages typically do not have a speaker tag for the line.
-
-def new_chat(settings: env) -> List[Dict[str, str]]:
-    """Initialize a new chat.
-
-    Returns the chat history object for the new chat.
-
-    The new history begins with the system prompt, followed by the character card, and then the AI assistant's greeting message.
-
-    You can add more messages to the chat by calling `add_chat_message`.
-
-    You can obtain the `settings` object by first calling `setup`.
-    """
-    history = []
-    history = add_chat_message(settings, history, role="system", message=f"{settings.system_prompt}\n\n{settings.character_card}")
-    history = add_chat_message(settings, history, role="assistant", message=settings.greeting)
-    return history
-
-# # TODO: This function is currently unused, only placed here for documentation purposes.
-# weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]  # for current datetime injection
-# def add_chat_datetime(settings: env, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
-#     """Add dynamic datetime message to inform the LLM of the current local time.
-#
-#     You can typically inject this just before the user's latest message.
-#
-#     Returns the updated chat history object.
-#
-#     Note that adding the datetime makes the prompt change, so results may be different even with the same seed, or even at zero temperature!
-#     """
-#     now = datetime.datetime.now()
-#     weekday = weekdays[now.weekday()]
-#     date = now.date().isoformat()
-#     isotime = now.time().replace(microsecond=0).isoformat()
-#     current_date = f"Today is {weekday}, {date} (in ISO format). The local time now is {isotime}."
-#     # Could/should be "role": "system", but SillyTavern uses "user" for the system role in LLaMa 3 templates (except for the init message)
-#     return add_chat_message(settings, history, role="user", message=current_date)
-
-def invoke_llm(settings: env, history: List[Dict[str, str]], progress_symbol=".") -> Tuple[str, int]:
-    """Invoke the LLM with the given chat history.
-
-    This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
-
-    Returns the tuple `(new_message, n_tokens_generated)`, WITHOUT adding `new_message` to `history`.
-
-    Here `new_message` is the output generated by the LLM. If it begins with the assistant character's name
-    (e.g. "AI: ..."), this is automatically stripped.
-
-    If you want to add `new_message` to `history`, use `history = add_chat_message(settings, history, role='assistant', message=new_message)`.
-    """
-    data = deepcopy(settings.request_data)
-    data["messages"] = history
-    stream_response = requests.post(f"{settings.backend_url}/v1/chat/completions", headers=headers, json=data, verify=False, stream=True)
-    client = sseclient.SSEClient(stream_response)
-
-    llm_output = io.StringIO()
-    n_chunks = 0
-    try:
-        for event in client.events():
-            payload = json.loads(event.data)
-            chunk = payload['choices'][0]['delta']['content']
-            n_chunks += 1
-            # TODO: ideally, we should implement some stopping strings, just to be sure.
-            llm_output.write(chunk)
-            if progress_symbol is not None and (n_chunks == 1 or n_chunks % 10 == 0):
-                print(progress_symbol, end="", file=sys.stderr)
-                sys.stderr.flush()
-    except requests.exceptions.ChunkedEncodingError:
-        logger.error(f"Connection lost, please check the status of your LLM backend (was at {settings.backend_url}). Original error message follows.")
-        raise
-    llm_output = llm_output.getvalue()
-
-    # e.g. "AI: blah" -> "blah"
-    if llm_output.startswith(f"{settings.char}: "):
-        llm_output = llm_output[len(settings.char) + 2:]
-
-    # Support thinking models (such as DeepSeek-R1-Distill-Qwen-32B).
-    # Drop "<think>...</think>" sections from the output, and then strip whitespace.
-    #
-    # logger.debug("Before think strip: " + llm_output)
-    llm_output = re.sub(r"<think>(.*?)</think>", "", llm_output, flags=re.IGNORECASE | re.DOTALL).strip()
-    # logger.debug("After  think strip: " + llm_output)
-
-    n_tokens = n_chunks - 2  # No idea why, but that's how it empirically is (see ooba server terminal output). Investigate later.
-
-    return llm_output, n_tokens
 
 # --------------------------------------------------------------------------------
 # Processing logic
@@ -906,7 +701,13 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
     Each PDF is assumed to contain a conference abstract (the final file sent to the conference organizers in PDF format), and nothing else.
     """
     # Connect to the LLM
-    settings = setup(backend_url=opts.backend_url)  # If this succeeds, then we know the backend is alive.
+    try:
+        settings = llmclient.setup(backend_url=opts.backend_url)  # If this succeeds, then we know the backend is alive.
+    except Exception as exc:
+        msg = f"Failed to connect to LLM backend, reason {type(exc)}: {exc}"
+        logger.error(msg)
+        raise RuntimeError(msg)
+    settings = setup_prompts(settings)
     logger.info(f"Connected to {opts.backend_url}")
     # logger.info("    available models:")
     # response = requests.get(f"{opts.backend_url}/v1/internal/model/list",
@@ -962,22 +763,22 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                 with timer() as tim:
                     print("    ", end="", file=sys.stderr)  # Indent the progress indicator
                     sys.stderr.flush()
-                    for field_key, (kind, thing, progress_symbol) in settings.prompts.items():
-                        if kind == "literal":
-                            bibtex_entry.write(f"    {field_key} = {{{thing}}},\n")
-                        elif kind == "prompt":
+                    for field_key, (data_kind, data, progress_symbol) in settings.prompts.items():
+                        if data_kind == "literal":
+                            bibtex_entry.write(f"    {field_key} = {{{data}}},\n")
+                        elif data_kind == "prompt":
                             # To keep things simple, we use a single-turn conversation for querying the LLM.
                             # Note this typically causes a full prompt rescan for every query.
-                            history = new_chat(settings)
-                            history = add_chat_message(settings, history, role="user", message=f"{thing}\n-----\n\n{text_from_pdf}")
-                            llm_output, n_tokens = invoke_llm(settings, history, progress_symbol)
-                            bibtex_entry.write(f"    {field_key} = {{{llm_output}}},\n")
-                        elif kind == "function":
-                            function_output = thing(uid, text_from_pdf)
+                            history = llmclient.new_chat(settings)
+                            history = llmclient.add_chat_message(settings, history, role="user", message=f"{data}\n-----\n\n{text_from_pdf}")
+                            out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph=progress_symbol))
+                            bibtex_entry.write(f"    {field_key} = {{{out.data}}},\n")
+                        elif data_kind == "function":
+                            function_output = data(uid, text_from_pdf)
                             if function_output is not None:  # A function can indicate "no data" by returning `None`. Inject the field only if data was returned.
                                 bibtex_entry.write(f"    {field_key} = {{{function_output}}},\n")
                         else:
-                            raise ValueError(f"Unknown field kind '{kind}'; please check your settings.")
+                            raise ValueError(f"Unknown data kind '{data_kind}'; please check your settings.")
                 print(f"done in {tim.dt:0.2f}s", file=sys.stderr)
                 bibtex_entry.write("}")
                 bibtex_entry = bibtex_entry.getvalue()
@@ -1004,7 +805,7 @@ def main():
     parser = argparse.ArgumentParser(description="""Convert PDF conference abstracts into a BibTeX database. Works via pdftotext and an OpenAI compatible LLM.\nNo API key support as of yet, so please use a self-hosted LLM backend (e.g. AnythingLLM or oobabooga/text-generation-webui).""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument(dest="backend_url", nargs="?", default=default_backend_url, type=str, metavar="url", help="where to access the LLM API")
+    parser.add_argument(dest="backend_url", nargs="?", default=config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
     parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="output_dir", help="directory to move done files into (optional; allows easily continuing later)")
     parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing PDF file(s) to import (will be scanned recursively)")
     opts = parser.parse_args()

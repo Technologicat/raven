@@ -77,6 +77,7 @@ with timer() as tim:
         handler.addFilter(utils.UnionFilter(logging.Filter(__name__),
                                             logging.Filter("raven.animation"),
                                             logging.Filter("raven.bgtask"),
+                                            logging.Filter("raven.llmclient"),
                                             logging.Filter("raven.preprocess"),
                                             logging.Filter("raven.utils"),
                                             logging.Filter("raven.vendor.file_dialog.fdialog")))

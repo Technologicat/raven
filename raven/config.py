@@ -49,6 +49,9 @@ summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"
 
 summarization_prefix = ""
 
+# PDF importer - URL used to connect to the LLM API. Used if no URL is given on the command line.
+llm_backend_url = "http://127.0.0.1:5000"
+
 # --------------------------------------------------------------------------------
 # Stopword list for importer
 
