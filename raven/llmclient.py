@@ -128,15 +128,27 @@ def setup(backend_url: str) -> env:
 
     # Generation settings for the LLM backend.
     request_data = {
-        "mode": "instruct",
-        "max_tokens": 3200,  # 800 is usually good, but thinking models may need (much) more
-        "temperature": 1,  # T = 1: don't skew the logits (as of early 2025, a good default; older models may need T = 0.7);  T = 0: fact extraction (for some models)
-        "min_p": 0.02,  # good sampler, with a good value for most models
+        "mode": "instruct",  # instruct mode: when invoking the LLM, send it instructions (system prompt and character card), followed by a chat transcript to continue.
+        "max_tokens": 3200,  # 800 is usually good, but thinking models may need (much) more. For them, 1600 or 3200 are good.
+        # Correct sampler order is min_p first, then temperature (and this is also the default).
+        #
+        # T = 1: Use the predicted logits as-is (as of early 2025, a good default; older models may need T = 0.7).
+        # T = 0: Greedy decoding, i.e. always pick the most likely token. Prone to getting stuck in a loop. For fact extraction (for some models).
+        # T > 1: Skew logits to emphasize rare continuations ("creative mode").
+        # 0 < T < 1: Skew logits to emphasize common continuations.
+        "temperature": 1,
+        # min_p a.k.a. "you must be this tall". Good default sampler, with 0.02 a good value for many models.
+        # This is a tail-cutter. The value is the minimum probability a token must have to admit sampling that token,
+        # as a fraction of the probability of the most likely option (locally, at each position).
+        #
+        # Once min_p cuts the tail, then the remaining distribution is given to the temperature mechanism for skewing.
+        # Then a token is sampled, weighted by the probabilities represented by the logits (after skewing).
+        "min_p": 0.02,
         "seed": -1,  # 558614238,  # -1 = random; unused if T = 0
-        "stream": True,
-        "messages": [],
-        "name1": user,
-        "name2": char,
+        "stream": True,  # When the LLM is generating text, send each token to the client as soon as it is available. For live-updating the UI.
+        "messages": [],  # Chat transcript, including system messages. Populated later by `invoke`.
+        "name1": user,  # Name of user's persona in the chat.
+        "name2": char,  # Name of AI's persona in the chat.
     }
 
     # For easily populating chat messages.
