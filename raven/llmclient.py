@@ -8,17 +8,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import argparse
+import atexit
 from copy import copy, deepcopy
 import datetime
 import io
 import json
+import os
+import pathlib
 import re
 import requests
 import sys
 from textwrap import dedent
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 import sseclient  # pip install sseclient-py
+
+from mcpyrate import colorizer
 
 from unpythonic import timer
 from unpythonic.env import env
@@ -28,7 +33,9 @@ from . import config
 # --------------------------------------------------------------------------------
 # Setup for minimal chat client (for testing/debugging)
 
-output_line_width = 160
+_config_dir = "~/.config/raven"  # for chat history
+
+output_line_width = 160  # for text wrapping in live update
 
 # --------------------------------------------------------------------------------
 # LLM API setup
@@ -288,6 +295,97 @@ def format_reminder_to_focus_on_latest_input() -> str:
     """
     return "[System information: IMPORTANT: Reply to the user's most recent message. In a discussion, prefer writing your raw thoughts rather than a structured report.]"
 
+
+_complete_thought_block = re.compile(r"([<\[])(think(ing)?[>\]])(.*?)\1/\2\s*", flags=re.IGNORECASE | re.DOTALL)  # opened and closed correctly; thought contents -> group 4
+_incomplete_thought_block = re.compile(r"([<\[])(think|thinking)([>\]])(?!.*?\1/\2\3)(.*)", flags=re.IGNORECASE | re.DOTALL)  # opened but not closed; thought contents -> group 4
+_doubled_think_tag = re.compile(r"([<\[])(think|thinking)([>\]])\n([<\[])(think|thinking)([>\]])", flags=re.IGNORECASE | re.DOTALL)
+_nan_thought_block = re.compile(r"([<\[])(think|thinking)([>\]])\nNaN\n([<\[])/(think|thinking)([>\]])\n", flags=re.IGNORECASE | re.DOTALL)
+_thought_begin_tag = re.compile(r"([<\[])(think|thinking)([>\]])", flags=re.IGNORECASE | re.DOTALL)
+_thought_end_tag = re.compile(r"([<\[])/(think|thinking)([>\]])", flags=re.IGNORECASE | re.DOTALL)
+
+def remove_persona_from_start_of_line(settings: env, role: str, content: str) -> str:
+    persona = settings.role_names.get(role, None)
+    if persona is None:
+        return content
+    _persona_name_at_start_of_line = re.compile(f"^{persona}:\\s+", re.MULTILINE)
+    content = re.sub(_persona_name_at_start_of_line, r"", content)
+    return content
+
+def clean(settings: env, message: str, thoughts_mode: str, add_ai_persona_name: bool) -> str:
+    """Heuristically clean up an LLM-generated message."""
+
+    # First remove any mentions of the AI persona's name at the start of any line in the message.
+    # The model might generate this anywhere - before the thought block, or after the thought block.
+    #
+    # E.g. "AI: blah" -> "blah".
+    #
+    # This is important for consistency, since many models randomly sometimes add the persona name, and sometimes don't.
+    #
+    message = remove_persona_from_start_of_line(settings=settings, role="assistant", content=message)
+
+    # Fix the most common kinds of broken thought blocks (for thinking models)
+    message = re.sub(_doubled_think_tag, r"\1\2\3", message)  # <think><think>...
+    message = re.sub(_nan_thought_block, r"", message)  # <think>NaN</think>
+
+    # QwQ-32B: the model was trained not to emit the opening <think> tag, but to begin thinking right away. Still, it sometimes inserts that tag, but not always.
+    #
+    # Also sometimes, the model skips thinking and starts writing the final answer immediately (although it shouldn't do that). There's no way to detect this case
+    # on the fly, because the opening <think> tag is *supposed to* be missing from the output when the model works correctly. The only way we can detect this is
+    # when #he output is complete; there won't be a closing </think> tag in it.
+    #
+    # At least in my tests, QwQ-32B always closes its thought blocks correctly, so if </think> is missing, it means that the model didn't generate a thought block.
+    # If </think> is there, then it did.
+    #
+    # So we search for a closing </think>, and if that's there, but there is no opening <think>, we add the opening tag.
+    #
+    # What we have here works when there is at most one think block in the message - should be sufficient in practice.
+    # TODO: Should we add the opening <think> already when streaming, or even add it to the prompt? How can we add a partial message with the API? Drawback: prevents the model from replying without thinking even in simple cases.
+    #
+    g = re.search(_thought_end_tag, message)
+    if g is not None and re.search(_thought_begin_tag, message) is None:
+        message = f"{g.group(1)}{g.group(2)}{g.group(3)}\n{message}"  # Prepend the message with a matching beginning think tag (for QwQ-32B, it's "<think>", but let's be general)
+
+    # Now we should have clean thought blocks.
+    # Treat them next.
+    if thoughts_mode == "discard":  # for cases where we're not going to read them anyway (e.g. when we pipe the output to a script that only needs the final answer)
+        message = re.sub(_complete_thought_block, r"", message)
+        message = re.sub(_incomplete_thought_block, r"", message)
+    elif thoughts_mode == "colorize":  # For cases where we want to see the thought blocks. Colorize them. (TODO: Maybe make some kind of data structure instead.)
+        # Colorize thought blocks (thinking models)
+        #
+        # TODO: this is for text terminals now; support also HTML colorization. Something like:
+        # r"<hr><font color="#a0a0a0">\4</font><hr>"  -- simple variant
+        # r"<hr><font color="#8080ff"><details name="thought"><summary><i>Thought</i></summary><font color="#a0a0a0">$4</font></details></font><hr>"  -- complete thought
+        # r"<hr><font color="#8080ff"><i>Thinking...</i><br><font color="#a0a0a0">$4<br></font><i>Thinking...</i></font><hr>"  -- incomplete thought
+        #
+        blue_thought = colorize("Thought", colorizer.Fore.BLUE)
+        def _colorize(match_obj):
+            s = match_obj.group(4)
+            s = colorize(s, colorizer.Style.DIM)
+            return f"⊳⊳⊳{blue_thought}⊳⊳⊳\n{s}⊲⊲⊲{blue_thought}⊲⊲⊲\n"
+        message = re.sub(_complete_thought_block, _colorize, message)
+        message = re.sub(_incomplete_thought_block, _colorize, message)
+    # else do nothing, i.e. keep thought blocks as-is.
+
+    # Remove whitespace surrounding the whole message. (Do this last.)
+    message = message.strip()
+
+    # Postprocess:
+    #
+    # If we should add the AI persona's name, now do so at the beginning of the message, for consistency.
+    # It will appear before the thought block, if any, because this is the easiest to do. :)
+    #
+    # Cases where we DON'T need to do this:
+    #   - Chat app, which usually has a separate UI element for the persona name, aside from the actual chat text content UI element.
+    #   - Piping output to a script, in which case the chat framework is superfluous. In that use case, we really use the LLM
+    #     as an instruct-tuned model, i.e. a natural language processor that is programmed via free-form instructions in English.
+    #     Raven's PDF importer does this a lot.
+    if add_ai_persona_name:
+        message = f"{settings.char}: {message}"
+
+    return message
+
+
 # --------------------------------------------------------------------------------
 # The most important function - call LLM, parse result
 
@@ -336,83 +434,257 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
         logger.error(f"Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
         logger.error(f"{type(exc)}: {exc}")
         raise
+
     llm_output = llm_output.getvalue()
-
-    # e.g. "AI: blah" -> "blah"
-    if llm_output.startswith(f"{settings.char}: "):
-        llm_output = llm_output[len(settings.char) + 2:]
-
-    # TODO: Support QwQ-32B, seems to be the best local thinking model as of April 2025.
-    #  - QwQ is trained not to emit the opening <think> tag, but to begin thinking right away. So we should insert a <think> at the beginning.
-    #  - But sometimes the model (at least the Q4_K_M quant) still emits that tag itself, so check the output (the first chunk, as the output is being streamed)
-    #    first before adding another copy of the tag.
-    #  - Usually, the model will correctly emit a closing </think> tag when it's done thinking, and then start writing its final answer.
-    #  - But sometimes, it skips thinking and starts writing the final answer immediately (although it shouldn't do that). There's no way to detect this on the fly,
-    #    because the opening <think> tag is *supposed to* be missing from the output when the model works correctly. The only way we can detect this case is when
-    #    the output is complete; there won't be a closing </think> tag in it.
-    #  - QwQ sometimes needs a really long response length to return a complete answer. 3200 tokens is fine. We need this because it's difficult to detect
-    #    programmatically whether a response is complete. At a lower level, we could look at the logits at the final token - if the END token has a high enough
-    #    probability, then the LLM most likely finished writing. But here we don't have access to that.
-    #  - I don't know whether it's a model issue or a SillyTavern issue, but in my manual testing, I've also had an issue of getting a "<think>NaN</think>"
-    #    at the start of the AI's message whenever I use the "Continue" feature (to extend a reply that was cut too early).
-
-    # Support thinking models (such as DeepSeek-R1-Distill-Qwen-32B).
-    # Drop "<think>...</think>" sections from the output, and then strip whitespace.
-    #
-    # logger.debug("Before think strip: " + llm_output)
-    llm_output = re.sub(r"<think>(.*?)</think>", "", llm_output, flags=re.IGNORECASE | re.DOTALL).strip()
-    # logger.debug("After  think strip: " + llm_output)
-
-    n_tokens = n_chunks - 2  # No idea why, but that's how it empirically is (see ooba server terminal output). Investigate later.
+    n_tokens = n_chunks - 2  # No idea why, but that's how it empirically is (see ooba server terminal output).  # TODO: Investigate later.
 
     return env(data=llm_output,
                n_tokens=n_tokens,
                dt=tim.dt)
 
+
 # --------------------------------------------------------------------------------
-# Minimal chat client
+# Minimal chat client.
+#
+# Also a usage example for the API of this module.
+
+# TODO: fix `mcpyrate.colorizer` and release new version, this belongs there. This version works also in `input` when `readline` is enabled.
+def colorize(text, *colors):
+    """Colorize string `text` for terminal display.
+
+    Always reset style and color at the start of `text`, as well as after it.
+
+    Returns `text`, augmented with color and style commands for terminals.
+
+    For available `colors`, see `Fore`, `Back` and `Style`.
+
+    Usage::
+
+        print(colorize("I'm new here", Fore.GREEN))
+        print(colorize("I'm bold and bluetiful", Style.BRIGHT, Fore.BLUE))
+
+    Each entry can also be a tuple (arbitrarily nested), which is useful
+    for defining compound styles::
+
+        BRIGHT_BLUE = (Style.BRIGHT, Fore.BLUE)
+        ...
+        print(colorize("I'm bold and bluetiful, too", BRIGHT_BLUE))
+
+    **CAUTION**: Does not nest. If you want to set a color and style
+    until further notice, use `setcolor` instead.
+    """
+    # To allow the `readline` module to calculate the visual length of colored text correctly, we can wrap the ANSI escape sequences
+    # in ASCII escape sequences that temporarily disable `readline`'s length counting:
+    #     \x01 is ASCII "Start of Heading" (SOH) character.
+    #     \x02 is ASCII "Start of Text" (STX) character.
+    #
+    #     https://www.reddit.com/r/commandline/comments/1d4t3xz/gnu_readline_issues_setting_up_a_python_prompt/
+    #
+    # Also, to use `readline` correctly, the prompt must be supplied to your call to `input` so that `readline` can perform
+    # the prompt printing, because it's not possible to get it back from the terminal (were we to print it from our own code).
+    # When you do that, browsing history entries no longer clears the prompt, and the prompt is protected from backspacing.
+    #     https://stackoverflow.com/questions/75987688/how-can-readline-be-told-not-to-erase-externally-supplied-prompt
+    return "\x01{}\x02{}\x01{}\x02".format(colorizer.setcolor(colors),
+                                           text,
+                                           colorizer.setcolor())
 
 def chat(backend_url):
     """Minimal LLM chat client, for testing/debugging."""
-    try:
-        message_number = 0
-        print(f"Connecting to {backend_url}")
-        print("    available models:")
-        for model_name in list_models(backend_url):
-            print(f"        {model_name}")
+    import readline  # noqa: F401, side effect: enable GNU readline in input()
+    # import rlcompleter  # noqa: F401, side effects: readline tab completion
 
+    config_dir = pathlib.Path(_config_dir).expanduser().resolve()
+    config_file_location = config_dir / "llmclient_history"
+    print(colorize(f"GNU readline available. Saving user inputs to {str(config_file_location)}.", colorizer.Style.BRIGHT))
+    print(colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
+    print()
+    try:
+        readline.read_history_file(config_file_location)
+    except FileNotFoundError:
+        pass
+
+    def save_history():
+        config_dir.mkdir(parents=True, exist_ok=True)
+        readline.set_history_length(1000)
+        readline.write_history_file(config_file_location)
+    atexit.register(save_history)
+
+    try:
         try:
+            print(colorize(f"Connecting to LLM backend at {backend_url}", colorizer.Style.BRIGHT))
+            list_models(backend_url)  # just do something, to try to connect
+            print(colorize("    Connected!", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+            print()
             settings = setup(backend_url=backend_url)  # If this succeeds, then we know the backend is alive.
         except Exception as exc:
-            msg = f"Failed to connect to LLM backend, reason {type(exc)}: {exc}"
+            print(colorize("    Failed!", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
+            msg = f"Failed to connect to LLM backend at {backend_url}, reason {type(exc)}: {exc}"
             logger.error(msg)
             raise RuntimeError(msg)
 
+        def chat_show_model_info():
+            print(f"    {colorize('Current model', colorizer.Style.BRIGHT)}: {settings.model}")
+            print(f"    {colorize('Character', colorizer.Style.BRIGHT)}: {settings.char} [defined in this client]")
+            print()
+        chat_show_model_info()
+
+        print(colorize("Starting chat.", colorizer.Style.BRIGHT))
+        print()
+        def chat_show_help():
+            print(colorize("=" * 80, colorizer.Style.BRIGHT))
+            print("    llmclient.py - Minimal LLM client for testing/debugging.")
+            print()
+            print("    Special commands (tab-completion available):")
+            print("        !clear   - Start new chat (clear history)")
+            print("        !history - Print a cleaned-up transcript of the chat history")
+            print("        !model   - Show which model is in use")
+            print("        !models  - List all models available at connected backend")
+            print("        !help    - Show this message again")
+            print()
+            print("    Press Ctrl+D to exit chat.")
+            print(colorize("=" * 80, colorizer.Style.BRIGHT))
+            print()
+        chat_show_help()
+
+        # https://docs.python.org/3/library/readline.html#readline-completion
+        # https://stackoverflow.com/questions/6718196/determine-the-common-prefix-of-multiple-strings
+        candidates = ["clear", "history", "model", "models", "help"]
+        def completer(text, state):  # completer for special commands
+            if not text.startswith("!"):  # Not a command -> no completions.
+                return None
+            text = text[1:]
+
+            # Just a "!"? -> List all commands.
+            if not text:
+                if state < len(candidates):
+                    return f"!{candidates[state]}"
+                return None
+
+            # Score the possible completions for the given prefix `text`.
+            scores = [len(os.path.commonprefix([text, candidate])) for candidate in candidates]
+            max_score = max(scores)
+            if max_score == 0:  # no match
+                return None
+
+            # Accept only completions that scored best (i.e. those that match the longest matched prefix).
+            # completions = [(c, s) for c, s in zip(candidates, scores) if s == max_score]
+            completions = [c for c, s in zip(candidates, scores) if s == max_score]
+            if state >= len(completions):  # No more completions for given prefix `text`.
+                return None
+            # completions = list(sorted(completions, key=lambda item: -item[1]))  # Sort by score, descending.
+            # completion, score = completions[state]
+            completion = completions[state]
+            return f"!{completion}"
+        readline.set_completer(completer)
+        readline.set_completer_delims(" ")
+        readline.parse_and_bind("tab: complete")
+
+        def chat_show_list_of_models():
+            available_models = list_models(backend_url)
+            print(colorize("    Available models:", colorizer.Style.BRIGHT))
+            for model_name in available_models:
+                print(f"        {model_name}")
+            print()
+
+        # TODO: we don't need the `color=False` option now that we fixed `colorize` to work with `readline`/`input`.
+        def format_message_number(message_number: Optional[int], color: bool) -> None:
+            if message_number is not None:
+                out = f"[#{message_number}]"
+                if color:
+                    out = colorize(out, colorizer.Style.DIM)
+                return out
+            return ""
+
+        def format_persona(role: str, color: bool) -> None:
+            persona = settings.role_names.get(role, None)
+            if role == "system" and persona is None:
+                out = "<<system>>"
+                if color:
+                    out = colorize(out, colorizer.Style.DIM)
+                return out
+            else:
+                out = persona
+                if color:
+                    out = colorize(out, colorizer.Style.BRIGHT)
+                return f"{out}:"
+
+        def format_message_heading(message_number: Optional[int], role: str, color: bool):
+            colorful_number = format_message_number(message_number, color)
+            colorful_persona = format_persona(role, color)
+            if message_number is not None:
+                return f"{colorful_number} {colorful_persona} "
+            else:
+                return f"{colorful_persona} "
+
+        def chat_print_message(message_number: Optional[int], role: str, content: str) -> None:
+            print(format_message_heading(message_number, role, color=True), end="")
+            print(remove_persona_from_start_of_line(settings=settings, role=role, content=content))
+
+        def chat_print_history(history: List[Dict[str, str]]) -> None:
+            for k, item in enumerate(history):
+                chat_print_message(k, item["role"], item["content"])
+                print()
+
         history = new_chat(settings)
-
-        print(f"    current model: {settings.model}")
-        print(f"    character: {settings.char} [defined in this client]")
-        print("Starting chat. Press Ctrl+D to exit.")
-        print()
-        print(f"[#{message_number}] ", end="")
-        print(settings.greeting)
-        print()
-
+        new_chat_history = history
+        chat_print_history(history)  # show initial blank history
+        injectors = [format_chat_datetime_now,  # let the LLM know the current local time and date
+                     format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
         while True:
-            # Injects
-            n_injects = 2
-            history = add_chat_message(settings, history, role="system", message=format_chat_datetime_now())
-            history = add_chat_message(settings, history, role="system", message=format_reminder_to_focus_on_latest_input())
+            original_history = history
+            user_message_number = len(history)
+            ai_message_number = user_message_number + 1
 
-            # User's turn
-            user_message = input("> ")
+            # User's turn - print a user input prompt and get the user's input.
+            #
+            # The `readline` module takes its user input prompt from what we supply to `input`, so we must print the prompt via `input`, colors and all.
+            # The colorizer automatically wraps the ANSI color escape codes in ASCII escape codes that tell `readline` not to include them in its
+            # visual length calculation.
+            #
+            # This avoids the user input prompt getting overwritten when browsing history entries, and protects it from backspacing.
+            user_message = input(format_message_heading(user_message_number, role="user", color=True))
+            print()
+
+            # Interpret special commands for this LLM client
+            if user_message == "!clear":
+                print(colorize("Starting new chat session (resetting history)", colorizer.Style.BRIGHT))
+                history = new_chat_history
+                chat_print_history(history)
+                continue
+            elif user_message == "!history":
+                print(colorize("Chat history (cleaned up):", colorizer.Style.BRIGHT))
+                print(colorize("=" * 80, colorizer.Style.BRIGHT))
+                chat_print_history(history)
+                print(colorize("=" * 80, colorizer.Style.BRIGHT))
+                print()
+                continue
+            elif user_message == "!model":
+                chat_show_model_info()
+                continue
+            elif user_message == "!models":
+                chat_show_list_of_models()
+                continue
+            elif user_message == "!help":
+                chat_show_help()
+                continue
+
+            # Prepare to prompt the LLM.
+
+            # Perform the temporary injects.
+            for thunk in injectors:
+                history = inject_chat_message(depth=0, settings=settings, history=history, role="system", message=thunk())
+
+            # Add the user's message to the context.
             history = add_chat_message(settings, history, role="user", message=user_message)
 
-            # AI's turn
-            print(f"[#{message_number}] ", end="")
-            message_number += 1
+            # Now:
+            #   -1 = user's last message
+            #   -2 = last inject
+
+            # AI's turn - prompt the LLM.
+            print(format_message_number(ai_message_number, color=True))
             chars = 0
-            def progress_callback(n_chunks, chunk_text):
+            def progress_callback(n_chunks, chunk_text):  # any UI live-update code goes here, in the callback
                 # TODO: think of a better way to split to lines
                 nonlocal chars
                 chars += len(chunk_text)
@@ -423,22 +695,25 @@ def chat(backend_url):
                     chars = 0
                 print(chunk_text, end="")
                 sys.stdout.flush()
-            out = invoke(settings, history, progress_callback)
-            print()
-            print()
-            print(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]")
+            out = invoke(settings, history, progress_callback)  # `out.data` is now the complete response
+            print()  # add the final newline
 
-            # When we get here:
-            #   -1 = user's last message
-            #   -2 = last inject
-            for _ in range(n_injects):
-                history.pop(-2)
-            if not out.data.startswith(f"{settings.char}: "):
-                out.data = f"{settings.char}: {out.data}"
+            # Clean up the AI's reply (heuristically).
+            out.data = clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)  # persona name is already added by `add_chat_message`
+
+            # Show performance statistics
+            print(colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))
+            print()
+
+            # Discard the temporary injects (resetting history to the start of this round, before user's message).
+            history = original_history
+
+            # Add the user's and the AI's messages to the chat history.
+            history = add_chat_message(settings, history, role="user", message=user_message)
             history = add_chat_message(settings, history, role="assistant", message=out.data)
     except (EOFError, KeyboardInterrupt):
         print()
-        print("Exiting chat.")
+        print(colorize("Exiting chat.", colorizer.Style.BRIGHT))
         print()
 
 def main():

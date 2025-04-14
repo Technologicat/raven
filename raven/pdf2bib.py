@@ -356,6 +356,7 @@ def setup_prompts(settings: env) -> env:
         #     history = llmclient.new_chat(settings)
         #     history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_check_authorlist}\n\n{text}")
         #     out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="*"))
+        #     out.data = llmclient.clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
         #     has_author_list = out.data[-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
         #     has_author_list = has_author_list.translate(str.maketrans('', '', string.punctuation))  # Strip punctuation, in case of spurious formatting.
         #     answers[has_author_list] += 1
@@ -380,6 +381,7 @@ def setup_prompts(settings: env) -> env:
         history = llmclient.new_chat(settings)
         history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_get_authors}\n-----\n\n{text}")
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="A"))
+        out.data = llmclient.clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
 
         logger.debug(f"\n        extracted : {out.data}")
 
@@ -392,12 +394,14 @@ def setup_prompts(settings: env) -> env:
         history = llmclient.new_chat(settings)
         history = llmclient.add_chat_message(settings, history, role="user", message=prompt_drop_author_affiliations.format(author_names=out.data))
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="a"))
+        out.data = llmclient.clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
 
         logger.debug(f"\n        LLM pass 1: {out.data}")
 
         history = llmclient.new_chat(settings)
         history = llmclient.add_chat_message(settings, history, role="user", message=prompt_reformat_author_separators.format(author_names=out.data))
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
+        out.data = llmclient.clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
 
         logger.debug(f"\n        LLM pass 2: {out.data}")
 
@@ -542,6 +546,7 @@ def setup_prompts(settings: env) -> env:
         history = llmclient.new_chat(settings)
         history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_get_title}\n-----\n\n{text}")
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="T"))
+        out.data = llmclient.clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
 
         logger.debug(f"\n        original : {out.data}")
 
@@ -597,6 +602,7 @@ def setup_prompts(settings: env) -> env:
         history = llmclient.new_chat(settings)
         history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_get_keywords}\n-----\n\n{text}")
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="K"))
+        out.data = llmclient.clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
 
         logger.debug(f"\n        original : {out.data}")
 
@@ -664,6 +670,7 @@ def setup_prompts(settings: env) -> env:
         history = llmclient.new_chat(settings)
         history = llmclient.add_chat_message(settings, history, role="user", message=f"{prompt_get_abstract}\n-----\n\n{text}")
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
+        out.data = llmclient.clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
 
         abstract = out.data.strip()
 
@@ -772,6 +779,7 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                             history = llmclient.new_chat(settings)
                             history = llmclient.add_chat_message(settings, history, role="user", message=f"{data}\n-----\n\n{text_from_pdf}")
                             out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph=progress_symbol))
+                            out.data = llmclient.clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
                             bibtex_entry.write(f"    {field_key} = {{{out.data}}},\n")
                         elif data_kind == "function":
                             function_output = data(uid, text_from_pdf)
