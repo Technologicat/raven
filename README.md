@@ -453,7 +453,7 @@ Then, install Raven's dependencies as follows. (If you are a seasoned pythonista
 **Basic install without GPU compute support**:
 
 ```bash
-pdm sync
+pdm install
 ```
 
 **Install with GPU compute support**:
@@ -461,7 +461,7 @@ pdm sync
 This requires an NVIDIA GPU, the proprietary NVIDIA drivers, and CUDA. The GPU will be used for accelerating BibTeX imports.
 
 ```bash
-pdm sync --prod -G cuda
+pdm install --prod -G cuda
 ```
 
 If you want to add GPU compute support later, you can run this install command on top of an already installed Raven.
