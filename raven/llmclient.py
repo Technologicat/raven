@@ -358,10 +358,10 @@ def clean(settings: env, message: str, thoughts_mode: str, add_ai_persona_name: 
         # r"<hr><font color="#8080ff"><details name="thought"><summary><i>Thought</i></summary><font color="#a0a0a0">$4</font></details></font><hr>"  -- complete thought
         # r"<hr><font color="#8080ff"><i>Thinking...</i><br><font color="#a0a0a0">$4<br></font><i>Thinking...</i></font><hr>"  -- incomplete thought
         #
-        blue_thought = colorize("Thought", colorizer.Fore.BLUE)
+        blue_thought = colorizer.colorize("Thought", colorizer.Fore.BLUE)
         def _colorize(match_obj):
             s = match_obj.group(4)
-            s = colorize(s, colorizer.Style.DIM)
+            s = colorizer.colorize(s, colorizer.Style.DIM)
             return f"⊳⊳⊳{blue_thought}⊳⊳⊳\n{s}⊲⊲⊲{blue_thought}⊲⊲⊲\n"
         message = re.sub(_complete_thought_block, _colorize, message)
         message = re.sub(_incomplete_thought_block, _colorize, message)
@@ -448,46 +448,6 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
 #
 # Also a usage example for the API of this module.
 
-# TODO: fix `mcpyrate.colorizer` and release new version, this belongs there. This version works also in `input` when `readline` is enabled.
-def colorize(text, *colors):
-    """Colorize string `text` for terminal display.
-
-    Always reset style and color at the start of `text`, as well as after it.
-
-    Returns `text`, augmented with color and style commands for terminals.
-
-    For available `colors`, see `Fore`, `Back` and `Style`.
-
-    Usage::
-
-        print(colorize("I'm new here", Fore.GREEN))
-        print(colorize("I'm bold and bluetiful", Style.BRIGHT, Fore.BLUE))
-
-    Each entry can also be a tuple (arbitrarily nested), which is useful
-    for defining compound styles::
-
-        BRIGHT_BLUE = (Style.BRIGHT, Fore.BLUE)
-        ...
-        print(colorize("I'm bold and bluetiful, too", BRIGHT_BLUE))
-
-    **CAUTION**: Does not nest. If you want to set a color and style
-    until further notice, use `setcolor` instead.
-    """
-    # To allow the `readline` module to calculate the visual length of colored text correctly, we can wrap the ANSI escape sequences
-    # in ASCII escape sequences that temporarily disable `readline`'s length counting:
-    #     \x01 is ASCII "Start of Heading" (SOH) character.
-    #     \x02 is ASCII "Start of Text" (STX) character.
-    #
-    #     https://www.reddit.com/r/commandline/comments/1d4t3xz/gnu_readline_issues_setting_up_a_python_prompt/
-    #
-    # Also, to use `readline` correctly, the prompt must be supplied to your call to `input` so that `readline` can perform
-    # the prompt printing, because it's not possible to get it back from the terminal (were we to print it from our own code).
-    # When you do that, browsing history entries no longer clears the prompt, and the prompt is protected from backspacing.
-    #     https://stackoverflow.com/questions/75987688/how-can-readline-be-told-not-to-erase-externally-supplied-prompt
-    return "\x01{}\x02{}\x01{}\x02".format(colorizer.setcolor(colors),
-                                           text,
-                                           colorizer.setcolor())
-
 def chat(backend_url):
     """Minimal LLM chat client, for testing/debugging."""
     import readline  # noqa: F401, side effect: enable GNU readline in input()
@@ -495,8 +455,8 @@ def chat(backend_url):
 
     config_dir = pathlib.Path(_config_dir).expanduser().resolve()
     config_file_location = config_dir / "llmclient_history"
-    print(colorize(f"GNU readline available. Saving user inputs to {str(config_file_location)}.", colorizer.Style.BRIGHT))
-    print(colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
+    print(colorizer.colorize(f"GNU readline available. Saving user inputs to {str(config_file_location)}.", colorizer.Style.BRIGHT))
+    print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
     print()
     try:
         readline.read_history_file(config_file_location)
@@ -511,27 +471,27 @@ def chat(backend_url):
 
     try:
         try:
-            print(colorize(f"Connecting to LLM backend at {backend_url}", colorizer.Style.BRIGHT))
+            print(colorizer.colorize(f"Connecting to LLM backend at {backend_url}", colorizer.Style.BRIGHT))
             list_models(backend_url)  # just do something, to try to connect
-            print(colorize("    Connected!", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+            print(colorizer.colorize("    Connected!", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
             print()
             settings = setup(backend_url=backend_url)  # If this succeeds, then we know the backend is alive.
         except Exception as exc:
-            print(colorize("    Failed!", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
+            print(colorizer.colorize("    Failed!", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
             msg = f"Failed to connect to LLM backend at {backend_url}, reason {type(exc)}: {exc}"
             logger.error(msg)
             raise RuntimeError(msg)
 
         def chat_show_model_info():
-            print(f"    {colorize('Current model', colorizer.Style.BRIGHT)}: {settings.model}")
-            print(f"    {colorize('Character', colorizer.Style.BRIGHT)}: {settings.char} [defined in this client]")
+            print(f"    {colorizer.colorize('Current model', colorizer.Style.BRIGHT)}: {settings.model}")
+            print(f"    {colorizer.colorize('Character', colorizer.Style.BRIGHT)}: {settings.char} [defined in this client]")
             print()
         chat_show_model_info()
 
-        print(colorize("Starting chat.", colorizer.Style.BRIGHT))
+        print(colorizer.colorize("Starting chat.", colorizer.Style.BRIGHT))
         print()
         def chat_show_help():
-            print(colorize("=" * 80, colorizer.Style.BRIGHT))
+            print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
             print("    llmclient.py - Minimal LLM client for testing/debugging.")
             print()
             print("    Special commands (tab-completion available):")
@@ -542,7 +502,7 @@ def chat(backend_url):
             print("        !help    - Show this message again")
             print()
             print("    Press Ctrl+D to exit chat.")
-            print(colorize("=" * 80, colorizer.Style.BRIGHT))
+            print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
             print()
         chat_show_help()
 
@@ -581,7 +541,7 @@ def chat(backend_url):
 
         def chat_show_list_of_models():
             available_models = list_models(backend_url)
-            print(colorize("    Available models:", colorizer.Style.BRIGHT))
+            print(colorizer.colorize("    Available models:", colorizer.Style.BRIGHT))
             for model_name in available_models:
                 print(f"        {model_name}")
             print()
@@ -591,7 +551,7 @@ def chat(backend_url):
             if message_number is not None:
                 out = f"[#{message_number}]"
                 if color:
-                    out = colorize(out, colorizer.Style.DIM)
+                    out = colorizer.colorize(out, colorizer.Style.DIM)
                 return out
             return ""
 
@@ -600,12 +560,12 @@ def chat(backend_url):
             if role == "system" and persona is None:
                 out = "<<system>>"
                 if color:
-                    out = colorize(out, colorizer.Style.DIM)
+                    out = colorizer.colorize(out, colorizer.Style.DIM)
                 return out
             else:
                 out = persona
                 if color:
-                    out = colorize(out, colorizer.Style.BRIGHT)
+                    out = colorizer.colorize(out, colorizer.Style.BRIGHT)
                 return f"{out}:"
 
         def format_message_heading(message_number: Optional[int], role: str, color: bool):
@@ -649,15 +609,15 @@ def chat(backend_url):
 
             # Interpret special commands for this LLM client
             if user_message == "!clear":
-                print(colorize("Starting new chat session (resetting history)", colorizer.Style.BRIGHT))
+                print(colorizer.colorize("Starting new chat session (resetting history)", colorizer.Style.BRIGHT))
                 history = new_chat_history
                 chat_print_history(history)
                 continue
             elif user_message == "!history":
-                print(colorize("Chat history (cleaned up):", colorizer.Style.BRIGHT))
-                print(colorize("=" * 80, colorizer.Style.BRIGHT))
+                print(colorizer.colorize("Chat history (cleaned up):", colorizer.Style.BRIGHT))
+                print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 chat_print_history(history)
-                print(colorize("=" * 80, colorizer.Style.BRIGHT))
+                print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 print()
                 continue
             elif user_message == "!model":
@@ -704,7 +664,7 @@ def chat(backend_url):
             out.data = clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)  # persona name is already added by `add_chat_message`
 
             # Show performance statistics
-            print(colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))
+            print(colorizer.colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))
             print()
 
             # Discard the temporary injects (resetting history to the start of this round, before user's message).
@@ -715,7 +675,7 @@ def chat(backend_url):
             history = add_chat_message(settings, history, role="assistant", message=out.data)
     except (EOFError, KeyboardInterrupt):
         print()
-        print(colorize("Exiting chat.", colorizer.Style.BRIGHT))
+        print(colorizer.colorize("Exiting chat.", colorizer.Style.BRIGHT))
         print()
 
 def main():
