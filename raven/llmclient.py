@@ -547,7 +547,6 @@ def chat(backend_url):
         chat_show_help()
 
         # https://docs.python.org/3/library/readline.html#readline-completion
-        # https://stackoverflow.com/questions/6718196/determine-the-common-prefix-of-multiple-strings
         candidates = ["clear", "history", "model", "models", "help"]
         def completer(text, state):  # completer for special commands
             if not text.startswith("!"):  # Not a command -> no completions.
@@ -561,6 +560,7 @@ def chat(backend_url):
                 return None
 
             # Score the possible completions for the given prefix `text`.
+            # https://stackoverflow.com/questions/6718196/determine-the-common-prefix-of-multiple-strings
             scores = [len(os.path.commonprefix([text, candidate])) for candidate in candidates]
             max_score = max(scores)
             if max_score == 0:  # no match
