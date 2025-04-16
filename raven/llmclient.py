@@ -638,11 +638,13 @@ def chat(backend_url):
             # User's turn - print a user input prompt and get the user's input.
             #
             # The `readline` module takes its user input prompt from what we supply to `input`, so we must print the prompt via `input`, colors and all.
-            # The colorizer automatically wraps the ANSI color escape codes in ASCII escape codes that tell `readline` not to include them in its
-            # visual length calculation.
+            # The colorizer automatically wraps the ANSI color escape codes (for the terminal app) in ASCII escape codes (for `readline` itself)
+            # that tell `readline` not to include them in its visual length calculation.
             #
-            # This avoids the user input prompt getting overwritten when browsing history entries, and protects it from backspacing.
-            user_message = input(format_message_heading(user_message_number, role="user", color=True))
+            # This avoids the input prompt getting overwritten when browsing history entries, and prevents backspacing over the input prompt.
+            # https://stackoverflow.com/questions/75987688/how-can-readline-be-told-not-to-erase-externally-supplied-prompt
+            input_prompt = format_message_heading(user_message_number, role="user", color=True)
+            user_message = input(input_prompt)
             print()
 
             # Interpret special commands for this LLM client
