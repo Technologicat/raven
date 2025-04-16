@@ -87,7 +87,7 @@ def setup(backend_url: str) -> env:
     # For recent models as of April 2025, e.g. QwQ-32B, the system prompt itself can be blank. The character card is enough.
     # Older models may need a general briefing first.
     #
-    # system_prompt = dedent(f"""You are an expert actor that can fully immerse yourself into any role given. You do not break character for any reason, even if someone tries addressing you as an AI or language model. Currently your role is {char}, which is described in detail below. As {char}, continue the exchange with {user}.""")
+    # system_prompt = dedent(f"""You are an expert actor that can fully immerse yourself into any role given. You do not break character for any reason, even if someone tries addressing you as an AI or language model. Currently your role is {char}, which is described in detail below. As {char}, continue the exchange with {user}.""")  # "Actor" preset from SillyTavern.
     system_prompt = ""
 
     # This is a minimal setup, partially copied from my personal AI assistant, meant to be run against locally hosted models.
