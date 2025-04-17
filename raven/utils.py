@@ -336,6 +336,10 @@ def setup_font_ranges():
     dpg.add_font_range_hint(dpg.mvFontRangeHint_Default)
     # Greek for math
     dpg.add_font_range(0x370, 0x3ff)
+    # infinity symbol ∞
+    dpg.add_font_chars([0x221e])
+    # normal subgroup symbols ⊲, ⊳ (useful also as GUI arrows and similar)
+    dpg.add_font_range(0x22b2, 0x22b3)
     # subscripts
     dpg.add_font_range(0x2080, 0x2089)  # zero through nine
     dpg.add_font_range(0x1d62, 0x1d65)  # i, r, u, v
