@@ -11,6 +11,7 @@ from unpythonic.env import env
 # See also `run-on-internal-gpu.sh` for another way to select the GPU when starting the app, without modifying any files.
 device_string = "cuda:0"
 
+device_string = device_string if torch.cuda.is_available() else "cpu"
 device_name = torch.cuda.get_device_name(device_string) if torch.cuda.is_available() else "cpu"
 torch_dtype = torch.float16 if device_string.startswith("cuda") else torch.float32
 
