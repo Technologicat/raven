@@ -7,7 +7,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-from glob import glob
+import glob
 import os
 import platform
 import psutil
