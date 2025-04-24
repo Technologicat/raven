@@ -66,6 +66,7 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
     - [From source](#from-source)
         - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
         - [Install Raven via PDM](#install-raven-via-pdm)
+            - [Install on an Intel Mac with MacOSX 10.x](#install-on-an-intel-mac-with-macosx-10x)
         - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
         - [Activate the Raven venv (to run Raven commands such as `raven-visualizer`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer)
         - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
@@ -469,6 +470,29 @@ If you want to add GPU compute support later, you can run this install command o
 Installing dependencies may take a long time (up to 15-30 minutes, depending on your internet connection), because `torch` and the NVIDIA packages are rather large (my `.venv` shows 11.1 GB in total).
 
 Now the installation should be complete.
+
+#### Install on an Intel Mac with MacOSX 10.x
+
+Installing Raven may fail, if Torch cannot be installed.
+
+On MacOSX, installing torch 2.3.0 or later requires an ARM64 processor and MacOSX 11.0 or later.
+
+If you have an Intel Mac (x86_64) with MacOSX 10.x, to work around this, you can use Torch 2.2.x.
+
+To do this, modify Raven's `pyproject.toml` in a text editor, so that the line
+
+```
+    "torch>=2.4.0",
+```
+
+becomes
+
+```
+    "torch>=2.2.0,<2.3.0",
+```
+
+Then run `pdm install` again.
+
 
 ### Check that CUDA works (optional)
 
