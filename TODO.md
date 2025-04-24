@@ -23,6 +23,31 @@
 
 - Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven/config.py`.
 
+- Improve MacOSX support
+  - Raven already runs on MacOSX, but some things could be improved.
+  - When running on MacOSX, instead of the Ctrl key, all hotkeys use the Cmd key instead.
+    - We should detect the OS we're running on at app startup, and change help and tooltips accordingly.
+  - Resolve hotkey conflicts with MacOSX builtin hotkeys.
+    - The hidden debug window Ctrl+M (to show FPS stats) doesn't work, because Cmd+M is *Minimize window*.
+  - Right-click or right-drag features on MacOSX with a one-button mouse or trackpad?
+  - F-keys on MacOSX?
+
+- Fix issues found via user feedback from initial testing:
+  - Make the text headings clickable in the import window (same as clicking the corresponding button)
+  - Make highlight visualization clearer, now it obscures which cluster each data point belongs to
+    - Maybe just an outline, not a filled circle?
+    - Brighten the data point's own color, don't use a separate color? (Difficult, one data series per color)
+  - Add a screenful of spacer at end of info panel, to be able to scroll to last cluster
+  - Make the "Search" heading brighter to make it stand out
+  - Highlight/color data points by year, so that newer research is brighter
+    - What to do with Misc items which are scattered all over the semantic map?
+  - What if the AI models update?
+    - Currently, we just auto-install them once, at first use after Raven itself is installed.
+    - Do we need an "update AI models" feature?
+    - Models:
+      - Semantic embedder
+      - spaCy NLP model
+
 
 ## v0.2 and later
 
@@ -40,6 +65,7 @@
     - ERIC (educational sciences / didactics)
 
 - **Filtering**. Real-time view filtering, e.g. by authors or year range.
+  - Color data points by year (instead of cluster number; what to do about outliers?).
   - Needs the full list of authors ("Author, Other, Someone"), not just the summarized version ("Author et al."). The proprocessor doesn't currently save that to the dataset.
   - Need an "inactive" scatter series *on the bottom* of the plot, so that it doesn't cover the active datapoints (that match the filter).
     - Maybe one series per cluster: grayscale each color separately, and use a monotonic-brightness color map. This gives the appearance of the datapoints retaining their identity, just becoming grayed out.
