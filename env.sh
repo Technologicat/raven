@@ -19,7 +19,7 @@ DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
 # --------------------------------------------------------------------------------
 # Config
 
-# Location of Raven's venv, installed by PDM when you "pdm update".
+# Location of Raven's venv, installed by PDM when you "pdm install".
 VENV_BASE="$DIR/.venv"
 
 # The version of Python installed in that venv.
