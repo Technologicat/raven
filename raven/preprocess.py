@@ -1337,7 +1337,7 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
 
 def main() -> None:
     logger.info("Settings:")
-    logger.info(f"    Compute device '{config.device_string}' ({torch.cuda.get_device_name(config.device_string)}), data type {config.torch_dtype}")
+    logger.info(f"    Compute device '{config.device_string}' ({config.device_name}), data type {config.torch_dtype}")
     logger.info(f"        {torch.cuda.get_device_properties(config.device_string)}")
     logger.info(f"        Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(config.device_string))}")
     logger.info(f"        Detected CUDA version {torch.version.cuda}")
