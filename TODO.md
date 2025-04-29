@@ -33,6 +33,15 @@
   - F-keys on MacOSX?
 
 - Fix issues found via user feedback from initial testing:
+  - Installation instructions: TL;DR version (without CUDA), walk through how to import the included dataset
+  - Show the DOI
+    - Export list of DOIs (for full paper search automation)
+  - Author search
+    - Show full author list if it fits
+    - How to show author list if "Aaltonen et al." and the user is searching for "Virtanen" (200 names later in the same author list)
+  - Word cloud window size: make it possible to scale the window and image
+  - Fullscreen mode / Exit fullscreen mode, with icons
+  - Full reports of selected items that don't care whether the items fit into the info panel
   - Make the text headings clickable in the import window (same as clicking the corresponding button)
   - Make highlight visualization clearer, now it obscures which cluster each data point belongs to
     - Maybe just an outline, not a filled circle?
@@ -40,13 +49,16 @@
   - Add a screenful of spacer at end of info panel, to be able to scroll to last cluster
   - Make the "Search" heading brighter to make it stand out
   - Highlight/color data points by year, so that newer research is brighter
-    - What to do with Misc items which are scattered all over the semantic map?
+    - What to do with Misc items which are scattered all over the semantic map? Toggle for show/hide them?
   - What if the AI models update?
     - Currently, we just auto-install them once, at first use after Raven itself is installed.
     - Do we need an "update AI models" feature?
     - Models:
       - Semantic embedder
       - spaCy NLP model
+  - BibTeX import:
+    - handle umlauts: {\"o} -> ö
+    - drop braces: {GPU} clusters -> GPU clusters
 
 
 ## v0.2 and later
