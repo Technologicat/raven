@@ -33,8 +33,6 @@ from . import config
 # --------------------------------------------------------------------------------
 # Setup for minimal chat client (for testing/debugging)
 
-_config_dir = "~/.config/raven"  # for chat history
-
 output_line_width = 160  # for text wrapping in live update
 
 # --------------------------------------------------------------------------------
@@ -453,7 +451,7 @@ def chat(backend_url):
     import readline  # noqa: F401, side effect: enable GNU readline in input()
     # import rlcompleter  # noqa: F401, side effects: readline tab completion
 
-    config_dir = pathlib.Path(_config_dir).expanduser().resolve()
+    config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
     config_file_location = config_dir / "llmclient_history"
     print(colorizer.colorize(f"GNU readline available. Saving user inputs to {str(config_file_location)}.", colorizer.Style.BRIGHT))
     print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
@@ -682,7 +680,7 @@ def main():
     parser = argparse.ArgumentParser(description="""Minimal LLM chat client, for testing/debugging. You can use this for testing that Raven can connect to your LLM.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument(dest="backend_url", nargs="?", default=config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
+    parser.add_argument(dest="backend_url", nargs="?", default=config.llm_backend_url, type=str, metavar="url", help=f"where to access the LLM API (default, currently '{config.llm_backend_url}', is set in `raven/config.py`)")
     opts = parser.parse_args()
 
     chat(opts.backend_url)

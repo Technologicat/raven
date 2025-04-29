@@ -5,6 +5,18 @@ import torch
 from unpythonic.env import env
 
 # --------------------------------------------------------------------------------
+# LLM integration
+#
+# Used by the `pdf2bib` and `llmclient` modules.
+
+# URL used to connect to the LLM API.
+# Currently, only local LLMs are supported, as there is no mechanism to pass an API key. I don't use cloud LLMs myself, but pull requests regarding this are welcome.
+llm_backend_url = "http://127.0.0.1:5000"
+
+# For LLM client chat history and RAG database storage
+llm_save_dir = "~/.config/raven"
+
+# --------------------------------------------------------------------------------
 # Torch config
 
 # Which GPU to use in the preprocessor (BibTeX import), if available. If not available, CPU fallback is used automatically.
@@ -16,43 +28,56 @@ device_name = torch.cuda.get_device_name(device_string) if torch.cuda.is_availab
 torch_dtype = torch.float16 if device_string.startswith("cuda") else torch.float32
 
 # --------------------------------------------------------------------------------
-# Raven importer config
+# BiBTeX import config
 
-# Model that produces the high-dimensional semantic vectors.
+# AI model that produces the high-dimensional semantic vectors.
+# Available on HuggingFace. Auto-downloaded on first use.
+#
 # embedding_model = "sentence-transformers/all-mpnet-base-v2"
 # embedding_model = "Snowflake/snowflake-arctic-embed-m"
 embedding_model = "Snowflake/snowflake-arctic-embed-l"
 
-# Dimension reduction method for hiD -> 2D conversion, used in plotting the semantic point cloud.
-# vis_method = "umap"  # best quality, slow-ish
-vis_method = "tsne"  # fast
+# Dimension reduction method for hiD -> 2D conversion, used for generating the semantic map.
+#
+# vis_method = "umap"  # best quality, slow
+vis_method = "tsne"  # good quality, fast (recommended)
 
-# Find keywords, for visualizing common terms in clusters. Keyword extraction is somewhat expensive (requires NLP), so this can be disabled.
+# Whether to detect keywords, for visualizing common terms in clusters.
+#
+# Keyword extraction is somewhat expensive (requires NLP), so this can be disabled.
+# It's useful when browsing the semantic map, so we recommend keeping it enabled.
+#
 extract_keywords = True
 # extract_keywords = False
 
-# Moved to a command-line option of `visualize.py`.
-# Plot a word cloud? Requires `extract_keywords=True`.
-# plot_wordcloud = True
-# plot_wordcloud = False
-
 # NLP model for spaCy, used in keyword extraction.
-spacy_model = "en_core_web_sm"  # small pipeline; fast
-# spacy_model = "en_core_web_trf"  # Transformer-based pipeline; more accurate, slower, requires GPU, takes lots of VRAM
+#
+# Auto-downloaded on first use. Uses's spaCy's own auto-download mechanism. See https://spacy.io/models
+#
+spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but can also benefit from GPU acceleration.
+# spacy_model = "en_core_web_trf"  # Transformer-based pipeline; more accurate, slower, requires GPU, takes lots of VRAM.
 
-summarize = False  # Shorten abstracts using AI; VERY expensive; currently, result is unused anyway.
+summarize = False  # Shorten abstracts using AI? VERY slow; experimental, the results are not used yet.
+
+# AI model to use for summarization.
+# This is a small model specialized to the task of summarization ONLY, not a general-purpose LLM.
+#
+# Available on HuggingFace. Auto-downloaded on first use.
+#
+# `summarization_prefix`: Some summarization models need input to be formatted like "summarize: Actual text goes here..."; use this to set the prefix.
+# For whether you need this and what the value should be, see the model card for your particular model.
 
 # summarization_model = "KipperDev/bart_summarizer_model"  # https://huggingface.co/KipperDev/bart_summarizer_model
-# summarization_prefix = "summarize: "  # some models need this (see the model card for your particular model)
+# summarization_prefix = "summarize: "
 
 # summarization_model = "Falconsai/text_summarization"
-summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"
-# summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"
+# summarization_prefix = ""
 
+summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"  # maybe better for scientific use?
 summarization_prefix = ""
 
-# PDF importer - URL used to connect to the LLM API. Used if no URL is given on the command line.
-llm_backend_url = "http://127.0.0.1:5000"
+# summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"  # there's also a larger variant (slower, with possibly better accuracy)
+# summarization_prefix = ""
 
 # --------------------------------------------------------------------------------
 # Stopword list for importer
@@ -61,7 +86,7 @@ llm_backend_url = "http://127.0.0.1:5000"
 # with some manual editing afterward.
 #
 # When editing this, keep in mind the use case of this program, and keep the list field-agnostic.
-# If the embedding model is good, it will do the heavy lifting.
+# If the `embedding_model` is good, it will do the heavy lifting.
 #
 # E.g. don't filter:
 #  - "best": e.g. "best practices" (software engineering)
@@ -185,7 +210,7 @@ metadata_stopwords = ["academy", "author", "conference", "journal", "institute",
 copyright_stopwords = ["all", "right", "reserved"]
 
 # some common publisher names
-publisher_stopwords = ["elsevier", "elsevi",  # "elsevi" is an incorrect lemmatization of "elsevier"
+publisher_stopwords = ["elsevier", "elsevi",  # "elsevi" is an incorrect lemmatization of "elsevier", though I suppose it makes sense (and leaves me wondering what kind of publication would be the elseviest).
                        "springer",  # we can't do the same for "spring", even though "springer" is much springer than a regular spring.
                        "wiley",
                        "llc"]  # Some Company Name LLC
@@ -213,7 +238,7 @@ custom_stopwords = set(filler_stopwords + scilang_stopwords +
                        publisher_stopwords + misc_stopwords)
 
 # --------------------------------------------------------------------------------
-# String normalization, common to importer and GUI.
+# String normalization, common to BibTeX import and the raven-visualizer GUI.
 
 # Currently, unicode subscript and superscript characters.
 
@@ -325,7 +350,7 @@ gui_config = env(  # ----------------------------------------
                  acknowledgment_duration=1.0,  # seconds, for button flashes upon clicking/hotkey.
                  scroll_ends_here_duration=0.5,  # seconds, for scrolling-past-end animation fadeout.
                  smooth_scrolling=True,  # whether to animate scrolling (all info panel scrolling, except scrollbar and mouse wheel, which are handled internally by DPG)
-                 smooth_scrolling_step_parameter=0.8,  # Essentially, a nondimensional rate in the half-open interval (0, 1]; see math comment after `SmoothScrolling`.
+                 smooth_scrolling_step_parameter=0.8,  # Essentially, a nondimensional rate in the half-open interval (0, 1]; see math comment after `raven.animation.SmoothScrolling`.
                  # ----------------------------------------
                  # Mouse
                  selection_brush_radius_pixels=10,
