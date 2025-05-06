@@ -32,7 +32,9 @@ dependencies = [
     "torch>=2.4.0",
     "unpythonic>=0.15.3",
     "wordcloud>=1.9.3",
-    "wosfile>=0.6"
+    "wosfile>=0.6",
+    "chromadb>=1.0.8",
+    "bm25s>=0.2.12"
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]

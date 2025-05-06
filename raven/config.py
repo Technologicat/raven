@@ -16,6 +16,10 @@ llm_backend_url = "http://127.0.0.1:5000"
 # For LLM client chat history and RAG database storage
 llm_save_dir = "~/.config/raven"
 
+# AI model for semantic search (RAG backend `raven.hybridir`), encoding both questions and answers into a joint semantic space.
+# Available on HuggingFace. Auto-downloaded on first use.
+qa_embedding_model = "sentence-transformers/multi-qa-mpnet-base-cos-v1"
+
 # --------------------------------------------------------------------------------
 # Torch config
 
