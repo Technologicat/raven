@@ -30,7 +30,7 @@ torch_dtype = torch.float16 if device_string.startswith("cuda") else torch.float
 # --------------------------------------------------------------------------------
 # BiBTeX import config
 
-# AI model that produces the high-dimensional semantic vectors.
+# AI model that produces the high-dimensional semantic vectors, for visualization in `raven-visualizer`.
 # Available on HuggingFace. Auto-downloaded on first use.
 #
 # embedding_model = "sentence-transformers/all-mpnet-base-v2"
