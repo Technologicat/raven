@@ -1,4 +1,4 @@
-"""Configuration for BibTeX extraction/visualization."""
+"""Configuration for Raven."""
 
 import torch
 
