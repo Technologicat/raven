@@ -1,8 +1,18 @@
 """A simple hybrid (keyword + semantic) information retrieval (IR) system.
 
-While this is no Google, this can be useful for retrieval-augmented generation (RAG) in an LLM context.
+While this is no Google, this can be useful for retrieval-augmented generation (RAG) for LLMs,
+and for adding a semi-intelligent fulltext search to an app.
 
-QwQ-32B wrote the very first initial rough draft, from which this was then manually coded.
+The search index is persisted automatically. Still, **everything** runs from RAM.
+
+The implementation is rather memory-hungry, because we keep a second copy of chunks/tokens/embeddings
+as well as the fulltext of each document. This keeps the code simple, and enables easy index rebuilds.
+For example, if the fulltext of each document is 100 KB, and you have 1e4 such documents, you'll need
+100 * 1e3 * 1e4 bytes = 1e9 bytes = 1 GB just to keep a copy of the fulltexts in memory; and likely a
+couple more times this, to accommodate the two indexing mechanisms. But I'm thinking that nowadays
+laptops have enough RAM for this not to be an issue with the dataset sizes needed in Raven.
+
+QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
 __all__ = ["HybridIR"]
@@ -298,29 +308,37 @@ class HybridIR:
 
         `embedding_model_name`: Semantic vector embedder, for semantic search.
 
+                                Used only when the datastore has not been created yet (indicated by the presence
+                                of the full-document stash file).
+
+                                After the datastore has been created, its embedding model cannot be changed,
+                                and `HybridIR` will automatically use the model that was used to create
+                                that datastore.
+
                                 Basically you can put a HuggingFace model path here.
                                 The default is a QA model that was trained specifically for semantic search.
 
                                 For more details, see `sentence_transformers.SentenceTransformer`, and:
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
 
-        `chunk_size`: Length of a search result chunk, in characters (Unicode codepoints).
+        `chunk_size`: Length of a search result chunk, in characters (Python native, so Unicode codepoints).
 
                       Smaller chunks gives more fine-grained search results inside each document, at the cost of
                       increasing the size of the index (because each chunk is a data record).
 
                       Note also it is possible that the neighbors of a matching chunk don't match the same search,
                       so if the chunk size is too small, you'll only get a very short snippet, with not much context.
-                      (But see the "offset" of the chunk returned - you can then retrieve as much context as you want
-                       from `your_hybrid_ir.documents[result["document_id"]]["text"]`, which contains the full text.)
 
-        `overlap`:    For sliding window chunking, to avoid losing context at the seams of the chunks.
-                      E.g. 0.25 means that the next chunk repeats the final 25% of the current chunk.
+                      But see the "offset" field of the chunk returned - you can then retrieve as much context as you want
+                      from `your_hybrid_ir.documents[result["document_id"]]["text"]`, which contains the full text.
 
-                      In search results, adjacent chunks are automatically seamlessly combined (removing overlaps),
-                      so this only affects the performance (more overlap -> higher chance of having a better local excerpt
-                      as a chunk in the index) and the size of the index (more overlap -> more duplicated text -> larger index
-                      -> slower search, uses more disk space for storage).
+        `overlap_fraction`: For sliding window chunking, to avoid losing context at the seams of the chunks.
+                            E.g. 0.25 means that the next chunk repeats the final 25% of the current chunk.
+
+                            In search results, adjacent chunks are automatically seamlessly combined (removing overlaps),
+                            so this only affects the performance (more overlap -> higher chance of having a better-matching
+                            local excerpt as a chunk in the index) and the size of the index (more overlap -> more duplicated
+                            text -> larger index -> slower search, uses more disk space for storage).
         """
         self._lock = threading.RLock()
 
@@ -330,18 +348,26 @@ class HybridIR:
 
         self.chunk_size = chunk_size
         self.overlap = int(overlap_fraction * chunk_size)
-        self._semantic_model = SentenceTransformer(embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
 
-        # Load the full-document stash (we use this to rebuild the BM25 index when documents are added/updated/deleted).
+        # Load the full-document stash. We use this to rebuild the BM25 index when documents are added/updated/deleted.
         # Note `self.documents` is technically part of the public API.
         try:
             with open(self.document_index_path, "r") as json_file:
-                self.documents = json.load(json_file)
+                data = json.load(json_file)
+            stored_embedding_model_name = data["embedding_model_name"]
+            if embedding_model_name != stored_embedding_model_name:
+                logger.warning(f"HybridIR.__init__: Existing datastore at '{str(self.document_index_path)}' was created with embedding model '{stored_embedding_model_name}', which is different from the requested '{embedding_model_name}'. Using the datastore's model.")
+            self.embedding_model_name = stored_embedding_model_name
+            self.documents = data["documents"]
             plural_s = "s" if len(self.documents) != 1 else ""
-            logger.info(f"HybridIR.__init__: Loaded full-document stash from '{str(self.document_index_path)}' ({len(self.documents)} document{plural_s}).")
-        except Exception as exc:  # likely no index created yet
+            logger.info(f"HybridIR.__init__: Loaded full-document stash from '{str(self.document_index_path)}' ({len(self.documents)} document{plural_s}), with embedding model '{stored_embedding_model_name}'.")
+        except Exception as exc:  # likely datastore not created yet
             logger.warning(f"HybridIR.__init__: While loading full-document stash from '{str(self.document_index_path)}': {type(exc)}: {exc}")
+            logger.info(f"HybridIR.__init__: Will create new datastore at '{str(self.document_index_path)}', with embedding model '{embedding_model_name}', at first commit.")
+            self.embedding_model_name = embedding_model_name
             self.documents = {}  # document_id -> full path to original file, chunks (output of `chunkify`)
+
+        self._semantic_model = SentenceTransformer(self.embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
 
         # Semantic search: ChromaDB vector storage
         # ChromaDB persists data automatically when we use the `PersistentClient`
@@ -353,13 +379,14 @@ class HybridIR:
         except Exception as exc:  # vector index missing
             logger.warning(f"HybridIR.__init__: While loading vector index from '{str(self.semantic_index_path)}': {type(exc)}: {exc}")
 
-            logger.info(f"HybridIR.__init__: Creating new (blank) vector index at '{str(self.semantic_index_path)}'.")
+            logger.info(f"HybridIR.__init__: Vector index not found. Creating new (blank) vector index at '{str(self.semantic_index_path)}'.")
             self._vector_collection = self._vector_client.create_collection(name="embeddings",
-                                                                            metadata={"hnsw:space": "cosine"})  # or "dotproduct"
+                                                                            metadata={"hnsw:space": "cosine"})  # we use normalized semantic vectors, so cosine distance is appropriate.
 
             if self.documents:  # suppress log message when no documents to process
-                logger.info(f"HybridIR.__init__: Vector-indexing {len(self.documents)} document{plural_s} from full-document stash. This may take a while.")
-                # TODO: full reindexing is slow. This should run as a bgtask.
+                logger.info(f"HybridIR.__init__: Rebuilding vector index for {len(self.documents)} document{plural_s} from full-document stash. This may take a while.")
+                # TODO: Full reindexing is slow. This should run as a bgtask.
+                # TODO: We could support changing the embedding model here, by preparing the documents again.
                 for doc in self.documents.values():
                     self._add_document_to_vector_collection(doc)
 
@@ -368,11 +395,12 @@ class HybridIR:
             self._keyword_retriever = bm25s.BM25.load(str(self.keyword_index_path),
                                                       load_corpus=True)
             self._build_full_id_to_record_index()
-        except Exception as exc:  # likely no index created yet
+        except Exception as exc:  # keyword index missing
             logger.warning(f"HybridIR.__init__: While loading keyword index from '{str(self.keyword_index_path)}': {type(exc)}: {exc}")
+            logger.info(f"HybridIR.__init__: Keyword index not found. Will create keyword index at '{str(self.keyword_index_path)}'.")
 
             if self.documents:  # suppress log message when no documents to process
-                logger.info(f"HybridIR.__init__: Keyword-indexing {len(self.documents)} document{plural_s} from full-document stash. This may take a while.")
+                logger.info(f"HybridIR.__init__: Rebuilding keyword index for {len(self.documents)} document{plural_s} from full-document stash. This may take a while.")
                 # TODO: full reindexing is slow. This should run as a bgtask.
                 self._rebuild_keyword_search_index()
             else:  # No documents yet.
@@ -381,7 +409,6 @@ class HybridIR:
 
         self._pending_edits = []
 
-    # TODO: support other media such as images (semantic embedding via `clip-ViT-L-14`, available in `sentence_transformers`; and keyword extraction by CLIP/Deepbooru)
     def add(self, document_id: str, path: str, text: str) -> str:
         """Queue a document for adding into the index. To save changes, call `commit`.
 
@@ -394,25 +421,10 @@ class HybridIR:
         """
         logger.info(f"HybridIR.add: entered. Queuing document '{document_id}' for adding to index.")
 
-        # TODO: Some of these steps can be slow; maybe `add` should run as a bgtask, like the BibTeX importer.
-        logger.info(f"HybridIR.add: chunkifying document '{document_id}' ({len(text)} characters).")
-        document_chunks = chunkify(text, chunk_size=self.chunk_size, overlap=self.overlap, extra=0.4)  # -> [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
-        logger.info(f"HybridIR.add: tokenizing document '{document_id}'.")
-        tokenized_chunks = [tokenize(chunk["text"]) for chunk in document_chunks]
-        logger.info(f"HybridIR.add: computing semantic embeddings for document '{document_id}'.")
-        document_embeddings = self._semantic_model.encode([chunk["text"] for chunk in document_chunks],
-                                                          show_progress_bar=True,
-                                                          convert_to_numpy=True,
-                                                          normalize_embeddings=True)  # SLOW; embeddings for each chunk
-        document_embeddings = document_embeddings.tolist()  # for JSON serialization
-
         # Document-level data. This goes into the full-document stash, which is also persisted so that we can rebuild indices when needed.
         document = {"document_id": document_id,
                     "path": path,  # path of original file (e.g. to be able to open it in a PDF reader)
                     "text": text,  # copy of original text as-is
-                    "chunks": document_chunks,  # [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
-                    "tokens": tokenized_chunks,  # [[token0_of_chunk0, token1_of_chunk0, ...], [token0_of_chunk1, token1_of_chunk1, ...], ...]
-                    "embeddings": document_embeddings,  # [vec_of_chunk0, vec_of_chunk1, ...]
                     }
         logger.info(f"HybridIR.add: exiting. Document '{document_id}' queued successfully.")
 
@@ -443,6 +455,7 @@ class HybridIR:
             return document_id
 
     # TODO: Index rebuilding is slow. Maybe `commit` should run as a bgtask, like the BibTeX importer.
+    # TODO: `commit` is not as atomic as I'd like. If anything goes wrong, the vector index becomes corrupted, necessitating a full rebuild. Check if ChromaDB has transaction management.
     def commit(self) -> None:
         """Commit pending changes (adds/deletes/updates), re-indexing the databases.
 
@@ -451,22 +464,24 @@ class HybridIR:
         logger.info("HybridIR.commit: entered.")
         with self._lock:
             if not self._pending_edits:
-                logger.info("HybridIR.commit: no pending changes, exiting.")
+                logger.info("HybridIR.commit: No pending changes, exiting.")
                 return
 
             # Update `self.documents` and the semantic search index.
             # There is no "update" operation - to do that, first "delete", then "add".
-            logger.info("HybridIR.commit: applying pending changes.")
+            logger.info("HybridIR.commit: Applying pending changes.")
             try:
                 for edit, data in self._pending_edits:
                     if edit == "add":
                         doc = data
                         document_id = doc["document_id"]
-                        logger.info(f"HybridIR.commit: adding document '{document_id}'.")
+                        logger.info(f"HybridIR.commit: Adding document '{document_id}'.")
 
                         if document_id in self.documents:
-                            logger.warning(f"HybridIR.commit: document with ID '{document_id}' already exists in index; ignoring. If you meant to update, first delete, then add.")
+                            logger.warning(f"HybridIR.commit: Document with ID '{document_id}' already exists in index; ignoring. If you meant to update, first delete, then add.")
                             continue
+
+                        doc.update(self._prepare_document_for_indexing(doc))  # the slow part: chunkify, tokenize, embed
 
                         self.documents[document_id] = doc
                         self._add_document_to_vector_collection(doc)
@@ -474,16 +489,18 @@ class HybridIR:
                     elif edit == "delete":
                         document_id = data
 
-                        logger.info(f"HybridIR.commit: deleting document '{document_id}'.")
+                        logger.info(f"HybridIR.commit: Deleting document '{document_id}'.")
                         try:
-                            old_chunks = self.documents[document_id]["chunks"]
+                            old_chunk_ids = [chunk["chunk_id"] for chunk in self.documents[document_id]["chunks"]]
                             self.documents.pop(document_id)
-                            self._vector_collection.delete(ids=[format_chunk_full_id(document_id, chunk["chunk_id"]) for chunk in old_chunks])
-                        except KeyError:
-                            logger.warning(f"HybridIR.commit: deleting document with ID '{document_id}', which was not found in the index; ignoring.")
+                            self._vector_collection.delete(ids=old_chunk_ids)
+                        except KeyError as exc:
+                            logger.warning(f"HybridIR.commit: Ignoring error: While deleting document with ID '{document_id}': {type(exc)}: {exc}")
 
-                    else:
-                        raise ValueError(f"HybridIR.commit: unknown pending change type '{edit}' (was called for document with ID '{document_id}').")
+                    else:  # should not happen, but let's log it
+                        msg = f"HybridIR.commit: Unknown pending change type '{edit}'. Ignoring."
+                        logger.warning(msg)
+
             except Exception as exc:
                 logger.error(f"While applying changes: {type(exc)}: {exc}")
                 logger.error(f"The above error may cause the semantic search index to become corrupted. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")
@@ -491,22 +508,43 @@ class HybridIR:
 
             self._rebuild_keyword_search_index()
 
-            logger.info("HybridIR.commit: clearing pending edits.")
+            logger.info("HybridIR.commit: All changes applied, clearing pending changes list.")
             self._pending_edits = []
 
-            # Persist the changes to disk
-            logger.info("HybridIR.commit: persisting changes.")
-
-            logger.info("HybridIR.commit: saving full-document stash...")
+            # Persist the changes to the master copy
+            logger.info("HybridIR.commit: Saving full-document stash...")
+            data = {"embedding_model_name": self.embedding_model_name,
+                    "documents": self.documents}
             with open(self.document_index_path, "w") as json_file:
-                json.dump(self.documents, json_file, indent=4)
+                # Keeping the amount of indentation small improves human-readability, but also saves a small amount of disk space (10-15%), as there are lots of indented lines in this file.
+                json.dump(data, json_file, indent=2)
 
-            logger.info("HybridIR.commit: saving keyword index...")
-            if self._keyword_retriever is not None:
-                self._keyword_retriever.save(str(self.keyword_index_path))
-            # NOTE: we don't save the vocab_dict, since we don't use the `Tokenizer` class from `bm25s`.
+            logger.info("HybridIR.commit: Commit finished, exiting.")
 
-            logger.info("HybridIR.commit: commit finished, exiting.")
+    # NOTE: This can be slow.
+    # TODO: support other media such as images (semantic embedding via `clip-ViT-L-14`, available in `sentence_transformers`; and keyword extraction by CLIP/Deepbooru)
+    def _prepare_document_for_indexing(self, doc):
+        document_id = doc["document_id"]
+        text = doc["text"]
+
+        logger.info(f"HybridIR._prepare_document_for_indexing: chunkifying document '{document_id}' ({len(text)} characters).")
+        document_chunks = chunkify(text, chunk_size=self.chunk_size, overlap=self.overlap, extra=0.4)  # -> [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
+
+        logger.info(f"HybridIR._prepare_document_for_indexing: tokenizing document '{document_id}'.")
+        tokenized_chunks = [tokenize(chunk["text"]) for chunk in document_chunks]
+
+        logger.info(f"HybridIR._prepare_document_for_indexing: computing semantic embeddings for document '{document_id}'.")
+        document_embeddings = self._semantic_model.encode([chunk["text"] for chunk in document_chunks],
+                                                          show_progress_bar=True,
+                                                          convert_to_numpy=True,
+                                                          normalize_embeddings=True)  # SLOW; embeddings for each chunk
+        document_embeddings = document_embeddings.tolist()  # for JSON serialization
+
+        prepdata = {"chunks": document_chunks,  # [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
+                    "tokens": tokenized_chunks,  # [[token0_of_chunk0, token1_of_chunk0, ...], [token0_of_chunk1, token1_of_chunk1, ...], ...]
+                    "embeddings": document_embeddings,  # [vec_of_chunk0, vec_of_chunk1, ...]
+                    }
+        return prepdata
 
     # This is used both by the commit mechanism as well as the full index rebuild.
     def _add_document_to_vector_collection(self, doc: Dict) -> None:
@@ -524,12 +562,12 @@ class HybridIR:
     # TODO: We currently rebuild the whole BM25 index at every commit, which is slow.
     # The new document may have added new tokens so that the token vocabulary must be updated, and the `bm25s` library doesn't support adding documents to an existing index, anyway.
     def _rebuild_keyword_search_index(self) -> None:
-        logger.info("HybridIR._rebuild_keyword_search_index: reindexing keyword search database.")
+        logger.info("HybridIR._rebuild_keyword_search_index: Reindexing keyword search database.")
         corpus_records = []
         corpus_tokens = []
         for doc in self.documents.values():
             for chunk, tokens in zip(doc["chunks"], doc["tokens"]):
-                # All data here needs to be JSON serializable so that we can save these records to the BM25 index.
+                # All data here needs to be JSON serializable so that we can save these records to the BM25 corpus.
                 record = {"document_id": doc["document_id"],
                           "chunk_id": chunk["chunk_id"],
                           "full_id": format_chunk_full_id(doc["document_id"], chunk["chunk_id"]),
@@ -540,23 +578,29 @@ class HybridIR:
         if self.documents:
             self._keyword_retriever = bm25s.BM25(corpus=corpus_records)
             self._keyword_retriever.index(corpus_tokens)
+            logger.info("HybridIR._rebuild_keyword_search_index: Saving keyword index.")
+            self._keyword_retriever.save(str(self.keyword_index_path))
+            # NOTE: we don't save the vocab_dict, since we don't use the `Tokenizer` class from `bm25s`.
         else:  # No documents yet
+            logger.info("HybridIR._rebuild_keyword_search_index: No documents. Doing nothing.")
             self._keyword_retriever = None
 
         self._build_full_id_to_record_index()
 
         logger.info("HybridIR._rebuild_keyword_search_index: done.")
 
-    # We need to map from a chunk's "full_id" to its actual data record when we fuse the search results.
+    # We need to map from a chunk's "full_id" to the actual data record of that chunk when we fuse the search results.
     # Note the corresponding full document in the full-document stash is just `self.documents[record["document_id"]]`.
+    #
+    # This mapping is quick to build, so we don't bother persisting it to disk.
     def _build_full_id_to_record_index(self) -> None:
         if self._keyword_retriever is not None:
             self.full_id_to_record_index = {record["full_id"]: idx for idx, record in enumerate(self._keyword_retriever.corpus)}
         else:
             self.full_id_to_record_index = {}
 
-    # TODO: add a variant of `query` that doesn't return debug information
-    # TODO: add a variant of `query` with a fixed amount of context around each match (we can do this by looking up the fulltext of the matching chunk and taking the text from there, then processing as usual)
+    # TODO: add a variant of `query` that doesn't return debug information (but final fused search results only)
+    # TODO: add a variant of `query` with a fixed amount of context around each match (we can do this by looking up the fulltext of the matching chunk and taking the text from there)
     def query(self,
               query: str,
               k: int = 10,
@@ -642,21 +686,21 @@ class HybridIR:
 
         # Collect the actual data records for each full ID, and populate the fused scores. Note we need the chunks, not the full documents.
         # We can collect them from the keyword-search corpus, regardless of which backend actually returned any specific result.
-        results = []
+        fused_results = []
         for full_id, rrf_score in rrf_results:
             record = copy.copy(self._keyword_retriever.corpus[self.full_id_to_record_index[full_id]])
             record["score"] = rrf_score
-            results.append(record)
+            fused_results.append(record)
 
         # Merge adjacent chunks, sorting the final results by the fused score.
         # Each merged chunk gets the score of the highest-scoring individual chunk that went into it.
         #
         # NOTE: Merged results don't have a "chunk_id" or "full_id" (design choice; multiple chunks may have been merged into each result,
-        #       so chunk-specific fields wouldn't make sense), but only "document_id", "offset", "text", and "score".
+        #       so chunk-specific fields wouldn't make sense), but only "document_id", "offset", "text", and "score" (RRF score).
         logger.info("HybridIR.query: merging contiguous spans in results")
-        merged = merge_contiguous_spans(results)
+        merged = merge_contiguous_spans(fused_results)
 
-        logger.info(f"HybridIR.query: retrieved chunk statistics: {len(keyword_results)} keyword matches, {len(vector_results)} semantic matches; total {len(results)} unique matches; {len(merged)} results after merging contiguous spans from each document.")
+        logger.info(f"HybridIR.query: retrieved chunk statistics: {len(keyword_results)} keyword matches, {len(vector_results)} semantic matches; total {len(fused_results)} unique matches; {len(merged)} results after merging contiguous spans from each document.")
 
         # Drop extra results, if there are still too many at this point.
         logger.info(f"HybridIR.query: Returning up to {k} best results (out of {len(merged)} retrieved), sorted by RRF score.")
@@ -680,6 +724,9 @@ if __name__ == "__main__":
                          embedding_model_name=config.qa_embedding_model)
 
     # Documents, plain text. Replace this with your data loading.
+    #
+    # This example is real-world data from a few AI papers from arXiv, copy'n'pasted from the PDFs.
+    # We could get cleaner abstracts from the arXiv metadata, but fulltexts (after `pdftotext`) tend to look like this.
     docs_text = [textwrap.dedent("""
                  SCALING LAWS FOR A MULTI-AGENT REINFORCEMENT LEARNING MODEL
 
@@ -786,18 +833,34 @@ if __name__ == "__main__":
                  in the real world and not just accurate on benchmarks.
                  """).strip()]
 
-    # Index the documents
+    # Add our documents to the index
     #
-    # NOTE: The store is persistent, so you only need to do this when you add new documents.
-    #       If you need to clear the index, go into `config_dir` in a file manager, and and delete the files/directories
-    #       that were configured as `document_index_path`, `keyword_index_path`, `semantic_index_path`.
+    # NOTE: The datastore is persistent, so you only need to do this when you add new documents.
+    #
+    # If you need to delete the index, open `config_dir` in a file manager, and delete the appropriate files/directories:
+    #   - `document_index_path` is the full-document stash.
+    #     - This file is the master copy of the data stored in the retrieval system, preprocessed into a format that can be indexed quickly
+    #       (i.e. chunkified, tokenized, and embedded).
+    #     - This file alone is sufficient to rebuild the indices (preserving all documents).
+    # The two subdirectories store chunks only:
+    #   - `keyword_index_path` is the keyword search index.
+    #     - It is currently rebuilt at every `commit` due to technical limitations of the `bm25s` backend.
+    #     - If you need to force a rebuild of the keyword index, shut down the app, delete this subdirectory, and then start the app again.
+    #       `HybridIR` will then detect that the keyword index is missing, and rebuild it automatically (from the full-document stash).
+    #   - `semantic_index_path` is the vector store for the semantic search.
+    #     - It is currently never rebuilt automatically, but only updated at every `commit`.
+    #     - If you need to force a rebuild of the semantic index, shut down the app, delete this subdirectory, and then start the app again.
+    #       `HybridIR` will then detect that the semantic index is missing, and rebuild it automatically (from the full-document stash).
+    #
+    # Queue each document for indexing.
     for m, doc_text in enumerate(docs_text, start=1):
-        retriever.add(document_id=f"test_item_{m}",
-                      path="<locals>",
+        retriever.add(document_id=f"arxiv_abstract_{m}",
+                      path="<locals>",  # in case of text coming from actual files, you can put the path here (to easily find the original file whose text data matched a search).
                       text=doc_text)
-    retriever.commit()  # Write pending changes to index
+    # Write all pending changes, performing the actual indexing.
+    retriever.commit()
 
-    # Search
+    # Now we have a datastore. Run some searches.
     kw_threshold = 0.1
     vec_threshold = 0.8
     for query_string in ("ai agents",  # the actual test set topic
@@ -812,7 +875,8 @@ if __name__ == "__main__":
                                                                                                                 semantic_distance_threshold=vec_threshold)
         styled_query_string = colorizer.colorize(query_string, colorizer.Style.BRIGHT)  # for printing
 
-        # DEBUG
+        # DEBUG - you can obtain the raw results for keyword and semantic searches separately.
+        # This data is useful e.g. for tuning the threshold hyperparameters.
         print()
         print(f"Keyword results for '{styled_query_string}' (BM25 score > {kw_threshold})")
         if keyword_results:
@@ -831,7 +895,8 @@ if __name__ == "__main__":
         print(f"Final search results for '{styled_query_string}':")
         print()
 
-        # Show results to user
+        # Show results to user. This is the final output that you'd normally show in the GUI (or paste into an LLM's context),
+        # where contiguous spans from the same document have been merged.
         if search_results:
             for rank, result in enumerate(search_results, start=1):
                 score = result["score"]  # final RRF score of search match
