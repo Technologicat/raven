@@ -400,7 +400,6 @@ class HybridIR:
             logger.info(f"HybridIR.__init__: Keyword index not found. Will create keyword index at '{str(self.keyword_index_path)}'.")
 
             if self.documents:  # suppress log message when no documents to process
-                logger.info(f"HybridIR.__init__: Rebuilding keyword index for {len(self.documents)} document{plural_s} from full-document stash. This may take a while.")
                 # TODO: full reindexing is slow. This should run as a bgtask.
                 self._rebuild_keyword_search_index()
             else:  # No documents yet.
@@ -419,14 +418,16 @@ class HybridIR:
 
         Returns `document_id`, for convenience.
         """
-        logger.info(f"HybridIR.add: entered. Queuing document '{document_id}' for adding to index.")
+        logger.info(f"HybridIR.add: Queuing document '{document_id}' for adding to index.")
 
         # Document-level data. This goes into the full-document stash, which is also persisted so that we can rebuild indices when needed.
+        #
+        # Here we populate just those fields that can be filled quickly, so that `add` can return instantly.
+        # Fields that require expensive computation (chunks, tokens, embeddings) are added at commit time, by `_prepare_document_for_indexing`.
         document = {"document_id": document_id,
                     "path": path,  # path of original file (e.g. to be able to open it in a PDF reader)
                     "text": text,  # copy of original text as-is
                     }
-        logger.info(f"HybridIR.add: exiting. Document '{document_id}' queued successfully.")
 
         # Pending document mechanism so that we can add a set of documents at once, and *then* rebuild the indices.
         with self._lock:  # may block until an ongoing `commit` (if any) finishes
@@ -437,6 +438,7 @@ class HybridIR:
 
         `document_id`: the ID you earlier gave to `add`.
         """
+        logger.info(f"HybridIR.add: Queuing document '{document_id}' for deletion from index.")
         with self._lock:
             self._pending_edits.append(("delete", document_id))
 
@@ -449,13 +451,14 @@ class HybridIR:
 
         Returns `document_id`, for convenience.
         """
+        logger.info(f"HybridIR.add: Queuing document '{document_id}' for update in index (will delete, then re-add).")
         with self._lock:
             self.delete(document_id)
             self.add(document_id, path, text)
             return document_id
 
     # TODO: Index rebuilding is slow. Maybe `commit` should run as a bgtask, like the BibTeX importer.
-    # TODO: `commit` is not as atomic as I'd like. If anything goes wrong, the vector index becomes corrupted, necessitating a full rebuild. Check if ChromaDB has transaction management.
+    # TODO: `commit` is not as atomic as I'd like. If anything goes wrong, the vector index loses sync with the actual data, necessitating a full rebuild. Check if ChromaDB has transaction management.
     def commit(self) -> None:
         """Commit pending changes (adds/deletes/updates), re-indexing the databases.
 
@@ -471,8 +474,8 @@ class HybridIR:
             # There is no "update" operation - to do that, first "delete", then "add".
             logger.info("HybridIR.commit: Applying pending changes.")
             try:
-                for edit, data in self._pending_edits:
-                    if edit == "add":
+                for edit_kind, data in self._pending_edits:
+                    if edit_kind == "add":
                         doc = data
                         document_id = doc["document_id"]
                         logger.info(f"HybridIR.commit: Adding document '{document_id}'.")
@@ -486,7 +489,7 @@ class HybridIR:
                         self.documents[document_id] = doc
                         self._add_document_to_vector_collection(doc)
 
-                    elif edit == "delete":
+                    elif edit_kind == "delete":
                         document_id = data
 
                         logger.info(f"HybridIR.commit: Deleting document '{document_id}'.")
@@ -498,12 +501,12 @@ class HybridIR:
                             logger.warning(f"HybridIR.commit: Ignoring error: While deleting document with ID '{document_id}': {type(exc)}: {exc}")
 
                     else:  # should not happen, but let's log it
-                        msg = f"HybridIR.commit: Unknown pending change type '{edit}'. Ignoring."
+                        msg = f"HybridIR.commit: Unknown pending change type '{edit_kind}'. Ignoring."
                         logger.warning(msg)
 
             except Exception as exc:
                 logger.error(f"While applying changes: {type(exc)}: {exc}")
-                logger.error(f"The above error may cause the semantic search index to become corrupted. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")
+                logger.error(f"The above error may have corrupted the semantic search index. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")
                 raise
 
             self._rebuild_keyword_search_index()
@@ -562,7 +565,8 @@ class HybridIR:
     # TODO: We currently rebuild the whole BM25 index at every commit, which is slow.
     # The new document may have added new tokens so that the token vocabulary must be updated, and the `bm25s` library doesn't support adding documents to an existing index, anyway.
     def _rebuild_keyword_search_index(self) -> None:
-        logger.info("HybridIR._rebuild_keyword_search_index: Reindexing keyword search database.")
+        plural_s = "s" if len(self.documents) != 1 else ""
+        logger.info(f"HybridIR._rebuild_keyword_search_index: Building keyword index for {len(self.documents)} document{plural_s} from full-document stash. This may take a while.")
         corpus_records = []
         corpus_tokens = []
         for doc in self.documents.values():
@@ -578,9 +582,11 @@ class HybridIR:
         if self.documents:
             self._keyword_retriever = bm25s.BM25(corpus=corpus_records)
             self._keyword_retriever.index(corpus_tokens)
-            logger.info("HybridIR._rebuild_keyword_search_index: Saving keyword index.")
-            self._keyword_retriever.save(str(self.keyword_index_path))
+
+            # Save the updated index to disk.
             # NOTE: we don't save the vocab_dict, since we don't use the `Tokenizer` class from `bm25s`.
+            logger.info("HybridIR._rebuild_keyword_search_index: Build complete. Saving keyword index.")
+            self._keyword_retriever.save(str(self.keyword_index_path))
         else:  # No documents yet
             logger.info("HybridIR._rebuild_keyword_search_index: No documents. Doing nothing.")
             self._keyword_retriever = None
@@ -592,7 +598,7 @@ class HybridIR:
     # We need to map from a chunk's "full_id" to the actual data record of that chunk when we fuse the search results.
     # Note the corresponding full document in the full-document stash is just `self.documents[record["document_id"]]`.
     #
-    # This mapping is quick to build, so we don't bother persisting it to disk.
+    # This mapping is quick to build, so we don't bother persisting it to disk. (That does mean we have to regenerate just this part when loading the keyword index from disk.)
     def _build_full_id_to_record_index(self) -> None:
         if self._keyword_retriever is not None:
             self.full_id_to_record_index = {record["full_id"]: idx for idx, record in enumerate(self._keyword_retriever.corpus)}
