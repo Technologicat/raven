@@ -1,8 +1,8 @@
-"""A simple hybrid (keyword + vector) store for information retrieval (IR).
+"""A simple hybrid (keyword + semantic) information retrieval (IR) system.
 
 While this is no Google, this can be useful for retrieval-augmented generation (RAG) in an LLM context.
 
-Parts drafted by QwQ-32B, but mostly manually coded.
+QwQ-32B wrote the very first initial rough draft, from which this was then manually coded.
 """
 
 __all__ = ["HybridIR"]
@@ -17,7 +17,7 @@ import json
 import operator
 import pathlib
 import threading
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from unpythonic import allsame, uniqify
 
@@ -26,20 +26,10 @@ from sentence_transformers import SentenceTransformer
 import spacy
 
 # database
-import bm25s  # keyword-based
-import chromadb  # semantic vector based
+import bm25s  # keyword
+import chromadb  # semantic (vector)
 
 from . import config
-
-# --------------------------------------------------------------------------------
-# Config
-
-config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
-
-# TODO: The RAG DB paths need to be per-dataset. These static paths are for proof-of-concept only.
-document_index_path = config_dir / "hybridir_fulldocs_index"
-keyword_index_path = config_dir / "hybridir_keyword_index"
-semantic_index_path = config_dir / "hybridir_semantic_index"
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -297,10 +287,14 @@ def merge_contiguous_spans(results: List[Dict]) -> List[Dict]:
 
 class HybridIR:
     def __init__(self,
+                 datastore_base_dir: Union[str, pathlib.Path],
                  embedding_model_name: str = "sentence-transformers/multi-qa-mpnet-base-cos-v1",
                  chunk_size: int = 1000,
                  overlap_fraction: float = 0.25):
         """Hybrid information retrieval (IR) index, using both keyword and semantic search.
+
+        `datastore_base_dir`: Where to store the indices (for the specific collection you're creating/loading).
+                              The datastore is persisted automatically.
 
         `embedding_model_name`: Semantic vector embedder, for semantic search.
 
@@ -330,6 +324,10 @@ class HybridIR:
         """
         self._lock = threading.RLock()
 
+        self.document_index_path = datastore_base_dir / "hybridir_fulldocs_index"
+        self.keyword_index_path = datastore_base_dir / "hybridir_keyword_index"
+        self.semantic_index_path = datastore_base_dir / "hybridir_semantic_index"
+
         self.chunk_size = chunk_size
         self.overlap = int(overlap_fraction * chunk_size)
         self._semantic_model = SentenceTransformer(embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
@@ -337,25 +335,25 @@ class HybridIR:
         # Load the full-document stash (we use this to rebuild the BM25 index when documents are added/updated/deleted).
         # Note `self.documents` is technically part of the public API.
         try:
-            with open(document_index_path, "r") as json_file:
+            with open(self.document_index_path, "r") as json_file:
                 self.documents = json.load(json_file)
             plural_s = "s" if len(self.documents) != 1 else ""
-            logger.info(f"HybridIR.__init__: Loaded full-document stash from '{str(document_index_path)}' ({len(self.documents)} document{plural_s}).")
+            logger.info(f"HybridIR.__init__: Loaded full-document stash from '{str(self.document_index_path)}' ({len(self.documents)} document{plural_s}).")
         except Exception as exc:  # likely no index created yet
-            logger.warning(f"HybridIR.__init__: While loading full-document stash from '{str(document_index_path)}': {type(exc)}: {exc}")
+            logger.warning(f"HybridIR.__init__: While loading full-document stash from '{str(self.document_index_path)}': {type(exc)}: {exc}")
             self.documents = {}  # document_id -> full path to original file, chunks (output of `chunkify`)
 
         # Semantic search: ChromaDB vector storage
         # ChromaDB persists data automatically when we use the `PersistentClient`
         # https://docs.trychroma.com/docs/collections/create-get-delete
-        self._vector_client = chromadb.PersistentClient(path=str(semantic_index_path),
+        self._vector_client = chromadb.PersistentClient(path=str(self.semantic_index_path),
                                                         settings=chromadb.Settings(anonymized_telemetry=False))
         try:
             self._vector_collection = self._vector_client.get_collection(name="embeddings")  # try loading existing vector index
         except Exception as exc:  # vector index missing
-            logger.warning(f"HybridIR.__init__: While loading vector index from '{str(semantic_index_path)}': {type(exc)}: {exc}")
+            logger.warning(f"HybridIR.__init__: While loading vector index from '{str(self.semantic_index_path)}': {type(exc)}: {exc}")
 
-            logger.info(f"HybridIR.__init__: Creating new (blank) vector index at '{str(semantic_index_path)}'.")
+            logger.info(f"HybridIR.__init__: Creating new (blank) vector index at '{str(self.semantic_index_path)}'.")
             self._vector_collection = self._vector_client.create_collection(name="embeddings",
                                                                             metadata={"hnsw:space": "cosine"})  # or "dotproduct"
 
@@ -367,11 +365,11 @@ class HybridIR:
 
         # Keyword search: BM25 index (tokenized documents as input)
         try:
-            self._keyword_retriever = bm25s.BM25.load(str(keyword_index_path),
+            self._keyword_retriever = bm25s.BM25.load(str(self.keyword_index_path),
                                                       load_corpus=True)
             self._build_full_id_to_record_index()
         except Exception as exc:  # likely no index created yet
-            logger.warning(f"HybridIR.__init__: While loading keyword index from '{str(keyword_index_path)}': {type(exc)}: {exc}")
+            logger.warning(f"HybridIR.__init__: While loading keyword index from '{str(self.keyword_index_path)}': {type(exc)}: {exc}")
 
             if self.documents:  # suppress log message when no documents to process
                 logger.info(f"HybridIR.__init__: Keyword-indexing {len(self.documents)} document{plural_s} from full-document stash. This may take a while.")
@@ -383,7 +381,7 @@ class HybridIR:
 
         self._pending_edits = []
 
-    # TODO: support other media such as images (semantic embedding, and keyword extraction by CLIP/Deepbooru)
+    # TODO: support other media such as images (semantic embedding via `clip-ViT-L-14`, available in `sentence_transformers`; and keyword extraction by CLIP/Deepbooru)
     def add(self, document_id: str, path: str, text: str) -> str:
         """Queue a document for adding into the index. To save changes, call `commit`.
 
@@ -488,7 +486,7 @@ class HybridIR:
                         raise ValueError(f"HybridIR.commit: unknown pending change type '{edit}' (was called for document with ID '{document_id}').")
             except Exception as exc:
                 logger.error(f"While applying changes: {type(exc)}: {exc}")
-                logger.error(f"The above error may cause the semantic search index to become corrupted. Recommend deleting '{semantic_index_path}' and restarting the app to perform a full reindex.")
+                logger.error(f"The above error may cause the semantic search index to become corrupted. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")
                 raise
 
             self._rebuild_keyword_search_index()
@@ -500,12 +498,12 @@ class HybridIR:
             logger.info("HybridIR.commit: persisting changes.")
 
             logger.info("HybridIR.commit: saving full-document stash...")
-            with open(document_index_path, "w") as json_file:
+            with open(self.document_index_path, "w") as json_file:
                 json.dump(self.documents, json_file, indent=4)
 
             logger.info("HybridIR.commit: saving keyword index...")
             if self._keyword_retriever is not None:
-                self._keyword_retriever.save(str(keyword_index_path))
+                self._keyword_retriever.save(str(self.keyword_index_path))
             # NOTE: we don't save the vocab_dict, since we don't use the `Tokenizer` class from `bm25s`.
 
             logger.info("HybridIR.commit: commit finished, exiting.")
@@ -671,13 +669,17 @@ class HybridIR:
 
 # --------------------------------------------------------------------------------
 
-# Usage example
+# Usage example / demo
 if __name__ == "__main__":
     import textwrap
     from mcpyrate import colorizer
 
-    retriever = HybridIR(embedding_model_name=config.qa_embedding_model)
+    # Create the retriever.
+    config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
+    retriever = HybridIR(datastore_base_dir=config_dir,
+                         embedding_model_name=config.qa_embedding_model)
 
+    # Documents, plain text. Replace this with your data loading.
     docs_text = [textwrap.dedent("""
                  SCALING LAWS FOR A MULTI-AGENT REINFORCEMENT LEARNING MODEL
 
@@ -784,14 +786,18 @@ if __name__ == "__main__":
                  in the real world and not just accurate on benchmarks.
                  """).strip()]
 
-    # Load documents and index them (replace with your data loading)
+    # Index the documents
+    #
+    # NOTE: The store is persistent, so you only need to do this when you add new documents.
+    #       If you need to clear the index, go into `config_dir` in a file manager, and and delete the files/directories
+    #       that were configured as `document_index_path`, `keyword_index_path`, `semantic_index_path`.
     for m, doc_text in enumerate(docs_text, start=1):
         retriever.add(document_id=f"test_item_{m}",
                       path="<locals>",
                       text=doc_text)
     retriever.commit()  # Write pending changes to index
 
-    # Search when user inputs a query
+    # Search
     kw_threshold = 0.1
     vec_threshold = 0.8
     for query_string in ("ai agents",  # the actual test set topic
@@ -825,8 +831,8 @@ if __name__ == "__main__":
         print(f"Final search results for '{styled_query_string}':")
         print()
 
+        # Show results to user
         if search_results:
-            # Show results to user
             for rank, result in enumerate(search_results, start=1):
                 score = result["score"]  # final RRF score of search match
                 document_id = result["document_id"]  # ID of document the search match came from
