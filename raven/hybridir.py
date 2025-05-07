@@ -342,7 +342,7 @@ class HybridIR:
         """
         self._lock = threading.RLock()
 
-        self.document_index_path = datastore_base_dir / "hybridir_fulldocs_index"
+        self.document_index_path = datastore_base_dir / "hybridir_fulldocs"
         self.keyword_index_path = datastore_base_dir / "hybridir_keyword_index"
         self.semantic_index_path = datastore_base_dir / "hybridir_semantic_index"
 
