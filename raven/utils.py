@@ -1,5 +1,5 @@
 __all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
-           "absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime",
+           "absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
            "make_blank_index_array",
            "UnionFilter",
            "format_bibtex_author", "format_bibtex_authors", "unicodize_basic_markup",
@@ -21,6 +21,7 @@ import io
 import os
 import pathlib
 import re
+from typing import Union
 import unicodedata
 import warnings
 
@@ -81,15 +82,15 @@ def psi(x, m=1.0):  # from `extrafeathers.pdes.numutil`
 # --------------------------------------------------------------------------------
 # File utilities
 
-def absolutize_filename(filename):
+def absolutize_filename(filename: str) -> str:
     """Convert `filename` to an absolute filename."""
     return str(pathlib.Path(filename).expanduser().resolve())
 
-def strip_ext(filename):
+def strip_ext(filename: str) -> str:
     """/foo/bar.bib -> /foo/bar"""
     return os.path.splitext(filename)[0]
 
-def make_cache_filename(origfullpath, suffix, ext):
+def make_cache_filename(origfullpath: Union[str, pathlib.Path], suffix: str, ext: str) -> str:
     """foo/bar.bib -> foo/bar_<suffix>.<ext>
 
     Useful e.g. for naming a cache file based on the input filename.
@@ -98,7 +99,7 @@ def make_cache_filename(origfullpath, suffix, ext):
     origfilename = strip_ext(os.path.basename(origfullpath))  # "foo/bar.bib" -> "bar"
     return os.path.join(origdirname, f"{origfilename}_{suffix}.{ext}")
 
-def validate_cache_mtime(cachefullpath, origfullpath):
+def validate_cache_mtime(cachefullpath: Union[str, pathlib.Path], origfullpath: Union[str, pathlib.Path]) -> bool:
     """Return whether a cache file at `cachefullpath` is valid, by comparing its mtime to that of the original file at `origfullpath`."""
     stat_result_cache = os.stat(cachefullpath)
     stat_result_orig = os.stat(origfullpath)
@@ -106,10 +107,44 @@ def validate_cache_mtime(cachefullpath, origfullpath):
         return True
     return False
 
+# def delete_directory_recursively(path: str) -> None:
+#     """Delete a directory recursively, like 'rm -rf' in the shell.
+#
+#     Ignores `FileNotFoundError`, but other errors raise. If an error occurs,
+#     some files and directories may already have been deleted.
+#     """
+#     path = pathlib.Path(path).expanduser().resolve()
+#
+#     for root, dirs, files in os.walk(path, topdown=False, followlinks=False):
+#         for x in files:
+#             try:
+#                 os.unlink(os.path.join(root, x))
+#             except FileNotFoundError:
+#                 pass
+#
+#         for x in dirs:
+#             try:
+#                 os.rmdir(os.path.join(root, x))
+#             except FileNotFoundError:
+#                 pass
+#
+#     try:
+#         os.rmdir(path)
+#     except FileNotFoundError:
+#         pass
+
+def create_directory(path: Union[str, pathlib.Path]) -> None:
+    p = pathlib.Path(path).expanduser().resolve()
+    pathlib.Path.mkdir(p, parents=True, exist_ok=True)
+
+# def clear_and_create_directory(path: str) -> None:
+#     delete_directory_recursively(path)
+#     create_directory(path)
+
 # --------------------------------------------------------------------------------
 # Misc utilities
 
-def make_blank_index_array():
+def make_blank_index_array() -> np.array:
     """Make a blank array of the same type as that used for slicing an array in NumPy."""
     return np.array([], dtype=np.int64)
 

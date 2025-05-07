@@ -43,6 +43,7 @@ from unpythonic.env import env
 
 from . import config
 from . import llmclient
+from . import utils
 
 # --------------------------------------------------------------------------------
 # Settings
@@ -57,40 +58,6 @@ conference_url = "https://eccomas2024.org/"
 
 # --------------------------------------------------------------------------------
 # Utilities
-
-# def delete_directory_recursively(path: str) -> None:
-#     """Delete a directory recursively, like 'rm -rf' in the shell.
-#
-#     Ignores `FileNotFoundError`, but other errors raise. If an error occurs,
-#     some files and directories may already have been deleted.
-#     """
-#     path = pathlib.Path(path).expanduser().resolve()
-#
-#     for root, dirs, files in os.walk(path, topdown=False, followlinks=False):
-#         for x in files:
-#             try:
-#                 os.unlink(os.path.join(root, x))
-#             except FileNotFoundError:
-#                 pass
-#
-#         for x in dirs:
-#             try:
-#                 os.rmdir(os.path.join(root, x))
-#             except FileNotFoundError:
-#                 pass
-#
-#     try:
-#         os.rmdir(path)
-#     except FileNotFoundError:
-#         pass
-
-def create_directory(path: str) -> None:
-    p = pathlib.Path(path).expanduser().resolve()
-    pathlib.Path.mkdir(p, parents=True, exist_ok=True)
-
-# def clear_and_create_directory(path: str) -> None:
-#     delete_directory_recursively(path)
-#     create_directory(path)
 
 def print_progress(n_chunks, chunk, glyph="."):
     """Progress indicator while the LLM is processing. Callback for `llmclient.invoke`."""
@@ -826,7 +793,7 @@ def main():
     if opts.output_dir is not None:
         opts.output_dir = str(pathlib.Path(opts.output_dir).expanduser().resolve())
         logger.info(f"Moving done files to {opts.output_dir}.")
-        create_directory(opts.output_dir)
+        utils.create_directory(opts.output_dir)
 
     blacklist = []
     paths = []
