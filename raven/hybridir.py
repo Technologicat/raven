@@ -29,6 +29,8 @@ import pathlib
 import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import numpy as np
+
 from unpythonic import allsame, uniqify
 
 # NLP
@@ -40,6 +42,7 @@ import bm25s  # keyword
 import chromadb  # semantic (vector)
 
 from . import config
+from . import utils
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -309,7 +312,7 @@ class HybridIR:
         `embedding_model_name`: Semantic vector embedder, for semantic search.
 
                                 Used only when the datastore has not been created yet (indicated by the presence
-                                of the full-document stash file).
+                                of the full-document stash).
 
                                 After the datastore has been created, its embedding model cannot be changed,
                                 and `HybridIR` will automatically use the model that was used to create
@@ -342,30 +345,27 @@ class HybridIR:
         """
         self._lock = threading.RLock()
 
-        self.document_index_path = datastore_base_dir / "hybridir_fulldocs"
-        self.keyword_index_path = datastore_base_dir / "hybridir_keyword_index"
-        self.semantic_index_path = datastore_base_dir / "hybridir_semantic_index"
+        self.document_stash_path = datastore_base_dir / "fulldocs"
+        self.document_stash_documents_file = self.document_stash_path / "data.json"
+        self.document_stash_embeddings_file = self.document_stash_path / "embeddings.npz"
+        self.keyword_index_path = datastore_base_dir / "bm25s"
+        self.semantic_index_path = datastore_base_dir / "chromadb"
 
         self.chunk_size = chunk_size
         self.overlap = int(overlap_fraction * chunk_size)
 
         # Load the full-document stash. We use this to rebuild the BM25 index when documents are added/updated/deleted.
         # Note `self.documents` is technically part of the public API.
-        try:
-            with open(self.document_index_path, "r") as json_file:
-                data = json.load(json_file)
-            stored_embedding_model_name = data["embedding_model_name"]
+        stored_embedding_model_name, stored_documents = self._load_fulldocs_stash()
+        if stored_embedding_model_name is not None:  # load successful?
             if embedding_model_name != stored_embedding_model_name:
-                logger.warning(f"HybridIR.__init__: Existing datastore at '{str(self.document_index_path)}' was created with embedding model '{stored_embedding_model_name}', which is different from the requested '{embedding_model_name}'. Using the datastore's model.")
+                logger.warning(f"HybridIR.__init__: Existing datastore at '{str(self.document_stash_path)}' was created with embedding model '{stored_embedding_model_name}', which is different from the requested '{embedding_model_name}'. Using the datastore's model.")
             self.embedding_model_name = stored_embedding_model_name
-            self.documents = data["documents"]
-            plural_s = "s" if len(self.documents) != 1 else ""
-            logger.info(f"HybridIR.__init__: Loaded full-document stash from '{str(self.document_index_path)}' ({len(self.documents)} document{plural_s}), with embedding model '{stored_embedding_model_name}'.")
-        except Exception as exc:  # likely datastore not created yet
-            logger.warning(f"HybridIR.__init__: While loading full-document stash from '{str(self.document_index_path)}': {type(exc)}: {exc}")
-            logger.info(f"HybridIR.__init__: Will create new datastore at '{str(self.document_index_path)}', with embedding model '{embedding_model_name}', at first commit.")
+            self.documents = stored_documents
+        else:
+            logger.info(f"HybridIR.__init__: Will create new datastore at '{str(self.document_stash_path)}', with embedding model '{embedding_model_name}', at first commit.")
             self.embedding_model_name = embedding_model_name
-            self.documents = {}  # document_id -> full path to original file, chunks (output of `chunkify`)
+            self.documents = {}
 
         self._semantic_model = SentenceTransformer(self.embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
 
@@ -384,6 +384,7 @@ class HybridIR:
                                                                             metadata={"hnsw:space": "cosine"})  # we use normalized semantic vectors, so cosine distance is appropriate.
 
             if self.documents:  # suppress log message when no documents to process
+                plural_s = "s" if len(self.documents) != 1 else ""
                 logger.info(f"HybridIR.__init__: Rebuilding vector index for {len(self.documents)} document{plural_s} from full-document stash. This may take a while.")
                 # TODO: Full reindexing is slow. This should run as a bgtask.
                 # TODO: We could support changing the embedding model here, by preparing the documents again.
@@ -515,14 +516,51 @@ class HybridIR:
             self._pending_edits = []
 
             # Persist the changes to the master copy
-            logger.info("HybridIR.commit: Saving full-document stash...")
-            data = {"embedding_model_name": self.embedding_model_name,
-                    "documents": self.documents}
-            with open(self.document_index_path, "w") as json_file:
-                # Keeping the amount of indentation small improves human-readability, but also saves a small amount of disk space (10-15%), as there are lots of indented lines in this file.
-                json.dump(data, json_file, indent=2)
+            self._save_fulldocs_stash()
 
             logger.info("HybridIR.commit: Commit finished, exiting.")
+
+    def _save_fulldocs_stash(self):
+        # We save embeddings separately, as compressed NumPy arrays, to save disk space.
+        logger.info("HybridIR._save_fulldocs_stash: entered. Preparing...")
+        documents_without_embeddings = {}
+        embeddings = []
+        for document_id, doc in self.documents.items():
+            tempdoc = copy.copy(doc)
+            embeddings.append(tempdoc.pop("embeddings"))  # dict preserves insertion order, so this list is in the same order as `self.documents.values()`
+            documents_without_embeddings[document_id] = tempdoc
+        data = {"embedding_model_name": self.embedding_model_name,
+                "documents": documents_without_embeddings}
+
+        logger.info("HybridIR._save_fulldocs_stash: Saving document stash...")
+        utils.create_directory(self.document_stash_path)
+        with open(self.document_stash_documents_file, "w") as json_file:
+            # Keeping the amount of indentation small improves human-readability, but also saves some disk space, as there are lots of indented lines in this file.
+            json.dump(data, json_file, indent=2)
+
+        # Note each document may have a different number of chunks, and each chunk produces one embedding vector.
+        logger.info(f"HybridIR._save_fulldocs_stash: Saving embeddings (model '{self.embedding_model_name}')...")
+        np.savez_compressed(self.document_stash_embeddings_file, *embeddings)
+
+        logger.info("HybridIR._save_fulldocs_stash: exiting, all done.")
+
+    def _load_fulldocs_stash(self):
+        try:
+            with open(self.document_stash_documents_file, "r") as json_file:
+                data = json.load(json_file)
+            stored_embedding_model_name = data["embedding_model_name"]
+            documents = data["documents"]
+
+            arrs = np.load(self.document_stash_embeddings_file)
+            for doc, document_embeddings in zip(documents.values(), arrs.values()):  # documents: {"document_id0": {...}, },  arrs: {"arr_0": np.array, ...}; arrs has one 2D array per document (outer index = chunk)
+                doc["embeddings"] = document_embeddings.tolist()  # same in-memory format as if freshly created
+
+            plural_s = "s" if len(documents) != 1 else ""
+            logger.info(f"HybridIR.__init__: Loaded full-document stash from '{str(self.document_stash_path)}' ({len(documents)} document{plural_s}), with embedding model '{stored_embedding_model_name}'.")
+            return stored_embedding_model_name, documents
+        except Exception as exc:  # likely datastore not created yet
+            logger.warning(f"HybridIR.__init__: While loading full-document stash from '{str(self.document_stash_path)}': {type(exc)}: {exc}")
+            return None, None
 
     # NOTE: This can be slow.
     # TODO: support other media such as images (semantic embedding via `clip-ViT-L-14`, available in `sentence_transformers`; and keyword extraction by CLIP/Deepbooru)
@@ -530,12 +568,15 @@ class HybridIR:
         document_id = doc["document_id"]
         text = doc["text"]
 
+        # We split each document into chunks. The chunks themselves are useful as the actual search results (the snippets that matched the search).
         logger.info(f"HybridIR._prepare_document_for_indexing: chunkifying document '{document_id}' ({len(text)} characters).")
         document_chunks = chunkify(text, chunk_size=self.chunk_size, overlap=self.overlap, extra=0.4)  # -> [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
 
+        # Tokenizing each chunk enables keyword search. These are used by the keyword index (bm25s).
         logger.info(f"HybridIR._prepare_document_for_indexing: tokenizing document '{document_id}'.")
         tokenized_chunks = [tokenize(chunk["text"]) for chunk in document_chunks]
 
+        # Embedding each chunk enables semantic search. These are used by the vector index (chromadb).
         logger.info(f"HybridIR._prepare_document_for_indexing: computing semantic embeddings for document '{document_id}'.")
         document_embeddings = self._semantic_model.encode([chunk["text"] for chunk in document_chunks],
                                                           show_progress_bar=True,
@@ -558,7 +599,7 @@ class HybridIR:
                         "chunk_id": chunk["chunk_id"],
                         "full_id": format_chunk_full_id(document_id, chunk["chunk_id"]),
                         "offset": chunk["offset"],
-                        "text": chunk["text"]} for chunk in doc["chunks"]],
+                        "text": chunk["text"]} for chunk in doc["chunks"]],  # TODO: the vector storage technically doesn't need the "text" field, because we always read the full data records from the keyword index.
             ids=[format_chunk_full_id(document_id, chunk["chunk_id"]) for chunk in doc["chunks"]]
         )
 
@@ -725,7 +766,7 @@ if __name__ == "__main__":
     from mcpyrate import colorizer
 
     # Create the retriever.
-    config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
+    config_dir = (pathlib.Path(config.llm_save_dir) / "hybridir_demo").expanduser().resolve()
     retriever = HybridIR(datastore_base_dir=config_dir,
                          embedding_model_name=config.qa_embedding_model)
 
@@ -843,17 +884,17 @@ if __name__ == "__main__":
     #
     # NOTE: The datastore is persistent, so you only need to do this when you add new documents.
     #
-    # If you need to delete the index, open `config_dir` in a file manager, and delete the appropriate files/directories:
-    #   - `document_index_path` is the full-document stash.
-    #     - This file is the master copy of the data stored in the retrieval system, preprocessed into a format that can be indexed quickly
-    #       (i.e. chunkified, tokenized, and embedded).
-    #     - This file alone is sufficient to rebuild the indices (preserving all documents).
-    # The two subdirectories store chunks only:
-    #   - `keyword_index_path` is the keyword search index.
+    # If you need to delete the index, open `config_dir` in a file manager, and delete the appropriate subdirectories:
+    #   - "fulldocs" is the full-document stash.
+    #     - This is the master copy of the text data stored in the IR system, preprocessed into a format that can be indexed quickly
+    #       (i.e. already chunkified, tokenized, and embedded).
+    #     - This subdirectory alone is sufficient to rebuild the indices, preserving all documents.
+    # The other two subdirectories store the actual search indices:
+    #   - "bm25s" is the keyword search index.
     #     - It is currently rebuilt at every `commit` due to technical limitations of the `bm25s` backend.
     #     - If you need to force a rebuild of the keyword index, shut down the app, delete this subdirectory, and then start the app again.
     #       `HybridIR` will then detect that the keyword index is missing, and rebuild it automatically (from the full-document stash).
-    #   - `semantic_index_path` is the vector store for the semantic search.
+    #   - "chromadb" is the vector store for the semantic search.
     #     - It is currently never rebuilt automatically, but only updated at every `commit`.
     #     - If you need to force a rebuild of the semantic index, shut down the app, delete this subdirectory, and then start the app again.
     #       `HybridIR` will then detect that the semantic index is missing, and rebuild it automatically (from the full-document stash).
