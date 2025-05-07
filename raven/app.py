@@ -1886,7 +1886,7 @@ with timer() as tim:
 
                     dpg.add_input_text(tag="search_field",
                                        default_value="",
-                                       hint="[Ctrl+F] [incremental fragment search; 'cat photo' matches 'photocatalytic'; lowercase = case-insensitive]",
+                                       hint="[Ctrl+F] [incremental fragment search in document titles; 'cat photo' matches 'photocatalytic'; lowercase = case-insensitive]",
                                        width=-1,
                                        callback=update_search)
 
