@@ -1208,6 +1208,9 @@ def update_search(wait=True):
     if not search_string:
         search_result_data_idxs = utils.make_blank_index_array()
     else:
+        # Simple O(n) scan for exact matches, ANDed across all fragments. No stopwording, lemmatization or anything fancy.
+        # TODO: Search also in document authors (full author list). For this, need to update the GUI wherever we show author names - e.g. searching for "Virtanen" in a paper "Aaltonen et al." that has 200 authors.
+        # TODO: With `raven.hybridir.HybridIR`, we could integrate also a semi-intelligent (keyword + semantic) fulltext search here. Think about the GUI, as the classic mode is useful too.
         case_sensitive_fragments, case_insensitive_fragments = utils.search_string_to_fragments(search_string, sort=False)  # minor speedup: don't need to sort, since all must match
         search_result_data_idxs = []
         for data_idx, entry in enumerate(dataset.sorted_entries):  # `data_idx`: index to `sorted_xxx`
