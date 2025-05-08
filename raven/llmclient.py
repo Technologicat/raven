@@ -53,7 +53,7 @@ if os.path.exists(api_key_file):
         api_key = f.read()
     # "Authorization": "Bearer yourPassword123"
     # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
-    headers["Authorization"] = api_key
+    headers["Authorization"] = api_key.strip()
 
 def list_models(backend_url):
     """List all models available at `backend_url`."""
