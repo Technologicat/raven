@@ -481,11 +481,11 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
 
 
 # --------------------------------------------------------------------------------
-# Minimal chat client.
+# Minimal chat client for testing/debugging that Raven can connect to your LLM.
 #
 # Also a usage example for the API of this module.
 
-def chat(backend_url):
+def minimal_chat_client(backend_url):
     """Minimal LLM chat client, for testing/debugging."""
     import readline  # noqa: F401, side effect: enable GNU readline in builtin input()
     # import rlcompleter  # noqa: F401, side effects: readline tab completion for Python code
@@ -731,7 +731,7 @@ def main():
     parser.add_argument(dest="backend_url", nargs="?", default=config.llm_backend_url, type=str, metavar="url", help=f"where to access the LLM API (default, currently '{config.llm_backend_url}', is set in `raven/config.py`)")
     opts = parser.parse_args()
 
-    chat(opts.backend_url)
+    minimal_chat_client(opts.backend_url)
 
 if __name__ == "__main__":
     main()
