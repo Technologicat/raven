@@ -487,8 +487,8 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
 
 def chat(backend_url):
     """Minimal LLM chat client, for testing/debugging."""
-    import readline  # noqa: F401, side effect: enable GNU readline in input()
-    # import rlcompleter  # noqa: F401, side effects: readline tab completion
+    import readline  # noqa: F401, side effect: enable GNU readline in builtin input()
+    # import rlcompleter  # noqa: F401, side effects: readline tab completion for Python code
 
     # Support cloud LLMs, too. API key already loaded during module bootup; here, we just inform the user.
     if "Authorization" in headers:
