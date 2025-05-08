@@ -45,12 +45,15 @@ headers = {
     "Content-Type": "application/json"
 }
 
-# # With an API key this would be as follows.
-# # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
-# headers = {
-#     "Content-Type": "application/json",
-#     "Authorization": "Bearer yourPassword123"
-# }
+# Support cloud LLMs, too
+config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
+api_key_file = config_dir / "llm_api_key.txt"
+if os.path.exists(api_key_file):
+    with open(api_key_file, "r") as f:
+        api_key = f.read()
+    # "Authorization": "Bearer yourPassword123"
+    # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
+    headers["Authorization"] = api_key
 
 def list_models(backend_url):
     """List all models available at `backend_url`."""
@@ -487,7 +490,16 @@ def chat(backend_url):
     import readline  # noqa: F401, side effect: enable GNU readline in input()
     # import rlcompleter  # noqa: F401, side effects: readline tab completion
 
-    config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
+    # Support cloud LLMs, too. API key already loaded during module bootup; here, we just inform the user.
+    if "Authorization" in headers:
+        print(f"Loaded LLM API key from '{str(api_key_file)}'.")
+        print()
+    else:
+        print(f"No LLM API key configured. If your LLM needs an API key to connect, put it into '{str(api_key_file)}'.")
+        print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
+        print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
+        print()
+
     config_file_location = config_dir / "llmclient_history"
     print(colorizer.colorize(f"GNU readline available. Saving user inputs to {str(config_file_location)}.", colorizer.Style.BRIGHT))
     print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
