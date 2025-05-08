@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 import argparse
 import atexit
+import collections
 from copy import copy, deepcopy
 import datetime
 import io
@@ -173,9 +174,13 @@ def setup(backend_url: str) -> env:
                   "assistant": char,
                   "system": None}
 
+    # List of strings at which to stop generation, if the model generates one of these.
+    stopping_strings = [f"\n{user}:"]
+
     settings = env(user=user, char=char, model=model,
                    system_prompt=system_prompt,
                    character_card=character_card,
+                   stopping_strings=stopping_strings,
                    greeting=greeting,
                    backend_url=backend_url,
                    request_data=request_data,
@@ -424,15 +429,29 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
     client = sseclient.SSEClient(stream_response)
 
     llm_output = io.StringIO()
+    last_few_chunks = collections.deque([""] * 10)  # ring buffer for quickly checking a short amount of text at the current end; prepopulate with empty strings since `popleft` requires at least one element to be present
     n_chunks = 0
+    stopped = False  # whether one of the stop strings triggered
     try:
         with timer() as tim:
             for event in client.events():
                 payload = json.loads(event.data)
                 chunk = payload['choices'][0]['delta']['content']
                 n_chunks += 1
-                # TODO: we should implement some stopping strings, just to be sure.
                 llm_output.write(chunk)
+
+                # Check for stopping strings (helps with some models that start talking on behalf of the user)
+                last_few_chunks.append(chunk)
+                last_few_chunks.popleft()
+                recent_output = "".join(last_few_chunks)
+                stop = [stopping_string in recent_output for stopping_string in settings.stopping_strings]  # check which stopping strings match (if any)
+                if any(stop):
+                    # The local LLM is OpenAI-compatible, so the same trick works - to tell the server to stop, just close the stream.
+                    # https://community.openai.com/t/interrupting-completion-stream-in-python/30628/7
+                    client.close()
+                    stopped = True
+                    break
+
                 if progress_callback is not None:
                     progress_callback(n_chunks, chunk)
     except requests.exceptions.ChunkedEncodingError as exc:
@@ -441,6 +460,16 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
         raise
 
     llm_output = llm_output.getvalue()
+
+    if stopped:  # due to a stopping string
+        # From the final LLM output, remove the longest suffix that is in the stopping strings
+        matched_stopping_strings = [stopping_string for is_match, stopping_string in zip(stop, settings.stopping_strings) if is_match]
+        assert matched_stopping_strings  # we only get here if at least one stopping string matches
+        stopping_string_start_positions = [llm_output.rfind(match) for match in matched_stopping_strings]
+        assert not any(start_position == -1 for start_position in stopping_string_start_positions)  # we only checked matching strings
+        chop_position = min(stopping_string_start_positions)
+        llm_output = llm_output[:chop_position]
+
     n_tokens = n_chunks - 2  # No idea why, but that's how it empirically is (see ooba server terminal output).  # TODO: Investigate later.
 
     return env(data=llm_output,
