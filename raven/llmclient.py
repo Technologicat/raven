@@ -44,6 +44,13 @@ headers = {
     "Content-Type": "application/json"
 }
 
+# # With an API key this would be as follows.
+# # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
+# headers = {
+#     "Content-Type": "application/json",
+#     "Authorization": "Bearer yourPassword123"
+# }
+
 def list_models(backend_url):
     """List all models available at `backend_url`."""
     response = requests.get(f"{config.llm_backend_url}/v1/internal/model/list",
