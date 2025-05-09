@@ -651,6 +651,7 @@ class HybridIR:
     # TODO: add a variant of `query` with a fixed amount of context around each match (we can do this by looking up the fulltext of the matching chunk and taking the text from there)
     def query(self,
               query: str,
+              *,
               k: int = 10,
               alpha: float = 2.0,
               keyword_score_threshold: float = 0.1,
