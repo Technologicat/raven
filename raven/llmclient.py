@@ -1,5 +1,6 @@
 __all__ = ["list_models", "setup",
-           "new_chat", "add_chat_message", "inject_chat_message",
+           "create_chat_message",
+           "add_chat_message",
            "format_chat_datetime_now", "format_reminder_to_focus_on_latest_input",
            "invoke"]
 
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 import argparse
 import atexit
 import collections
-from copy import copy, deepcopy
+from copy import deepcopy
 import datetime
 import io
 import json
@@ -20,7 +21,7 @@ import re
 import requests
 import sys
 from textwrap import dedent
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
 import sseclient  # pip install sseclient-py
 
@@ -29,6 +30,7 @@ from mcpyrate import colorizer
 from unpythonic import timer
 from unpythonic.env import env
 
+from . import chattree
 from . import config
 
 # --------------------------------------------------------------------------------
@@ -237,62 +239,65 @@ def setup(backend_url: str) -> env:
 # "num_ctx": 65536,
 
 # --------------------------------------------------------------------------------
-# Utilities
+# Utilities for minimal chat client
 
-def new_chat(settings: env) -> List[Dict[str, str]]:
-    """Initialize a new chat.
-
-    Returns the chat history object for the new chat.
-
-    The new history begins with the system prompt, followed by the character card, and then the AI assistant's greeting message.
-
-    You can add more messages to the chat by calling `add_chat_message`.
-
-    You can obtain the `settings` object by first calling `setup`.
-    """
-    history = []
-    history = add_chat_message(settings, history, role="system", message=f"{settings.system_prompt}\n\n{settings.character_card}")
-    history = add_chat_message(settings, history, role="assistant", message=settings.greeting)
-    return history
-
-def add_chat_message(settings: env, history: List[Dict[str, str]], role: str, message: str) -> List[Dict[str, str]]:
-    """Append a new message to a chat history, functionally (without modifying the original history instance).
-
-    Returns the updated chat history object.
+def create_chat_message(settings: env, role: str, message: str) -> Dict[str, str]:
+    """Create a new chat message, compatible with the chat history format sent to the LLM.
 
     `role`: one of "user", "assistant", "system"
-    """
-    return inject_chat_message(0, settings, history, role, message)
 
-def inject_chat_message(depth: int, settings: env, history: List[Dict[str, str]], role: str, message: str) -> List[Dict[str, str]]:
-    """Add a new message to a chat history at arbitrary position, functionally (without modifying the original history instance).
+    Returns the new message: `{"role": ..., "content": ...}`.
 
-    Returns the updated chat history object.
-
-    `depth`: int, nonnegative. Inject position, counting from current end of `history` (0 = append at end).
-             If `depth = -1` or `depth > len(history)`, insert at the beginning.
-    `role`: one of "user", "assistant", "system"
+    This automatically prepends the role name (e.g. "AI: ...") to the text content,
+    if `settings.role_names` has a name defined for that role.
     """
     if role not in ("user", "assistant", "system"):
         raise ValueError(f"Unknown role '{role}'; valid: one of 'user', 'assistant', 'system'.")
-    if depth == -1:  # insert at beginning?
-        idx = 0
-    else:
-        idx = max(0, len(history) - depth)
     if settings.role_names[role] is not None:
         content = f"{settings.role_names[role]}: {message}"  # e.g. "User: ..."
     else:  # System messages typically do not have a speaker tag for the line.
         content = message
-    new_history = copy(history)
-    new_history.insert(idx, {"role": role, "content": content})
-    return new_history
+    return {"role": role, "content": content}
+
+# TODO: persistent history
+def start_new_chat(settings: env) -> str:
+    """Reset the (in-memory) global chat node storage.
+
+    This creates a root node containing the system prompt (including the character card), and a node for the AI's initial greeting.
+
+    Returns the unique ID of the initial greeting node, so you can start building chats on top of that.
+
+    You can obtain the `settings` object by first calling `setup`.
+    """
+    chattree.clear_datastore()
+    root_node_id = chattree.create_node(message=create_chat_message(settings,
+                                                                    role="system",
+                                                                    message=f"{settings.system_prompt}\n\n{settings.character_card}"),
+                                        parent_id=None)
+    initial_greeting_id = chattree.create_node(message=create_chat_message(settings,
+                                                                           role="assistant",
+                                                                           message=settings.greeting),
+                                               parent_id=root_node_id)
+    return initial_greeting_id
+
+def add_chat_message(settings: env, parent_node_id: Optional[str], role: str, message: str) -> str:
+    """Append a new message to the chat tree, as a child node of `parent_node_id`.
+
+    If `parent_node_id` is not given, this creates a new root node.
+
+    Returns the unique ID of the new chat node.
+
+    `role`: one of "user", "assistant", "system"
+    """
+    new_node_id = chattree.create_node(message=create_chat_message(settings,
+                                                                   role=role,
+                                                                   message=message),
+                                       parent_id=parent_node_id)
+    return new_node_id
 
 _weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 def format_chat_datetime_now() -> str:
-    """Return a dynamic system message containing the current date, weekday, and local time.
-
-    This message can be injected to the chat history to show it to the LLM.
-    """
+    """Return the content of a dynamic system message containing the current date, weekday, and local time."""
     now = datetime.datetime.now()
     weekday = _weekdays[now.weekday()]
     date = now.date().isoformat()
@@ -300,11 +305,9 @@ def format_chat_datetime_now() -> str:
     return f"[System information: Today is {weekday}, {date} (in ISO format). The local time now is {isotime}.]"
 
 def format_reminder_to_focus_on_latest_input() -> str:
-    """Return a system message that reminds the LLM to focus on the user's latest input.
+    """Return the content of a system message that reminds the LLM to focus on the user's latest input.
 
     Some models such as the distills of DeepSeek-R1 need this to enable multi-turn conversation to work correctly.
-
-    This message can be injected to the chat history to show it to the LLM.
     """
     return "[System information: IMPORTANT: Reply to the user's most recent message. In a discussion, prefer writing your raw thoughts rather than a structured report.]"
 
@@ -324,7 +327,7 @@ def remove_persona_from_start_of_line(settings: env, role: str, content: str) ->
     content = re.sub(_persona_name_at_start_of_line, r"", content)
     return content
 
-def clean(settings: env, message: str, thoughts_mode: str, add_ai_persona_name: bool) -> str:
+def scrub(settings: env, message: str, thoughts_mode: str, add_ai_persona_name: bool) -> str:
     """Heuristically clean up an LLM-generated message."""
 
     # First remove any mentions of the AI persona's name at the start of any line in the message.
@@ -541,11 +544,13 @@ def minimal_chat_client(backend_url):
             print("    llmclient.py - Minimal LLM client for testing/debugging.")
             print()
             print("    Special commands (tab-completion available):")
-            print("        !clear   - Start new chat (clear history)")
-            print("        !history - Print a cleaned-up transcript of the chat history")
-            print("        !model   - Show which model is in use")
-            print("        !models  - List all models available at connected backend")
-            print("        !help    - Show this message again")
+            print("        !clear             - Start new chat (clear history)")
+            print("        !dump              - See raw contents of chat node datastore")
+            print("        !head some-node-id - Switch to another chat branch (get the node ID from `!dump`)")
+            print("        !history           - Print a cleaned-up transcript of the chat history")
+            print("        !model             - Show which model is in use")
+            print("        !models            - List all models available at connected backend")
+            print("        !help              - Show this message again")
             print()
             print("    Press Ctrl+D to exit chat.")
             print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
@@ -553,7 +558,7 @@ def minimal_chat_client(backend_url):
         chat_show_help()
 
         # https://docs.python.org/3/library/readline.html#readline-completion
-        candidates = ["clear", "history", "model", "models", "help"]
+        candidates = ["clear", "dump", "head ", "help", "history", "model", "models"]  # note space after "head"; that command expects an argument
         def completer(text, state):  # completer for special commands
             if not text.startswith("!"):  # Not a command -> no completions.
                 return None
@@ -631,13 +636,16 @@ def minimal_chat_client(backend_url):
                 chat_print_message(k, item["role"], item["content"])
                 print()
 
-        history = new_chat(settings)
-        new_chat_history = history
-        chat_print_history(history)  # show initial blank history
+        # Initialize
+        initial_greeting_id = start_new_chat(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
+        HEAD = initial_greeting_id  # current last node in chat; like HEAD pointer in git
+        chat_print_history(chattree.linearize_branch(HEAD))  # show initial blank history
+
+        # Main loop
         injectors = [format_chat_datetime_now,  # let the LLM know the current local time and date
                      format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
         while True:
-            original_history = history
+            history = chattree.linearize_branch(HEAD)  # latest, at start
             user_message_number = len(history)
             ai_message_number = user_message_number + 1
 
@@ -656,8 +664,32 @@ def minimal_chat_client(backend_url):
             # Interpret special commands for this LLM client
             if user_message == "!clear":
                 print(colorizer.colorize("Starting new chat session (resetting history)", colorizer.Style.BRIGHT))
-                history = new_chat_history
-                chat_print_history(history)
+                HEAD = initial_greeting_id
+                chat_print_history(chattree.linearize_branch(HEAD))
+                continue
+            elif user_message == "!dump":
+                print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {HEAD})")
+                print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
+                chattree.print_datastore()
+                print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
+                print()
+                continue
+            elif user_message.startswith("!head"):  # switch to another chat branch
+                try:
+                    _, new_head_id = user_message.split()
+                except ValueError:
+                    print("!head: wrong number of arguments; expected exactly one, the node ID to switch to; see `!dump` for available chat nodes.")
+                    print()
+                    continue
+                if new_head_id not in chattree.storage:
+                    print(f"!head: no such chat node '{new_head_id}'; see `!dump` for available chat nodes.")
+                    print()
+                    continue
+                HEAD = new_head_id
+                chat_print_history(chattree.linearize_branch(HEAD))
+                continue
+            elif user_message == "!help":
+                chat_show_help()
                 continue
             elif user_message == "!history":
                 print(colorizer.colorize("Chat history (cleaned up):", colorizer.Style.BRIGHT))
@@ -672,22 +704,19 @@ def minimal_chat_client(backend_url):
             elif user_message == "!models":
                 chat_show_list_of_models()
                 continue
-            elif user_message == "!help":
-                chat_show_help()
-                continue
+
+            # Not a special command - add the user's message to the chat.
+            user_message_node_id = chattree.create_node(message=create_chat_message(settings=settings, role="user", message=user_message),
+                                                        parent_id=HEAD)
+            HEAD = user_message_node_id
+            history = chattree.linearize_branch(HEAD)  # latest, after user's message
 
             # Prepare to prompt the LLM.
 
-            # Perform the temporary injects.
+            # Perform the temporary injects. These are not meant to be persistent, so we don't even add them as nodes to the chat tree, but only into the temporary linearized history.
             for thunk in injectors:
-                history = inject_chat_message(depth=0, settings=settings, history=history, role="system", message=thunk())
-
-            # Add the user's message to the context.
-            history = add_chat_message(settings, history, role="user", message=user_message)
-
-            # Now:
-            #   -1 = user's last message
-            #   -2 = last inject
+                message_to_inject = create_chat_message(settings=settings, role="system", message=thunk())
+                history.insert(-1, message_to_inject)  # -1 = just before user's message
 
             # AI's turn - prompt the LLM.
             print(format_message_number(ai_message_number, color=True))
@@ -703,22 +732,21 @@ def minimal_chat_client(backend_url):
                     chars = 0
                 print(chunk_text, end="")
                 sys.stdout.flush()
+            # `invoke` uses a linearized history, as expected by the LLM API.
             out = invoke(settings, history, progress_callback)  # `out.data` is now the complete response
             print()  # add the final newline
 
             # Clean up the AI's reply (heuristically).
-            out.data = clean(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)  # persona name is already added by `add_chat_message`
+            out.data = scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)  # persona name is already added by `add_chat_message`
 
             # Show performance statistics
             print(colorizer.colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))
             print()
 
-            # Discard the temporary injects (resetting history to the start of this round, before user's message).
-            history = original_history
-
-            # Add the user's and the AI's messages to the chat history.
-            history = add_chat_message(settings, history, role="user", message=user_message)
-            history = add_chat_message(settings, history, role="assistant", message=out.data)
+            # Add the AI's message to the chat.
+            ai_message_node_id = chattree.create_node(message=create_chat_message(settings=settings, role="assistant", message=out.data),
+                                                      parent_id=HEAD)
+            HEAD = ai_message_node_id
     except (EOFError, KeyboardInterrupt):
         print()
         print(colorizer.colorize("Exiting chat.", colorizer.Style.BRIGHT))
