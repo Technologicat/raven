@@ -1,7 +1,7 @@
 # Raven-visualizer TODO
 
 
-## v0.1.1 (March 2025?)
+## v0.1.x (August 2025?)
 
 *Preliminary plan, not final. Details may change.*
 
@@ -69,6 +69,10 @@
     - handle umlauts Å, Ä, Ö, Ü, å, ä, ö, ü: e.g. {\"o} -> ö
     - drop BibTeX's "verbatim" braces: {GPU} clusters -> GPU clusters
 
+- Save/load selection, for reproducible reports. (Needs some care to make it work for a dynamic dataset.)
+  - This becomes especially important with the LLM client, as the selection will affect which documents are enabled for RAG, so chat histories will be selection-specific.
+    So it will feel silly if there is no way to save/load selections without attaching an AI chat to them.
+  - The GUI needs some thinking. What is a good UX here?
 
 ## v0.2 and later
 
@@ -211,7 +215,6 @@
 
 - Data file format: `pickle` is not portable across Python versions or indeed even app versions. Use `npz` or something.
 
-- Save/load selection, for reproducible reports. (Needs some care to make it work for a dynamic dataset.)
 - Multiple datasets, to place one dataset into the wider context of another (e.g. one's own research within a whole field of science). How to color-code the datasets in the plot?
 
 - Make all colors configurable. May need a lot of work. We must customize *every colorable item* in the theme, since the default theme cannot be queried for its colors in DPG.
