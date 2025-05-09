@@ -649,13 +649,15 @@ class HybridIR:
 
     # TODO: add a variant of `query` that doesn't return debug information (but final fused search results only)
     # TODO: add a variant of `query` with a fixed amount of context around each match (we can do this by looking up the fulltext of the matching chunk and taking the text from there)
+    # TODO: do we need `exclude_documents`, for symmetry?
     def query(self,
               query: str,
               *,
               k: int = 10,
               alpha: float = 2.0,
               keyword_score_threshold: float = 0.1,
-              semantic_distance_threshold: float = 0.8) -> List[Dict]:
+              semantic_distance_threshold: float = 0.8,
+              include_documents: Optional[List[str]] = None) -> List[Dict]:
         """Hybrid BM25 + Vector search with RRF fusion.
 
         `query`: Search query, of the kind you'd type into Google: space-separated keywords, or a natural-language question.
@@ -674,6 +676,8 @@ class HybridIR:
         `semantic_distance_threshold`: Ignore any semantic search results whose semantic distance to the query is this or more.
                                        Good values depend on the embedding you use, and possibly on the dataset.
                                        The default is for cosine distance using the default embedding model.
+
+        `include_documents`: Optional list of document IDs. If provided, search only in the specified documents.
         """
         logger.info(f"HybridIR.query: entered. Searching for {k} best matches for '{query}'")
 
@@ -689,17 +693,25 @@ class HybridIR:
         # BM25 search
         logger.info("HybridIR.query: keyword search")
         query_tokens = tokenize(query)
-        raw_keyword_results, raw_keyword_scores = self._keyword_retriever.retrieve([query_tokens],  # list of list of tokens (outer list = one element per query; can run multiple queries at once)
-                                                                                   k=internal_k)
 
-        # Filter keyword results by threshold
+        if include_documents is None:
+            keyword_k = internal_k
+        else:  # return score for *every record in database*, we'll do the metadata-based filtering (document ID) manually.
+            keyword_k = len(self._keyword_retriever.corpus)
+        raw_keyword_results, raw_keyword_scores = self._keyword_retriever.retrieve([query_tokens],  # list of list of tokens (outer list = one element per query; can run multiple queries at once)
+                                                                                   k=keyword_k)
+
+        # Filter keyword results by threshold (and by `include_documents`, if specified)
         keyword_results = []
         keyword_scores = []
+        include_documents_set = set(include_documents) if include_documents is not None else set()  # for O(1) checking
         for j in range(raw_keyword_results.shape[1]):
             # https://github.com/xhluca/bm25s/blob/main/examples/save_and_reload_end_to_end.py
             keyword_result = raw_keyword_results[0, j]
             keyword_score = raw_keyword_scores[0, j]
             if keyword_score > keyword_score_threshold:
+                if include_documents is not None and keyword_result["document_id"] not in include_documents_set:
+                    continue
                 keyword_results.append(keyword_result)
                 keyword_scores.append(keyword_score)
         # Now `keyword_results` contains the corpus entries as-is
@@ -710,9 +722,15 @@ class HybridIR:
                                                       show_progress_bar=True,
                                                       convert_to_numpy=True,
                                                       normalize_embeddings=True)[0].tolist()
-        chroma_results = self._vector_collection.query(query_embeddings=[query_embedding],
-                                                       n_results=internal_k,
-                                                       include=["metadatas", "distances"])
+        if include_documents is not None:  # search only documents with given IDs
+            chroma_results = self._vector_collection.query(query_embeddings=[query_embedding],
+                                                           n_results=internal_k,
+                                                           include=["metadatas", "distances"],
+                                                           where={"document_id": {"$in": include_documents}})
+        else:  # search all documents
+            chroma_results = self._vector_collection.query(query_embeddings=[query_embedding],
+                                                           n_results=internal_k,
+                                                           include=["metadatas", "distances"])
         # list of list of metadatas (outer list = one element per query?)
         # https://github.com/chroma-core/chroma/blob/main/chromadb/api/types.py
         raw_vector_results = chroma_results["metadatas"][0]  # -> list of metadatas
