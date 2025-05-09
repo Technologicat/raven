@@ -535,7 +535,7 @@ def minimal_chat_client(backend_url):
 
         # Save the ID of the new-chat node, as well as that of the current HEAD node of the chat.
         state = {"HEAD": HEAD,
-                 "initial_greeting_id": initial_greeting_id}
+                 "new_chat_HEAD": initial_greeting_id}
         with open(state_file, "w") as json_file:
             json.dump(state, json_file, indent=2)
     # We register later than `chattree.PersistentForest`, so ours runs first. Hence we'll have the chance to prune before the forest is persisted to disk.
@@ -667,7 +667,7 @@ def minimal_chat_client(backend_url):
 
             with open(state_file, "r") as json_file:
                 state = json.load(json_file)
-            initial_greeting_id = state["initial_greeting_id"]
+            initial_greeting_id = state["new_chat_HEAD"]
             HEAD = state["HEAD"]
 
             print(f"Loaded chat datastore from '{datastore_file}' and app state from '{state_file}'.")
