@@ -17,6 +17,8 @@
 
 - Flash the search field (both in main window and in file dialogs) when focused by hotkey. Need to generalize `ButtonFlash` for GUI elements other than buttons.
 
+- Split `raven.utils` into smaller modules to optimize clarity and loading time - e.g. some utilities are DPG-related, whereas others are not.
+
 - fdialog: least surprise: if the user has picked a unique file extension in the file extension filter combo, use that as the default file extension when in save mode. If the current choice in that combo has several file extensions, and/or has one or more wildcards, then use the API-provided default file extension.
 
 - Import BibTeX: use multiple columns for input file table in the GUI if we have very many input files.
@@ -34,18 +36,24 @@
 
 - Fix issues found via user feedback from initial testing:
   - Installation instructions: TL;DR version (without CUDA), walk through how to import the included dataset
-  - Show the DOI
-    - Export list of DOIs (for full paper search automation)
+  - Import and show the DOI / URL
+    - Export list of DOIs / URLs (for fulltext internet search automation)
   - Author search
     - Show full author list if it fits
     - How to show author list if "Aaltonen et al." and the user is searching for "Virtanen" (200 names later in the same author list)
   - Word cloud window size: make it possible to scale the window and image
-  - Fullscreen mode / Exit fullscreen mode, with icons
-  - Full reports of selected items that don't care whether the items fit into the info panel
+    - Make the word cloud window resizable
+    - Add a 1:1 button to the word cloud window's toolbar to return to pixel-perfect size
+    - DPG's image texture scaler seems to be just nearest-neighbor, which is a really bad algorithm (horrible frequency response / aliasing); perhaps we should use Pillow, it has a Lanczos scaler in `Image.resize`
+      - Keep a separate copy of the full-resolution texture (word cloud output)
+      - Keep a dynamic texture copy that is shown in the GUI
+      - Lanczos-scale the data in the GUI texture in a bgtask (Lanczos scale to target size, then nearest-neighbor scale the result to the fixed texture size)
+  - Toggle fullscreen -> Fullscreen mode / Exit fullscreen mode, with icons
+  - Full report of all selected items that doesn't care whether the items fit into the info panel
   - Make the text headings clickable in the import window (same as clicking the corresponding button)
   - Make highlight visualization clearer, now it obscures which cluster each data point belongs to
     - Maybe just an outline, not a filled circle?
-    - Brighten the data point's own color, don't use a separate color? (Difficult, one data series per color)
+    - Brighten the data point's own color, don't use a separate color? (Difficult, DPG needs one data series per color)
   - Add a screenful of spacer at end of info panel, to be able to scroll to last cluster
   - Make the "Search" heading brighter to make it stand out
   - Highlight/color data points by year, so that newer research is brighter
@@ -56,9 +64,10 @@
     - Models:
       - Semantic embedder
       - spaCy NLP model
+      - QA embedder (for upcoming intelligent search features)
   - BibTeX import:
-    - handle umlauts: {\"o} -> ö
-    - drop braces: {GPU} clusters -> GPU clusters
+    - handle umlauts Å, Ä, Ö, Ü, å, ä, ö, ü: e.g. {\"o} -> ö
+    - drop BibTeX's "verbatim" braces: {GPU} clusters -> GPU clusters
 
 
 ## v0.2 and later
