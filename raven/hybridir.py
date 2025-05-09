@@ -767,7 +767,7 @@ if __name__ == "__main__":
     from mcpyrate import colorizer
 
     # Create the retriever.
-    config_dir = (pathlib.Path(config.llm_save_dir) / "hybridir_demo").expanduser().resolve()
+    config_dir = pathlib.Path(config.hybridir_demo_save_dir).expanduser().resolve()
     retriever = HybridIR(datastore_base_dir=config_dir,
                          embedding_model_name=config.qa_embedding_model)
 

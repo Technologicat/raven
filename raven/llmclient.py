@@ -38,6 +38,13 @@ from . import config
 
 output_line_width = 160  # for text wrapping in live update
 
+config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
+
+api_key_file = config_dir / "api_key.txt"
+history_file = config_dir / "history"      # user input history (readline)
+datastore_file = config_dir / "data.json"  # chat node datastore
+state_file = config_dir / "state.json"     # important node IDs for the chat client state
+
 # --------------------------------------------------------------------------------
 # LLM API setup
 
@@ -48,8 +55,6 @@ headers = {
 }
 
 # Support cloud LLMs, too
-config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
-api_key_file = config_dir / "llm_api_key.txt"
 if os.path.exists(api_key_file):
     with open(api_key_file, "r") as f:
         api_key = f.read()
@@ -259,7 +264,6 @@ def create_chat_message(settings: env, role: str, message: str) -> Dict[str, str
         content = message
     return {"role": role, "content": content}
 
-# TODO: persistent history
 def start_new_chat(settings: env) -> str:
     """Reset the (in-memory) global chat node storage.
 
@@ -503,20 +507,31 @@ def minimal_chat_client(backend_url):
         print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
         print()
 
-    config_file_location = config_dir / "llmclient_history"
-    print(colorizer.colorize(f"GNU readline available. Saving user inputs to {str(config_file_location)}.", colorizer.Style.BRIGHT))
+    print(colorizer.colorize(f"GNU readline available. Saving user inputs to {str(history_file)}.", colorizer.Style.BRIGHT))
     print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
     print()
     try:
-        readline.read_history_file(config_file_location)
+        readline.read_history_file(history_file)
     except FileNotFoundError:
         pass
 
-    def save_history():
+    def persist():
         config_dir.mkdir(parents=True, exist_ok=True)
+
         readline.set_history_length(1000)
-        readline.write_history_file(config_file_location)
-    atexit.register(save_history)
+        readline.write_history_file(history_file)
+
+        # Before saving, remove any nodes not reachable from the initial message (there shouldn't be any, but this way we exercise this feature, too)
+        system_prompt_node_id = chattree.storage[initial_greeting_id]["parent"]  # ugh
+        chattree.prune_datastore(system_prompt_node_id)
+
+        chattree.save_datastore(datastore_file)
+
+        state = {"HEAD": HEAD,
+                 "initial_greeting_id": initial_greeting_id}
+        with open(state_file, "w") as json_file:
+            json.dump(state, json_file, indent=2)
+    atexit.register(persist)
 
     try:
         try:
@@ -544,7 +559,7 @@ def minimal_chat_client(backend_url):
             print("    llmclient.py - Minimal LLM client for testing/debugging.")
             print()
             print("    Special commands (tab-completion available):")
-            print("        !clear             - Start new chat (clear history)")
+            print("        !clear             - Start new chat")
             print("        !dump              - See raw contents of chat node datastore")
             print("        !head some-node-id - Switch to another chat branch (get the node ID from `!dump`)")
             print("        !history           - Print a cleaned-up transcript of the chat history")
@@ -637,8 +652,20 @@ def minimal_chat_client(backend_url):
                 print()
 
         # Initialize
-        initial_greeting_id = start_new_chat(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
-        HEAD = initial_greeting_id  # current last node in chat; like HEAD pointer in git
+        try:
+            with open(state_file, "r") as json_file:
+                state = json.load(json_file)
+            initial_greeting_id = state["initial_greeting_id"]
+            HEAD = state["HEAD"]
+
+            chattree.load_datastore(datastore_file)
+
+            print(f"Loaded chat datastore from '{datastore_file}' and app state from '{state_file}'.")
+        except FileNotFoundError:  # if either one not found
+            print(f"No chat datastore at '{datastore_file}'. Will create new datastore when the app exits.")
+            initial_greeting_id = start_new_chat(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
+            HEAD = initial_greeting_id  # current last node in chat; like HEAD pointer in git
+
         chat_print_history(chattree.linearize_branch(HEAD))  # show initial blank history
 
         # Main loop

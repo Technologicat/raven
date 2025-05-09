@@ -13,8 +13,13 @@ from unpythonic.env import env
 # Currently, only local LLMs are supported, as there is no mechanism to pass an API key. I don't use cloud LLMs myself, but pull requests regarding this are welcome.
 llm_backend_url = "http://127.0.0.1:5000"
 
-# For LLM client chat history and RAG database storage
-llm_save_dir = "~/.config/raven"
+config_base_dir = "~/.config/raven/"
+
+# For LLM client chat history
+llm_save_dir = config_base_dir + "llmclient"
+
+# For RAG database storage (API usage example / demo)
+hybridir_demo_save_dir = config_base_dir + "hybridir_demo"
 
 # AI model for semantic search (RAG backend `raven.hybridir`), encoding both questions and answers into a joint semantic space.
 # Available on HuggingFace. Auto-downloaded on first use.

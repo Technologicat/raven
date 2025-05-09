@@ -15,11 +15,16 @@ logger = logging.getLogger(__name__)
 
 import collections
 import copy
+import json
 import pathlib
 import threading
 from typing import Any, Callable, List, Optional, Union
 
 from unpythonic import gensym
+
+from . import utils
+
+# TODO: Make this into a class (like `HybridIR` is), so that we can have per-instance independent datastores.
 
 # For easy JSON-ability, we store the chat nodes in a global dictionary, as a doubly-linked forest:
 #
@@ -283,7 +288,7 @@ def print_datastore() -> None:
     """Show the raw contents of the global storage for chat nodes. For debugging."""
     with storage_lock:
         for node_id, node in storage.items():
-            print(f"{node_id}:")
+            print(f"{node_id}")  # on its own line for easy copy'n'pasting
             for key, value in node.items():
                 print(f"    {key}: {value}")
             print()
@@ -324,7 +329,36 @@ def clear_datastore() -> None:
         storage.clear()
 
 def save_datastore(path: Union[str, pathlib.Path]) -> None:
-    pass  # TODO
+    """Save the global chat node storage to a file, so that it can be reloaded later with `load_datastore`."""
+    with storage_lock:
+        absolute_path = path.expanduser().resolve()
+        logger.info(f"save_datastore: Saving chat node datastore to '{str(path)}' (resolved to '{str(absolute_path)}').")
+
+        directory = path.parent
+        logger.info(f"save_datastore: Creating directory '{str(directory)}'.")
+        utils.create_directory(directory)
+
+        logger.info("save_datastore: Saving data.")
+        with open(absolute_path, "w") as json_file:
+            json.dump(storage, json_file, indent=2)
+
+        logger.info("save_datastore: All done.")
 
 def load_datastore(path: Union[str, pathlib.Path]) -> None:
-    pass  # TODO
+    """Load the global chat node storage to a file.
+
+    Loading replaces the current in-memory datastore.
+    """
+    with storage_lock:
+        absolute_path = path.expanduser().resolve()
+        logger.info(f"load_datastore: Loading chat node datastore from '{str(path)}' (resolved to '{str(absolute_path)}').")
+
+        try:
+            with open(absolute_path, "r") as json_file:
+                data = json.load(json_file)
+        except Exception as exc:
+            logger.warning(f"load_datastore: While loading datastore from '{str(absolute_path)}': {type(exc)}: {exc}")
+        else:
+            storage.clear()
+            storage.update(data)
+            logger.info("load_datastore: Datastore loaded successfully.")
