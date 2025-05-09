@@ -425,4 +425,4 @@ class PersistentForest:
                 self.nodes.clear()
                 self.nodes.update(data)
                 plural_s = "s" if len(data) != 1 else ""
-                logger.info(f"PersistentForest._load: PersistentForest loaded successfully ({len(data)} chat node{plural_s}).")
+                logger.info(f"PersistentForest._load: PersistentForest loaded successfully ({len(data)} node{plural_s}).")
