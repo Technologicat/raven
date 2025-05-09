@@ -45,6 +45,8 @@ history_file = config_dir / "history"      # user input history (readline)
 datastore_file = config_dir / "data.json"  # chat node datastore
 state_file = config_dir / "state.json"     # important node IDs for the chat client state
 
+datastore = chattree.Datastore(datastore_file=datastore_file)  # this will autoload if there is any data at the specified location
+
 # --------------------------------------------------------------------------------
 # LLM API setup
 
@@ -264,8 +266,12 @@ def create_chat_message(settings: env, role: str, message: str) -> Dict[str, str
         content = message
     return {"role": role, "content": content}
 
-def start_new_chat(settings: env) -> str:
-    """Reset the (in-memory) global chat node storage.
+def initialize_chat_datastore(settings: env) -> str:
+    """Reset the chat node datastore to its "factory-default" state.
+
+    **IMPORTANT**: This deletes all existing chat nodes in the datastore, and CANNOT BE UNDONE.
+
+    The primary purpose of this function is to initialize the chat datastore when it hasn't been created yet.
 
     This creates a root node containing the system prompt (including the character card), and a node for the AI's initial greeting.
 
@@ -273,15 +279,15 @@ def start_new_chat(settings: env) -> str:
 
     You can obtain the `settings` object by first calling `setup`.
     """
-    chattree.clear_datastore()
-    root_node_id = chattree.create_node(message=create_chat_message(settings,
-                                                                    role="system",
-                                                                    message=f"{settings.system_prompt}\n\n{settings.character_card}"),
-                                        parent_id=None)
-    initial_greeting_id = chattree.create_node(message=create_chat_message(settings,
-                                                                           role="assistant",
-                                                                           message=settings.greeting),
-                                               parent_id=root_node_id)
+    datastore.purge()
+    root_node_id = datastore.create_node(data=create_chat_message(settings,
+                                                                  role="system",
+                                                                  message=f"{settings.system_prompt}\n\n{settings.character_card}"),
+                                         parent_id=None)
+    initial_greeting_id = datastore.create_node(data=create_chat_message(settings,
+                                                                         role="assistant",
+                                                                         message=settings.greeting),
+                                                parent_id=root_node_id)
     return initial_greeting_id
 
 def add_chat_message(settings: env, parent_node_id: Optional[str], role: str, message: str) -> str:
@@ -293,10 +299,10 @@ def add_chat_message(settings: env, parent_node_id: Optional[str], role: str, me
 
     `role`: one of "user", "assistant", "system"
     """
-    new_node_id = chattree.create_node(message=create_chat_message(settings,
-                                                                   role=role,
-                                                                   message=message),
-                                       parent_id=parent_node_id)
+    new_node_id = datastore.create_node(data=create_chat_message(settings,
+                                                                 role=role,
+                                                                 message=message),
+                                        parent_id=parent_node_id)
     return new_node_id
 
 _weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -521,17 +527,19 @@ def minimal_chat_client(backend_url):
         readline.set_history_length(1000)
         readline.write_history_file(history_file)
 
-        # Before saving, remove any nodes not reachable from the initial message (there shouldn't be any, but this way we exercise this feature, too)
-        system_prompt_node_id = chattree.storage[initial_greeting_id]["parent"]  # ugh
-        chattree.prune_unreachable_nodes(system_prompt_node_id)
-        chattree.prune_dead_links(system_prompt_node_id)
+        # Before saving (which happens automatically at exit), remove any nodes not reachable from the initial message, and also remove dead links.
+        # There shouldn't be any, but this way we exercise these features, too.
+        system_prompt_node_id = datastore.nodes[initial_greeting_id]["parent"]
+        datastore.prune_unreachable_nodes(system_prompt_node_id)
+        datastore.prune_dead_links(system_prompt_node_id)
 
-        chattree.save_datastore(datastore_file)
-
+        # Save the ID of the new-chat node, as well as that of the current HEAD node of the chat.
         state = {"HEAD": HEAD,
                  "initial_greeting_id": initial_greeting_id}
         with open(state_file, "w") as json_file:
             json.dump(state, json_file, indent=2)
+    # We register later than `chattree.Datastore`, so ours runs first. Hence we'll have the chance to prune before the datastore is persisted to disk.
+    #     https://docs.python.org/3/library/atexit.html
     atexit.register(persist)
 
     try:
@@ -654,26 +662,26 @@ def minimal_chat_client(backend_url):
 
         # Initialize
         try:
+            if not datastore.nodes:  # No nodes loaded from datastore -> don't bother reading `state.json`, either.
+                raise FileNotFoundError
+
             with open(state_file, "r") as json_file:
                 state = json.load(json_file)
             initial_greeting_id = state["initial_greeting_id"]
             HEAD = state["HEAD"]
 
-            chattree.load_datastore(datastore_file)
-
             print(f"Loaded chat datastore from '{datastore_file}' and app state from '{state_file}'.")
-        except FileNotFoundError:  # if either one not found
-            print(f"No chat datastore at '{datastore_file}'. Will create new datastore when the app exits.")
-            initial_greeting_id = start_new_chat(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
+        except FileNotFoundError:
+            initial_greeting_id = initialize_chat_datastore(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
             HEAD = initial_greeting_id  # current last node in chat; like HEAD pointer in git
 
-        chat_print_history(chattree.linearize_branch(HEAD))  # show initial blank history
+        chat_print_history(datastore.linearize_up(HEAD))  # show initial blank history
 
         # Main loop
         injectors = [format_chat_datetime_now,  # let the LLM know the current local time and date
                      format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
         while True:
-            history = chattree.linearize_branch(HEAD)  # latest, at start
+            history = datastore.linearize_up(HEAD)  # latest, at start
             user_message_number = len(history)
             ai_message_number = user_message_number + 1
 
@@ -691,14 +699,16 @@ def minimal_chat_client(backend_url):
 
             # Interpret special commands for this LLM client
             if user_message == "!clear":
-                print(colorizer.colorize("Starting new chat session (resetting history)", colorizer.Style.BRIGHT))
+                print(colorizer.colorize("Starting new chat session.", colorizer.Style.BRIGHT))
                 HEAD = initial_greeting_id
-                chat_print_history(chattree.linearize_branch(HEAD))
+                print(f"HEAD is now at '{HEAD}'.")
+                print()
+                chat_print_history(datastore.linearize_up(HEAD))
                 continue
             elif user_message == "!dump":
                 print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {HEAD})")
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
-                chattree.print_datastore()
+                print(f"{datastore}", end="")  # -> str; also, already has the final blank line
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 print()
                 continue
@@ -709,12 +719,14 @@ def minimal_chat_client(backend_url):
                     print("!head: wrong number of arguments; expected exactly one, the node ID to switch to; see `!dump` for available chat nodes.")
                     print()
                     continue
-                if new_head_id not in chattree.storage:
+                if new_head_id not in datastore.nodes:
                     print(f"!head: no such chat node '{new_head_id}'; see `!dump` for available chat nodes.")
                     print()
                     continue
                 HEAD = new_head_id
-                chat_print_history(chattree.linearize_branch(HEAD))
+                print(f"HEAD is now at '{HEAD}'.")
+                print()
+                chat_print_history(datastore.linearize_up(HEAD))
                 continue
             elif user_message == "!help":
                 chat_show_help()
@@ -734,10 +746,12 @@ def minimal_chat_client(backend_url):
                 continue
 
             # Not a special command - add the user's message to the chat.
-            user_message_node_id = chattree.create_node(message=create_chat_message(settings=settings, role="user", message=user_message),
-                                                        parent_id=HEAD)
+            user_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
+                                                                                  role="user",
+                                                                                  message=user_message),
+                                                         parent_id=HEAD)
             HEAD = user_message_node_id
-            history = chattree.linearize_branch(HEAD)  # latest, after user's message
+            history = datastore.linearize_up(HEAD)  # latest, after user's message
 
             # Prepare to prompt the LLM.
 
@@ -772,8 +786,10 @@ def minimal_chat_client(backend_url):
             print()
 
             # Add the AI's message to the chat.
-            ai_message_node_id = chattree.create_node(message=create_chat_message(settings=settings, role="assistant", message=out.data),
-                                                      parent_id=HEAD)
+            ai_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
+                                                                                role="assistant",
+                                                                                message=out.data),
+                                                       parent_id=HEAD)
             HEAD = ai_message_node_id
     except (EOFError, KeyboardInterrupt):
         print()
