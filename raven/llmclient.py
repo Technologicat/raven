@@ -45,7 +45,7 @@ history_file = config_dir / "history"      # user input history (readline)
 datastore_file = config_dir / "data.json"  # chat node datastore
 state_file = config_dir / "state.json"     # important node IDs for the chat client state
 
-datastore = chattree.Datastore(datastore_file=datastore_file)  # this will autoload if there is any data at the specified location
+datastore = chattree.PersistentForest(datastore_file)  # this will autoload if there is any data at the specified location
 
 # --------------------------------------------------------------------------------
 # LLM API setup
@@ -538,7 +538,7 @@ def minimal_chat_client(backend_url):
                  "initial_greeting_id": initial_greeting_id}
         with open(state_file, "w") as json_file:
             json.dump(state, json_file, indent=2)
-    # We register later than `chattree.Datastore`, so ours runs first. Hence we'll have the chance to prune before the datastore is persisted to disk.
+    # We register later than `chattree.PersistentForest`, so ours runs first. Hence we'll have the chance to prune before the forest is persisted to disk.
     #     https://docs.python.org/3/library/atexit.html
     atexit.register(persist)
 
