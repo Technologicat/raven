@@ -6,8 +6,8 @@ __all__ = ["create_node", "delete_node", "copy_node",
            "reparent_subtree", "reparent_children",
            "walk_up",
            "linearize_branch",
-           "get_all_root_nodes",
-           "print_datastore", "prune_datastore", "clear_datastore", "save_datastore", "load_datastore"]
+           "get_all_root_nodes", "prune_unreachable_nodes", "prune_dead_links",
+           "print_datastore", "clear_datastore", "save_datastore", "load_datastore"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +20,7 @@ import pathlib
 import threading
 from typing import Any, Callable, List, Optional, Union
 
-from unpythonic import gensym
+from unpythonic import gensym, partition
 
 from . import utils
 
@@ -284,17 +284,7 @@ def get_all_root_nodes() -> List[str]:
     """
     return [node["id"] for node in storage.values() if node["parent"] is None]
 
-def print_datastore() -> None:
-    """Show the raw contents of the global storage for chat nodes. For debugging."""
-    with storage_lock:
-        for node_id, node in storage.items():
-            print(f"{node_id}")  # on its own line for easy copy'n'pasting
-            for key, value in node.items():
-                print(f"    {key}: {value}")
-            print()
-
-# TODO: prune dead links, too?
-def prune_datastore(*roots: str) -> None:
+def prune_unreachable_nodes(*roots: str) -> None:
     """Delete any chat nodes in the global storage that are not reachable from any of the `roots` (list of root node unique IDs).
 
     Note this walks only down (children), not up (parent chain).
@@ -305,7 +295,7 @@ def prune_datastore(*roots: str) -> None:
         reachable_node_ids = set()
         def find_nodes_reachable_from(node_id):
             if node_id not in storage:
-                logger.warning(f"prune_datastore: trying to scan non-existent chat node '{node_id}'. Ignoring error.")
+                logger.warning(f"prune_unreachable_nodes: trying to scan non-existent chat node '{node_id}'. Ignoring error.")
                 return
             reachable_node_ids.add(node_id)
             node = storage[node_id]
@@ -317,8 +307,57 @@ def prune_datastore(*roots: str) -> None:
         all_node_ids = set(storage.keys())
         unreachable_node_ids = all_node_ids.difference(reachable_node_ids)
 
+        if unreachable_node_ids:
+            plural_s = "s" if len(unreachable_node_ids) != 1 else ""
+            logger.info(f"prune_unreachable_nodes: found {len(unreachable_node_ids)} unreachable node{plural_s}. Deleting.")
+
         for unreachable_node_id in unreachable_node_ids:
             delete_node(unreachable_node_id)  # this ensures any links to them get removed too
+
+def prune_dead_links(*roots: str) -> None:
+    """Delete any links (parent or child) in the chat tree that point to a nonexistent node.
+
+    This is a depth-first tree scan that starts at each of the `roots` (list of root node unique IDs).
+
+    If a node's parent does not exist, that node becomes a root node.
+
+    If a node's child does not exist, that child is removed from the list of children.
+
+    Dead links should never occur; we provide this utility just in case.
+    """
+    with storage_lock:
+        def walk(node_id):
+            node = storage[node_id]
+
+            parent_node_id = node["parent"]
+            if parent_node_id is not None and parent_node_id not in storage:  # dead link?
+                logger.warning(f"Node '{node_id}' links to nonexistent parent '{parent_node_id}'; removing the link.")
+                node["parent"] = None
+
+            nonexistent_children, valid_children = partition(pred=lambda node_id: node_id in storage,
+                                                             iterable=node["children"])
+            nonexistent_children = list(nonexistent_children)
+            valid_children = list(valid_children)
+
+            if nonexistent_children:  # any dead links?
+                logger.warning(f"Node '{node_id}' links to one or more nonexistent children {nonexistent_children}; removing the links.")
+                node["children"].clear()
+                node["children"].extend(valid_children)
+
+            for child_node_id in node["children"]:  # walk the remaining (valid) ones
+                walk(child_node_id)
+
+        for root_node_id in roots:
+            walk(root_node_id)
+
+def print_datastore() -> None:
+    """Show the raw contents of the global storage for chat nodes. For debugging."""
+    with storage_lock:
+        for node_id, node in storage.items():
+            print(f"{node_id}")  # on its own line for easy copy'n'pasting
+            for key, value in node.items():
+                print(f"    {key}: {value}")
+            print()
 
 def clear_datastore() -> None:
     """Delete all data in the global chat node storage.

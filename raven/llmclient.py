@@ -523,7 +523,8 @@ def minimal_chat_client(backend_url):
 
         # Before saving, remove any nodes not reachable from the initial message (there shouldn't be any, but this way we exercise this feature, too)
         system_prompt_node_id = chattree.storage[initial_greeting_id]["parent"]  # ugh
-        chattree.prune_datastore(system_prompt_node_id)
+        chattree.prune_unreachable_nodes(system_prompt_node_id)
+        chattree.prune_dead_links(system_prompt_node_id)
 
         chattree.save_datastore(datastore_file)
 
