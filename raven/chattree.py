@@ -395,10 +395,8 @@ class PersistentForest:
             logger.info(f"PersistentForest._save: Saving datastore to '{str(self.datastore_file)}' (resolved to '{str(absolute_path)}').")
 
             directory = self.datastore_file.parent
-            logger.info(f"PersistentForest._save: Creating directory '{str(directory)}'.")
             utils.create_directory(directory)
 
-            logger.info("PersistentForest._save: Saving data.")
             with open(absolute_path, "w") as json_file:
                 json.dump(self.nodes, json_file, indent=2)
 
