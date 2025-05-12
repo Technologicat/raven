@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 import argparse
 import atexit
 import collections
-from copy import deepcopy
+import copy
 import datetime
 import io
 import json
@@ -439,7 +439,7 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
 
     If you want to add `data` to `history`, use `history = add_chat_message(settings, history, role='assistant', message=data)`.
     """
-    data = deepcopy(settings.request_data)
+    data = copy.deepcopy(settings.request_data)
     data["messages"] = history
     stream_response = requests.post(f"{settings.backend_url}/v1/chat/completions", headers=headers, json=data, verify=False, stream=True)
     client = sseclient.SSEClient(stream_response)
