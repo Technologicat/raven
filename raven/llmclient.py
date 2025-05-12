@@ -521,23 +521,25 @@ def minimal_chat_client(backend_url):
     except FileNotFoundError:
         pass
 
+    initial_greeting_id = None  # initialized later
     def persist():
         config_dir.mkdir(parents=True, exist_ok=True)
 
         readline.set_history_length(1000)
         readline.write_history_file(history_file)
 
-        # Before saving (which happens automatically at exit), remove any nodes not reachable from the initial message, and also remove dead links.
-        # There shouldn't be any, but this way we exercise these features, too.
-        system_prompt_node_id = datastore.nodes[initial_greeting_id]["parent"]
-        datastore.prune_unreachable_nodes(system_prompt_node_id)
-        datastore.prune_dead_links(system_prompt_node_id)
+        if initial_greeting_id is not None:  # initialized successfully? (during development, might not always be, if a bug causes the client to crash at startup)
+            # Before saving (which happens automatically at exit), remove any nodes not reachable from the initial message, and also remove dead links.
+            # There shouldn't be any, but this way we exercise these features, too.
+            system_prompt_node_id = datastore.nodes[initial_greeting_id]["parent"]
+            datastore.prune_unreachable_nodes(system_prompt_node_id)
+            datastore.prune_dead_links(system_prompt_node_id)
 
-        # Save the ID of the new-chat node, as well as that of the current HEAD node of the chat.
-        state = {"HEAD": HEAD,
-                 "new_chat_HEAD": initial_greeting_id}
-        with open(state_file, "w") as json_file:
-            json.dump(state, json_file, indent=2)
+            # Save the ID of the new-chat node, as well as that of the current HEAD node of the chat.
+            state = {"HEAD": HEAD,
+                     "new_chat_HEAD": initial_greeting_id}
+            with open(state_file, "w") as json_file:
+                json.dump(state, json_file, indent=2)
     # We register later than `chattree.PersistentForest`, so ours runs first. Hence we'll have the chance to prune before the forest is persisted to disk.
     #     https://docs.python.org/3/library/atexit.html
     atexit.register(persist)
