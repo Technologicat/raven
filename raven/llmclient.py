@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 import argparse
 import atexit
 import collections
+import concurrent.futures
 import copy
 import datetime
 import io
@@ -25,6 +26,8 @@ from typing import Dict, List, Optional, Tuple
 
 import sseclient  # pip install sseclient-py
 
+from watchdog.observers import Observer
+
 from mcpyrate import colorizer
 
 from unpythonic import timer
@@ -32,6 +35,7 @@ from unpythonic.env import env
 
 from . import chattree
 from . import config
+from . import hybridir
 
 # --------------------------------------------------------------------------------
 # Setup for minimal chat client (for testing/debugging)
@@ -563,6 +567,21 @@ def minimal_chat_client(backend_url):
             print()
         chat_show_model_info()
 
+        # Enable RAG database
+        print(colorizer.colorize(f"Enabling RAG for documents at '{config.llm_docs_dir}'.", colorizer.Style.BRIGHT))
+        print(f"RAG database is saved in '{config.llm_database_dir}'.")
+        print()
+        bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
+        hybridir.init(executor=bg)
+        retriever = hybridir.HybridIR(datastore_base_dir=pathlib.Path(config.llm_database_dir).expanduser().resolve(),
+                                      embedding_model_name=config.qa_embedding_model)
+        docs_event_handler = hybridir.HybridIRFileMonitor(retriever)
+        docs_observer = Observer()
+        docs_observer.schedule(docs_event_handler,
+                               path=pathlib.Path(config.llm_docs_dir).expanduser().resolve(),
+                               recursive=False)  # for now
+        docs_observer.start()
+
         print(colorizer.colorize("Starting chat.", colorizer.Style.BRIGHT))
         print()
         def chat_show_help():
@@ -582,6 +601,12 @@ def minimal_chat_client(backend_url):
             print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
             print()
         chat_show_help()
+
+        # TODO: add "!docs [on|off]" for RAG search
+        # TODO: add "!speculate [on|off]" (no argument: toggle)
+        #   - when "!docs" is on:
+        #     - "!speculate off" means answer based on docs only (no search match = don't even ask LLM)
+        #     - "!speculate on" means allow answering also based on static knowledge
 
         # https://docs.python.org/3/library/readline.html#readline-completion
         commands = ["!clear",
@@ -814,6 +839,8 @@ def minimal_chat_client(backend_url):
         print()
         print(colorizer.colorize("Exiting chat.", colorizer.Style.BRIGHT))
         print()
+        docs_observer.stop()
+        docs_observer.join()
 
 def main():
     parser = argparse.ArgumentParser(description="""Minimal LLM chat client, for testing/debugging. You can use this for testing that Raven can connect to your LLM.""",

@@ -15,8 +15,15 @@ llm_backend_url = "http://127.0.0.1:5000"
 
 config_base_dir = "~/.config/raven/"
 
-# For LLM client chat history
+# For LLM client
 llm_save_dir = config_base_dir + "llmclient"
+
+# Magic directory: put your RAG documents here (plain text for now).
+# Add/modify/delete a file in this directory to trigger a RAG index auto-update in the LLM client.
+llm_docs_dir = config_base_dir + "llmclient/documents"
+
+# Where to store the RAG database (machine-readable).
+llm_database_dir = config_base_dir + "llmclient/rag_index"
 
 # For RAG database storage (API usage example / demo)
 hybridir_demo_save_dir = config_base_dir + "hybridir_demo"
