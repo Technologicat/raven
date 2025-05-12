@@ -298,10 +298,12 @@ def make_managed_task(*, status_box, lock, entrypoint, running_poll_interval, pe
                 # logger.debug(f"_managed_task: {env.task_name}: starting")
                 status_box << status_running
                 entrypoint(task_env=env)
-            except Exception as exc:  # VERY IMPORTANT, to not silently swallow uncaught exceptions from background tasks
-                logger.warning(f"_managed_task: {env.task_name}: exited with exception {type(exc)}: {exc}")
-                traceback.print_exc()  # DEBUG
-                raise
+            # # Used to be VERY IMPORTANT, to not silently swallow uncaught exceptions from background task.
+            # # But now `TaskManager._done_callback` does this.
+            # except Exception as exc:
+            #     logger.warning(f"_managed_task: {env.task_name}: exited with exception {type(exc)}: {exc}")
+            #     traceback.print_exc()  # DEBUG; `TaskManager._done_callback` now does this.
+            #     raise
             # else:
             #     logger.debug(f"_managed_task: {env.task_name}: exited with status {'OK' if not env.cancelled else 'CANCELLED (from running state)'}")
             finally:
