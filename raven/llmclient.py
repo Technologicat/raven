@@ -582,37 +582,54 @@ def minimal_chat_client(backend_url):
         chat_show_help()
 
         # https://docs.python.org/3/library/readline.html#readline-completion
-        candidates = ["clear", "dump", "head ", "help", "history", "model", "models"]  # note space after "head"; that command expects an argument
-        def completer(text, state):  # completer for special commands
-            if not text.startswith("!"):  # Not a command -> no completions.
-                return None
-            text = text[1:]
+        commands = ["!clear",
+                    "!dump",
+                    "!head ",  # prefill the space, since this command takes an argument
+                    "!help",
+                    "!history",
+                    "!model",
+                    "!models"]
+        def get_completions(candidates, text):
+            """Return matching completions for `text`.
 
-            # Just a "!"? -> List all commands.
-            if not text:
-                if state < len(candidates):
-                    return f"!{candidates[state]}"
-                return None
+            `candidates`: Every possible completion the system knows of, in the current context.
+            `text`: Prefix text to complete. Can be the empty string, which matches all candidates.
+            """
+            if not text:  # If no text, all candidates match.
+                return candidates
+            assert text  # we have text
 
-            # Score the possible completions for the given prefix `text`.
+            # Score the completions for the given prefix `text`.
             # https://stackoverflow.com/questions/6718196/determine-the-common-prefix-of-multiple-strings
             scores = [len(os.path.commonprefix([text, candidate])) for candidate in candidates]
             max_score = max(scores)
             if max_score == 0:  # no match
                 return None
+            assert max_score > 0  # we have at least one match, of at least one character
 
-            # Accept only completions that scored best (i.e. those that match the longest matched prefix).
-            # completions = [(c, s) for c, s in zip(candidates, scores) if s == max_score]
-            completions = [c for c, s in zip(candidates, scores) if s == max_score]
-            if state >= len(completions):  # No more completions for given prefix `text`.
+            # Possible completions are those that scored best (i.e. match the longest matched prefix).
+            completions = [candidate for candidate, score in zip(candidates, scores) if score == max_score]
+            return completions
+        def completer(text, state):  # completer for special commands
+            buffer_content = readline.get_line_buffer()  # context: text before the part being completed (up to last delim)
+
+            # TODO: fix one more failure mode, e.g. "!help !<tab>"
+            if buffer_content.startswith("!") and text.startswith("!"):  # completing a command?
+                candidates = commands
+            elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
+                candidates = list(sorted(datastore.nodes.keys()))
+            else:  # anything else -> no completions
                 return None
-            # completions = list(sorted(completions, key=lambda item: -item[1]))  # Sort by score, descending.
-            # completion, score = completions[state]
-            completion = completions[state]
-            return f"!{completion}"
+
+            completions = get_completions(candidates, text)
+            if completions is None:  # no match
+                return None
+            if state >= len(completions):  # no more completions
+                return None
+            return completions[state]
         readline.set_completer(completer)
         readline.set_completer_delims(" ")
-        readline.parse_and_bind("tab: complete")
+        readline.parse_and_bind("tab: complete")  # TODO: detect MacOS, there should be: "bind ^I rl_complete"
 
         def chat_show_list_of_models():
             available_models = list_models(backend_url)
