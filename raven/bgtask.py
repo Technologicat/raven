@@ -149,6 +149,13 @@ class TaskManager:
         """
         logger.debug(f"TaskManager._done_callback: instance '{self.name}': called for future '{future}'.")
         logger.debug(f"TaskManager._done_callback: instance '{self.name}': task list now: {self.tasks}.")
+
+        # Avoid silently swallowing exceptions from background tasks
+        exc = future.exception()  # the future exited already, so we don't need to set a timeout
+        if exc is not None:
+            logger.error(f"TaskManager._done_callback: instance '{self.name}': future '{future}' exited with exception {type(exc)}: {exc}")
+            traceback.print_exc()
+
         with self.lock:
             task_name = self._find_task_by_future(future)
             logger.debug(f"TaskManager._done_callback: instance '{self.name}': task lookup for future '{future}' returned '{task_name}'.")
