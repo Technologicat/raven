@@ -18,6 +18,7 @@ import io
 import json
 import os
 import pathlib
+import platform
 import re
 import requests
 import sys
@@ -656,7 +657,13 @@ def minimal_chat_client(backend_url):
             return completions[state]
         readline.set_completer(completer)
         readline.set_completer_delims(" ")
-        readline.parse_and_bind("tab: complete")  # TODO: detect MacOS, there should be: "bind ^I rl_complete"
+
+        # https://stackoverflow.com/questions/7116038/python-repl-tab-completion-on-macos
+        # https://stackoverflow.com/questions/1854/how-to-identify-which-os-python-is-running-on
+        if platform.system() == "Darwin":  # MacOSX
+            readline.parse_and_bind("bind ^I rl_complete")
+        else:  # "Linux", "Windows"
+            readline.parse_and_bind("tab: complete")
 
         def chat_show_list_of_models():
             available_models = list_models(backend_url)
