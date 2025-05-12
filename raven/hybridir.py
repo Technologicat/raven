@@ -15,7 +15,7 @@ laptops have enough RAM for this not to be an issue with the dataset sizes neede
 QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
-__all__ = ["HybridIR"]
+__all__ = ["init", "HybridIR", "HybridIRFileMonitor"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -29,9 +29,12 @@ import pathlib
 import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from watchdog.events import FileSystemEventHandler
+
 import numpy as np
 
-from unpythonic import allsame, uniqify
+from unpythonic import allsame, box, uniqify
+from unpythonic.env import env as envcls
 
 # NLP
 from sentence_transformers import SentenceTransformer
@@ -41,6 +44,7 @@ import spacy
 import bm25s  # keyword
 import chromadb  # semantic (vector)
 
+from . import bgtask
 from . import config
 from . import utils
 
@@ -777,6 +781,155 @@ class HybridIR:
 
         # Format of `merged`: [{"document_id": the_id_string, "text": merged_contiguous_text, "offset": start_offset_in_document, "score": rrf_score}, ...]
         return merged, (keyword_results, keyword_scores), (vector_results, vector_distances)
+
+# --------------------------------------------------------------------------------
+
+bg = None
+task_managers = {}
+def init(executor):
+    """Initialize this module. Must be called before `HybridIRFileMonitor` can be used.
+
+    `executor`: A `ThreadPoolExecutor` or something duck-compatible with it.
+                Used for running the background task for committing changes.
+    """
+    global bg
+    if bg is not None:  # already initialized?
+        return
+    bg = executor
+    try:
+        task_managers["ingest"] = bgtask.TaskManager(name="hybridir_ingest",
+                                                     mode="concurrent",
+                                                     executor=bg)
+        task_managers["commit"] = bgtask.TaskManager(name="hybridir_commit",
+                                                     mode="sequential",  # for the auto-cancel mechanism
+                                                     executor=bg)
+    except Exception:
+        bg = None
+        task_managers.clear()
+        raise
+
+# See e.g. https://www.kdnuggets.com/monitor-your-file-system-with-pythons-watchdog
+class HybridIRFileMonitor(FileSystemEventHandler):
+    def __init__(self,
+                 retriever: HybridIR,
+                 exts: List[str] = [".txt", ".md", ".rst", ".org"],
+                 callback: Callable = None):
+        """Simple auto-updater that monitors a directory and auto-commits changes to a `HybridIR`.
+
+        `retriever`: The `HybridIR` instance to automatically keep up to date.
+
+        `ext`: File extensions of files to monitor.
+
+        `callback`: When new content arrives (a file is created in, updated in, or moved into
+                    the target directory), this function is called.
+
+                    Its only argument is the path to the file, and it must return the plaintext
+                    content of the file. This plaintext content is then sent into the search index.
+
+                    If no callback is specified, the file is read as-is. (This is enough for
+                    simple plaintext file formats.)
+
+        Uses the `watchdog` library.
+        """
+        self.retriever = retriever
+        self.exts = exts
+        self.callback = callback
+
+        # For delayed commit (commit when new/modified files stop appearing in quick succession)
+        self._status_box = box()
+        self._lock = threading.RLock()
+        def commit(task_env):
+            assert task_env is not None
+            logger.debug(f"HybridIRFileMonitor.commit: {task_env.task_name}: Entered.")
+            if task_env.cancelled:
+                logger.debug(f"HybridIRFileMonitor.commit: {task_env.task_name}: Cancelled.")
+                return
+            logger.debug(f"HybridIRFileMonitor.commit: {task_env.task_name}: Committing changes to HybridIR (may take a while; this step cannot be cancelled).")
+            self.retriever.commit()
+            logger.debug(f"HybridIRFileMonitor.commit: {task_env.task_name}: Done.")
+        self.commit_task = bgtask.make_managed_task(status_box=self._status_box,
+                                                    lock=self._lock,
+                                                    entrypoint=commit,
+                                                    running_poll_interval=1.0,
+                                                    pending_wait_duration=1.0)
+
+    def _sanity_check(self, path):
+        if not task_managers:
+            logger.warning("HybridIRFileMonitor._sanity_check: Module not initialized, cannot proceed.")
+            return False
+        if not any(path.endswith(ext) for ext in self.exts):
+            logger.info(f"HybridIRFileMonitor._sanity_check: file '{path}': file extension not in monitored list {self.exts}, ignoring file.")
+            return False
+        return True
+
+    def _read(self, path):
+        if self.callback:
+            content = self.callback(path)
+        else:
+            with open(path, "r") as f:
+                content = f.read()
+        if not content:
+            return None
+        if not isinstance(content, str):
+            logger.error(f"HybridIRFileMonitor._read: file '{path}': got non-string content. Ignoring file.")
+            return None
+        return content.strip()
+
+    def on_created(self, event):
+        path = event.src_path
+        logger.info(f"HybridIRFileMonitor.on_created: file '{path}'.")
+        if not self._sanity_check(path):
+            return
+
+        def ingest_task(task_env):
+            logger.debug(f"HybridIRFileMonitor.ingest_task (on_created): file '{path}': ingesting file content.")
+            document_id = pathlib.Path(path).name  # TODO: needs to be unique but easily mappable from filename, persistently; also ChromaDB has some limitations as to valid IDs
+            content = self._read(path)
+            if content is None:
+                logger.debug(f"HybridIRFileMonitor.ingest_task (on_created): file '{path}': got empty or non-string content, ignoring file.")
+                return
+            self.retriever.add(document_id=document_id,
+                               path=path,
+                               text=content)
+            logger.debug(f"HybridIRFileMonitor.ingest_task (on_created): file '{path}': scheduling commit to save changes to HybridIR.")
+            task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
+        logger.info(f"HybridIRFileMonitor.on_created: file '{path}': scheduling ingest.")
+        task_managers["ingest"].submit(ingest_task, envcls())
+
+    def on_modified(self, event):
+        path = event.src_path
+        logger.info(f"HybridIRFileMonitor.on_modified: file '{path}'.")
+        if not self._sanity_check(path):
+            return
+
+        def ingest_task(task_env):
+            logger.debug(f"HybridIRFileMonitor.ingest_task (on_modified): file '{path}': ingesting file content.")
+            document_id = pathlib.Path(path).name  # TODO: needs to be unique but easily mappable from filename, persistently; also ChromaDB has some limitations as to valid IDs
+            content = self._read(path)
+            if content is None:
+                logger.debug(f"HybridIRFileMonitor.ingest_task (on_created): file '{path}': got empty or non-string content, removing file from index.")
+                self.retriever.delete(document_id)
+            else:
+                self.retriever.update(document_id=document_id,
+                                      path=path,
+                                      text=content)
+            logger.debug(f"HybridIRFileMonitor.ingest_task (on_modified): file '{path}': scheduling commit to save changes to HybridIR.")
+            task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
+        logger.info(f"HybridIRFileMonitor.on_created: file '{path}': scheduling ingest.")
+        task_managers["ingest"].submit(ingest_task, envcls())
+
+    def on_deleted(self, event):
+        path = event.src_path
+        logger.info(f"HybridIRFileMonitor.on_deleted: file '{path}'.")
+        if not self._sanity_check(path):
+            return
+
+        self.retriever.delete(document_id)
+
+        logger.debug(f"HybridIRFileMonitor.on_deleted: file '{path}': scheduling commit to save changes to HybridIR.")
+        task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
+
+    # TODO: Do we need `on_moved`?
 
 # --------------------------------------------------------------------------------
 
