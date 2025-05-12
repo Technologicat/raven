@@ -492,10 +492,10 @@ class HybridIR:
 
                     elif edit_kind == "delete":
                         document_id = data
-
                         logger.info(f"HybridIR.commit: Deleting document '{document_id}'.")
                         try:
-                            old_chunk_ids = [chunk["chunk_id"] for chunk in self.documents[document_id]["chunks"]]
+                            doc = self.documents[document_id]
+                            old_chunk_ids = [format_chunk_full_id(document_id, chunk["chunk_id"]) for chunk in doc["chunks"]]
                             self.documents.pop(document_id)
                             self._vector_collection.delete(ids=old_chunk_ids)
                         except KeyError as exc:
