@@ -25,6 +25,7 @@ from collections import defaultdict
 import copy
 import json
 import operator
+import os
 import pathlib
 import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -414,12 +415,23 @@ class HybridIR:
 
         self._pending_edits = []
 
+    def _stat(self, path: Union[pathlib.Path, str]) -> Dict:  # size, mtime
+        if isinstance(path, str):
+            path = pathlib.Path(path)
+        path = path.expanduser().resolve()
+        if path.exists():
+            stat = os.stat(path)
+            return {"size": stat.st_size, "mtime": stat.st_mtime}
+        return {"size": None, "mtime": None}  # could be an in-memory document
+
     def add(self, document_id: str, path: str, text: str, *, _log=True) -> str:
         """Queue a document for adding into the index. To save changes, call `commit`.
 
         `document_id`: must be unique. Recommended to use `unpythonic.gensym(os.path.basename(path))` or something.
-        `path`: Full path (or URL) of the original file. `HybridIR` itself doesn't use it; it's for your convenience
-                so that you can easily locate the original file a given search result refers to.
+        `path`: Full path (or URL) of the original file.
+                `HybridIR` uses this to check for changes to the file at datastore load time.
+                You can use this to easily locate the original file a given search result refers to.
+
         `text`: Plain-text content of the file, to be indexed for searching.
 
         Returns `document_id`, for convenience.
@@ -431,8 +443,13 @@ class HybridIR:
         #
         # Here we populate just those fields that can be filled quickly, so that `add` can return instantly.
         # Fields that require expensive computation (chunks, tokens, embeddings) are added at commit time, by `_prepare_document_for_indexing`.
+        #
+        # Mind the insertion order - the resulting json should be easily human-readable, for debugging.
+        stats = self._stat(path)
         document = {"document_id": document_id,
                     "path": path,  # path of original file (e.g. to be able to open it in a PDF reader)
+                    "filesize": stats["size"],
+                    "mtime": stats["mtime"],
                     "text": text,  # copy of original text as-is
                     }
 
