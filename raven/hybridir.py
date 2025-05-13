@@ -346,7 +346,8 @@ class HybridIR:
                             local excerpt as a chunk in the index) and the size of the index (more overlap -> more duplicated
                             text -> larger index -> slower search, uses more disk space for storage).
         """
-        self._lock = threading.RLock()
+        self.datastore_lock = threading.RLock()  # self.documents, and the keyword and vector search indices
+        self._pending_edits_lock = threading.RLock()  # self._pending_edits
 
         self.datastore_base_dir = datastore_base_dir
         self.fulldocs_path = datastore_base_dir / "fulldocs"
@@ -435,7 +436,7 @@ class HybridIR:
                     }
 
         # Pending document mechanism so that we can add a set of documents at once, and *then* rebuild the indices.
-        with self._lock:  # may block until an ongoing `commit` (if any) finishes
+        with self._pending_edits_lock:
             self._pending_edits.append(("add", document))
 
     def delete(self, document_id: str) -> None:
@@ -444,7 +445,7 @@ class HybridIR:
         `document_id`: the ID you earlier gave to `add`.
         """
         logger.info(f"HybridIR.add: Queuing document '{document_id}' for deletion from index.")
-        with self._lock:
+        with self._pending_edits_lock:
             self._pending_edits.append(("delete", document_id))
 
     def update(self, document_id: str, path: str, text: str) -> str:
@@ -457,12 +458,13 @@ class HybridIR:
         Returns `document_id`, for convenience.
         """
         logger.info(f"HybridIR.add: Queuing document '{document_id}' for update in index (will delete, then re-add).")
-        with self._lock:
+        with self._pending_edits_lock:
             self.delete(document_id)
             self.add(document_id, path, text)
             return document_id
 
     # TODO: Index rebuilding is slow. Maybe `commit` should run as a bgtask, like the BibTeX importer.
+    #       Note `HybridIRFileMonitor` already does that.
     # TODO: `commit` is not as atomic as I'd like. If anything goes wrong, the vector index loses sync with the actual data, necessitating a full rebuild. Check if ChromaDB has transaction management.
     def commit(self) -> None:
         """Commit pending changes (adds/deletes/updates), re-indexing the databases.
@@ -470,16 +472,23 @@ class HybridIR:
         An update is internally a delete, followed by an add for the updated version of the same document.
         """
         logger.info("HybridIR.commit: entered.")
-        with self._lock:
-            if not self._pending_edits:
-                logger.info("HybridIR.commit: No pending changes, exiting.")
-                return
+        with self.datastore_lock:
+            with self._pending_edits_lock:
+                if not self._pending_edits:
+                    logger.info("HybridIR.commit: No pending changes, exiting.")
+                    return
+                pending_edits = copy.copy(self._pending_edits)
+                self._pending_edits.clear()
+            # Now we can release the lock on the original pending edits list,
+            # so that `add`/`update`/`delete` are available in case another thread
+            # wants to queue new edits while we're committing the previous ones.
 
             # Update `self.documents` and the semantic search index.
             # There is no "update" operation - to do that, first "delete", then "add".
             logger.info("HybridIR.commit: Applying pending changes.")
-            try:
-                for edit_kind, data in self._pending_edits:
+            errors_occurred = 0
+            for edit_kind, data in pending_edits:
+                try:
                     if edit_kind == "add":
                         doc = data
                         document_id = doc["document_id"]
@@ -508,18 +517,19 @@ class HybridIR:
                     else:  # should not happen, but let's log it
                         msg = f"HybridIR.commit: Unknown pending change type '{edit_kind}'. Ignoring."
                         logger.warning(msg)
-
-            except Exception as exc:
-                logger.error(f"While applying changes: {type(exc)}: {exc}")
-                logger.error(f"The above error may have corrupted the semantic search index. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")
-                raise
+                except Exception as exc:
+                    errors_occurred += 1
+                    logger.error(f"While applying changes: {type(exc)}: {exc}")
+                    logger.info("Attempting to continue with remaining edits, if any.")
 
             self._rebuild_keyword_search_index()
-
-            logger.info("HybridIR.commit: All changes applied, clearing pending changes list.")
-            self._pending_edits = []
-
             self._save_datastore()
+
+            if errors_occurred:
+                plural_s = "s" if errors_occurred != 1 else ""
+                logger.error(f"Error{plural_s} occurred while pending changes were being applied. This may cause the semantic search index to go out of sync with the actual data. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")
+            else:
+                logger.info("HybridIR.commit: All pending changes applied successfully.")
 
             logger.info("HybridIR.commit: Commit finished, exiting.")
 
@@ -527,51 +537,61 @@ class HybridIR:
         # We save embeddings separately, as compressed NumPy arrays, to save disk space.
         # Separate the embeddings from the rest of the data, being careful to not create extra in-memory copies (e.g. of the actual chunk texts or fulltexts).
         logger.info("HybridIR._save_datastore: entered. Preparing...")
-        documents_without_embeddings = {}
-        embeddings = []
-        for document_id, doc in self.documents.items():
-            tempdoc = copy.copy(doc)
-            embeddings.append(tempdoc.pop("embeddings"))  # dict preserves insertion order, so this list is in the same order as `self.documents.values()`
-            documents_without_embeddings[document_id] = tempdoc
-        data = {"embedding_model_name": self.embedding_model_name,
-                "documents": documents_without_embeddings}
+        with self.datastore_lock:
+            documents_without_embeddings = {}
+            embeddings = []
+            for document_id, doc in self.documents.items():
+                tempdoc = copy.copy(doc)
+                # `dict` preserves insertion order, so `embeddings` will be
+                # in the same order as `self.documents.values()`
+                embeddings.append(tempdoc.pop("embeddings"))
+                documents_without_embeddings[document_id] = tempdoc
+            data = {"embedding_model_name": self.embedding_model_name,
+                    "documents": documents_without_embeddings}
 
-        logger.info("HybridIR._save_datastore: Saving...")
-        utils.create_directory(self.fulldocs_path)
-        with open(self.fulldocs_documents_file, "w") as json_file:
-            # Keeping the amount of indentation small improves human-readability, but also saves some disk space, as there are lots of indented lines in this file.
-            json.dump(data, json_file, indent=2)
+            logger.info("HybridIR._save_datastore: Saving...")
+            utils.create_directory(self.fulldocs_path)
+            with open(self.fulldocs_documents_file, "w") as json_file:
+                # Keeping the amount of indentation small improves human-readability,
+                # but also saves some disk space, as there are lots of indented lines in this file.
+                json.dump(data, json_file, indent=2)
 
-        # Note each document may have a different number of chunks, and each chunk produces one embedding vector. This yields one 2D array per document (outer index = chunk).
-        logger.info(f"HybridIR._save_datastore: Saving embeddings (model '{self.embedding_model_name}')...")
-        np.savez_compressed(self.fulldocs_embeddings_file, *embeddings)
+            # Note each document may have a different number of chunks, and each chunk
+            # produces one embedding vector. This yields one 2D array per document (outer index = chunk).
+            logger.info(f"HybridIR._save_datastore: Saving embeddings (model '{self.embedding_model_name}')...")
+            np.savez_compressed(self.fulldocs_embeddings_file, *embeddings)
 
         logger.info("HybridIR._save_datastore: exiting, all done.")
 
     def _load_datastore(self):
-        try:
-            with open(self.fulldocs_documents_file, "r") as json_file:
-                data = json.load(json_file)
-            stored_embedding_model_name = data["embedding_model_name"]
-            documents = data["documents"]
+        logger.info("HybridIR._load_datastore: entered.")
+        with self.datastore_lock:
+            try:
+                with open(self.fulldocs_documents_file, "r") as json_file:
+                    data = json.load(json_file)
+                stored_embedding_model_name = data["embedding_model_name"]
+                documents = data["documents"]
 
-            arrs = np.load(self.fulldocs_embeddings_file)
-            for doc, document_embeddings in zip(documents.values(), arrs.values()):  # documents: {"document_id0": {...}, },  arrs: {"arr_0": np.array, ...}; arrs has one 2D array per document (outer index = chunk)
-                doc["embeddings"] = document_embeddings.tolist()  # same in-memory format as if freshly created
+                # documents: {"document_id0": {...}, },  arrs: {"arr_0": np.array, ...};
+                # arrs has one 2D array per document (outer index = chunk)
+                arrs = np.load(self.fulldocs_embeddings_file)
+                for doc, document_embeddings in zip(documents.values(), arrs.values()):
+                    doc["embeddings"] = document_embeddings.tolist()  # same in-memory format as if freshly created
 
-            plural_s = "s" if len(documents) != 1 else ""
-            logger.info(f"HybridIR._load_datastore: Loaded datastore with embedding model '{stored_embedding_model_name}' from '{str(self.fulldocs_path)}' ({len(documents)} document{plural_s}).")
-            return stored_embedding_model_name, documents
-        except Exception as exc:  # likely datastore not created yet
-            logger.warning(f"HybridIR._load_datastore: While loading datastore from '{str(self.fulldocs_path)}': {type(exc)}: {exc}")
-            return None, None
+                plural_s = "s" if len(documents) != 1 else ""
+                logger.info(f"HybridIR._load_datastore: Loaded datastore with embedding model '{stored_embedding_model_name}' from '{str(self.fulldocs_path)}' ({len(documents)} document{plural_s}).")
+                return stored_embedding_model_name, documents
+            except Exception as exc:  # likely datastore not created yet
+                logger.warning(f"HybridIR._load_datastore: While loading datastore from '{str(self.fulldocs_path)}': {type(exc)}: {exc}")
+                return None, None
 
     # TODO: support other media such as images (semantic embedding via `clip-ViT-L-14`, available in `sentence_transformers`; and keyword extraction by CLIP/Deepbooru)
     def _prepare_document_for_indexing(self, doc):
         document_id = doc["document_id"]
         text = doc["text"]
 
-        # We split each document into chunks. The chunks themselves are useful as the actual search results (the snippets that matched the search).
+        # We split each document into chunks. The chunks themselves are useful
+        # as the actual search results (the snippets that matched the search).
         logger.info(f"HybridIR._prepare_document_for_indexing: chunkifying document '{document_id}' ({len(text)} characters).")
         document_chunks = chunkify(text, chunk_size=self.chunk_size, overlap=self.overlap, extra=0.4)  # -> [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
 
@@ -581,7 +601,7 @@ class HybridIR:
         tokenized_chunks = [tokenize(chunk["text"]) for chunk in document_chunks]
 
         # Embedding each chunk enables semantic search. These are used by the vector index (chromadb).
-        # NOTE: This can be slow, depending on the embedding model used, and whether GPU acceleration is available.
+        # NOTE: This can be slow, depending on the embedding model, and whether GPU acceleration is available.
         logger.info(f"HybridIR._prepare_document_for_indexing: computing semantic embeddings for document '{document_id}'.")
         document_embeddings = self._semantic_model.encode([chunk["text"] for chunk in document_chunks],
                                                           show_progress_bar=True,
@@ -597,59 +617,62 @@ class HybridIR:
 
     # This is used both by the commit mechanism as well as the full index rebuild.
     def _add_document_to_vector_collection(self, doc: Dict) -> None:
-        document_id = doc["document_id"]
-        self._vector_collection.add(
-            embeddings=doc["embeddings"],
-            metadatas=[{"document_id": document_id,
-                        "chunk_id": chunk["chunk_id"],
-                        "full_id": format_chunk_full_id(document_id, chunk["chunk_id"]),
-                        "offset": chunk["offset"],
-                        "text": chunk["text"]} for chunk in doc["chunks"]],  # TODO: the vector storage technically doesn't need the "text" field, because we always read the full data records from the keyword index.
-            ids=[format_chunk_full_id(document_id, chunk["chunk_id"]) for chunk in doc["chunks"]]
-        )
+        with self.datastore_lock:
+            document_id = doc["document_id"]
+            self._vector_collection.add(
+                embeddings=doc["embeddings"],
+                metadatas=[{"document_id": document_id,
+                            "chunk_id": chunk["chunk_id"],
+                            "full_id": format_chunk_full_id(document_id, chunk["chunk_id"]),
+                            "offset": chunk["offset"],
+                            "text": chunk["text"]} for chunk in doc["chunks"]],  # TODO: the vector storage technically doesn't need the "text" field, because we always read the full data records from the keyword index.
+                ids=[format_chunk_full_id(document_id, chunk["chunk_id"]) for chunk in doc["chunks"]]
+            )
 
     # TODO: We currently rebuild the whole BM25 index at every commit, which is slow.
     # The new document may have added new tokens so that the token vocabulary must be updated, and the `bm25s` library doesn't support adding documents to an existing index, anyway.
     def _rebuild_keyword_search_index(self) -> None:
-        plural_s = "s" if len(self.documents) != 1 else ""
-        logger.info(f"HybridIR._rebuild_keyword_search_index: Building keyword index for {len(self.documents)} document{plural_s} from main datastore. This may take a while.")
-        corpus_records = []
-        corpus_tokens = []
-        for doc in self.documents.values():
-            for chunk, tokens in zip(doc["chunks"], doc["tokens"]):
-                # All data here needs to be JSON serializable so that we can save these records to the BM25 corpus.
-                record = {"document_id": doc["document_id"],
-                          "chunk_id": chunk["chunk_id"],
-                          "full_id": format_chunk_full_id(doc["document_id"], chunk["chunk_id"]),
-                          "offset": chunk["offset"],
-                          "text": chunk["text"]}
-                corpus_records.append(record)
-                corpus_tokens.append(tokens)
-        if self.documents:
-            self._keyword_retriever = bm25s.BM25(corpus=corpus_records)
-            self._keyword_retriever.index(corpus_tokens)
+        with self.datastore_lock:
+            plural_s = "s" if len(self.documents) != 1 else ""
+            logger.info(f"HybridIR._rebuild_keyword_search_index: Building keyword index for {len(self.documents)} document{plural_s} from main datastore. This may take a while.")
+            corpus_records = []
+            corpus_tokens = []
+            for doc in self.documents.values():
+                for chunk, tokens in zip(doc["chunks"], doc["tokens"]):
+                    # All data here needs to be JSON serializable so that we can save these records to the BM25 corpus.
+                    record = {"document_id": doc["document_id"],
+                              "chunk_id": chunk["chunk_id"],
+                              "full_id": format_chunk_full_id(doc["document_id"], chunk["chunk_id"]),
+                              "offset": chunk["offset"],
+                              "text": chunk["text"]}
+                    corpus_records.append(record)
+                    corpus_tokens.append(tokens)
+            if self.documents:
+                self._keyword_retriever = bm25s.BM25(corpus=corpus_records)
+                self._keyword_retriever.index(corpus_tokens)
 
-            # Save the updated index to disk.
-            # NOTE: we don't save the vocab_dict, since we don't use the `Tokenizer` class from `bm25s`.
-            logger.info("HybridIR._rebuild_keyword_search_index: Build complete. Saving keyword index.")
-            self._keyword_retriever.save(str(self.keyword_index_path))
-        else:  # No documents yet
-            logger.info("HybridIR._rebuild_keyword_search_index: No documents. Doing nothing.")
-            self._keyword_retriever = None
+                # Save the updated index to disk.
+                # NOTE: we don't save the vocab_dict, since we don't use the `Tokenizer` class from `bm25s`.
+                logger.info("HybridIR._rebuild_keyword_search_index: Build complete. Saving keyword index.")
+                self._keyword_retriever.save(str(self.keyword_index_path))
+            else:  # No documents yet
+                logger.info("HybridIR._rebuild_keyword_search_index: No documents. Doing nothing.")
+                self._keyword_retriever = None
 
-        self._build_full_id_to_record_index()
+            self._build_full_id_to_record_index()
 
-        logger.info("HybridIR._rebuild_keyword_search_index: done.")
+            logger.info("HybridIR._rebuild_keyword_search_index: done.")
 
     # We need to map from a chunk's "full_id" to the actual data record of that chunk when we fuse the search results.
     # Note the corresponding full document in the datastore is just `self.documents[record["document_id"]]`.
     #
     # This mapping is quick to build, so we don't bother persisting it to disk. (That does mean we have to regenerate just this part when loading the keyword index from disk.)
     def _build_full_id_to_record_index(self) -> None:
-        if self._keyword_retriever is not None:
-            self.full_id_to_record_index = {record["full_id"]: idx for idx, record in enumerate(self._keyword_retriever.corpus)}
-        else:
-            self.full_id_to_record_index = {}
+        with self.datastore_lock:
+            if self._keyword_retriever is not None:
+                self.full_id_to_record_index = {record["full_id"]: idx for idx, record in enumerate(self._keyword_retriever.corpus)}
+            else:
+                self.full_id_to_record_index = {}
 
     # TODO: add a variant of `query` with a fixed amount of context around each match (we can do this by looking up the fulltext of the matching chunk and taking the text from there)
     # TODO: do we need `exclude_documents`, for symmetry?
@@ -699,25 +722,52 @@ class HybridIR:
         plural_s = "es" if k != 1 else ""
         logger.info(f"HybridIR.query: entered. Searching for {k} best match{plural_s} for '{query}'")
 
-        if not self.documents:
-            logger.info("HybridIR.query: No documents in index, returning empty result.")
-            return []
-        if self._keyword_retriever is None:
-            assert False  # we should have `self._keyword_retriever` as soon as we have at least one document
-
-        internal_k = int(alpha * k)
-        internal_k = min(internal_k, len(self._keyword_retriever.corpus))  # `bm25s` library requires `k ≤ corpus size`
-
-        # BM25 search
-        logger.info("HybridIR.query: keyword search")
-        query_tokens = tokenize(query)
-
+        # Prepare anything we can before locking the datastore
+        internal_k = min(alpha * k,
+                         len(self._keyword_retriever.corpus))  # `bm25s` library requires `k ≤ corpus size`
         if include_documents is None:
             keyword_k = internal_k
-        else:  # return score for *every record in database*, we'll do the metadata-based filtering (document ID) manually.
+        else:  # return score for *every record in database*, for manual metadata-based filtering (document ID)
             keyword_k = len(self._keyword_retriever.corpus)
-        raw_keyword_results, raw_keyword_scores = self._keyword_retriever.retrieve([query_tokens],  # list of list of tokens (outer list = one element per query; can run multiple queries at once)
-                                                                                   k=keyword_k)
+
+        # Prepare query for keyword search
+        query_tokens = tokenize(query)
+
+        # Prepare query for vector search
+        query_embedding = self._semantic_model.encode([query],
+                                                      show_progress_bar=True,
+                                                      convert_to_numpy=True,
+                                                      normalize_embeddings=True)[0].tolist()
+
+        with self.datastore_lock:
+            if not self.documents:
+                logger.info("HybridIR.query: No documents in index, returning empty result.")
+                return []
+            if self._keyword_retriever is None:
+                assert False  # we should have `self._keyword_retriever` as soon as we have at least one document
+
+            # BM25 search
+            logger.info("HybridIR.query: keyword search")
+            # Here we always search all documents; we filter afterward, if needed.
+            raw_keyword_results, raw_keyword_scores = self._keyword_retriever.retrieve([query_tokens],  # list of list of tokens (outer list = one element per query; can run multiple queries at once)
+                                                                                       k=keyword_k)
+
+            # Vector search
+            logger.info("HybridIR.query: semantic search")
+            if include_documents is not None:  # search only documents with given IDs
+                chroma_results = self._vector_collection.query(query_embeddings=[query_embedding],
+                                                               n_results=internal_k,
+                                                               include=["metadatas", "distances"],
+                                                               where={"document_id": {"$in": include_documents}})
+            else:  # search all documents
+                chroma_results = self._vector_collection.query(query_embeddings=[query_embedding],
+                                                               n_results=internal_k,
+                                                               include=["metadatas", "distances"])
+            # list of list of metadatas (outer list = one element per query?)
+            # https://github.com/chroma-core/chroma/blob/main/chromadb/api/types.py
+            raw_vector_results = chroma_results["metadatas"][0]  # -> list of metadatas
+            raw_vector_distances = chroma_results["distances"][0]  # -> list of float
+        # Now we no longer need datastore access to complete the search
 
         # Filter keyword results by threshold (and by `include_documents`, if specified)
         keyword_results = []
@@ -734,26 +784,6 @@ class HybridIR:
                 keyword_scores.append(keyword_score)
         # Now `keyword_results` contains the corpus entries as-is
 
-        # Vector search
-        logger.info("HybridIR.query: semantic search")
-        query_embedding = self._semantic_model.encode([query],
-                                                      show_progress_bar=True,
-                                                      convert_to_numpy=True,
-                                                      normalize_embeddings=True)[0].tolist()
-        if include_documents is not None:  # search only documents with given IDs
-            chroma_results = self._vector_collection.query(query_embeddings=[query_embedding],
-                                                           n_results=internal_k,
-                                                           include=["metadatas", "distances"],
-                                                           where={"document_id": {"$in": include_documents}})
-        else:  # search all documents
-            chroma_results = self._vector_collection.query(query_embeddings=[query_embedding],
-                                                           n_results=internal_k,
-                                                           include=["metadatas", "distances"])
-        # list of list of metadatas (outer list = one element per query?)
-        # https://github.com/chroma-core/chroma/blob/main/chromadb/api/types.py
-        raw_vector_results = chroma_results["metadatas"][0]  # -> list of metadatas
-        raw_vector_distances = chroma_results["distances"][0]  # -> list of float
-
         # Filter vector results by threshold
         vector_results = []
         vector_distances = []
@@ -769,8 +799,9 @@ class HybridIR:
         full_ids_vector = [record["full_id"] for record in vector_results]
         rrf_results = reciprocal_rank_fusion(full_ids_bm25, full_ids_vector)
 
-        # Collect the actual data records for each full ID, and populate the fused scores. Note we need the chunks, not the full documents.
-        # We can collect them from the keyword-search corpus, regardless of which backend actually returned any specific result.
+        # Collect the actual data records for each full ID, and populate the fused scores.
+        # Note we need the chunks, not the full documents. We can collect them from the
+        # keyword-search corpus, regardless of which backend actually returned any specific result.
         fused_results = []
         for full_id, rrf_score in rrf_results:
             record = copy.copy(self._keyword_retriever.corpus[self.full_id_to_record_index[full_id]])
@@ -780,8 +811,9 @@ class HybridIR:
         # Merge adjacent chunks, sorting the final results by the fused score.
         # Each merged chunk gets the score of the highest-scoring individual chunk that went into it.
         #
-        # NOTE: Merged results don't have a "chunk_id" or "full_id" (design choice; multiple chunks may have been merged into each result,
-        #       so chunk-specific fields wouldn't make sense), but only "document_id", "offset", "text", and "score" (RRF score).
+        # NOTE: Merged results don't have a "chunk_id" or "full_id" (design choice; multiple chunks may
+        #       have been merged into each result, so chunk-specific fields wouldn't make sense), but only
+        #       "document_id", "offset", "text", and "score" (RRF score).
         logger.info("HybridIR.query: merging contiguous spans in results")
         merged = merge_contiguous_spans(fused_results)
 
@@ -798,7 +830,6 @@ class HybridIR:
 
         logger.info("HybridIR.query: exiting. All done.")
 
-        # Format of `merged`: [{"document_id": the_id_string, "text": merged_contiguous_text, "offset": start_offset_in_document, "score": rrf_score}, ...]
         if return_extra_info:
             return merged, (keyword_results, keyword_scores), (vector_results, vector_distances)
         return merged
