@@ -90,6 +90,11 @@ docs_observer.schedule(docs_event_handler,
                        recursive=False)  # for now, don't recurse into subdirectories - think about this later
 docs_observer.start()
 
+def _docs_observer_shutdown():
+    docs_observer.stop()
+    docs_observer.join()
+atexit.register(_docs_observer_shutdown)
+
 # --------------------------------------------------------------------------------
 # Utilities
 
@@ -965,8 +970,6 @@ def minimal_chat_client(backend_url):
         print()
         print(colorizer.colorize("Exiting chat.", colorizer.Style.BRIGHT))
         print()
-        docs_observer.stop()
-        docs_observer.join()
 
 def main():
     parser = argparse.ArgumentParser(description="""Minimal LLM chat client, for testing/debugging. You can use this for testing that Raven can connect to your LLM.""",
