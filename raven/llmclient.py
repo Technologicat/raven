@@ -638,6 +638,10 @@ def minimal_chat_client(backend_url):
                                                  colorizer.Style.BRIGHT)
         print(f"{colorful_rag_status} Toggle with the `!docs` command.")
         print(f"    Document store is at '{config.llm_docs_dir}'.")
+        # The retriever's `documents` attribute must be locked before accessing.
+        with retriever.datastore_lock:
+            plural_s = "s" if len(retriever.documents) != 1 else ""
+            print(f"        {len(retriever.documents)} document{plural_s} loaded.")
         print(f"    Search indices are saved in '{config.llm_database_dir}'.")
         print()
 
