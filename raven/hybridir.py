@@ -15,7 +15,7 @@ laptops have enough RAM for this not to be an issue with the dataset sizes neede
 QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
-__all__ = ["init", "HybridIR", "HybridIRFileMonitor"]
+__all__ = ["init", "HybridIR", "HybridIRFileSystemEventHandler"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -34,7 +34,7 @@ from watchdog.events import FileSystemEventHandler
 
 import numpy as np
 
-from unpythonic import allsame, box, uniqify
+from unpythonic import allsame, box, partition, uniqify
 from unpythonic.env import env as envcls
 
 # NLP
@@ -416,11 +416,10 @@ class HybridIR:
         self._pending_edits = []
 
     def _stat(self, path: Union[pathlib.Path, str]) -> Dict:  # size, mtime
-        if isinstance(path, str):
-            path = pathlib.Path(path)
-        path = path.expanduser().resolve()
-        if path.exists():
-            stat = os.stat(path)
+        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
+        abspath = p.expanduser().resolve()
+        if abspath.exists():
+            stat = os.stat(abspath)
             return {"size": stat.st_size, "mtime": stat.st_mtime}
         return {"size": None, "mtime": None}  # could be an in-memory document
 
@@ -431,6 +430,10 @@ class HybridIR:
         `path`: Full path (or URL) of the original file.
                 `HybridIR` uses this to check for changes to the file at datastore load time.
                 You can use this to easily locate the original file a given search result refers to.
+
+                If your document did not come from a file, use angle brackets
+                to disable the file system event handler's rescan for that document,
+                e.g. `path="<my in-memory document>"`.
 
         `text`: Plain-text content of the file, to be indexed for searching.
 
@@ -483,7 +486,7 @@ class HybridIR:
             return document_id
 
     # TODO: Index rebuilding is slow. Maybe `commit` should run as a bgtask, like the BibTeX importer.
-    #       Note `HybridIRFileMonitor` already does that.
+    #       Note `HybridIRFileSystemEventHandler` already does that.
     # TODO: `commit` is not as atomic as I'd like. If anything goes wrong, the vector index loses sync with the actual data, necessitating a full rebuild. Check if ChromaDB has transaction management.
     def commit(self) -> None:
         """Commit pending changes (adds/deletes/updates), re-indexing the databases.
@@ -859,16 +862,26 @@ class HybridIR:
 bg = None
 task_managers = {}
 def init(executor):
-    """Initialize this module. Must be called before `HybridIRFileMonitor` can be used.
+    """Initialize this module.
+
+    Must be called before `HybridIRFileSystemEventHandler` (including its `rescan` method)
+    can be used.
 
     `executor`: A `ThreadPoolExecutor` or something duck-compatible with it.
-                Used for running the background task for committing changes.
+                Used for running the background tasks for ingesting files
+                and committing search index changes.
     """
     global bg
     if bg is not None:  # already initialized?
         return
     bg = executor
     try:
+        # Ingestion for multiple files can proceed concurrently. The ingestion step might also be slow,
+        # if the plaintext needs to be extracted from a binary file by a user callback.
+        #
+        # For search index commits, only one commit should be running at any given time.
+        #
+        # These share the same executor, so this takes no additional OS resources.
         task_managers["ingest"] = bgtask.TaskManager(name="hybridir_ingest",
                                                      mode="concurrent",
                                                      executor=bg)
@@ -881,7 +894,7 @@ def init(executor):
         raise
 
 # See e.g. https://www.kdnuggets.com/monitor-your-file-system-with-pythons-watchdog
-class HybridIRFileMonitor(FileSystemEventHandler):
+class HybridIRFileSystemEventHandler(FileSystemEventHandler):
     def __init__(self,
                  retriever: HybridIR,
                  exts: List[str] = [".txt", ".md", ".rst", ".org"],
@@ -892,14 +905,15 @@ class HybridIRFileMonitor(FileSystemEventHandler):
 
         `ext`: File extensions of files to monitor.
 
-        `callback`: When new content arrives (a file is created in, updated in, or moved into
-                    the target directory), this function is called.
+        `callback`: When new content arrives (a file is created or updated in the target directory),
+                    this function is called.
 
                     Its only argument is the path to the file, and it must return the plaintext
-                    content of the file. This plaintext content is then sent into the search index.
+                    content of the file. This plaintext content is then sent into `retriever`'s
+                    search index.
 
-                    If no callback is specified, the file is read as-is. (This is enough for
-                    simple plaintext file formats.)
+                    If no callback is specified, the file is read as-is, assuming text with
+                    utf-8 encoding. (This is enough for simple plaintext files.)
 
         Uses the `watchdog` library.
         """
@@ -912,107 +926,187 @@ class HybridIRFileMonitor(FileSystemEventHandler):
         self._lock = threading.RLock()
         def commit(task_env):
             assert task_env is not None
-            logger.debug(f"HybridIRFileMonitor.commit: {task_env.task_name}: Entered.")
+            logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Entered.")
             if task_env.cancelled:
-                logger.debug(f"HybridIRFileMonitor.commit: {task_env.task_name}: Cancelled.")
+                logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Cancelled.")
                 return
-            logger.debug(f"HybridIRFileMonitor.commit: {task_env.task_name}: Committing changes to HybridIR (may take a while; this step cannot be cancelled).")
+            logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Committing changes to HybridIR (may take a while; this step cannot be cancelled).")
             self.retriever.commit()
-            logger.debug(f"HybridIRFileMonitor.commit: {task_env.task_name}: Done.")
+            logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Done.")
         self.commit_task = bgtask.make_managed_task(status_box=self._status_box,
                                                     lock=self._lock,
                                                     entrypoint=commit,
                                                     running_poll_interval=1.0,
                                                     pending_wait_duration=1.0)
 
+    # TODO: `document_id` needs to be unique, but easily mappable from filename, persistently.
+    # Currently this doesn't work for duplicate filenames across subdirectories.
+    # Also ChromaDB has some limitations as to valid IDs.
+    def _document_id_from_path(self, path: Union[pathlib.Path, str]) -> str:
+        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
+        return p.name
+
     def _sanity_check(self, path: Union[pathlib.Path, str]) -> bool:
         if not task_managers:
-            logger.warning("HybridIRFileMonitor._sanity_check: Module not initialized, cannot proceed.")
+            logger.warning("HybridIRFileSystemEventHandler._sanity_check: Module not initialized, cannot proceed.")
             return False
-        if isinstance(path, pathlib.Path):
-            path = path.expanduser().resolve()
-        path = str(path)
-        if not any(path.endswith(ext) for ext in self.exts):
-            logger.info(f"HybridIRFileMonitor._sanity_check: file '{path}': file extension not in monitored list {self.exts}, ignoring file.")
+        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
+        abspath = p.expanduser().resolve()
+        abspath = str(abspath)
+        if not any(abspath.endswith(ext) for ext in self.exts):
+            logger.info(f"HybridIRFileSystemEventHandler._sanity_check: file '{abspath}': file extension not in monitored list {self.exts}, ignoring file.")
             return False
         return True
 
     def _read(self, path: Union[pathlib.Path, str]) -> str:
-        if isinstance(path, pathlib.Path):
-            path = path.expanduser().resolve()
-        path = str(path)
+        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
+        abspath = p.expanduser().resolve()
         if self.callback:
-            content = self.callback(path)
+            content = self.callback(abspath)
         else:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
         if not content:
             return None
         if not isinstance(content, str):
-            logger.error(f"HybridIRFileMonitor._read: file '{path}': got non-string content. Ignoring file.")
+            logger.error(f"HybridIRFileSystemEventHandler._read: file '{str(abspath)}': got non-string content. Ignoring file.")
             return None
         return content.strip()
 
+    def _make_task(self, kind: str, path: Union[pathlib.Path, str]) -> Callable:
+        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
+        abspath = p.expanduser().resolve()
+        document_id = self._document_id_from_path(abspath)
+        if kind == "add":
+            def scheduled_add(task_env):
+                logger.debug(f"HybridIRFileSystemEventHandler.scheduled_add: file '{path}': ingesting file content.")
+                content = self._read(abspath)
+                if content is None:
+                    logger.debug(f"HybridIRFileSystemEventHandler.scheduled_add: file '{path}': got empty or non-string content, ignoring file.")
+                    return
+                self.retriever.add(document_id=document_id,
+                                   path=str(abspath),
+                                   text=content)
+                logger.debug(f"HybridIRFileSystemEventHandler.scheduled_add: file '{path}': scheduling commit to save changes to HybridIR.")
+                task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
+            return scheduled_add
+
+        elif kind == "update":
+            def scheduled_update(task_env):
+                logger.debug(f"HybridIRFileSystemEventHandler.scheduled_update: file '{path}': ingesting file content.")
+                content = self._read(abspath)
+                if content is None:
+                    logger.warning(f"HybridIRFileSystemEventHandler.scheduled_update: file '{path}': got empty or non-string content from updated file; removing file from index.")
+                    self.retriever.delete(document_id)
+                else:
+                    self.retriever.update(document_id=document_id,
+                                          path=str(abspath),
+                                          text=content)
+                logger.debug(f"HybridIRFileSystemEventHandler.scheduled_update: file '{path}': scheduling commit to save changes to HybridIR.")
+                task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
+            return scheduled_update
+
+        elif kind == "delete":
+            def scheduled_delete(task_env):
+                logger.debug(f"HybridIRFileSystemEventHandler.scheduled_delete: file '{path}': deleting from search indices.")
+                self.retriever.delete(document_id)
+
+                logger.debug(f"HybridIRFileSystemEventHandler.scheduled_delete: file '{path}': scheduling commit to save changes to HybridIR.")
+                task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
+            return scheduled_delete
+
+        else:
+            raise ValueError(f"Unknown kind '{kind}'; expected one of 'add', 'update', 'delete'.")
+
+    def rescan(self, path: Union[pathlib.Path, str], recursive: bool = False) -> None:
+        """Rescan for documents at `path`.
+
+        This adds/updates/deletes files from the retriever's index as necessary.
+
+        Useful at app startup, since events only fire on live changes (while the app is running).
+        """
+        logger.info(f"HybridIRFileSystemEventHandler.rescan: Scanning '{path}' for offline changes (changes made while this app was not running).")
+        p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
+        abspath = p.expanduser().resolve()
+        found_paths = []
+        for root, dirs, files in os.walk(abspath):
+            if not recursive:
+                dirs.clear()
+            for filename in files:
+                filepath = os.path.join(root, filename)
+                if self._sanity_check(filepath):
+                    found_paths.append(str(pathlib.Path(filepath).expanduser().resolve()))
+        plural_s = "s" if len(found_paths) != 1 else ""
+        logger.info(f"HybridIRFileSystemEventHandler.rescan: Found {len(found_paths)} file{plural_s}.")
+
+        with self.retriever.datastore_lock:
+            def came_from_file(doc: Dict) -> bool:
+                return not (doc["path"].startswith("<") and doc["path"].endswith(">"))
+            indexed_paths = [doc["path"] for doc in self.retriever.documents.values() if came_from_file(doc)]
+            indexed_paths_set = set(indexed_paths)
+            def is_in_index(path: str) -> bool:
+                return path in indexed_paths_set
+            def is_file_updated(path: str) -> bool:
+                stats = self.retriever._stat(path)
+                document_id = self._document_id_from_path(path)
+                assert document_id in self.retriever.documents  # this is only ever called for already indexed documents
+                doc = self.retriever.documents[document_id]
+                mtime_increased = (stats["mtime"] > doc["mtime"])
+                filesize_changed = (stats["size"] != doc["filesize"])
+                return mtime_increased or filesize_changed
+
+            new_found_paths, already_indexed_found_paths = partition(is_in_index, found_paths)
+            new_found_paths = list(new_found_paths)
+            already_indexed_found_paths = list(already_indexed_found_paths)
+            updated_paths = [path for path in already_indexed_found_paths if is_file_updated(path)]
+            found_paths_set = set(found_paths)
+            deleted_paths = [path for path in indexed_paths if path not in found_paths_set]
+
+        new_plural_s = "s" if len(new_found_paths) != 1 else ""
+        updated_plural_s = "s" if len(updated_paths) != 1 else ""
+        deleted_plural_s = "s" if len(deleted_paths) != 1 else ""
+        logger.info(f"HybridIRFileSystemEventHandler.rescan: Scan complete. Found {len(new_found_paths)} new file{new_plural_s}, {len(updated_paths)} updated file{updated_plural_s}, and {len(deleted_paths)} deleted file{deleted_plural_s}.")
+
+        for path in new_found_paths:
+            logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' is new: scheduling ingest.")
+            task_managers["ingest"].submit(self._make_task(kind="add", path=path), envcls())
+        for path in updated_paths:
+            logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' was updated: scheduling ingest.")
+            task_managers["ingest"].submit(self._make_task(kind="update", path=path), envcls())
+        for path in deleted_paths:
+            logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' was deleted: scheduling deletion from index.")
+            task_managers["ingest"].submit(self._make_task(kind="delete", path=path), envcls())
+
     def on_created(self, event):
         path = event.src_path
-        logger.info(f"HybridIRFileMonitor.on_created: file '{path}'.")
+        logger.info(f"HybridIRFileSystemEventHandler.on_created: File '{path}'.")
         if not self._sanity_check(path):
             return
-
-        def ingest_task(task_env):
-            logger.debug(f"HybridIRFileMonitor.ingest_task (on_created): file '{path}': ingesting file content.")
-            document_id = pathlib.Path(path).name  # TODO: needs to be unique but easily mappable from filename, persistently; also ChromaDB has some limitations as to valid IDs
-            content = self._read(path)
-            if content is None:
-                logger.debug(f"HybridIRFileMonitor.ingest_task (on_created): file '{path}': got empty or non-string content, ignoring file.")
-                return
-            self.retriever.add(document_id=document_id,
-                               path=path,
-                               text=content)
-            logger.debug(f"HybridIRFileMonitor.ingest_task (on_created): file '{path}': scheduling commit to save changes to HybridIR.")
-            task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
-        logger.info(f"HybridIRFileMonitor.on_created: file '{path}': scheduling ingest.")
-        task_managers["ingest"].submit(ingest_task, envcls())
+        logger.info(f"HybridIRFileSystemEventHandler.on_created: File '{path}': scheduling ingest.")
+        task_managers["ingest"].submit(self._make_task(kind="add", path=path), envcls())
 
     def on_modified(self, event):
         path = event.src_path
-        logger.info(f"HybridIRFileMonitor.on_modified: file '{path}'.")
+        logger.info(f"HybridIRFileSystemEventHandler.on_modified: File '{path}'.")
         if not self._sanity_check(path):
             return
-
-        def ingest_task(task_env):
-            logger.debug(f"HybridIRFileMonitor.ingest_task (on_modified): file '{path}': ingesting file content.")
-            document_id = pathlib.Path(path).name  # TODO: needs to be unique but easily mappable from filename, persistently; also ChromaDB has some limitations as to valid IDs
-            content = self._read(path)
-            if content is None:
-                logger.debug(f"HybridIRFileMonitor.ingest_task (on_created): file '{path}': got empty or non-string content, removing file from index.")
-                self.retriever.delete(document_id)
-            else:
-                self.retriever.update(document_id=document_id,
-                                      path=path,
-                                      text=content)
-            logger.debug(f"HybridIRFileMonitor.ingest_task (on_modified): file '{path}': scheduling commit to save changes to HybridIR.")
-            task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
-        logger.info(f"HybridIRFileMonitor.on_created: file '{path}': scheduling ingest.")
-        task_managers["ingest"].submit(ingest_task, envcls())
+        logger.info(f"HybridIRFileSystemEventHandler.on_created: File '{path}': scheduling ingest.")
+        task_managers["ingest"].submit(self._make_task(kind="update", path=path), envcls())
 
     def on_deleted(self, event):
         path = event.src_path
-        logger.info(f"HybridIRFileMonitor.on_deleted: file '{path}'.")
+        logger.info(f"HybridIRFileSystemEventHandler.on_deleted: File '{path}'.")
         if not self._sanity_check(path):
             return
+        logger.info(f"HybridIRFileSystemEventHandler.on_deleted: File '{path}': scheduling deletion from index.")
+        task_managers["ingest"].submit(self._make_task(kind="delete", path=path), envcls())
 
-        self.retriever.delete(document_id)
-
-        logger.debug(f"HybridIRFileMonitor.on_deleted: file '{path}': scheduling commit to save changes to HybridIR.")
-        task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
-
-    # TODO: Do we need `on_moved`?
+    # TODO: Do we need `on_moved`, too?
 
 # --------------------------------------------------------------------------------
 
 # Usage example / demo
-if __name__ == "__main__":
+def demo():
     import textwrap
     from mcpyrate import colorizer
 
@@ -1217,3 +1311,6 @@ if __name__ == "__main__":
         else:
             print(colorizer.colorize("<no results>", colorizer.Style.DIM))
             print()
+
+if __name__ == "__main__":
+    demo()

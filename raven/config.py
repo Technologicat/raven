@@ -24,10 +24,13 @@ llm_save_dir = config_base_dir + "llmclient"
 # Add/modify/delete a file in this directory to trigger a RAG index auto-update in the LLM client.
 llm_docs_dir = config_base_dir + "llmclient/documents"
 
-# Where to store the RAG database (machine-readable).
+# Whether to scan also subdirectories of `llm_docs_dir` (TODO: doesn't yet work properly, need to mod doc IDs)
+llm_docs_dir_recursive = False
+
+# Where to store the search indices for the RAG database (machine-readable).
 llm_database_dir = config_base_dir + "llmclient/rag_index"
 
-# For RAG database storage (API usage example / demo)
+# Where to store the search indices for the `HybridIR` API usage example / demo
 hybridir_demo_save_dir = config_base_dir + "hybridir_demo"
 
 # AI model for semantic search (RAG backend `raven.hybridir`), encoding both questions and answers into a joint semantic space.

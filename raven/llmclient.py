@@ -7,8 +7,6 @@ If you want to see the final prompt in instruct or chat mode, start your server 
 
 # TODO: fix pdf2bib, now that the history handling has changed
 
-# TODO: add "!rescan" - scan the docs directory for documents, check against fulldocs index
-#       (hybridir needs to store a last-updated timestamp in the fulldocs index?)
 # TODO: add "!speculate [on|off]" (no argument: toggle)
 #   - when "!docs" is on:
 #     - "!speculate off" means answer based on docs only (no search matches = don't even ask LLM)
@@ -64,6 +62,9 @@ history_file = config_dir / "history"      # user input history (readline)
 datastore_file = config_dir / "data.json"  # chat node datastore
 state_file = config_dir / "state.json"     # important node IDs for the chat client state
 
+db_dir = pathlib.Path(config.llm_database_dir).expanduser().resolve()
+docs_dir = pathlib.Path(config.llm_docs_dir).expanduser().resolve()
+
 # Persistent, branching chat history. `PersistentForest` autoloads and auto-persists.
 datastore = chattree.PersistentForest(datastore_file)
 
@@ -72,25 +73,32 @@ headers = {
     "Content-Type": "application/json"
 }
 
-# Support cloud LLMs, too
+# Read API key for cloud LLM support
 if os.path.exists(api_key_file):
-    with open(api_key_file, "r") as f:
+    with open(api_key_file, "r", encoding="utf-8") as f:
         api_key = f.read()
     # "Authorization": "Bearer yourPassword123"
     # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
     headers["Authorization"] = api_key.strip()
 
 # RAG system with hybrid keyword/semantic search - auto-search your documents.
+
 # `HybridIR` also autoloads and auto-persists its search indices.
 bg = concurrent.futures.ThreadPoolExecutor()
 hybridir.init(executor=bg)
-retriever = hybridir.HybridIR(datastore_base_dir=pathlib.Path(config.llm_database_dir).expanduser().resolve(),
+retriever = hybridir.HybridIR(datastore_base_dir=db_dir,
                               embedding_model_name=config.qa_embedding_model)
-docs_event_handler = hybridir.HybridIRFileMonitor(retriever)
+
+# Rescan docs directory for changes made while the app was not running.
+docs_event_handler = hybridir.HybridIRFileSystemEventHandler(retriever)
+docs_event_handler.rescan(docs_dir,
+                          recursive=config.llm_docs_dir_recursive)
+
+# Register handler to auto-update RAG index on live changes in docs directory.
 docs_observer = Observer()
 docs_observer.schedule(docs_event_handler,
-                       path=pathlib.Path(config.llm_docs_dir).expanduser().resolve(),
-                       recursive=False)  # for now, don't recurse into subdirectories - think about this later
+                       path=docs_dir,
+                       recursive=config.llm_docs_dir_recursive)
 docs_observer.start()
 
 def _docs_observer_shutdown():
