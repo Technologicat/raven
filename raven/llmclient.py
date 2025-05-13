@@ -87,7 +87,7 @@ docs_event_handler = hybridir.HybridIRFileMonitor(retriever)
 docs_observer = Observer()
 docs_observer.schedule(docs_event_handler,
                        path=pathlib.Path(config.llm_docs_dir).expanduser().resolve(),
-                       recursive=False)  # for now
+                       recursive=False)  # for now, don't recurse into subdirectories - think about this later
 docs_observer.start()
 
 # --------------------------------------------------------------------------------
@@ -565,11 +565,14 @@ def minimal_chat_client(backend_url):
     def persist():
         config_dir.mkdir(parents=True, exist_ok=True)
 
+        # Save readline history
         readline.set_history_length(1000)
         readline.write_history_file(history_file)
 
+        # Save app state
         if initial_greeting_id is not None:  # initialized successfully? (during development, might not always be, if a bug causes the client to crash at startup)
-            # Before saving (which happens automatically at exit), remove any nodes not reachable from the initial message, and also remove dead links.
+            # Before saving (which happens automatically at exit),
+            # remove any nodes not reachable from the initial message, and also remove dead links.
             # There shouldn't be any, but this way we exercise these features, too.
             system_prompt_node_id = datastore.nodes[initial_greeting_id]["parent"]
             datastore.prune_unreachable_nodes(system_prompt_node_id)
@@ -581,7 +584,8 @@ def minimal_chat_client(backend_url):
                      "docs_enabled": docs_enabled}
             with open(state_file, "w") as json_file:
                 json.dump(state, json_file, indent=2)
-    # We register later than `chattree.PersistentForest`, so ours runs first. Hence we'll have the chance to prune before the forest is persisted to disk.
+    # We register later than `chattree.PersistentForest`, so ours runs first.
+    # Hence we'll have the chance to prune before the forest is persisted to disk.
     #     https://docs.python.org/3/library/atexit.html
     atexit.register(persist)
 
