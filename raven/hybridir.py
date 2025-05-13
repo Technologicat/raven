@@ -683,7 +683,8 @@ class HybridIR:
 
         `include_documents`: Optional list of document IDs. If provided, search only in the specified documents.
         """
-        logger.info(f"HybridIR.query: entered. Searching for {k} best matches for '{query}'")
+        plural_s = "es" if k != 1 else ""
+        logger.info(f"HybridIR.query: entered. Searching for {k} best match{plural_s} for '{query}'")
 
         if not self.documents:
             logger.info("HybridIR.query: No documents in index, returning empty result.")
@@ -771,10 +772,15 @@ class HybridIR:
         logger.info("HybridIR.query: merging contiguous spans in results")
         merged = merge_contiguous_spans(fused_results)
 
-        logger.info(f"HybridIR.query: retrieved chunk statistics: {len(keyword_results)} keyword matches, {len(vector_results)} semantic matches; total {len(fused_results)} unique matches; {len(merged)} results after merging contiguous spans from each document.")
+        kw_plural_s = "es" if len(keyword_results) != 1 else ""
+        vec_plural_s = "es" if len(vector_results) != 1 else ""
+        fused_plural_s = "es" if len(fused_results) != 1 else ""
+        total_plural_s = "s" if len(merged) != 1 else ""
+        logger.info(f"HybridIR.query: retrieved chunk statistics: {len(keyword_results)} keyword match{kw_plural_s}, {len(vector_results)} semantic match{vec_plural_s}; total {len(fused_results)} unique match{fused_plural_s}; {len(merged)} result{total_plural_s} after merging contiguous spans from each document.")
 
         # Drop extra results, if there are still too many at this point.
-        logger.info(f"HybridIR.query: Returning up to {k} best results (out of {len(merged)} retrieved), sorted by RRF score.")
+        plural_s = "s" if k != 1 else ""
+        logger.info(f"HybridIR.query: Returning up to {k} best result{plural_s} (out of {len(merged)} retrieved), sorted by RRF score.")
         merged = merged[:k]
 
         logger.info("HybridIR.query: exiting. All done.")
