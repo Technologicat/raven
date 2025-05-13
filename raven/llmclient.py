@@ -641,7 +641,7 @@ def minimal_chat_client(backend_url):
         print(f"    Search indices are saved in '{config.llm_database_dir}'.")
         print()
 
-        print(colorizer.colorize(f"GNU readline available. Saving user inputs to {str(history_file)}.", colorizer.Style.BRIGHT))
+        print(colorizer.colorize(f"GNU readline available. Saving user inputs to '{str(history_file)}'.", colorizer.Style.BRIGHT))
         print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
         print()
         try:
