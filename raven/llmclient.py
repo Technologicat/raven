@@ -5,6 +5,8 @@ NOTE for oobabooga/text-generation-webui users:
 If you want to see the final prompt in instruct or chat mode, start your server in `--verbose` mode.
 """
 
+# TODO: fix pdf2bib, now that the history handling has changed
+
 # TODO: add "!rescan" - scan the docs directory for documents, check against fulldocs index
 #       (hybridir needs to store a last-updated timestamp in the fulldocs index?)
 # TODO: add "!speculate [on|off]" (no argument: toggle)
@@ -13,10 +15,10 @@ If you want to see the final prompt in instruct or chat mode, start your server 
 #     - "!speculate on" means allow answering also based on static knowledge, change wording of prompt accordingly
 
 __all__ = ["list_models", "setup",
-           "create_chat_message",
-           "add_chat_message",
+           "create_chat_message", "create_initial_system_message",
+           "factory_reset_chat_datastore",
            "format_chat_datetime_now", "format_reminder_to_focus_on_latest_input",
-           "invoke"]
+           "invoke", "scrub"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -118,7 +120,7 @@ def setup(backend_url: str) -> env:
         `greeting`: The AI assistant's first message, used later for initializing the chat history.
         `prompts`: Prompts for the LLM, BibTeX field processing functions, and any literal info to fill in the output BibTeX. See the main program for details.
         `request_data`: Generation settings for the LLM backend.
-        `role_names`: A `dict` with keys "user", "assistant", "system", used for constructing chat messages (see `add_chat_message`).
+        `role_names`: A `dict` with keys "user", "assistant", "system", used for constructing chat messages (see `create_chat_message`).
     """
     user = "User"
     char = "Aria"
@@ -319,7 +321,7 @@ def create_initial_system_message(settings: env) -> Dict[str, str]:
                                role="system",
                                message=msg)
 
-def initialize_chat_datastore(settings: env) -> str:
+def factory_reset_chat_datastore(settings: env) -> str:
     """Reset the chat node datastore to its "factory-default" state.
 
     **IMPORTANT**: This deletes all existing chat nodes in the datastore, and CANNOT BE UNDONE.
@@ -340,21 +342,6 @@ def initialize_chat_datastore(settings: env) -> str:
                                                                          message=settings.greeting),
                                                 parent_id=root_node_id)
     return initial_greeting_id
-
-def add_chat_message(settings: env, parent_node_id: Optional[str], role: str, message: str) -> str:
-    """Append a new message to the chat tree, as a child node of `parent_node_id`.
-
-    If `parent_node_id` is not given, this creates a new root node.
-
-    Returns the unique ID of the new chat node.
-
-    `role`: one of "user", "assistant", "system"
-    """
-    new_node_id = datastore.create_node(data=create_chat_message(settings,
-                                                                 role=role,
-                                                                 message=message),
-                                        parent_id=parent_node_id)
-    return new_node_id
 
 _weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 def format_chat_datetime_now() -> str:
@@ -471,6 +458,10 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
 
+    `settings`: Obtain this by calling `setup()` at app start time.
+
+    `history`: List of chat messages, see `create_chat_message`.
+
     `progress_callback`: callable, optional.
         If provided, this is called for each chunk. It is expected to take two arguments; the signature is
         `progress_callback(n_chunks, chunk_text)`. Here:
@@ -487,8 +478,6 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
                      If it begins with the assistant character's name (e.g. "AI: ..."), this is automatically stripped.
         `n_tokens`: int, Number of tokens emitted by the LLM.
         `dt`: float, Wall time elapsed for generating this message, in seconds.
-
-    If you want to add `data` to `history`, use `history = add_chat_message(settings, history, role='assistant', message=data)`.
     """
     data = copy.deepcopy(settings.request_data)
     data["messages"] = history
@@ -638,7 +627,7 @@ def minimal_chat_client(backend_url):
 
             print(colorizer.colorize(f"Loaded app state from '{state_file}'.", colorizer.Style.BRIGHT))
         except FileNotFoundError:  # no `state.json` - initialize using defaults
-            initial_greeting_id = initialize_chat_datastore(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
+            initial_greeting_id = factory_reset_chat_datastore(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
             HEAD = initial_greeting_id  # current last node in chat; like HEAD pointer in git
             docs_enabled = True
         print()
@@ -955,7 +944,7 @@ def minimal_chat_client(backend_url):
             print()  # add the final newline
 
             # Clean up the AI's reply (heuristically).
-            out.data = scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)  # persona name is already added by `add_chat_message`
+            out.data = scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)  # persona name is already added by `create_chat_message`
 
             # Show performance statistics
             print(colorizer.colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))
