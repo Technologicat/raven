@@ -865,7 +865,7 @@ class HybridIRFileMonitor(FileSystemEventHandler):
     def __init__(self,
                  retriever: HybridIR,
                  exts: List[str] = [".txt", ".md", ".rst", ".org"],
-                 callback: Callable = None):
+                 callback: Callable = None) -> None:
         """Simple auto-updater that monitors a directory and auto-commits changes to a `HybridIR`.
 
         `retriever`: The `HybridIR` instance to automatically keep up to date.
