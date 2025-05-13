@@ -1,3 +1,17 @@
+"""LLM client for Raven.
+
+NOTE for oobabooga/text-generation-webui users:
+
+If you want to see the final prompt in instruct or chat mode, start your server in `--verbose` mode.
+"""
+
+# TODO: add "!rescan" - scan the docs directory for documents, check against fulldocs index
+#       (hybridir needs to store a last-updated timestamp in the fulldocs index?)
+# TODO: add "!speculate [on|off]" (no argument: toggle)
+#   - when "!docs" is on:
+#     - "!speculate off" means answer based on docs only (no search matches = don't even ask LLM)
+#     - "!speculate on" means allow answering also based on static knowledge, change wording of prompt accordingly
+
 __all__ = ["list_models", "setup",
            "create_chat_message",
            "add_chat_message",
@@ -39,9 +53,7 @@ from . import config
 from . import hybridir
 
 # --------------------------------------------------------------------------------
-# Setup for minimal chat client (for testing/debugging)
-
-output_line_width = 160  # for text wrapping in live update
+# Module bootup
 
 config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
 
@@ -50,13 +62,10 @@ history_file = config_dir / "history"      # user input history (readline)
 datastore_file = config_dir / "data.json"  # chat node datastore
 state_file = config_dir / "state.json"     # important node IDs for the chat client state
 
-datastore = chattree.PersistentForest(datastore_file)  # this will autoload if there is any data at the specified location
+# Persistent, branching chat history
+datastore = chattree.PersistentForest(datastore_file)  # this autoloads and auto-persists
 
-# --------------------------------------------------------------------------------
-# LLM API setup
-
-# !!! oobabooga/text-generation-webui users: If you need to see the final prompt in instruct or chat mode, start your server in `--verbose` mode.
-
+# HTTP headers for LLM requests
 headers = {
     "Content-Type": "application/json"
 }
@@ -68,6 +77,21 @@ if os.path.exists(api_key_file):
     # "Authorization": "Bearer yourPassword123"
     # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
     headers["Authorization"] = api_key.strip()
+
+# RAG system with hybrid keyword/semantic search - auto-search your documents
+bg = concurrent.futures.ThreadPoolExecutor()
+hybridir.init(executor=bg)
+retriever = hybridir.HybridIR(datastore_base_dir=pathlib.Path(config.llm_database_dir).expanduser().resolve(),
+                              embedding_model_name=config.qa_embedding_model)
+docs_event_handler = hybridir.HybridIRFileMonitor(retriever)
+docs_observer = Observer()
+docs_observer.schedule(docs_event_handler,
+                       path=pathlib.Path(config.llm_docs_dir).expanduser().resolve(),
+                       recursive=False)  # for now
+docs_observer.start()
+
+# --------------------------------------------------------------------------------
+# Utilities
 
 def list_models(backend_url):
     """List all models available at `backend_url`."""
@@ -107,19 +131,26 @@ def setup(backend_url: str) -> env:
     # ----------------------------------------
     # System prompt and character card
 
-    # For recent models as of April 2025, e.g. QwQ-32B, the system prompt itself can be blank. The character card is enough.
+    # For recent models as of April 2025, e.g. QwQ-32B, the system prompt itself can be blank.
+    # The character card is enough.
+    #
     # Older models may need a general briefing first.
     #
-    # system_prompt = dedent(f"""You are an expert actor that can fully immerse yourself into any role given. You do not break character for any reason, even if someone tries addressing you as an AI or language model. Currently your role is {char}, which is described in detail below. As {char}, continue the exchange with {user}.""")  # "Actor" preset from SillyTavern.
+    # If you provide a system prompt, be sure to dedent and strip it
+    # so the client can process whitespace in a unified way. See example.
+    #
+    # system_prompt = dedent(f"""You are an expert actor that can fully immerse yourself into any role given. You do not break character for any reason, even if someone tries addressing you as an AI or language model. Currently your role is {char}, which is described in detail below. As {char}, continue the exchange with {user}.""").strip()  # "Actor" preset from SillyTavern.
     system_prompt = ""
 
-    # This is a minimal setup, partially copied from my personal AI assistant, meant to be run against locally hosted models.
-    # This gives better performance (accuracy, instruction following) vs. querying the LLM directly without any system prompt.
+    # This is a minimal setup, partially copied from my personal AI assistant, meant to be run
+    # against locally hosted models. This gives better performance (accuracy, instruction following)
+    # vs. querying the LLM directly without any system prompt.
     #
     # TODO: "If unsure" and similar tricks tend to not work for 8B models. At LLaMA 3.1 70B and better, it should work, but running that requires at least 2x24GB VRAM.
     # TODO: Query the context size from the backend if possible. No, doesn't seem to be possible. https://github.com/oobabooga/text-generation-webui/discussions/5317
     #
-    character_card = dedent(f"""Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).
+    character_card = dedent(f"""
+    Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).
 
     **About {char}**
 
@@ -157,7 +188,7 @@ def setup(backend_url: str) -> env:
 
     - The system accesses external data beyond its built-in knowledge through:
       - Additional context that is provided by the software this LLM is running in.
-    """)
+    """).strip()
 
     greeting = "How can I help you today?"
 
@@ -204,7 +235,6 @@ def setup(backend_url: str) -> env:
                    role_names=role_names)
     return settings
 
-
 # # neutralize other samplers (copied from what SillyTavern sends)
 # "top_p": 1,
 # "typical_p": 1,
@@ -250,9 +280,6 @@ def setup(backend_url: str) -> env:
 # "num_predict": 800,
 # "num_ctx": 65536,
 
-# --------------------------------------------------------------------------------
-# Utilities for minimal chat client
-
 def create_chat_message(settings: env, role: str, message: str) -> Dict[str, str]:
     """Create a new chat message, compatible with the chat history format sent to the LLM.
 
@@ -271,6 +298,21 @@ def create_chat_message(settings: env, role: str, message: str) -> Dict[str, str
         content = message
     return {"role": role, "content": content}
 
+def create_initial_system_message(settings: env) -> Dict[str, str]:
+    """Create a chat message containing the system prompt and the AI's character card as specified in `settings`."""
+    if settings.system_prompt and settings.character_card:
+        # The system prompt is stripped, so we need two linefeeds to have one blank line in between.
+        msg = f"{settings.system_prompt}\n\n{settings.character_card}\n\n-----"
+    elif settings.system_prompt:
+        msg = f"{settings.system_prompt}\n\n-----"
+    elif settings.character_card:
+        msg = f"{settings.character_card}\n\n-----"
+    else:
+        raise ValueError("create_initial_system_message: Need at least a system prompt or a character card.")
+    return create_chat_message(settings,
+                               role="system",
+                               message=msg)
+
 def initialize_chat_datastore(settings: env) -> str:
     """Reset the chat node datastore to its "factory-default" state.
 
@@ -285,9 +327,7 @@ def initialize_chat_datastore(settings: env) -> str:
     You can obtain the `settings` object by first calling `setup`.
     """
     datastore.purge()
-    root_node_id = datastore.create_node(data=create_chat_message(settings,
-                                                                  role="system",
-                                                                  message=f"{settings.system_prompt}\n\n{settings.character_card}"),
+    root_node_id = datastore.create_node(data=create_initial_system_message(settings),
                                          parent_id=None)
     initial_greeting_id = datastore.create_node(data=create_chat_message(settings,
                                                                          role="assistant",
@@ -501,6 +541,8 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
 # --------------------------------------------------------------------------------
 # Minimal chat client for testing/debugging that Raven can connect to your LLM.
 #
+# Although for a "minimal" client, this does have some fancy features, such as branching history and RAG.
+#
 # Also a usage example for the API of this module.
 
 def minimal_chat_client(backend_url):
@@ -518,15 +560,8 @@ def minimal_chat_client(backend_url):
         print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
         print()
 
-    print(colorizer.colorize(f"GNU readline available. Saving user inputs to {str(history_file)}.", colorizer.Style.BRIGHT))
-    print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
-    print()
-    try:
-        readline.read_history_file(history_file)
-    except FileNotFoundError:
-        pass
-
     initial_greeting_id = None  # initialized later
+    docs_enabled = True  # initialized later
     def persist():
         config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -542,46 +577,78 @@ def minimal_chat_client(backend_url):
 
             # Save the ID of the new-chat node, as well as that of the current HEAD node of the chat.
             state = {"HEAD": HEAD,
-                     "new_chat_HEAD": initial_greeting_id}
+                     "new_chat_HEAD": initial_greeting_id,
+                     "docs_enabled": docs_enabled}
             with open(state_file, "w") as json_file:
                 json.dump(state, json_file, indent=2)
     # We register later than `chattree.PersistentForest`, so ours runs first. Hence we'll have the chance to prune before the forest is persisted to disk.
     #     https://docs.python.org/3/library/atexit.html
     atexit.register(persist)
 
+    # Ugh for the presentation order, but this is needed in two places, starting immediately below.
+    def chat_show_model_info():
+        print(f"    {colorizer.colorize('Model', colorizer.Style.BRIGHT)}: {settings.model}")
+        print(f"    {colorizer.colorize('Character', colorizer.Style.BRIGHT)}: {settings.char} [defined in this client]")
+        print()
+
+    # Start the chat
     try:
         try:
             print(colorizer.colorize(f"Connecting to LLM backend at {backend_url}", colorizer.Style.BRIGHT))
+
             list_models(backend_url)  # just do something, to try to connect
-            print(colorizer.colorize("    Connected!", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
-            print()
-            settings = setup(backend_url=backend_url)  # If this succeeds, then we know the backend is alive.
         except Exception as exc:
             print(colorizer.colorize("    Failed!", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
             msg = f"Failed to connect to LLM backend at {backend_url}, reason {type(exc)}: {exc}"
             logger.error(msg)
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from exc
+        else:
+            print(colorizer.colorize("    Connected!", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+            settings = setup(backend_url=backend_url)
+            chat_show_model_info()
 
-        def chat_show_model_info():
-            print(f"    {colorizer.colorize('Current model', colorizer.Style.BRIGHT)}: {settings.model}")
-            print(f"    {colorizer.colorize('Character', colorizer.Style.BRIGHT)}: {settings.char} [defined in this client]")
-            print()
-        chat_show_model_info()
+        # Chat datastore is already loaded during module bootup; here, we just inform the user.
+        if datastore.nodes:
+            print(colorizer.colorize(f"Loaded chat datastore from '{datastore_file}'.", colorizer.Style.BRIGHT))
 
-        # Enable RAG database
-        print(colorizer.colorize(f"Enabling RAG for documents at '{config.llm_docs_dir}'.", colorizer.Style.BRIGHT))
-        print(f"RAG database is saved in '{config.llm_database_dir}'.")
+        # Load app state.
+        try:
+            if not datastore.nodes:  # No nodes loaded from datastore -> don't bother reading `state.json`, either.
+                raise FileNotFoundError
+
+            with open(state_file, "r") as json_file:
+                state = json.load(json_file)
+            initial_greeting_id = state["new_chat_HEAD"]
+            HEAD = state["HEAD"]
+            docs_enabled = state["docs_enabled"]
+
+            # Refresh the stored system prompt (to the one in this client's source code)
+            system_prompt_node_id = datastore.nodes[initial_greeting_id]["parent"]
+            datastore.nodes[system_prompt_node_id]["data"] = create_initial_system_message(settings)
+
+            print(colorizer.colorize(f"Loaded app state from '{state_file}'.", colorizer.Style.BRIGHT))
+        except FileNotFoundError:  # no `state.json` - initialize using defaults
+            initial_greeting_id = initialize_chat_datastore(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
+            HEAD = initial_greeting_id  # current last node in chat; like HEAD pointer in git
+            docs_enabled = True
         print()
-        bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
-        hybridir.init(executor=bg)
-        retriever = hybridir.HybridIR(datastore_base_dir=pathlib.Path(config.llm_database_dir).expanduser().resolve(),
-                                      embedding_model_name=config.qa_embedding_model)
-        docs_event_handler = hybridir.HybridIRFileMonitor(retriever)
-        docs_observer = Observer()
-        docs_observer.schedule(docs_event_handler,
-                               path=pathlib.Path(config.llm_docs_dir).expanduser().resolve(),
-                               recursive=False)  # for now
-        docs_observer.start()
+
+        # RAG database is already loaded during module bootup; here, we just inform the user.
+        docs_enabled_str = "ON" if docs_enabled else "OFF"
+        colorful_rag_status = colorizer.colorize(f"RAG (retrieval-augmented generation) autosearch is currently {docs_enabled_str}.",
+                                                 colorizer.Style.BRIGHT)
+        print(f"{colorful_rag_status} Toggle with the `!docs` command.")
+        print(f"    Document store is at '{config.llm_docs_dir}'.")
+        print(f"    Search indices are saved in '{config.llm_database_dir}'.")
+        print()
+
+        print(colorizer.colorize(f"GNU readline available. Saving user inputs to {str(history_file)}.", colorizer.Style.BRIGHT))
+        print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
+        print()
+        try:
+            readline.read_history_file(history_file)
+        except FileNotFoundError:
+            pass
 
         print(colorizer.colorize("Starting chat.", colorizer.Style.BRIGHT))
         print()
@@ -591,6 +658,7 @@ def minimal_chat_client(backend_url):
             print()
             print("    Special commands (tab-completion available):")
             print("        !clear             - Start new chat")
+            print(f"        !docs [True|False] - RAG autosearch on/off/toggle (currently {docs_enabled}; document store at '{config.llm_docs_dir}')")
             print("        !dump              - See raw contents of chat node datastore")
             print("        !head some-node-id - Switch to another chat branch (get the node ID from `!dump`)")
             print("        !history           - Print a cleaned-up transcript of the chat history")
@@ -603,16 +671,11 @@ def minimal_chat_client(backend_url):
             print()
         chat_show_help()
 
-        # TODO: add "!docs [on|off]" for RAG search
-        # TODO: add "!speculate [on|off]" (no argument: toggle)
-        #   - when "!docs" is on:
-        #     - "!speculate off" means answer based on docs only (no search match = don't even ask LLM)
-        #     - "!speculate on" means allow answering also based on static knowledge
-
-        # https://docs.python.org/3/library/readline.html#readline-completion
+        # We prefill the space for commands that take an argument.
         commands = ["!clear",
+                    "!docs ",
                     "!dump",
-                    "!head ",  # prefill the space, since this command takes an argument
+                    "!head ",
                     "!help",
                     "!history",
                     "!model",
@@ -638,12 +701,15 @@ def minimal_chat_client(backend_url):
             # Possible completions are those that scored best (i.e. match the longest matched prefix).
             completions = [candidate for candidate, score in zip(candidates, scores) if score == max_score]
             return completions
+        # https://docs.python.org/3/library/readline.html#readline-completion
         def completer(text, state):  # completer for special commands
             buffer_content = readline.get_line_buffer()  # context: text before the part being completed (up to last delim)
 
             # TODO: fix one more failure mode, e.g. "!help !<tab>"
             if buffer_content.startswith("!") and text.startswith("!"):  # completing a command?
                 candidates = commands
+            elif buffer_content.startswith("!docs"):  # in `!docs` command, expecting an argument?
+                candidates = ["True", "False"]
             elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
                 candidates = list(sorted(datastore.nodes.keys()))
             else:  # anything else -> no completions
@@ -658,8 +724,19 @@ def minimal_chat_client(backend_url):
         readline.set_completer(completer)
         readline.set_completer_delims(" ")
 
+        # Support tab completion also on MacOSX. Not sure which way is better here.
+        # Neither seems The Right Thing:
+        #   - Detecting the platform (as we do now) assumes that MacOSX will always use `libedit`
+        #     to provide `readline`.
+        #   - Detecting the `readline` module's `__doc__` assumes that any future versions of `libedit`
+        #     keep the mention of `libedit` in the docstring.
         # https://stackoverflow.com/questions/7116038/python-repl-tab-completion-on-macos
         # https://stackoverflow.com/questions/1854/how-to-identify-which-os-python-is-running-on
+        #
+        # if 'libedit' in readline.__doc__:  # MacOSX uses libedit, not GNU readline
+        #     readline.parse_and_bind("bind ^I rl_complete")
+        # else:  # Linux, Windows
+        #     readline.parse_and_bind("tab: complete")
         if platform.system() == "Darwin":  # MacOSX
             readline.parse_and_bind("bind ^I rl_complete")
         else:  # "Linux", "Windows"
@@ -706,27 +783,18 @@ def minimal_chat_client(backend_url):
             print(format_message_heading(message_number, role, color=True), end="")
             print(remove_persona_from_start_of_line(settings=settings, role=role, content=content))
 
-        def chat_print_history(history: List[Dict[str, str]]) -> None:
-            for k, item in enumerate(history):
-                chat_print_message(k, item["role"], item["content"])
-                print()
+        def chat_print_history(history: List[Dict[str, str]], show_numbers: bool = True) -> None:
+            if show_numbers:
+                for k, item in enumerate(history):
+                    chat_print_message(k, item["role"], item["content"])
+                    print()
+            else:
+                for item in history:
+                    chat_print_message(None, item["role"], item["content"])
+                    print()
 
-        # Initialize
-        try:
-            if not datastore.nodes:  # No nodes loaded from datastore -> don't bother reading `state.json`, either.
-                raise FileNotFoundError
-
-            with open(state_file, "r") as json_file:
-                state = json.load(json_file)
-            initial_greeting_id = state["new_chat_HEAD"]
-            HEAD = state["HEAD"]
-
-            print(f"Loaded chat datastore from '{datastore_file}' and app state from '{state_file}'.")
-        except FileNotFoundError:
-            initial_greeting_id = initialize_chat_datastore(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
-            HEAD = initial_greeting_id  # current last node in chat; like HEAD pointer in git
-
-        chat_print_history(datastore.linearize_up(HEAD))  # show initial blank history
+        # Show initial blank history
+        chat_print_history(datastore.linearize_up(HEAD))
 
         # Main loop
         injectors = [format_chat_datetime_now,  # let the LLM know the current local time and date
@@ -755,6 +823,29 @@ def minimal_chat_client(backend_url):
                 print(f"HEAD is now at '{HEAD}'.")
                 print()
                 chat_print_history(datastore.linearize_up(HEAD))
+                continue
+            elif user_message.startswith("!docs"):
+                split_command = user_message.split()
+                nargs = len(split_command) - 1
+                if nargs == 0:
+                    docs_enabled = not docs_enabled
+                elif nargs == 1:
+                    arg = split_command[-1]
+                    if arg == "True":
+                        docs_enabled = True
+                    elif arg == "False":
+                        docs_enabled = False
+                    else:
+                        print(f"!docs: unrecognized argument '{arg}'; expected 'True' or 'False'.")
+                        print()
+                        continue
+                else:
+                    print("!docs: wrong number of arguments; expected at most one, 'True' or 'False'.")
+                    print()
+                    continue
+                docs_enabled_str = "ON" if docs_enabled else "OFF"
+                print(f"RAG autosearch is now {docs_enabled_str}.")
+                print()
                 continue
             elif user_message == "!dump":
                 print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {HEAD})")
@@ -795,6 +886,9 @@ def minimal_chat_client(backend_url):
             elif user_message == "!models":
                 chat_show_list_of_models()
                 continue
+            elif user_message.startswith("!") and len(user_message.split("\n")) == 1:
+                print(f"Unrecognized command '{user_message}'; use `!help` for available commands.")
+                continue
 
             # Not a special command - add the user's message to the chat.
             user_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
@@ -802,14 +896,35 @@ def minimal_chat_client(backend_url):
                                                                                   message=user_message),
                                                          parent_id=HEAD)
             HEAD = user_message_node_id
-            history = datastore.linearize_up(HEAD)  # latest, after user's message
+            history = datastore.linearize_up(HEAD)  # latest history, after user's new message
 
             # Prepare to prompt the LLM.
+            #
+            # Perform the temporary injects. These are not meant to be persistent, so we don't even add them
+            # as nodes to the chat tree, but only into the temporary linearized history.
 
-            # Perform the temporary injects. These are not meant to be persistent, so we don't even add them as nodes to the chat tree, but only into the temporary linearized history.
+            # RAG search
+            if docs_enabled:
+                docs_results = retriever.query(user_message,
+                                               k=10,
+                                               return_extra_info=False)
+                for docs_result in reversed(docs_results):
+                    search_result_message = f"[System information: Knowledge-base match from `{docs_result['document_id']}`.]\n\n{docs_result['text'].strip()}\n-----"
+                    message_to_inject = create_chat_message(settings=settings,
+                                                            role="system",
+                                                            message=search_result_message)
+                    history.insert(1, message_to_inject)  # after system prompt and character card
+
+            # Always-on injects, e.g. current local datetime
             for thunk in injectors:
-                message_to_inject = create_chat_message(settings=settings, role="system", message=thunk())
+                message_to_inject = create_chat_message(settings=settings,
+                                                        role="system",
+                                                        message=thunk())
                 history.insert(-1, message_to_inject)  # -1 = just before user's message
+
+            # # DEBUG - show history with injects.
+            # # Message numbers counted from the modified history would be wrong, so don't show them.
+            # chat_print_history(history, show_numbers=False)
 
             # AI's turn - prompt the LLM.
             print(format_message_number(ai_message_number, color=True))
