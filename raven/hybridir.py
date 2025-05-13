@@ -414,7 +414,7 @@ class HybridIR:
 
         self._pending_edits = []
 
-    def add(self, document_id: str, path: str, text: str) -> str:
+    def add(self, document_id: str, path: str, text: str, *, _log=True) -> str:
         """Queue a document for adding into the index. To save changes, call `commit`.
 
         `document_id`: must be unique. Recommended to use `unpythonic.gensym(os.path.basename(path))` or something.
@@ -424,7 +424,8 @@ class HybridIR:
 
         Returns `document_id`, for convenience.
         """
-        logger.info(f"HybridIR.add: Queuing document '{document_id}' for adding to index.")
+        if _log:
+            logger.info(f"HybridIR.add: Queuing document '{document_id}' for adding to index.")
 
         # Document-level data. This goes into the main datastore, which is also persisted so that we can rebuild indices when needed.
         #
@@ -439,12 +440,13 @@ class HybridIR:
         with self._pending_edits_lock:
             self._pending_edits.append(("add", document))
 
-    def delete(self, document_id: str) -> None:
+    def delete(self, document_id: str, *, _log=True) -> None:
         """Queue a document for deletion. To save changes, call `commit`.
 
         `document_id`: the ID you earlier gave to `add`.
         """
-        logger.info(f"HybridIR.add: Queuing document '{document_id}' for deletion from index.")
+        if _log:
+            logger.info(f"HybridIR.add: Queuing document '{document_id}' for deletion from index.")
         with self._pending_edits_lock:
             self._pending_edits.append(("delete", document_id))
 
@@ -459,8 +461,8 @@ class HybridIR:
         """
         logger.info(f"HybridIR.add: Queuing document '{document_id}' for update in index (will delete, then re-add).")
         with self._pending_edits_lock:
-            self.delete(document_id)
-            self.add(document_id, path, text)
+            self.delete(document_id, _log=False)
+            self.add(document_id, path, text, _log=False)
             return document_id
 
     # TODO: Index rebuilding is slow. Maybe `commit` should run as a bgtask, like the BibTeX importer.
