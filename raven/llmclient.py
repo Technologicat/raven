@@ -820,7 +820,7 @@ def minimal_chat_client(backend_url):
                 chars += len(chunk_text)
                 if "\n" in chunk_text:  # one token at a time; should have either one linefeed or no linefeed
                     chars = 0  # good enough?
-                elif chars >= output_line_width:
+                elif chars >= config.llm_line_wrap_width:
                     print()
                     chars = 0
                 print(chunk_text, end="")

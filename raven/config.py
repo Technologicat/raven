@@ -15,6 +15,8 @@ llm_backend_url = "http://127.0.0.1:5000"
 
 config_base_dir = "~/.config/raven/"
 
+llm_line_wrap_width = 160  # `llmclient`; for text wrapping in live update
+
 # For LLM client
 llm_save_dir = config_base_dir + "llmclient"
 
