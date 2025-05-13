@@ -51,7 +51,7 @@ from . import utils
 # --------------------------------------------------------------------------------
 # Bootup
 
-def load_stopwords():
+def load_stopwords() -> List[str]:
     from spacy.lang.en import English
     nlp_en = English()
     stopwords = nlp_en.Defaults.stop_words
@@ -307,7 +307,7 @@ class HybridIR:
                  datastore_base_dir: Union[str, pathlib.Path],
                  embedding_model_name: str = "sentence-transformers/multi-qa-mpnet-base-cos-v1",
                  chunk_size: int = 1000,
-                 overlap_fraction: float = 0.25):
+                 overlap_fraction: float = 0.25) -> None:
         """Hybrid information retrieval (IR) index, using both keyword and semantic search.
 
         `datastore_base_dir`: Where to store the data (for the specific collection you're creating/loading).
@@ -533,7 +533,7 @@ class HybridIR:
 
             logger.info("HybridIR.commit: Commit finished, exiting.")
 
-    def _save_datastore(self):
+    def _save_datastore(self) -> None:
         # We save embeddings separately, as compressed NumPy arrays, to save disk space.
         # Separate the embeddings from the rest of the data, being careful to not create extra in-memory copies (e.g. of the actual chunk texts or fulltexts).
         logger.info("HybridIR._save_datastore: entered. Preparing...")
@@ -563,7 +563,7 @@ class HybridIR:
 
         logger.info("HybridIR._save_datastore: exiting, all done.")
 
-    def _load_datastore(self):
+    def _load_datastore(self) -> Tuple[Optional[str], Optional[str]]:
         logger.info("HybridIR._load_datastore: entered.")
         with self.datastore_lock:
             try:
@@ -586,7 +586,7 @@ class HybridIR:
                 return None, None
 
     # TODO: support other media such as images (semantic embedding via `clip-ViT-L-14`, available in `sentence_transformers`; and keyword extraction by CLIP/Deepbooru)
-    def _prepare_document_for_indexing(self, doc):
+    def _prepare_document_for_indexing(self, doc: Dict) -> Dict:
         document_id = doc["document_id"]
         text = doc["text"]
 
