@@ -651,7 +651,6 @@ class HybridIR:
         else:
             self.full_id_to_record_index = {}
 
-    # TODO: add a variant of `query` that doesn't return debug information (but final fused search results only)
     # TODO: add a variant of `query` with a fixed amount of context around each match (we can do this by looking up the fulltext of the matching chunk and taking the text from there)
     # TODO: do we need `exclude_documents`, for symmetry?
     def query(self,
@@ -661,7 +660,8 @@ class HybridIR:
               alpha: float = 2.0,
               keyword_score_threshold: float = 0.1,
               semantic_distance_threshold: float = 0.8,
-              include_documents: Optional[List[str]] = None) -> List[Dict]:
+              include_documents: Optional[List[str]] = None,
+              return_extra_info: bool = False) -> List[Dict]:
         """Hybrid BM25 + Vector search with RRF fusion.
 
         `query`: Search query, of the kind you'd type into Google: space-separated keywords, or a natural-language question.
@@ -682,6 +682,19 @@ class HybridIR:
                                        The default is for cosine distance using the default embedding model.
 
         `include_documents`: Optional list of document IDs. If provided, search only in the specified documents.
+
+        `return_extra_info`:
+            If `True`: Return
+                       `final_results, (keyword_results, keyword_scores), (vector_results, vector_distances)`.
+                       This can be useful for debugging your knowledge base.
+            If `False`: Return `final_results` only.
+
+        In both return formats, the format of `final_results is`
+            [{"document_id": the_id_string,
+              "text": merged_contiguous_text,
+              "offset": start_offset_in_document,
+              "score": rrf_score},
+             ...]
         """
         plural_s = "es" if k != 1 else ""
         logger.info(f"HybridIR.query: entered. Searching for {k} best match{plural_s} for '{query}'")
@@ -786,7 +799,9 @@ class HybridIR:
         logger.info("HybridIR.query: exiting. All done.")
 
         # Format of `merged`: [{"document_id": the_id_string, "text": merged_contiguous_text, "offset": start_offset_in_document, "score": rrf_score}, ...]
-        return merged, (keyword_results, keyword_scores), (vector_results, vector_distances)
+        if return_extra_info:
+            return merged, (keyword_results, keyword_scores), (vector_results, vector_distances)
+        return merged
 
 # --------------------------------------------------------------------------------
 
@@ -1098,7 +1113,8 @@ if __name__ == "__main__":
         search_results, (keyword_results, keyword_scores), (vector_results, vector_distances) = retriever.query(query_string,
                                                                                                                 k=5,
                                                                                                                 keyword_score_threshold=kw_threshold,
-                                                                                                                semantic_distance_threshold=vec_threshold)
+                                                                                                                semantic_distance_threshold=vec_threshold,
+                                                                                                                return_extra_info=True)
         styled_query_string = colorizer.colorize(query_string, colorizer.Style.BRIGHT)  # for printing
 
         # DEBUG - you can obtain the raw results for keyword and semantic searches separately.
