@@ -62,8 +62,8 @@ history_file = config_dir / "history"      # user input history (readline)
 datastore_file = config_dir / "data.json"  # chat node datastore
 state_file = config_dir / "state.json"     # important node IDs for the chat client state
 
-# Persistent, branching chat history
-datastore = chattree.PersistentForest(datastore_file)  # this autoloads and auto-persists
+# Persistent, branching chat history. `PersistentForest` autoloads and auto-persists.
+datastore = chattree.PersistentForest(datastore_file)
 
 # HTTP headers for LLM requests
 headers = {
@@ -78,7 +78,8 @@ if os.path.exists(api_key_file):
     # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
     headers["Authorization"] = api_key.strip()
 
-# RAG system with hybrid keyword/semantic search - auto-search your documents
+# RAG system with hybrid keyword/semantic search - auto-search your documents.
+# `HybridIR` also autoloads and auto-persists its search indices.
 bg = concurrent.futures.ThreadPoolExecutor()
 hybridir.init(executor=bg)
 retriever = hybridir.HybridIR(datastore_base_dir=pathlib.Path(config.llm_database_dir).expanduser().resolve(),
