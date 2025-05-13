@@ -540,7 +540,8 @@ class HybridIR:
         with self.datastore_lock:
             documents_without_embeddings = {}
             embeddings = []
-            for document_id, doc in self.documents.items():
+            for document_id, doc in sorted(self.documents.items(),
+                                           key=operator.itemgetter(0)):  # sort by document ID for debuggability
                 tempdoc = copy.copy(doc)
                 # `dict` preserves insertion order, so `embeddings` will be
                 # in the same order as `self.documents.values()`
