@@ -908,16 +908,22 @@ class HybridIRFileMonitor(FileSystemEventHandler):
                                                     running_poll_interval=1.0,
                                                     pending_wait_duration=1.0)
 
-    def _sanity_check(self, path):
+    def _sanity_check(self, path: Union[pathlib.Path, str]) -> bool:
         if not task_managers:
             logger.warning("HybridIRFileMonitor._sanity_check: Module not initialized, cannot proceed.")
             return False
+        if isinstance(path, pathlib.Path):
+            path = path.expanduser().resolve()
+        path = str(path)
         if not any(path.endswith(ext) for ext in self.exts):
             logger.info(f"HybridIRFileMonitor._sanity_check: file '{path}': file extension not in monitored list {self.exts}, ignoring file.")
             return False
         return True
 
-    def _read(self, path):
+    def _read(self, path: Union[pathlib.Path, str]) -> str:
+        if isinstance(path, pathlib.Path):
+            path = path.expanduser().resolve()
+        path = str(path)
         if self.callback:
             content = self.callback(path)
         else:
