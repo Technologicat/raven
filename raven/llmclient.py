@@ -65,9 +65,6 @@ state_file = config_dir / "state.json"     # important node IDs for the chat cli
 db_dir = pathlib.Path(config.llm_database_dir).expanduser().resolve()
 docs_dir = pathlib.Path(config.llm_docs_dir).expanduser().resolve()
 
-# Persistent, branching chat history. `PersistentForest` autoloads and auto-persists.
-datastore = chattree.PersistentForest(datastore_file)
-
 # HTTP headers for LLM requests
 headers = {
     "Content-Type": "application/json"
@@ -329,8 +326,8 @@ def create_initial_system_message(settings: env) -> Dict[str, str]:
                                role="system",
                                message=msg)
 
-def factory_reset_chat_datastore(settings: env) -> str:
-    """Reset the chat node datastore to its "factory-default" state.
+def factory_reset_chat_datastore(datastore: chattree.PersistentForest, settings: env) -> str:
+    """Reset `datastore` to its "factory-default" state.
 
     **IMPORTANT**: This deletes all existing chat nodes in the datastore, and CANNOT BE UNDONE.
 
@@ -345,11 +342,11 @@ def factory_reset_chat_datastore(settings: env) -> str:
     datastore.purge()
     root_node_id = datastore.create_node(data=create_initial_system_message(settings),
                                          parent_id=None)
-    initial_greeting_id = datastore.create_node(data=create_chat_message(settings,
-                                                                         role="assistant",
-                                                                         message=settings.greeting),
+    new_chat_node_id = datastore.create_node(data=create_chat_message(settings,
+                                                                      role="assistant",
+                                                                      message=settings.greeting),
                                                 parent_id=root_node_id)
-    return initial_greeting_id
+    return new_chat_node_id
 
 _weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 def format_chat_datetime_now() -> str:
@@ -550,47 +547,38 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
 
 def minimal_chat_client(backend_url):
     """Minimal LLM chat client, for testing/debugging."""
-    import readline  # noqa: F401, side effect: enable GNU readline in builtin input()
-    # import rlcompleter  # noqa: F401, side effects: readline tab completion for Python code
 
-    # Support cloud LLMs, too. API key already loaded during module bootup; here, we just inform the user.
-    if "Authorization" in headers:
-        print(f"Loaded LLM API key from '{str(api_key_file)}'.")
-        print()
-    else:
-        print(f"No LLM API key configured. If your LLM needs an API key to connect, put it into '{str(api_key_file)}'.")
-        print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
-        print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
-        print()
+    datastore = None  # initialized later, during app startup
+    def load_app_state(settings: env) -> Dict:
+        try:
+            if datastore is None:
+                assert False  # `datastore` must be initialized before this internal function is called
+            if not datastore.nodes:  # No stored chat history -> initialize with defaults.
+                raise FileNotFoundError
 
-    initial_greeting_id = None  # initialized later
-    docs_enabled = True  # initialized later
-    def persist():
-        config_dir.mkdir(parents=True, exist_ok=True)
+            with open(state_file, "r") as json_file:
+                state = json.load(json_file)
 
-        # Save readline history
-        readline.set_history_length(1000)
-        readline.write_history_file(history_file)
+            # Refresh the system prompt in the datastore (to the one in this client's source code)
+            new_chat_node_id = state["new_chat_HEAD"]
+            system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
+            datastore.nodes[system_prompt_node_id]["data"] = create_initial_system_message(settings)
 
-        # Save app state
-        if initial_greeting_id is not None:  # initialized successfully? (during development, might not always be, if a bug causes the client to crash at startup)
-            # Before saving (which happens automatically at exit),
-            # remove any nodes not reachable from the initial message, and also remove dead links.
-            # There shouldn't be any, but this way we exercise these features, too.
-            system_prompt_node_id = datastore.nodes[initial_greeting_id]["parent"]
-            datastore.prune_unreachable_nodes(system_prompt_node_id)
-            datastore.prune_dead_links(system_prompt_node_id)
+            print(colorizer.colorize(f"Loaded app state from '{state_file}'.", colorizer.Style.BRIGHT))
+        except FileNotFoundError:
+            state["new_chat_HEAD"] = factory_reset_chat_datastore(datastore, settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
+            state["HEAD"] = state["new_chat_HEAD"]  # current last node in chat; like HEAD pointer in git
+            state["docs_enabled"] = True
+        return state
 
-            # Save the ID of the new-chat node, as well as that of the current HEAD node of the chat.
-            state = {"HEAD": HEAD,
-                     "new_chat_HEAD": initial_greeting_id,
-                     "docs_enabled": docs_enabled}
-            with open(state_file, "w") as json_file:
-                json.dump(state, json_file, indent=2)
-    # We register later than `chattree.PersistentForest`, so ours runs first.
-    # Hence we'll have the chance to prune before the forest is persisted to disk.
-    #     https://docs.python.org/3/library/atexit.html
-    atexit.register(persist)
+    def save_app_state(state: Dict) -> None:
+        # validate
+        required_keys = ("new_chat_HEAD", "HEAD", "docs_enabled")
+        if any(key not in state for key in required_keys):
+            raise KeyError  # at least one required setting missing from `state`
+
+        with open(state_file, "w") as json_file:
+            json.dump(state, json_file, indent=2)
 
     # Ugh for the presentation order, but this is needed in two places, starting immediately below.
     def chat_show_model_info():
@@ -600,6 +588,16 @@ def minimal_chat_client(backend_url):
 
     # Start the chat
     try:
+        # API key already loaded during module bootup; here, we just inform the user.
+        if "Authorization" in headers:
+            print(f"Loaded LLM API key from '{str(api_key_file)}'.")
+            print()
+        else:
+            print(f"No LLM API key configured. If your LLM needs an API key to connect, put it into '{str(api_key_file)}'.")
+            print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
+            print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
+            print()
+
         try:
             print(colorizer.colorize(f"Connecting to LLM backend at {backend_url}", colorizer.Style.BRIGHT))
 
@@ -614,34 +612,14 @@ def minimal_chat_client(backend_url):
             settings = setup(backend_url=backend_url)
             chat_show_model_info()
 
-        # Chat datastore is already loaded during module bootup; here, we just inform the user.
+        # Persistent, branching chat history.
+        datastore = chattree.PersistentForest(datastore_file)  # This autoloads and auto-persists.
+        state = load_app_state(settings)
         if datastore.nodes:
             print(colorizer.colorize(f"Loaded chat datastore from '{datastore_file}'.", colorizer.Style.BRIGHT))
 
-        # Load app state.
-        try:
-            if not datastore.nodes:  # No nodes loaded from datastore -> don't bother reading `state.json`, either.
-                raise FileNotFoundError
-
-            with open(state_file, "r") as json_file:
-                state = json.load(json_file)
-            initial_greeting_id = state["new_chat_HEAD"]
-            HEAD = state["HEAD"]
-            docs_enabled = state["docs_enabled"]
-
-            # Refresh the stored system prompt (to the one in this client's source code)
-            system_prompt_node_id = datastore.nodes[initial_greeting_id]["parent"]
-            datastore.nodes[system_prompt_node_id]["data"] = create_initial_system_message(settings)
-
-            print(colorizer.colorize(f"Loaded app state from '{state_file}'.", colorizer.Style.BRIGHT))
-        except FileNotFoundError:  # no `state.json` - initialize using defaults
-            initial_greeting_id = factory_reset_chat_datastore(settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
-            HEAD = initial_greeting_id  # current last node in chat; like HEAD pointer in git
-            docs_enabled = True
-        print()
-
         # RAG database is already loaded during module bootup; here, we just inform the user.
-        docs_enabled_str = "ON" if docs_enabled else "OFF"
+        docs_enabled_str = "ON" if state["docs_enabled"] else "OFF"
         colorful_rag_status = colorizer.colorize(f"RAG (retrieval-augmented generation) autosearch is currently {docs_enabled_str}.",
                                                  colorizer.Style.BRIGHT)
         print(f"{colorful_rag_status} Toggle with the `!docs` command.")
@@ -653,6 +631,8 @@ def minimal_chat_client(backend_url):
         print(f"    Search indices are saved in '{config.llm_database_dir}'.")
         print()
 
+        import readline  # noqa: F401, side effect: enable GNU readline in builtin input()
+        # import rlcompleter  # noqa: F401, side effects: readline tab completion for Python code
         print(colorizer.colorize(f"GNU readline available. Saving user inputs to '{str(history_file)}'.", colorizer.Style.BRIGHT))
         print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
         print()
@@ -660,6 +640,35 @@ def minimal_chat_client(backend_url):
             readline.read_history_file(history_file)
         except FileNotFoundError:
             pass
+
+        # Set up autosave at exit.
+        def persist():
+            config_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save readline history
+            readline.set_history_length(1000)
+            readline.write_history_file(history_file)
+
+            try:
+                save_app_state(state)
+            except KeyError:
+                logger.warning(f"During app shutdown: app `state` missing at least one required key, cannot persist it. Existing keys: {list(state.keys())}")
+
+            # Before saving (which happens automatically at exit),
+            # remove any nodes not reachable from the initial message, and also remove dead links.
+            # There shouldn't be any, but this way we exercise these features, too.
+            try:
+                new_chat_node_id = state["new_chat_HEAD"]
+                system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
+            except KeyError as exc:
+                logger.warning(f"During app shutdown: while pruning chat forest: {type(exc)}: {exc}")
+            else:
+                datastore.prune_unreachable_nodes(system_prompt_node_id)
+                datastore.prune_dead_links(system_prompt_node_id)
+        # We register later than `chattree.PersistentForest`, so ours runs first.
+        # Hence we'll have the chance to prune before the forest is persisted to disk.
+        #     https://docs.python.org/3/library/atexit.html
+        atexit.register(persist)
 
         print(colorizer.colorize("Starting chat.", colorizer.Style.BRIGHT))
         print()
@@ -669,7 +678,7 @@ def minimal_chat_client(backend_url):
             print()
             print("    Special commands (tab-completion available):")
             print("        !clear             - Start new chat")
-            print(f"        !docs [True|False] - RAG autosearch on/off/toggle (currently {docs_enabled}; document store at '{config.llm_docs_dir}')")
+            print(f"        !docs [True|False] - RAG autosearch on/off/toggle (currently {state['docs_enabled']}; document store at '{config.llm_docs_dir}')")
             print("        !dump              - See raw contents of chat node datastore")
             print("        !head some-node-id - Switch to another chat branch (get the node ID from `!dump`)")
             print("        !history           - Print a cleaned-up transcript of the chat history")
@@ -804,14 +813,14 @@ def minimal_chat_client(backend_url):
                     chat_print_message(None, item["role"], item["content"])
                     print()
 
-        # Show initial blank history
-        chat_print_history(datastore.linearize_up(HEAD))
+        # Show initial history (loaded from datastore, or blank upon first start)
+        chat_print_history(datastore.linearize_up(state["HEAD"]))
 
         # Main loop
         injectors = [format_chat_datetime_now,  # let the LLM know the current local time and date
                      format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
         while True:
-            history = datastore.linearize_up(HEAD)  # latest, at start
+            history = datastore.linearize_up(state["HEAD"])  # linearize current branch
             user_message_number = len(history)
             ai_message_number = user_message_number + 1
 
@@ -830,22 +839,22 @@ def minimal_chat_client(backend_url):
             # Interpret special commands for this LLM client
             if user_message == "!clear":
                 print(colorizer.colorize("Starting new chat session.", colorizer.Style.BRIGHT))
-                HEAD = initial_greeting_id
-                print(f"HEAD is now at '{HEAD}'.")
+                state["HEAD"] = state["new_chat_HEAD"]
+                print(f"HEAD is now at '{state['HEAD']}'.")
                 print()
-                chat_print_history(datastore.linearize_up(HEAD))
+                chat_print_history(datastore.linearize_up(state["HEAD"]))
                 continue
             elif user_message.startswith("!docs"):
                 split_command = user_message.split()
                 nargs = len(split_command) - 1
                 if nargs == 0:
-                    docs_enabled = not docs_enabled
+                    state["docs_enabled"] = not state["docs_enabled"]
                 elif nargs == 1:
                     arg = split_command[-1]
                     if arg == "True":
-                        docs_enabled = True
+                        state["docs_enabled"] = True
                     elif arg == "False":
-                        docs_enabled = False
+                        state["docs_enabled"] = False
                     else:
                         print(f"!docs: unrecognized argument '{arg}'; expected 'True' or 'False'.")
                         print()
@@ -854,12 +863,12 @@ def minimal_chat_client(backend_url):
                     print("!docs: wrong number of arguments; expected at most one, 'True' or 'False'.")
                     print()
                     continue
-                docs_enabled_str = "ON" if docs_enabled else "OFF"
+                docs_enabled_str = "ON" if state["docs_enabled"] else "OFF"
                 print(f"RAG autosearch is now {docs_enabled_str}.")
                 print()
                 continue
             elif user_message == "!dump":
-                print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {HEAD})")
+                print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {state['HEAD']})")
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 print(f"{datastore}", end="")  # -> str; also, already has the final blank line
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
@@ -876,10 +885,10 @@ def minimal_chat_client(backend_url):
                     print(f"!head: no such chat node '{new_head_id}'; see `!dump` for available chat nodes.")
                     print()
                     continue
-                HEAD = new_head_id
-                print(f"HEAD is now at '{HEAD}'.")
+                state["HEAD"] = new_head_id
+                print(f"HEAD is now at '{state['HEAD']}'.")
                 print()
-                chat_print_history(datastore.linearize_up(HEAD))
+                chat_print_history(datastore.linearize_up(state["HEAD"]))
                 continue
             elif user_message == "!help":
                 chat_show_help()
@@ -905,9 +914,9 @@ def minimal_chat_client(backend_url):
             user_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
                                                                                   role="user",
                                                                                   message=user_message),
-                                                         parent_id=HEAD)
-            HEAD = user_message_node_id
-            history = datastore.linearize_up(HEAD)  # latest history, after user's new message
+                                                         parent_id=state["HEAD"])
+            state["HEAD"] = user_message_node_id
+            history = datastore.linearize_up(state["HEAD"])  # latest history, after user's new message
 
             # Prepare to prompt the LLM.
             #
@@ -915,7 +924,7 @@ def minimal_chat_client(backend_url):
             # as nodes to the chat tree, but only into the temporary linearized history.
 
             # RAG search
-            if docs_enabled:
+            if state["docs_enabled"]:
                 docs_results = retriever.query(user_message,
                                                k=10,
                                                return_extra_info=False)
@@ -966,8 +975,8 @@ def minimal_chat_client(backend_url):
             ai_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
                                                                                 role="assistant",
                                                                                 message=out.data),
-                                                       parent_id=HEAD)
-            HEAD = ai_message_node_id
+                                                       parent_id=state["HEAD"])
+            state["HEAD"] = ai_message_node_id
     except (EOFError, KeyboardInterrupt):
         print()
         print(colorizer.colorize("Exiting chat.", colorizer.Style.BRIGHT))
