@@ -1125,6 +1125,15 @@ def setup(docs_dir: Union[pathlib.Path, str],
           executor: Optional = None) -> None:
     """Set up hybrid keyword/semantic search for a directory containing document files.
 
+    This is a convenience function that wires up both `HybridIR` and `HybridIRFileSystemEventHandler`
+    in one go. When your app starts, point `setup` to the correct directories, and the search indices
+    will work automagically. This includes an initial rescan when you call `setup`, to detect any changes
+    to the documents folder that occurred while the app was not running.
+
+    However, note that it is still the caller's responsibility to actually perform searches
+    (see `HybridIR.query`) and to actually feed the search results to the LLM's context
+    if you want to use `HybridIR` as a retrieval-augmented generation (RAG) backend.
+
     `docs_dir`: The directory the user puts documents in.
     `recursive`: Whether subdirectories of `docs_dir` are document directories, too.
 
@@ -1147,18 +1156,6 @@ def setup(docs_dir: Union[pathlib.Path, str],
 
     Returns the tuple `(retriever, scanner)`, where `retriever` is a `HybridIR` instance,
     and `scanner` is a `HybridIRFileSystemEventHandler` instance.
-
-    This function automates the setup of `HybridIR` and `HybridIRFileSystemEventHandler`,
-    so that you only need to point this to the correct directories, and the search indices
-    will then work automagically. This includes an initial rescan when you call this function,
-    to detect any changes to the documents folder that occurred while the app was not running.
-
-    However, note that this only keeps the indices up to date. It is the caller's responsibility
-    to actually perform searches (see `HybridIR.query`) and to actually feed the search results
-    to the LLM's context if you want to use this as a retrieval-augmented generation (RAG) backend.
-
-    The feeding is easiest done after linearizing the current chat history branch;
-    for an example, see the minimal LLM client.
     """
     if executor is None:
         executor = concurrent.futures.ThreadPoolExecutor()
