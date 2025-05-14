@@ -616,9 +616,10 @@ def minimal_chat_client(backend_url):
 
         # Persistent, branching chat history.
         datastore = chattree.PersistentForest(datastore_file)  # This autoloads and auto-persists.
-        state = load_app_state(settings)
         if datastore.nodes:
             print(colorizer.colorize(f"Loaded chat datastore from '{datastore_file}'.", colorizer.Style.BRIGHT))
+        state = load_app_state(settings)
+        print()
 
         # RAG database is already loaded during module bootup; here, we just inform the user.
         docs_enabled_str = "ON" if state["docs_enabled"] else "OFF"
