@@ -5,8 +5,6 @@ NOTE for oobabooga/text-generation-webui users:
 If you want to see the final prompt in instruct or chat mode, start your server in `--verbose` mode.
 """
 
-# TODO: fix pdf2bib, now that the history handling has changed
-
 # TODO: add "!speculate [on|off]" (no argument: toggle)
 #   - when "!docs" is on:
 #     - "!speculate off" means answer based on docs only (no search matches = don't even ask LLM)
