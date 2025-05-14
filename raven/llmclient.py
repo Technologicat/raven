@@ -521,25 +521,42 @@ def minimal_chat_client(backend_url):
 
     datastore = None  # initialized later, during app startup
     def load_app_state(settings: env) -> Dict:
-        try:
-            if datastore is None:
-                assert False  # `datastore` must be initialized before this internal function is called
-            if not datastore.nodes:  # No stored chat history -> initialize with defaults.
-                raise FileNotFoundError
+        if datastore is None:
+            assert False  # `datastore` must be initialized before this internal function is called
 
-            with open(state_file, "r") as json_file:
-                state = json.load(json_file)
-
-            # Refresh the system prompt in the datastore (to the one in this client's source code)
-            new_chat_node_id = state["new_chat_HEAD"]
-            system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
-            datastore.nodes[system_prompt_node_id]["data"] = create_initial_system_message(settings)
-
-            print(colorizer.colorize(f"Loaded app state from '{state_file}'.", colorizer.Style.BRIGHT))
-        except FileNotFoundError:
+        def new_datastore():
             state["new_chat_HEAD"] = factory_reset_chat_datastore(datastore, settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
             state["HEAD"] = state["new_chat_HEAD"]  # current last node in chat; like HEAD pointer in git
+
+        try:
+            with open(state_file, "r") as json_file:
+                state = json.load(json_file)
+        except FileNotFoundError:
+            new_datastore()
             state["docs_enabled"] = True
+
+        if not datastore.nodes:  # No stored chat history -> reset datastore
+            logger.warning("load_app_state: no chat nodes in datastore, creating new datastore")
+            new_datastore()
+
+        if "new_chat_HEAD" not in state:  # New-chat start node ID missing -> reset datastore
+            logger.warning(f"load_app_state: missing key 'new_chat_HEAD' in '{state_file}', creating new datastore")
+            new_datastore()
+
+        if "HEAD" not in state:  # Current chat node ID missing -> start at new chat
+            logger.warning(f"load_app_state: missing key 'HEAD' in '{state_file}', resetting it to 'new_chat_HEAD'")
+            state["HEAD"] = state["new_chat_HEAD"]
+
+        if "docs_enabled" not in state:
+            logger.warning(f"load_app_state: missing key 'docs_enabled' in '{state_file}', using default")
+            state["docs_enabled"] = True
+
+        # Refresh the system prompt in the datastore (to the one in this client's source code)
+        new_chat_node_id = state["new_chat_HEAD"]
+        system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
+        datastore.nodes[system_prompt_node_id]["data"] = create_initial_system_message(settings)
+
+        print(colorizer.colorize(f"Loaded app state from '{state_file}'.", colorizer.Style.BRIGHT))
         return state
 
     def save_app_state(state: Dict) -> None:
