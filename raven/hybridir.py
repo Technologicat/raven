@@ -15,13 +15,15 @@ laptops have enough RAM for this not to be an issue with the dataset sizes neede
 QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
-__all__ = ["init", "HybridIR", "HybridIRFileSystemEventHandler"]
+__all__ = ["init", "HybridIR", "HybridIRFileSystemEventHandler", "setup"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import atexit
 from collections import defaultdict
+import concurrent.futures
 import copy
 import json
 import operator
@@ -30,7 +32,8 @@ import pathlib
 import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from watchdog.events import FileSystemEventHandler
+import watchdog.events
+import watchdog.observers
 
 import numpy as np
 
@@ -303,6 +306,7 @@ def merge_contiguous_spans(results: List[Dict]) -> List[Dict]:
 
 # --------------------------------------------------------------------------------
 
+# TODO: `chunk_size` and `overlap_fraction` should probably also remain fixed after the datastore has been created.
 class HybridIR:
     def __init__(self,
                  datastore_base_dir: Union[str, pathlib.Path],
@@ -867,6 +871,8 @@ def init(executor):
     Must be called before `HybridIRFileSystemEventHandler` (including its `rescan` method)
     can be used.
 
+    But note that if you use the all-in-one convenience function `setup`, it calls `init` automatically.
+
     `executor`: A `ThreadPoolExecutor` or something duck-compatible with it.
                 Used for running the background tasks for ingesting files
                 and committing search index changes.
@@ -893,8 +899,10 @@ def init(executor):
         task_managers.clear()
         raise
 
+# --------------------------------------------------------------------------------
+
 # See e.g. https://www.kdnuggets.com/monitor-your-file-system-with-pythons-watchdog
-class HybridIRFileSystemEventHandler(FileSystemEventHandler):
+class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
     def __init__(self,
                  retriever: HybridIR,
                  exts: List[str] = [".txt", ".md", ".rst", ".org"],
@@ -912,8 +920,8 @@ class HybridIRFileSystemEventHandler(FileSystemEventHandler):
                     content of the file. This plaintext content is then sent into `retriever`'s
                     search index.
 
-                    If no callback is specified, the file is read as-is, assuming text with
-                    utf-8 encoding. (This is enough for simple plaintext files.)
+                    If no callback is specified, the file is read as UTF-8 encoded text.
+                    (This is enough for simple plaintext files.)
 
         Uses the `watchdog` library.
         """
@@ -1102,6 +1110,85 @@ class HybridIRFileSystemEventHandler(FileSystemEventHandler):
         task_managers["ingest"].submit(self._make_task(kind="delete", path=path), envcls())
 
     # TODO: Do we need `on_moved`, too?
+
+# --------------------------------------------------------------------------------
+
+def setup(docs_dir: Union[pathlib.Path, str],
+          recursive: bool,
+          db_dir: Union[pathlib.Path, str],
+          exts=[".txt", ".md", ".rst", ".org"],
+          callback: Optional[Callable] = None,
+          embedding_model_name: str = "sentence-transformers/multi-qa-mpnet-base-cos-v1",
+          chunk_size: int = 1000,
+          overlap_fraction: float = 0.25,
+          executor: Optional = None) -> None:
+    """Set up hybrid keyword/semantic search for a directory containing document files.
+
+    `docs_dir`: The directory the user puts documents in.
+    `recursive`: Whether subdirectories of `docs_dir` are document directories, too.
+
+    `db_dir`: The directory for storing search indices.
+
+    `exts`: Passed on to `HybridIRFileSystemEventHandler`, which see.
+    `callback`: Passed on to `HybridIRFileSystemEventHandler`, which see.
+
+    `embedding_model_name`: passed on to `HybridIR`, which see.
+    `chunk_size`: passed on to `HybridIR`, which see.
+    `overlap_fraction`: passed on to `HybridIR`, which see.
+
+    `executor`: A `ThreadPoolExecutor` or something duck-compatible with it.
+                Passed on to `init`.
+
+                If not provided, a new `ThreadPoolExecutor` is instantiated.
+
+                Used for running the background tasks for ingesting files
+                and committing search index changes.
+
+    Returns the tuple `(retriever, scanner)`, where `retriever` is a `HybridIR` instance,
+    and `scanner` is a `HybridIRFileSystemEventHandler` instance.
+
+    This function automates the setup of `HybridIR` and `HybridIRFileSystemEventHandler`,
+    so that you only need to point this to the correct directories, and the search indices
+    will then work automagically. This includes an initial rescan when you call this function,
+    to detect any changes to the documents folder that occurred while the app was not running.
+
+    However, note that this only keeps the indices up to date. It is the caller's responsibility
+    to actually perform searches (see `HybridIR.query`) and to actually feed the search results
+    to the LLM's context if you want to use this as a retrieval-augmented generation (RAG) backend.
+
+    The feeding is easiest done after linearizing the current chat history branch;
+    for an example, see the minimal LLM client.
+    """
+    if executor is None:
+        executor = concurrent.futures.ThreadPoolExecutor()
+    init(executor=executor)
+
+    # `HybridIR` also autoloads and auto-persists its search indices.
+    retriever = HybridIR(datastore_base_dir=db_dir,
+                         embedding_model_name=embedding_model_name,
+                         chunk_size=chunk_size,
+                         overlap_fraction=overlap_fraction)
+
+    # Rescan docs directory for changes made while the app was not running.
+    scanner = HybridIRFileSystemEventHandler(retriever,
+                                             exts=exts,
+                                             callback=callback)
+    scanner.rescan(docs_dir,
+                   recursive=recursive)
+
+    # Register handler to auto-update search indices on live changes in docs directory.
+    docs_observer = watchdog.observers.Observer()
+    docs_observer.schedule(scanner,
+                           path=docs_dir,
+                           recursive=recursive)
+    docs_observer.start()
+
+    def _docs_observer_shutdown():
+        docs_observer.stop()
+        docs_observer.join()
+    atexit.register(_docs_observer_shutdown)
+
+    return retriever, scanner
 
 # --------------------------------------------------------------------------------
 

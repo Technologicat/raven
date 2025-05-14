@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 import argparse
 import atexit
 import collections
-import concurrent.futures
 import copy
 import datetime
 import io
@@ -38,8 +37,6 @@ from textwrap import dedent
 from typing import Dict, List, Optional, Tuple
 
 import sseclient  # pip install sseclient-py
-
-from watchdog.observers import Observer
 
 from mcpyrate import colorizer
 
@@ -57,10 +54,6 @@ config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
 
 api_key_file = config_dir / "api_key.txt"
 
-# TODO: These should be per-app, too.
-db_dir = pathlib.Path(config.llm_database_dir).expanduser().resolve()
-docs_dir = pathlib.Path(config.llm_docs_dir).expanduser().resolve()
-
 # HTTP headers for LLM requests
 headers = {
     "Content-Type": "application/json"
@@ -73,31 +66,6 @@ if os.path.exists(api_key_file):
     # "Authorization": "Bearer yourPassword123"
     # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
     headers["Authorization"] = api_key.strip()
-
-# RAG system with hybrid keyword/semantic search - auto-search your documents.
-
-# `HybridIR` also autoloads and auto-persists its search indices.
-bg = concurrent.futures.ThreadPoolExecutor()
-hybridir.init(executor=bg)
-retriever = hybridir.HybridIR(datastore_base_dir=db_dir,
-                              embedding_model_name=config.qa_embedding_model)
-
-# Rescan docs directory for changes made while the app was not running.
-docs_event_handler = hybridir.HybridIRFileSystemEventHandler(retriever)
-docs_event_handler.rescan(docs_dir,
-                          recursive=config.llm_docs_dir_recursive)
-
-# Register handler to auto-update RAG index on live changes in docs directory.
-docs_observer = Observer()
-docs_observer.schedule(docs_event_handler,
-                       path=docs_dir,
-                       recursive=config.llm_docs_dir_recursive)
-docs_observer.start()
-
-def _docs_observer_shutdown():
-    docs_observer.stop()
-    docs_observer.join()
-atexit.register(_docs_observer_shutdown)
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -548,6 +516,9 @@ def minimal_chat_client(backend_url):
     datastore_file = config_dir / "data.json"  # chat node datastore
     state_file = config_dir / "state.json"     # important node IDs for the chat client state
 
+    docs_dir = pathlib.Path(config.llm_docs_dir).expanduser().resolve()  # RAG documents (put your documents in this directory)
+    db_dir = pathlib.Path(config.llm_database_dir).expanduser().resolve()  # RAG search indices datastore
+
     datastore = None  # initialized later, during app startup
     def load_app_state(settings: env) -> Dict:
         try:
@@ -573,7 +544,9 @@ def minimal_chat_client(backend_url):
 
     def save_app_state(state: Dict) -> None:
         # validate
-        required_keys = ("new_chat_HEAD", "HEAD", "docs_enabled")
+        required_keys = ("new_chat_HEAD",
+                         "HEAD",
+                         "docs_enabled")
         if any(key not in state for key in required_keys):
             raise KeyError  # at least one required setting missing from `state`
 
@@ -619,7 +592,11 @@ def minimal_chat_client(backend_url):
         state = load_app_state(settings)
         print()
 
-        # RAG database is already loaded during module bootup; here, we just inform the user.
+        # Load RAG database (it will auto-persist at app exit).
+        retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
+                                                    recursive=config.llm_docs_dir_recursive,
+                                                    db_dir=db_dir,
+                                                    embedding_model_name=config.qa_embedding_model)
         docs_enabled_str = "ON" if state["docs_enabled"] else "OFF"
         colorful_rag_status = colorizer.colorize(f"RAG (retrieval-augmented generation) autosearch is currently {docs_enabled_str}.",
                                                  colorizer.Style.BRIGHT)
