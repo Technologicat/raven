@@ -1,9 +1,9 @@
-"""Persistent forest data structure that saves as JSON.
+"""Forest data structure, with optional persistence (as JSON).
 
-Used as branching chat history for the LLM client.
+Used as branching chat history for Raven's LLM client.
 """
 
-__all__ = ["PersistentForest"]
+__all__ = ["Forest", "PersistentForest"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -22,12 +22,18 @@ from unpythonic import gensym, partition
 
 from . import utils
 
-class PersistentForest:
-    def __init__(self,
-                 datastore_file: Union[str, pathlib.Path]):
-        """Persistent forest datastore that saves as JSON.
+class Forest:
+    def __init__(self):
+        """Forest datastore.
 
-        `datastore_file`: Where to store the data (for the specific collection you're creating/loading).
+        Each node has at most one parent, but may have many children, making a forest structure.
+        Starting from any node, it is easy to produce a linearized branch up to that point,
+        by walking up the parent chain.
+
+        NOTE: it is the caller's responsibility to keep a copy of important node IDs (such as root nodes);
+        this class only provides the forest structure itself.
+
+        For a persistent version, see `PersistentForest`.
 
         For easy JSON-ability, we store the nodes in a dictionary, as a doubly-linked forest:
 
@@ -37,26 +43,9 @@ class PersistentForest:
                             "children": List[str]     # [unique_id_of_child0, ...]
                            }
         }
-
-        Since each node has at most one parent, but may have many children, this makes a forest structure.
-        Starting from any node, it is easy to produce a linearized branch up to that point, by walking up the parent chain.
-
-        NOTE: it is the caller's responsibility to keep a copy of important node IDs (such as root nodes);
-        this module only provides persistent storage for an arbitrary forest structure.
         """
         self.nodes = {}
         self.lock = threading.RLock()
-        self.datastore_file = datastore_file
-
-        # Load persisted state, if any.
-        # To check if any state has been loaded, check `len(your_datastore.nodes)`.
-        self._load()
-
-        # Persist at shutdown.
-        #
-        # We are extra careful in any operations that edit the data, to check and raise errors first, before making any edits.
-        # Hence whatever the state is at shutdown, it is the latest valid state, and it's always safe to persist it.
-        atexit.register(self._save)
 
     def create_node(self, data: Any, parent_id: Optional[str]) -> str:
         """Create a node conataining `data`, and store it in the forest.
@@ -120,7 +109,7 @@ class PersistentForest:
                 # The parent of each child node is set during node creation, so we only need to update the links on the parent side.
                 new_node["children"].append(new_child_node_id)
             except KeyError:
-                logger.warning(f"PersistentForest.copy_subtree: while recursively copying node '{node_id}': one of the child nodes, '{original_child_node_id}', does not exist. Ignoring error.")
+                logger.warning(f"Forest.copy_subtree: while recursively copying node '{node_id}': one of the child nodes, '{original_child_node_id}', does not exist. Ignoring error.")
         return new_node_id
 
     def delete_node(self, node_id: str) -> None:
@@ -150,7 +139,7 @@ class PersistentForest:
                     try:
                         recursive_delete(child_node_id)
                     except KeyError:
-                        logger.warning(f"PersistentForest.delete_subtree: while deleting children of '{node_id}': one of its child nodes '{child_node_id}' does not exist. Ignoring error.")
+                        logger.warning(f"Forest.delete_subtree: while deleting children of '{node_id}': one of its child nodes '{child_node_id}' does not exist. Ignoring error.")
                 self.nodes.pop(node_id)
             recursive_delete(node_id)
 
@@ -171,12 +160,12 @@ class PersistentForest:
             try:
                 parent_node = self.nodes[parent_node_id]
             except KeyError:
-                logger.warning(f"PersistentForest.detach_subtree: while detaching node '{node_id}' from its parent: its parent node '{parent_node_id}' does not exist. Ignoring error.")
+                logger.warning(f"Forest.detach_subtree: while detaching node '{node_id}' from its parent: its parent node '{parent_node_id}' does not exist. Ignoring error.")
             else:
                 try:
                     parent_node["children"].remove(node_id)
                 except ValueError:
-                    logger.warning(f"PersistentForest.detach_subtree: while detaching node '{node_id}' from its parent: this node was not listed in the children of its parent node '{parent_node_id}'. Ignoring error.")
+                    logger.warning(f"Forest.detach_subtree: while detaching node '{node_id}' from its parent: this node was not listed in the children of its parent node '{parent_node_id}'. Ignoring error.")
         node["parent"] = None
         return node_id
 
@@ -198,7 +187,7 @@ class PersistentForest:
                 try:
                     child_node = self.nodes[child_node_id]
                 except KeyError:
-                    logger.warning(f"PersistentForest.detach_children: while detaching node '{node_id}' from its children: one of the child nodes, '{child_node_id}', does not exist. Ignoring error.")
+                    logger.warning(f"Forest.detach_children: while detaching node '{node_id}' from its children: one of the child nodes, '{child_node_id}', does not exist. Ignoring error.")
                 else:
                     child_node["parent"] = None
             node["children"].clear()
@@ -244,7 +233,7 @@ class PersistentForest:
                     try:
                         child_node = self.nodes[child_node_id]
                     except KeyError:
-                        logger.warning(f"PersistentForest.reparent_children: while reparenting children of node '{node_id}' (to '{new_parent_id}'): one of the child nodes, '{child_node_id}', does not exist. Ignoring error.")
+                        logger.warning(f"Forest.reparent_children: while reparenting children of node '{node_id}' (to '{new_parent_id}'): one of the child nodes, '{child_node_id}', does not exist. Ignoring error.")
                     else:
                         child_node["parent"] = new_parent_id
                         new_parent_node["children"].append(child_node_id)
@@ -309,7 +298,7 @@ class PersistentForest:
             reachable_node_ids = set()
             def find_nodes_reachable_from(node_id):
                 if node_id not in self.nodes:
-                    logger.warning(f"PersistentForest.prune_unreachable_nodes: trying to scan non-existent node '{node_id}'. Ignoring error.")
+                    logger.warning(f"Forest.prune_unreachable_nodes: trying to scan non-existent node '{node_id}'. Ignoring error.")
                     return
                 reachable_node_ids.add(node_id)
                 node = self.nodes[node_id]
@@ -323,7 +312,7 @@ class PersistentForest:
 
             if unreachable_node_ids:
                 plural_s = "s" if len(unreachable_node_ids) != 1 else ""
-                logger.info(f"PersistentForest.prune_unreachable_nodes: found {len(unreachable_node_ids)} unreachable node{plural_s}. Deleting.")
+                logger.info(f"Forest.prune_unreachable_nodes: found {len(unreachable_node_ids)} unreachable node{plural_s}. Deleting.")
 
             for unreachable_node_id in unreachable_node_ids:
                 self.delete_node(unreachable_node_id)  # this ensures any links to them get removed too
@@ -347,7 +336,7 @@ class PersistentForest:
 
                 parent_node_id = node["parent"]
                 if parent_node_id is not None and parent_node_id not in self.nodes:  # dead link?
-                    logger.warning(f"PersistentForest.prune_dead_links: Node '{node_id}' links to nonexistent parent '{parent_node_id}'; removing the link.")
+                    logger.warning(f"Forest.prune_dead_links: Node '{node_id}' links to nonexistent parent '{parent_node_id}'; removing the link.")
                     node["parent"] = None
 
                 nonexistent_children, valid_children = partition(pred=lambda node_id: node_id in self.nodes,
@@ -356,7 +345,7 @@ class PersistentForest:
                 valid_children = list(valid_children)
 
                 if nonexistent_children:  # any dead links?
-                    logger.warning(f"PersistentForest.prune_dead_links: Node '{node_id}' links to one or more nonexistent children, {nonexistent_children}; removing the links.")
+                    logger.warning(f"Forest.prune_dead_links: Node '{node_id}' links to one or more nonexistent children, {nonexistent_children}; removing the links.")
                     node["children"].clear()
                     node["children"].extend(valid_children)
 
@@ -384,6 +373,27 @@ class PersistentForest:
         """
         with self.lock:
             self.nodes.clear()
+
+class PersistentForest(Forest):
+    def __init__(self,
+                 datastore_file: Union[str, pathlib.Path]):
+        """Exactly like `Forest`, but with persistent storage as JSON.
+
+        `datastore_file`: Where to store the data (for the specific collection you're creating/loading).
+        """
+        super().__init__()
+
+        self.datastore_file = datastore_file
+
+        # Load persisted state, if any.
+        self._load()
+
+        # Persist at shutdown.
+        #
+        # In `Forest`, we are extra careful in any operations that edit the data, to check and raise errors first,
+        # before making any edits. Hence whatever the state is at shutdown, it is the latest valid state, and
+        # it's always safe to persist it.
+        atexit.register(self._save)
 
     def _save(self) -> None:
         """Save the forest to a file, so that it can be reloaded later with `_load`.
