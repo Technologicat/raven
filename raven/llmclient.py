@@ -586,7 +586,7 @@ def minimal_chat_client(backend_url):
         print(f"    {colorizer.colorize('Character', colorizer.Style.BRIGHT)}: {settings.char} [defined in this client]")
         print()
 
-    # Start the chat
+    # Main program
     try:
         # API key already loaded during module bootup; here, we just inform the user.
         if "Authorization" in headers:
@@ -666,7 +666,7 @@ def minimal_chat_client(backend_url):
             else:
                 datastore.prune_unreachable_nodes(system_prompt_node_id)
                 datastore.prune_dead_links(system_prompt_node_id)
-        # We register later than `chattree.PersistentForest`, so ours runs first.
+        # We register later than `chattree.PersistentForest` (which we already instantiated above), so ours runs first.
         # Hence we'll have the chance to prune before the forest is persisted to disk.
         #     https://docs.python.org/3/library/atexit.html
         atexit.register(persist)
