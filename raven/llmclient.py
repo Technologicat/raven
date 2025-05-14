@@ -5,15 +5,10 @@ NOTE for oobabooga/text-generation-webui users:
 If you want to see the final prompt in instruct or chat mode, start your server in `--verbose` mode.
 """
 
-# TODO: add "!speculate [on|off]" (no argument: toggle)
-#   - when "!docs" is on:
-#     - "!speculate off" means answer based on docs only (no search matches = don't even ask LLM)
-#     - "!speculate on" means allow answering also based on static knowledge, change wording of prompt accordingly
-
 __all__ = ["list_models", "setup",
            "create_chat_message", "create_initial_system_message",
            "factory_reset_chat_datastore",
-           "format_chat_datetime_now", "format_reminder_to_focus_on_latest_input",
+           "format_chat_datetime_now", "format_reminder_to_focus_on_latest_input", "format_reminder_to_use_information_from_context_only",
            "invoke", "scrub"]
 
 import logging
@@ -328,6 +323,17 @@ def format_reminder_to_focus_on_latest_input() -> str:
     """
     return "[System information: IMPORTANT: Reply to the user's most recent message. In a discussion, prefer writing your raw thoughts rather than a structured report.]"
 
+def format_reminder_to_use_information_from_context_only() -> str:
+    """Return the content of a system message that reminds the LLM to use the information from the context only (not its internal static knowledge).
+
+    As with all things LLM, this isn't completely reliable, but tends to increase the chances of the model NOT responding based on its static knowledge.
+    This is useful when summarizing or extracting information from RAG search results.
+
+    (The first line of defense is not giving control to the LLM when the search comes up empty. This reminder helps when the search returns results,
+     but their content is irrelevant to the query.)
+    """
+    return "[System information: NOTE: Please answer based on the information provided in the context only.]"
+
 
 _complete_thought_block = re.compile(r"([<\[])(think(ing)?[>\]])(.*?)\1/\2\s*", flags=re.IGNORECASE | re.DOTALL)  # opened and closed correctly; thought contents -> group 4
 _incomplete_thought_block = re.compile(r"([<\[])(think|thinking)([>\]])(?!.*?\1/\2\3)(.*)", flags=re.IGNORECASE | re.DOTALL)  # opened but not closed; thought contents -> group 4
@@ -551,6 +557,10 @@ def minimal_chat_client(backend_url):
             logger.warning(f"load_app_state: missing key 'docs_enabled' in '{state_file}', using default")
             state["docs_enabled"] = True
 
+        if "speculate_enabled" not in state:
+            logger.warning(f"load_app_state: missing key 'speculat_enabled' in '{state_file}', using default")
+            state["speculate_enabled"] = False
+
         # Refresh the system prompt in the datastore (to the one in this client's source code)
         new_chat_node_id = state["new_chat_HEAD"]
         system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
@@ -563,7 +573,8 @@ def minimal_chat_client(backend_url):
         # validate
         required_keys = ("new_chat_HEAD",
                          "HEAD",
-                         "docs_enabled")
+                         "docs_enabled",
+                         "speculate_enabled")
         if any(key not in state for key in required_keys):
             raise KeyError  # at least one required setting missing from `state`
 
@@ -672,14 +683,17 @@ def minimal_chat_client(backend_url):
             print("    llmclient.py - Minimal LLM client for testing/debugging.")
             print()
             print("    Special commands (tab-completion available):")
-            print("        !clear             - Start new chat")
-            print(f"        !docs [True|False] - RAG autosearch on/off/toggle (currently {state['docs_enabled']}; document store at '{config.llm_docs_dir}')")
-            print("        !dump              - See raw contents of chat node datastore")
-            print("        !head some-node-id - Switch to another chat branch (get the node ID from `!dump`)")
-            print("        !history           - Print a cleaned-up transcript of the chat history")
-            print("        !model             - Show which model is in use")
-            print("        !models            - List all models available at connected backend")
-            print("        !help              - Show this message again")
+            print("        !clear                  - Start new chat")
+            print(f"        !docs [True|False]      - RAG autosearch on/off/toggle (currently {state['docs_enabled']}; document store at '{config.llm_docs_dir}')")
+            print(f"        !speculate [True|False] - LLM speculate on/off/toggle (currently {state['speculate_enabled']}); used only if docs is True.")
+            print("                                  If speculate is False, try to use only RAG results to answer.")
+            print("                                  If speculate is True, let the LLM respond however it wants.")
+            print("        !dump                   - See raw contents of chat node datastore")
+            print("        !head some-node-id      - Switch to another chat branch (get the node ID from `!dump`)")
+            print("        !history                - Print a cleaned-up transcript of the current chat branch")
+            print("        !model                  - Show which model is in use")
+            print("        !models                 - List all models available at connected backend")
+            print("        !help                   - Show this message again")
             print()
             print("    Press Ctrl+D to exit chat.")
             print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
@@ -694,7 +708,8 @@ def minimal_chat_client(backend_url):
                     "!help",
                     "!history",
                     "!model",
-                    "!models"]
+                    "!models",
+                    "!speculate"]
         def get_completions(candidates, text):
             """Return matching completions for `text`.
 
@@ -727,6 +742,8 @@ def minimal_chat_client(backend_url):
                 candidates = ["True", "False"]
             elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
                 candidates = list(sorted(datastore.nodes.keys()))
+            elif buffer_content.startswith("!speculate"):  # in `!speculate` command, expecting an argument?
+                candidates = ["True", "False"]
             else:  # anything else -> no completions
                 return None
 
@@ -839,7 +856,7 @@ def minimal_chat_client(backend_url):
                 print()
                 chat_print_history(datastore.linearize_up(state["HEAD"]))
                 continue
-            elif user_message.startswith("!docs"):
+            elif user_message.startswith("!docs"):  # TODO: refactor
                 split_command = user_message.split()
                 nargs = len(split_command) - 1
                 if nargs == 0:
@@ -901,6 +918,29 @@ def minimal_chat_client(backend_url):
             elif user_message == "!models":
                 chat_show_list_of_models()
                 continue
+            elif user_message.startswith("!speculate"):  # TODO: refactor
+                split_command = user_message.split()
+                nargs = len(split_command) - 1
+                if nargs == 0:
+                    state["speculate_enabled"] = not state["speculate_enabled"]
+                elif nargs == 1:
+                    arg = split_command[-1]
+                    if arg == "True":
+                        state["speculate_enabled"] = True
+                    elif arg == "False":
+                        state["speculate_enabled"] = False
+                    else:
+                        print(f"!speculate: unrecognized argument '{arg}'; expected 'True' or 'False'.")
+                        print()
+                        continue
+                else:
+                    print("!speculate: wrong number of arguments; expected at most one, 'True' or 'False'.")
+                    print()
+                    continue
+                speculate_enabled_str = "ON" if state["speculate_enabled"] else "OFF"
+                print(f"LLM speculation is now {speculate_enabled_str}.")
+                print()
+                continue
             elif user_message.startswith("!") and len(user_message.split("\n")) == 1:
                 print(f"Unrecognized command '{user_message}'; use `!help` for available commands.")
                 continue
@@ -919,10 +959,39 @@ def minimal_chat_client(backend_url):
             # as nodes to the chat tree, but only into the temporary linearized history.
 
             # RAG search
+            #
+            # NOTE: This is very rudimentary.
+            #   - We simply use the user's new message as-is as the query.
+            #   - Hence, this does NOT match on any earlier message, and may result in spurious matches.
+            #     E.g. "Can cats jump?" and "Does your knowledge base say if cats can jump?" return
+            #     different results, because the term "knowledge base" in the latter may match e.g.
+            #     AI/CS articles that the user happens to have included in the KB.
+            #     - In this example, with the example data, the shorter query correctly returns no matches.
+            #     - The longer query returns two AI agent abstracts, leaving it to the LLM to put the
+            #       pieces together and notice that the user's query and provided KB context don't actually match.
+            #   - This could be improved by querying the LLM itself - "given the chat history so far and
+            #     the user's most recent message, please formulate query terms for a knowledge base search."
+            #     and then run the search with the final output of that.
+            #   - We could also build a slightly more complex scaffold to support tool-calling,
+            #     and instruct the LLM to send a query when it itself thinks it needs to.
             if state["docs_enabled"]:
                 docs_results = retriever.query(user_message,
                                                k=10,
                                                return_extra_info=False)
+
+                # First line of defense: no matches, speculate off -> bypass LLM
+                if not docs_results and not state["speculate_enabled"]:
+                    nomatch_message = "No matches in knowledge base. Please try another query."
+                    ai_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
+                                                                                        role="assistant",
+                                                                                        message=nomatch_message),
+                                                               parent_id=state["HEAD"])
+                    state["HEAD"] = ai_message_node_id
+                    chat_print_message(ai_message_number, role="assistant", content=nomatch_message)
+                    print()
+                    continue
+                # got at least one match from RAG index
+
                 for docs_result in reversed(docs_results):
                     search_result_message = f"[System information: Knowledge-base match from `{docs_result['document_id']}`.]\n\n{docs_result['text'].strip()}\n-----"
                     message_to_inject = create_chat_message(settings=settings,
@@ -935,6 +1004,15 @@ def minimal_chat_client(backend_url):
                 message_to_inject = create_chat_message(settings=settings,
                                                         role="system",
                                                         message=thunk())
+                history.insert(-1, message_to_inject)  # -1 = just before user's message
+
+            # If docs on, speculate off (-> we get here if there is at least one match), remind the LLM to use information from context only.
+            #                           This increases the changes of the user's query working correctly when the search returns irrelevant results.
+            # If docs off, the whole point is to use the LLM's static knowledge, so in that case don't bother.
+            if state["docs_enabled"] and not state["speculate_enabled"]:
+                message_to_inject = create_chat_message(settings=settings,
+                                                        role="system",
+                                                        message=format_reminder_to_use_information_from_context_only())
                 history.insert(-1, message_to_inject)  # -1 = just before user's message
 
             # # DEBUG - show history with injects.
