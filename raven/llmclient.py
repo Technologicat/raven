@@ -59,6 +59,7 @@ config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
 
 api_key_file = config_dir / "api_key.txt"
 
+# TODO: These should be per-app, too.
 db_dir = pathlib.Path(config.llm_database_dir).expanduser().resolve()
 docs_dir = pathlib.Path(config.llm_docs_dir).expanduser().resolve()
 
