@@ -868,10 +868,11 @@ task_managers = {}
 def init(executor):
     """Initialize this module.
 
-    Must be called before `HybridIRFileSystemEventHandler` (including its `rescan` method)
-    can be used.
+    If you use the all-in-one convenience function `setup`, you do not need `init`;
+    `setup` calls `init` automatically.
 
-    But note that if you use the all-in-one convenience function `setup`, it calls `init` automatically.
+    Otherwise, `init` must be called before `HybridIRFileSystemEventHandler`
+    (including its `rescan` method) can be used.
 
     `executor`: A `ThreadPoolExecutor` or something duck-compatible with it.
                 Used for running the background tasks for ingesting files
