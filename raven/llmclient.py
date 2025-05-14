@@ -58,9 +58,6 @@ from . import hybridir
 config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
 
 api_key_file = config_dir / "api_key.txt"
-history_file = config_dir / "history"      # user input history (readline)
-datastore_file = config_dir / "data.json"  # chat node datastore
-state_file = config_dir / "state.json"     # important node IDs for the chat client state
 
 db_dir = pathlib.Path(config.llm_database_dir).expanduser().resolve()
 docs_dir = pathlib.Path(config.llm_docs_dir).expanduser().resolve()
@@ -547,6 +544,10 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
 
 def minimal_chat_client(backend_url):
     """Minimal LLM chat client, for testing/debugging."""
+
+    history_file = config_dir / "history"      # user input history (readline)
+    datastore_file = config_dir / "data.json"  # chat node datastore
+    state_file = config_dir / "state.json"     # important node IDs for the chat client state
 
     datastore = None  # initialized later, during app startup
     def load_app_state(settings: env) -> Dict:
