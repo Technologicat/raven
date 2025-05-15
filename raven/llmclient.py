@@ -974,7 +974,9 @@ def minimal_chat_client(backend_url):
             #     and then run the search with the final output of that.
             #   - We could also build a slightly more complex scaffold to support tool-calling,
             #     and instruct the LLM to send a query when it itself thinks it needs to.
-            if state["docs_enabled"]:
+            if not state["docs_enabled"]:
+                docs_results = None
+            else:
                 docs_results = retriever.query(user_message,
                                                k=10,
                                                return_extra_info=False)
@@ -986,6 +988,9 @@ def minimal_chat_client(backend_url):
                                                                                         role="assistant",
                                                                                         message=nomatch_message),
                                                                parent_id=state["HEAD"])
+                    ai_message_node = datastore.nodes[ai_message_node_id]
+                    ai_message_node["retrieval"] = {"query": user_message,
+                                                    "results": []}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
                     state["HEAD"] = ai_message_node_id
                     chat_print_message(ai_message_number, role="assistant", content=nomatch_message)
                     print()
@@ -1049,6 +1054,9 @@ def minimal_chat_client(backend_url):
                                                                                 role="assistant",
                                                                                 message=out.data),
                                                        parent_id=state["HEAD"])
+            ai_message_node = datastore.nodes[ai_message_node_id]
+            ai_message_node["retrieval"] = {"query": user_message,
+                                            "results": docs_results}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
             state["HEAD"] = ai_message_node_id
     except (EOFError, KeyboardInterrupt):
         print()
