@@ -164,7 +164,7 @@ def get_content_by_selector(selector: str) -> List[str]:
     return collected
 
 def get_attr_by_selector(selector: str, attr: str) -> List[str]:
-    """Returna a list of the attribute `attr` of each element matching the CSS selector `selector` in the page in the web driver.
+    """Return a list of the attribute `attr` of each element matching the CSS selector `selector` in the page in the web driver.
 
     This can be used to extract link destinations (by matching "a" elements, and `attr="href"`).
     """
