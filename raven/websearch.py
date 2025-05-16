@@ -87,13 +87,13 @@ def encodeURIComponent(text: str) -> str:
     # https://stackoverflow.com/questions/6431061/python-encoding-characters-with-urllib-quote
     return urllib.parse.quote(text, safe="!~*'()")
 
-def wait_for_id(element_id: str, delay: int = 5) -> None:
+def wait_for_id(element_id: str, delay: float = 5.0) -> None:
     try:
         WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.ID, element_id)))
     except Exception:
         logger.info(f"wait_for_id: Element with id '{element_id}' not found, proceeding without.")
 
-def wait_for_selector(selector: str, delay: int = 5) -> None:
+def wait_for_selector(selector: str, delay: float = 5.0) -> None:
     try:
         WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
     except Exception:
