@@ -73,6 +73,7 @@ def get_driver():
         options = FirefoxOptions()
         options.add_argument("--headless")
         options.set_preference("intl.accept_languages", "en,en_US")
+        options.set_preference("general.useragent.override", user_agent)  # https://stackoverflow.com/a/72465725
         return webdriver.Firefox(service=firefoxService, options=options)
 
 driver = get_driver()
