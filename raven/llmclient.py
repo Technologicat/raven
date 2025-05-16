@@ -168,9 +168,6 @@ def setup(backend_url: str) -> env:
     greeting = "How can I help you today?"
 
     # Tools (functions) to make available to the AI for tool-calling (for models that support that - as of May 2025, at least Qwen 2 or later do).
-    # TODO: Add a download-web-page tool (Need to clean the result from HTML into plain text? Perhaps ingest to RAG for persistence, so that if it already exists, it is not re-downloaded (until some timeout expires)?)
-    # TODO: Add a RAG search tool to allow the AI to query the RAG database
-    # TODO: Add a full-document tool to retrieve a full document from the RAG database (the RAG search shows the IDs)
     tools = [
         {"type": "function",
          "function": {"name": "websearch",

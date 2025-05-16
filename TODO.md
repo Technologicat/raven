@@ -69,11 +69,45 @@
     - handle umlauts Å, Ä, Ö, Ü, å, ä, ö, ü: e.g. {\"o} -> ö
     - drop BibTeX's "verbatim" braces: {GPU} clusters -> GPU clusters
 
+- BibTeX importer's (`raven/preprocess.py`) keyword extractor as separate component, for e.g. creating keyword indices for book manuscripts.
+
 - Save/load selection, for reproducible reports. (Needs some care to make it work for a dynamic dataset.)
   - This becomes especially important with the LLM client, as the selection will affect which documents are enabled for RAG, so chat histories will be selection-specific.
     So it will feel silly if there is no way to save/load selections without attaching an AI chat to them.
   - The GUI needs some thinking. What is a good UX here?
 
+- LLMClient, to prepare for interactive AI summarization:
+  - Finish tool-calling functionality.
+    - Implement the scaffolding to actually perform the calls and insert the results into the LLM's context.
+    - Add a "RAG search" tool to allow the AI to explicitly query the RAG database.
+      - Remaining problem: how to dynamically tell the AI what kinds of topics are currently available in the database? Keyword auto-extraction and system message?
+    - Add a "get full document" tool to retrieve a full document from the RAG database based on its ID (the current RAG autosearch already shows the document IDs).
+    - Finish websearch.
+      - Final formatting for the results.
+      - Store the raw results into the chat tree.
+      - Add link crawling to retrieve the full result documents. (These should be safe to download.)
+        - Persist the documents to the RAG database to avoid unnecessary re-downloading.
+          - Set an expiry timeout for each downloaded page.
+          - How to decide in which contexts the search result pages should be enabled as RAG data sources?
+    - Add a "download web page" tool?
+      - Infosec needs some consideration here.
+        - Some web pages are not documents, but actions (e.g. wikipedia "Edit" link). Some pages may contain viruses that could corrupt or hijack the web driver.
+        - User-provided links might be considered safe? ("Here, take a look at this: [URL]" -> allow the AI to download that page if it wants to)
+  - Add a pedigree field to `HybridIR` documents, so that the automatic rescan can auto-remove only documents added by that scanner (name the scanner instances).
+    - There may be occasions we need to programmatically send data into the RAG index, e.g. web pages from websearch.
+  - Source attribution for RAG search and websearch results.
+    - In GUI: RAG: clickable snippets based on `document_id`, `offset`, length; plus a clickable link to open the full document (need to spawn external program depending on file type).
+  - Inline citations?
+  - See where to stuff the RAG search data in the chat tree, it's not part of the standard format.
+  - Tune the system prompt, consider how it needs to be different when LLM speculation is on/off.
+  - LLMClient GUI
+    - Control the available RAG sources based on the selected data points in the `raven-visualizer` GUI.
+    - Swipes like in SillyTavern (regenerate AI response, keep also old ones).
+    - Branch chat from any point.
+    - Tree node view of full branching chat history.
+    - Linear chat view of current branch.
+    - Show also system messages such as tool-call results?
+    - Message editing?
 ## v0.2 and later
 
 ### Large new features
