@@ -36,6 +36,7 @@ dependencies = [
     "chromadb>=1.0.8",  # RAG semantic search
     "bm25s>=0.2.12",  # RAG keyword search
     "watchdog>=6.0.0",  # RAG document directory monitoring
+    "selenium>=4.32.0"  # websearch
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]
