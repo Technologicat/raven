@@ -515,7 +515,26 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
         logger.error(f"{type(exc)}: {exc}")
         raise
 
-    # TODO: handle tool calls requested by the LLM
+    # TODO: Handle tool calls requested by the LLM. Call the tool, and add the result to the history. We probably need to do that outside `invoke`, and rearchitect some parts.
+    #
+    # These come in the last chunk, with empty text content, when "finish_reason = tool_calls", e.g.:
+    #
+    # {'id': 'chatcmpl-1747386255850717184', 'object': 'chat.completion.chunk', 'created': 1747386255, 'model': 'Qwen_QwQ-32B-Q4_K_M.gguf',
+    #  'choices': [{'index': 0,
+    #               'finish_reason': 'tool_calls',
+    #               'delta': {'role': 'assistant',
+    #                         'content': '',
+    #                         'tool_calls': [{'type': 'function',
+    #                                         'function': {'name': 'websearch',
+    #                                                      'arguments': '{"query": "Sharon Apple"}'},
+    #                                         'id': 'call_m357947b',
+    #                                         'index': '0'}]
+    #                        }}],
+    #  'usage': {'prompt_tokens': 674, 'completion_tokens': 264, 'total_tokens': 938}}
+    #
+    # See also the backend source code, particularly:
+    #   https://github.com/oobabooga/text-generation-webui/blob/dev/extensions/openai/typing.py
+    #   https://github.com/oobabooga/text-generation-webui/blob/dev/extensions/openai/completions.py
 
     llm_output = llm_output.getvalue()
 
@@ -528,7 +547,13 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
         chop_position = min(stopping_string_start_positions)
         llm_output = llm_output[:chop_position]
 
-    n_tokens = n_chunks - 2  # No idea why, but that's how it empirically is (see ooba server terminal output).  # TODO: Investigate later.
+    # In streaming mode, the oobabooga backend always yields an initial chunk with empty content (perhaps to indicate that the connection was successful?)
+    # and at the end, a final chunk with empty content, containing usage stats and possible tool calls.
+    #
+    # The correct way to get the number of tokens is to read the "usage" field of the final chunk.
+    # Of course, if we have to close the connection on our end due to a stopping string, we won't get that chunk.
+    # But this hack always works.
+    n_tokens = n_chunks - 2
 
     return env(data=llm_output,
                n_tokens=n_tokens,
