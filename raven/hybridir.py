@@ -578,7 +578,7 @@ class HybridIR:
 
             logger.info("HybridIR._save_datastore: Saving...")
             utils.create_directory(self.fulldocs_path)
-            with open(self.fulldocs_documents_file, "w") as json_file:
+            with open(self.fulldocs_documents_file, "w", encoding="utf-8") as json_file:
                 # Keeping the amount of indentation small improves human-readability,
                 # but also saves some disk space, as there are lots of indented lines in this file.
                 json.dump(data, json_file, indent=2)

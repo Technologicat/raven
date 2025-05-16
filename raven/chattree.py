@@ -407,7 +407,7 @@ class PersistentForest(Forest):
             directory = self.datastore_file.parent
             utils.create_directory(directory)
 
-            with open(absolute_path, "w") as json_file:
+            with open(absolute_path, "w", encoding="utf-8") as json_file:
                 json.dump(self.nodes, json_file, indent=2)
 
             logger.info("PersistentForest._save: All done.")
@@ -424,7 +424,7 @@ class PersistentForest(Forest):
             logger.info(f"PersistentForest._load: Loading datastore from '{str(self.datastore_file)}' (resolved to '{str(absolute_path)}').")
 
             try:
-                with open(absolute_path, "r") as json_file:
+                with open(absolute_path, "r", encoding="utf-8") as json_file:
                     data = json.load(json_file)
             except Exception as exc:
                 logger.warning(f"PersistentForest._load: While loading datastore from '{str(absolute_path)}': {type(exc)}: {exc}")

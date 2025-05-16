@@ -535,7 +535,7 @@ def minimal_chat_client(backend_url):
             state["HEAD"] = state["new_chat_HEAD"]  # current last node in chat; like HEAD pointer in git
 
         try:
-            with open(state_file, "r") as json_file:
+            with open(state_file, "r", encoding="utf-8") as json_file:
                 state = json.load(json_file)
         except FileNotFoundError:
             new_datastore()
@@ -578,7 +578,7 @@ def minimal_chat_client(backend_url):
         if any(key not in state for key in required_keys):
             raise KeyError  # at least one required setting missing from `state`
 
-        with open(state_file, "w") as json_file:
+        with open(state_file, "w", encoding="utf-8") as json_file:
             json.dump(state, json_file, indent=2)
 
     # Ugh for the presentation order, but this is needed in two places, starting immediately below.
