@@ -85,25 +85,44 @@ atexit.register(quit_driver)
 # Utilities
 
 def encodeURIComponent(text: str) -> str:
-    # https://stackoverflow.com/questions/6431061/python-encoding-characters-with-urllib-quote
+    """Rough Python equivalent for JavaScript's `encodeURIComponent`.
+
+    See:
+        https://stackoverflow.com/questions/6431061/python-encoding-characters-with-urllib-quote
+    """
     return urllib.parse.quote(text, safe="!~*'()")
 
 def wait_for_id(element_id: str, delay: float = 5.0) -> None:
+    """Wait until an element with id `element_id` appears in the page being loaded by the web driver.
+
+    Give up after `delay` seconds, and return anyway.
+    """
     try:
         WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.ID, element_id)))
     except Exception:
         logger.info(f"wait_for_id: Element with id '{element_id}' not found, proceeding without.")
 
 def wait_for_selector(selector: str, delay: float = 5.0) -> None:
+    """Wait until an element matching the CSS selector `selector` appears in the page being loaded by the web driver.
+
+    Give up after `delay` seconds, and return anyway.
+    """
     try:
         WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
     except Exception:
         logger.info(f"wait_for_id: Element matching selector '{selector}' not found, proceeding without.")
 
 def get_page_height() -> int:
+    """Get the current height of the page in the web driver, in pixels."""
     return driver.execute_script("return document.body.scrollHeight")
 
 def wait_for_page_height_increase(old_height: int) -> int:
+    """Wait until the page height in the web driver changes to a value different from `old_height`.
+
+    Returns the new height.
+
+    Times out after 5 seconds. Returns whatever the height is at that moment.
+    """
     for k in range(5):
         page_height = get_page_height()
         if page_height > old_height:
@@ -112,6 +131,10 @@ def wait_for_page_height_increase(old_height: int) -> int:
     return old_height
 
 def click_element(element: WebElement) -> None:
+    """Click a web element in the page in the web driver.
+
+    Can be used to dismiss popups and such.
+    """
     try:
         WebDriverWait(driver, 1.0).until(EC.element_to_be_clickable(element))
     except exceptions.TimeoutException:
@@ -120,6 +143,10 @@ def click_element(element: WebElement) -> None:
         element.click()
 
 def find_first_element_by_id(element_id: str) -> Optional[WebElement]:
+    """Find the first element with id `element_id` in the page in the web driver.
+
+    Return the element if found, else return `None`.
+    """
     it = driver.find_elements(By.ID, element_id)
     try:
         element = next(it)
@@ -129,6 +156,7 @@ def find_first_element_by_id(element_id: str) -> Optional[WebElement]:
         return element
 
 def get_content_by_selector(selector: str) -> List[str]:
+    """Return a list of the `text` of each element matching the CSS selector `selector` in the page in the web driver."""
     collected = []
     for el in driver.find_elements(By.CSS_SELECTOR, selector):
         if el and el.text:
@@ -136,6 +164,10 @@ def get_content_by_selector(selector: str) -> List[str]:
     return collected
 
 def get_attr_by_selector(selector: str, attr: str) -> List[str]:
+    """Returna a list of the attribute `attr` of each element matching the CSS selector `selector` in the page in the web driver.
+
+    This can be used to extract link destinations (by matching "a" elements, and `attr="href"`).
+    """
     collected = []
     for el in driver.find_elements(By.CSS_SELECTOR, selector):
         if el and el.text:
@@ -143,6 +175,7 @@ def get_attr_by_selector(selector: str, attr: str) -> List[str]:
     return collected
 
 def debug_dump():
+    """Dump the page from the web driver to an HTML file, for debugging."""
     with open(dump_filename, "w", encoding='utf-8') as html_file:
         html_file.write(driver.page_source)
 
@@ -154,6 +187,29 @@ def debug_dump():
 def format_results(texts: List[str],
                    titles: Optional[List[str]] = None,
                    links: Optional[List[str]] = None) -> str:
+    """Format search results.
+
+    Returns the tuple `(preformatted_text, results)`,
+    where `preformatted_text` (for one entry) looks like::
+
+        Page title of this result
+        https://some.link/thingy/
+
+        Lorem ipsum dolor sit amet...
+        Blah blah blah...
+
+    Both `titles` and `links` are optional, but if present,
+    must have as many entries as `texts`.
+
+    In the return value, `results` is a list of dicts::
+
+        [{"text": ...,
+          "link": ...,
+          "title": ...}
+        ]
+
+    This is convenient for further manual formatting.
+    """
     results = [{"text": text} for text in texts]
     if links:
         for result, link in zip(results, links):
