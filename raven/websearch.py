@@ -37,7 +37,7 @@ from . import utils
 # --------------------------------------------------------------------------------
 # Bootup
 
-# See `navigator.userAgent` in a Chromium debug console
+# See `navigator.userAgent` in a web browser's JavaScript console (to access it, try pressing F12 or Ctrl+Shift+C)
 user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 dump_dir = pathlib.Path(config.config_base_dir).expanduser().resolve() / "websearch"
