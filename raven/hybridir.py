@@ -594,7 +594,7 @@ class HybridIR:
         logger.info("HybridIR._load_datastore: entered.")
         with self.datastore_lock:
             try:
-                with open(self.fulldocs_documents_file, "r") as json_file:
+                with open(self.fulldocs_documents_file, "r", encoding="utf-8") as json_file:
                     data = json.load(json_file)
                 stored_embedding_model_name = data["embedding_model_name"]
                 documents = data["documents"]
