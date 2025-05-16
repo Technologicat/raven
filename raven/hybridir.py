@@ -973,8 +973,8 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         if self.callback:
             content = self.callback(abspath)
         else:
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
+            with open(path, "r", encoding="utf-8") as document_file:
+                content = document_file.read()
         if not content:
             return None
         if not isinstance(content, str):
