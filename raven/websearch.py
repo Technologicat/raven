@@ -335,3 +335,58 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Example result:
+#
+# INFO:__main__:get_driver: Initializing Chrome driver...
+# INFO:__main__:search_duckduckgo: Searching DuckDuckGo for sharon%20apple...
+# https://macross.fandom.com/wiki/Sharon_Apple
+#
+# Sharon Apple (シャロン・アップル, Sharon Appuru) is a virtual idol and one of the antagonists of the Macross Plus OVA and its theatrical adaptation, Macross Plus Movie Edition. She also appeared in the short-lived manga adaptation, Macross Plus: TAC Name. She is an artificially created idol singer whose voice and thoughts are provided by Myung Fang Lone. manifests herself ...
+# -----
+# https://en.wikipedia.org/wiki/List_of_Macross_characters
+#
+# The new alliance is tested when the crazed Sharon Apple takes control of the Ghost and attacks them. Guld however convinces Isamu to leave and rescue the imprisoned Myung. There he is faced by intense fire from the Macross itself, also controlled by Sharon Apple. Soon after, Isamu succumbs to hypnotizing powers and takes his fighter ...
+# -----
+# https://en.wikipedia.org/wiki/Macross_Plus
+#
+# Sharon Apple's songs are performed by a number of different artists - namely Gabriela Robin, Akino Arai, Mai Yamane, Melodie Sexton, Wuyontana and the Raiché Coutev Sisters. The most notable song in the series is Myung's song "Voices", which is performed by Arai and is the only Japanese-language song in the soundtrack. For the English dub of ...
+# -----
+# http://www.macross2.net/m3/macrossplus/virturoid.htm
+#
+# Virturoid is a computer-generated virtual reality singer created by the Macross Consortium in 2039. She became a popular idol, but also caused the Sharon Apple Incident in 2040 when she tried to take over the SDF-1 Macross.
+# -----
+# https://blackgate.com/2020/01/25/her-masters-voice-the-world-of-virtual-idols-part-i/
+#
+# Sharon Apple (Macross) The first full-on virtual idol to really capture international attention however came ten years later with the arrival of Sharon Apple — from 1995's follow-up entry in the Macross anime series, the four-part video release called Macross Plus. She is very different from Minmay, in numerous ways!
+# -----
+# https://myanimelist.net/character/7888/Sharon_Apple/
+#
+# Sharon Apple Sharon Apple is an artificial idol. She exists as a computer which produces a hologram. While her producers say that she has an artificial intelligence that includes emotional programming. (Source: Wikipedia) Voice Actors. Hyoudou, Mako. Japanese. Harte, Melora. English. Federici, Roberta. Italian. Ambrós, Carmen ...
+# -----
+# https://deculture.fandom.com/wiki/Sharon_Apple_Incident
+#
+# The events surrounding the installation of an illegal bio-neural chip into the virtual idol Sharon Apple in 2040. Once installed with the bio-neural chip, Sharon Apple began forming an artificial intelligence and subsequently a dangerous self-preservation psychology. took over control of the SDF-1 Macross, the X-9 Ghost fighter and hypnotically enthralled most of the population of ...
+# -----
+# https://macross.anime.net/wiki/Sharon_Apple
+#
+# Unlike the rest of the recent wave of idols however, Sharon is a computer-generated virtual reality singer. Despite this (or perhaps because of this), the virturoid's explosive popularity has grown on Earth and the planets colonized by Humans. ... Project Team: Project Debut: Plus Vol. 1 Voice: Mako Hyoudou, Mai Yamane, Gabriela ...
+# -----
+# https://anidb.net/character/48625
+#
+# Sharon Apple is an artificial idol and a computer-generated hologram in the anime Macross Plus. Learn about her name, gender, abilities, appearance, seiyuu, and anime relations on AniDB.
+# -----
+# https://en.namu.wiki/w/%EC%83%A4%EB%A1%A0%20%EC%95%A0%ED%94%8C
+#
+# シャロン・アップル Sharon Apple A cyber idol from Macross Plus.She is voiced by Mako Hyodo. At the beginning of Plus, Sharon's AI was incomplete, so the concert was conducted with the support of Mün Pan Ron, who masqueraded as her manager. As a result, Mune's deep consciousness was projected as it is, and in the second half, this twisted and caused an accident.
+#
+# {'text': 'Sharon Apple (シャロン・アップル, Sharon Appuru) is a virtual idol and one of the antagonists of the Macross Plus OVA and its theatrical adaptation, Macross Plus Movie Edition. She also appeared in the short-lived manga adaptation, Macross Plus: TAC Name. She is an artificially created idol singer whose voice and thoughts are provided by Myung Fang Lone. manifests herself ...', 'link': 'https://macross.fandom.com/wiki/Sharon_Apple'}
+# {'text': 'The new alliance is tested when the crazed Sharon Apple takes control of the Ghost and attacks them. Guld however convinces Isamu to leave and rescue the imprisoned Myung. There he is faced by intense fire from the Macross itself, also controlled by Sharon Apple. Soon after, Isamu succumbs to hypnotizing powers and takes his fighter ...', 'link': 'https://en.wikipedia.org/wiki/List_of_Macross_characters'}
+# {'text': 'Sharon Apple\'s songs are performed by a number of different artists - namely Gabriela Robin, Akino Arai, Mai Yamane, Melodie Sexton, Wuyontana and the Raiché Coutev Sisters. The most notable song in the series is Myung\'s song "Voices", which is performed by Arai and is the only Japanese-language song in the soundtrack. For the English dub of ...', 'link': 'https://en.wikipedia.org/wiki/Macross_Plus'}
+# {'text': 'Virturoid is a computer-generated virtual reality singer created by the Macross Consortium in 2039. She became a popular idol, but also caused the Sharon Apple Incident in 2040 when she tried to take over the SDF-1 Macross.', 'link': 'http://www.macross2.net/m3/macrossplus/virturoid.htm'}
+# {'text': "Sharon Apple (Macross) The first full-on virtual idol to really capture international attention however came ten years later with the arrival of Sharon Apple — from 1995's follow-up entry in the Macross anime series, the four-part video release called Macross Plus. She is very different from Minmay, in numerous ways!", 'link': 'https://blackgate.com/2020/01/25/her-masters-voice-the-world-of-virtual-idols-part-i/'}
+# {'text': 'Sharon Apple Sharon Apple is an artificial idol. She exists as a computer which produces a hologram. While her producers say that she has an artificial intelligence that includes emotional programming. (Source: Wikipedia) Voice Actors. Hyoudou, Mako. Japanese. Harte, Melora. English. Federici, Roberta. Italian. Ambrós, Carmen ...', 'link': 'https://myanimelist.net/character/7888/Sharon_Apple/'}
+# {'text': 'The events surrounding the installation of an illegal bio-neural chip into the virtual idol Sharon Apple in 2040. Once installed with the bio-neural chip, Sharon Apple began forming an artificial intelligence and subsequently a dangerous self-preservation psychology. took over control of the SDF-1 Macross, the X-9 Ghost fighter and hypnotically enthralled most of the population of ...', 'link': 'https://deculture.fandom.com/wiki/Sharon_Apple_Incident'}
+# {'text': "Unlike the rest of the recent wave of idols however, Sharon is a computer-generated virtual reality singer. Despite this (or perhaps because of this), the virturoid's explosive popularity has grown on Earth and the planets colonized by Humans. ... Project Team: Project Debut: Plus Vol. 1 Voice: Mako Hyoudou, Mai Yamane, Gabriela ...", 'link': 'https://macross.anime.net/wiki/Sharon_Apple'}
+# {'text': 'Sharon Apple is an artificial idol and a computer-generated hologram in the anime Macross Plus. Learn about her name, gender, abilities, appearance, seiyuu, and anime relations on AniDB.', 'link': 'https://anidb.net/character/48625'}
+# {'text': "シャロン・アップル Sharon Apple A cyber idol from Macross Plus.She is voiced by Mako Hyodo. At the beginning of Plus, Sharon's AI was incomplete, so the concert was conducted with the support of Mün Pan Ron, who masqueraded as her manager. As a result, Mune's deep consciousness was projected as it is, and in the second half, this twisted and caused an accident.", 'link': 'https://en.namu.wiki/w/%EC%83%A4%EB%A1%A0%20%EC%95%A0%ED%94%8C'}
