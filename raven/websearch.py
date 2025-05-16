@@ -1,3 +1,5 @@
+"""Web search client for Raven."""
+
 # Based on:
 #
 # https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium/blob/main/src/index.ts
