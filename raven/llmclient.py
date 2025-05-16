@@ -41,6 +41,7 @@ from unpythonic.env import env
 from . import chattree
 from . import config
 from . import hybridir
+from . import websearch
 
 # --------------------------------------------------------------------------------
 # Module bootup
@@ -132,7 +133,7 @@ def setup(backend_url: str) -> env:
 
     The LLM version is "{model}".
 
-    The knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context may be newer.
+    The knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context as well as web search results may be newer.
 
     You are running on a private, local system.
 
@@ -159,10 +160,27 @@ def setup(backend_url: str) -> env:
     **Data sources**
 
     - The system accesses external data beyond its built-in knowledge through:
+      - Tool calls.
       - Additional context that is provided by the software this LLM is running in.
     """).strip()
 
+    # The AI's initial greeting. Used when a new chat is started.
     greeting = "How can I help you today?"
+
+    # Tools (functions) to make available to the AI for tool-calling (for models that support that - as of May 2025, at least Qwen 2 or later do).
+    # TODO: Add a download-web-page tool (Need to clean the result from HTML into plain text? Perhaps ingest to RAG for persistence, so that if it already exists, it is not re-downloaded (until some timeout expires)?)
+    # TODO: Add a RAG search tool to allow the AI to query the RAG database
+    # TODO: Add a full-document tool to retrieve a full document from the RAG database (the RAG search shows the IDs)
+    tools = [
+        {"type": "function",
+         "function": {"name": "websearch",
+                      "description": "Perform a web search.",
+                      "parameters": {"type": "object",
+                                     "required": ["query"],
+                                     "properties": {"query": {"type": "string",
+                                                              "description": "The search query."}}}}}
+    ]
+    tool_entrypoints = {"websearch": websearch.search_duckduckgo}
 
     # Generation settings for the LLM backend.
     request_data = {
@@ -185,6 +203,7 @@ def setup(backend_url: str) -> env:
         "seed": -1,  # 558614238,  # -1 = random; unused if T = 0
         "stream": True,  # When the LLM is generating text, send each token to the client as soon as it is available. For live-updating the UI.
         "messages": [],  # Chat transcript, including system messages. Populated later by `invoke`.
+        "tools": tools,  # Tools available for tool-calling, for models that support that (as of 16 May 2025, need dev branch of ooba).
         "name1": user,  # Name of user's persona in the chat.
         "name2": char,  # Name of AI's persona in the chat.
     }
@@ -202,6 +221,8 @@ def setup(backend_url: str) -> env:
                    character_card=character_card,
                    stopping_strings=stopping_strings,
                    greeting=greeting,
+                   tools=tools,  # for inspection
+                   tool_entrypoints=tool_entrypoints,  # for our implementation to be able to call them
                    backend_url=backend_url,
                    request_data=request_data,
                    role_names=role_names)
@@ -457,6 +478,12 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
     data = copy.deepcopy(settings.request_data)
     data["messages"] = history
     stream_response = requests.post(f"{settings.backend_url}/v1/chat/completions", headers=headers, json=data, verify=False, stream=True)
+
+    if stream_response.status_code != 200:  # not "200 OK"?
+        logger.error(f"LLM server returned error: {stream_response.status_code} {stream_response.reason}. Content of error response follows.")
+        logger.error(stream_response.text)
+        raise RuntimeError(f"While calling LLM: HTTP {stream_response.status_code} {stream_response.reason}")
+
     client = sseclient.SSEClient(stream_response)
 
     llm_output = io.StringIO()
@@ -467,6 +494,7 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
         with timer() as tim:
             for event in client.events():
                 payload = json.loads(event.data)
+                # print(payload, file=sys.stderr)  # DEBUG / basic science against API
                 chunk = payload['choices'][0]['delta']['content']
                 n_chunks += 1
                 llm_output.write(chunk)
@@ -489,6 +517,8 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
         logger.error(f"Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
         logger.error(f"{type(exc)}: {exc}")
         raise
+
+    # TODO: handle tool calls requested by the LLM
 
     llm_output = llm_output.getvalue()
 
