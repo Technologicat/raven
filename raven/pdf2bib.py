@@ -333,11 +333,11 @@ def setup_prompts(settings: env) -> env:
         #                                             parent_id=root_node_id)
         #     history = datastore.linearize_up(request_node_id)
         #     out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="*"))
-        #     out.data = llmclient.scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
-        #     has_author_list = out.data[-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
+        #     out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+        #     has_author_list = out.data["content"][-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
         #     has_author_list = has_author_list.translate(str.maketrans('', '', string.punctuation))  # Strip punctuation, in case of spurious formatting.
         #     answers[has_author_list] += 1
-        #     llm_outputs.append(out.data)
+        #     llm_outputs.append(out.data["content"])
         # settings.request_data["temperature"] = T
         # votes = answers.most_common()  # [(item0, count0), ...]
         #
@@ -361,7 +361,7 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="A"))
-        out.data = llmclient.scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
+        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        extracted : {out.data}")
 
@@ -373,28 +373,28 @@ def setup_prompts(settings: env) -> env:
 
         request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
                                                                               role="user",
-                                                                              message=prompt_drop_author_affiliations.format(author_names=out.data)),
+                                                                              message=prompt_drop_author_affiliations.format(author_names=out.data["content"])),
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="a"))
-        out.data = llmclient.scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
+        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        LLM pass 1: {out.data}")
 
         request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
                                                                               role="user",
-                                                                              message=prompt_reformat_author_separators.format(author_names=out.data)),
+                                                                              message=prompt_reformat_author_separators.format(author_names=out.data["content"])),
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
-        out.data = llmclient.scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
+        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        LLM pass 2: {out.data}")
 
-        if out.data.endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
-            out.data = out.data[:-3]
+        if out.data["content"].endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
+            out.data["content"] = out.data["content"][:-3]
 
-        authors = out.data.strip()  # Final result from LLM. Remove extra whitespace, just in case.
+        authors = out.data["content"].strip()  # Final result from LLM. Remove extra whitespace, just in case.
 
         # Sanity-check the LLM output.
         #
@@ -536,11 +536,11 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="T"))
-        out.data = llmclient.scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
+        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        original : {out.data}")
 
-        title = out.data.strip()
+        title = out.data["content"].strip()
 
         # Strip spurious period
         while title[-1] == ".":
@@ -596,19 +596,19 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="K"))
-        out.data = llmclient.scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
+        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        original : {out.data}")
 
         # Remove spurious heading
         for heading in ("Keywords:", "KEYWORDS:", "Key words:", "Key Words:", "KEY WORDS:"):
-            if out.data.startswith(heading):
-                out.data = out.data[len(heading):]
+            if out.data["content"].startswith(heading):
+                out.data["content"] = out.data["content"][len(heading):]
 
         # Sanity-check the LLM output.
         #
         # Initial list of keywords.
-        keywords = out.data.strip()
+        keywords = out.data["content"].strip()
 
         # Strip spurious period
         while keywords[-1] == ".":
@@ -668,9 +668,9 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
-        out.data = llmclient.scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
+        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
-        abstract = out.data.strip()
+        abstract = out.data["content"].strip()
 
         return abstract
 
@@ -781,8 +781,8 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                                                                     parent_id=root_node_id)
                             history = datastore.linearize_up(request_node_id)
                             out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph=progress_symbol))
-                            out.data = llmclient.scrub(settings, out.data, thoughts_mode="discard", add_ai_persona_name=False)
-                            bibtex_entry.write(f"    {field_key} = {{{out.data}}},\n")
+                            out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+                            bibtex_entry.write(f"    {field_key} = {{{out.data['content']}}},\n")
                         elif data_kind == "function":
                             function_output = data(uid, text_from_pdf)
                             if function_output is not None:  # A function can indicate "no data" by returning `None`. Inject the field only if data was returned.
