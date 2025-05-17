@@ -1194,11 +1194,11 @@ def minimal_chat_client(backend_url):
                                                                      parent_id=state["HEAD"])
                         state["HEAD"] = tool_message_node_id
 
-                # DEBUG
-                history = datastore.linearize_up(state["HEAD"])
-                chat_print_history(history, show_numbers=False)
+                # # DEBUG
+                # history = datastore.linearize_up(state["HEAD"])
+                # chat_print_history(history, show_numbers=False)
 
-                # TODO: AI's turn again
+                # TODO: AI's turn again after tool calls, if any were made
 
     except (EOFError, KeyboardInterrupt):
         print()
