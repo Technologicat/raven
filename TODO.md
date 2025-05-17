@@ -78,7 +78,8 @@
 
 - LLMClient, to prepare for interactive AI summarization:
   - Finish tool-calling functionality.
-    - Implement the scaffolding to actually perform the calls and insert the results into the LLM's context.
+    - Implement the scaffolding to actually perform the calls, insert the results into the LLM's context, and then invoke the AI again.
+    - Add possibility for the user to call the tools, too (then control returns back to user). Use Python syntax?
     - Add a "RAG search" tool to allow the AI to explicitly query the RAG database.
       - Remaining problem: how to dynamically tell the AI what kinds of topics are currently available in the database? Keyword auto-extraction and system message?
     - Add a "get full document" tool to retrieve a full document from the RAG database based on its ID (the current RAG autosearch already shows the document IDs).
