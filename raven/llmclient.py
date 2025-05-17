@@ -541,9 +541,7 @@ def invoke(settings: env, history: List[Dict[str, str]], progress_callback=None)
         raise
     llm_output = llm_output.getvalue()
 
-    # TODO: Handle tool calls requested by the LLM. Call the tool, and add the result to the history. We probably need to do that outside `invoke`, and rearchitect some parts.
-    #
-    # These come in the last chunk, with empty text content, when "finish_reason = tool_calls", e.g.:
+    # Tool calls come in the last chunk, with empty text content, when "finish_reason = tool_calls", e.g.:
     #
     # {'id': 'chatcmpl-1747386255850717184', 'object': 'chat.completion.chunk', 'created': 1747386255, 'model': 'Qwen_QwQ-32B-Q4_K_M.gguf',
     #  'choices': [{'index': 0,
@@ -1142,6 +1140,8 @@ def minimal_chat_client(backend_url):
                                             "results": docs_results}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
             state["HEAD"] = ai_message_node_id
 
+            # Handle tool calls requested by the LLM, if any.
+            # Call the tool(s) specified by the LLM, with arguments specified by the LLM, and add the result to the history.
             if out.data["tool_calls"]:
                 logger.debug(f"toolcall: len({out.data['tool_calls']}) tool calls requested by the LLM.")
 
