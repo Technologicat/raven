@@ -877,8 +877,8 @@ def minimal_chat_client(backend_url):
 
         def format_persona(role: str, color: bool) -> None:
             persona = settings.role_names.get(role, None)
-            if role == "system" and persona is None:
-                out = "<<system>>"
+            if persona is None:
+                out = f"<<{role}>>"  # currently, this include "<<system>>" and "<<tool>>"
                 if color:
                     out = colorizer.colorize(out, colorizer.Style.DIM)
                 return out
@@ -1141,6 +1141,64 @@ def minimal_chat_client(backend_url):
             ai_message_node["retrieval"] = {"query": user_message,
                                             "results": docs_results}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
             state["HEAD"] = ai_message_node_id
+
+            if out.data["tool_calls"]:
+                logger.debug(f"toolcall: len({out.data['tool_calls']}) tool calls requested by the LLM.")
+
+                # TODO: refactor into a function
+                for request_record in out.data["tool_calls"]:
+                    if "type" not in request_record:
+                        logger.warning(f"toolcall: missing 'type' field in request. Ignoring this tool call request. Data: {request_record}")
+                        continue
+                    if request_record["type"] != "function":
+                        logger.warning(f"toolcall: unknown type '{request_record['type']}' in request, expected 'function'. Ignoring this tool call request. Data: {request_record}")
+                        continue
+                    if "function" not in request_record:
+                        logger.warning(f"toolcall: missing 'function' field. Ignoring this tool call request. Data: {request_record}")
+                        continue
+
+                    function_record = request_record["function"]
+                    if "name" not in function_record:
+                        logger.warning(f"toolcall: missing 'function.name' field in request. Ignoring this tool call request. Data: {request_record}")
+                        continue
+
+                    function_name = function_record["name"]
+                    try:
+                        function = settings.tool_entrypoints[function_name]
+                    except KeyError:
+                        logger.warning(f"toolcall: unknown function '{function_name}'. Ignoring this tool call.")
+                        continue
+
+                    if "arguments" in function_record:
+                        try:
+                            kwargs = json.loads(function_record["arguments"])
+                        except Exception as exc:
+                            logger.warning(f"toolcall: function '{function_name}': failed to parse JSON for arguments; ignoring this tool call request: {type(exc)}: {exc}")
+                            continue
+                    else:
+                        kwargs = {}
+
+                    # TODO: get the tool call ID (OpenAI compatible API) and add it to the message
+                    logger.debug(f"toolcall: calling '{function_name}' with arguments {kwargs}.")
+                    try:
+                        tool_call_output = function(**kwargs)
+                    except Exception as exc:
+                        logger.warning(f"toolcall: function '{function_name}': exited with exception {type(exc)}: {exc}")
+                    else:
+                        tool_message = create_chat_message(settings=settings,
+                                                           role="tool",
+                                                           message=tool_call_output,
+                                                           add_role_name=False)
+                        tool_message_node_id = datastore.create_node(data=tool_message,
+                                                                     parent_id=state["HEAD"])
+                        state["HEAD"] = tool_message_node_id
+
+                # DEBUG
+                history = datastore.linearize_up(state["HEAD"])
+                chat_print_history(history, show_numbers=False)
+
+                # TODO: AI's turn again
+
     except (EOFError, KeyboardInterrupt):
         print()
         print(colorizer.colorize("Exiting chat.", colorizer.Style.BRIGHT))
