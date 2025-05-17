@@ -1179,6 +1179,7 @@ def minimal_chat_client(backend_url):
                         kwargs = {}
 
                     # TODO: get the tool call ID (OpenAI compatible API) and add it to the message
+                    # TODO: websearch return format: for the chat history, need only the preformatted text, but for the eventual GUI, would be nice to have the links separately.
                     logger.debug(f"toolcall: calling '{function_name}' with arguments {kwargs}.")
                     try:
                         tool_call_output = function(**kwargs)
