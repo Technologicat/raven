@@ -598,7 +598,7 @@ def extract_keywords(input_data, max_vis_kw=6):
                 with timer() as tim2:
                     # NOTE: make sure to `source env.sh` first, or this won't find the CUDA runtime.
                     try:
-                        spacy.require_gpu()
+                        spacy.require_gpu()  # TODO: allow configuring this
                         update_status_and_log("NLP model will run on GPU (if available).", log_indent=2)
                     except Exception as exc:
                         logger.warning(f"extract_keywords: exception while enabling GPU: {type(exc)}: {exc}")
