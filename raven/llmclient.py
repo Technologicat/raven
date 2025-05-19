@@ -1173,8 +1173,8 @@ def minimal_chat_client(backend_url):
                     chat_print_message(message_number=ai_message_number, role="assistant", text=nomatch_text)
                     print()
                     continue
-                # got at least one match from RAG index
 
+                # Got at least one match from RAG index.
                 for docs_result in reversed(docs_results):
                     search_result_text = f"[System information: Knowledge-base match from `{docs_result['document_id']}`.]\n\n{docs_result['text'].strip()}\n-----"
                     message_to_inject = create_chat_message(settings=settings,
