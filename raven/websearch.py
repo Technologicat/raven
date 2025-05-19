@@ -8,7 +8,7 @@
 #
 # https://github.com/SillyTavern/SillyTavern-Extras/blob/main/modules/websearch/script.py
 
-__all__ = ["search_google", "search_duckduckgo"]
+__all__ = ["search_google", "search_duckduckgo", "websearch_wrapper"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -323,6 +323,10 @@ def search_duckduckgo(query: str, max_links: int = 10) -> (List[str], List[str])
 #     preformatted_text, results = format_results(texts=texts, titles=titles, links=links)
 #     logger.debug(f"search_startpage: Found: {preformatted_text}")
 #     return preformatted_text, results
+
+def websearch_wrapper(query: str, max_links: int = 10) -> (List[str], List[str]):
+    preformatted_text, results = search_duckduckgo(query)
+    return preformatted_text  # TODO: the LLM scaffolding doesn't currently accept anything else
 
 # --------------------------------------------------------------------------------
 # Example

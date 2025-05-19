@@ -17,6 +17,17 @@ from unpythonic.env import env
 # Currently, only local LLMs are supported, as there is no mechanism to pass an API key. I don't use cloud LLMs myself, but pull requests regarding this are welcome.
 llm_backend_url = "http://127.0.0.1:5000"
 
+# Some LLMs are capable of tool-calling, but don't have the instructions to do that in their templates.
+# When `True`, this changes the system prompt to include tool-calling instructions.
+#
+# E.g. DeepSeek-R1-Distill-Qwen-7B is like this.
+#
+# Newer models such as QwQ-32B automatically include these instructions from the tools metadata,
+# and don't need this.
+#
+llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
+# llm_send_toolcall_instructions = False  # for QwQ-32B
+
 config_base_dir = "~/.config/raven/"
 
 llm_line_wrap_width = 160  # `llmclient`; for text wrapping in live update
