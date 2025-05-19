@@ -608,7 +608,7 @@ class HybridIR:
         # Tokenizing each chunk enables keyword search. These are used by the keyword index (bm25s).
         # NOTE: This can be slow, since we use spaCy's neural model for lemmatization.
         logger.info(f"HybridIR._prepare_document_for_indexing: tokenizing document '{document_id}'.")
-        tokenized_chunks = [self.tokenize(chunk["text"]) for chunk in document_chunks]
+        tokenized_chunks = [self._tokenize(chunk["text"]) for chunk in document_chunks]
 
         # Embedding each chunk enables semantic search. These are used by the vector index (chromadb).
         # NOTE: This can be slow, depending on the embedding model, and whether GPU acceleration is available.
@@ -741,7 +741,7 @@ class HybridIR:
             keyword_k = len(self._keyword_retriever.corpus)
 
         # Prepare query for keyword search
-        query_tokens = self.tokenize(query)
+        query_tokens = self._tokenize(query)
 
         # Prepare query for vector search
         query_embedding = self._semantic_model.encode([query],
