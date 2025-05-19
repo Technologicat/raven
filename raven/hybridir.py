@@ -62,22 +62,19 @@ def load_stopwords() -> List[str]:
     return stopwords
 
 def load_nlp_pipeline():
-    spacy.require_gpu()
-    nlp = spacy.load(config.spacy_model)
-
     try:
-        spacy.require_gpu()
-        logger.info("NLP model will run on GPU (if available).")
+        spacy.require_gpu()  # TODO: allow configuring this
+        logger.info("load_nlp_pipeline: NLP model will run on GPU (if available).")
     except Exception as exc:
-        logger.warning(f"exception while enabling GPU: {type(exc)}: {exc}")
+        logger.warning(f"load_nlp_pipeline: exception while enabling GPU: {type(exc)}: {exc}")
         spacy.require_cpu()
-        logger.info("NLP model will run on CPU.")
+        logger.info("load_nlp_pipeline: NLP model will run on CPU.")
 
     try:
         nlp = spacy.load(config.spacy_model)
     except OSError:
         # https://stackoverflow.com/questions/62728854/how-to-place-spacy-en-core-web-md-model-in-python-package
-        logger.info("Downloading language model for spaCy (don't worry, this will only happen once)...")
+        logger.info("load_nlp_pipeline: Downloading language model for spaCy (don't worry, this will only happen once)...")
         from spacy.cli import download
         download(config.spacy_model)
         nlp = spacy.load(config.spacy_model)
@@ -88,6 +85,30 @@ stopwords = load_stopwords()
 nlp = load_nlp_pipeline()
 
 # --------------------------------------------------------------------------------
+
+# Cache the embedding models (to load only one copy of each model)
+_embedding_models = {}
+def load_embedding_model(model_name: str):
+    """Load and return the embedding model (for vector storage).
+
+    If the specified model is already loaded, return the already-loaded instance.
+    """
+    if model_name in _embedding_models:
+        logger.info(f"load_embedding_model: '{model_name}' is already loaded, returning it.")
+        return _embedding_models[model_name]
+    logger.info(f"load_embedding_model: loading '{model_name}'.")
+
+    try:
+        embedding_model = SentenceTransformer(model_name, device=config.device_string)
+    except RuntimeError as exc:
+        logger.warning(f"load_embedding_model: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
+        try:
+            embedding_model = SentenceTransformer(model_name, device="cpu")
+        except RuntimeError as exc:
+            logger.warning(f"load_embedding_model: failed to load SentenceTransformer: {type(exc)}: {exc}")
+            raise
+    _embedding_models[model_name] = embedding_model
+    return embedding_model
 
 def format_chunk_full_id(document_id: str, chunk_id: str) -> str:
     """Generate an identifier for a chunk of a document, based on the given IDs."""
@@ -377,7 +398,7 @@ class HybridIR:
             self.embedding_model_name = embedding_model_name
             self.documents = {}
 
-        self._semantic_model = SentenceTransformer(self.embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
+        self._semantic_model = load_embedding_model(self.embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
 
         # Semantic search: ChromaDB vector storage
         # ChromaDB persists data automatically when we use the `PersistentClient`
