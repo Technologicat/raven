@@ -9,7 +9,8 @@ __all__ = ["list_models", "setup",
            "create_chat_message", "create_initial_system_message",
            "factory_reset_chat_datastore",
            "format_chat_datetime_now", "format_reminder_to_focus_on_latest_input", "format_reminder_to_use_information_from_context_only",
-           "invoke", "scrub"]
+           "scrub",
+           "invoke", "perform_tool_calls"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -607,8 +608,82 @@ def invoke(settings: env, history: List[Dict], progress_callback=None) -> env:
                n_tokens=n_tokens,
                dt=tim.dt)
 
-def handle_tool_calls(message: Dict):
-    pass
+def perform_tool_calls(settings: env, message: Dict) -> List[Dict]:
+    """Perform tool calls as requested in `message["tool_calls"]`.
+
+    Return a list of messages (each with `role="tool"`) containing the tool outputs.
+
+    If the `tool_calls` field of the message is missing or if it is empty, return the empty list.
+    """
+    if "tool_calls" not in message:
+        logger.debug(f"perform_tool_calls: `tool_calls` field missing from message record. Data: {message}")
+        return []
+    if not message["tool_calls"]:
+        logger.debug("perform_tool_calls: No tool calls requested by the LLM.")
+        return []
+    logger.info(f"perform_tool_calls: The LLM requested {len(message['tool_calls'])} tool calls.")
+
+    tool_response_messages = []
+    def add_tool_response_message(text):
+        tool_response_message = create_chat_message(settings=settings,
+                                                    role="tool",
+                                                    text=text,
+                                                    add_role_name=False)
+        tool_response_messages.append(tool_response_message)
+
+    for request_record in message["tool_calls"]:
+        if "type" not in request_record:
+            # The response message is intended for the LLM, whereas the log message (with all technical details) goes into the log.
+            add_tool_response_message("Tool call failed. The request record is missing the 'type' field.")
+            logger.warning(f"perform_tool_calls: missing 'type' field in request. Ignoring this tool call request. Data: {request_record}")
+            continue
+        if request_record["type"] != "function":
+            add_tool_response_message(f"Tool call failed. Unknown request record type '{request_record['type']}'; expected 'function'.")
+            logger.warning(f"perform_tool_calls: unknown type '{request_record['type']}' in request, expected 'function'. Ignoring this tool call request. Data: {request_record}")
+            continue
+        if "function" not in request_record:
+            add_tool_response_message("Tool call failed. The request record is missing the 'function' field.")
+            logger.warning(f"perform_tool_calls: missing 'function' field. Ignoring this tool call request. Data: {request_record}")
+            continue
+
+        function_record = request_record["function"]
+        if "name" not in function_record:
+            add_tool_response_message("Tool call failed. The request's function record is missing the 'name' field.")
+            logger.warning(f"perform_tool_calls: missing 'function.name' field in request. Ignoring this tool call request. Data: {request_record}")
+            continue
+
+        function_name = function_record["name"]
+        try:
+            function = settings.tool_entrypoints[function_name]
+        except KeyError:
+            add_tool_response_message(f"Tool call failed. Function not found: '{function_name}'.")
+            logger.warning(f"perform_tool_calls: unknown function '{function_name}'. Ignoring this tool call request.")
+            continue
+
+        if "arguments" in function_record:
+            try:
+                kwargs = json.loads(function_record["arguments"])
+            except Exception as exc:
+                add_tool_response_message(f"Tool call failed. For function '{function_name}', failed to parse the JSON containing the function arguments.")
+                logger.warning(f"perform_tool_calls: function '{function_name}': failed to parse JSON for arguments; ignoring this tool call request: {type(exc)}: {exc}")
+                continue
+        else:
+            logger.debug(f"perform_tool_calls: for function '{function_name}: The request's function record is missing the 'arguments' field. Calling without arguments.")
+            kwargs = {}
+
+        # TODO: get the tool call ID (OpenAI compatible API) and add it to the message
+        # TODO: websearch return format: for the chat history, need only the preformatted text, but for the eventual GUI, would be nice to have the links separately.
+        logger.debug(f"perform_tool_calls: calling '{function_name}' with arguments {kwargs}.")
+        try:
+            tool_output_text = function(**kwargs)
+        except Exception as exc:
+            add_tool_response_message(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}")
+            logger.warning(f"perform_tool_calls: function '{function_name}': exited with exception {type(exc)}: {exc}")
+        else:  # success!
+            logger.debug(f"perform_tool_calls: Function '{function_name}' returned successfully. Generating tool response message.")
+            add_tool_response_message(tool_output_text)
+
+    return tool_response_messages
 
 # --------------------------------------------------------------------------------
 # Minimal chat client for testing/debugging that Raven can connect to your LLM.
@@ -1161,63 +1236,18 @@ def minimal_chat_client(backend_url):
 
             # Handle tool calls requested by the LLM, if any.
             # Call the tool(s) specified by the LLM, with arguments specified by the LLM, and add the result to the history.
-            if out.data["tool_calls"]:
-                logger.debug(f"toolcall: len({out.data['tool_calls']}) tool calls requested by the LLM.")
+            # Each response goes into its own message, with `role="tool"`.
+            # If there are no tool calls, we get an empty list, and the loop body will be skipped.
+            for tool_response_message in perform_tool_calls(settings, message=out.data):
+                tool_response_message_node_id = datastore.create_node(data=tool_response_message,
+                                                                      parent_id=state["HEAD"])
+                state["HEAD"] = tool_response_message_node_id
 
-                # TODO: refactor into a function
-                for request_record in out.data["tool_calls"]:
-                    if "type" not in request_record:
-                        logger.warning(f"toolcall: missing 'type' field in request. Ignoring this tool call request. Data: {request_record}")
-                        continue
-                    if request_record["type"] != "function":
-                        logger.warning(f"toolcall: unknown type '{request_record['type']}' in request, expected 'function'. Ignoring this tool call request. Data: {request_record}")
-                        continue
-                    if "function" not in request_record:
-                        logger.warning(f"toolcall: missing 'function' field. Ignoring this tool call request. Data: {request_record}")
-                        continue
+            # # DEBUG
+            # history = datastore.linearize_up(state["HEAD"])
+            # chat_print_history(history, show_numbers=False)
 
-                    function_record = request_record["function"]
-                    if "name" not in function_record:
-                        logger.warning(f"toolcall: missing 'function.name' field in request. Ignoring this tool call request. Data: {request_record}")
-                        continue
-
-                    function_name = function_record["name"]
-                    try:
-                        function = settings.tool_entrypoints[function_name]
-                    except KeyError:
-                        logger.warning(f"toolcall: unknown function '{function_name}'. Ignoring this tool call.")
-                        continue
-
-                    if "arguments" in function_record:
-                        try:
-                            kwargs = json.loads(function_record["arguments"])
-                        except Exception as exc:
-                            logger.warning(f"toolcall: function '{function_name}': failed to parse JSON for arguments; ignoring this tool call request: {type(exc)}: {exc}")
-                            continue
-                    else:
-                        kwargs = {}
-
-                    # TODO: get the tool call ID (OpenAI compatible API) and add it to the message
-                    # TODO: websearch return format: for the chat history, need only the preformatted text, but for the eventual GUI, would be nice to have the links separately.
-                    logger.debug(f"toolcall: calling '{function_name}' with arguments {kwargs}.")
-                    try:
-                        tool_call_output = function(**kwargs)
-                    except Exception as exc:
-                        logger.warning(f"toolcall: function '{function_name}': exited with exception {type(exc)}: {exc}")
-                    else:
-                        tool_message = create_chat_message(settings=settings,
-                                                           role="tool",
-                                                           text=tool_call_output,
-                                                           add_role_name=False)
-                        tool_message_node_id = datastore.create_node(data=tool_message,
-                                                                     parent_id=state["HEAD"])
-                        state["HEAD"] = tool_message_node_id
-
-                # # DEBUG
-                # history = datastore.linearize_up(state["HEAD"])
-                # chat_print_history(history, show_numbers=False)
-
-                # TODO: AI's turn again after tool calls, if any were made
+            # TODO: AI's turn again after tool calls, if any were made
 
     except (EOFError, KeyboardInterrupt):
         print()
