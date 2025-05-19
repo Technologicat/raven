@@ -329,7 +329,7 @@ def setup_prompts(settings: env) -> env:
         #     print(_ + 1, end="", file=sys.stderr)
         #     request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
         #                                                                           role="user",
-        #                                                                           message=f"{prompt_check_authorlist}\n\n{text}"),
+        #                                                                           text=f"{prompt_check_authorlist}\n\n{text}"),
         #                                             parent_id=root_node_id)
         #     history = datastore.linearize_up(request_node_id)
         #     out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="*"))
@@ -357,7 +357,7 @@ def setup_prompts(settings: env) -> env:
 
         request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
                                                                               role="user",
-                                                                              message=f"{prompt_get_authors}\n-----\n\n{text}"),
+                                                                              text=f"{prompt_get_authors}\n-----\n\n{text}"),
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="A"))
@@ -373,7 +373,7 @@ def setup_prompts(settings: env) -> env:
 
         request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
                                                                               role="user",
-                                                                              message=prompt_drop_author_affiliations.format(author_names=out.data["content"])),
+                                                                              text=prompt_drop_author_affiliations.format(author_names=out.data["content"])),
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="a"))
@@ -383,7 +383,7 @@ def setup_prompts(settings: env) -> env:
 
         request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
                                                                               role="user",
-                                                                              message=prompt_reformat_author_separators.format(author_names=out.data["content"])),
+                                                                              text=prompt_reformat_author_separators.format(author_names=out.data["content"])),
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
@@ -532,7 +532,7 @@ def setup_prompts(settings: env) -> env:
         root_node_id = llmclient.factory_reset_chat_datastore(datastore, settings)
         request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
                                                                               role="user",
-                                                                              message=f"{prompt_get_title}\n-----\n\n{text}"),
+                                                                              text=f"{prompt_get_title}\n-----\n\n{text}"),
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="T"))
@@ -592,7 +592,7 @@ def setup_prompts(settings: env) -> env:
         root_node_id = llmclient.factory_reset_chat_datastore(datastore, settings)
         request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
                                                                               role="user",
-                                                                              message=f"{prompt_get_keywords}\n-----\n\n{text}"),
+                                                                              text=f"{prompt_get_keywords}\n-----\n\n{text}"),
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="K"))
@@ -664,7 +664,7 @@ def setup_prompts(settings: env) -> env:
         root_node_id = llmclient.factory_reset_chat_datastore(datastore, settings)
         request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
                                                                               role="user",
-                                                                              message=f"{prompt_get_abstract}\n-----\n\n{text}"),
+                                                                              text=f"{prompt_get_abstract}\n-----\n\n{text}"),
                                                 parent_id=root_node_id)
         history = datastore.linearize_up(request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
@@ -777,7 +777,7 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                             root_node_id = llmclient.factory_reset_chat_datastore(datastore, settings)
                             request_node_id = datastore.create_node(llmclient.create_chat_message(settings,
                                                                                                   role="user",
-                                                                                                  message=f"{data}\n-----\n\n{text_from_pdf}"),
+                                                                                                  text=f"{data}\n-----\n\n{text_from_pdf}"),
                                                                     parent_id=root_node_id)
                             history = datastore.linearize_up(request_node_id)
                             out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph=progress_symbol))
