@@ -736,7 +736,7 @@ def minimal_chat_client(backend_url):
             state["docs_enabled"] = True
 
         if "speculate_enabled" not in state:
-            logger.warning(f"load_app_state: missing key 'speculat_enabled' in '{state_file}', using default")
+            logger.warning(f"load_app_state: missing key 'speculate_enabled' in '{state_file}', using default")
             state["speculate_enabled"] = False
 
         # Refresh the system prompt in the datastore (to the one in this client's source code)
