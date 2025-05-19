@@ -417,6 +417,7 @@ class HybridIR:
                 self._keyword_retriever = None
                 self.full_id_to_record_index = {}
 
+        # Pending-edit mechanism so that we can add/update/delete a set of documents at once, and *then* rebuild the indices.
         self._pending_edits = []
 
     def _stat(self, path: Union[pathlib.Path, str]) -> Dict:  # size, mtime
@@ -427,7 +428,7 @@ class HybridIR:
             return {"size": stat.st_size, "mtime": stat.st_mtime}
         return {"size": None, "mtime": None}  # could be an in-memory document
 
-    def add(self, document_id: str, path: str, text: str, *, _log=True) -> str:
+    def add(self, document_id: str, path: str, text: str) -> str:
         """Queue a document for adding into the index. To save changes, call `commit`.
 
         `document_id`: must be unique. Recommended to use `unpythonic.gensym(os.path.basename(path))` or something.
@@ -443,36 +444,8 @@ class HybridIR:
 
         Returns `document_id`, for convenience.
         """
-        if _log:
-            logger.info(f"HybridIR.add: Queuing document '{document_id}' for adding to index.")
-
-        # Document-level data. This goes into the main datastore, which is also persisted so that we can rebuild indices when needed.
-        #
-        # Here we populate just those fields that can be filled quickly, so that `add` can return instantly.
-        # Fields that require expensive computation (chunks, tokens, embeddings) are added at commit time, by `_prepare_document_for_indexing`.
-        #
-        # Mind the insertion order - the resulting json should be easily human-readable, for debugging.
-        stats = self._stat(path)
-        document = {"document_id": document_id,
-                    "path": path,  # path of original file (e.g. to be able to open it in a PDF reader)
-                    "filesize": stats["size"],
-                    "mtime": stats["mtime"],
-                    "text": text,  # copy of original text as-is
-                    }
-
-        # Pending document mechanism so that we can add a set of documents at once, and *then* rebuild the indices.
-        with self._pending_edits_lock:
-            self._pending_edits.append(("add", document))
-
-    def delete(self, document_id: str, *, _log=True) -> None:
-        """Queue a document for deletion. To save changes, call `commit`.
-
-        `document_id`: the ID you earlier gave to `add`.
-        """
-        if _log:
-            logger.info(f"HybridIR.add: Queuing document '{document_id}' for deletion from index.")
-        with self._pending_edits_lock:
-            self._pending_edits.append(("delete", document_id))
+        self._pend_edit(action="add", document_id=document_id, path=path, text=text)
+        return document_id
 
     def update(self, document_id: str, path: str, text: str) -> str:
         """Queue a document for updating. To save changes, call `commit`.
@@ -483,11 +456,57 @@ class HybridIR:
 
         Returns `document_id`, for convenience.
         """
-        logger.info(f"HybridIR.add: Queuing document '{document_id}' for update in index (will delete, then re-add).")
+        self._pend_edit(action="update", document_id=document_id, path=path, text=text)
+        return document_id
+
+    def delete(self, document_id: str) -> None:
+        """Queue a document for deletion. To save changes, call `commit`.
+
+        `document_id`: the ID you earlier gave to `add`.
+        """
+        self._pend_edit(action="delete", document_id=document_id)
+
+    def _pend_edit(self,
+                   action: str,
+                   document_id: str,
+                   path: Optional[str] = None,
+                   text: Optional[str] = None):
+        if action not in ("add", "update", "delete"):
+            raise ValueError(f"Unknown action '{action}'; expected one of 'add', 'update', 'delete'.")
+        logger.info(f"HybridIR._pend_edit: Queuing document '{document_id}' for {action}.")
+
+        # Add or update -> prepare document record.
+        if action != "delete":
+            # Document-level data. This goes into the main datastore, which is also persisted so that we can rebuild indices when needed.
+            #
+            # Here we populate just those fields that can be filled quickly, so that the edit-queuing step can return instantly.
+            # Fields that require expensive computation (chunks, tokens, embeddings) are added at commit time, by `_prepare_document_for_indexing`.
+            #
+            # Mind the insertion order of the fields - the resulting json should be easily human-readable, for debugging.
+            # Metadata first, in a sensible order; fulltext last.
+            stats = self._stat(path)
+            document = {"document_id": document_id,
+                        "path": path,  # path of original file (e.g. to be able to open it in a PDF reader)
+                        "filesize": stats["size"],
+                        "mtime": stats["mtime"],
+                        "text": text,  # copy of original text as-is
+                        }
+
         with self._pending_edits_lock:
-            self.delete(document_id, _log=False)
-            self.add(document_id, path, text, _log=False)
-            return document_id
+            # Performance optimization: Drop any previous pending edits for the same document, since they'd be overwritten.
+            new_edits = [(act, doc) for (act, doc) in self._pending_edits if doc["document_id"] != document_id]
+            self._pending_edits.clear()
+            self._pending_edits.extend(new_edits)
+
+            # Pend the requested edit.
+            if action == "add":
+                self._pending_edits.append((action, document))
+            elif action == "delete":
+                self._pending_edits.append((action, document_id))
+            else:  # action == "update":
+                # Update = delete, then add.
+                self._pending_edits.append(("delete", document_id))
+                self._pending_edits.append(("add", document))
 
     # TODO: Index rebuilding is slow. Maybe `commit` should run as a bgtask, like the BibTeX importer.
     #       Note `HybridIRFileSystemEventHandler` already does that.
