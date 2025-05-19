@@ -1,5 +1,9 @@
 """Configuration for Raven."""
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 import torch
 
 from unpythonic.env import env
@@ -42,11 +46,27 @@ qa_embedding_model = "sentence-transformers/multi-qa-mpnet-base-cos-v1"
 
 # Which GPU to use in the preprocessor (BibTeX import), if available. If not available, CPU fallback is used automatically.
 # See also `run-on-internal-gpu.sh` for another way to select the GPU when starting the app, without modifying any files.
-device_string = "cuda:0"
+devices = {"embeddings": {"device_string": "cuda:0"},
+           "nlp": {"device_string": "cuda:0"},
+           "summarization": {"device_string": "cuda:0"}}
 
-device_string = device_string if torch.cuda.is_available() else "cpu"
-device_name = torch.cuda.get_device_name(device_string) if torch.cuda.is_available() else "cpu"
-torch_dtype = torch.float16 if device_string.startswith("cuda") else torch.float32
+def _check_devices():
+    unique_gpus = set()
+    for task, record in devices.items():
+        record["device_string"] = record["device_string"] if torch.cuda.is_available() else "cpu"
+        record["device_name"] = torch.cuda.get_device_name(record["device_string"]) if torch.cuda.is_available() else "cpu"
+        record["torch_dtype"] = torch.float16 if record["device_string"].startswith("cuda") else torch.float32
+        if record["device_string"].startswith("cuda"):
+            unique_gpus.add(record["device_string"])
+        logger.info(f"Compute device for {task} is {record['device_string']}, dtype {record['torch_dtype']}")
+
+    if torch.cuda.is_available():
+        for device in sorted(unique_gpus):
+            logger.info(f"Device info for GPU {record['device_string']} ({record['device_name']}):")
+            logger.info(f"    {torch.cuda.get_device_properties(record['device_string'])}")
+            logger.info(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(record['device_string']))}")
+            logger.info(f"    Detected CUDA version {torch.version.cuda}")
+_check_devices()
 
 # --------------------------------------------------------------------------------
 # BiBTeX import config

@@ -40,75 +40,16 @@ import numpy as np
 from unpythonic import allsame, box, partition, uniqify
 from unpythonic.env import env as envcls
 
-# NLP
-from sentence_transformers import SentenceTransformer
-import spacy
-
 # database
 import bm25s  # keyword
 import chromadb  # semantic (vector)
 
 from . import bgtask
 from . import config
+from . import nlpbackends
 from . import utils
 
 # --------------------------------------------------------------------------------
-# Bootup
-
-def load_stopwords() -> List[str]:
-    from spacy.lang.en import English
-    nlp_en = English()
-    stopwords = nlp_en.Defaults.stop_words
-    return stopwords
-
-def load_nlp_pipeline():
-    try:
-        spacy.require_gpu()  # TODO: allow configuring this
-        logger.info("load_nlp_pipeline: NLP model will run on GPU (if available).")
-    except Exception as exc:
-        logger.warning(f"load_nlp_pipeline: exception while enabling GPU: {type(exc)}: {exc}")
-        spacy.require_cpu()
-        logger.info("load_nlp_pipeline: NLP model will run on CPU.")
-
-    try:
-        nlp = spacy.load(config.spacy_model)
-    except OSError:
-        # https://stackoverflow.com/questions/62728854/how-to-place-spacy-en-core-web-md-model-in-python-package
-        logger.info("load_nlp_pipeline: Downloading language model for spaCy (don't worry, this will only happen once)...")
-        from spacy.cli import download
-        download(config.spacy_model)
-        nlp = spacy.load(config.spacy_model)
-
-    return nlp
-
-stopwords = load_stopwords()
-nlp = load_nlp_pipeline()
-
-# --------------------------------------------------------------------------------
-
-# Cache the embedding models (to load only one copy of each model)
-_embedding_models = {}
-def load_embedding_model(model_name: str):
-    """Load and return the embedding model (for vector storage).
-
-    If the specified model is already loaded, return the already-loaded instance.
-    """
-    if model_name in _embedding_models:
-        logger.info(f"load_embedding_model: '{model_name}' is already loaded, returning it.")
-        return _embedding_models[model_name]
-    logger.info(f"load_embedding_model: loading '{model_name}'.")
-
-    try:
-        embedding_model = SentenceTransformer(model_name, device=config.device_string)
-    except RuntimeError as exc:
-        logger.warning(f"load_embedding_model: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
-        try:
-            embedding_model = SentenceTransformer(model_name, device="cpu")
-        except RuntimeError as exc:
-            logger.warning(f"load_embedding_model: failed to load SentenceTransformer: {type(exc)}: {exc}")
-            raise
-    _embedding_models[model_name] = embedding_model
-    return embedding_model
 
 def format_chunk_full_id(document_id: str, chunk_id: str) -> str:
     """Generate an identifier for a chunk of a document, based on the given IDs."""
@@ -192,17 +133,6 @@ def chunkify(text: str, chunk_size: int, overlap: int, extra: float, trimmer: Op
         start += delta
         chunk_id += 1
     return chunks
-
-def tokenize(text: str) -> List[str]:
-    """Apply lowercasing, tokenization, stemming, stopword removal.
-
-    Returns a list of tokens.
-
-    We use a spaCy NLP pipeline to do the analysis.
-    """
-    doc = nlp(text.lower())
-    tokens = [token.lemma_ for token in doc if token.is_alpha and token.text not in stopwords]
-    return tokens
 
 def reciprocal_rank_fusion(*item_lists: List[Any], K: int = 60) -> List[Tuple[Any, float]]:
     """Fuse rank from multiple IR systems using Reciprocal Rank Fusion (RRF).
@@ -398,7 +328,9 @@ class HybridIR:
             self.embedding_model_name = embedding_model_name
             self.documents = {}
 
-        self._semantic_model = load_embedding_model(self.embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
+        self._semantic_model = nlpbackends.load_embedding_model(self.embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
+        self._nlp_pipeline = nlpbackends.load_nlp_pipeline(config.spacy_model)
+        self._stopwords = nlpbackends.load_stopwords()
 
         # Semantic search: ChromaDB vector storage
         # ChromaDB persists data automatically when we use the `PersistentClient`
@@ -440,6 +372,17 @@ class HybridIR:
 
         # Pending-edit mechanism so that we can add/update/delete a set of documents at once, and *then* rebuild the indices.
         self._pending_edits = []
+
+    def _tokenize(self, text: str) -> List[str]:
+        """Apply lowercasing, tokenization, stemming, stopword removal.
+
+        Returns a list of tokens.
+
+        We use a spaCy NLP pipeline to do the analysis.
+        """
+        doc = self._nlp_pipeline(text.lower())
+        tokens = [token.lemma_ for token in doc if token.is_alpha and token.text not in self._stopwords]
+        return tokens
 
     def _stat(self, path: Union[pathlib.Path, str]) -> Dict:  # size, mtime
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
@@ -665,7 +608,7 @@ class HybridIR:
         # Tokenizing each chunk enables keyword search. These are used by the keyword index (bm25s).
         # NOTE: This can be slow, since we use spaCy's neural model for lemmatization.
         logger.info(f"HybridIR._prepare_document_for_indexing: tokenizing document '{document_id}'.")
-        tokenized_chunks = [tokenize(chunk["text"]) for chunk in document_chunks]
+        tokenized_chunks = [self.tokenize(chunk["text"]) for chunk in document_chunks]
 
         # Embedding each chunk enables semantic search. These are used by the vector index (chromadb).
         # NOTE: This can be slow, depending on the embedding model, and whether GPU acceleration is available.
@@ -798,7 +741,7 @@ class HybridIR:
             keyword_k = len(self._keyword_retriever.corpus)
 
         # Prepare query for keyword search
-        query_tokens = tokenize(query)
+        query_tokens = self.tokenize(query)
 
         # Prepare query for vector search
         query_embedding = self._semantic_model.encode([query],

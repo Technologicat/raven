@@ -53,6 +53,7 @@ from sklearn.cluster import HDBSCAN
 
 from . import bgtask
 from . import config
+from . import nlpbackends
 from . import utils
 
 # TODO: spacy doesn't support NumPy 2.0 yet (August 2024), so staying with NumPy 1.26 for now.
@@ -85,8 +86,13 @@ def update_status_and_log(msg, *, log_indent=0):
 # TL;DR: AI-based summarization
 
 if config.summarize:
-    summarization_pipeline = transformers.pipeline("summarization", model=config.summarization_model, device=config.device_string, torch_dtype=config.torch_dtype)
+    summarization_device = config.devices["summarization"]
+    summarization_pipeline = transformers.pipeline("summarization",
+                                                   model=config.summarization_model,
+                                                   device=summarization_device["device_string"],
+                                                   torch_dtype=summarization_device["torch_dtype"])
 else:
+    summarization_device = None
     summarization_pipeline = None
 
 def tldr(text: str) -> str:
@@ -261,23 +267,8 @@ def get_highdim_semantic_vectors(input_data):
             logger.info(f"        No cached embeddings '{embeddings_cache_filename}', reason: {cache_state}")
             logger.info("        Computing embeddings...")
             if sentence_embedder is None:  # delayed init - load only if needed, on first use
-                logger.info("        Loading SentenceTransformer...")
-                with timer() as tim:
-                    from sentence_transformers import SentenceTransformer
-                    try:
-                        sentence_embedder = SentenceTransformer(config.embedding_model, device=config.device_string)
-                        final_device = config.device_string
-                    except RuntimeError as exc:
-                        logger.warning(f"get_highdim_semantic_vectors: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
-                        try:
-                            sentence_embedder = SentenceTransformer(config.embedding_model, device="cpu")
-                            final_device = "cpu"
-                        except RuntimeError as exc:
-                            logger.warning(f"get_highdim_semantic_vectors: failed to load SentenceTransformer: {type(exc)}: {exc}")
-                            raise
-                logger.info(f"            Done in {tim.dt:0.6g}s.")
-
-            logger.info(f"        Encoding (on device '{final_device}')...")
+                sentence_embedder = nlpbackends.load_embedding_model(config.embedding_model)
+            logger.info("        Encoding...")
             with timer() as tim:
                 all_inputs = [entry.title for entry in entries]  # with mpnet, this works best (and we don't always necessarily have an abstract)
                 # all_inputs = [entry.abstract for entry in entries]  # testing with snowflake
@@ -288,7 +279,10 @@ def get_highdim_semantic_vectors(input_data):
                                                        normalize_embeddings=True)
                 # Round-trip to force truncation, if needed.
                 # This matters to make the "cluster centers" coincide with the original datapoints when clustering is disabled.
-                all_vectors = torch.tensor(all_vectors, device=config.device_string, dtype=config.torch_dtype)
+                embeddings_device = config.devices["embeddings"]
+                all_vectors = torch.tensor(all_vectors,
+                                           device=embeddings_device["device_string"],
+                                           dtype=embeddings_device["torch_dtype"])
                 all_vectors = all_vectors.detach().cpu().numpy()
             logger.info(f"            Done in {tim.dt:0.6g}s [avg {len(all_inputs) / tim.dt:0.6g} entries/s].")
 
@@ -594,29 +588,12 @@ def extract_keywords(input_data, max_vis_kw=6):
             logger.info(f"        No cached NLP data '{nlp_cache_filename}', reason: {cache_state}")
             logger.info("        Extracting keywords...")
             if nlp_pipeline is None:
-                logger.info("        Loading spaCy...")
-                with timer() as tim2:
-                    # NOTE: make sure to `source env.sh` first, or this won't find the CUDA runtime.
-                    try:
-                        spacy.require_gpu()  # TODO: allow configuring this
-                        update_status_and_log("NLP model will run on GPU (if available).", log_indent=2)
-                    except Exception as exc:
-                        logger.warning(f"extract_keywords: exception while enabling GPU: {type(exc)}: {exc}")
-                        spacy.require_cpu()
-                        update_status_and_log("NLP model will run on CPU.", log_indent=2)
-                    try:
-                        nlp_pipeline = spacy.load(config.spacy_model)
-                    except OSError:
-                        # https://stackoverflow.com/questions/62728854/how-to-place-spacy-en-core-web-md-model-in-python-package
-                        update_status_and_log("Downloading language model for spaCy (don't worry, this will only happen once)...", log_indent=2)
-                        from spacy.cli import download
-                        download(config.spacy_model)
-                        nlp_pipeline = spacy.load(config.spacy_model)
-                    update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
-                    # analysis = nlp_pipeline.analyze_pipes(pretty=True)  # print pipeline overview
-                    # nlp_pipeline.disable_pipe("parser")
-                    # nlp_pipeline.enable_pipe("senter")
-                logger.info(f"            Done in {tim2.dt:0.6g}s.")
+                update_status_and_log("Loading NLP pipeline for keyword analysis...", log_indent=2)
+                nlp_pipeline = nlpbackends.load_nlp_pipeline(config.spacy_model)
+                update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
+                # analysis = nlp_pipeline.analyze_pipes(pretty=True)  # print pipeline overview
+                # nlp_pipeline.disable_pipe("parser")
+                # nlp_pipeline.enable_pipe("senter")
 
             # Apply standard tricks from information retrieval:
             #   - Drop useless stopwords ("the", "of", ...), which typically dominate the word frequency distribution
@@ -1340,11 +1317,6 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
 
 def main() -> None:
     logger.info("Settings:")
-    logger.info(f"    Compute device '{config.device_string}' ({config.device_name}), data type {config.torch_dtype}")
-    if torch.cuda.is_available():
-        logger.info(f"        {torch.cuda.get_device_properties(config.device_string)}")
-        logger.info(f"        Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(config.device_string))}")
-        logger.info(f"        Detected CUDA version {torch.version.cuda}")
     logger.info(f"    Embedding model: {config.embedding_model}")
     logger.info(f"        Dimension reduction method: {config.vis_method}")
     logger.info(f"    Extract keywords: {config.extract_keywords}")

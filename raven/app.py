@@ -45,8 +45,6 @@ with timer() as tim:
 
     import scipy.spatial.ckdtree
 
-    import torch
-
     from spacy.lang.en import English
     nlp_en = English()
     stopwords = nlp_en.Defaults.stop_words
@@ -4488,12 +4486,6 @@ dpg.set_exit_callback(clean_up_at_exit)
 # Start the app
 
 logger.info("App bootup...")
-
-logger.info(f"    Compute device '{config.device_string}' ({config.device_name}), data type {config.torch_dtype}")
-if torch.cuda.is_available():
-    logger.info(f"        {torch.cuda.get_device_properties(config.device_string)}")
-    logger.info(f"        Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(config.device_string))}")
-    logger.info(f"        Detected CUDA version {torch.version.cuda}")
 
 parser = argparse.ArgumentParser(description="""Visualize BibTeX data.""",
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
