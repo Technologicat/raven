@@ -69,7 +69,11 @@
     - handle umlauts Å, Ä, Ö, Ü, å, ä, ö, ü: e.g. {\"o} -> ö
     - drop BibTeX's "verbatim" braces: {GPU} clusters -> GPU clusters
 
-- BibTeX importer's (`raven/preprocess.py`) keyword extractor as separate component, for e.g. creating keyword indices for book manuscripts.
+- Refactor BibTeX importer's (`raven/preprocess.py`) keyword extractor into a separate component.
+  - Text in, keywords out.
+  - List[str] in -> both per-document and global results.
+  - Expose also as a command-line tool, for e.g. creating keyword lists for book manuscripts.
+  - Option to turn lemmatization on/off.
 
 - Save/load selection, for reproducible reports. (Needs some care to make it work for a dynamic dataset.)
   - This becomes especially important with the LLM client, as the selection will affect which documents are enabled for RAG, so chat histories will be selection-specific.
@@ -78,8 +82,11 @@
 
 - LLMClient, to prepare for interactive AI summarization:
   - Finish tool-calling functionality.
-    - Implement the scaffolding to actually perform the calls, insert the results into the LLM's context, and then invoke the AI again.
+    - Implement invoking the AI again after the tool-calls return.
     - Add possibility for the user to call the tools, too (then control returns back to user). Use Python syntax?
+    - Add a tool to get topics stored in RAG.
+      - Use keyword detection.
+      - Preprocess keywords when tokenizing new/updated documents.
     - Add a "RAG search" tool to allow the AI to explicitly query the RAG database.
       - Remaining problem: how to dynamically tell the AI what kinds of topics are currently available in the database? Keyword auto-extraction and system message?
     - Add a "get full document" tool to retrieve a full document from the RAG database based on its ID (the current RAG autosearch already shows the document IDs).
@@ -94,6 +101,11 @@
       - Infosec needs some consideration here.
         - Some web pages are not documents, but actions (e.g. wikipedia "Edit" link). Some pages may contain viruses that could corrupt or hijack the web driver.
         - User-provided links might be considered safe? ("Here, take a look at this: [URL]" -> allow the AI to download that page if it wants to)
+    - Add a weather tool.
+    - Add a calendar tool (get one- or three-month calendar, like the `cal` command-line utility). See Python's `calendar` module.
+    - Add a calculator tool, if this can be done securely.
+      - I'd use Python restricted to the `math` module, but `eval` itself is unsafe: e.g. ().__class__.__base__.__subclasses__()[-1].__init__.__globals__['__builtins__']['__import__']('os').system('install ransomware or something')
+        https://stackoverflow.com/questions/64618043/safely-using-eval-to-calculate-using-the-math-module-in-python
   - Add a pedigree field to `HybridIR` documents, so that the automatic rescan can auto-remove only documents added by that scanner (name the scanner instances).
     - There may be occasions we need to programmatically send data into the RAG index, e.g. web pages from websearch.
   - Source attribution for RAG search and websearch results.
@@ -101,7 +113,16 @@
   - Inline citations?
   - See where to stuff the RAG search data in the chat tree, it's not part of the standard format.
   - Tune the system prompt, consider how it needs to be different when LLM speculation is on/off.
+  - Long-term memory experiment:
+    - A second RAG store for long-term memory
+    - Autosearch with user's most recent message (or its keywords, we can get those from the NLP/tokenization step?)
+    - Also provide explicit access via tool-calling
+    - Each entire chatlog (linearized up from a leaf node) = a RAG document
+    - To avoid reindexing at every new message, commit changes when switching to another chat branch. Ignore current branch when searching the RAG store.
+    - Should be able to use the chat node ID (in the forest) as the document ID.
   - LLMClient GUI
+    - Separate module/class for LLM client GUI window; take in an animator instance
+    - In the main program, instantiate an animator and the GUI window
     - Control the available RAG sources based on the selected data points in the `raven-visualizer` GUI.
     - Swipes like in SillyTavern (regenerate AI response, keep also old ones).
     - Branch chat from any point.
