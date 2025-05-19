@@ -81,9 +81,8 @@
   - The GUI needs some thinking. What is a good UX here?
 
 - LLMClient, to prepare for interactive AI summarization:
-  - Finish tool-calling functionality.
-    - Implement invoking the AI again after the tool-calls return.
-    - Add possibility for the user to call the tools, too (then control returns back to user). Use Python syntax?
+  - Expand tool-calling functionality.
+    - Add possibility for the user to call the tools, too? (Then control returns back to user. Use Python syntax?)
     - Add a tool to get topics stored in RAG.
       - Use keyword detection.
       - Preprocess keywords when tokenizing new/updated documents.
