@@ -1278,7 +1278,7 @@ def minimal_chat_client(backend_url):
                     tool_response_messages = perform_tool_calls(settings, message=out.data)
                     if not tool_response_messages:
                         break  # no more tool calls, the LLM is done - break from inner loop
-                    for tool_response_message in perform_tool_calls(settings, message=out.data):
+                    for tool_response_message in tool_response_messages:
                         tool_response_message_node_id = datastore.create_node(data=tool_response_message,
                                                                               parent_id=state["HEAD"])
                         state["HEAD"] = tool_response_message_node_id
