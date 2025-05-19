@@ -424,7 +424,7 @@ def scrub(settings: env, text: str, thoughts_mode: str, add_ai_role_name: bool) 
 
     `settings`: Obtain this by calling `setup()` at app start time.
     `text`: The text content of the message to scrub.
-    `thoughts_mode`: one of "discard", "colorize". What to do with thought blocks,
+    `thoughts_mode`: one of "discard", "colorize". or "keep". What to do with thought blocks,
                      for thinking models.
     `add_ai_role_name`: Whether to format the final text as "AI: blah blah" or just "blah blah".
 
