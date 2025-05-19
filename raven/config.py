@@ -17,16 +17,23 @@ from unpythonic.env import env
 # Currently, only local LLMs are supported, as there is no mechanism to pass an API key. I don't use cloud LLMs myself, but pull requests regarding this are welcome.
 llm_backend_url = "http://127.0.0.1:5000"
 
-# Some LLMs are capable of tool-calling, but don't have the instructions to do that in their templates.
-# When `True`, this changes the system prompt to include tool-calling instructions.
+# Tool-calling requires instructions for the model. Typically the instructions state that
+# tools are available, and include a dynamically generated list of available functions
+# (and their call signatures).
 #
-# E.g. DeepSeek-R1-Distill-Qwen-7B is like this.
+# Newer models, e.g. QwQ-32B, include a templates for these instructions in their built-in
+# prompt template. In this case, the LLM backend builds the instructions automatically,
+# based on data sent by the LLM client (see `tools` in `llmclient.setup`).
 #
-# Newer models such as QwQ-32B automatically include these instructions from the tools metadata,
-# and don't need this.
+# However, there exist LLMs that are capable of tool-calling, but have no instruction template
+# for that. E.g. the DeepSeek-R1-Distill-Qwen-7B model is like this.
 #
-llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
-# llm_send_toolcall_instructions = False  # for QwQ-32B
+# Hence this setting:
+#   - If `True`, our system prompt builder generates the tool-calling instructions. (For older models.)
+#   - If `False`, we just send the data, and let the LLM backend build the instructions. (For newer models.)
+#
+# llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
+llm_send_toolcall_instructions = False  # for QwQ-32B
 
 config_base_dir = "~/.config/raven/"
 
