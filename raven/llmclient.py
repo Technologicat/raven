@@ -1201,7 +1201,7 @@ def minimal_chat_client(backend_url):
                 message_to_inject = create_chat_message(settings=settings,
                                                         role="system",
                                                         text=thunk())
-                history.insert(-1, message_to_inject)  # -1 = just before user's message
+                history.append(message_to_inject)
 
             # If docs on, speculate off (-> `perform_injects` gets called if there is at least one RAG match), remind the LLM to use information from context only.
             #                           This increases the changes of the user's query working correctly when the search returns irrelevant results.
