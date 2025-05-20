@@ -48,7 +48,7 @@ from sklearn.cluster import HDBSCAN
 
 from . import bgtask
 from . import config
-from . import nlpbackends
+from . import nlptools
 from . import utils
 
 # --------------------------------------------------------------------------------
@@ -251,7 +251,7 @@ def get_highdim_semantic_vectors(input_data):
             logger.info(f"        No cached embeddings '{embeddings_cache_filename}', reason: {cache_state}")
             logger.info("        Computing embeddings...")
             if sentence_embedder is None:  # delayed init - load only if needed, on first use
-                sentence_embedder = nlpbackends.load_embedding_model(config.embedding_model)
+                sentence_embedder = nlptools.load_embedding_model(config.embedding_model)
             logger.info("        Encoding...")
             with timer() as tim:
                 all_inputs = [entry.title for entry in entries]  # with mpnet, this works best (and we don't always necessarily have an abstract)
@@ -564,7 +564,7 @@ def extract_keywords(input_data, max_vis_kw=6):
             logger.info("        Extracting keywords...")
             if nlp_pipeline is None:
                 update_status_and_log("Loading NLP pipeline for keyword analysis...", log_indent=2)
-                nlp_pipeline = nlpbackends.load_pipeline(config.spacy_model)
+                nlp_pipeline = nlptools.load_pipeline(config.spacy_model)
                 update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
                 # analysis = nlp_pipeline.analyze_pipes(pretty=True)  # print pipeline overview
                 # nlp_pipeline.disable_pipe("parser")
@@ -596,8 +596,8 @@ def extract_keywords(input_data, max_vis_kw=6):
             # TODO: Should we trim the keywords across the whole dataset? We currently trim each input file separately.
             logger.info(f"            Frequency analysis across all documents from NLP pipeline results for data from {filename}...")
             with timer() as tim:
-                all_keywords_for_this_file = nlpbackends.count_frequencies(all_docs_for_this_file,
-                                                                           stopwords=nlpbackends.extended_stopwords)
+                all_keywords_for_this_file = nlptools.count_frequencies(all_docs_for_this_file,
+                                                                        stopwords=nlptools.extended_stopwords)
                 all_keywords_for_this_file = dict(sorted(all_keywords_for_this_file.items(), key=lambda kv: -kv[1]))  # sort by number of occurrences, descending
                 # all_keywords_for_this_file = " ".join(sorted(all_keywords_for_this_file.keys()))
                 # logger.info(f"keywords collected from {filename}: {all_keywords_for_this_file}")  # DEBUG
@@ -629,15 +629,15 @@ def extract_keywords(input_data, max_vis_kw=6):
 
                     # Frequency analysis.
                     with timer() as tim2:
-                        kws = nlpbackends.count_frequencies(doc,
-                                                            stopwords=nlpbackends.extended_stopwords)
+                        kws = nlptools.count_frequencies(doc,
+                                                         stopwords=nlptools.extended_stopwords)
                     fa_times.append(tim2.dt)
 
                     # Named entity recognition (NER).
                     # TODO: Update named entities to the cluster keywords, too. The thing is, we don't have frequency information for named entities, so we can't decide which are the most relevant ones. TODO: Now we do. Fix this.
                     with timer() as tim2:
-                        ents = set(nlpbackends.detect_named_entities(doc,
-                                                                     stopwords=nlpbackends.extended_stopwords).keys())
+                        ents = set(nlptools.detect_named_entities(doc,
+                                                                  stopwords=nlptools.extended_stopwords).keys())
                     ner_times.append(tim2.dt)
 
                     # for cache saving (and unified handling)
@@ -731,7 +731,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
 
     `max_vis_kw`: how many keywords to keep for each cluster.
 
-    `fraction`: IMPORTANT. The source of the keyword suggestion magic. See `nlpbackends.suggest_keywords`.
+    `fraction`: IMPORTANT. The source of the keyword suggestion magic. See `nlptools.suggest_keywords`.
 
     Returns `vis_keywords_by_cluster`, a list, where the `k`th item is a list of keywords (`str`) for cluster ID `k`.
     For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
@@ -749,10 +749,10 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
                 keywords_by_cluster[entry.cluster_id].update(entry.keywords)  # inject keywords of this entry to the keywords of the cluster this entry belongs to
 
         # Here, each cluster is a "document" for the purposes of suggesting keywords.
-        vis_keywords_by_cluster = nlpbackends.suggest_keywords(per_document_frequencies=keywords_by_cluster,
-                                                               corpus_frequencies=all_keywords,
-                                                               threshold_fraction=fraction,
-                                                               max_keywords=max_vis_kw)
+        vis_keywords_by_cluster = nlptools.suggest_keywords(per_document_frequencies=keywords_by_cluster,
+                                                            corpus_frequencies=all_keywords,
+                                                            threshold_fraction=fraction,
+                                                            max_keywords=max_vis_kw)
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
     return vis_keywords_by_cluster
