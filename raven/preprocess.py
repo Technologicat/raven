@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 import argparse
 import collections
-import functools
 import itertools
 import math
 import os
@@ -500,15 +499,6 @@ def cluster_lowdim_data(input_data, lowdim_data):
     return vis_data, vis_clusterer.labels_, n_vis_clusters, n_vis_outliers
 
 
-def rank_keyword(word: str, counts: dict) -> int:
-    """Sort key: rank `word` (str) by number of occurrences in `counts` (dict, str -> int), descending.
-
-    Words that do not appear in `counts` are sorted to the end.
-    """
-    if word not in counts:
-        return float("+inf")
-    return -counts[word]
-
 def extract_keywords(input_data, max_vis_kw=6):
     """Extract keywords for the dataset.
 
@@ -646,8 +636,8 @@ def extract_keywords(input_data, max_vis_kw=6):
                     # Named entity recognition (NER).
                     # TODO: Update named entities to the cluster keywords, too. The thing is, we don't have frequency information for named entities, so we can't decide which are the most relevant ones. TODO: Now we do. Fix this.
                     with timer() as tim2:
-                        ents = set(nlpbackends.ner(doc,
-                                                   stopwords=nlpbackends.extended_stopwords).keys())
+                        ents = set(nlpbackends.detect_named_entities(doc,
+                                                                     stopwords=nlpbackends.extended_stopwords).keys())
                     ner_times.append(tim2.dt)
 
                     # for cache saving (and unified handling)
@@ -709,7 +699,9 @@ def extract_keywords(input_data, max_vis_kw=6):
 
                 # Find the highest-frequency keywords for this entry.
                 kws = {k: v for k, v in kws.items() if k in all_keywords}  # Drop keywords that did not appear in the trimmed keyword analysis across the whole dataset.
-                kws = list(sorted(kws.keys(), key=functools.partial(rank_keyword, counts=all_keywords)))
+                kws = list(sorted(kws.keys(),
+                                  key=lambda word: all_keywords.get(word, 0),  # sort by frequency in full corpus, descending
+                                  reverse=True))
                 kws = kws[:max_vis_kw]
 
                 # Add in the named entities.
@@ -768,7 +760,6 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
     For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
     """
     update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
-    progress.set_micro_count(n_vis_clusters)
     with timer() as tim:
         logger.info("        Collecting keywords from data points in each cluster...")
         keywords_by_cluster = [collections.Counter() for _ in range(n_vis_clusters)]
@@ -780,40 +771,11 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
                 # TODO: Including entities would be nice, but they don't currently have frequency information.
                 keywords_by_cluster[entry.cluster_id].update(entry.keywords)  # inject keywords of this entry to the keywords of the cluster this entry belongs to
 
-        threshold_n = max(min(5, n_vis_clusters), math.ceil(fraction * n_vis_clusters))  # how many clusters must have a particular keyword for that keyword to be considered uselessly common
-        cluster_counts_by_keyword = collections.Counter()
-        for cluster_id, kws in enumerate(keywords_by_cluster):
-            for kw in kws.keys():
-                cluster_counts_by_keyword[kw] += 1  # found one more cluster that has this keyword
-        keywords_common_to_most_clusters = {kw for kw, count in cluster_counts_by_keyword.items() if count >= threshold_n}
-        logger.info(f"        Found {len(keywords_common_to_most_clusters)} common (useless) keywords, shared between {threshold_n} clusters out of {n_vis_clusters}. Threshold fraction = {fraction:0.2g}.")
-
-        # # Detect keywords common to *all* clusters - not helpful.
-        # keywords_common_to_all_clusters = set(keywords_by_cluster[0].keys())
-        # for kws in keywords_by_cluster[1:]:
-        #     kws = set(kws.keys())
-        #     keywords_common_to_all_clusters.intersection_update(kws)
-
-        # Keep the highest-frequency keywords detected in each cluster. Hopefully this will compactly describe what the cluster is about.
-        logger.info("        Ranking and filtering results...")
-        vis_keywords_by_cluster = []
-        for cluster_id, kws in enumerate(keywords_by_cluster):
-            kws = set(kws.keys())
-
-            # # Drop keywords present in *any* other cluster - not helpful.
-            # other_cluster_keywords = keywords_by_cluster[:cluster_id] + keywords_by_cluster[cluster_id + 1:]
-            # for other_kws in other_cluster_keywords:
-            #     kws = kws.difference(other_kws)
-
-            # Drop keywords common with too many other clusters.
-            # NOTE: We build the set first (further above), and filter against the complete set, to treat all clusters symmetrically.
-            #       We don't want filler words to end up in the first cluster just because it was processed first.
-            kws = kws.difference(keywords_common_to_most_clusters)
-
-            kws = list(sorted(kws, key=functools.partial(rank_keyword, counts=all_keywords)))
-            kws = kws[:max_vis_kw]
-            vis_keywords_by_cluster.append(kws)
-            progress.tick()
+        # Here, each cluster is a "document" for the purposes of suggesting keywords.
+        vis_keywords_by_cluster = nlpbackends.suggest_keywords(per_document_frequencies=keywords_by_cluster,
+                                                               corpus_frequencies=all_keywords,
+                                                               threshold_fraction=fraction,
+                                                               max_keywords=max_vis_kw)
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
     return vis_keywords_by_cluster
