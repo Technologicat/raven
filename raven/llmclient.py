@@ -1188,9 +1188,29 @@ def minimal_chat_client(backend_url):
         injectors = [format_chat_datetime_now,  # let the LLM know the current local time and date
                      format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
         def perform_injects(history: List[Dict], docs_matches: List[Dict]) -> None:
-            # Results from RAG, if any.
-            for docs_result in reversed(docs_matches):
-                search_result_text = f"[System information: Knowledge-base match from `{docs_result['document_id']}`.]\n\n{docs_result['text'].strip()}\n-----"
+            # # This causes Qwen3 to miss the user's last message. Maybe better to put the RAG results at another position.
+            # #
+            # # Format RAG results like a tool-call reply to the user's message.
+            # # First, find the user's latest message in the linearized history.
+            # for depth, message in enumerate(reversed(history)):
+            #     if message["role"] == "user":
+            #         break
+            # else:  # no user message found (should not happen)
+            #     depth = None
+            #     message = None
+            #
+            # if message is not None:
+            #     position = len(history) - depth
+            #     for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
+            #         search_result_text = f"Knowledge-base match from '{docs_result['document_id']}':\n\n{docs_result['text'].strip()}\n-----"
+            #         message_to_inject = create_chat_message(settings=settings,
+            #                                                 role="tool",
+            #                                                 text=search_result_text)
+            #         history.insert(position, message_to_inject)
+
+            # Insert RAG results at the start of the history, as system messages.
+            for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
+                search_result_text = f"[System information: Knowledge-base match from '{docs_result['document_id']}'.]\n\n{docs_result['text'].strip()}\n-----"
                 message_to_inject = create_chat_message(settings=settings,
                                                         role="system",
                                                         text=search_result_text)
