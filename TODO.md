@@ -102,6 +102,7 @@
     - Add a calculator tool, if this can be done securely.
       - I'd use Python restricted to the `math` module, but `eval` itself is unsafe: e.g. ().__class__.__base__.__subclasses__()[-1].__init__.__globals__['__builtins__']['__import__']('os').system('install ransomware or something')
         https://stackoverflow.com/questions/64618043/safely-using-eval-to-calculate-using-the-math-module-in-python
+  - Fix RAG document IDs so that they are unique across subdirectories of the RAG datastore
   - Add a pedigree field to `HybridIR` documents, so that the automatic rescan can auto-remove only documents added by that scanner (name the scanner instances).
     - There may be occasions we need to programmatically send data into the RAG index, e.g. web pages from websearch.
   - Source attribution for RAG search and websearch results.
