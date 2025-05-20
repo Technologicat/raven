@@ -9,13 +9,46 @@ import torch
 from unpythonic.env import env
 
 # --------------------------------------------------------------------------------
+
+config_base_dir = "~/.config/raven/"
+
+# --------------------------------------------------------------------------------
 # LLM integration
 #
 # Used by the `pdf2bib` and `llmclient` modules.
 
+llm_save_dir = config_base_dir + "llmclient"
+
 # URL used to connect to the LLM API.
-# Currently, only local LLMs are supported, as there is no mechanism to pass an API key. I don't use cloud LLMs myself, but pull requests regarding this are welcome.
+#
+# This has been tested with local LLMs only, but theoretically cloud LLMs should work, too.
+# To set your API key, see the setting `llm_save_dir` above, and create a file "api_key.txt" in that directory.
+# Its contents will be automatically set as the Authorization field of the HTTP headers when `llmclient` starts.
+#
 llm_backend_url = "http://127.0.0.1:5000"
+
+llm_line_wrap_width = 160  # `llmclient`; for text wrapping in live update
+
+# RAG / IR
+
+# AI model for semantic search (RAG backend `raven.hybridir`), encoding both questions and answers into a joint semantic space.
+# Available on HuggingFace. Auto-downloaded on first use.
+qa_embedding_model = "sentence-transformers/multi-qa-mpnet-base-cos-v1"
+
+# Magic directory: put your RAG documents here (plain text for now).
+# Add/modify/delete a file in this directory to trigger a RAG index auto-update in the LLM client.
+llm_docs_dir = config_base_dir + "llmclient/documents"
+
+# Whether to scan also subdirectories of `llm_docs_dir` (TODO: doesn't yet work properly, need to mod doc IDs)
+llm_docs_dir_recursive = False
+
+# Where to store the search indices for the RAG database (machine-readable).
+llm_database_dir = config_base_dir + "llmclient/rag_index"
+
+# Where to store the search indices for the `HybridIR` API usage example / demo
+hybridir_demo_save_dir = config_base_dir + "hybridir_demo"
+
+# Tool-calling
 
 # Tool-calling requires instructions for the model. Typically the instructions state that
 # tools are available, and include a dynamically generated list of available functions
@@ -34,30 +67,6 @@ llm_backend_url = "http://127.0.0.1:5000"
 #
 # llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
 llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
-
-config_base_dir = "~/.config/raven/"
-
-llm_line_wrap_width = 160  # `llmclient`; for text wrapping in live update
-
-# For LLM client
-llm_save_dir = config_base_dir + "llmclient"
-
-# Magic directory: put your RAG documents here (plain text for now).
-# Add/modify/delete a file in this directory to trigger a RAG index auto-update in the LLM client.
-llm_docs_dir = config_base_dir + "llmclient/documents"
-
-# Whether to scan also subdirectories of `llm_docs_dir` (TODO: doesn't yet work properly, need to mod doc IDs)
-llm_docs_dir_recursive = False
-
-# Where to store the search indices for the RAG database (machine-readable).
-llm_database_dir = config_base_dir + "llmclient/rag_index"
-
-# Where to store the search indices for the `HybridIR` API usage example / demo
-hybridir_demo_save_dir = config_base_dir + "hybridir_demo"
-
-# AI model for semantic search (RAG backend `raven.hybridir`), encoding both questions and answers into a joint semantic space.
-# Available on HuggingFace. Auto-downloaded on first use.
-qa_embedding_model = "sentence-transformers/multi-qa-mpnet-base-cos-v1"
 
 # --------------------------------------------------------------------------------
 # Torch config
