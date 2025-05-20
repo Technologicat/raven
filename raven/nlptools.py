@@ -285,7 +285,9 @@ def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
         return representative_words
 
     frequencies = trim_word_counts(extract_word_counts(tokens))
-    frequencies = dict(sorted(frequencies.items(), key=lambda kv: -kv[1]))
+    frequencies = dict(sorted(frequencies.items(),
+                              key=operator.itemgetter(1),
+                              reverse=True))
     return frequencies
 
 
@@ -329,7 +331,9 @@ def detect_named_entities(tokens: Union[List[spacy.tokens.token.Token],
                 ents.update(_ner_impl(sublist))
             return ents
     named_entities = _ner_impl(tokens)
-    named_entities = dict(sorted(named_entities.items(), key=lambda kv: -kv[1]))
+    named_entities = dict(sorted(named_entities.items(),
+                                 key=operator.itemgetter(1),
+                                 reverse=True))
     return named_entities
 
 
