@@ -36,7 +36,7 @@ import sseclient  # pip install sseclient-py
 
 from mcpyrate import colorizer
 
-from unpythonic import call_ec, timer
+from unpythonic import sym, timer, Values
 from unpythonic.env import env
 
 from . import chattree
@@ -1027,272 +1027,307 @@ def minimal_chat_client(backend_url):
                     chat_print_message(message_number=None, role=message["role"], text=message["content"])
                     print()
 
+        action_proceed = sym("proceed")  # proceed current round as normal
+        action_next_round = sym("next_round")  # skip to start of next round, e.g. after a special command
+
+        def user_turn() -> Values:
+            history = datastore.linearize_up(state["HEAD"])
+            user_message_number = len(history)
+
+            # Print a user input prompt and get the user's input.
+            #
+            # The `readline` module takes its user input prompt from what we supply to `input`, so we must print the prompt via `input`, colors and all.
+            # The colorizer automatically wraps the ANSI color escape codes (for the terminal app) in ASCII escape codes (for `readline` itself)
+            # that tell `readline` not to include them in its visual length calculation.
+            #
+            # This avoids the input prompt getting overwritten when browsing history entries, and prevents backspacing over the input prompt.
+            # https://stackoverflow.com/questions/75987688/how-can-readline-be-told-not-to-erase-externally-supplied-prompt
+            input_prompt = format_message_heading(user_message_number, role="user", color=True)
+            user_message_text = input(input_prompt)
+            print()
+
+            # Interpret special commands for this LLM client
+            if user_message_text == "!clear":
+                print(colorizer.colorize("Starting new chat session.", colorizer.Style.BRIGHT))
+                state["HEAD"] = state["new_chat_HEAD"]
+                print(f"HEAD is now at '{state['HEAD']}'.")
+                print()
+                chat_print_history(datastore.linearize_up(state["HEAD"]))
+                return Values(action=action_next_round)
+            elif user_message_text.startswith("!docs"):  # TODO: refactor
+                split_command_text = user_message_text.split()
+                nargs = len(split_command_text) - 1
+                if nargs == 0:
+                    state["docs_enabled"] = not state["docs_enabled"]
+                elif nargs == 1:
+                    arg = split_command_text[-1]
+                    if arg == "True":
+                        state["docs_enabled"] = True
+                    elif arg == "False":
+                        state["docs_enabled"] = False
+                    else:
+                        print(f"!docs: unrecognized argument '{arg}'; expected 'True' or 'False'.")
+                        print()
+                        return Values(action_next_round)
+                else:
+                    print("!docs: wrong number of arguments; expected at most one, 'True' or 'False'.")
+                    print()
+                    return Values(action=action_next_round)
+                docs_enabled_str = "ON" if state["docs_enabled"] else "OFF"
+                print(f"RAG autosearch is now {docs_enabled_str}.")
+                print()
+                return Values(action=action_next_round)
+            elif user_message_text == "!dump":
+                print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {state['HEAD']})")
+                print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
+                print(f"{datastore}", end="")  # -> str; also, already has the final blank line
+                print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
+                print()
+                return Values(action=action_next_round)
+            elif user_message_text.startswith("!head"):  # switch to another chat branch
+                try:
+                    _, new_head_id = user_message_text.split()
+                except ValueError:
+                    print("!head: wrong number of arguments; expected exactly one, the node ID to switch to; see `!dump` for available chat nodes.")
+                    print()
+                    return Values(action=action_next_round)
+                if new_head_id not in datastore.nodes:
+                    print(f"!head: no such chat node '{new_head_id}'; see `!dump` for available chat nodes.")
+                    print()
+                    return Values(action=action_next_round)
+                state["HEAD"] = new_head_id
+                print(f"HEAD is now at '{state['HEAD']}'.")
+                print()
+                chat_print_history(datastore.linearize_up(state["HEAD"]))
+                return Values(action=action_next_round)
+            elif user_message_text == "!help":
+                chat_show_help()
+                return Values(action=action_next_round)
+            elif user_message_text == "!history":
+                print(colorizer.colorize("Chat history (cleaned up):", colorizer.Style.BRIGHT))
+                print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
+                chat_print_history(history)
+                print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
+                print()
+                return Values(action=action_next_round)
+            elif user_message_text == "!model":
+                chat_show_model_info()
+                return Values(action=action_next_round)
+            elif user_message_text == "!models":
+                chat_show_list_of_models()
+                return Values(action=action_next_round)
+            elif user_message_text.startswith("!speculate"):  # TODO: refactor
+                split_command_text = user_message_text.split()
+                nargs = len(split_command_text) - 1
+                if nargs == 0:
+                    state["speculate_enabled"] = not state["speculate_enabled"]
+                elif nargs == 1:
+                    arg = split_command_text[-1]
+                    if arg == "True":
+                        state["speculate_enabled"] = True
+                    elif arg == "False":
+                        state["speculate_enabled"] = False
+                    else:
+                        print(f"!speculate: unrecognized argument '{arg}'; expected 'True' or 'False'.")
+                        print()
+                        return Values(action=action_next_round)
+                else:
+                    print("!speculate: wrong number of arguments; expected at most one, 'True' or 'False'.")
+                    print()
+                    return Values(action=action_next_round)
+                speculate_enabled_str = "ON" if state["speculate_enabled"] else "OFF"
+                print(f"LLM speculation is now {speculate_enabled_str}.")
+                print()
+                return Values(action=action_next_round)
+            elif user_message_text.startswith("!") and len(user_message_text.split("\n")) == 1:
+                print(f"Unrecognized command '{user_message_text}'; use `!help` for available commands.")
+                return Values(action=action_next_round)
+            # Not a special command.
+
+            # Add the user's message to the chat.
+            user_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
+                                                                                  role="user",
+                                                                                  text=user_message_text),
+                                                         parent_id=state["HEAD"])
+            state["HEAD"] = user_message_node_id
+            return Values(action=action_proceed, text=user_message_text)
+
+        def rag_search_with_bypass(query: str) -> Values:
+            if not state["docs_enabled"]:
+                return Values(action=action_proceed, matches=[])
+
+            docs_results = retriever.query(query,
+                                           k=10,
+                                           return_extra_info=False)
+
+            # First line of defense: docs on, no matches for given query, speculate off -> bypass LLM
+            if not docs_results and not state["speculate_enabled"]:
+                nomatch_text = "No matches in knowledge base. Please try another query."
+                nomatch_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
+                                                                                         role="assistant",
+                                                                                         text=nomatch_text),
+                                                                parent_id=state["HEAD"])
+                nomatch_message_node = datastore.nodes[nomatch_message_node_id]
+                nomatch_message_node["retrieval"] = {"query": query,
+                                                     "results": []}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
+                state["HEAD"] = nomatch_message_node_id
+
+                history = datastore.linearize_up(state["HEAD"])
+                nomatch_message_number = len(history)
+                chat_print_message(message_number=nomatch_message_number,
+                                   role="assistant",
+                                   text=nomatch_text)
+                print()
+
+                return Values(action=action_next_round)
+
+            return Values(action=action_proceed, matches=docs_results)
+
+        # Perform the temporary injects. These are not meant to be persistent, so we don't even add them
+        # as nodes to the chat tree, but only into the temporary linearized history.
+        injectors = [format_chat_datetime_now,  # let the LLM know the current local time and date
+                     format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
+        def perform_injects(history: List[Dict], docs_matches: List[Dict]) -> None:
+            # Results from RAG, if any.
+            for docs_result in reversed(docs_matches):
+                search_result_text = f"[System information: Knowledge-base match from `{docs_result['document_id']}`.]\n\n{docs_result['text'].strip()}\n-----"
+                message_to_inject = create_chat_message(settings=settings,
+                                                        role="system",
+                                                        text=search_result_text)
+                history.insert(1, message_to_inject)  # after system prompt and character card
+
+            # Always-on injects, e.g. current local datetime
+            for thunk in injectors:
+                message_to_inject = create_chat_message(settings=settings,
+                                                        role="system",
+                                                        text=thunk())
+                history.insert(-1, message_to_inject)  # -1 = just before user's message
+
+            # If docs on, speculate off (-> `perform_injects` gets called if there is at least one RAG match), remind the LLM to use information from context only.
+            #                           This increases the changes of the user's query working correctly when the search returns irrelevant results.
+            # If docs off, the whole point is to use the LLM's static knowledge, so in that case don't bother.
+            if state["docs_enabled"] and not state["speculate_enabled"]:
+                message_to_inject = create_chat_message(settings=settings,
+                                                        role="system",
+                                                        text=format_reminder_to_use_information_from_context_only())
+                history.insert(-1, message_to_inject)  # -1 = just before user's message
+
+            # # Format RAG results like a tool-call reply
+            # for docs_result in docs_matches:
+            #     search_result_text = f"Knowledge-base match from `{docs_result['document_id']}`.\n\n{docs_result['text'].strip()}\n-----"
+            #     message_to_inject = create_chat_message(settings=settings,
+            #                                             role="tool",
+            #                                             text=search_result_text)
+            #     history.append(message_to_inject)
+
+            # # DEBUG - show history with injects.
+            # # Message numbers counted from the modified history (with injects) would be wrong, so don't show them.
+            # chat_print_history(history, show_numbers=False)
+
+        def ai_turn(user_message_text: str) -> Values:
+            # Perform the RAG autosearch (if enabled; will check automatically).
+            # If docs is on, no match, and speculate is off -> bypass the LLM.
+            #
+            # NOTE: This is very rudimentary.
+            #   - We simply use the user's new message as-is as the query.
+            #   - Hence, this does NOT match on any earlier message, and may result in spurious matches.
+            #     E.g. "Can cats jump?" and "Does your knowledge base say if cats can jump?" return
+            #     different results, because the term "knowledge base" in the latter may match e.g.
+            #     AI/CS articles that the user happens to have included in the KB.
+            #     - In this example, with the example data, the shorter query correctly returns no matches.
+            #     - The longer query returns two AI agent abstracts, leaving it to the LLM to put the
+            #       pieces together and notice that the user's query and provided KB context don't actually match.
+            #   - This could be improved by querying the LLM itself - "given the chat history so far and
+            #     the user's most recent message, please formulate query terms for a knowledge base search."
+            #     and then run the search with the final output of that.
+            #   - We could also build a slightly more complex scaffold to support tool-calling,
+            #     and instruct the LLM to send a query when it itself thinks it needs to.
+            rag_query = user_message_text
+            rag_result = rag_search_with_bypass(query=rag_query)
+            if rag_result["action"] is action_next_round:  # bypass triggered
+                return Values(action=action_next_round)
+
+            # AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
+            while True:
+                history = datastore.linearize_up(state["HEAD"])  # latest history
+                ai_message_number = len(history)
+
+                # Prepare the final LLM prompt, by including the temporary injects.
+                perform_injects(history, docs_matches=rag_result["matches"])
+
+                # Invoke the LLM.
+                print(format_message_number(ai_message_number, color=True))
+                chars = 0
+                def progress_callback(n_chunks, chunk_text):  # any UI live-update code goes here, in the callback
+                    # TODO: think of a better way to split to lines
+                    nonlocal chars
+                    chars += len(chunk_text)
+                    if "\n" in chunk_text:  # one token at a time; should have either one linefeed or no linefeed
+                        chars = 0  # good enough?
+                    elif chars >= config.llm_line_wrap_width:
+                        print()
+                        chars = 0
+                    print(chunk_text, end="")
+                    sys.stdout.flush()
+                # `invoke` uses a linearized history, as expected by the LLM API.
+                out = invoke(settings, history, progress_callback)  # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
+                print()  # print the final newline
+
+                # Clean up the LLM's reply (heuristically). This version goes into the chat history.
+                out.data["content"] = scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=True)
+
+                # Show LLM performance statistics
+                print(colorizer.colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))
+                print()
+
+                # Add the LLM's message to the chat.
+                ai_message_node_id = datastore.create_node(data=out.data,
+                                                           parent_id=state["HEAD"])
+                ai_message_node = datastore.nodes[ai_message_node_id]
+                if state["docs_enabled"]:
+                    ai_message_node["retrieval"] = {"query": rag_query,
+                                                    "results": rag_result["matches"]}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
+                state["HEAD"] = ai_message_node_id
+
+                # Handle tool calls requested by the LLM, if any.
+                # Call the tool(s) specified by the LLM, with arguments specified by the LLM, and add the result to the history.
+                # Each response goes into its own message, with `role="tool"`.
+                # If there are no tool calls, we get an empty list, and the loop body will be skipped.
+                tool_message_number = ai_message_number + 1
+                tool_response_messages = perform_tool_calls(settings, message=out.data)
+                if not tool_response_messages:
+                    break  # no more tool calls, the LLM is done - break from inner loop
+                for tool_response_message in tool_response_messages:
+                    tool_response_message_node_id = datastore.create_node(data=tool_response_message,
+                                                                          parent_id=state["HEAD"])
+                    state["HEAD"] = tool_response_message_node_id
+
+                    chat_print_message(message_number=tool_message_number,
+                                       role="tool",
+                                       text=tool_response_message["content"])
+                    print()
+
+                    tool_message_number += 1
+
+                # # DEBUG
+                # history = datastore.linearize_up(state["HEAD"])
+                # chat_print_history(history, show_numbers=False)
+
+            return Values(action=action_proceed)
+
         # Show initial history (loaded from datastore, or blank upon first start)
         chat_print_history(datastore.linearize_up(state["HEAD"]))
 
         # Main loop
-        injectors = [format_chat_datetime_now,  # let the LLM know the current local time and date
-                     format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
-        # We could add a "break_mainloop" call-ec here if we needed that.
         while True:
-            @call_ec  # we use this to implement continue-outer-loop from an inner loop
-            def mainloop_iteration(continue_mainloop):
-                history = datastore.linearize_up(state["HEAD"])  # linearize current branch
-                user_message_number = len(history)
+            user_result = user_turn()
+            if user_result["action"] is action_next_round:
+                continue
 
-                # User's turn - print a user input prompt and get the user's input.
-                #
-                # The `readline` module takes its user input prompt from what we supply to `input`, so we must print the prompt via `input`, colors and all.
-                # The colorizer automatically wraps the ANSI color escape codes (for the terminal app) in ASCII escape codes (for `readline` itself)
-                # that tell `readline` not to include them in its visual length calculation.
-                #
-                # This avoids the input prompt getting overwritten when browsing history entries, and prevents backspacing over the input prompt.
-                # https://stackoverflow.com/questions/75987688/how-can-readline-be-told-not-to-erase-externally-supplied-prompt
-                input_prompt = format_message_heading(user_message_number, role="user", color=True)
-                user_message_text = input(input_prompt)
-                print()
-
-                # Interpret special commands for this LLM client
-                if user_message_text == "!clear":
-                    print(colorizer.colorize("Starting new chat session.", colorizer.Style.BRIGHT))
-                    state["HEAD"] = state["new_chat_HEAD"]
-                    print(f"HEAD is now at '{state['HEAD']}'.")
-                    print()
-                    chat_print_history(datastore.linearize_up(state["HEAD"]))
-                    continue_mainloop(None)
-                elif user_message_text.startswith("!docs"):  # TODO: refactor
-                    split_command_text = user_message_text.split()
-                    nargs = len(split_command_text) - 1
-                    if nargs == 0:
-                        state["docs_enabled"] = not state["docs_enabled"]
-                    elif nargs == 1:
-                        arg = split_command_text[-1]
-                        if arg == "True":
-                            state["docs_enabled"] = True
-                        elif arg == "False":
-                            state["docs_enabled"] = False
-                        else:
-                            print(f"!docs: unrecognized argument '{arg}'; expected 'True' or 'False'.")
-                            print()
-                            continue_mainloop(None)
-                    else:
-                        print("!docs: wrong number of arguments; expected at most one, 'True' or 'False'.")
-                        print()
-                        continue_mainloop(None)
-                    docs_enabled_str = "ON" if state["docs_enabled"] else "OFF"
-                    print(f"RAG autosearch is now {docs_enabled_str}.")
-                    print()
-                    continue_mainloop(None)
-                elif user_message_text == "!dump":
-                    print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {state['HEAD']})")
-                    print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
-                    print(f"{datastore}", end="")  # -> str; also, already has the final blank line
-                    print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
-                    print()
-                    continue_mainloop(None)
-                elif user_message_text.startswith("!head"):  # switch to another chat branch
-                    try:
-                        _, new_head_id = user_message_text.split()
-                    except ValueError:
-                        print("!head: wrong number of arguments; expected exactly one, the node ID to switch to; see `!dump` for available chat nodes.")
-                        print()
-                        continue_mainloop(None)
-                    if new_head_id not in datastore.nodes:
-                        print(f"!head: no such chat node '{new_head_id}'; see `!dump` for available chat nodes.")
-                        print()
-                        continue_mainloop(None)
-                    state["HEAD"] = new_head_id
-                    print(f"HEAD is now at '{state['HEAD']}'.")
-                    print()
-                    chat_print_history(datastore.linearize_up(state["HEAD"]))
-                    continue_mainloop(None)
-                elif user_message_text == "!help":
-                    chat_show_help()
-                    continue_mainloop(None)
-                elif user_message_text == "!history":
-                    print(colorizer.colorize("Chat history (cleaned up):", colorizer.Style.BRIGHT))
-                    print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
-                    chat_print_history(history)
-                    print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
-                    print()
-                    continue_mainloop(None)
-                elif user_message_text == "!model":
-                    chat_show_model_info()
-                    continue_mainloop(None)
-                elif user_message_text == "!models":
-                    chat_show_list_of_models()
-                    continue_mainloop(None)
-                elif user_message_text.startswith("!speculate"):  # TODO: refactor
-                    split_command_text = user_message_text.split()
-                    nargs = len(split_command_text) - 1
-                    if nargs == 0:
-                        state["speculate_enabled"] = not state["speculate_enabled"]
-                    elif nargs == 1:
-                        arg = split_command_text[-1]
-                        if arg == "True":
-                            state["speculate_enabled"] = True
-                        elif arg == "False":
-                            state["speculate_enabled"] = False
-                        else:
-                            print(f"!speculate: unrecognized argument '{arg}'; expected 'True' or 'False'.")
-                            print()
-                            continue_mainloop(None)
-                    else:
-                        print("!speculate: wrong number of arguments; expected at most one, 'True' or 'False'.")
-                        print()
-                        continue_mainloop(None)
-                    speculate_enabled_str = "ON" if state["speculate_enabled"] else "OFF"
-                    print(f"LLM speculation is now {speculate_enabled_str}.")
-                    print()
-                    continue_mainloop(None)
-                elif user_message_text.startswith("!") and len(user_message_text.split("\n")) == 1:
-                    print(f"Unrecognized command '{user_message_text}'; use `!help` for available commands.")
-                    continue_mainloop(None)
-
-                # Not a special command - add the user's message to the chat.
-                user_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
-                                                                                      role="user",
-                                                                                      text=user_message_text),
-                                                             parent_id=state["HEAD"])
-                state["HEAD"] = user_message_node_id
-
-                # Prepare to prompt the LLM.
-                #
-                # Tool-calling inner loop: loop AI's turn interleaved with tool responses,
-                # until there are no tool responses.
-                docs_queried = False
-                while True:
-                    history = datastore.linearize_up(state["HEAD"])  # latest history, after user's new message
-                    ai_message_number = len(history)
-
-                    # Perform the temporary injects. These are not meant to be persistent, so we don't even add them
-                    # as nodes to the chat tree, but only into the temporary linearized history.
-
-                    # RAG search
-                    #
-                    # NOTE: This is very rudimentary.
-                    #   - We simply use the user's new message as-is as the query.
-                    #   - Hence, this does NOT match on any earlier message, and may result in spurious matches.
-                    #     E.g. "Can cats jump?" and "Does your knowledge base say if cats can jump?" return
-                    #     different results, because the term "knowledge base" in the latter may match e.g.
-                    #     AI/CS articles that the user happens to have included in the KB.
-                    #     - In this example, with the example data, the shorter query correctly returns no matches.
-                    #     - The longer query returns two AI agent abstracts, leaving it to the LLM to put the
-                    #       pieces together and notice that the user's query and provided KB context don't actually match.
-                    #   - This could be improved by querying the LLM itself - "given the chat history so far and
-                    #     the user's most recent message, please formulate query terms for a knowledge base search."
-                    #     and then run the search with the final output of that.
-                    #   - We could also build a slightly more complex scaffold to support tool-calling,
-                    #     and instruct the LLM to send a query when it itself thinks it needs to.
-                    if not state["docs_enabled"]:
-                        docs_results = None
-                    else:
-                        if not docs_queried:  # during first inner iteration only
-                            docs_queried = True
-                            docs_results = retriever.query(user_message_text,
-                                                           k=10,
-                                                           return_extra_info=False)
-
-                            # First line of defense: no matches, speculate off -> bypass LLM
-                            if not docs_results and not state["speculate_enabled"]:
-                                nomatch_text = "No matches in knowledge base. Please try another query."
-                                ai_message_node_id = datastore.create_node(data=create_chat_message(settings=settings,
-                                                                                                    role="assistant",
-                                                                                                    text=nomatch_text),
-                                                                           parent_id=state["HEAD"])
-                                ai_message_node = datastore.nodes[ai_message_node_id]
-                                ai_message_node["retrieval"] = {"query": user_message_text,
-                                                                "results": []}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
-                                state["HEAD"] = ai_message_node_id
-                                chat_print_message(message_number=ai_message_number, role="assistant", text=nomatch_text)
-                                print()
-                                continue_mainloop(None)  # continue outer loop, called from inner loop
-                        # else just use old `docs_results`
-
-                        # Got at least one match from RAG index.
-                        for docs_result in reversed(docs_results):
-                            search_result_text = f"[System information: Knowledge-base match from `{docs_result['document_id']}`.]\n\n{docs_result['text'].strip()}\n-----"
-                            message_to_inject = create_chat_message(settings=settings,
-                                                                    role="system",
-                                                                    text=search_result_text)
-                            history.insert(1, message_to_inject)  # after system prompt and character card
-
-                    # Always-on injects, e.g. current local datetime
-                    for thunk in injectors:
-                        message_to_inject = create_chat_message(settings=settings,
-                                                                role="system",
-                                                                text=thunk())
-                        history.insert(-1, message_to_inject)  # -1 = just before user's message
-
-                    # If docs on, speculate off (-> we get here if there is at least one match), remind the LLM to use information from context only.
-                    #                           This increases the changes of the user's query working correctly when the search returns irrelevant results.
-                    # If docs off, the whole point is to use the LLM's static knowledge, so in that case don't bother.
-                    if state["docs_enabled"] and not state["speculate_enabled"]:
-                        message_to_inject = create_chat_message(settings=settings,
-                                                                role="system",
-                                                                text=format_reminder_to_use_information_from_context_only())
-                        history.insert(-1, message_to_inject)  # -1 = just before user's message
-
-                    # # DEBUG - show history with injects.
-                    # # Message numbers counted from the modified history (with injects) would be wrong, so don't show them.
-                    # chat_print_history(history, show_numbers=False)
-
-                    # AI's turn - prompt the LLM.
-                    print(format_message_number(ai_message_number, color=True))
-                    chars = 0
-                    def progress_callback(n_chunks, chunk_text):  # any UI live-update code goes here, in the callback
-                        # TODO: think of a better way to split to lines
-                        nonlocal chars
-                        chars += len(chunk_text)
-                        if "\n" in chunk_text:  # one token at a time; should have either one linefeed or no linefeed
-                            chars = 0  # good enough?
-                        elif chars >= config.llm_line_wrap_width:
-                            print()
-                            chars = 0
-                        print(chunk_text, end="")
-                        sys.stdout.flush()
-                    # `invoke` uses a linearized history, as expected by the LLM API.
-                    out = invoke(settings, history, progress_callback)  # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
-                    print()  # print the final newline
-
-                    # Clean up the AI's reply (heuristically). This version goes into the chat history.
-                    out.data["content"] = scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=True)
-
-                    # Show performance statistics
-                    print(colorizer.colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))
-                    print()
-
-                    # Add the AI's message to the chat.
-                    ai_message_node_id = datastore.create_node(data=out.data,
-                                                               parent_id=state["HEAD"])
-                    ai_message_node = datastore.nodes[ai_message_node_id]
-                    ai_message_node["retrieval"] = {"query": user_message_text,
-                                                    "results": docs_results}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
-                    state["HEAD"] = ai_message_node_id
-
-                    # Handle tool calls requested by the LLM, if any.
-                    # Call the tool(s) specified by the LLM, with arguments specified by the LLM, and add the result to the history.
-                    # Each response goes into its own message, with `role="tool"`.
-                    # If there are no tool calls, we get an empty list, and the loop body will be skipped.
-                    tool_message_number = ai_message_number + 1
-                    tool_response_messages = perform_tool_calls(settings, message=out.data)
-                    if not tool_response_messages:
-                        break  # no more tool calls, the LLM is done - break from inner loop
-                    for tool_response_message in tool_response_messages:
-                        tool_response_message_node_id = datastore.create_node(data=tool_response_message,
-                                                                              parent_id=state["HEAD"])
-                        state["HEAD"] = tool_response_message_node_id
-
-                        chat_print_message(message_number=tool_message_number,
-                                           role="tool",
-                                           text=tool_response_message["content"])
-                        print()
-
-                        tool_message_number += 1
-
-                    # # DEBUG
-                    # history = datastore.linearize_up(state["HEAD"])
-                    # chat_print_history(history, show_numbers=False)
+            # The AI needs the text of the user's latest message for the RAG autosearch query.
+            ai_result = ai_turn(user_message_text=user_result["text"])
+            if ai_result["action"] is action_next_round:
+                continue  # Silly, since this is the last thing in the loop, but for symmetry.
 
     except (EOFError, KeyboardInterrupt):
         print()
