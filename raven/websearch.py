@@ -222,11 +222,11 @@ def format_results(texts: List[str],
 
     def format_result(result):
         if "title" in result and "link" in result:
-            heading = f"{result['title']}\n{result['link']}"
+            heading = f"Web result from: {result['link']}\n{result['title']}"
         elif "title" in result:
             heading = result["title"]
         elif "link" in result:
-            heading = result["link"]
+            heading = f"Web result from: {result['link']}"
         else:
             return f"{result['text']}\n"
         return f"{heading}\n\n{result['text']}\n"
