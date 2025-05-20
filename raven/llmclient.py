@@ -1302,13 +1302,19 @@ def minimal_chat_client(backend_url):
                 state["HEAD"] = ai_message_node_id
 
                 # Handle tool calls requested by the LLM, if any.
-                # Call the tool(s) specified by the LLM, with arguments specified by the LLM, and add the result to the history.
+                #
+                # Call the tool(s) specified by the LLM, with arguments specified by the LLM, and add the result to the chat.
+                #
                 # Each response goes into its own message, with `role="tool"`.
-                # If there are no tool calls, we get an empty list, and the loop body will be skipped.
+                #
                 tool_message_number = ai_message_number + 1
                 tool_response_messages = perform_tool_calls(settings, message=out.data)
+
+                # When there are no more tool calls, the LLM is done replying.
+                # Each tool call produces exactly one response, so we may as well check this from the number of responses.
                 if not tool_response_messages:
-                    break  # no more tool calls, the LLM is done - break from inner loop
+                    break
+
                 for tool_response_message in tool_response_messages:
                     tool_response_message_node_id = datastore.create_node(data=tool_response_message,
                                                                           parent_id=state["HEAD"])
@@ -1321,7 +1327,7 @@ def minimal_chat_client(backend_url):
 
                     tool_message_number += 1
 
-                # # DEBUG
+                # # DEBUG - show history after the tool calls, before the LLM starts writing again.
                 # history = datastore.linearize_up(state["HEAD"])
                 # chat_print_history(history, show_numbers=False)
 
