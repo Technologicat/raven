@@ -69,12 +69,6 @@
     - handle umlauts Å, Ä, Ö, Ü, å, ä, ö, ü: e.g. {\"o} -> ö
     - drop BibTeX's "verbatim" braces: {GPU} clusters -> GPU clusters
 
-- Refactor BibTeX importer's (`raven/preprocess.py`) keyword extractor into a separate component.
-  - Text in, keywords out.
-  - List[str] in -> both per-document and global results.
-  - Expose also as a command-line tool, for e.g. creating keyword lists for book manuscripts.
-  - Option to turn lemmatization on/off.
-
 - Save/load selection, for reproducible reports. (Needs some care to make it work for a dynamic dataset.)
   - This becomes especially important with the LLM client, as the selection will affect which documents are enabled for RAG, so chat histories will be selection-specific.
     So it will feel silly if there is no way to save/load selections without attaching an AI chat to them.
@@ -84,8 +78,11 @@
   - Expand tool-calling functionality.
     - Add possibility for the user to call the tools, too? (Then control returns back to user. Use Python syntax?)
     - Add a tool to get topics stored in RAG.
-      - Use keyword detection.
+      - Use keyword detection to identify what the documents are about.
       - Preprocess keywords when tokenizing new/updated documents.
+        - Avoid running the full document through the NLP pipeline twice (need to mod `hybridir.HybridIR._tokenize`).
+        - Where to get the corpus data to compare against? Store the raw word frequency data for each document in the fulldocs database to avoid recomputing them each time a new document is added?
+          We still need to aggregate across the whole database at each commit, but that's probably acceptable (AI parts as well as the reindexing step are much more expensive anyway).
     - Add a "RAG search" tool to allow the AI to explicitly query the RAG database.
       - Remaining problem: how to dynamically tell the AI what kinds of topics are currently available in the database? Keyword auto-extraction and system message?
     - Add a "get full document" tool to retrieve a full document from the RAG database based on its ID (the current RAG autosearch already shows the document IDs).
@@ -114,7 +111,7 @@
   - Tune the system prompt, consider how it needs to be different when LLM speculation is on/off.
   - Long-term memory experiment:
     - A second RAG store for long-term memory
-    - Autosearch with user's most recent message (or its keywords, we can get those from the NLP/tokenization step?)
+    - Autosearch with user's most recent message
     - Also provide explicit access via tool-calling
     - Each entire chatlog (linearized up from a leaf node) = a RAG document
     - To avoid reindexing at every new message, commit changes when switching to another chat branch. Ignore current branch when searching the RAG store.
@@ -200,7 +197,7 @@
 - **More flexible preprocessing**.
   - Rethink what our native input format should be. BibTeX is nice for research literature, but the Raven core could be applicable to so much more: patent databases, Wikipedia, news articles, arbitrary text files, Linux system logs, ...
   - User-defined Python function: input record -> object to be embedded (allowing customization of which fields to use)
-    - E.g. for scientific papers, could be useful to use also the abstracts, and keywords, not only the titles. But depends on the quality of the embedding model; so far, the best clustering has been obtained using titles only.
+    - E.g. for scientific papers, could be useful to use also the abstracts, and author-supplied keywords, not only the titles. But depends on the quality of the embedding model; so far, the best clustering has been obtained using titles only.
   - Embedding model: object to be embedded -> high-dimensional vector (allowing embedding of different modalities of data: text, images, audio)
 
 - **Other input modalities** beside text.
