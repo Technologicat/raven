@@ -329,8 +329,8 @@ class HybridIR:
             self.documents = {}
 
         self._semantic_model = nlpbackends.load_embedding_model(self.embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
-        self._nlp_pipeline = nlpbackends.load_nlp_pipeline(config.spacy_model)
-        self._stopwords = nlpbackends.load_stopwords()
+        self._nlp_pipeline = nlpbackends.load_pipeline(config.spacy_model)
+        self._stopwords = nlpbackends.default_stopwords
 
         # Semantic search: ChromaDB vector storage
         # ChromaDB persists data automatically when we use the `PersistentClient`

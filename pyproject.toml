@@ -20,7 +20,7 @@ dependencies = [
     "dearpygui>=2.0.0",
     "mcpyrate>=3.6.4",  # for unpythonic, though we only use the colorizer utility for now
     "mistletoe>=1.4.0",  # for vendored dpg-markdown
-    "numpy>=1.26.4,<2.0",
+    "numpy>=1.26.4,<2.0",  # spaCy doesn't support NumPy 2.0 yet (August 2024), so staying with NumPy 1.26 for now.
     "openTSNE>=1.0.2",
     "pip==24.3.1",  # for spaCy language model auto-install  # TODO: version?
     "psutil>=5.9.0",  # for vendored file_dialog

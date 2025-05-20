@@ -29,12 +29,8 @@ import re
 import sys
 import threading
 import traceback
-from typing import Dict, List, Union
 
 import bibtexparser
-
-# import nltk
-import spacy
 
 from unpythonic.env import env
 from unpythonic import box, dyn, islice, make_dynvar, sym, timer, uniqify
@@ -55,17 +51,6 @@ from . import bgtask
 from . import config
 from . import nlpbackends
 from . import utils
-
-# TODO: spacy doesn't support NumPy 2.0 yet (August 2024), so staying with NumPy 1.26 for now.
-# stopwords = nltk.corpus.stopwords.words("english")
-from spacy.lang.en import English
-nlp_en = English()
-stopwords = nlp_en.Defaults.stop_words
-
-def isstopword(word: str) -> bool:
-    # word = lemmatizer.lemmatize(word.lower())  # NLTK
-    word = word.lower()
-    return word in stopwords or word in config.custom_stopwords
 
 # --------------------------------------------------------------------------------
 # Common helpers
@@ -589,112 +574,11 @@ def extract_keywords(input_data, max_vis_kw=6):
             logger.info("        Extracting keywords...")
             if nlp_pipeline is None:
                 update_status_and_log("Loading NLP pipeline for keyword analysis...", log_indent=2)
-                nlp_pipeline = nlpbackends.load_nlp_pipeline(config.spacy_model)
+                nlp_pipeline = nlpbackends.load_pipeline(config.spacy_model)
                 update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
                 # analysis = nlp_pipeline.analyze_pipes(pretty=True)  # print pipeline overview
                 # nlp_pipeline.disable_pipe("parser")
                 # nlp_pipeline.enable_pipe("senter")
-
-            # Apply standard tricks from information retrieval:
-            #   - Drop useless stopwords ("the", "of", ...), which typically dominate the word frequency distribution
-            #   - Cut the (long!) tail of the distribution
-            # => Obtain words that appear at an intermediate frequency (not too common, not too rare).
-            #    These usually describe the text usefully.
-
-            # # Old implementation using NLTK
-            # lemmatizer = nltk.stem.WordNetLemmatizer()
-            # def extract_word_counts(text: Union[str, List[str]]) -> collections.Counter:
-            #     if isinstance(text, str):
-            #         def filter_tokens(tokens):
-            #             out = []
-            #             for x in tokens:
-            #                 if x.pos_ in ("ADP", "AUX", "CCONJ", "DET", "NUM", "PRON", "PUNCT", "SCONJ"):
-            #                     continue
-            #                 if not x.lemma_.isalnum():
-            #                     continue
-            #                 x = x.lemma_.lower()
-            #                 # x = lemmatizer.lemmatize(x.lower())  # NLTK
-            #                 if isstopword(x) or len(x) < 3:
-            #                     continue
-            #                 out.append(x)
-            #             return out
-            #         return collections.Counter(filter_tokens(nlp_pipeline(text)))
-            #         # return collections.Counter(filter_tokens(nltk.word_tokenize(text)))
-            #     else:  # List[str]
-            #         word_counts = collections.Counter()
-            #         for item in text:
-            #             word_counts.update(extract_word_counts(item))
-            #         return word_counts
-
-            # New implementation using spaCy
-            def extract_word_counts(things: Union[List[spacy.tokens.token.Token],
-                                                  List[List[spacy.tokens.token.Token]]]) -> collections.Counter:
-                if not things:
-                    return collections.Counter()
-                if isinstance(things[0], spacy.tokens.token.Token):  # token list
-                    def filter_tokens(tokens):
-                        out = []
-                        for x in tokens:
-                            # https://spacy.io/usage/linguistic-features
-                            # https://universaldependencies.org/u/pos/
-                            #     ADJ: adjective
-                            #     ADP: adposition
-                            #     ADV: adverb
-                            #     AUX: auxiliary
-                            #     CCONJ: coordinating conjunction
-                            #     DET: determiner
-                            #     INTJ: interjection
-                            #     NOUN: noun
-                            #     NUM: numeral
-                            #     PART: particle
-                            #     PRON: pronoun
-                            #     PROPN: proper noun
-                            #     PUNCT: punctuation
-                            #     SCONJ: subordinating conjunction
-                            #     SYM: symbol
-                            #     VERB: verb
-                            #     X: other
-                            if x.pos_ in ("ADP", "AUX", "CCONJ", "DET", "NUM", "PRON", "PUNCT", "SCONJ"):  # filter out parts of speech that are useless as keywords
-                                continue
-                            if not x.lemma_.isalnum():  # filter out punctuation
-                                continue
-                            x = x.lemma_.lower()
-                            if isstopword(x) or len(x) < 3:
-                                continue
-                            out.append(x)
-                        return out
-                    return collections.Counter(filter_tokens(things))
-                else:  # list of token lists
-                    word_counts = collections.Counter()
-                    for sublist in things:
-                        word_counts.update(extract_word_counts(sublist))
-                    return word_counts
-
-            # def trim_word_counts(word_counts: Dict[str, int], p: float = 0.05) -> Dict[str, int]:
-            #     """`p`: tail cutoff, as proportion of the largest count.
-            #
-            #             The resulting cutoff count is automatically rounded to the nearest integer.
-            #             Words that appear only once are always trimmed (to do only this, use `p=0`).
-            #     """
-            #     max_count = max(word_counts.values())
-            #     tail_cutoff_count = max(2, round(p * max_count))
-            #     representative_words = {x: word_counts[x] for x in word_counts if word_counts[x] >= tail_cutoff_count}
-            #     return representative_words
-
-            # from unpythonic import islice
-            # def trim_word_counts(word_counts: Dict[str, int]) -> Dict[str, int]:
-            #     k = 10  # drop this many most common words
-            #     keys = islice(word_counts.keys())[k:]
-            #     m = 3  # drop any word with fewer occurrences than this
-            #     representative_words = {x: word_counts[x] for x in keys if word_counts[x] >= m}
-            #     return representative_words
-
-            def trim_word_counts(word_counts: Dict[str, int]) -> Dict[str, int]:
-                # U = int(0.2 * input_data.n_entries_total)  # drop any word with at least this many occurrences
-                U = float("+inf")  # upper limit disabled
-                L = 2  # drop any word with fewer occurrences than this
-                representative_words = {x: word_counts[x] for x in word_counts if L <= word_counts[x] <= U}
-                return representative_words
 
             def format_entry_for_keyword_extraction(entry: env) -> str:
                 # return entry.title
@@ -720,9 +604,10 @@ def extract_keywords(input_data, max_vis_kw=6):
             logger.info(f"                Done in {tim.dt:0.6g}s [avg {input_data.n_entries_total / tim.dt:0.6g} entries/s].")
 
             # TODO: Should we trim the keywords across the whole dataset? We currently trim each input file separately.
-            logger.info("            Extracting keywords from NLP pipeline results...")
+            logger.info(f"            Frequency analysis across all documents from NLP pipeline results for data from {filename}...")
             with timer() as tim:
-                all_keywords_for_this_file = trim_word_counts(extract_word_counts(all_docs_for_this_file))
+                all_keywords_for_this_file = nlpbackends.count_frequencies(all_docs_for_this_file,
+                                                                           stopwords=nlpbackends.extended_stopwords)
                 all_keywords_for_this_file = dict(sorted(all_keywords_for_this_file.items(), key=lambda kv: -kv[1]))  # sort by number of occurrences, descending
                 # all_keywords_for_this_file = " ".join(sorted(all_keywords_for_this_file.keys()))
                 # logger.info(f"keywords collected from {filename}: {all_keywords_for_this_file}")  # DEBUG
@@ -737,8 +622,8 @@ def extract_keywords(input_data, max_vis_kw=6):
             # alphabetized_keywords_debug = dict(sorted(all_keywords_for_this_file.items(), key=lambda kv: kv[0]))
             # logger.info(", ".join(alphabetized_keywords_debug.keys()))  # DEBUG
 
-            # Tag the entries.
-            logger.info(f"        Trimming word counts and tagging named entities for data from {filename}...")
+            # Per-document analysis.
+            logger.info(f"        Per-document frequency analysis and NER (named entity recognition) for data from {filename}...")
             fa_times = []
             ner_times = []
             with timer() as tim:
@@ -748,33 +633,21 @@ def extract_keywords(input_data, max_vis_kw=6):
                     if _is_cancelled():
                         return
 
+                    # This is essentially just dumb occurrence counting, aided by an extended list of stopwords manually tuned for scientific texts.
+                    # Everything smarter occurs further below, in `collect_cluster_keywords`, where we actually analyze this data to ignore uselessly
+                    # common words (when determining keywords for clusters).
+
+                    # Frequency analysis.
                     with timer() as tim2:
-                        kws = trim_word_counts(extract_word_counts(doc))
+                        kws = nlpbackends.count_frequencies(doc,
+                                                            stopwords=nlpbackends.extended_stopwords)
                     fa_times.append(tim2.dt)
 
                     # Named entity recognition (NER).
-                    # TODO: Update named entities to the cluster keywords, too. The thing is, we don't have frequency information for named entities, so we can't decide which are the most relevant ones.
+                    # TODO: Update named entities to the cluster keywords, too. The thing is, we don't have frequency information for named entities, so we can't decide which are the most relevant ones. TODO: Now we do. Fix this.
                     with timer() as tim2:
-                        # pos_tags = nltk.pos_tag(nltk.word_tokenize(text))
-                        # tree = nltk.ne_chunk(pos_tags, binary=True)
-                        # ents = set()
-                        # for subtree in tree:
-                        #     if isinstance(subtree, nltk.Tree):
-                        #         ent = " ".join([word for word, tag in subtree.leaves()])
-                        #         # label = subtree.label()
-                        #         if not isstopword(ent):  # omit single-word entities that are in stopwords
-                        #             ents.add(ent)
-                        #         # logger.info(f"Entity: {ent}, Label: {label}")
-
-                        # spaCy's pipeline (which we anyway use for keyword detection above) gives much better results here.
-                        ents = set()
-                        for ent in doc.ents:
-                            if ent.label_ in ("CARDINAL", "DATE", "MONEY", "QUANTITY", "PERCENT", "TIME"):
-                                continue
-                            if isstopword(ent.text):
-                                continue
-                            # print(f"Entity: {ent.text}, Label: {ent.label_}")  # DEBUG
-                            ents.add(ent.text)
+                        ents = set(nlpbackends.ner(doc,
+                                                   stopwords=nlpbackends.extended_stopwords).keys())
                     ner_times.append(tim2.dt)
 
                     # for cache saving (and unified handling)
