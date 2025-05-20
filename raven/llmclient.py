@@ -1194,7 +1194,7 @@ def minimal_chat_client(backend_url):
                 message_to_inject = create_chat_message(settings=settings,
                                                         role="system",
                                                         text=search_result_text)
-                history.insert(1, message_to_inject)  # after system prompt and character card
+                history.insert(1, message_to_inject)  # after system prompt / character card combo
 
             # Always-on injects, e.g. current local datetime
             for thunk in injectors:
