@@ -1210,15 +1210,7 @@ def minimal_chat_client(backend_url):
                 message_to_inject = create_chat_message(settings=settings,
                                                         role="system",
                                                         text=format_reminder_to_use_information_from_context_only())
-                history.insert(-1, message_to_inject)  # -1 = just before user's message
-
-            # # Format RAG results like a tool-call reply
-            # for docs_result in docs_matches:
-            #     search_result_text = f"Knowledge-base match from `{docs_result['document_id']}`.\n\n{docs_result['text'].strip()}\n-----"
-            #     message_to_inject = create_chat_message(settings=settings,
-            #                                             role="tool",
-            #                                             text=search_result_text)
-            #     history.append(message_to_inject)
+                history.append(message_to_inject)
 
             # # DEBUG - show history with injects.
             # # Message numbers counted from the modified history (with injects) would be wrong, so don't show them.
