@@ -1202,6 +1202,7 @@ def minimal_chat_client(backend_url):
             # if message is not None:
             #     position = len(history) - depth
             #     for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
+            #         # TODO: Should the RAG match notification show the query string, too?
             #         search_result_text = f"Knowledge-base match from '{docs_result['document_id']}':\n\n{docs_result['text'].strip()}\n-----"
             #         message_to_inject = create_chat_message(settings=settings,
             #                                                 role="tool",
@@ -1210,6 +1211,7 @@ def minimal_chat_client(backend_url):
 
             # Insert RAG results at the start of the history, as system messages.
             for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
+                # TODO: Should the RAG match notification show the query string, too?
                 search_result_text = f"[System information: Knowledge-base match from '{docs_result['document_id']}'.]\n\n{docs_result['text'].strip()}\n-----"
                 message_to_inject = create_chat_message(settings=settings,
                                                         role="system",
