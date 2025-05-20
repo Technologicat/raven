@@ -19,7 +19,7 @@ llm_backend_url = "http://127.0.0.1:5000"
 
 # Tool-calling requires instructions for the model. Typically the instructions state that
 # tools are available, and include a dynamically generated list of available functions
-# (and their call signatures).
+# and their call signatures.
 #
 # Newer models, e.g. QwQ-32B, include a templates for these instructions in their built-in
 # prompt template. In this case, the LLM backend builds the instructions automatically,
