@@ -33,7 +33,7 @@ llm_backend_url = "http://127.0.0.1:5000"
 #   - If `False`, we just send the data, and let the LLM backend build the instructions. (For newer models.)
 #
 # llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
-llm_send_toolcall_instructions = False  # for QwQ-32B
+llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
 
 config_base_dir = "~/.config/raven/"
 
