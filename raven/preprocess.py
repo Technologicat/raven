@@ -731,30 +731,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
 
     `max_vis_kw`: how many keywords to keep for each cluster.
 
-    `fraction`: float, cleaning parameter, important.
-
-                The aim of this parameter is to help omit useless keywords from visualization, trying to focus on
-                what distinguishes each cluster from the others. There's a fine balance here, drawing on the old
-                NLP observation that words with intermediate frequencies best describe a dataset:
-
-                  - Filtering out keywords present in *all* other clusters drops only a few of the most common words,
-                    leaving uselessly large overlaps between the keyword sets. This happens even after we account for
-                    stopwords, because the typical use case of Raven is that the dataset discusses a single broad
-                    umbrella topic (one field of science).
-
-                  - Filtering out keywords present in *any* other cluster leaves only noise.
-
-                  - So we set a threshold `fraction` such that if at least that fraction of all clusters have a
-                    particular keyword, then that keyword is considered uselessly common for the purposes of
-                    distinguishing clusters, and dropped.
-
-                 The default is to ignore keywords that appear in at least 10% of all clusters.
-                 But small datasets produce very few clusters, so the final formula that allows
-                 also such edge cases is::
-
-                     threshold_n = max(min(5, n_vis_clusters), math.ceil(fraction * n_vis_clusters))
-
-                 Any keyword that appears in `threshold_n` or more clusters is ignored.
+    `fraction`: IMPORTANT. The source of the keyword suggestion magic. See `nlpbackends.suggest_keywords`.
 
     Returns `vis_keywords_by_cluster`, a list, where the `k`th item is a list of keywords (`str`) for cluster ID `k`.
     For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
