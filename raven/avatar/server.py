@@ -2,7 +2,10 @@
 """Talkinghead server, for rendering an animated avatar for the AI.
 
 Customized from `server.py` in the discontinued SillyTavern-extras.
-Stripped everything except the `talkinghead` and `classify` modules, which are now always loaded.
+Stripped everything except the `talkinghead`, `classify`, and `embeddings` modules.
+
+The first two are now always loaded, and `embeddings` can be enabled for use with SillyTavern.
+(Note this is a separate process, and Raven runs its embeddings in its main process.)
 """
 
 # TODO: convert prints to use logger where appropriate
