@@ -36,7 +36,14 @@ dependencies = [
     "chromadb>=1.0.8",  # RAG semantic search
     "bm25s>=0.2.12",  # RAG keyword search
     "watchdog>=6.0.0",  # RAG document directory monitoring
-    "selenium>=4.32.0"  # websearch
+    "selenium>=4.32.0",  # websearch
+    "colorama>=0.4.6",  # AI avatar server (though we use it also through `mcpyrate` elsewhere)
+    "markdown>=3.8",  # AI avatar server
+    "flask>=3.1.1",  # AI avatar server
+    "flask-cors>=6.0.0",  # AI avatar server
+    "flask-compress>=1.17",  # AI avatar server
+    "torchvision>=0.22.0",  # AI avatar server
+    "huggingface-hub>=0.31.4"  # AI avatar server (for THA3 models autodownloader)
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]
