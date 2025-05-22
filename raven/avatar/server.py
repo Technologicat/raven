@@ -62,7 +62,6 @@ def is_authorize_ignored(request):
 # --------------------------------------------------------------------------------
 # Web API and its support functions
 
-
 @app.before_request
 def before_request():
     # Request time measuring
