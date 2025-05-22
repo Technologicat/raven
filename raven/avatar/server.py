@@ -403,3 +403,6 @@ else:
 
 ignore_auth.append(api_talkinghead_result_feed)   # TODO: does this make sense?
 app.run(host=host, port=port)
+
+def main():  # TODO: we don't really need this; it's just for console_scripts.
+    pass

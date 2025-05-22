@@ -90,6 +90,7 @@ Repository = "https://github.com/Technologicat/raven"
 
 [project.scripts]
 raven-arxiv2id = "raven.arxiv2id:main"
+raven-avatar-server = "raven.avatar.server:main"
 raven-check-cuda = "raven.check_cuda:main"
 raven-llmclient = "raven.llmclient:main"
 raven-pdf2bib = "raven.pdf2bib:main"
