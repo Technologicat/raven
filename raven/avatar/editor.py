@@ -916,15 +916,15 @@ class PoseEditorGUI:
             # This is faster (from `animator.py`).
             pose = torch.tensor(current_pose, device=self.device, dtype=self.dtype)
             with torch.no_grad():
+                # - model's data range is [-1, +1], linear intensity ("gamma encoded")
                 output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].float()
 
                 # [-1, 1] -> [0, 1]
-                # output_image = (output_image + 1.0) / 2.0
                 output_image.add_(1.0)
                 output_image.mul_(0.5)
                 output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
 
-                # convert [c, h, w] float -> [h, w, c] uint8
+                # reshape [c, h, w] -> [h, w, c]
                 c, h, w = output_image.shape
                 output_image = torch.transpose(output_image.reshape(c, h * w), 0, 1).reshape(h, w, c)
 
