@@ -66,7 +66,7 @@ from .vendor.tha3.poser.modes.load_poser import load_poser
 from .vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from .vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
-from .util import load_emotion_presets, posedict_to_pose, pose_to_posedict, torch_image_to_numpy, RunningAverage, maybe_install_models
+from .util import load_emotion_presets, posedict_to_pose, pose_to_posedict, torch_image_to_numpy, RunningAverage, maybe_install_models, convert_linear_to_srgb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -894,9 +894,6 @@ class PoseEditorGUI:
         The output image is rendered when necessary.
         """
         with self.lock:
-            update_start_time = time.time_ns()
-            actually_rendered = False  # For the FPS counter, to detect if a render actually took place.
-
             # Apply the currently selected emotion, unless "[custom]" is selected, in which case skip this.
             # Note this may modify the current pose, hence we do this first.
             current_emotion_name = dpg.get_value(self.emotion_choice)
@@ -914,47 +911,63 @@ class PoseEditorGUI:
             # so we must defer the rest of our processing until currently pending events have been processed.
             dpg.split_frame()
 
-            try:
-                output_index = int(dpg.get_value(self.output_index_choice))
-                if not self.source_image_changed:
-                    if (self.last_pose is not None and
-                            self.last_pose == current_pose and
-                            self.last_output_index == output_index):
-                        return
-                self.source_image_changed = False
-                self.last_pose = current_pose
-                self.last_output_index = output_index
-
-                if self.torch_source_image is None:
-                    dpg.show_item("source_no_image_loaded_text")
-                    dpg.show_item("result_no_image_loaded_text")
-                    self.source_image_dirty = False
+            output_index = int(dpg.get_value(self.output_index_choice))
+            if not self.source_image_changed:
+                if (self.last_pose is not None and
+                        self.last_pose == current_pose and
+                        self.last_output_index == output_index):
                     return
-                dpg.hide_item("source_no_image_loaded_text")
-                dpg.hide_item("result_no_image_loaded_text")
+            self.source_image_changed = False
+            self.last_pose = current_pose
+            self.last_output_index = output_index
 
-                with timer() as tim1:
-                    pose = torch.tensor(current_pose, device=self.device, dtype=self.dtype)
-                    with torch.no_grad():
-                        output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].detach().cpu()
-                with timer() as tim2:
-                    numpy_image = torch_image_to_numpy(output_image)
-                    self.last_output_numpy_image = numpy_image
-                logger.debug(f"update_images: pose {int(1000 * tim1.dt)} ms, torch -> numpy in {int(1000 * tim2.dt)} ms")
+            if self.torch_source_image is None:
+                dpg.show_item("source_no_image_loaded_text")
+                dpg.show_item("result_no_image_loaded_text")
+                self.source_image_dirty = False
+                return
+            dpg.hide_item("source_no_image_loaded_text")
+            dpg.hide_item("result_no_image_loaded_text")
 
-                arr = np.array(numpy_image, dtype=np.float32) / 255
-                raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-                dpg.set_value(self.result_image_texture, raw_data)
+            render_start_time = time.time_ns()
 
-                actually_rendered = True
-            finally:
-                # Update FPS counter, but only if a render actually took place (we want to measure the render speed only).
-                if actually_rendered:
-                    elapsed_time = time.time_ns() - update_start_time
-                    fps = 1.0 / (elapsed_time / 10**9)
-                    if self.torch_source_image is not None:
-                        self.fps_statistics.add_datapoint(fps)
-                    dpg.set_value(self.fps_text, f"Render (avg): {self.fps_statistics.average():0.2f} FPS")
+            # with timer() as tim1:
+            #     pose = torch.tensor(current_pose, device=self.device, dtype=self.dtype)
+            #     with torch.no_grad():
+            #         output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].detach().cpu()
+            # with timer() as tim2:
+            #     numpy_image = torch_image_to_numpy(output_image)
+            #     self.last_output_numpy_image = numpy_image
+            # logger.debug(f"update_images: pose {int(1000 * tim1.dt)} ms, torch -> numpy in {int(1000 * tim2.dt)} ms")
+            # arr = np.array(output_image_numpy, dtype=np.float32) / 255
+            # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
+            # dpg.set_value(self.result_image_texture, raw_data)
+
+            # This is faster (from `animator.py`).
+            pose = torch.tensor(current_pose, device=self.device, dtype=self.dtype)
+            with torch.no_grad():
+                output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].float()
+
+                # [-1, 1] -> [0, 1]
+                # output_image = (output_image + 1.0) / 2.0
+                output_image.add_(1.0)
+                output_image.mul_(0.5)
+                output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
+
+                # convert [c, h, w] float -> [h, w, c] uint8
+                c, h, w = output_image.shape
+                output_image = torch.transpose(output_image.reshape(c, h * w), 0, 1).reshape(h, w, c)
+
+                arr = output_image.detach().cpu().numpy()
+            raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
+            dpg.set_value(self.result_image_texture, raw_data)
+
+            # Update FPS counter, measuring the render speed only.
+            elapsed_time = time.time_ns() - render_start_time
+            fps = 1.0 / (elapsed_time / 10**9)
+            if self.torch_source_image is not None:
+                self.fps_statistics.add_datapoint(fps)
+            dpg.set_value(self.fps_text, f"Render (avg): {self.fps_statistics.average():0.2f} FPS")
 
     def save_image(self, image_file_name: str) -> None:
         """Save the output image.
