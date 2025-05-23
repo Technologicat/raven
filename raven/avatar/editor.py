@@ -932,6 +932,8 @@ class PoseEditorGUI:
             raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
             dpg.set_value(self.result_image_texture, raw_data)  # to GUI
 
+            self.last_output_numpy_image = arr
+
             # Update FPS counter, measuring the render speed only.
             elapsed_time = time.time_ns() - render_start_time
             fps = 1.0 / (elapsed_time / 10**9)
@@ -945,7 +947,9 @@ class PoseEditorGUI:
         The pose is automatically saved into the same directory as the output image, with
         file name determined from the image file name (e.g. "my_emotion.png" -> "my_emotion.json").
         """
-        self.save_numpy_image(self.last_output_numpy_image, image_file_name)
+        uint8_image = self.last_output_numpy_image * 255.0
+        uint8_image = np.array(uint8_image, dtype=np.uint8)
+        self.save_numpy_image(uint8_image, image_file_name)
         logger.info(f"Saved image {image_file_name}")
 
         # Since it is possible to save the image and JSON to "tha3/emotions", on a successful save, refresh the emotion presets list.
