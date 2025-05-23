@@ -5,7 +5,7 @@ __all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
            "format_bibtex_author", "format_bibtex_authors", "unicodize_basic_markup",
            "normalize_search_string", "search_string_to_fragments", "search_fragment_to_highlight_regex_fragment",
            "setup_font_ranges", "markdown_add_font_callback",
-           "has_child_items", "get_widget_pos", "get_widget_size", "is_mouse_inside_widget", "wait_for_resize",
+           "has_child_items", "get_widget_pos", "get_widget_size", "get_widget_relative_pos", "is_mouse_inside_widget", "wait_for_resize",
            "compute_tooltip_position_scalar",
            "get_pixels_per_plotter_data_unit",
            "is_completely_below_target_y", "is_completely_above_target_y",
@@ -433,6 +433,17 @@ def get_widget_size(widget):
         w = config["width"]
         h = config["height"]
     return w, h
+
+def get_widget_relative_pos(widget, reference):
+    """Return `widget`'s (DPG tag or ID) position, measured relative to the `reference` widget (DPG tag or ID).
+
+    This is handy when you need child window coordinates (use the child window as `reference`).
+    """
+    x0, y0 = get_widget_pos(widget)  # in viewport coordinates  # tag
+    x0_c, y0_c = get_widget_pos(reference)  # in viewport coordinates
+    x0_local = x0 - x0_c
+    y0_local = y0 - y0_c
+    return x0_local, y0_local
 
 def is_mouse_inside_widget(widget):
     """Return whether the mouse cursor is inside `widget` (DPG ID or tag)."""
