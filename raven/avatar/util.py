@@ -4,7 +4,7 @@ __all__ = ["posedict_keys", "posedict_key_to_index",
            "load_emotion_presets",
            "posedict_to_pose", "pose_to_posedict",
            "maybe_install_models",
-           "torch_image_to_numpy", "to_talkinghead_image",
+           "to_talkinghead_image",
            "RunningAverage",
            "rgb_to_yuv", "yuv_to_rgb", "luminance"]
 
@@ -18,11 +18,12 @@ from typing import Dict, List, Tuple
 
 import PIL
 
-import numpy as np
+# import numpy as np
 
 import torch
 
-from .vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
+# from .vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
+from .vendor.tha3.util import torch_linear_to_srgb
 
 
 # The keys for a pose in the emotion JSON files.
@@ -172,26 +173,28 @@ def convert_linear_to_srgb(image: torch.Tensor) -> torch.Tensor:
     rgb_image = torch_linear_to_srgb(image[0:3, :, :])
     return torch.cat([rgb_image, image[3:4, :, :]], dim=0)
 
-def torch_image_to_numpy(image: torch.tensor) -> np.array:
-    if image.shape[2] == 2:
-        h, w, c = image.shape
-        numpy_image = torch.transpose(image.reshape(h * w, c), 0, 1).reshape(c, h, w)
-    elif image.shape[0] == 4:
-        numpy_image = rgba_to_numpy_image(image)
-    elif image.shape[0] == 3:
-        numpy_image = rgb_to_numpy_image(image)
-    elif image.shape[0] == 1:
-        c, h, w = image.shape
-        alpha_image = torch.cat([image.repeat(3, 1, 1) * 2.0 - 1.0, torch.ones(1, h, w)], dim=0)
-        numpy_image = rgba_to_numpy_image(alpha_image)
-    elif image.shape[0] == 2:
-        numpy_image = grid_change_to_numpy_image(image, num_channels=4)
-    else:
-        msg = f"torch_image_to_numpy: unsupported # image channels: {image.shape[0]}"
-        logger.error(msg)
-        raise RuntimeError(msg)
-    numpy_image = np.uint8(np.rint(numpy_image * 255.0))
-    return numpy_image
+# # I have no idea what half of these modes are doing. Fortunately this function is no longer needed.
+# # See also `vendor.tha3.util.convert_output_image_from_torch_to_numpy`, which this is based on, fortunately also unused.
+# def torch_image_to_numpy(image: torch.tensor) -> np.array:
+#     if image.shape[2] == 2:
+#         h, w, c = image.shape
+#         numpy_image = torch.transpose(image.reshape(h * w, c), 0, 1).reshape(c, h, w)
+#     elif image.shape[0] == 4:
+#         numpy_image = rgba_to_numpy_image(image)
+#     elif image.shape[0] == 3:
+#         numpy_image = rgb_to_numpy_image(image)
+#     elif image.shape[0] == 1:
+#         c, h, w = image.shape
+#         alpha_image = torch.cat([image.repeat(3, 1, 1) * 2.0 - 1.0, torch.ones(1, h, w)], dim=0)
+#         numpy_image = rgba_to_numpy_image(alpha_image)
+#     elif image.shape[0] == 2:
+#         numpy_image = grid_change_to_numpy_image(image, num_channels=4)
+#     else:
+#         msg = f"torch_image_to_numpy: unsupported # image channels: {image.shape[0]}"
+#         logger.error(msg)
+#         raise RuntimeError(msg)
+#     numpy_image = np.uint8(np.rint(numpy_image * 255.0))
+#     return numpy_image
 
 def to_talkinghead_image(image: PIL.Image, new_size: Tuple[int] = (512, 512)) -> PIL.Image:
     """Resize image to `new_size`, add alpha channel, and center.

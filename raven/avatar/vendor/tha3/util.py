@@ -273,18 +273,19 @@ def extract_PIL_image_from_filelike(file):
     return PIL.Image.open(file)
 
 
-def convert_output_image_from_torch_to_numpy(output_image):
-    if output_image.shape[2] == 2:
-        h, w, c = output_image.shape
-        output_image = torch.transpose(output_image.reshape(h * w, c), 0, 1).reshape(c, h, w)
-    if output_image.shape[0] == 4:
-        numpy_image = rgba_to_numpy_image(output_image)
-    elif output_image.shape[0] == 1:
-        c, h, w = output_image.shape
-        alpha_image = torch.cat([output_image.repeat(3, 1, 1) * 2.0 - 1.0, torch.ones(1, h, w)], dim=0)
-        numpy_image = rgba_to_numpy_image(alpha_image)
-    elif output_image.shape[0] == 2:
-        numpy_image = grid_change_to_numpy_image(output_image, num_channels=4)
-    else:
-        raise RuntimeError("Unsupported # image channels: %d" % output_image.shape[0])
-    return numpy_image
+# # I have no idea what half of these modes are doing. Fortunately this function is no longer needed.
+# def convert_output_image_from_torch_to_numpy(output_image):
+#     if output_image.shape[2] == 2:
+#         h, w, c = output_image.shape
+#         output_image = torch.transpose(output_image.reshape(h * w, c), 0, 1).reshape(c, h, w)
+#     if output_image.shape[0] == 4:
+#         numpy_image = rgba_to_numpy_image(output_image)
+#     elif output_image.shape[0] == 1:
+#         c, h, w = output_image.shape
+#         alpha_image = torch.cat([output_image.repeat(3, 1, 1) * 2.0 - 1.0, torch.ones(1, h, w)], dim=0)
+#         numpy_image = rgba_to_numpy_image(alpha_image)
+#     elif output_image.shape[0] == 2:
+#         numpy_image = grid_change_to_numpy_image(output_image, num_channels=4)
+#     else:
+#         raise RuntimeError("Unsupported # image channels: %d" % output_image.shape[0])
+#     return numpy_image
