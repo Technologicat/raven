@@ -200,13 +200,13 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                        multi_selection=False,
                                        allow_drag=False,
                                        default_path=default_path)
-    # TODO: "save all emotions" needs to be a *directory* picker, not a file picker. Can fdialog do that or do we need to mod it further?
     filedialog_save_all_emotions = FileDialog(title="Save all emotions as JSON",
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
                                               modal=True,
                                               filter_list=[""],
                                               file_filter="",
+                                              dirs_only=True,  # *directory* picker mode
                                               save_mode=True,
                                               default_file_extension="",  # used if the user does not provide a file extension when naming the save-as
                                               allow_drag=False,
