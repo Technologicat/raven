@@ -4393,7 +4393,7 @@ def hotkeys_callback(sender, app_data):
         select_visible_all()
     elif key == dpg.mvKey_F10:
         toggle_word_cloud_window()
-        # Ctrl+Shift+...
+    # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_Z and dpg.is_item_enabled("selection_undo_button"):  # tag
             selection_undo()
