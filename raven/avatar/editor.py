@@ -697,7 +697,7 @@ class PoseEditorGUI:
                 dpg.add_text("Emotion preset [Ctrl+P]")
                 self.emotion_choice = dpg.add_combo(items=self.emotion_names,
                                                     default_value=self.emotion_names[0],
-                                                    callback=self.update_images)
+                                                    callback=self.update_output)
 
             with dpg.group():
                 self.load_image_button = dpg.add_button(label="Load image [Ctrl+O]",
@@ -807,7 +807,7 @@ class PoseEditorGUI:
         # logger.debug(f"on_pose_edited: sender = {sender}, app_data = {app_data}")
         dpg.set_value(self.emotion_choice, self.emotion_names[0])
         self.last_emotion_name = self.emotion_names[0]
-        self.update_images()
+        self.update_output()
 
     def load_image(self, image_file_name: str) -> None:
         """Load an input image."""
@@ -830,7 +830,7 @@ class PoseEditorGUI:
         except Exception as exc:
             logger.error(f"Could not load image {image_file_name}, reason: {exc}")
             modal_dialog(window_title="Error", message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}", buttons=["Close"], cancel_button="Close")
-        self.update_images()
+        self.update_output()
 
     def load_json(self, json_file_name: str) -> None:
         """Load a custom emotion JSON file."""
@@ -858,7 +858,7 @@ class PoseEditorGUI:
             modal_dialog(window_title="Error", message=f"Could not load JSON '{json_file_name}', reason {type(exc)}: {exc}", buttons=["Close"], cancel_button="Close")
         else:
             logger.info(f"Loaded JSON {json_file_name}")
-            self.update_images()
+            self.update_output()
 
     def get_current_pose(self) -> List[float]:
         """Get the current pose of the character as a list of morph values (in the order the models expect them).
@@ -887,7 +887,7 @@ class PoseEditorGUI:
             for panel in self.non_morph_control_panels.values():
                 panel.read_from_pose(pose)
 
-    def update_images(self) -> None:
+    def update_output(self) -> None:
         """Render the output image, and update the "no image loaded" widget status."""
         with self.lock:
             # Apply the currently selected emotion, unless "[custom]" is selected, in which case skip this.
@@ -931,7 +931,7 @@ class PoseEditorGUI:
             # with timer() as tim2:
             #     numpy_image = torch_image_to_numpy(output_image)
             #     self.last_output_numpy_image = numpy_image
-            # logger.debug(f"update_images: pose {int(1000 * tim1.dt)} ms, torch -> numpy in {int(1000 * tim2.dt)} ms")
+            # logger.debug(f"update_output: pose {int(1000 * tim1.dt)} ms, torch -> numpy in {int(1000 * tim2.dt)} ms")
             # arr = np.array(output_image_numpy, dtype=np.float32) / 255
             # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
             # dpg.set_value(self.result_image_texture, raw_data)
