@@ -864,6 +864,7 @@ class PoseEditorGUI:
                 panel.read_from_pose(pose)
 
     def _render(self, pose: List[float], output_index: int):
+        """Render `pose` on active device. Return the image data as a float NumPy array of shape [h, w, c], on CPU."""
         # pose = torch.tensor(current_pose, device=self.device, dtype=self.dtype)
         # with torch.no_grad():
         #     output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].detach().cpu()
@@ -873,7 +874,7 @@ class PoseEditorGUI:
         # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
         # dpg.set_value(self.result_image_texture, raw_data)
 
-        # This is faster (from `animator.py`).
+        # This is faster (from `animator.py`), since we do all possible operations on the GPU (when using GPU).
         posetensor = torch.tensor(pose, device=self.device, dtype=self.dtype)
         with torch.no_grad():
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
@@ -891,7 +892,8 @@ class PoseEditorGUI:
             arr = output_image.detach().cpu().numpy()
         return arr
 
-    def _float_image_to_uint8(self, arr):
+    def _float_image_to_uint8(self, arr: np.array) -> np.array:  # TODO: this might belong in `util`
+        """Convert the given image `arr` (a float array of shape [h, w, c]) into uint8, for file saving."""
         uint8_image = arr * 255.0
         uint8_image = np.array(uint8_image, dtype=np.uint8)
         return uint8_image
