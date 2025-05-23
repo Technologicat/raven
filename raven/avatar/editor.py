@@ -1074,11 +1074,14 @@ def pose_editor_hotkeys_callback(sender, app_data):
     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
+    # Ctrl+Shift+...
     if ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_O:
             show_open_json_dialog()
         elif key == dpg.mvKey_S:
             show_save_all_emotions_dialog()
+
+    # Ctrl+...
     elif ctrl_pressed:
         if key == dpg.mvKey_O:
             show_open_image_dialog()
@@ -1088,6 +1091,33 @@ def pose_editor_hotkeys_callback(sender, app_data):
             gui_instance.focus_presets()
         elif key == dpg.mvKey_I:
             gui_instance.focus_output_index()
+
+    # Bare key
+    #
+    # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
+    else:
+        # {widget_tag_or_id: list_of_choices}
+        choice_map = {gui_instance.emotion_choice: gui_instance.emotion_names,
+                      gui_instance.output_index_choice: gui_instance.output_index_choice_items}
+        def browse(choice_widget, choices):
+            index = choices.index(dpg.get_value(choice_widget))
+            if key == dpg.mvKey_Down:
+                new_index = min(index + 1, len(choices) - 1)
+            elif key == dpg.mvKey_Up:
+                new_index = max(index - 1, 0)
+            elif key == dpg.mvKey_Home:
+                new_index = 0
+            elif key == dpg.mvKey_End:
+                new_index = len(choices) - 1
+            else:
+                new_index = None
+            if new_index is not None:
+                dpg.set_value(choice_widget, choices[new_index])
+                gui_instance.update_output()  # the callback doesn't trigger automatically if we programmatically set the value
+        focused_item = dpg.get_focused_item()
+        if focused_item in choice_map.keys():
+            browse(focused_item, choice_map[focused_item])
+
 with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="pose_editor_hotkeys_handler", callback=pose_editor_hotkeys_callback)
 
