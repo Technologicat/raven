@@ -121,7 +121,19 @@ def rgba_to_numpy_image(torch_image: Tensor, min_pixel_value=-1.0, max_pixel_val
     height = torch_image.shape[1]
     width = torch_image.shape[2]
 
-    reshaped_image = torch_image.numpy().reshape(4, height * width).transpose().reshape(height, width, 4)
+    # [c, h, w] - > [h, w, c]
+    reshaped_image = torch_image.numpy().reshape(4, height * width).transpose().reshape(height, width, 4)  # original
+
+    # with torch.no_grad():
+    #     reshaped_image = torch.reshape(torch_image, (4, height * width))
+    #     reshaped_image = torch.transpose(reshaped_image, 0, 1)
+    #     reshaped_image = torch.reshape(reshaped_image, (height, width, 4))
+    #     reshaped_image = reshaped_image.cpu().numpy()
+
+    # with torch.no_grad():
+    #     reshaped_image = torch.transpose(torch_image, 0, 2)
+    #     reshaped_image = torch.transpose(reshaped_image, 0, 1).detach().cpu().numpy()
+
     numpy_image = (reshaped_image - min_pixel_value) / (max_pixel_value - min_pixel_value)
     rgb_image = numpy_linear_to_srgb(numpy_image[:, :, 0:3])
     a_image = numpy.clip(numpy_image[:, :, 3], 0.0, 1.0)
