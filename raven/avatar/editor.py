@@ -505,9 +505,9 @@ class MorphCategoryControlPanel:
 
     def on_choice_updated(self, sender, app_data) -> None:
         """Automatically optimize usability for the new arity and discrete/continuous state."""
-        # logger.debug(f"on_choice_updated: sender = {sender}, app_data = {app_data}")
         selected_morph_index = self.param_group_names.index(dpg.get_value(self.choice))
         param_group = self.param_groups[selected_morph_index]
+        # logger.debug(f"on_choice_updated: sender = {sender}, app_data = {app_data}, new morph index = {selected_morph_index}, new param_group = {param_group}")
         if param_group.is_discrete():
             dpg.set_value(self.checkbox, True)  # discrete parameter group: set to "on" when switched into
 
@@ -617,6 +617,7 @@ class PoseEditorGUI:
         self.dtype = self.poser.get_dtype()
         self.device = device
         self.image_size = self.poser.get_image_size()
+        self.gui_extra_height = 350
 
         with dpg.texture_registry(tag="pose_editor_textures"):
             self.blank_texture = np.zeros([self.image_size,  # height
@@ -641,9 +642,7 @@ class PoseEditorGUI:
         dpg.set_viewport_title(f"THA3 Pose Editor [{disp_device}] [{model}]")
 
         with dpg.window(tag="pose_editor_window",
-                        label="THA3 Pose Editor main window",  # not actually shown, since this window is maximized to the whole viewport
-                        width=3 * self.image_size,
-                        height=self.image_size + 200) as self.window:
+                        label="THA3 Pose Editor main window") as self.window:  # not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 self.init_left_panel()
                 self.init_control_panel()
@@ -663,7 +662,7 @@ class PoseEditorGUI:
         """Initialize the input image and emotion preset panel."""
         with dpg.child_window(tag="left_panel",
                               width=self.image_size,
-                              height=self.image_size + 400,
+                              height=self.image_size + self.gui_extra_height,
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
             dpg.add_image("source_image_texture", tag="source_image_image")
@@ -695,10 +694,11 @@ class PoseEditorGUI:
         """Initialize the pose editor panel."""
         with dpg.child_window(tag="control_panel",
                               width=self.image_size,
-                              height=self.image_size + 400,
+                              height=self.image_size + self.gui_extra_height,
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
-            dpg.add_text("Editor")
+            dpg.add_text("Pose controls [Ctrl+click to set a numeric value]")
+            dpg.add_spacer(height=8)
 
             morph_categories = [PoseParameterCategory.EYEBROW,
                                 PoseParameterCategory.EYE,
@@ -750,7 +750,7 @@ class PoseEditorGUI:
         """Initialize the output image and output controls panel."""
         with dpg.child_window(tag="right_panel",
                               width=self.image_size,
-                              height=self.image_size + 400,
+                              height=self.image_size + self.gui_extra_height,
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
             dpg.add_image("result_image_texture", tag="result_image_image")
@@ -1063,6 +1063,7 @@ class PoseEditorGUI:
             logger.info(f"Saved JSON {json_file_path}")
 
 # Hotkey support
+choice_map = None
 def pose_editor_hotkeys_callback(sender, app_data):
     if gui_instance is None:
         return
@@ -1097,9 +1098,14 @@ def pose_editor_hotkeys_callback(sender, app_data):
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
     else:
         # {widget_tag_or_id: list_of_choices}
-        choice_map = {gui_instance.emotion_choice: gui_instance.emotion_names,
-                      gui_instance.output_index_choice: gui_instance.output_index_choice_items}
-        def browse(choice_widget, choices):
+        global choice_map
+        if choice_map is None:  # build on first use
+            choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, lambda sender, app_data: gui_instance.update_output()),
+                          gui_instance.output_index_choice: (gui_instance.output_index_choice_items, lambda sender, app_data: gui_instance.update_output())}
+            for panel in gui_instance.morph_control_panels.values():
+                choice_map[panel.choice] = (panel.param_group_names, panel.on_choice_updated)
+        def browse(choice_widget, data):
+            choices, callback = data
             index = choices.index(dpg.get_value(choice_widget))
             if key == dpg.mvKey_Down:
                 new_index = min(index + 1, len(choices) - 1)
@@ -1113,7 +1119,7 @@ def pose_editor_hotkeys_callback(sender, app_data):
                 new_index = None
             if new_index is not None:
                 dpg.set_value(choice_widget, choices[new_index])
-                gui_instance.update_output()  # the callback doesn't trigger automatically if we programmatically set the value
+                callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
         focused_item = dpg.get_focused_item()
         if focused_item in choice_map.keys():
             browse(focused_item, choice_map[focused_item])
@@ -1199,6 +1205,13 @@ if __name__ == "__main__":
 
     _default_path = os.getcwd()
     initialize_filedialogs(_default_path)
+
+    def tune_viewport():
+        dpg.set_viewport_width(3 * gui_instance.image_size + 32)
+        dpg.set_viewport_height(gui_instance.image_size + gui_instance.gui_extra_height + 16)
+        dpg.split_frame()
+        dpg.set_viewport_resizable(False)
+    dpg.set_frame_callback(10, tune_viewport)
 
     def update_animations():
         animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
