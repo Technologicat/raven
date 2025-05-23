@@ -873,13 +873,8 @@ class PoseEditorGUI:
         return current_pose
 
     def set_current_pose(self, pose: List[float]) -> None:
-        """Write `pose` to the UI controls in the editor panel.
-
-        Note that after this, you have to flush the wx event queue for the GUI to update itself correctly.
-        So if you call `set_current_pose` and intend to do something immediately, instead do that something
-        using `wx.CallAfter`.
-        """
-        # `update_images` calls us; but if it is not already running (i.e. if we are called by something else),
+        """Write `pose` to the UI controls in the editor panel."""
+        # `update_output` calls us; but if it is not already running (i.e. if we are called by something else),
         # we should not let it run until the pose update is complete.
         with self.lock:
             for panel in self.morph_control_panels.values():
