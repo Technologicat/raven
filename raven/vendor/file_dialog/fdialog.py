@@ -940,6 +940,8 @@ class FileDialog:
         dpg.set_item_width(self.spacer_okcancel, new_width)
         dpg.set_item_width(self.spacer_notification, new_width)
 
+        dpg.focus_item(self.search_field)
+
     def refresh(self):
         cwd = os.getcwd()
         logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
