@@ -635,22 +635,18 @@ class PoseEditorGUI:
         self.image_size = self.poser.get_image_size()
 
         with dpg.texture_registry(tag="pose_editor_textures"):
-            self.source_image_texture_rawdata = np.zeros([self.image_size,  # height
-                                                          self.image_size,  # width
-                                                          4],  # RGBA
-                                                         dtype=np.float64)
-            self.result_image_texture_rawdata = np.zeros([self.image_size,  # height
-                                                          self.image_size,  # width
-                                                          4],  # RGBA
-                                                         dtype=np.float64)
+            self.blank_texture = np.zeros([self.image_size,  # height
+                                           self.image_size,  # width
+                                           4],  # RGBA
+                                          dtype=np.float32).ravel()
             self.source_image_texture = dpg.add_raw_texture(width=self.image_size,
                                                             height=self.image_size,
-                                                            default_value=self.source_image_texture_rawdata,
+                                                            default_value=self.blank_texture,
                                                             format=dpg.mvFormat_Float_rgba,
                                                             tag="source_image_texture")
             self.result_image_texture = dpg.add_raw_texture(width=self.image_size,
                                                             height=self.image_size,
-                                                            default_value=self.result_image_texture_rawdata,
+                                                            default_value=self.blank_texture,
                                                             format=dpg.mvFormat_Float_rgba,
                                                             tag="result_image_texture")
 
@@ -820,14 +816,16 @@ class PoseEditorGUI:
                                          (self.poser.get_image_size(), self.poser.get_image_size()))
             w, h = pil_image.size
             if pil_image.mode != "RGBA":  # input image must have an alpha channel
+                self.torch_source_image = None
+                self.source_image_changed = True
                 raise ValueError(f"Incompatible input image (no alpha channel): '{image_file_name}'")
             else:
                 logger.info(f"Loaded input image: {image_file_name}")
                 arr = np.asarray(pil_image.convert("RGBA"))
                 arr = np.array(arr, dtype=np.float32) / 255
                 raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-                dpg.set_value(self.source_image_texture, raw_data)
-                self.torch_source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device).to(self.dtype)
+                dpg.set_value(self.source_image_texture, raw_data)  # to GUI
+                self.torch_source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device).to(self.dtype)  # for poser
                 self.source_image_changed = True
         except Exception as exc:
             logger.error(f"Could not load image {image_file_name}, reason: {exc}")
@@ -860,6 +858,7 @@ class PoseEditorGUI:
             modal_dialog(window_title="Error", message=f"Could not load JSON '{json_file_name}', reason {type(exc)}: {exc}", buttons=["Close"], cancel_button="Close")
         else:
             logger.info(f"Loaded JSON {json_file_name}")
+            self.update_images()
 
     def get_current_pose(self) -> List[float]:
         """Get the current pose of the character as a list of morph values (in the order the models expect them).
@@ -889,15 +888,12 @@ class PoseEditorGUI:
                 panel.read_from_pose(pose)
 
     def update_images(self) -> None:
-        """Update the input and output images.
-
-        The output image is rendered when necessary.
-        """
+        """Render the output image, and update the "no image loaded" widget status."""
         with self.lock:
             # Apply the currently selected emotion, unless "[custom]" is selected, in which case skip this.
             # Note this may modify the current pose, hence we do this first.
             current_emotion_name = dpg.get_value(self.emotion_choice)
-            if current_emotion_name != self.emotion_names[0] and current_emotion_name != self.last_emotion_name:  # not "[custom]"
+            if current_emotion_name != self.emotion_names[0] and current_emotion_name != self.last_emotion_name:  # changed, and not "[custom]"
                 self.last_emotion_name = current_emotion_name
                 logger.info(f"Loading emotion preset {current_emotion_name}")
                 posedict = self.emotions[current_emotion_name]
@@ -906,10 +902,6 @@ class PoseEditorGUI:
                 current_pose = pose
             else:
                 current_pose = self.get_current_pose()
-
-            # The sliders may need to handle some events to update their values,
-            # so we must defer the rest of our processing until currently pending events have been processed.
-            dpg.split_frame()
 
             output_index = int(dpg.get_value(self.output_index_choice))
             if not self.source_image_changed:
@@ -921,10 +913,11 @@ class PoseEditorGUI:
             self.last_pose = current_pose
             self.last_output_index = output_index
 
-            if self.torch_source_image is None:
+            if self.torch_source_image is None:  # anything to render?
+                dpg.set_value(self.source_image_texture, self.blank_texture)
+                dpg.set_value(self.result_image_texture, self.blank_texture)
                 dpg.show_item("source_no_image_loaded_text")
                 dpg.show_item("result_no_image_loaded_text")
-                self.source_image_dirty = False
                 return
             dpg.hide_item("source_no_image_loaded_text")
             dpg.hide_item("result_no_image_loaded_text")
@@ -960,7 +953,7 @@ class PoseEditorGUI:
 
                 arr = output_image.detach().cpu().numpy()
             raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-            dpg.set_value(self.result_image_texture, raw_data)
+            dpg.set_value(self.result_image_texture, raw_data)  # to GUI
 
             # Update FPS counter, measuring the render speed only.
             elapsed_time = time.time_ns() - render_start_time
