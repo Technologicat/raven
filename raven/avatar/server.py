@@ -178,7 +178,7 @@ def api_classify_labels():
 
 @app.route("/api/talkinghead/load", methods=["POST"])
 def api_talkinghead_load():
-    """Load the talkinghead sprite posted as a file in the request. Resume animation if the talkinghead module was paused.
+    """Load the avatar sprite posted as a file in the request. Resume animation if the talkinghead module was paused.
 
     The file should be in a format that Pillow can read.
     """
@@ -187,8 +187,19 @@ def api_talkinghead_load():
 
 @app.route('/api/talkinghead/unload')
 def api_talkinghead_unload():
-    """Pause the avatar. To resume, load a character via '/api/talkinghead/load'."""
+    """Pause the avatar.
+
+    To resume, use '/api/talkinghead/reload'.
+
+    To resume, you can also load a character via '/api/talkinghead/load'.
+    This is slower, so if you want to resume the same animation, prefer reload.
+    """
     return animator.unload()
+
+@app.route('/api/talkinghead/reload')
+def api_talkinghead_reload():
+    """Resume the avatar."""
+    return animator.reload()
 
 @app.route('/api/talkinghead/load_emotion_templates', methods=["POST"])
 def api_talkinghead_load_emotion_templates():

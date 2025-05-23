@@ -106,12 +106,24 @@ def set_emotion(emotion: str) -> str:
 def unload() -> str:
     """Stop animation.
 
+    The animator remains paused, nothing is actually unloaded.
+
     Return a status message for passing over HTTP.
     """
     global animation_running
     animation_running = False
     logger.info("unload: animation paused")
     return "animation paused"
+
+def reload() -> str:
+    """Resume animation.
+
+    Return a status message for passing over HTTP.
+    """
+    global animation_running
+    animation_running = True
+    logger.info("reload: animation resumed")
+    return "animation resumed"
 
 def start_talking() -> str:
     """Start talking animation.
