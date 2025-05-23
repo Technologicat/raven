@@ -121,25 +121,6 @@ with dpg.theme() as global_theme:
         dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
 dpg.bind_theme(global_theme)  # set this theme as the default
 
-# FIX disabled controls not showing as disabled.
-# DPG does not provide a default disabled-item theme, so we provide our own.
-# Everything else is automatically inherited from DPG's global theme.
-#     https://github.com/hoffstadt/DearPyGui/issues/2068
-# TODO: Figure out how to get colors from a theme. Might not always be `(45, 45, 48)`.
-#   - Maybe see how DPG's built-in theme editor does it - unless it's implemented at the C++ level.
-#   - See also the theme color editor in https://github.com/hoffstadt/DearPyGui/wiki/Tools-and-Widgets
-disabled_color = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
-disabled_button_color = (45, 45, 48)
-disabled_button_hover_color = (45, 45, 48)
-disabled_button_active_color = (45, 45, 48)
-with dpg.theme(tag="disablable_button_theme"):
-    # We customize just this. Everything else is inherited from the global theme.
-    with dpg.theme_component(dpg.mvButton, enabled_state=False):
-        dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
-
 # TODO: viewport size depends on the image size, so it needs to be set up after `PoseEditorGUI` initializes
 dpg.create_viewport(title="THA3 Pose Editor",
                     width=1600,
