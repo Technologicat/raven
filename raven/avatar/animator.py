@@ -35,12 +35,13 @@ from flask import Response
 
 from .vendor.tha3.poser.modes.load_poser import load_poser
 from .vendor.tha3.poser.poser import Poser
-from .vendor.tha3.util import (torch_linear_to_srgb, resize_PIL_image,
-                               extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image)
+from .vendor.tha3.util import (resize_PIL_image,
+                               extract_PIL_image_from_filelike,
+                               extract_pytorch_image_from_PIL_image)
 
 from . import config
 from .postprocessor import Postprocessor
-from .util import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, RunningAverage
+from .util import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, RunningAverage, convert_linear_to_srgb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -308,12 +309,6 @@ def launch(device: str, model: str) -> Union[None, NoReturn]:
 
 # --------------------------------------------------------------------------------
 # Internal stuff
-
-def convert_linear_to_srgb(image: torch.Tensor) -> torch.Tensor:
-    """RGBA (linear) -> RGBA (SRGB), preserving the alpha channel."""
-    rgb_image = torch_linear_to_srgb(image[0:3, :, :])
-    return torch.cat([rgb_image, image[3:4, :, :]], dim=0)
-
 
 class Animator:
     """uWu Waifu"""

@@ -22,7 +22,7 @@ import numpy as np
 
 import torch
 
-from .vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image
+from .vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
 
 
 # The keys for a pose in the emotion JSON files.
@@ -166,6 +166,11 @@ def maybe_install_models(hf_reponame: str, modelsdir: str) -> None:
         snapshot_download(repo_id=hf_reponame, local_dir=modelsdir, local_dir_use_symlinks=False)
 
 # --------------------------------------------------------------------------------
+
+def convert_linear_to_srgb(image: torch.Tensor) -> torch.Tensor:
+    """RGBA (linear) -> RGBA (SRGB), preserving the alpha channel."""
+    rgb_image = torch_linear_to_srgb(image[0:3, :, :])
+    return torch.cat([rgb_image, image[3:4, :, :]], dim=0)
 
 def torch_image_to_numpy(image: torch.tensor) -> np.array:
     if image.shape[2] == 2:
