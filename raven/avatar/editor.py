@@ -47,9 +47,7 @@ import pathlib
 import sys
 import threading
 import time
-from typing import Callable, List, Optional
-
-from unpythonic import timer
+from typing import Callable, Dict, List, Optional
 
 import PIL.Image
 
@@ -60,13 +58,14 @@ import torch
 import dearpygui.dearpygui as dpg
 
 from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
+from .. import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
 from .. import utils as raven_utils
 
 from .vendor.tha3.poser.modes.load_poser import load_poser
 from .vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from .vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
-from .util import load_emotion_presets, posedict_to_pose, pose_to_posedict, torch_image_to_numpy, RunningAverage, maybe_install_models, convert_linear_to_srgb
+from .util import load_emotion_presets, posedict_to_pose, pose_to_posedict, RunningAverage, maybe_install_models, convert_linear_to_srgb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -864,6 +863,39 @@ class PoseEditorGUI:
             for panel in self.non_morph_control_panels.values():
                 panel.read_from_pose(pose)
 
+    def _render(self, pose: List[float], output_index: int):
+        # pose = torch.tensor(current_pose, device=self.device, dtype=self.dtype)
+        # with torch.no_grad():
+        #     output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].detach().cpu()
+        # numpy_image = torch_image_to_numpy(output_image)
+        # self.last_output_numpy_image = numpy_image
+        # arr = np.array(numpy_image, dtype=np.float32) / 255
+        # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
+        # dpg.set_value(self.result_image_texture, raw_data)
+
+        # This is faster (from `animator.py`).
+        posetensor = torch.tensor(pose, device=self.device, dtype=self.dtype)
+        with torch.no_grad():
+            # - model's data range is [-1, +1], linear intensity ("gamma encoded")
+            output_image = self.poser.pose(self.torch_source_image, posetensor, output_index)[0].float()
+
+            # [-1, 1] -> [0, 1]
+            output_image.add_(1.0)
+            output_image.mul_(0.5)
+            output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
+
+            # reshape [c, h, w] -> [h, w, c]
+            c, h, w = output_image.shape
+            output_image = torch.transpose(output_image.reshape(c, h * w), 0, 1).reshape(h, w, c)
+
+            arr = output_image.detach().cpu().numpy()
+        return arr
+
+    def _float_image_to_uint8(self, arr):
+        uint8_image = arr * 255.0
+        uint8_image = np.array(uint8_image, dtype=np.uint8)
+        return uint8_image
+
     def update_output(self) -> None:
         """Render the output image, and update the "no image loaded" widget status."""
         with self.lock:
@@ -901,38 +933,10 @@ class PoseEditorGUI:
 
             render_start_time = time.time_ns()
 
-            # with timer() as tim1:
-            #     pose = torch.tensor(current_pose, device=self.device, dtype=self.dtype)
-            #     with torch.no_grad():
-            #         output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].detach().cpu()
-            # with timer() as tim2:
-            #     numpy_image = torch_image_to_numpy(output_image)
-            #     self.last_output_numpy_image = numpy_image
-            # logger.debug(f"update_output: pose {int(1000 * tim1.dt)} ms, torch -> numpy in {int(1000 * tim2.dt)} ms")
-            # arr = np.array(output_image_numpy, dtype=np.float32) / 255
-            # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-            # dpg.set_value(self.result_image_texture, raw_data)
-
-            # This is faster (from `animator.py`).
-            pose = torch.tensor(current_pose, device=self.device, dtype=self.dtype)
-            with torch.no_grad():
-                # - model's data range is [-1, +1], linear intensity ("gamma encoded")
-                output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].float()
-
-                # [-1, 1] -> [0, 1]
-                output_image.add_(1.0)
-                output_image.mul_(0.5)
-                output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
-
-                # reshape [c, h, w] -> [h, w, c]
-                c, h, w = output_image.shape
-                output_image = torch.transpose(output_image.reshape(c, h * w), 0, 1).reshape(h, w, c)
-
-                arr = output_image.detach().cpu().numpy()
+            arr = self._render(current_pose, output_index)
             raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
             dpg.set_value(self.result_image_texture, raw_data)  # to GUI
-
-            self.last_output_numpy_image = arr
+            self.last_output_numpy_image = arr  # for file saving
 
             # Update FPS counter, measuring the render speed only.
             elapsed_time = time.time_ns() - render_start_time
@@ -947,9 +951,8 @@ class PoseEditorGUI:
         The pose is automatically saved into the same directory as the output image, with
         file name determined from the image file name (e.g. "my_emotion.png" -> "my_emotion.json").
         """
-        uint8_image = self.last_output_numpy_image * 255.0
-        uint8_image = np.array(uint8_image, dtype=np.uint8)
-        self.save_numpy_image(uint8_image, image_file_name)
+        posedict = pose_to_posedict(self.get_current_pose())
+        self.save_numpy_image(self.last_output_numpy_image, posedict, image_file_name)
         logger.info(f"Saved image {image_file_name}")
 
         # Since it is possible to save the image and JSON to "tha3/emotions", on a successful save, refresh the emotion presets list.
@@ -981,15 +984,12 @@ class PoseEditorGUI:
                 continue  # skip "[custom]" and "[reset]"
             try:
                 pose = posedict_to_pose(posedict)
-
-                posetensor = torch.tensor(pose, device=self.device, dtype=self.dtype)
                 output_index = int(dpg.get_value(self.output_index_choice))
-                with torch.no_grad():
-                    output_image = self.poser.pose(self.torch_source_image, posetensor, output_index)[0].detach().cpu()
-                numpy_image = torch_image_to_numpy(output_image)
+
+                arr = self._render(pose, output_index)
 
                 image_file_name = os.path.join(dir_name, f"{emotion_name}.png")
-                self.save_numpy_image(numpy_image, image_file_name)
+                self.save_numpy_image(arr, posedict, image_file_name)
 
                 logger.info(f"Saved image {image_file_name}")
             except Exception as exc:
@@ -1025,8 +1025,11 @@ class PoseEditorGUI:
 
         logger.info("Batch save finished.")
 
-    def save_numpy_image(self, numpy_image: np.array, image_file_name: str) -> None:
+    def save_numpy_image(self, numpy_image: np.array, posedict: Dict[str, float], image_file_name: str) -> None:
         """Save the output image.
+
+        `numpy_image` is an RGBA float array with range [0, 1].
+        `posedict` is the pose dictionary that corresponds to the `numpy_image`, for saving the emotion JSON.
 
         Output format is determined by file extension (which must be supported by the installed `Pillow`).
         Automatically save also the corresponding settings as JSON.
@@ -1034,15 +1037,16 @@ class PoseEditorGUI:
         The settings are saved into the same directory as the output image, with file name determined
         from the image file name (e.g. "my_emotion.png" -> "my_emotion.json").
         """
+        numpy_image = self._float_image_to_uint8(numpy_image)
+
         pil_image = PIL.Image.fromarray(numpy_image, mode="RGBA")
         os.makedirs(os.path.dirname(image_file_name), exist_ok=True)
         pil_image.save(image_file_name)
 
-        pose_dict = pose_to_posedict(self.get_current_pose())
         json_file_path = os.path.splitext(image_file_name)[0] + ".json"
 
         filename_without_extension = os.path.splitext(os.path.basename(image_file_name))[0]
-        data_dict_with_filename = {filename_without_extension: pose_dict}  # JSON structure: {emotion_name0: posedict0, ...}
+        data_dict_with_filename = {filename_without_extension: posedict}  # JSON structure: {emotion_name0: posedict0, ...}
 
         try:
             with open(json_file_path, "w") as file:
@@ -1162,6 +1166,13 @@ if __name__ == "__main__":
     _default_path = os.getcwd()
     initialize_filedialogs(_default_path)
 
-    dpg.start_dearpygui()  # automatic render loop
+    def update_animations():
+        animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
+
+    # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
+    while dpg.is_dearpygui_running():
+        update_animations()
+        dpg.render_dearpygui_frame()
+    # dpg.start_dearpygui()  # automatic render loop
 
     dpg.destroy_context()
