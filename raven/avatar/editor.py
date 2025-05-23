@@ -779,7 +779,8 @@ class PoseEditorGUI:
                 dpg.add_text("Output index [Ctrl+I] [meaning depends on the model]")
                 self.output_index_choice_items = [str(i) for i in range(self.poser.get_output_length())]
                 self.output_index_choice = dpg.add_combo(items=self.output_index_choice_items,
-                                                         default_value=self.output_index_choice_items[0])
+                                                         default_value=self.output_index_choice_items[0],
+                                                         callback=self.update_output)
 
             with dpg.group():
                 self.save_image_button = dpg.add_button(label="Save image and JSON [Ctrl+S]",
