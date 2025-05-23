@@ -420,7 +420,7 @@ class FileDialog:
                             self.ok()
                             return user_data[1]
                 else:
-                    if os.path.isfile(user_data[1]):
+                    if os.path.isfile(user_data[1]) or (self.dirs_only and os.path.isdir(user_data[1])):
                         _deselect_recursive(f"explorer_{self.instance_tag}")  # unselect others
                         dpg.set_value(sender, True)  # and select this item
                         # Save mode: populate file name field from clicked file, without file extension
