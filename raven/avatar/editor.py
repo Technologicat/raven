@@ -65,7 +65,7 @@ from .vendor.tha3.poser.modes.load_poser import load_poser
 from .vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from .vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
-from .util import load_emotion_presets, posedict_to_pose, pose_to_posedict, RunningAverage, maybe_install_models, convert_linear_to_srgb
+from .util import load_emotion_presets, posedict_to_pose, pose_to_posedict, RunningAverage, maybe_install_models, convert_linear_to_srgb, convert_float_to_uint8
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -896,12 +896,6 @@ class PoseEditorGUI:
             arr = output_image.detach().cpu().numpy()
         return arr
 
-    def _float_image_to_uint8(self, arr: np.array) -> np.array:  # TODO: this might belong in `util`
-        """Convert the given image `arr` (a float array of shape [h, w, c]) into uint8, for file saving."""
-        uint8_image = arr * 255.0
-        uint8_image = np.array(uint8_image, dtype=np.uint8)
-        return uint8_image
-
     def update_output(self) -> None:
         """Render the output image, and update the "no image loaded" widget status."""
         with self.lock:
@@ -1043,7 +1037,7 @@ class PoseEditorGUI:
         The settings are saved into the same directory as the output image, with file name determined
         from the image file name (e.g. "my_emotion.png" -> "my_emotion.json").
         """
-        numpy_image = self._float_image_to_uint8(numpy_image)
+        numpy_image = convert_float_to_uint8(numpy_image)
 
         pil_image = PIL.Image.fromarray(numpy_image, mode="RGBA")
         os.makedirs(os.path.dirname(image_file_name), exist_ok=True)

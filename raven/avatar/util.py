@@ -4,7 +4,7 @@ __all__ = ["posedict_keys", "posedict_key_to_index",
            "load_emotion_presets",
            "posedict_to_pose", "pose_to_posedict",
            "maybe_install_models",
-           "to_talkinghead_image",
+           "convert_linear_to_srgb", "convert_float_to_uint8", "to_talkinghead_image",
            "RunningAverage",
            "rgb_to_yuv", "yuv_to_rgb", "luminance"]
 
@@ -18,7 +18,7 @@ from typing import Dict, List, Tuple
 
 import PIL
 
-# import numpy as np
+import numpy as np
 
 import torch
 
@@ -172,6 +172,12 @@ def convert_linear_to_srgb(image: torch.Tensor) -> torch.Tensor:
     """RGBA (linear) -> RGBA (SRGB), preserving the alpha channel."""
     rgb_image = torch_linear_to_srgb(image[0:3, :, :])
     return torch.cat([rgb_image, image[3:4, :, :]], dim=0)
+
+def convert_float_to_uint8(image: np.array) -> np.array:
+    """Convert the given `image` (a float array of shape [h, w, c]) into uint8, for file saving."""
+    uint8_image = image * 255.0
+    uint8_image = np.array(uint8_image, dtype=np.uint8)
+    return uint8_image
 
 # # I have no idea what half of these modes are doing. Fortunately this function is no longer needed.
 # # See also `vendor.tha3.util.convert_output_image_from_torch_to_numpy`, which this is based on, fortunately also unused.
