@@ -698,7 +698,7 @@ class PoseEditorGUI:
                               height=self.image_size + 400,
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
-            dpg.add_text("Editor [Ctrl+E]")
+            dpg.add_text("Editor")
 
             morph_categories = [PoseParameterCategory.EYEBROW,
                                 PoseParameterCategory.EYE,
@@ -1086,8 +1086,6 @@ def pose_editor_hotkeys_callback(sender, app_data):
             show_save_image_dialog()
         elif key == dpg.mvKey_P:
             gui_instance.focus_presets()
-        elif key == dpg.mvKey_E:
-            gui_instance.focus_editor()
         elif key == dpg.mvKey_I:
             gui_instance.focus_output_index()
 with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole viewport)
