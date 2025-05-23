@@ -204,20 +204,17 @@ def convert_avs_to_avi(avs_file, avi_file):
 
 def convert_avi_to_mp4(avi_file, mp4_file):
     os.makedirs(os.path.dirname(mp4_file), exist_ok=True)
-    os.system("ffmpeg -y -i %s -c:v libx264 -preset slow -crf 22 -c:a libfaac -b:a 128k %s" % \
-              (avi_file, mp4_file))
+    os.system("ffmpeg -y -i %s -c:v libx264 -preset slow -crf 22 -c:a libfaac -b:a 128k %s" % (avi_file, mp4_file))
 
 
 def convert_avi_to_webm(avi_file, webm_file):
     os.makedirs(os.path.dirname(webm_file), exist_ok=True)
-    os.system("ffmpeg -y -i %s -vcodec libvpx -qmin 0 -qmax 50 -crf 10 -b:v 1M -acodec libvorbis %s" % \
-              (avi_file, webm_file))
+    os.system("ffmpeg -y -i %s -vcodec libvpx -qmin 0 -qmax 50 -crf 10 -b:v 1M -acodec libvorbis %s" % (avi_file, webm_file))
 
 
 def convert_mp4_to_webm(mp4_file, webm_file):
     os.makedirs(os.path.dirname(webm_file), exist_ok=True)
-    os.system("ffmpeg -y -i %s -vcodec libvpx -qmin 0 -qmax 50 -crf 10 -b:v 1M -acodec libvorbis %s" % \
-              (mp4_file, webm_file))
+    os.system("ffmpeg -y -i %s -vcodec libvpx -qmin 0 -qmax 50 -crf 10 -b:v 1M -acodec libvorbis %s" % (mp4_file, webm_file))
 
 
 def create_parent_dir(file_name):
