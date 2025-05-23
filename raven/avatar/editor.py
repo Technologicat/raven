@@ -257,6 +257,8 @@ def show_save_image_dialog():
     """
     if gui_instance is None:
         return
+    if gui_instance.torch_source_image is None:  # anything to save?
+        return
     logger.debug("show_save_image_dialog: Showing save file dialog.")
     filedialog_save_image.show_file_dialog()
     logger.debug("show_save_image_dialog: Done.")
@@ -326,6 +328,8 @@ def show_save_all_emotions_dialog():
     If you need to close it programmatically, call `filedialog_save_all_emotions.cancel()` so it'll trigger the callback.
     """
     if gui_instance is None:
+        return
+    if gui_instance.torch_source_image is None:  # character not loaded?
         return
     logger.debug("show_save_all_emotions_dialog: Showing save file dialog.")
     filedialog_save_all_emotions.show_file_dialog()
