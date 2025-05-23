@@ -472,7 +472,7 @@ class FileDialog:
                 FILE_ATTRIBUTE_HIDDEN = 0x2
                 attrs = ctypes.windll.kernel32.GetFileAttributesW(str(filepath))
                 return FILE_ATTRIBUTE_HIDDEN & attrs
-            except:  # TODO: Catch which types exactly? `Exception`? `BaseException`?
+            except Exception:
                 return False
 
         def _makedir(item, callback, parent=f"explorer_{self.instance_tag}", size=False):
