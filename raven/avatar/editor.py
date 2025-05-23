@@ -799,7 +799,7 @@ class PoseEditorGUI:
             if pil_image.mode != "RGBA":  # input image must have an alpha channel
                 self.torch_source_image = None
                 self.source_image_changed = True
-                raise ValueError(f"Incompatible input image (no alpha channel): '{image_file_name}'")
+                raise ValueError("Incompatible input image (no alpha channel)")
             else:
                 logger.info(f"Loaded input image: {image_file_name}")
                 arr = np.asarray(pil_image.convert("RGBA"))
@@ -821,7 +821,7 @@ class PoseEditorGUI:
                 emotions_from_json = json.load(json_file)
             # TODO: Here we just take the first emotion from the file.
             if not emotions_from_json:
-                logger.warning(f"No emotions defined in given JSON file, canceling load: {json_file_name}")
+                logger.warning("No emotions defined in given JSON file")
                 return
             first_emotion_name = list(emotions_from_json.keys())[0]  # first in insertion order, i.e. topmost in file
             if len(emotions_from_json) > 1:
