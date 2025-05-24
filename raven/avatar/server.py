@@ -443,6 +443,17 @@ if not torch.cuda.is_available() and not args.cpu:
     if not torch.backends.mps.is_available() and not args.cpu:
         print(f"{Fore.YELLOW}{Style.BRIGHT}torch-mps is not supported on this device.{Style.RESET_ALL}")
 
+if device_string.startswith("cuda") and torch.cuda.is_available():
+    print(f"Device info for GPU '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' ({torch.cuda.get_device_name(device_string)}):")
+    print(f"    {torch.cuda.get_device_properties(device_string)}")
+    print(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(device_string))}")
+    print(f"    Detected CUDA version {torch.version.cuda}")
+
+# --------------------
+# Websearch
+
+websearch.init_module()
+
 # --------------------
 # Embeddings
 
@@ -455,11 +466,6 @@ if not torch.cuda.is_available() and not args.cpu:
 #
 if args.embeddings:
     embed.init_module(embedding_model, device_string)
-
-# --------------------
-# Websearch
-
-websearch.init_module()
 
 # --------------------
 # Classify
@@ -491,6 +497,8 @@ animator.init_module(avatar_device, model)
 
 # ----------------------------------------
 # Start app
+
+print(f"{Fore.GREEN}{Style.BRIGHT}Starting server{Style.RESET_ALL}")
 
 # Read an API key from an already existing file. If that file doesn't exist, create it.
 if args.secure:
