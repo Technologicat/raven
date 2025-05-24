@@ -158,9 +158,10 @@ def _websearch_impl():
     engine = data["engine"] if "engine" in data else "duckduckgo"
     max_links = data["max_links"] if "max_links" in data else 10
 
-    if engine == "duckduckgo":
-        return websearch.search_duckduckgo(query, max_links=max_links)
-    return websearch.search_google(query, max_links=max_links)
+    if engine not in ("duckduckgo", "google"):
+        abort(400, '"engine", if provided, must be one of "duckduckgo", "google"')
+
+    return websearch.search(query, engine=engine, max_links=max_links)
 
 # ST-compatible websearch endpoint
 @app.route("/api/websearch", methods=["POST"])

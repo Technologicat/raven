@@ -9,7 +9,7 @@ and its old Python implementation:
     https://github.com/SillyTavern/SillyTavern-Extras/blob/main/modules/websearch/script.py
 """
 
-__all__ = ["search_google", "search_duckduckgo"]
+__all__ = ["search"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 import atexit
 import pathlib
 import time
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 import urllib.parse
 
 from selenium import webdriver
@@ -244,7 +244,7 @@ def format_results(texts: List[str],
     return preformatted_text, results
 
 @memoize
-def search_google(query: str, max_links: int = 10) -> (List[str], List[str]):
+def search_google(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     logger.info(f"search_google: Searching Google for {query}...")
     driver.get(f"https://google.com/search?hl=en&q={encodeURIComponent(query)}&num={max_links}")
     wait_for_id("res")
@@ -270,7 +270,7 @@ def search_google(query: str, max_links: int = 10) -> (List[str], List[str]):
     return preformatted_text, results
 
 @memoize
-def search_duckduckgo(query: str, max_links: int = 10) -> (List[str], List[str]):
+def search_duckduckgo(query: str, max_links: int = 10) -> Tuple[str, Dict]:
     logger.info(f"search_duckduckgo: Searching DuckDuckGo for {encodeURIComponent(query)}...")
     driver.get(f"https://duckduckgo.com/?kl=wt-wt&kp=-2&kav=1&kf=-1&kac=-1&kbh=-1&ko=-1&k1=-1&kv=n&kz=-1&kat=-1&kbg=-1&kbe=0&kpsb=-1&q={query}")
     wait_for_id("web_content_wrapper")
@@ -316,7 +316,7 @@ def search_duckduckgo(query: str, max_links: int = 10) -> (List[str], List[str])
 # # description css-1507v2l: web result snippet
 # #
 # @memoize
-# def search_startpage(query: str, max_links: int = 10) -> (List[str], List[str]):
+# def search_startpage(query: str, max_links: int = 10) -> Tuple[str, Dict]:
 #     logger.info(f"search_startpage: Searching StartPage for {query}...")
 #     driver.get(f"https://www.startpage.com/sp/search?q={encodeURIComponent(query)}")
 #     wait_for_selector(".w-gl.css-oerspo")
@@ -332,6 +332,15 @@ def search_duckduckgo(query: str, max_links: int = 10) -> (List[str], List[str])
 #     preformatted_text, results = format_results(texts=texts, titles=titles, links=links)
 #     logger.debug(f"search_startpage: Found: {preformatted_text}")
 #     return preformatted_text, results
+
+def search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple[str, Dict]:
+    if engine == "duckduckgo":
+        return search_duckduckgo(query, max_links)
+    elif engine == "google":
+        return search_google(query, max_links)
+    # elif engine == "startpage":
+    #     return search_startpage(query, max_links)
+    assert False
 
 # --------------------------------------------------------------------------------
 # Example
