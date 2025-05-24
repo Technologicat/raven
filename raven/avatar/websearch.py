@@ -92,7 +92,7 @@ def get_driver():
 driver = None
 def init_module():
     """Initialize the websearch module."""
-    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}websearch{Style.RESET_ALL}..")
+    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}websearch{Style.RESET_ALL}...")
     global driver
     driver = get_driver()
     if driver is not None:
