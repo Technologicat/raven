@@ -94,11 +94,15 @@ def index():
 
 @app.route("/api/modules", methods=["GET"])
 def get_modules():
-    modules = ["talkinghead", "classify"]
-    if args.embeddings:  # embeddings API endpoint enabled?
-        modules.append("embeddings")
-    if websearch.driver is not None:  # websearch initialized successfully?
+    modules = []
+    if animator.is_available():
+        modules.append("talkinghead")
+    if classify.is_available():
+        modules.append("classify")
+    if websearch.is_available():
         modules.append("websearch")
+    if args.embeddings and embed.is_available():  # the only optional module; embeddings API endpoint enabled?
+        modules.append("embeddings")
     return jsonify({"modules": modules})
 
 # ----------------------------------------
@@ -130,8 +134,8 @@ def api_embeddings_compute():
 
     This is the Extras backend for computing embeddings in the Vector Storage builtin extension.
     """
-    if not embed.sentence_embedder:
-        abort(403, "Module 'embeddings' not enabled in config")  # this is the only optional module
+    if not embed.is_available():
+        abort(403, "Module 'embeddings' not running")  # this is the only optional module
     data = request.get_json()
     if "text" not in data:
         abort(400, '"text" is required')
@@ -300,7 +304,7 @@ def api_talkinghead_load_emotion_templates():
 
     This API endpoint becomes available after the talkinghead has been launched.
     """
-    if animator.global_animator_instance is None:
+    if not animator.is_available():
         abort(400, 'avatar not launched')
     data = request.get_json()
     if not len(data):
@@ -323,7 +327,7 @@ def api_talkinghead_load_animator_settings():
 
     This API endpoint becomes available after the talkinghead has been launched.
     """
-    if animator.global_animator_instance is None:
+    if not animator.is_available():
         abort(400, 'avatar not launched')
     data = request.get_json()
     if not len(data):
@@ -453,6 +457,11 @@ if args.embeddings:
     embed.init_module(embedding_model)
 
 # --------------------
+# Websearch
+
+websearch.init_module()
+
+# --------------------
 # Classify
 
 classify.init_module(classification_model, device_string, torch_dtype)
@@ -478,7 +487,7 @@ util.maybe_install_models(hf_reponame=args.talkinghead_models, modelsdir=tha3_mo
 
 # avatar_device: choices='The device to use for PyTorch ("cuda" for GPU, "cpu" for CPU).'
 # model: choices=['standard_float', 'separable_float', 'standard_half', 'separable_half'],
-animator.launch(avatar_device, model)
+animator.init_module(avatar_device, model)
 
 # ----------------------------------------
 # Start app
@@ -500,5 +509,5 @@ else:
 ignore_auth.append(api_talkinghead_result_feed)   # TODO: does this make sense?
 app.run(host=host, port=port)
 
-def main():  # TODO: we don't really need this; it's just for console_scripts.
+def main():  # TODO: we don't really need this; it's just for console_scripts so that we can provide a command-line entrypoint.
     pass

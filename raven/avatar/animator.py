@@ -6,12 +6,12 @@ This module implements the live animation backend and serves the API. For usage,
 If you want to play around with THA3 expressions in a standalone app, see `editor.py`.
 """
 
-__all__ = ["set_emotion_from_classification", "set_emotion",
+__all__ = ["init_module", "is_available",
+           "set_emotion_from_classification", "set_emotion",
            "unload",
            "start_talking", "stop_talking",
            "result_feed",
-           "load_image_from_stream",
-           "launch"]
+           "load_image_from_stream"]
 
 import atexit
 import io
@@ -282,10 +282,8 @@ def load_image_from_stream(stream) -> str:
         animation_running = True
     return "OK"
 
-def launch(device: str, model: str) -> Union[None, NoReturn]:
+def init_module(device: str, model: str) -> Union[None, NoReturn]:
     """Launch the avatar (live mode).
-
-    If the launch fails, the process exits.
 
     device: "cpu" or "cuda"
     model: one of the folder names inside "vendor/tha3/models/"
@@ -296,13 +294,13 @@ def launch(device: str, model: str) -> Union[None, NoReturn]:
     try:
         # If the animator already exists, clean it up first
         if global_animator_instance is not None:
-            logger.info(f"launch: relaunching on device {device} with model {model}")
+            logger.info(f"init_module: relaunching on device {device} with model {model}")
             global_animator_instance.exit()
             global_animator_instance = None
             global_encoder_instance.exit()
             global_encoder_instance = None
 
-        logger.info("launch: loading the Talking Head Anime 3 (THA3) posing engine")
+        logger.info("init_module: loading the Talking Head Anime 3 (THA3) posing engine")
         modelsdir = str(vendor_basedir / "tha3" / "models")
         poser = load_poser(model, device, modelsdir=modelsdir)
         global_animator_instance = Animator(poser, device)
@@ -317,7 +315,16 @@ def launch(device: str, model: str) -> Union[None, NoReturn]:
 
     except RuntimeError as exc:
         logger.error(exc)
-        sys.exit()
+        if global_animator_instance is not None:
+            global_animator_instance.exit()
+            global_animator_instance = None
+        if global_encoder_instance is not None:
+            global_encoder_instance.exit()
+            global_encoder_instance = None
+
+def is_available():
+    """Return whether this module is up and running."""
+    return all(component is not None for component in (global_animator_instance, global_encoder_instance))
 
 # --------------------------------------------------------------------------------
 # Internal stuff

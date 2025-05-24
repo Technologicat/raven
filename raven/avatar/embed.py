@@ -3,7 +3,7 @@
 #
 # Raven loads its embedding module in the main app, not in the `avatar` subapp.
 
-__all__ = ["init_module", "embed_sentences"]
+__all__ = ["init_module", "is_available", "embed_sentences"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +22,15 @@ sentence_embedder = None
 def init_module(model_name: str) -> None:
     global sentence_embedder
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}embeddings{Style.RESET_ALL} with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
-    sentence_embedder = nlptools.load_embedding_model(model_name)
+    try:
+        sentence_embedder = nlptools.load_embedding_model(model_name)
+    except Exception as exc:
+        logger.warning(f"init_module: failed: {type(exc)}: {exc}")
+        sentence_embedder = None
+
+def is_available():
+    """Return whether this module is up and running."""
+    return (sentence_embedder is not None)
 
 def embed_sentences(text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
     vectors: Union[np.array, List[np.array]] = sentence_embedder.encode(text,

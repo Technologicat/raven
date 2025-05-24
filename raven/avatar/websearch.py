@@ -9,7 +9,7 @@ and its old Python implementation:
     https://github.com/SillyTavern/SillyTavern-Extras/blob/main/modules/websearch/script.py
 """
 
-__all__ = ["search"]
+__all__ = ["init_module", "is_available", "search"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +20,8 @@ import pathlib
 import time
 from typing import Dict, List, Optional, Tuple, Union
 import urllib.parse
+
+from colorama import Fore, Style
 
 from selenium import webdriver
 from selenium.common import exceptions
@@ -86,11 +88,20 @@ def get_driver():
             logger.warning("get_driver: Firefox not found either. Disabling websearch.")
             return None
 
-driver = get_driver()
-def quit_driver():
+driver = None
+def init_module():
+    """Initialize the websearch module."""
+    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}websearch{Style.RESET_ALL}..")
+    global driver
+    driver = get_driver()
     if driver is not None:
-        driver.quit()
-atexit.register(quit_driver)
+        def quit_driver():
+            driver.quit()
+        atexit.register(quit_driver)
+
+def is_available():
+    """Return whether this module is up and running."""
+    return (driver is not None)
 
 # --------------------------------------------------------------------------------
 # Utilities
