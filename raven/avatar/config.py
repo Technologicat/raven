@@ -26,6 +26,9 @@ DEFAULT_CLASSIFICATION_MODEL = "joeddav/distilbert-base-uncased-go-emotions-stud
 #
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 
+# Where to store files. Currently only used for websearch's debug functionality.
+config_base_dir = "~/.config/raven/avatar/"
+
 # Default configuration for the pixel-space postprocessor, to make the AI's avatar
 # look more cyberpunk via pixel-space glitch artistry.
 #
