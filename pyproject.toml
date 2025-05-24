@@ -43,7 +43,8 @@ dependencies = [
     "flask-cors>=6.0.0",  # AI avatar server
     "flask-compress>=1.17",  # AI avatar server
     "torchvision>=0.22.0",  # AI avatar server
-    "huggingface-hub>=0.31.4"  # AI avatar server (for THA3 models autodownloader)
+    "huggingface-hub>=0.31.4",  # AI avatar server (for THA3 models autodownloader)
+    "waitress>=3.0.2"  # AI avatar server
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]

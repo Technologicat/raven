@@ -507,7 +507,9 @@ else:
     print(f"{Fore.YELLOW}{Style.BRIGHT}No API key, accepting all requests.{Style.RESET_ALL} (use --secure to require an API key)")
 
 ignore_auth.append(api_talkinghead_result_feed)   # TODO: does this make sense?
-app.run(host=host, port=port)
+
+from waitress import serve
+serve(app, host=host, port=port)
 
 def main():  # TODO: we don't really need this; it's just for console_scripts so that we can provide a command-line entrypoint.
     pass
