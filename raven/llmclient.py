@@ -42,14 +42,17 @@ from unpythonic.env import env
 from . import chattree
 from . import config
 from . import hybridir
-from . import websearch
 
 # --------------------------------------------------------------------------------
 # Module bootup
 
 config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
 
+# ----------------------------------------
+# LLM communication setup
+
 api_key_file = config_dir / "api_key.txt"
+avatar_api_key_file = config_dir / "avatar_api_key.txt"
 
 # HTTP headers for LLM requests
 headers = {
@@ -57,12 +60,47 @@ headers = {
 }
 
 # Read API key for cloud LLM support
-if os.path.exists(api_key_file):
+if os.path.exists(api_key_file):  # TODO: test this (implemented according to spec)
     with open(api_key_file, "r", encoding="utf-8") as f:
         api_key = f.read()
     # "Authorization": "Bearer yourPassword123"
     # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
     headers["Authorization"] = api_key.strip()
+
+# ----------------------------------------
+# Avatar communication setup
+
+avatar_url = "http://localhost:5100"
+
+avatar_api_key_file = config_dir / "avatar_api_key.txt"
+
+avatar_headers = {
+    "Content-Type": "application/json"
+}
+
+if os.path.exists(avatar_api_key_file):  # TODO: test this (I have no idea what I'm doing; check against `avatar/server.py`)
+    with open(api_key_file, "r", encoding="utf-8") as f:
+        api_key = f.read()
+    avatar_headers["Authorization"] = api_key.strip()
+
+# --------------------------------------------------------------------------------
+# Websearch integration (requires `raven.avatar.server`)
+
+def websearch_wrapper(query: str, engine: str, max_links: int = 10) -> (List[str], List[str]):
+    """Perform a websearch, using the Avatar server to handle the interaction with the search engine and the parsing of the results page."""
+    data = {"query": query,
+            "engine": engine,
+            "max_links": max_links}
+    response = requests.post(f"{avatar_url}/api/websearch2", headers=avatar_headers, json=data, verify=False, stream=False)
+
+    if response.status_code != 200:
+        logger.error(f"Avatar server returned error: {response.status_code} {response.reason}. Content of error response follows.")
+        logger.error(response.text)
+        raise RuntimeError(f"While calling avatar server: HTTP {response.status_code} {response.reason}")
+
+    payload = response.json()
+
+    return payload["results"]  # TODO: the LLM scaffolding doesn't currently accept anything else but preformatted text
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -178,7 +216,7 @@ def setup(backend_url: str) -> env:
                                      "properties": {"query": {"type": "string",
                                                               "description": "The search query."}}}}}
     ]
-    tool_entrypoints = {"websearch": websearch.websearch_wrapper}
+    tool_entrypoints = {"websearch": websearch_wrapper}
 
     if config.llm_send_toolcall_instructions:
         tools_json = "\n".join(json.dumps(tool) for tool in tools)

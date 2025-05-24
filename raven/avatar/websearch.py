@@ -1,14 +1,15 @@
-"""Web search client for Raven."""
+"""Web search client for Raven.
 
-# Based on:
-#
-# https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium/blob/main/src/index.ts
-#
-# and its old Python implementation:
-#
-# https://github.com/SillyTavern/SillyTavern-Extras/blob/main/modules/websearch/script.py
+Based on:
 
-__all__ = ["search_google", "search_duckduckgo", "websearch_wrapper"]
+    https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium/blob/main/src/index.ts
+
+and its old Python implementation:
+
+    https://github.com/SillyTavern/SillyTavern-Extras/blob/main/modules/websearch/script.py
+"""
+
+__all__ = ["search_google", "search_duckduckgo"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 import atexit
 import pathlib
 import time
-from typing import List, Optional
+from typing import List, Optional, Union
 import urllib.parse
 
 from selenium import webdriver
@@ -33,17 +34,20 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from unpythonic import memoize
 
-from . import config
-from . import utils
-
 # --------------------------------------------------------------------------------
 # Bootup
 
 # See `navigator.userAgent` in a web browser's JavaScript console (to access it, try pressing F12 or Ctrl+Shift+C)
 user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
+# DEBUG: TODO: temp solution, add a separate storage place for Avatar
+from .. import config
 dump_dir = pathlib.Path(config.config_base_dir).expanduser().resolve() / "websearch"
-utils.create_directory(dump_dir)
+
+def create_directory(path: Union[str, pathlib.Path]) -> None:
+    p = pathlib.Path(path).expanduser().resolve()
+    pathlib.Path.mkdir(p, parents=True, exist_ok=True)
+create_directory(dump_dir)
 
 dump_filename = dump_dir / "debug.html"
 
@@ -69,18 +73,23 @@ def get_driver():
             chromeService = ChromeService()
             return webdriver.Chrome(service=chromeService, options=options)
     except Exception:
-        logger.info("get_driver: Chrome not found, using Firefox instead.")
-        logger.info("get_driver: Initializing Firefox driver...")
-        firefoxService = FirefoxService()
-        options = FirefoxOptions()
-        options.add_argument("--headless")
-        options.set_preference("intl.accept_languages", "en,en_US")
-        options.set_preference("general.useragent.override", user_agent)  # https://stackoverflow.com/a/72465725
-        return webdriver.Firefox(service=firefoxService, options=options)
+        try:
+            logger.info("get_driver: Chrome not found, using Firefox instead.")
+            logger.info("get_driver: Initializing Firefox driver...")
+            firefoxService = FirefoxService()
+            options = FirefoxOptions()
+            options.add_argument("--headless")
+            options.set_preference("intl.accept_languages", "en,en_US")
+            options.set_preference("general.useragent.override", user_agent)  # https://stackoverflow.com/a/72465725
+            return webdriver.Firefox(service=firefoxService, options=options)
+        except Exception:
+            logger.warning("get_driver: Firefox not found either. Disabling websearch.")
+            return None
 
 driver = get_driver()
 def quit_driver():
-    driver.quit()
+    if driver is not None:
+        driver.quit()
 atexit.register(quit_driver)
 
 # --------------------------------------------------------------------------------
@@ -323,10 +332,6 @@ def search_duckduckgo(query: str, max_links: int = 10) -> (List[str], List[str])
 #     preformatted_text, results = format_results(texts=texts, titles=titles, links=links)
 #     logger.debug(f"search_startpage: Found: {preformatted_text}")
 #     return preformatted_text, results
-
-def websearch_wrapper(query: str, max_links: int = 10) -> (List[str], List[str]):
-    preformatted_text, results = search_duckduckgo(query)
-    return preformatted_text  # TODO: the LLM scaffolding doesn't currently accept anything else
 
 # --------------------------------------------------------------------------------
 # Example

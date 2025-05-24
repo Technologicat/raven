@@ -12,6 +12,7 @@ The first two are now always loaded, and `embeddings` can be enabled for use wit
 
 import argparse
 import gc
+import json
 import os
 import pathlib
 import secrets
@@ -33,6 +34,7 @@ from . import classify
 from . import config
 from . import embed
 from . import util
+from . import websearch
 
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further
@@ -96,6 +98,8 @@ def get_modules():
     modules = ["talkinghead", "classify"]
     if args.embeddings:  # embeddings API endpoint enabled?
         modules.append("embeddings")
+    if websearch.driver is not None:  # websearch initialized successfully?
+        modules.append("websearch")
     return jsonify({"modules": modules})
 
 # ----------------------------------------
@@ -127,6 +131,8 @@ def api_embeddings_compute():
 
     This is the Extras backend for computing embeddings in the Vector Storage builtin extension.
     """
+    if not embed.sentence_embedder:
+        abort(403, "Module 'embeddings' not enabled in config")  # this is the only optional module
     data = request.get_json()
     if "text" not in data:
         abort(400, '"text" is required')
@@ -140,6 +146,83 @@ def api_embeddings_compute():
     print(f"Computing vector embedding for {nitems} item{'s' if nitems != 1 else ''}")
     vectors = embed.embed_sentences(sentences)
     return jsonify({"embedding": vectors})
+
+# ----------------------------------------
+# websearch
+
+def _websearch_impl():
+    data = request.get_json()
+    if "query" not in data or not isinstance(data["query"], str):
+        abort(400, '"query" is required')
+
+    query = data["query"]
+    engine = data["engine"] if "engine" in data else "duckduckgo"
+    max_links = data["max_links"] if "max_links" in data else 10
+
+    if engine == "duckduckgo":
+        return websearch.search_duckduckgo(query, max_links=max_links)
+    return websearch.search_google(query, max_links=max_links)
+
+# ST-compatible websearch endpoint
+@app.route("/api/websearch", methods=["POST"])
+def api_websearch():
+    """Perform a web search with the query posted in the request.
+
+    SillyTavern compatible endpoint.
+
+    Input format is JSON::
+
+        {"query": "what is the airspeed velocity of an unladen swallow",
+         "engine": "duckduckgo"}
+
+    In the input, "engine" is optional. Valid values are "duckduckgo" (default)
+    and "google".
+
+    Output is also JSON:
+
+        {"results": preformatted_text,
+         "links": [link0, ...]}
+
+    where the "links" field contains a list of all links to the search results.
+    """
+    preformatted_text, structured_results = _websearch_impl()
+    output = {"results": preformatted_text,
+              "links": [item["link"] for item in structured_results]}
+    return jsonify(output)
+
+# for Raven
+@app.route("/api/websearch2", methods=["POST"])
+def api_websearch2():
+    """Perform a web search with the query posted in the request.
+
+    Input format is JSON::
+
+        {"query": "what is the airspeed velocity of an unladen swallow",
+         "engine": "duckduckgo",
+         "max_links": 10}
+
+    In the input, some fields are optional:
+
+      - "engine": valid values are "duckduckgo" (default) and "google".
+      - "max_links": default 10.
+
+    Output is also JSON:
+
+        {"results": preformatted_text,
+         "data": [{"title": ...,
+                   "link": ...,
+                   "text": ...}],
+                  ...}
+
+    In the output, title is optional; not all search engines return it.
+
+    This format preserves the connection between the text of the result
+    and its corresponding link, which is convenient for citation mechanisms.
+    """
+    preformatted_text, structured_results = _websearch_impl()
+    output = {"results": preformatted_text,
+              "data": structured_results}
+    return jsonify(output)
 
 # ----------------------------------------
 # classify
