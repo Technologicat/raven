@@ -454,7 +454,7 @@ if not torch.cuda.is_available() and not args.cpu:
 # So this is optional, and off by default.
 #
 if args.embeddings:
-    embed.init_module(embedding_model)
+    embed.init_module(embedding_model, device_string)
 
 # --------------------
 # Websearch
