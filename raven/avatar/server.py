@@ -12,7 +12,6 @@ The first two are now always loaded, and `embeddings` can be enabled for use wit
 
 import argparse
 import gc
-import json
 import os
 import pathlib
 import secrets
