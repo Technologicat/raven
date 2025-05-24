@@ -1,45 +1,37 @@
-## Talkinghead TODO
+# Talkinghead TODO
+
+## Status
+
+As of May 2025.
+
+Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM frontend, which will support an AI-animated avatar for the AI. I'll see about splitting this into a separate repo later.
 
 
-### High priority
+## High priority
 
-As of February 2024.
+### Documentation
 
-#### Frontend
-
-- See if we can get this working also with local classify now that we have a `set_emotion` API endpoint.
-  - Responsibilities: the client end should set the emotion when it calls classify, instead of relying on the extras server doing it internally when extras classify is called.
-- Figure out why the crop filter doesn't help in positioning the `talkinghead` sprite in *MovingUI* mode.
-  - There must be some logic at the frontend side that reserves a square shape for the talkinghead sprite output,
-    regardless of the image dimensions or aspect ratio of the actual `result_feed`.
-- Add live-modifiable configuration for per-character animator and postprocessor settings.
-  - Add a new control panel to SillyTavern client extension settings.
-  - Send new configs to backend whenever anything changes.
-
-#### Documentation
+- Now that we're detached from SillyTavern-extras, document the web API endpoints this particular server supports.
 
 - Polish up the documentation:
-  - Add pictures to the talkinghead README.
-    - Screenshot of the manual poser. Anything else we should say about it?
+  - Add pictures to README.
+    - Screenshot of the pose editor. Anything else we should say about it?
     - Examples of generated poses, highlighting both success and failure cases. How the live talking head looks in the actual SillyTavern GUI. Link the original THA tech reports.
     - Examples of postprocessor filter results.
     - How each postprocessor example config looks when rendering the example character.
-  - Merge appropriate material from old user manual into the new README.
   - Update/rewrite the user manual, based on the new README.
-    - This should replace the old manual at https://docs.sillytavern.app/extras/extensions/talkinghead/
 
-#### Examples
+### Examples
 
 - Add some example characters created in Stable Diffusion.
-  - Original characters only, as per ST content policy.
-  - Maybe we should do Seraphina, since she's part of a default SillyTavern install?
+  - Original characters only.
 
 
-### Low priority
+## Low priority
 
 Not scheduled for now.
 
-#### Backend
+### Backend
 
 - Low compute mode: static poses + postprocessor.
   - Poses would be generated from `talkinghead.png` using THA3, as usual, but only once per session. Each pose would be cached.
@@ -66,32 +58,23 @@ Not scheduled for now.
 - Investigate if some particular emotions could use a small random per-frame oscillation applied to "iris_small",
   for that anime "intense emotion" effect (since THA3 doesn't have a morph specifically for the specular reflections in the eyes).
 
-#### Frontend
+### Frontend
 
-- Add a way to upload new JSON configs (`_animator.json`, `_emotions.json`), because ST could be running on a remote machine somewhere.
+- Add a way to upload new JSON configs (`_animator.json`, `_emotions.json`), because the frontend could be running on a remote machine somewhere.
   - Send new uploaded config to backend.
 
-#### Both frontend and backend
+### Both frontend and backend
 
-- Add new API endpoint for pause/resume to handle ST tab focus/unfocus more gracefully.
-  - The current `/api/talkinghead/unload` is actually a pause function (the client pauses, and then just hides the live image),
-    but there is currently no resume function (except `/api/talkinghead/load`, which requires sending an image file - which causes a small but noticeable delay).
 - Lip-sync talking animation to TTS output.
   - THA3 has morphs for A, I, U, E, O, and the "mouth delta" shape Δ.
-  - This needs either:
-    - Realtime data from client
-      - Exists already! See `SillyTavern/public/scripts/extensions/tts/index.js`, function `playAudioData`. There's lip sync for VRM (VRoid).
-        Still need to investigate how the VRM plugin extracts phonemes from the audio data.
-    - Or if ST-extras generates the TTS output, then at least a start timestamp for the playback of a given TTS output audio file,
-      and a possibility to stop animating if the user stops the audio.
 
-### Far future
+## Far future
 
 Definitely not scheduled. Ideas for future enhancements.
 
 - Fast, high-quality output scaling mechanism.
-  - On a 4k display, the character becomes rather small, which looks jarring on the default backgrounds.
+  - On a 4k display, the character becomes rather small.
   - The algorithm should be cartoon-aware, some modern-day equivalent of waifu2x. A GAN such as 4x-AnimeSharp or Remacri would be nice, but too slow.
   - Maybe the scaler should run at the client side to avoid the need to stream 1024x1024 PNGs.
-    - What JavaScript anime scalers are there, or which algorithms are simple enough for a small custom implementation?
-- Group chats / visual novel mode / several talkingheads running simultaneously.
+    - Which algorithms are simple enough for a small custom implementation?
+- Several talkingheads running simultaneously.
