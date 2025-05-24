@@ -1,11 +1,12 @@
-## Talkinghead
+## raven-avatar (fork of Talkinghead)
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 
-- [Talkinghead](#talkinghead)
+- [raven-avatar (fork of Talkinghead)](#raven-avatar-fork-of-talkinghead)
     - [Introduction](#introduction)
-    - [Live mode](#live-mode)
+    - [Live mode with `raven-llmclient`](#live-mode-with-raven-llmclient)
+    - [Live mode with SillyTavern](#live-mode-with-sillytavern)
         - [Testing your installation](#testing-your-installation)
         - [Configuration](#configuration)
         - [Emotion templates](#emotion-templates)
@@ -15,9 +16,8 @@
         - [Postprocessor example: cheap video camera, amber monochrome computer monitor](#postprocessor-example-cheap-video-camera-amber-monochrome-computer-monitor)
         - [Postprocessor example: HDR, cheap video camera, 1980s VHS tape](#postprocessor-example-hdr-cheap-video-camera-1980s-vhs-tape)
         - [Complete example: animator and postprocessor settings](#complete-example-animator-and-postprocessor-settings)
-    - [Manual poser](#manual-poser)
+    - [THA3 Pose Editor](#tha3-pose-editor)
     - [Troubleshooting](#troubleshooting)
-        - [It's not working! Help!](#its-not-working-help)
         - [Low framerate](#low-framerate)
         - [Low VRAM - what to do?](#low-vram---what-to-do)
         - [Missing THA3 model at startup](#missing-tha3-model-at-startup)
@@ -31,49 +31,58 @@
 
 ### Introduction
 
-This module renders a **live, AI-based custom anime avatar for your AI character**.
+This software renders a **live, AI-based custom anime avatar for your AI character**.
 
-In contrast to VTubing software, `talkinghead` is an **AI-based** character animation technology, which produces animation from just **one static 2D image**. This makes creating new characters accessible and cost-effective. All you need is Stable Diffusion and an image editor to get started! Additionally, you can experiment with your character's appearance in an agile way, animating each revision of your design.
+In contrast to VTubing software, *raven-avatar* (part of the Raven constellation) is an **AI-based** character animation technology, which produces animation from just **one static 2D image** via the THA3 AI posing engine. This makes creating new characters accessible and cost-effective. All you need is Stable Diffusion and an image editor. Additionally, you can experiment with your character's appearance in an agile way, animating each revision of your design.
 
 The animator is built on top of a deep learning model, so optimal performance requires a fast GPU. The model can vary the character's expression, and pose some joints by up to 15 degrees. This allows producing parametric animation on the fly, just like from a traditional 2D or 3D model - but from a small generative AI. Modern GPUs have enough compute to do this in realtime.
 
-You only need to provide **one** expression for your character. The model automatically generates the rest of the 28, and seamlessly animates between them. The expressions are based on *emotion templates*, which are essentially just morph settings. To make it convenient to edit the templates, we provide a GUI editor (the manual poser), where you can see how the resulting expression looks on your character.
+You only need to provide **one** expression for your character. The model automatically generates the rest of the 28, and seamlessly animates between them. The expressions are based on *emotion templates*, which are essentially just morph settings. To make it convenient to edit the templates, we provide a GUI editor (see *THA3 Pose Editor* below), where you can see how the resulting expression looks on your character.
 
 As with any AI technology, there are limitations. The AI-generated animation frames may not look perfect, and in particular the model does not support characters wearing large hats or props. For details (and many example outputs), refer to the [tech report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html) by the model's original author.
 
 Still images do not do the system justice; the realtime animation is a large part of its appeal. Preferences vary here. If you have the hardware, try it, you might like it. Especially, if you like to make new characters, or to tweak your character design often, this is the animator for you. On the other hand, if you prefer still images, and focus on one particular design, you may get more aesthetically pleasing results by inpainting static expression sprites in Stable Diffusion.
 
-Currently, `talkinghead` is focused on providing 1-on-1 interactions with your AI character, so support for group chats and visual novel mode are not included, nor planned. However, as a community-driven project, we appreciate any feedback or especially code or documentation contributions towards the growth and development of this extension.
+Currently, *raven-avatar* is focused on providing 1-on-1 interactions with your AI character, so support for multiple characters is not included, nor planned at the moment. However, we appreciate any feedback or especially code or documentation contributions towards the growth and development of this software.
 
 
-### Live mode
+### Live mode with `raven-llmclient`
+
+As of May 2025, the GUI for `raven-llmclient` is under construction. It will support the live mode of `raven-avatar` right from the beginning.
+
+### Live mode with SillyTavern
+
+The *raven-avatar* server is a web-based technology that replaces the discontinued *SillyTavern-extras*. In fact, it started as a stripped-down ST-extras. We always enable the `talkinghead` and `classify` modules. We also support `embeddings` (although it's out of scope for an AI avatar software) because it runs much faster than ST's local embeddings; compared to **ST-extras*, everything else has been removed.
 
 To activate the live mode:
 
-- Configure your *SillyTavern-extras* installation so that it loads the `talkinghead` module. See example below. This makes the backend available.
 - Ensure that your character has a `SillyTavern/public/characters/yourcharacternamehere/talkinghead.png`. This is the input image for the animator.
   - You can upload one in the *SillyTavern* settings, in *Extensions ⊳ Character Expressions*.
 - To enable **talkinghead mode** in *Character Expressions*, check the checkbox *Extensions ⊳ Character Expressions ⊳ Image Type - talkinghead (extras)*.
   - **IMPORTANT**: Automatic expression changes for the AI character are powered by **classification**, which detects the AI character's emotional state from the latest message written (or in streaming mode, currently being written) by the character.
   - However, `talkinghead` **cannot be used with local classification**. If you have local classification enabled, the option to enable `talkinghead` is disabled **and hidden**.
   - Therefore, to show the option to enable `talkinghead`, **uncheck** the checkbox *Character Expressions ⊳ Local server classification*.
-  - Then, to use classification, enable the `classify` module in your *SillyTavern-extras* installation. See example below.
 
-CUDA (*SillyTavern-extras* option `--talkinghead-gpu`) is very highly recommended. As of late 2023, a recent GPU is also recommended. For example, on a laptop with an RTX 3070 Ti mobile GPU, and the `separable_half` THA3 poser model (fastest and smallest; default when running on GPU), you can expect ≈40-50 FPS render performance. VRAM usage in this case is about 520 MB. CPU mode exists, but is very slow, about ≈2 FPS on an i7-12700H.
+CUDA (*raven-avatar* option `--talkinghead-gpu`) is very highly recommended. As of late 2023, a recent GPU is also recommended. For example, on a laptop with an RTX 3070 Ti mobile GPU, and the `separable_half` THA3 poser model (fastest and smallest; default when running on GPU), you can expect ≈40-50 FPS render performance. VRAM usage in this case is about 520 MB. CPU mode exists, but is very slow, about ≈2 FPS on an i7-12700H.
 
-Here is an example *SillyTavern-extras* config that enables `talkinghead` and `classify`. The `talkinghead` model runs on GPU, while `classify` runs on CPU:
+Here is an example of how to start *raven-avatar* with the `talkinghead` model on GPU, and `classify` on CPU:
 
+```bash
+$(pdm venv activate)
+python -m raven.avatar.server --cpu --talkinghead-gpu
 ```
---enable-modules=classify,talkinghead --classification-model=joeddav/distilbert-base-uncased-go-emotions-student --talkinghead-gpu
-```
 
-To customize which model variant of the THA3 poser to use, and where to install the models from, see the `--talkinghead-model=...` and `--talkinghead-models=...` options, respectively. If the directory `talkinghead/tha3/models/` (under the top level of *SillyTavern-extras*) does not exist, the model files are automatically downloaded from HuggingFace and installed there.
+Run the server with the `--help` option for a description of its command-line options.
+
+To customize which model variant of the THA3 poser to use, and where to install the models from, see the `--talkinghead-model=...` and `--talkinghead-models=...` options, respectively. If the directory `raven/avatar/vendor/tha3/models/` does not exist, the model files are automatically downloaded from HuggingFace and installed there.
+
+To customize which classification model to use, see the `--classification-model=...` option.
 
 #### Testing your installation
 
-To check that the `talkinghead` software works, you can use the example character. Just copy `SillyTavern-extras/talkinghead/tha3/images/example.png` to `SillyTavern/public/characters/yourcharacternamehere/talkinghead.png`.
+To check that `raven-avatar` works, you can use the example character. Just copy `raven/avatar/vendor/tha3/images/example.png` to `SillyTavern/public/characters/yourcharacternamehere/talkinghead.png`.
 
-To check that changing the character's expression works, use `/emote xxx`, where `xxx` is name of one of the 28 emotions. See e.g. the filenames of the emotion templates in `SillyTavern-extras/talkinghead/emotions`.
+To check that changing the character's expression works, use `/emote xxx` in SillyTavern, where `xxx` is name of one of the 28 emotions. See e.g. the filenames of the emotion templates in `raven/avatar/emotions/`.
 
 The *Character Expressions* control panel also has a full list of emotions. In fact, instead of using the `/emote xxx` command, clicking one of the sprite slots in that control panel should apply that expression to the character.
 
@@ -91,9 +100,9 @@ The live mode is configured per-character, via files **at the client end**:
   - If a character does not have this file, server-side default settings are used. Most of the time, there is no need to customize the emotion templates per-character.
   - *At the client end*, only this one file is needed (or even supported) to customize the emotion templates.
 
-By default, the **sprite position** on the screen is static. However, by enabling the **MovingUI** checkbox in *User Settings ⊳ Advanced*, you can manually position the sprite in the GUI, by dragging its move handle. Note that there is some empty space in the sprite canvas around the sides of the character, so the character will not be able to fit flush against the edge of the window (since that empty space hits the edge of the window first). To cut away that empty space, see the crop options in *Animator configuration*.
+By default, the **sprite position** on the screen is static. However, by enabling the **MovingUI** checkbox in SillyTavern's *User Settings ⊳ Advanced*, you can manually position the sprite in the GUI, by dragging its move handle. Note that there is some empty space in the sprite canvas around the sides of the character, so the character will not be able to fit flush against the edge of the window (since that empty space hits the edge of the window first). To cut away that empty space, see the crop options in *Animator configuration*.
 
-Due to the base pose used by the posing engine, the character's legs are always cut off at the bottom of the image; the sprite is designed to be placed at the bottom. You may need to create a custom background image that works with such a placement. Of the default backgrounds, at least the cyberpunk bedroom looks fine.
+Due to the base pose used by the posing engine, the character's legs are always cut off at the bottom of the image; the sprite is designed to be placed at the bottom of the window. You may need to create a custom background image that works with such a placement. Of the default SillyTavern backgrounds, at least the cyberpunk bedroom looks fine.
 
 **IMPORTANT**: Changing your web browser's zoom level will change the size of the character, too, because doing so rescales all images, including the live feed.
 
@@ -101,29 +110,29 @@ We rate-limit the output to 25 FPS (maximum, default) to avoid DoSing the SillyT
 
 #### Emotion templates
 
-The manual poser app included with `talkinghead` is a GUI editor for these templates.
+The *THA3 Pose Editor* app included with *raven-avatar* is a GUI editor for these templates.
 
-The batch export of the manual poser produces a set of static expression images (and corresponding emotion templates), but also an `_emotions.json`, in your chosen output folder. You can use this file at the client end as `SillyTavern/public/characters/yourcharacternamehere/_emotions.json`. This is convenient if you have customized your emotion templates, and wish to share one of your characters with other users, making it automatically use your version of the templates.
+The batch export of the pose editor produces a set of static expression images (and corresponding emotion templates), but also an `_emotions.json`, in your chosen output folder. You can use this file at the client end as `SillyTavern/public/characters/yourcharacternamehere/_emotions.json`. This is convenient if you have customized your emotion templates, and wish to share one of your characters with other users, making it automatically use your version of the templates.
 
-The file `_emotions.json` uses the same format as the factory settings in `SillyTavern-extras/talkinghead/emotions/_defaults.json`.
+The file `_emotions.json` uses the same format as the factory settings in `raven/avatar/emotions/_defaults.json`.
 
 Emotion template lookup order is:
 
 - The set of per-character custom templates sent by the ST client, read from `SillyTavern/public/characters/yourcharacternamehere/_emotions.json` if it exists.
-- Server defaults, from the individual files `SillyTavern-extras/talkinghead/emotions/emotionnamehere.json`.
+- Server defaults, from the individual files `raven/avatar/emotions/emotionnamehere.json`.
   - These are customizable. You can e.g. overwrite `curiosity.json` to change the default template for the *"curiosity"* emotion.
   - **IMPORTANT**: *However, updating SillyTavern-extras from git may overwrite your changes to the server-side default emotion templates. Keep a backup if you customize these.*
-- Factory settings, from `SillyTavern-extras/talkinghead/emotions/_defaults.json`.
+- Factory settings, from `raven/avatar/emotions/_defaults.json`.
   - **IMPORTANT**: Never overwrite or remove this file.
 
 Any emotion that is missing from a particular level in the lookup order falls through to be looked up at the next level.
 
 If you want to edit the emotion templates manually (without using the GUI) for some reason, the following may be useful sources of information:
 
-- `posedict_keys` in [`talkinghead/tha3/app/util.py`](tha3/app/util.py) lists the morphs available in THA3.
-- [`talkinghead/tha3/poser/modes/pose_parameters.py`](tha3/poser/modes/pose_parameters.py) contains some more detail.
+- `posedict_keys` in [`raven/avatar/util.py`](raven/avatar/util.py) lists the morphs available in THA3.
+- [`raven/avatar/vendor/tha3/poser/modes/pose_parameters.py`](raven/avatar/vendor/tha3/poser/modes/pose_parameters.py) contains some more detail.
   - *"Arity 2"* means `posedict_keys` has separate left/right morphs.
-- The GUI panel implementations in [`talkinghead/tha3/app/manual_poser.py`](tha3/app/manual_poser.py).
+- The GUI panel implementations in [`raven/avatar/editor.py`](raven/avatar/editor.py).
 
 Any morph that is not mentioned for a particular emotion defaults to zero. Thus only those morphs that have nonzero values need to be mentioned.
 
@@ -135,10 +144,10 @@ Any morph that is not mentioned for a particular emotion defaults to zero. Thus 
 Animator and postprocessor settings lookup order is:
 
 - The custom per-character settings sent by the ST client, read from `SillyTavern/public/characters/yourcharacternamehere/_animator.json` if it exists.
-- Server defaults, from `SillyTavern-extras/talkinghead/animator.json`, if it exists.
+- Server defaults, from `raven/avatar/animator.json`, if it exists.
   - This file is customizable.
   - **IMPORTANT**: *However, updating SillyTavern-extras from git may overwrite your changes to the server-side animator and postprocessor configuration. Keep a backup if you customize this.*
-- Built-in defaults, hardcoded as `animator_defaults` in [`talkinghead/tha3/app/app.py`](tha3/app/app.py).
+- Built-in defaults, hardcoded as `animator_defaults` in [`raven/avatar/config.py`](raven/avatar/config.py).
   - **IMPORTANT**: Never change these!
   - The built-in defaults are used for validation of available settings, so they are guaranteed to be complete.
 
@@ -172,7 +181,7 @@ Here is a complete example of `animator.json`, showing the default values:
 
 Note that some settings make more sense as server defaults, while others make more sense as per-character settings.
 
-Particularly, `target_fps` makes the most sense to set globally at the server side, in `SillyTavern-extras/talkinghead/animator.json`, while almost everything else makes more sense per-character, in `SillyTavern/public/characters/yourcharacternamehere/_animator.json`. Nevertheless, providing server-side defaults is a good idea, since the per-character animation configuration is optional.
+Particularly, `target_fps` makes the most sense to set globally at the server side, in `raven/avatar/animator.json`, while almost everything else makes more sense per-character, in `SillyTavern/public/characters/yourcharacternamehere/_animator.json`. Nevertheless, providing server-side defaults is a good idea, since the per-character animation configuration is optional.
 
 **What each settings does**:
 
@@ -184,14 +193,14 @@ Particularly, `target_fps` makes the most sense to set globally at the server si
 - `blink_probability`: Applied at each frame at a reference of 25 FPS, with automatic internal FPS-correction to the actual output FPS. This is the probability of initiating a blink in each 1/25 second interval.
 - `blink_confusion_duration`: seconds. Upon entering the `"confusion"` emotion, the character may blink quickly in succession, temporarily disregarding the blink interval settings. This sets how long that state lasts.
 - `talking_fps`: How often to re-randomize the mouth during the talking animation. The default value is based on the fact that early 2000s anime used ~12 FPS as the fastest actual framerate of new cels, not counting camera panning effects and such.
-- `talking_morph`: Which mouth-open morph to use for talking. For available values, see `posedict_keys` in [`talkinghead/tha3/app/util.py`](tha3/app/util.py).
-- `sway_morphs`: Which morphs participate in the sway (fidgeting) animation. This setting is mainly useful for disabling some or all of them, e.g. for a robot character. For available values, see `posedict_keys` in [`talkinghead/tha3/app/util.py`](tha3/app/util.py).
+- `talking_morph`: Which mouth-open morph to use for talking. For available values, see `posedict_keys` in [`raven/avatar/util.py`](raven/avatar/util.py).
+- `sway_morphs`: Which morphs participate in the sway (fidgeting) animation. This setting is mainly useful for disabling some or all of them, e.g. for a robot character. For available values, see `posedict_keys` in [`raven/avatar/util.py`](raven/avatar/util.py).
 - `sway_interval_min`: seconds. Lower limit for random time interval until randomizing a new target pose for the sway animation.
 - `sway_interval_max`: seconds. Upper limit for random time interval until randomizing a new target pose for the sway animation.
-- `sway_macro_strength`: A value such that `0 < strength <= 1`. In the sway target pose, this sets the maximum absolute deviation from the target pose specified by the current emotion, but also the maximum deviation from the center position. The setting is applied to each sway morph separately. The emotion pose itself may use higher values for the morphs; in such cases, sway will only occur toward the center. For details, see `compute_sway_target_pose` in [`talkinghead/tha3/app/app.py`](tha3/app/app.py).
+- `sway_macro_strength`: A value such that `0 < strength <= 1`. In the sway target pose, this sets the maximum absolute deviation from the target pose specified by the current emotion, but also the maximum deviation from the center position. The setting is applied to each sway morph separately. The emotion pose itself may use higher values for the morphs; in such cases, sway will only occur toward the center. For details, see `compute_sway_target_pose` in [`raven/avatar/animator.py`](raven/avatar/animator.py).
 - `sway_micro_strength`: A value such that `0 < strength <= 1`. This is the maximum absolute value of random noise added to the sway target pose at each 1/25 second interval. To this, no limiting is applied, other than a clamp of the final randomized value of each sway morph to the valid range [-1, 1]. A small amount of random jitter makes the character look less robotic.
 - `breathing_cycle_duration`: seconds. The duration of a full cycle of the breathing animation.
-- `postprocessor_chain`: Pixel-space glitch artistry settings. The default is empty (no postprocessing); see below for examples of what can be done with this. For details, see [`talkinghead/tha3/app/postprocessor.py`](tha3/app/postprocessor.py).
+- `postprocessor_chain`: Pixel-space glitch artistry settings. The default is empty (no postprocessing); see below for examples of what can be done with this. For details, see [`raven/avatar/postprocessor.py`](raven/avatar/postprocessor.py).
 
 #### Postprocessor configuration
 
@@ -209,7 +218,7 @@ and set the order for the filters based on that. However, this does not mean tha
 
 The chain is allowed have several instances of the same filter. This is useful e.g. for multiple copies of an effect with different parameter values, or for applying the same general-use effect at more than one point in the chain. Note that some dynamic filters require tracking some state. These filters have a `name` parameter. The dynamic state storage is accessed by name, so the different instances should be configured with different names, so that they will not step on each others' toes in tracking their state.
 
-The following postprocessing filters are available. Options for each filter are documented in the docstrings in [`talkinghead/tha3/app/postprocessor.py`](tha3/app/postprocessor.py).
+The following postprocessing filters are available. Options for each filter are documented in the docstrings in [`raven/avatar/postprocessor.py`](raven/avatar/postprocessor.py).
 
 **Light**:
 
@@ -309,7 +318,7 @@ Then we again render the output on a simulated CRT TV, as appropriate for the 19
 
 This example combines the default values for the animator with the "scifi hologram" postprocessor example above.
 
-This part goes **at the server end** as `SillyTavern-extras/talkinghead/animator.json`, to make it apply to all `talkinghead` characters that do not provide their own values for these settings:
+This part goes **at the server end** as `raven/avatar/animator.json`, to make it apply to all avatars that do not provide their own values for these settings:
 
 ```json
 {"target_fps": 25,
@@ -341,95 +350,77 @@ This part goes **at the client end** as `SillyTavern/public/characters/yourchara
 }
 ```
 
-To refresh a running `talkinghead` after updating any of its settings files, make `talkinghead` reload your character. To do this, you can toggle `talkinghead` off and back on in the SillyTavern settings. Upon loading a character, the settings are re-read from disk both at client at server ends.
+To refresh a running avatar after updating any of its settings files, make `talkinghead` reload your character. (Pausing and resuming the animation isn't enough.) Upon loading a character, the settings are re-read from disk both at client at server ends.
 
 
-### Manual poser
+### THA3 Pose Editor
 
-This is a standalone wxPython app that you can run locally on the machine where you installed *SillyTavern-extras*. It is based on the original manual poser app in the THA3 tech demo, but this version has some important new convenience features and usability improvements.
+This is a standalone graphical app that you can run locally on the machine where you installed `raven-avatar`. It is based on the original manual poser app in the THA3 tech demo, but this version has some important new convenience features and usability improvements. The GUI toolkit has also changed from wxPython to [DearPyGui](https://github.com/hoffstadt/DearPyGui/), so that this integrates better with my other stuff.
 
-The manual poser uses the same THA3 poser models as the live mode. If the directory `talkinghead/tha3/models/` (under the top level of *SillyTavern-extras*) does not exist, the model files are automatically downloaded from HuggingFace and installed there.
+The pose editor uses the same THA3 poser models as the live mode. If the directory `raven/avatar/vendor/tha3/models/` does not exist, the model files are automatically downloaded from HuggingFace and installed there.
 
 With this app, you can:
 
 - **Graphically edit the emotion templates** used by the live mode.
-  - They are JSON files, found in `talkinghead/emotions/` under your *SillyTavern-extras* folder.
+  - They are JSON files, found in `raven/avatar/emotions/`.
     - The GUI also has a dropdown to quickload any preset.
   - **NEVER** delete or modify `_defaults.json`. That file stores the factory settings, and the app will not run without it.
   - For blunder recovery: to reset an emotion back to its factory setting, see the `--factory-reset=EMOTION` command-line option, which will use the factory settings to overwrite the corresponding emotion preset JSON. To reset **all** emotion presets to factory settings, see `--factory-reset-all`. Careful, these operations **cannot** be undone!
-    - Currently, these options do **NOT** regenerate the example images also provided in `talkinghead/emotions/`.
+    - Currently, these options do **NOT** regenerate the example images also provided in `raven/avatar/emotions/`.
 - **Batch-generate the 28 static expression sprites** for a character.
   - Input is the same single static image format as used by the live mode.
   - You can then use the generated images as the static expression sprites for your AI character. No need to run the live mode.
   - You may also want to do this even if you mostly use the live mode, in the rare case you want to save compute and VRAM.
 
-To run the manual poser:
+To run the pose editor, open a terminal in your `raven` directory, and:
 
-- Open a terminal in your `talkinghead` subdirectory
-- `conda activate extras`
-- `python -m tha3.app.manual_poser`.
-  - For systems with `bash`, a convenience wrapper `./start_manual_poser.sh` is included.
+```bash
+$(pdm venv activate)
+python -m raven.avatar.editor
+```
 
-Run the poser with the `--help` option for a description of its command-line options. The command-line options of the manual poser are **completely independent** from the options of *SillyTavern-extras* itself.
+Run the editor with the `--help` option for a description of its command-line options. The command-line options of the pose editor are **completely independent** from the options of `raven.avatar.server` itself.
 
-Currently, you can choose the device to run on (GPU or CPU), and which THA3 model to use. By default, the manual poser uses GPU and the `separable_float` model.
+Currently, you can choose the device to run on (GPU or CPU), and which THA3 model to use. By default, the pose editor uses GPU and the `separable_float` model.
 
 GPU mode gives the best response, but CPU mode (~2 FPS) is useful at least for batch-exporting static sprites when your VRAM is already full of AI.
-
-To load a PNG image or emotion JSON, you can either use the buttons, their hotkeys, or **drag'n'drop a PNG or JSON** file from your favorite file manager into the source image pane.
 
 
 ### Troubleshooting
 
-#### It's not working! Help!
-
-If you just installed and enabled `talkinghead`, and nothing happens, try restarting **both** *SillyTavern* and *SillyTavern-extras*. That usually fixes it. Try restarting both also if you have changed something between sessions, and it fails to load. This happens rarely, so I haven't been able to figure out the cause.
-
-Secondly, is your *SillyTavern* **frontend** up to date? The implementation of some new `talkinghead` features needed changes to the *Character Expressions* builtin extension at the frontend side. These features include the postprocessor, the talking animation (while the LLM is streaming text), and `/emote` support.
-
-As of January 2024, these frontend changes have been merged into the `staging` branch of *SillyTavern*. So if you already have `staging` installed, just pull the latest changes from git, and restart *SillyTavern*. If you have `release` installed, you'll need to switch to `staging` for now to get these features working.
-
 #### Low framerate
 
-The poser is a deep-learning model. Each animation frame requires an inference pass. This requires lots of compute.
+The THA3 poser is a deep-learning model. Each animation frame requires an inference pass. This requires lots of compute.
 
-Thus, if you have a CUDA-capable GPU, enable GPU support by using the `--talkinghead-gpu` setting of *SillyTavern-extras*.
+Thus, if you have a CUDA-capable GPU, enable GPU support by using the `--talkinghead-gpu` setting of `raven.avatar.server`.
 
 CPU mode is very slow, and without a redesign of the AI model (or distillation, like in the newer [THA4 paper](https://arxiv.org/abs/2311.17409)), there is not much that can be done. It is already running as fast as PyTorch can go, and the performance impact of everything except the posing engine is almost negligible.
 
 #### Low VRAM - what to do?
 
-Observe that the `--talkinghead-gpu` setting is independent of the CUDA device setting of the rest of *SillyTavern-extras*.
+Observe that the `--talkinghead-gpu` setting is independent of the CUDA device setting of the `classify` (and `embeddings`) endpoints of `raven.avatar.server`.
 
-So in a low-VRAM environment such as a gaming laptop, you can run just `talkinghead` on the GPU (VRAM usage about 520 MB) to get acceptable animation performance, while running all other extras modules on the CPU. The `classify` or `summarize` AI modules do not require realtime performance, whereas `talkinghead` does.
+So in a low-VRAM environment such as a gaming laptop, you can run just `talkinghead` on the GPU (VRAM usage about 520 MB) to get acceptable animation performance, while running all other extras modules on the CPU. The `classify` or `embeddings` AI modules do not require realtime performance, whereas `talkinghead` does.
 
 #### Missing THA3 model at startup
 
-The `separable_float` variant of the THA3 poser models was previously included in the *SillyTavern-extras* repository. However, `talkinghead` was recently (December 2023) changed to download these models from HuggingFace if necessary, so a local copy of the model is no longer provided in the repository.
-
-Therefore, if you updated your *SillyTavern-extras* installation from *git*, it is likely that *git* deleted your local copy of that particular model, leading to an error message like:
+If you get an error message like:
 
 ```
-FileNotFoundError: Model file /home/xxx/SillyTavern-extras/talkinghead/tha3/models/separable_float/eyebrow_decomposer.pt not found, please check the path.
+FileNotFoundError: Model file /home/xxx/raven-downloadedgitrepo/raven/avatar/vendor/tha3/models/separable_float/eyebrow_decomposer.pt not found, please check the path.
 ```
 
-The solution is to remove (or rename) your `SillyTavern-extras/talkinghead/tha3/models/` directory, and restart *SillyTavern-extras*. If the model directory does not exist, `talkinghead` will download the models at the first run.
+the solution is to remove (or rename) your `raven/avatar/tha3/models/` directory, and restart `raven.avatar.server`. If the model directory does not exist, *raven-avatar* will download the models at the first run.
 
-The models are actually shared between the live mode and the manual poser, so it doesn't matter which one you run first.
+The models are actually shared between the live mode and the pose editor, so it doesn't matter which one you run first.
 
 #### Known missing features
 
-**Visual novel mode** and **group chats** are not supported by `talkinghead`.
-
-The `/emote` command only works with `talkinghead` when *visual novel mode* is **off**.
-
-Also, the live mode is not compatible with the popular VTuber software Live2D. Rather, `talkinghead` is an independent exploration of somewhat similar functionality in the context of providing a live anime avatar for AI characters.
+The live mode is not compatible with the popular VTuber software Live2D. Rather, this is an independent exploration of somewhat similar functionality in the context of providing a live anime avatar for AI characters.
 
 #### Known bugs
 
 During development, known bugs are collected into [TODO](TODO.md).
-
-As `talkinghead` is part of *SillyTavern-extras*, you may also want to check the [SillyTavern-extras issue tracker](https://github.com/SillyTavern/SillyTavern-Extras/issues/).
 
 
 ### Creating a character
@@ -458,6 +449,8 @@ To create an AI avatar that `talkinghead` understands:
 - Load up the result into *SillyTavern* as a `talkinghead.png`, and see how well it performs.
 
 #### Tips for Stable Diffusion
+
+**These tips are old, for SD 1.5.** As of May 2025, I'd recommend a checkpoint based on *Illustrious-XL*.
 
 **Time needed**: about 1.5h. Most of that time will be spent rendering lots of gens to get a suitable one, but you should set aside 20-30 minutes to cut your final character cleanly from the background, using image editing software such as GIMP or Photoshop.
 
@@ -518,4 +511,6 @@ Finally, you may want to upscale, to have enough pixels available to align and c
 
 This software incorporates the [THA3](https://github.com/pkhungurn/talking-head-anime-3-demo) AI-based anime posing engine developed by Pramook Khungurn. The THA3 code is used under the MIT license, and the THA3 AI models are used under the Creative Commons Attribution 4.0 International license. The THA3 example character is used under the Creative Commons Attribution-NonCommercial 4.0 International license. The trained models are currently mirrored [on HuggingFace](https://huggingface.co/OktayAlpk/talking-head-anime-3).
 
-In this software, the manual poser app has been mostly rewritten, and the live mode (the animation driver) is original to `talkinghead` (although initially inspired by the IFacialMocap demo).
+In this software, the pose editor app has been rewritten, and the live mode (the animation driver) is original to `talkinghead` (although initially inspired by the IFacialMocap demo).
+
+Like *SillyTavern-extras*, where the Talkinghead module was originally published, the *raven-avatar* software is licensed under the *GNU Affero General Public License v3*.
