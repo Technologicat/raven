@@ -52,7 +52,7 @@ As of May 2025, the GUI for `raven-llmclient` is under construction. It will sup
 
 ### Live mode with SillyTavern
 
-The *raven-avatar* server is a web-based technology that replaces the discontinued *SillyTavern-extras*. In fact, it started as a stripped-down ST-extras. We always enable the `talkinghead` and `classify` modules. We also support `embeddings` (although it's out of scope for an AI avatar software) because it's fast; compared to *ST-extras*, everything else has been removed.
+The live mode server is a web-based technology that replaces the discontinued *SillyTavern-extras*. In fact, it is essentially a stripped-down ST-extras. We always enable the `talkinghead` and `classify` modules. We also support `embeddings` (although it's out of scope for an AI avatar software) because it's fast; compared to *ST-extras*, everything else has been removed.
 
 To activate the live mode:
 
