@@ -8,7 +8,7 @@ If you want to play around with THA3 expressions in a standalone app, see `edito
 
 __all__ = ["init_module", "is_available",
            "set_emotion_from_classification", "set_emotion",
-           "unload",
+           "unload", "reload",
            "start_talking", "stop_talking",
            "result_feed",
            "load_image_from_stream"]
