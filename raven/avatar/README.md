@@ -431,11 +431,11 @@ To create an AI avatar that `talkinghead` understands:
 - **The image must have an alpha channel**.
   - Any pixel with nonzero alpha is part of the character.
   - If the edges of the silhouette look like a cheap photoshop job (especially when ST renders the character on a different background), check them manually for background bleed.
-- Using any method you prefer, create a front view of your character within [these specifications](Character_Card_Guide.png).
+- Using any method you prefer, create a front view of your character within [these specifications](readme/Character_Card_Guide.png).
   - In practice, you can create an image of the character in the correct pose first, and align it as a separate step.
   - If you use Stable Diffusion, see separate section below.
   - **IMPORTANT**: *The character's eyes and mouth must be open*, so that the model sees what they look like when open.
-    - See [the THA3 example character](tha3/images/example.png).
+    - See [the THA3 example character](vendor/tha3/images/example.png).
     - If that's easier to produce, an open-mouth smile also works.
 - To add an alpha channel to an image that has the character otherwise fine, but on a background:
   - In Stable Diffusion, you can try the [rembg](https://github.com/AUTOMATIC1111/stable-diffusion-webui-rembg) extension for Automatic1111 to get a rough first approximation.
@@ -444,7 +444,7 @@ To create an AI avatar that `talkinghead` understands:
     - If you rendered the character on a light background, use a dark background layer when editing the edges, and vice versa.
     - This makes it much easier to see which pixels have background bleed and need to be erased.
 - Finally, align the character on the canvas to conform to the placement the THA3 posing engine expects.
-  - We recommend using [the THA3 example character](tha3/images/example.png) as an alignment template.
+  - We recommend using [the THA3 example character](vendor/tha3/images/example.png) as an alignment template.
   - **IMPORTANT**: Export the final edited image, *without any background layer*, as a PNG with an alpha channel.
 - Load up the result into *SillyTavern* as a `talkinghead.png`, and see how well it performs.
 
