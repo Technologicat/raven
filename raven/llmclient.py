@@ -86,7 +86,7 @@ if os.path.exists(avatar_api_key_file):  # TODO: test this (I have no idea what 
 # --------------------------------------------------------------------------------
 # Websearch integration (requires `raven.avatar.server`)
 
-def websearch_wrapper(query: str, engine: str, max_links: int = 10) -> (List[str], List[str]):
+def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 10) -> (List[str], List[str]):
     """Perform a websearch, using the Avatar server to handle the interaction with the search engine and the parsing of the results page."""
     data = {"query": query,
             "engine": engine,
@@ -100,7 +100,7 @@ def websearch_wrapper(query: str, engine: str, max_links: int = 10) -> (List[str
 
     payload = response.json()
 
-    return payload["results"]  # TODO: the LLM scaffolding doesn't currently accept anything else but preformatted text
+    return payload["results"]  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -1399,6 +1399,7 @@ def main():
     parser.add_argument(dest="backend_url", nargs="?", default=config.llm_backend_url, type=str, metavar="url", help=f"where to access the LLM API (default, currently '{config.llm_backend_url}', is set in `raven/config.py`)")
     opts = parser.parse_args()
 
+    # print(websearch_wrapper("what is the airspeed velocity of an unladen swallow"))
     minimal_chat_client(opts.backend_url)
 
 if __name__ == "__main__":
