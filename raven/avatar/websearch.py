@@ -85,7 +85,8 @@ def get_driver():
             options.set_preference("general.useragent.override", user_agent)  # https://stackoverflow.com/a/72465725
             return webdriver.Firefox(service=firefoxService, options=options)
         except Exception:
-            logger.warning("get_driver: Firefox not found either. Disabling websearch.")
+            print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (details below)")
+            logger.error("get_driver: Firefox not found either. Disabling websearch.")
             return None
 
 driver = None

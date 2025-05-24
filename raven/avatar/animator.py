@@ -21,11 +21,12 @@ import math
 import os
 import pathlib
 import random
-import sys
 import time
 import numpy as np
 import threading
 from typing import Any, Dict, List, NoReturn, Optional, Union
+
+from colorama import Fore, Style
 
 import PIL
 
@@ -314,6 +315,7 @@ def init_module(device: str, model: str) -> Union[None, NoReturn]:
         global_encoder_instance.start()
 
     except RuntimeError as exc:
+        print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL}")
         logger.error(exc)
         if global_animator_instance is not None:
             global_animator_instance.exit()
@@ -544,6 +546,7 @@ class Animator:
                     .to(self.device).to(self.poser.get_dtype())
 
         except Exception as exc:
+            print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (details below)")
             logger.error(f"load_image: {exc}")
 
         finally:

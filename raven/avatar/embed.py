@@ -13,19 +13,20 @@ from typing import List, Union
 
 from colorama import Fore, Style
 
-import numpy as np
+from sentence_transformers import SentenceTransformer
 
-from .. import nlptools
+import numpy as np
 
 sentence_embedder = None
 
-def init_module(model_name: str) -> None:
+def init_module(model_name: str, device_string: str) -> None:
     global sentence_embedder
-    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}embeddings{Style.RESET_ALL} with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
+    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}embeddings{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
     try:
-        sentence_embedder = nlptools.load_embedding_model(model_name)
+        sentence_embedder = SentenceTransformer(model_name, device=device_string)
     except Exception as exc:
-        logger.warning(f"init_module: failed: {type(exc)}: {exc}")
+        print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (details below)")
+        logger.error(f"init_module: failed: {type(exc)}: {exc}")
         sentence_embedder = None
 
 def is_available():
