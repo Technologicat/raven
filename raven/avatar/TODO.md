@@ -4,17 +4,25 @@
 
 As of May 2025.
 
-Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM frontend, which will support an AI-animated avatar for the AI. I'll see about splitting this into a separate repo later.
+Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM frontend, which will support an AI-animated avatar for the AI.
 
 
 ## High priority
 
+### General
+
+- Split into a separate repo and think about branding.
+  - This is essentially a drop-in replacement for *SillyTavern-extras*, with modules `talkinghead`, `classify` (which Talkinghead needs), `websearch` (which Raven needs), and `embeddings` (fast endpoint for SillyTavern).
+  - But as development continues, we will likely take things into a new direction, so this is effectively no longer ST-extras.
+
 ### Documentation
 
-- Now that we're detached from SillyTavern-extras, document the web API endpoints this particular server supports.
+- localhost:5100 is serving the wrong README. Fix the directory layout.
+
+- Document the web API endpoints.
 
 - Polish up the documentation:
-  - Add pictures to README.
+  - Add pictures to Talkinghead README.
     - Screenshot of the pose editor. Anything else we should say about it?
     - Examples of generated poses, highlighting both success and failure cases. How the live talking head looks in the actual SillyTavern GUI. Link the original THA tech reports.
     - Examples of postprocessor filter results.
