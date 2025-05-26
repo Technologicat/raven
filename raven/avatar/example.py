@@ -35,6 +35,7 @@ from .. import animation  # Raven's GUI animation system, nothing to do with the
 from .. import bgtask  # TODO: read the result_feed in a bgtask; see Raven's preprocessor.py for how to use bgtask for things like this
 from .. import utils as raven_utils
 
+from . import client_util
 from . import config
 from .util import RunningAverage
 
@@ -293,7 +294,7 @@ with dpg.theme() as global_theme:
 dpg.bind_theme(global_theme)  # set this theme as the default
 
 viewport_width = 1600
-viewport_height = 520
+viewport_height = 700
 dpg.create_viewport(title="Talkinghead example client",
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
@@ -469,6 +470,9 @@ class TalkingheadExampleGUI:
                     dpg.add_text("Control panel")
                     dpg.add_spacer(height=8)
 
+                    dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_image_dialog, tag="open_image_button")
+                    dpg.add_button(label="Load JSON [Ctrl+Shift+O]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
+
                     dpg.add_text("Emotion [Ctrl+E]")
                     self.emotion_names = classify_labels()
                     if "neutral" in self.emotion_names:
@@ -484,17 +488,36 @@ class TalkingheadExampleGUI:
                     dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
                     dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
 
-    def on_send_emotion(self, sender, app_data):
+    def on_send_emotion(self, sender, app_data):  # GUI event handler
         # On clicking a choice in the combobox, `app_data` is that choice, but on arrow key, `app_data` is the keycode.
         logger.info(f"TalkingheadExampleGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
         current_emotion_name = dpg.get_value(self.emotion_choice)
-        self.send_emotion(emotion_name=current_emotion_name)
+        logger.info(f"TalkingheadExampleGUI.on_send_emotion: sending emotion '{current_emotion_name}'")
+        talkinghead_set_emotion(current_emotion_name)
 
-    def send_emotion(self, emotion_name):
-        logger.info(f"TalkingheadExampleGUI.send_emotion: sending emotion '{emotion_name}'")
-        talkinghead_set_emotion(emotion_name)
+    def load_image(self, filename: Union[pathlib.Path, str]) -> None:
+        try:
+            talkinghead_load(filename)
+        except Exception as exc:
+            logger.error(f"TalkingheadExampleGUI.load_image: {type(exc)}: {exc}")
+            client_util.modal_dialog(window_title="Error",
+                                     message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
+                                     buttons=["Close"],
+                                     cancel_button="Close",
+                                     centering_reference_window=self.window)
 
-    def toggle_talking(self):
+    def load_json(self, filename: Union[pathlib.Path, str]) -> None:
+        try:
+            talkinghead_load_emotion_templates_from_file(filename)
+        except Exception as exc:
+            logger.error(f"TalkingheadExampleGUI.load_json: {type(exc)}: {exc}")
+            client_util.modal_dialog(window_title="Error",
+                                     message=f"Could not load JSON '{filename}', reason {type(exc)}: {exc}",
+                                     buttons=["Close"],
+                                     cancel_button="Close",
+                                     centering_reference_window=self.window)
+
+    def toggle_talking(self) -> None:
         """Toggle the talkinghead's talking state."""
         if not self.talking:
             talkinghead_start_talking()
@@ -504,7 +527,7 @@ class TalkingheadExampleGUI:
             dpg.set_item_label("start_stop_talking_button", "Start talking [Ctrl+T]")
         self.talking = not self.talking
 
-    def toggle_animator_paused(self):
+    def toggle_animator_paused(self) -> None:
         """Pause or resume the animation. Pausing when the talkinghead won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
         if self.animator_running:
             talkinghead_unload()
