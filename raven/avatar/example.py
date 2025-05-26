@@ -284,9 +284,11 @@ with dpg.theme() as global_theme:
         dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
 dpg.bind_theme(global_theme)  # set this theme as the default
 
+viewport_width = 1600
+viewport_height = 1000
 dpg.create_viewport(title="Talkinghead example client",
-                    width=1600,
-                    height=1000)  # OS window (DPG "viewport")
+                    width=viewport_width,
+                    height=viewport_height)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()
 
 # --------------------------------------------------------------------------------
@@ -428,7 +430,7 @@ class TalkingheadExampleGUI:
         with dpg.window(tag="talkinghead_example_main_window",
                         label="Talkinghead example client") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
-                dpg.add_image("live_texture", tag="live_image")
+                dpg.add_image("live_texture", pos=(0, viewport_height - self.image_size), tag="live_image")
 
                 # x0, y0 = raven_utils.get_widget_relative_pos("live_image", reference="main_window")
                 # x0, y0 = raven_utils.get_widget_pos("live_image")
