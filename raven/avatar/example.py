@@ -295,7 +295,7 @@ dpg.bind_theme(global_theme)  # set this theme as the default
 
 viewport_width = 1600
 viewport_height = 700
-dpg.create_viewport(title="Talkinghead example client",
+dpg.create_viewport(title="Talkinghead",
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()
@@ -306,16 +306,14 @@ dpg.setup_dearpygui()
 gui_instance = None  # initialized later, when the app starts
 
 filedialog_open_image = None
-filedialog_save_image = None
 filedialog_open_json = None
-filedialog_save_all_emotions = None
+filedialog_open_animator_settings = None
 
 def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
     """Create the file dialogs."""
     global filedialog_open_image
-    global filedialog_save_image
     global filedialog_open_json
-    global filedialog_save_all_emotions
+    global filedialog_open_animator_settings
     filedialog_open_image = FileDialog(title="Open input image",
                                        tag="open_image_dialog",
                                        callback=_open_image_callback,
@@ -334,6 +332,15 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                        multi_selection=False,
                                        allow_drag=False,
                                        default_path=default_path)
+    filedialog_open_animator_settings = FileDialog(title="Open animator settings JSON file",
+                                                   tag="open_animator_settings_dialog",
+                                                   callback=_open_animator_settings_callback,
+                                                   modal=True,
+                                                   filter_list=[".json"],
+                                                   file_filter=".json",
+                                                   multi_selection=False,
+                                                   allow_drag=False,
+                                                   default_path=default_path)
 
 # --------------------------------------------------------------------------------
 # "Open image" dialog
@@ -371,10 +378,10 @@ def is_open_image_dialog_visible():
     return dpg.is_item_visible("open_image_dialog")  # tag
 
 # --------------------------------------------------------------------------------
-# "Open JSON" dialog
+# "Open JSON" dialog (emotion templates)
 
 def show_open_json_dialog():
-    """Button callback. Show the open JSON dialog, for the user to pick an emotion JSON file to open.
+    """Button callback. Show the open JSON dialog, for the user to pick an emotion templates JSON file to open.
 
     If you need to close it programmatically, call `filedialog_open_json.cancel()` so it'll trigger the callback.
     """
@@ -406,6 +413,41 @@ def is_open_json_dialog_visible():
     return dpg.is_item_visible("open_json_dialog")  # tag
 
 # --------------------------------------------------------------------------------
+# "Open JSON" dialog (animator settings)
+
+def show_open_animator_settings_dialog():
+    """Button callback. Show the open JSON dialog, for the user to pick an animator settings JSON file to open.
+
+    If you need to close it programmatically, call `filedialog_open_animator_settings.cancel()` so it'll trigger the callback.
+    """
+    if gui_instance is None:
+        return
+    logger.debug("show_open_animator_settings_dialog: Showing open file dialog.")
+    filedialog_open_animator_settings.show_file_dialog()
+    logger.debug("show_open_animator_settings_dialog: Done.")
+
+def _open_animator_settings_callback(selected_files):
+    """Callback that fires when the open JSON dialog closes."""
+    logger.debug("_open_animator_settings_callback: Open file dialog callback triggered.")
+    if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
+        raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
+    if selected_files:
+        selected_file = selected_files[0]
+        logger.debug(f"_open_animator_settings_callback: User selected the file '{selected_file}'.")
+        gui_instance.load_animator_settings(selected_file)
+    else:  # empty selection -> cancelled
+        logger.debug("_open_animator_settings_callback: Cancelled.")
+
+def is_animator_settings_dialog_visible():
+    """Return whether the open JSON dialog is open.
+
+    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
+    """
+    if filedialog_open_animator_settings is None:
+        return False
+    return dpg.is_item_visible("open_animator_settings_dialog")  # tag
+
+# --------------------------------------------------------------------------------
 # GUI controls
 
 def is_any_modal_window_visible():
@@ -413,12 +455,12 @@ def is_any_modal_window_visible():
 
     Currently these are file dialogs.
     """
-    return (is_open_image_dialog_visible() or is_open_json_dialog_visible())
+    return (is_open_image_dialog_visible() or is_open_json_dialog_visible() or is_animator_settings_dialog_visible())
 
 class TalkingheadExampleGUI:
     def __init__(self):
         self.image_size = 512
-        self.button_width = 200
+        self.button_width = 300
 
         self.talking = False
         self.animator_running = True
@@ -439,12 +481,14 @@ class TalkingheadExampleGUI:
                                                     format=dpg.mvFormat_Float_rgba,
                                                     tag="live_texture")
 
-        with dpg.window(tag="talkinghead_example_main_window",
-                        label="Talkinghead example client") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
+        dpg.set_viewport_title(f"Talkinghead [{avatar_url}]")
+
+        with dpg.window(tag="talkinghead_main_window",
+                        label="Talkinghead main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 with dpg.group(tag="live_texture_group"):
                     dpg.add_spacer(width=self.image_size, height=0)  # keep the group at the image's width even when the image is hidden
-                    dpg.add_image("live_texture", pos=(0, viewport_height - self.image_size), tag="live_image")
+                    dpg.add_image("live_texture", pos=(0, viewport_height - self.image_size - 8), tag="live_image")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
                     dpg.add_text("FPS counter will appear here", color=(0, 255, 0), pos=(8, 0), tag="fps_text")
                     self.fps_statistics = RunningAverage()
 
@@ -458,20 +502,16 @@ class TalkingheadExampleGUI:
                                  show=False)
                 dpg.set_frame_callback(10, position_please_standby_text)
 
-                # TODO: The rest of the controls
-                #   - load character
-                #   - load emotion JSON
-                #   - load animator settings
                 # TODO: reposition talkinghead on window resize
                 # TODO: robustness: don't crash if the server is/goes down
                 # TODO: animator/postproc settings editor
                 # TODO: zooming (client-side, based on image data)
                 with dpg.group(horizontal=False):
-                    dpg.add_text("Control panel")
-                    dpg.add_spacer(height=8)
-
+                    dpg.add_text("Load")
                     dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_image_dialog, tag="open_image_button")
-                    dpg.add_button(label="Load JSON [Ctrl+Shift+O]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
+                    dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
+                    dpg.add_button(label="Load animator settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
+                    dpg.add_spacer(height=8)
 
                     dpg.add_text("Emotion [Ctrl+E]")
                     self.emotion_names = classify_labels()
@@ -483,8 +523,9 @@ class TalkingheadExampleGUI:
                                                         width=self.button_width,
                                                         callback=self.on_send_emotion)
                     talkinghead_set_emotion(self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
-                    dpg.add_spacer(height=4)
+                    dpg.add_spacer(height=8)
 
+                    dpg.add_text("Toggles")
                     dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
                     dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
 
@@ -512,7 +553,18 @@ class TalkingheadExampleGUI:
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_json: {type(exc)}: {exc}")
             client_util.modal_dialog(window_title="Error",
-                                     message=f"Could not load JSON '{filename}', reason {type(exc)}: {exc}",
+                                     message=f"Could not load emotion templates JSON '{filename}', reason {type(exc)}: {exc}",
+                                     buttons=["Close"],
+                                     cancel_button="Close",
+                                     centering_reference_window=self.window)
+
+    def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
+        try:
+            talkinghead_load_animator_settings_from_file(filename)
+        except Exception as exc:
+            logger.error(f"TalkingheadExampleGUI.load_animator_settings: {type(exc)}: {exc}")
+            client_util.modal_dialog(window_title="Error",
+                                     message=f"Could not load animator settings JSON '{filename}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
                                      cancel_button="Close",
                                      centering_reference_window=self.window)
@@ -557,8 +609,10 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
 
     # Ctrl+Shift+...
     if ctrl_pressed and shift_pressed:
-        if key == dpg.mvKey_O:
+        if key == dpg.mvKey_E:  # emotions
             show_open_json_dialog()
+        elif key == dpg.mvKey_A:  # animator settings
+            show_open_animator_settings_dialog()
 
     # Ctrl+...
     elif ctrl_pressed:
@@ -609,13 +663,13 @@ def update_live_texture(task_env):
     assert task_env is not None
     gen = talkinghead_result_feed()
     while not task_env.cancelled:
+        frame_start_time = time.time_ns()
+
+        image_data = next(gen)  # next-gen lol
         if gui_instance is None:
             time.sleep(0.01)
             continue
 
-        frame_start_time = time.time_ns()
-
-        image_data = next(gen)  # next-gen lol
         image_file = io.BytesIO(image_data)
         pil_image = PIL.Image.open(image_file)
         arr = np.asarray(pil_image.convert("RGBA"))
@@ -624,7 +678,8 @@ def update_live_texture(task_env):
         dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
 
         # Update FPS counter.
-        # NOTE: The refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS. If the machine could render faster, this just means less than 100% CPU/GPU usage.
+        # NOTE: Since we wait on `gen`, the refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS.
+        #       If the machine could render faster, this just means less than 100% CPU/GPU usage.
         elapsed_time = time.time_ns() - frame_start_time
         fps = 1.0 / (elapsed_time / 10**9)
         gui_instance.fps_statistics.add_datapoint(fps)
