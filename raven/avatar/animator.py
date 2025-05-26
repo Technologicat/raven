@@ -224,7 +224,9 @@ def result_feed() -> Response:
                 if time_until_frame_deadline <= 0.0:
                     time_now = time.time_ns()
                     yield (b"--frame\r\n"
-                           b"Content-Type: image/png\r\n\r\n" + image_bytes + b"\r\n")
+                           b"Content-Type: image/png\r\n"
+                           b"Content-Length: " + bytes(str(len(image_bytes)), encoding="utf-8") + b"\r\n"
+                           b"\r\n" + image_bytes + b"\r\n")
                     global_latest_frame_sent = id(image_bytes)  # atomic update, no need for lock
                     send_duration_sec = (time.time_ns() - time_now) / 10**9  # about 0.12 ms on localhost (compress_level=1 or 6, doesn't matter)
                     # print(f"send {send_duration_sec:0.6g}s")  # DEBUG
