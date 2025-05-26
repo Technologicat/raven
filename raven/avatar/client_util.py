@@ -86,10 +86,11 @@ def modal_dialog(window_title: str,
     for label in buttons:
         dpg.add_button(label=label, width=75, callback=modal_dialog_callback, user_data=label, parent="modal_dialog_button_group")
 
-    dpg.show_item("modal_dialog_window")
+    dpg.split_frame()  # We might be called when another modal (e.g. `FileDialog`) closes. Give it a chance to close first, to make DPG happy. (Otherwise this modal won't always show.)
     if centering_reference_window:
         recenter_window("modal_dialog_window", reference_window=centering_reference_window)
-
+    else:
+        dpg.show_item("modal_dialog_window")
 
 # --------------------------------------------------------------------------------
 # Utilities
