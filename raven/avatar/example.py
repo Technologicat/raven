@@ -18,6 +18,7 @@ import os
 import pathlib
 import re
 import requests
+import time
 from typing import Dict, Generator, Iterator, List, Union
 
 import PIL.Image
@@ -32,9 +33,10 @@ import dearpygui.dearpygui as dpg
 from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 from .. import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
 from .. import bgtask  # TODO: read the result_feed in a bgtask; see Raven's preprocessor.py for how to use bgtask for things like this
-# from .. import utils as raven_utils
+from .. import utils as raven_utils
 
 from . import config
+from .util import RunningAverage
 
 # ----------------------------------------
 # Module bootup
@@ -186,21 +188,27 @@ def talkinghead_reload() -> None:
     response = requests.get(f"{avatar_url}/api/talkinghead/reload", headers=headers)
     yell_on_error(response)
 
-def talkinghead_load_emotion_templates(filename: Union[pathlib.Path, str]) -> None:
+def talkinghead_load_emotion_templates(emotions: Dict) -> None:
     headers = copy.copy(default_headers)
     headers["Content-Type"] = "application/json"
-    with open(filename, "r", encoding="utf-8") as json_file:
-        emotions = json.load(json_file)
     response = requests.post(f"{avatar_url}/api/talkinghead/load_emotion_templates", json=emotions, headers=headers)
     yell_on_error(response)
 
-def talkinghead_load_animator_settings(filename: Union[pathlib.Path, str]) -> None:
-    headers = copy.copy(default_headers)
-    headers["Content-Type"] = "application/json"
+def talkinghead_load_emotion_templates_from_file(filename: Union[pathlib.Path, str]) -> None:
     with open(filename, "r", encoding="utf-8") as json_file:
         emotions = json.load(json_file)
-    response = requests.post(f"{avatar_url}/api/talkinghead/load_animator_settings", json=emotions, headers=headers)
+    talkinghead_load_emotion_templates(emotions)
+
+def talkinghead_load_animator_settings(animator_settings: Dict) -> None:
+    headers = copy.copy(default_headers)
+    headers["Content-Type"] = "application/json"
+    response = requests.post(f"{avatar_url}/api/talkinghead/load_animator_settings", json=animator_settings, headers=headers)
     yell_on_error(response)
+
+def talkinghead_load_animator_settings_from_file(filename: Union[pathlib.Path, str]) -> None:
+    with open(filename, "r", encoding="utf-8") as json_file:
+        animator_settings = json.load(json_file)
+    talkinghead_load_animator_settings(animator_settings)
 
 def talkinghead_start_talking() -> None:
     headers = copy.copy(default_headers)
@@ -285,7 +293,7 @@ with dpg.theme() as global_theme:
 dpg.bind_theme(global_theme)  # set this theme as the default
 
 viewport_width = 1600
-viewport_height = 1000
+viewport_height = 520
 dpg.create_viewport(title="Talkinghead example client",
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
@@ -412,6 +420,7 @@ class TalkingheadExampleGUI:
         self.button_width = 200
 
         self.talking = False
+        self.animator_running = True
 
         # TODO: Investigate whether we could super-resolution in realtime with Anime4K-PyTorch. For 1920x1080 (2MP) that takes ~60ms per frame, but our image is only 0.25 MP, so it should be fast enough, if it works for this res.
         # TODO: Also investigate whether it's better to scale at the server side (one less GPU/CPU roundtrip, but more data to send) or at the client side.
@@ -432,26 +441,58 @@ class TalkingheadExampleGUI:
         with dpg.window(tag="talkinghead_example_main_window",
                         label="Talkinghead example client") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
-                dpg.add_image("live_texture", pos=(0, viewport_height - self.image_size), tag="live_image")
+                with dpg.group(tag="live_texture_group"):
+                    dpg.add_spacer(width=self.image_size, height=0)  # keep the group at the image's width even when the image is hidden
+                    dpg.add_image("live_texture", pos=(0, viewport_height - self.image_size), tag="live_image")
+                    dpg.add_text("FPS counter will appear here", color=(0, 255, 0), pos=(8, 0), tag="fps_text")
+                    self.fps_statistics = RunningAverage()
 
-                # x0, y0 = raven_utils.get_widget_relative_pos("live_image", reference="main_window")
-                # x0, y0 = raven_utils.get_widget_pos("live_image")
-                # dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
-                #                                        y0 + self.image_size / 2 - (font_size / 2)),
-                #              tag="no_image_loaded_text")
+                def position_please_standby_text():
+                    # x0, y0 = raven_utils.get_widget_relative_pos("live_image", reference="main_window")
+                    x0, y0 = raven_utils.get_widget_pos("live_image")
+                    dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
+                                                           y0 + self.image_size / 2 - (font_size / 2)),
+                                 tag="please_standby_text",
+                                 parent="live_texture_group",
+                                 show=False)
+                dpg.set_frame_callback(10, position_please_standby_text)
 
-                # TODO: FPS counter
                 # TODO: The rest of the controls
                 #   - load character
                 #   - load emotion JSON
                 #   - load animator settings
-                #   - set emotion
-                #   - pause/resume
+                # TODO: reposition talkinghead on window resize
+                # TODO: robustness: don't crash if the server is/goes down
+                # TODO: animator/postproc settings editor
+                # TODO: zooming (client-side, based on image data)
                 with dpg.group(horizontal=False):
-                    pass
+                    dpg.add_text("Control panel")
+                    dpg.add_spacer(height=8)
 
-                with dpg.group(horizontal=False):
+                    dpg.add_text("Emotion [Ctrl+E]")
+                    self.emotion_names = classify_labels()
+                    if "neutral" in self.emotion_names:
+                        self.emotion_names.remove("neutral")
+                        self.emotion_names = ["neutral"] + self.emotion_names
+                    self.emotion_choice = dpg.add_combo(items=self.emotion_names,
+                                                        default_value=self.emotion_names[0],
+                                                        width=self.button_width,
+                                                        callback=self.on_send_emotion)
+                    talkinghead_set_emotion(self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
+                    dpg.add_spacer(height=4)
+
                     dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
+                    dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
+
+    def on_send_emotion(self, sender, app_data):
+        # On clicking a choice in the combobox, `app_data` is that choice, but on arrow key, `app_data` is the keycode.
+        logger.info(f"TalkingheadExampleGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
+        current_emotion_name = dpg.get_value(self.emotion_choice)
+        self.send_emotion(emotion_name=current_emotion_name)
+
+    def send_emotion(self, emotion_name):
+        logger.info(f"TalkingheadExampleGUI.send_emotion: sending emotion '{emotion_name}'")
+        talkinghead_set_emotion(emotion_name)
 
     def toggle_talking(self):
         """Toggle the talkinghead's talking state."""
@@ -463,7 +504,23 @@ class TalkingheadExampleGUI:
             dpg.set_item_label("start_stop_talking_button", "Start talking [Ctrl+T]")
         self.talking = not self.talking
 
+    def toggle_animator_paused(self):
+        """Pause or resume the animation. Pausing when the talkinghead won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
+        if self.animator_running:
+            talkinghead_unload()
+            dpg.set_value("please_standby_text", "[Animator is paused]")
+            dpg.show_item("please_standby_text")
+            dpg.hide_item("live_image")
+            dpg.set_item_label("pause_resume_button", "Resume animator [Ctrl+P]")
+        else:
+            talkinghead_reload()
+            dpg.hide_item("please_standby_text")
+            dpg.show_item("live_image")
+            dpg.set_item_label("pause_resume_button", "Pause animator [Ctrl+P]")
+        self.animator_running = not self.animator_running
+
 # Hotkey support
+choice_map = None
 def talkinghead_example_hotkeys_callback(sender, app_data):
     if gui_instance is None:
         return
@@ -486,6 +543,38 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
             show_open_image_dialog()
         elif key == dpg.mvKey_T:
             gui_instance.toggle_talking()
+        elif key == dpg.mvKey_P:
+            gui_instance.toggle_animator_paused()
+        elif key == dpg.mvKey_E:
+            dpg.focus_item(gui_instance.emotion_choice)
+
+    # Bare key
+    #
+    # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
+    else:
+        # {widget_tag_or_id: list_of_choices}
+        global choice_map
+        if choice_map is None:  # build on first use
+            choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion)}
+        def browse(choice_widget, data):
+            choices, callback = data
+            index = choices.index(dpg.get_value(choice_widget))
+            if key == dpg.mvKey_Down:
+                new_index = min(index + 1, len(choices) - 1)
+            elif key == dpg.mvKey_Up:
+                new_index = max(index - 1, 0)
+            elif key == dpg.mvKey_Home:
+                new_index = 0
+            elif key == dpg.mvKey_End:
+                new_index = len(choices) - 1
+            else:
+                new_index = None
+            if new_index is not None:
+                dpg.set_value(choice_widget, choices[new_index])
+                callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
+        focused_item = dpg.get_focused_item()
+        if focused_item in choice_map.keys():
+            browse(focused_item, choice_map[focused_item])
 with dpg.handler_registry(tag="talkinghead_example_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="talkinghead_example_hotkeys_handler", callback=talkinghead_example_hotkeys_callback)
 
@@ -497,16 +586,26 @@ def update_live_texture(task_env):
     assert task_env is not None
     gen = talkinghead_result_feed()
     while not task_env.cancelled:
+        if gui_instance is None:
+            time.sleep(0.01)
+            continue
+
+        frame_start_time = time.time_ns()
+
         image_data = next(gen)  # next-gen lol
         image_file = io.BytesIO(image_data)
         pil_image = PIL.Image.open(image_file)
         arr = np.asarray(pil_image.convert("RGBA"))
         arr = np.array(arr, dtype=np.float32) / 255
         raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-        if gui_instance is not None:  # app is not shutting down
-            dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
-        # TODO: update FPS counter (NOTE: capped to rate that data actually arrives at, i.e. the server's TARGET_FPS)
-        # TODO: measure how fast this part is
+        dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
+
+        # Update FPS counter.
+        # NOTE: The refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS. If the machine could render faster, this just means less than 100% CPU/GPU usage.
+        elapsed_time = time.time_ns() - frame_start_time
+        fps = 1.0 / (elapsed_time / 10**9)
+        gui_instance.fps_statistics.add_datapoint(fps)
+        dpg.set_value("fps_text", f"RX (avg) {gui_instance.fps_statistics.average():0.2f} FPS")
 
 # --------------------------------------------------------------------------------
 # Main program
@@ -518,7 +617,9 @@ if __name__ == "__main__":
     task_manager = bgtask.TaskManager(name="avatar_updater",
                                       mode="concurrent",
                                       executor=bg)
-    talkinghead_load("example.png")
+    talkinghead_load("example.png")  # this will also start the animator if it was paused
+    talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
+    talkinghead_load_animator_settings({})  # send empty dict -> reset to server defaults
     talkinghead_set_emotion("curiosity")
     def shutdown():
         task_manager.clear(wait=True)
