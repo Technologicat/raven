@@ -232,7 +232,10 @@ def talkinghead_result_feed(chunk_size: int = 4096) -> Generator[bytes, None, No
     stream_iterator = response.iter_content(chunk_size=chunk_size)
     boundary = re.search(r"boundary=(\S+)", response.headers["Content-Type"]).group(1)
     boundary_prefix = f"--{boundary}"  # e.g., '--frame'
-    return multipart_x_mixed_replace_payload_extractor(source=stream_iterator, boundary_prefix=boundary_prefix, expected_mimetype="image/png")
+    gen = multipart_x_mixed_replace_payload_extractor(source=stream_iterator,
+                                                      boundary_prefix=boundary_prefix,
+                                                      expected_mimetype="image/png")
+    return gen
 
 # # DEBUG/TEST - exercise each of the API endpoints
 # print(classify_labels())  # get available emotion names from server
