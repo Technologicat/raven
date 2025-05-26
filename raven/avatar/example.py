@@ -7,9 +7,10 @@ to facilitate integrating Talkinghead regardless of the license of your own soft
 """
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import concurrent.futures
 import copy
 import io
 import json
@@ -21,6 +22,7 @@ from typing import Dict, Generator, Iterator, List, Union
 
 import PIL.Image
 
+from unpythonic.env import env as envcls
 from unpythonic.net.util import ReceiveBuffer
 
 import numpy as np
@@ -29,8 +31,8 @@ import dearpygui.dearpygui as dpg
 
 from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 from .. import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-# from .. import bgtask  # TODO: read the result_feed in a bgtask; see Raven's preprocessor.py for how to use bgtask for things like this
-from .. import utils as raven_utils
+from .. import bgtask  # TODO: read the result_feed in a bgtask; see Raven's preprocessor.py for how to use bgtask for things like this
+# from .. import utils as raven_utils
 
 from . import config
 
@@ -428,23 +430,54 @@ class TalkingheadExampleGUI:
             with dpg.group(horizontal=True):
                 dpg.add_image("live_texture", tag="live_image")
 
-                x0, y0 = raven_utils.get_widget_relative_pos("live_image", reference="main_window")
-                dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
-                                                       y0 + self.image_size / 2 - (font_size / 2)),
-                             tag="no_image_loaded_text")
+                # x0, y0 = raven_utils.get_widget_relative_pos("live_image", reference="main_window")
+                # x0, y0 = raven_utils.get_widget_pos("live_image")
+                # dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
+                #                                        y0 + self.image_size / 2 - (font_size / 2)),
+                #              tag="no_image_loaded_text")
 
+                # TODO: FPS counter
+                # TODO: The rest of the controls
                 with dpg.group(horizontal=False):
                     pass
 
                 with dpg.group(horizontal=False):
                     dpg.add_button(label="Start talking", width=self.button_width)
 
+# --------------------------------------------------------------------------------
+# Animation client task
+
+def update_live_texture(task_env):
+    assert task_env is not None
+    gen = talkinghead_result_feed()
+    while not task_env.cancelled:
+        image_data = next(gen)  # next-gen lol
+        image_file = io.BytesIO(image_data)
+        pil_image = PIL.Image.open(image_file)
+        arr = np.asarray(pil_image.convert("RGBA"))
+        arr = np.array(arr, dtype=np.float32) / 255
+        raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
+        if gui_instance is not None:  # app is not shutting down
+            dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
 
 # --------------------------------------------------------------------------------
 # Main program
 
 if __name__ == "__main__":
     gui_instance = TalkingheadExampleGUI()
+
+    bg = concurrent.futures.ThreadPoolExecutor()
+    task_manager = bgtask.TaskManager(name="avatar_updater",
+                                      mode="concurrent",
+                                      executor=bg)
+    talkinghead_load("example.png")
+    def shutdown():
+        task_manager.clear(wait=True)
+        animation.animator.clear()
+        global gui_instance
+        gui_instance = None
+    dpg.set_exit_callback(shutdown)
+    task_manager.submit(update_live_texture, envcls())
 
     dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
     dpg.set_viewport_vsync(True)
