@@ -161,6 +161,10 @@ def classify(text: str) -> Dict[str, float]:  # TODO: feature orthogonality
     return {record["label"]: record["score"] for record in sorted_records}
 
 def talkinghead_load(filename: Union[pathlib.Path, str]) -> None:
+    """Send a character (512x512 RGBA PNG image) to the animator.
+
+    Then, if the animator is not running, start it automatically.
+    """
     headers = copy.copy(default_headers)
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
     with open(filename, "rb") as image_file:
@@ -169,13 +173,13 @@ def talkinghead_load(filename: Union[pathlib.Path, str]) -> None:
     yell_on_error(response)
 
 def talkinghead_unload() -> None:
-    """Actually just pause the animation, don't unload anything."""
+    """Actually just pause the animator, don't unload anything."""
     headers = copy.copy(default_headers)
     response = requests.get(f"{avatar_url}/api/talkinghead/unload", headers=headers)
     yell_on_error(response)
 
 def talkinghead_reload() -> None:
-    """Resume animation paused by `talkinghead_unload`, without sending a new character."""
+    """Resume the animator after it was paused via `talkinghead_unload`, without sending a new character."""
     headers = copy.copy(default_headers)
     response = requests.get(f"{avatar_url}/api/talkinghead/reload", headers=headers)
     yell_on_error(response)
@@ -214,7 +218,12 @@ def talkinghead_set_emotion(emotion_name: str) -> None:
     yell_on_error(response)
 
 def talkinghead_result_feed(chunk_size: int = 4096) -> Generator[bytes, None, None]:
-    """Returns a generator that yields `bytes` objects, one per video frame, as PNG."""
+    """Return a generator that yields `bytes` objects, one per video frame, as PNG.
+
+    Due to the server's framerate control, the result feed attempts to feed data to the client at TARGET_FPS (default 25).
+    New frames are not generated until the previous one has been consumed. Thus, while the animator is in the running state,
+    it is recommended to continuously read the stream in a background thread.
+    """
     headers = copy.copy(default_headers)
     headers["Accept"] = "multipart/x-mixed-replace"
     response = requests.get(f"{avatar_url}/api/talkinghead/result_feed", headers=headers, stream=True)
