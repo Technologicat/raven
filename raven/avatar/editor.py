@@ -76,7 +76,7 @@ print(f"Talkinghead is installed at '{str(talkinghead_path)}'")
 sys.path.append(str(talkinghead_path))
 
 
-# Detect image file formats supported by the installed Pillow, and format a list for wxPython file open/save dialogs.
+# Detect image file formats supported by the installed Pillow, and format a list for the file open/save dialogs.
 # TODO: This is not very useful unless we can filter these to get only formats that support an alpha channel.
 #
 # https://docs.wxpython.org/wx.FileDialog.html
