@@ -63,6 +63,7 @@ def yell_on_error(response: requests.Response) -> None:
         logger.error(response.text)
         raise RuntimeError(f"While calling avatar server: HTTP {response.status_code} {response.reason}")
 
+# TODO: split to a new `netutil.py` or something
 def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
                                                 boundary_prefix: str,
                                                 expected_mimetype: str) -> Generator[bytes, None, None]:
@@ -144,6 +145,8 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
 
 # --------------------------------------------------------------------------------
 # Python client for Talkinghead web API
+
+# TODO: move into a new module
 
 def classify_labels() -> List[str]:
     """Get list of emotion names from server."""
