@@ -127,6 +127,7 @@
     - Linear chat view of current branch.
     - Show also system messages such as tool-call results?
     - Message editing?
+  - Add support for OpenAI-compatible TTS endpoint (e.g. [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI?tab=readme-ov-file))
 ## v0.2 and later
 
 ### Large new features
