@@ -47,7 +47,7 @@ import pathlib
 import sys
 import threading
 import time
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List
 
 import PIL.Image
 
@@ -65,6 +65,7 @@ from .vendor.tha3.poser.modes.load_poser import load_poser
 from .vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from .vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
+from . import client_util
 from .util import load_emotion_presets, posedict_to_pose, pose_to_posedict, RunningAverage, maybe_install_models, convert_linear_to_srgb, convert_float_to_uint8
 
 logging.basicConfig(level=logging.INFO)
@@ -125,36 +126,6 @@ dpg.create_viewport(title="THA3 Pose Editor",
                     width=1600,
                     height=1000)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()
-
-
-# --------------------------------------------------------------------------------
-# Simple modal dialog for OK/cancel
-
-with dpg.window(label="Modal dialog title", modal=True, show=False, tag="modal_dialog_window"):
-    dpg.add_text("Modal dialog message", wrap=600, tag="modal_dialog_message")
-    dpg.add_separator()
-    dpg.add_group(horizontal=True, tag="modal_dialog_button_group")
-
-def modal_dialog(window_title: str,
-                 message: str,
-                 buttons: List[str],
-                 cancel_button: str,  # When esc is pressed, or the window is closed by clicking on the "X"
-                 callback: Optional[Callable] = None) -> None:  # CPS due to how DPG works; `modal_dialog` itself returns immediately; put the stuff you want to run (if any) after the modal closes into your `callback`
-    # Remove old buttons, if any
-    for child in dpg.get_item_children("modal_dialog_button_group", slot=1):
-        dpg.delete_item(child)
-
-    def modal_dialog_callback(sender, app_data, user_data):
-        dpg.hide_item("modal_dialog_window")
-        if callback:
-            callback(user_data)  # send the label of the clicked button
-
-    dpg.configure_item("modal_dialog_window", label=window_title, on_close=modal_dialog_callback, user_data=cancel_button)
-    dpg.set_value("modal_dialog_message", message)
-    for label in buttons:
-        dpg.add_button(label=label, width=75, callback=modal_dialog_callback, user_data=label, parent="modal_dialog_button_group")
-
-    dpg.show_item("modal_dialog_window")
 
 # --------------------------------------------------------------------------------
 # File dialog init
@@ -813,8 +784,12 @@ class PoseEditorGUI:
                 self.torch_source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device).to(self.dtype)  # for poser
                 self.source_image_changed = True
         except Exception as exc:
-            logger.error(f"Could not load image {image_file_name}, reason: {exc}")
-            modal_dialog(window_title="Error", message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}", buttons=["Close"], cancel_button="Close")
+            logger.error(f"Could not load image {image_file_name}, reason: {type(exc)}: {exc}")
+            client_util.modal_dialog(window_title="Error",
+                                     message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}",
+                                     buttons=["Close"],
+                                     cancel_button="Close",
+                                     centering_reference_window=self.window)
         self.update_output()
 
     def load_json(self, json_file_name: str) -> None:
@@ -839,8 +814,12 @@ class PoseEditorGUI:
             # Auto-select "[custom]"
             dpg.set_value(self.emotion_choice, self.emotion_names[0])
         except Exception as exc:
-            logger.error(f"Could not load JSON {json_file_name}, reason: {exc}")
-            modal_dialog(window_title="Error", message=f"Could not load JSON '{json_file_name}', reason {type(exc)}: {exc}", buttons=["Close"], cancel_button="Close")
+            logger.error(f"Could not load JSON {json_file_name}, reason: {type(exc)}: {exc}")
+            client_util.modal_dialog(window_title="Error",
+                                     message=f"Could not load JSON '{json_file_name}', reason {type(exc)}: {exc}",
+                                     buttons=["Close"],
+                                     cancel_button="Close",
+                                     centering_reference_window=self.window)
         else:
             logger.info(f"Loaded JSON {json_file_name}")
             self.update_output()
@@ -921,29 +900,40 @@ class PoseEditorGUI:
             self.source_image_changed = False
             self.last_pose = current_pose
             self.last_output_index = output_index
+            try:
+                if self.torch_source_image is None:  # anything to render?
+                    dpg.set_value(self.source_image_texture, self.blank_texture)
+                    dpg.set_value(self.result_image_texture, self.blank_texture)
+                    dpg.show_item("source_no_image_loaded_text")
+                    dpg.show_item("result_no_image_loaded_text")
+                    return
+                dpg.hide_item("source_no_image_loaded_text")
+                dpg.hide_item("result_no_image_loaded_text")
 
-            if self.torch_source_image is None:  # anything to render?
-                dpg.set_value(self.source_image_texture, self.blank_texture)
+                render_start_time = time.time_ns()
+
+                arr = self._render(current_pose, output_index)
+
+                raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
+                dpg.set_value(self.result_image_texture, raw_data)  # to GUI
+                self.last_output_numpy_image = arr  # for file saving
+            except Exception as exc:
                 dpg.set_value(self.result_image_texture, self.blank_texture)
-                dpg.show_item("source_no_image_loaded_text")
                 dpg.show_item("result_no_image_loaded_text")
+                logger.error(f"Could not render, reason: {type(exc)}: {exc}")
+                client_util.modal_dialog(window_title="Error",
+                                         message=f"Could not render, reason {type(exc)}: {exc}",
+                                         buttons=["Close"],
+                                         cancel_button="Close",
+                                         centering_reference_window=self.window)
                 return
-            dpg.hide_item("source_no_image_loaded_text")
-            dpg.hide_item("result_no_image_loaded_text")
-
-            render_start_time = time.time_ns()
-
-            arr = self._render(current_pose, output_index)
-            raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-            dpg.set_value(self.result_image_texture, raw_data)  # to GUI
-            self.last_output_numpy_image = arr  # for file saving
-
-            # Update FPS counter, measuring the render speed only.
-            elapsed_time = time.time_ns() - render_start_time
-            fps = 1.0 / (elapsed_time / 10**9)
-            if self.torch_source_image is not None:
-                self.fps_statistics.add_datapoint(fps)
-            dpg.set_value(self.fps_text, f"Render (avg): {self.fps_statistics.average():0.2f} FPS")
+            else:
+                # Update FPS counter, measuring the render speed only.
+                elapsed_time = time.time_ns() - render_start_time
+                fps = 1.0 / (elapsed_time / 10**9)
+                if self.torch_source_image is not None:
+                    self.fps_statistics.add_datapoint(fps)
+                dpg.set_value(self.fps_text, f"Render (avg): {self.fps_statistics.average():0.2f} FPS")
 
     def save_image(self, image_file_name: str) -> None:
         """Save the output image.
@@ -993,7 +983,7 @@ class PoseEditorGUI:
 
                 logger.info(f"Saved image {image_file_name}")
             except Exception as exc:
-                logger.error(f"Could not save {image_file_name}, reason: {exc}")
+                logger.error(f"Could not save {image_file_name}, reason: {type(exc)}: {exc}")
 
         # Save `_emotions.json`, for use as customized emotion templates.
         #
