@@ -492,6 +492,7 @@ with dpg.handler_registry(tag="talkinghead_example_handler_registry"):  # global
 # --------------------------------------------------------------------------------
 # Animation client task
 
+# We must continuously retrieve new frames as they become ready, so this runs in the background.
 def update_live_texture(task_env):
     assert task_env is not None
     gen = talkinghead_result_feed()
