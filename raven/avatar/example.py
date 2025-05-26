@@ -458,6 +458,32 @@ class TalkingheadExampleGUI:
             dpg.set_item_label("start_stop_talking_button", "Start talking [Ctrl+T]")
         self.talking = not self.talking
 
+# Hotkey support
+def talkinghead_example_hotkeys_callback(sender, app_data):
+    if gui_instance is None:
+        return
+    # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
+    if is_any_modal_window_visible():
+        return
+
+    key = app_data
+    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+
+    # Ctrl+Shift+...
+    if ctrl_pressed and shift_pressed:
+        if key == dpg.mvKey_O:
+            show_open_json_dialog()
+
+    # Ctrl+...
+    elif ctrl_pressed:
+        if key == dpg.mvKey_O:
+            show_open_image_dialog()
+        elif key == dpg.mvKey_T:
+            gui_instance.toggle_talking()
+with dpg.handler_registry(tag="talkinghead_example_handler_registry"):  # global (whole viewport)
+    dpg.add_key_press_handler(tag="talkinghead_example_hotkeys_handler", callback=talkinghead_example_hotkeys_callback)
+
 # --------------------------------------------------------------------------------
 # Animation client task
 
