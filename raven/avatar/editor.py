@@ -642,7 +642,7 @@ class PoseEditorGUI:
         dpg.set_viewport_title(f"THA3 Pose Editor [{disp_device}] [{model}]")
 
         with dpg.window(tag="pose_editor_window",
-                        label="THA3 Pose Editor main window") as self.window:  # not actually shown, since this window is maximized to the whole viewport
+                        label="THA3 Pose Editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 self.init_left_panel()
                 self.init_control_panel()
