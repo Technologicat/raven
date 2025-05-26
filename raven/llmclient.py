@@ -91,7 +91,7 @@ def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 1
     data = {"query": query,
             "engine": engine,
             "max_links": max_links}
-    response = requests.post(f"{avatar_url}/api/websearch2", headers=avatar_headers, json=data, verify=False, stream=False)
+    response = requests.post(f"{avatar_url}/api/websearch2", headers=avatar_headers, json=data)
 
     if response.status_code != 200:
         logger.error(f"Avatar server returned error: {response.status_code} {response.reason}. Content of error response follows.")
