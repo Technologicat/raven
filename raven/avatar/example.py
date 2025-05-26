@@ -471,6 +471,7 @@ if __name__ == "__main__":
                                       mode="concurrent",
                                       executor=bg)
     talkinghead_load("example.png")
+    talkinghead_set_emotion("curiosity")
     def shutdown():
         task_manager.clear(wait=True)
         animation.animator.clear()
