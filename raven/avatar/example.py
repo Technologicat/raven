@@ -407,6 +407,11 @@ class TalkingheadExampleGUI:
         self.image_size = 512
         self.button_width = 200
 
+        # TODO: Investigate whether we could super-resolution in realtime with Anime4K-PyTorch. For 1920x1080 (2MP) that takes ~60ms per frame, but our image is only 0.25 MP, so it should be fast enough, if it works for this res.
+        # TODO: Also investigate whether it's better to scale at the server side (one less GPU/CPU roundtrip, but more data to send) or at the client side.
+        # https://github.com/bloc97/Anime4K
+        # https://colab.research.google.com/drive/11xAn4fyAUJPZOjrxwnL2ipl_1DGGegkB#scrollTo=prK7pqyim1Uo
+
         with dpg.texture_registry(tag="talkinghead_example_textures"):
             self.blank_texture = np.zeros([self.image_size,  # height
                                            self.image_size,  # width
