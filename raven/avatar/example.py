@@ -442,6 +442,11 @@ class TalkingheadExampleGUI:
 
                 # TODO: FPS counter
                 # TODO: The rest of the controls
+                #   - load character
+                #   - load emotion JSON
+                #   - load animator settings
+                #   - set emotion
+                #   - pause/resume
                 with dpg.group(horizontal=False):
                     pass
 
