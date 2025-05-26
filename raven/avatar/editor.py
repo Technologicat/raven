@@ -1193,6 +1193,10 @@ if __name__ == "__main__":
 
     gui_instance = PoseEditorGUI(poser, device, args.model)
 
+    def shutdown():
+        animation.animator.clear()
+    dpg.set_exit_callback(shutdown)
+
     dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
     dpg.set_viewport_vsync(True)
     dpg.show_viewport()
