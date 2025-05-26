@@ -411,6 +411,8 @@ class TalkingheadExampleGUI:
         self.image_size = 512
         self.button_width = 200
 
+        self.talking = False
+
         # TODO: Investigate whether we could super-resolution in realtime with Anime4K-PyTorch. For 1920x1080 (2MP) that takes ~60ms per frame, but our image is only 0.25 MP, so it should be fast enough, if it works for this res.
         # TODO: Also investigate whether it's better to scale at the server side (one less GPU/CPU roundtrip, but more data to send) or at the client side.
         # https://github.com/bloc97/Anime4K
@@ -444,7 +446,17 @@ class TalkingheadExampleGUI:
                     pass
 
                 with dpg.group(horizontal=False):
-                    dpg.add_button(label="Start talking", width=self.button_width)
+                    dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
+
+    def toggle_talking(self):
+        """Toggle the talkinghead's talking state."""
+        if not self.talking:
+            talkinghead_start_talking()
+            dpg.set_item_label("start_stop_talking_button", "Stop talking [Ctrl+T]")
+        else:
+            talkinghead_stop_talking()
+            dpg.set_item_label("start_stop_talking_button", "Start talking [Ctrl+T]")
+        self.talking = not self.talking
 
 # --------------------------------------------------------------------------------
 # Animation client task
