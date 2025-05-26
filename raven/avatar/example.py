@@ -504,6 +504,8 @@ def update_live_texture(task_env):
         raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
         if gui_instance is not None:  # app is not shutting down
             dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
+        # TODO: update FPS counter (NOTE: capped to rate that data actually arrives at, i.e. the server's TARGET_FPS)
+        # TODO: measure how fast this part is
 
 # --------------------------------------------------------------------------------
 # Main program
