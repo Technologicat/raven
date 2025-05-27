@@ -318,7 +318,7 @@ def tts_speak(voice: str,
             "speed": 1,
             "stream": True,
             "return_download_link": False}
-    stream_response = requests.post(f"{tts_url}/v1/audio/speech", headers=headers, json=data)
+    stream_response = requests.post(f"{tts_url}/v1/audio/speech", headers=headers, json=data, stream=True)
     yell_on_error(stream_response)
 
     # We run this in the background to
