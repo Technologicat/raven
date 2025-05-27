@@ -661,15 +661,41 @@ with dpg.handler_registry(tag="talkinghead_example_handler_registry"):  # global
 # --------------------------------------------------------------------------------
 # Animation client task
 
+class ResultFeedReader:
+    def __init__(self):
+        self.gen = None
+
+    def start(self):
+        self.gen = talkinghead_result_feed()
+
+    def is_running(self):
+        return self.gen is not None
+
+    def get_frame(self):  # next-gen lol
+        return next(self.gen)
+
+    def stop(self):
+        self.gen.close()
+        self.gen = None
+
 # We must continuously retrieve new frames as they become ready, so this runs in the background.
 def update_live_texture(task_env):
     assert task_env is not None
-    gen = talkinghead_result_feed()
+    reader = ResultFeedReader()
+    reader.start()
     while not task_env.cancelled:
         frame_start_time = time.time_ns()
 
-        image_data = next(gen)  # next-gen lol
-        if gui_instance is None:
+        if gui_instance:
+            if not gui_instance.animator_running and reader.is_running():
+                reader.stop()
+                dpg.set_value("fps_text", "RX (avg) -- FPS")
+            elif gui_instance.animator_running and not reader.is_running():
+                reader.start()
+
+        if reader.is_running():
+            image_data = reader.get_frame()
+        if gui_instance is None or not reader.is_running():
             time.sleep(0.01)
             continue
 
