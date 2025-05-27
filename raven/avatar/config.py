@@ -77,6 +77,18 @@ animator_defaults = {
     # available to smooth over the occasional hiccup due to other running programs.
     "target_fps": 25,
 
+    # For available output formats, see:
+    #     https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html
+    #
+    # SillyTavern expects PNG. To optimize encoding speed with custom clients, we recommend the uncompressed IM:
+    #
+    #   "IM is a format used by LabEye and other applications based on the IFUNC image processing library.
+    #    The library reads and writes most uncompressed interchange versions of this format.
+    #    IM is the only format that can store all internal Pillow formats."
+    #
+    "format": "PNG",
+    "upscale": 1.0,  # 1.0 = send as-is; e.g. 2.0 = upscale 2x (using anime4k) before sending
+
     # If the avatar does not occupy the whole 512x512 canvas, it is possible to cut away the empty space from the edges,
     # which makes postprocessing faster (since fewer pixels).
     "crop_left": 0.0,  # cut how much inward from left edge, in units where the image width is 2.0

@@ -37,8 +37,6 @@ from .. import animation  # Raven's GUI animation system, nothing to do with the
 from .. import bgtask  # TODO: read the result_feed in a bgtask; see Raven's preprocessor.py for how to use bgtask for things like this
 from .. import utils as raven_utils
 
-from .vendor.anime4k import anime4k
-
 from . import client_util
 from . import config
 from .util import RunningAverage
@@ -79,12 +77,12 @@ def yell_on_error(response: requests.Response) -> None:
 # TODO: split to a new `netutil.py` or something
 def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
                                                 boundary_prefix: str,
-                                                expected_mimetype: str) -> Generator[bytes, None, None]:
+                                                expected_mimetype: Optional[str]) -> Generator[bytes, None, None]:
     """Generator: yield payloads from `source`, which is reading from a "multipart/x-mixed-replace" stream.
 
     The server MUST send the Content-Type and Content-Length headers.
 
-    Content-Type must match `expected_mimetype`, e.g. "image/png".
+    If `expected_mimetype` is provided, the actual received Content-Type must match, e.g. "image/png".
 
     Loosely based on `unpythonic.net.msg.decodemsg`.
     """
@@ -130,8 +128,8 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
             field = field.decode("utf-8")
             field_name, field_value = [text.strip().lower() for text in field.split(":")]
             if field_name == "content-type":
-                if field_value != expected_mimetype:  # wrong type of data?
-                    raise ValueError
+                if expected_mimetype is not None and field_value != expected_mimetype:  # wrong type of data?
+                    raise ValueError(f"multipart_x_mixed_replace_payload_extractor.read_headers: expected mimetype '{expected_mimetype}', got '{field_value}'")
             if field_name == "content-length":
                 body_length_bytes = int(field_value)  # and let it raise if the value is invalid
         if body_length_bytes is None:
@@ -244,7 +242,7 @@ def talkinghead_set_emotion(emotion_name: str) -> None:
     response = requests.post(f"{avatar_url}/api/talkinghead/set_emotion", headers=headers, json=data)
     yell_on_error(response)
 
-def talkinghead_result_feed(chunk_size: int = 4096) -> Generator[bytes, None, None]:
+def talkinghead_result_feed(chunk_size: int = 4096, format: str = "png") -> Generator[bytes, None, None]:
     """Return a generator that yields `bytes` objects, one per video frame, as PNG.
 
     Due to the server's framerate control, the result feed attempts to feed data to the client at TARGET_FPS (default 25).
@@ -264,7 +262,7 @@ def talkinghead_result_feed(chunk_size: int = 4096) -> Generator[bytes, None, No
     boundary_prefix = f"--{boundary}"  # e.g., '--frame'
     gen = multipart_x_mixed_replace_payload_extractor(source=stream_iterator,
                                                       boundary_prefix=boundary_prefix,
-                                                      expected_mimetype="image/png")
+                                                      expected_mimetype=f"image/{format}")  # if provided, must match the format we send in `talkinghead_load_animator_settings`
     return gen
 
 # # DEBUG/TEST - exercise each of the API endpoints
@@ -407,7 +405,7 @@ with dpg.theme(tag="disablable_button_theme"):
         dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
 
 viewport_width = 1600
-viewport_height = 700
+viewport_height = 800
 dpg.create_viewport(title="Talkinghead",
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
@@ -572,16 +570,20 @@ def is_any_modal_window_visible():
 
 class TalkingheadExampleGUI:
     def __init__(self):
-        self.image_size = 512
+        self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed
+
+        self.upscale = 1.5  # but the animator has a realtime super-resolution filter (anime4k)
+        self.image_size = int(self.upscale * self.source_image_size)
+        self.target_fps = 25  # default 25; maybe better to lower this when upscaling (see the server's terminal output for available FPS)
+        self.comm_format = "PNG"  # for send from server to client; anything that Pillow can write (faster and smaller better)
+
+        self.custom_animator_settings = {"format": self.comm_format,
+                                         "upscale": self.upscale,
+                                         "target_fps": self.target_fps}  # any missing keys are auto-populated from server defaults
         self.button_width = 300
 
         self.talking = False
         self.animator_running = True
-
-        # TODO: Investigate whether we could super-resolution in realtime with Anime4K-PyTorch. For 1920x1080 (2MP) that takes ~60ms per frame, but our image is only 0.25 MP, so it should be fast enough, if it works for this res.
-        # TODO: Also investigate whether it's better to scale at the server side (one less GPU/CPU roundtrip, but more data to send) or at the client side.
-        # https://github.com/bloc97/Anime4K
-        # https://colab.research.google.com/drive/11xAn4fyAUJPZOjrxwnL2ipl_1DGGegkB#scrollTo=prK7pqyim1Uo
 
         with dpg.texture_registry(tag="talkinghead_example_textures"):
             self.blank_texture = np.zeros([self.image_size,  # height
@@ -691,7 +693,10 @@ class TalkingheadExampleGUI:
 
     def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
         try:
-            talkinghead_load_animator_settings_from_file(filename)
+            with open(filename, "r", encoding="utf-8") as json_file:
+                animator_settings = json.load(json_file)
+            animator_settings.update(self.custom_animator_settings)  # setup overrides
+            talkinghead_load_animator_settings(animator_settings)
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_animator_settings: {type(exc)}: {exc}")
             client_util.modal_dialog(window_title="Error",
@@ -808,7 +813,7 @@ class ResultFeedReader:
         self.gen = None
 
     def start(self):
-        self.gen = talkinghead_result_feed()
+        self.gen = talkinghead_result_feed(format=gui_instance.comm_format.lower())
 
     def is_running(self):
         return self.gen is not None
@@ -820,65 +825,54 @@ class ResultFeedReader:
         self.gen.close()
         self.gen = None
 
-# Implementation of preset A (HQ)
-device = "cuda:0"  # TODO
-upscaler_pipeline = anime4k.Anime4KPipeline(
-    anime4k.ClampHighlight(),
-    anime4k.create_model("Upscale_Denoise_VL"),
-    anime4k.AutoDownscalePre(4),
-    anime4k.create_model("Upscale_M"),
-    screen_width=1024, screen_height=1024,
-    final_stage_upscale_mode="bilinear"
-).to(device).half()
-
 # We must continuously retrieve new frames as they become ready, so this runs in the background.
 def update_live_texture(task_env) -> None:
     assert task_env is not None
     reader = ResultFeedReader()
     reader.start()
-    while not task_env.cancelled:
-        frame_start_time = time.time_ns()
+    try:
+        while not task_env.cancelled:
+            frame_start_time = time.time_ns()
 
-        if gui_instance:
-            if not gui_instance.animator_running and reader.is_running():
-                reader.stop()
-                dpg.set_value("fps_text", "RX (avg) -- FPS")
-            elif gui_instance.animator_running and not reader.is_running():
-                reader.start()
+            if gui_instance:
+                if not gui_instance.animator_running and reader.is_running():
+                    reader.stop()
+                    dpg.set_value("fps_text", "RX (avg) -- FPS")
+                elif gui_instance.animator_running and not reader.is_running():
+                    reader.start()
 
-        if reader.is_running():
-            image_data = reader.get_frame()
-        if gui_instance is None or not reader.is_running():
-            time.sleep(0.01)
-            continue
+            if reader.is_running():
+                image_data = reader.get_frame()
+            if gui_instance is None or not reader.is_running():
+                time.sleep(0.01)
+                continue
 
-        image_file = io.BytesIO(image_data)
+            image_file = io.BytesIO(image_data)
 
-        # # EXPERIMENT: upscale 2x
-        # #  - Would this be faster to do this on the server side? More data to send, but the image is still on the GPU.
-        # original_pil_image = PIL.Image.open(image_file)  # input, 512x512
-        # image_tensor = anime4k.to_tensor(original_pil_image.convert("RGB")).unsqueeze(0).to(device).half()
-        # upscaled_image_tensor = upscaler_pipeline(image_tensor)
-        # upscaled_pil_image = anime4k.to_pil(upscaled_image_tensor[0])
-        # arr = np.asarray(upscaled_pil_image.convert("RGBA"))
-        # arr = np.array(arr, dtype=np.float32) / 255
-        # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-        # dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
+            pil_image = PIL.Image.open(image_file)
+            arr = np.asarray(pil_image.convert("RGBA"))
+            arr = np.array(arr, dtype=np.float32) / 255
+            raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
+            dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
 
-        # at original resolution
-        pil_image = PIL.Image.open(image_file)
-        arr = np.asarray(pil_image.convert("RGBA"))
-        arr = np.array(arr, dtype=np.float32) / 255
-        raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-        dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
+            # Update FPS counter.
+            # NOTE: Since we wait on the server to send a frame, the refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS.
+            #       If the machine could render faster, this just means less than 100% CPU/GPU usage.
+            elapsed_time = time.time_ns() - frame_start_time
+            fps = 1.0 / (elapsed_time / 10**9)
+            gui_instance.fps_statistics.add_datapoint(fps)
+            dpg.set_value("fps_text", f"RX (avg) {gui_instance.fps_statistics.average():0.2f} FPS")
+    except Exception as exc:
+        logger.error(f"TalkingheadExampleGUI.update_live_texture: {type(exc)}: {exc}")
 
-        # Update FPS counter.
-        # NOTE: Since we wait on the server to send a frame, the refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS.
-        #       If the machine could render faster, this just means less than 100% CPU/GPU usage.
-        elapsed_time = time.time_ns() - frame_start_time
-        fps = 1.0 / (elapsed_time / 10**9)
-        gui_instance.fps_statistics.add_datapoint(fps)
-        dpg.set_value("fps_text", f"RX (avg) {gui_instance.fps_statistics.average():0.2f} FPS")
+        # TODO: recovery if the server comes back online
+        if gui_instance is not None:
+            gui_instance.animator_running = False
+            dpg.set_value("please_standby_text", "[Connection lost]")
+            dpg.show_item("please_standby_text")
+            dpg.hide_item("live_image")
+            dpg.set_value("fps_text", "RX (avg) -- FPS")
+
 
 # --------------------------------------------------------------------------------
 # Main program
@@ -892,7 +886,7 @@ if __name__ == "__main__":
                                       executor=bg)
     talkinghead_load("example.png")  # this will also start the animator if it was paused
     talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
-    talkinghead_load_animator_settings({})  # send empty dict -> reset to server defaults
+    talkinghead_load_animator_settings(gui_instance.custom_animator_settings)
     talkinghead_set_emotion("curiosity")
     def shutdown() -> None:
         task_manager.clear(wait=True)

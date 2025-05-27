@@ -24,6 +24,7 @@ import random
 import time
 import numpy as np
 import threading
+import traceback
 from typing import Any, Dict, List, NoReturn, Optional, Union
 
 from colorama import Fore, Style
@@ -31,8 +32,11 @@ from colorama import Fore, Style
 import PIL
 
 import torch
+import torch.nn.functional
 
 from flask import Response
+
+from .vendor.anime4k import anime4k
 
 from .vendor.tha3.poser.modes.load_poser import load_poser
 from .vendor.tha3.poser.poser import Poser
@@ -66,7 +70,9 @@ current_emotion = "neutral"
 is_talking = False
 global_reload_image = None
 
-target_fps = 25  # value overridden by `load_animator_settings` at animator startup
+# values overridden by `load_animator_settings` at animator startup
+target_fps = 25
+output_format = "PNG"
 
 # --------------------------------------------------------------------------------
 # Implementations for API endpoints served by `server.py`
@@ -194,9 +200,11 @@ def stop_talking() -> str:
 #       frame N+1 is being encoded (or is already encoded, and waiting for frame N to be sent), and frame N+2 is being rendered.
 #
 def result_feed() -> Response:
-    """Return a Flask `Response` that repeatedly yields the current image as 'image/png'."""
+    """Return a Flask `Response` that repeatedly yields the current image as an image file in the configured format."""
     def generate():
         global global_latest_frame_sent
+        global output_format  # to document intent only; we don't write to it
+        global target_fps  # to document intent only; we don't write to it
 
         last_frame_send_complete_time = None
         last_report_time = None
@@ -223,10 +231,14 @@ def result_feed() -> Response:
 
                 if time_until_frame_deadline <= 0.0:
                     time_now = time.time_ns()
-                    yield (b"--frame\r\n"
-                           b"Content-Type: image/png\r\n"
-                           b"Content-Length: " + bytes(str(len(image_bytes)), encoding="utf-8") + b"\r\n"
-                           b"\r\n" + image_bytes + b"\r\n")
+                    content_type_header = f"Content-Type: image/{output_format.lower()}\r\n".encode()
+                    content_length_header = f"Content-Length: {len(image_bytes)}\r\n".encode()
+                    yield (b"--frame\r\n" +
+                           content_type_header +
+                           content_length_header +
+                           b"\r\n" +  # A second successive CRLF sequence signals the end of the headers for this frame.
+                           image_bytes +
+                           b"\r\n")
                     global_latest_frame_sent = id(image_bytes)  # atomic update, no need for lock
                     send_duration_sec = (time.time_ns() - time_now) / 10**9  # about 0.12 ms on localhost (compress_level=1 or 6, doesn't matter)
                     # print(f"send {send_duration_sec:0.6g}s")  # DEBUG
@@ -340,7 +352,8 @@ class Animator:
         self.poser = poser
         self.device = device
 
-        self.postprocessor = Postprocessor(device)
+        self.upscaler = None
+        self.postprocessor = Postprocessor(device, dtype=torch.float16)  # dtype must match `output_image` in `Animator.render_animation_frame`
         self.render_duration_statistics = RunningAverage()
         self.animator_thread = None
 
@@ -365,6 +378,7 @@ class Animator:
                     self.render_animation_frame()
                 except Exception as exc:
                     logger.error(exc)
+                    traceback.print_exc()
                     raise  # let the animator stop so we won't spam the log
                 time.sleep(0.01)  # rate-limit the renderer to 100 FPS maximum (this could be adjusted later)
         self.animator_thread = threading.Thread(target=animator_update, daemon=True)
@@ -453,6 +467,7 @@ class Animator:
         see `postprocessor.py`.
         """
         global target_fps
+        global output_format
 
         if settings is None:
             settings = {}
@@ -508,8 +523,21 @@ class Animator:
         logger.debug(f"load_animator_settings: Setting new target FPS = {settings['target_fps']}")
         target_fps = settings.pop("target_fps")  # global variable, controls the network send rate.
 
+        logger.debug(f"load_animator_settings: Setting output format = {settings['format']}")
+        output_format = settings.pop("format")
+
         logger.debug("load_animator_settings: Sending new effect chain to postprocessor")
         self.postprocessor.chain = settings.pop("postprocessor_chain")  # ...and that's where the postprocessor reads its filter settings from.
+
+        logger.debug("load_animator_settings: Setting up upscaler")
+        if settings["upscale"] != 1.0:
+            self.target_size = int(settings["upscale"] * self.poser.get_image_size())
+            self.upscaler = Upscaler(device=self.device,
+                                     upscaled_width=self.target_size,
+                                     upscaled_height=self.target_size)
+        else:
+            self.target_size = self.poser.get_image_size()
+            self.upscaler = None
 
         # The rest of the settings we can just store in an attribute, and let the animation drivers read them from there.
         self._settings = settings
@@ -583,6 +611,8 @@ class Animator:
 
         Return the modified pose.
         """
+        global target_fps  # to document intent only; we don't write to it
+
         # Compute FPS-corrected blink probability
         CALIBRATION_FPS = 25
         p_orig = self._settings["blink_probability"]  # blink probability per frame at CALIBRATION_FPS
@@ -979,6 +1009,7 @@ class Animator:
         #
         # which, given desired `n`, gives us the `α` that makes the interpolator cover the fraction `xrel` of the original distance in `n` steps.
         #
+        global target_fps  # to document intent only; we don't write to it
         CALIBRATION_FPS = 25  # FPS for which the default value `step` was calibrated
         xrel = 0.5  # just some convenient value
         step = self._settings["pose_interpolator_step"]
@@ -1072,7 +1103,7 @@ class Animator:
         with torch.no_grad():
             # - [0]: model's output index for the full result image
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
-            output_image = self.poser.pose(self.source_image, pose)[0].float()
+            output_image = self.poser.pose(self.source_image, pose)[0].half()
 
             # A simple crop filter, for removing empty space around character.
             # Apply this first so that the postprocessor has fewer pixels to process.
@@ -1090,6 +1121,9 @@ class Animator:
 
             self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
             output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
+
+            if self.upscaler is not None:
+                output_image = self.upscaler.upscale(output_image)
 
             # convert [c, h, w] float -> [h, w, c] uint8
             c, h, w = output_image.shape
@@ -1119,7 +1153,7 @@ class Animator:
             avg_render_sec = self.render_duration_statistics.average()
             msec = round(1000 * avg_render_sec, 1)
             fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
-            logger.info(f"render: {msec:.1f}ms [{fps} FPS available]")
+            logger.info(f"render: {msec:.1f}ms [{fps} FPS available]")  # NOTE: "render" includes upscaling time when upscaler is in use
             self.last_report_time = time_now
 
 
@@ -1163,14 +1197,23 @@ class Encoder:
 
                         # Save as PNG with RGBA mode. Use the fastest compression level available.
                         #
-                        # On an i7-12700H @ 2.3 GHz (laptop optimized for low fan noise):
-                        #  - `compress_level=1` (fastest), about 20 ms
-                        #  - `compress_level=6` (default), about 40 ms (!) - too slow!
-                        #  - `compress_level=9` (smallest size), about 120 ms
+                        # On an i7-12700H @ 2.3 GHz (laptop optimized for low fan noise), 512x512 resolution:
+                        #  - PNG:
+                        #    - `compress_level=1` (fastest), about 20 ms
+                        #    - `compress_level=6` (default), about 40 ms (!) - too slow!
+                        #    - `compress_level=9` (smallest size), about 120 ms
+                        #  - IM:
+                        #    - uncompressed, about 5 ms
                         #
                         # time_now = time.time_ns()
                         buffer = io.BytesIO()
-                        pil_image.save(buffer, format="PNG", compress_level=1)
+                        if output_format == "PNG":
+                            kwargs = {"compress_level": 1}
+                        else:
+                            kwargs = {}
+                        pil_image.save(buffer,
+                                       format=output_format,
+                                       **kwargs)
                         image_bytes = buffer.getvalue()
                         # pack_duration_sec = (time.time_ns() - time_now) / 10**9
 
@@ -1190,6 +1233,7 @@ class Encoder:
                         self.image_bytes = image_bytes  # atomic replace so no need for a lock
                     except Exception as exc:
                         logger.error(exc)
+                        traceback.print_exc()
                         raise  # let the encoder stop so we won't spam the log
 
                     # Update FPS counter.
@@ -1223,3 +1267,65 @@ class Encoder:
         self._terminated = True
         self.encoder_thread.join()
         self.encoder_thread = None
+
+class Upscaler:
+    def __init__(self,
+                 device: torch.device,
+                 upscaled_width: int,
+                 upscaled_height: int,
+                 use_fp16: bool = True) -> None:
+        self.device = device
+        self.use_fp16 = use_fp16
+        self.upscaled_width = upscaled_width
+        self.upscaled_height = upscaled_height
+
+        # Implementation of preset A (HQ) - for fp16, 512x512 -> 768x768, about 20 ms on the same machine as the encoder measurements
+        self.pipeline = anime4k.Anime4KPipeline(
+            anime4k.ClampHighlight(),
+            anime4k.create_model("Upscale_Denoise_VL"),
+            anime4k.AutoDownscalePre(4),
+            anime4k.create_model("Upscale_M"),
+            screen_width=upscaled_width, screen_height=upscaled_height,
+            final_stage_upscale_mode="bilinear"
+        ).to(self.device)
+
+        if self.use_fp16:
+            self.pipeline = self.pipeline.half()
+
+    def upscale(self, image_tensor: torch.Tensor) -> torch.Tensor:
+        """Upscale `image_tensor` to size target x target, where `target = self.target_size`.
+
+        `image_tensor`: [c, h, w], where c = 3 (RGB) or c = 4 (RGBA).
+        """
+        c, h, w = image_tensor.shape
+        if c == 4:
+            rgb_image_tensor = image_tensor[:3, :, :]
+        elif c == 3:
+            rgb_image_tensor = image_tensor
+        else:
+            raise ValueError(f"Upscaler.upscale: Expected [c, h, w] image tensor with 3 (RGB) or 4 (RGBA) channels, got {c} instead (shape {image_tensor.shape}).")
+        data = rgb_image_tensor.unsqueeze(0).to(self.device)
+        if self.use_fp16:
+            data = data.half()
+        upscaled_rgb_tensor = self.pipeline(data)[0]
+
+        if c == 3:
+            return upscaled_rgb_tensor
+
+        # c == 4
+        # anime4k supports RGB only; upscale alpha channel using a rough method.
+        upscaled_alpha = torch.nn.functional.interpolate(image_tensor[3, :, :].unsqueeze(0).unsqueeze(0),  # [w, h] -> [batch, c, w, h]
+                                                         (self.upscaled_height, self.upscaled_width),
+                                                         mode="bilinear")
+        upscaled_rgba_tensor = torch.cat([upscaled_rgb_tensor, upscaled_alpha[0]], dim=0)  # RGB [3, w, h], alpha [1, w, h]
+
+        return upscaled_rgba_tensor
+
+        # original_pil_image = PIL.Image.open(image_file)  # input, 512x512
+        # image_tensor = anime4k.to_tensor(original_pil_image.convert("RGB")).unsqueeze(0).to(device).half()
+        # upscaled_image_tensor = self.pipeline(image_tensor)
+        # upscaled_pil_image = anime4k.to_pil(upscaled_image_tensor[0])
+        # arr = np.asarray(upscaled_pil_image.convert("RGBA"))
+        # arr = np.array(arr, dtype=np.float32) / 255
+        # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
+        # dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI

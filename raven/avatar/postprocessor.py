@@ -64,7 +64,7 @@ class Postprocessor:
                      produces animation even for a stationary input image.
     """
 
-    def __init__(self, device: torch.device, chain: List[Tuple[str, Dict[str, MaybeContained[Atom]]]] = None):
+    def __init__(self, device: torch.device, dtype: torch.dtype, chain: List[Tuple[str, Dict[str, MaybeContained[Atom]]]] = None):
         # We intentionally keep very little state in this class, for a more FP/REST approach with less bugs.
         # Filters for static effects are stateless.
         #
@@ -73,6 +73,7 @@ class Postprocessor:
         #     This is to allow optimizing their implementations for memory usage and speed.
         #   - The filter for a dynamic effect may store state, if needed for performing FPS correction.
         self.device = device
+        self.dtype = dtype
         self.chain = chain
 
         # Meshgrid cache for geometric position of each pixel
@@ -121,8 +122,8 @@ class Postprocessor:
             # We don't strictly keep state here - we just cache. :P
 
             # Seems the deformation geometry must be float32 no matter the image data type.
-            self._yy = torch.linspace(-1.0, 1.0, h, dtype=torch.float32, device=self.device)
-            self._xx = torch.linspace(-1.0, 1.0, w, dtype=torch.float32, device=self.device)
+            self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
+            self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
             self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
             self._prev_h = h
             self._prev_w = w
