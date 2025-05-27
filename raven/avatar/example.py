@@ -290,7 +290,11 @@ def talkinghead_result_feed(chunk_size: int = 4096, format: str = "png") -> Gene
 def tts_available() -> bool:
     """Return whether the speech synthesizer is available."""
     headers = copy.copy(tts_default_headers)
-    response = requests.get(f"{tts_url}/health", headers=headers)
+    try:
+        response = requests.get(f"{tts_url}/health", headers=headers)
+    except Exception as exc:
+        logger.error(f"TalkingheadExampleGUI.tts_available: {type(exc)}: {exc}")
+        return False
     if response.status_code != 200:
         return False
     return True
