@@ -37,6 +37,8 @@ from .. import animation  # Raven's GUI animation system, nothing to do with the
 from .. import bgtask  # TODO: read the result_feed in a bgtask; see Raven's preprocessor.py for how to use bgtask for things like this
 from .. import utils as raven_utils
 
+from .vendor.anime4k import anime4k
+
 from . import client_util
 from . import config
 from .util import RunningAverage
@@ -818,6 +820,17 @@ class ResultFeedReader:
         self.gen.close()
         self.gen = None
 
+# Implementation of preset A (HQ)
+device = "cuda:0"  # TODO
+upscaler_pipeline = anime4k.Anime4KPipeline(
+    anime4k.ClampHighlight(),
+    anime4k.create_model("Upscale_Denoise_VL"),
+    anime4k.AutoDownscalePre(4),
+    anime4k.create_model("Upscale_M"),
+    screen_width=1024, screen_height=1024,
+    final_stage_upscale_mode="bilinear"
+).to(device).half()
+
 # We must continuously retrieve new frames as they become ready, so this runs in the background.
 def update_live_texture(task_env) -> None:
     assert task_env is not None
@@ -840,6 +853,19 @@ def update_live_texture(task_env) -> None:
             continue
 
         image_file = io.BytesIO(image_data)
+
+        # # EXPERIMENT: upscale 2x
+        # #  - Would this be faster to do this on the server side? More data to send, but the image is still on the GPU.
+        # original_pil_image = PIL.Image.open(image_file)  # input, 512x512
+        # image_tensor = anime4k.to_tensor(original_pil_image.convert("RGB")).unsqueeze(0).to(device).half()
+        # upscaled_image_tensor = upscaler_pipeline(image_tensor)
+        # upscaled_pil_image = anime4k.to_pil(upscaled_image_tensor[0])
+        # arr = np.asarray(upscaled_pil_image.convert("RGBA"))
+        # arr = np.array(arr, dtype=np.float32) / 255
+        # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
+        # dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
+
+        # at original resolution
         pil_image = PIL.Image.open(image_file)
         arr = np.asarray(pil_image.convert("RGBA"))
         arr = np.array(arr, dtype=np.float32) / 255
