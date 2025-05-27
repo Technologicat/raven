@@ -43,20 +43,26 @@ def modal_dialog_hotkeys_callback(sender, app_data):
     if not dpg.is_item_visible("modal_dialog_window"):
         return
     key = app_data
-    if key == dpg.mvKey_Escape and current_on_close is not None:
-        current_on_close(sender, app_data, user_data=current_cancel_button)
+    if current_on_close is not None:
+        if key == dpg.mvKey_Return:
+            current_on_close(sender, app_data, user_data=current_ok_button)
+        elif key == dpg.mvKey_Escape:
+            current_on_close(sender, app_data, user_data=current_cancel_button)
 
 current_on_close = None
+current_ok_button = None
 current_cancel_button = None
 def modal_dialog(window_title: str,
                  message: str,
                  buttons: List[str],
+                 ok_button: str,
                  cancel_button: str,
                  callback: Optional[Callable] = None,
                  centering_reference_window: Union[str, int] = None) -> None:
     """A simple modal dialog.
 
     `buttons`: Texts on buttons. These play a double role as return values.
+    `ok_button`: When Enter is pressed, this value is returned.
     `cancel_button`: When Esc is pressed, or the window is closed by clicking on the "X", this value is returned.
     `callback`: CPS due to how DPG works. `modal_dialog` itself returns immediately; put the stuff you want to run
                 (if any) after the modal closes into your `callback`.
@@ -77,8 +83,10 @@ def modal_dialog(window_title: str,
         if callback:
             callback(user_data)  # send the label of the clicked button
     global current_on_close
+    global current_ok_button
     global current_cancel_button
     current_on_close = modal_dialog_callback
+    current_ok_button = ok_button
     current_cancel_button = cancel_button
 
     dpg.configure_item("modal_dialog_window", label=window_title, on_close=modal_dialog_callback, user_data=cancel_button)

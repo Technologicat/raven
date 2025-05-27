@@ -788,6 +788,7 @@ class PoseEditorGUI:
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
+                                     ok_button="Close",
                                      cancel_button="Close",
                                      centering_reference_window=self.window)
         self.update_output()
@@ -818,6 +819,7 @@ class PoseEditorGUI:
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load JSON '{json_file_name}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
+                                     ok_button="Close",
                                      cancel_button="Close",
                                      centering_reference_window=self.window)
         else:
@@ -924,6 +926,7 @@ class PoseEditorGUI:
                 client_util.modal_dialog(window_title="Error",
                                          message=f"Could not render, reason {type(exc)}: {exc}",
                                          buttons=["Close"],
+                                         ok_button="Close",
                                          cancel_button="Close",
                                          centering_reference_window=self.window)
                 return
@@ -1103,7 +1106,8 @@ def pose_editor_hotkeys_callback(sender, app_data):
                 new_index = None
             if new_index is not None:
                 dpg.set_value(choice_widget, choices[new_index])
-                callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
+                if callback is not None:
+                    callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
         focused_item = dpg.get_focused_item()
         if focused_item in choice_map.keys():
             browse(focused_item, choice_map[focused_item])

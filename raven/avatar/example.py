@@ -547,6 +547,7 @@ class TalkingheadExampleGUI:
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
+                                     ok_button="Close",
                                      cancel_button="Close",
                                      centering_reference_window=self.window)
 
@@ -558,6 +559,7 @@ class TalkingheadExampleGUI:
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load emotion templates JSON '{filename}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
+                                     ok_button="Close",
                                      cancel_button="Close",
                                      centering_reference_window=self.window)
 
@@ -569,6 +571,7 @@ class TalkingheadExampleGUI:
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load animator settings JSON '{filename}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
+                                     ok_button="Close",
                                      cancel_button="Close",
                                      centering_reference_window=self.window)
 
