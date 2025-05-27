@@ -610,6 +610,7 @@ class TalkingheadExampleGUI:
                     dpg.add_image("live_texture", pos=(0, viewport_height - self.image_size - 8), tag="live_image")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
                     dpg.add_text("FPS counter will appear here", color=(0, 255, 0), pos=(8, 0), tag="fps_text")
                     self.fps_statistics = RunningAverage()
+                    self.frame_size_statistics = RunningAverage()
 
                 def position_please_standby_text():
                     # x0, y0 = raven_utils.get_widget_relative_pos("live_image", reference="main_window")
@@ -829,6 +830,17 @@ class ResultFeedReader:
         self.gen.close()
         self.gen = None
 
+def human_size(size_bytes):
+    """Convert bytes to human-readable format.
+
+    https://medium.com/@ryan_forrester_/getting-file-sizes-in-python-a-complete-guide-01293aaa68ef
+    """
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.2f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.2f} EB"
+
 # We must continuously retrieve new frames as they become ready, so this runs in the background.
 def update_live_texture(task_env) -> None:
     assert task_env is not None
@@ -841,12 +853,13 @@ def update_live_texture(task_env) -> None:
             if gui_instance:
                 if not gui_instance.animator_running and reader.is_running():
                     reader.stop()
-                    dpg.set_value("fps_text", "RX (avg) -- FPS")
+                    dpg.set_value("fps_text", "RX (avg) -- FPS; avg -- B per frame")
                 elif gui_instance.animator_running and not reader.is_running():
                     reader.start()
 
             if reader.is_running():
                 image_data = reader.get_frame()
+                gui_instance.frame_size_statistics.add_datapoint(len(image_data))
             if gui_instance is None or not reader.is_running():
                 time.sleep(0.01)
                 continue
@@ -865,7 +878,7 @@ def update_live_texture(task_env) -> None:
             elapsed_time = time.time_ns() - frame_start_time
             fps = 1.0 / (elapsed_time / 10**9)
             gui_instance.fps_statistics.add_datapoint(fps)
-            dpg.set_value("fps_text", f"RX (avg) {gui_instance.fps_statistics.average():0.2f} FPS")
+            dpg.set_value("fps_text", f"RX (avg) {gui_instance.fps_statistics.average():0.2f} FPS; avg {human_size(int(gui_instance.frame_size_statistics.average()))} per frame")
     except Exception as exc:
         logger.error(f"TalkingheadExampleGUI.update_live_texture: {type(exc)}: {exc}")
 
@@ -875,7 +888,7 @@ def update_live_texture(task_env) -> None:
             dpg.set_value("please_standby_text", "[Connection lost]")
             dpg.show_item("please_standby_text")
             dpg.hide_item("live_image")
-            dpg.set_value("fps_text", "RX (avg) -- FPS")
+            dpg.set_value("fps_text", "RX (avg) -- FPS; avg -- B per frame")
 
 
 # --------------------------------------------------------------------------------
