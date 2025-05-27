@@ -251,11 +251,11 @@ def talkinghead_result_feed(chunk_size: int = 4096) -> Generator[bytes, None, No
     """
     headers = copy.copy(default_headers)
     headers["Accept"] = "multipart/x-mixed-replace"
-    response = requests.get(f"{avatar_url}/api/talkinghead/result_feed", headers=headers, stream=True)
-    yell_on_error(response)
+    stream_response = requests.get(f"{avatar_url}/api/talkinghead/result_feed", headers=headers, stream=True)
+    yell_on_error(stream_response)
 
-    stream_iterator = response.iter_content(chunk_size=chunk_size)
-    boundary = re.search(r"boundary=(\S+)", response.headers["Content-Type"]).group(1)
+    stream_iterator = stream_response.iter_content(chunk_size=chunk_size)
+    boundary = re.search(r"boundary=(\S+)", stream_response.headers["Content-Type"]).group(1)
     boundary_prefix = f"--{boundary}"  # e.g., '--frame'
     gen = multipart_x_mixed_replace_payload_extractor(source=stream_iterator,
                                                       boundary_prefix=boundary_prefix,
