@@ -44,7 +44,8 @@ dependencies = [
     "flask-compress>=1.17",  # AI avatar server
     "torchvision>=0.22.0",  # AI avatar server
     "huggingface-hub>=0.31.4",  # AI avatar server (for THA3 models autodownloader)
-    "waitress>=3.0.2"  # AI avatar server
+    "waitress>=3.0.2",  # AI avatar server
+    "pygame>=2.6.1"  # AI avatar client, for TTS support
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]
