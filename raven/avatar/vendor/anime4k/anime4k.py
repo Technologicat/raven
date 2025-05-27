@@ -6,6 +6,10 @@
 #
 # Used under the MIT License.
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 import os
 import re
 import math
@@ -96,9 +100,9 @@ class anime4k(nn.Module):
         convert(self.conv_tail, iter, True)
         check = next(iter, None)
         if check is None:
-            print("pass")
+            logger.debug("pass")
         else:
-            print("---failed---\n", check)
+            logger.error("---failed---\n", check)
 
 
 def convert(c, iter, doswap=False):
@@ -255,7 +259,7 @@ def main():
         AutoDownscalePre(4),
         create_model("Upscale_M"),
         # screen_width=1920, screen_height=1080,
-        screen_width=512, screen_height=512,
+        screen_width=1024, screen_height=1024,
         final_stage_upscale_mode="bilinear"
     )
 
@@ -314,7 +318,7 @@ def main():
     pipeline(rand_image)
     for _ in range(20):
         _, t = timed(lambda: pipeline(rand_image))
-        print(t * 1000, 'ms')
+        logger.info(f"{t * 1000} ms")
 
     # #@title Export to onnx (Require OPTIMIZATION=None)
     # # pip install --upgrade onnx onnxscript einops
@@ -348,19 +352,20 @@ def main():
     #         None,
     #         {"input": inp},
     #     )
-    #     print((perf_counter() - start) * 1000, 'ms')
+    #     logger.info(f"{(perf_counter() - start) * 1000} ms")
 
     # PyTorch Inference
 
     # wget https://cdni.fancaps.net/file/fancaps-animeimages/6486130.jpg -nc
-    image_filename = os.path.join(os.path.dirname(__file__), "images", "6486130.png")
+    image_filename = os.path.join(os.path.dirname(__file__), "images", "example.png")
     image = to_tensor(PIL.Image.open(image_filename).convert("RGB")).unsqueeze(0).to(device)
     if USE_FP16:
         image = image.half()
     for _ in range(5):
         out, t = timed(lambda: pipeline(image))
-    print(t * 1000, 'ms')
+    logger.info(f"{t * 1000} ms")
     image = to_pil(out[0])
+    image.save("rescaled.png")
 
 if __name__ == '__main__':
     main()
