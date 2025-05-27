@@ -1105,15 +1105,6 @@ class Animator:
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
             output_image = self.poser.pose(self.source_image, pose)[0].half()
 
-            # A simple crop filter, for removing empty space around character.
-            # Apply this first so that the postprocessor has fewer pixels to process.
-            c, h, w = output_image.shape
-            x1 = int((self._settings["crop_left"] / 2.0) * w)
-            x2 = int((1 - (self._settings["crop_right"] / 2.0)) * w)
-            y1 = int((self._settings["crop_top"] / 2.0) * h)
-            y2 = int((1 - (self._settings["crop_bottom"] / 2.0)) * h)
-            output_image = output_image[:, y1:y2, x1:x2]
-
             # [-1, 1] -> [0, 1]
             # output_image = (output_image + 1.0) / 2.0
             output_image.add_(1.0)
@@ -1121,6 +1112,15 @@ class Animator:
 
             if self.upscaler is not None:
                 output_image = self.upscaler.upscale(output_image)
+
+            # A simple crop filter, for removing empty space around character.
+            # Apply this now so that if we're cropping, the postprocessor has fewer pixels to process.
+            c, h, w = output_image.shape
+            x1 = int((self._settings["crop_left"] / 2.0) * w)
+            x2 = int((1 - (self._settings["crop_right"] / 2.0)) * w)
+            y1 = int((self._settings["crop_top"] / 2.0) * h)
+            y2 = int((1 - (self._settings["crop_bottom"] / 2.0)) * h)
+            output_image = output_image[:, y1:y2, x1:x2]
 
             self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
             output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
