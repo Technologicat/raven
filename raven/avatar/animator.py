@@ -1209,6 +1209,8 @@ class Encoder:
                         buffer = io.BytesIO()
                         if output_format == "PNG":
                             kwargs = {"compress_level": 1}
+                        elif output_format == "TGA":
+                            kwargs = {"compression": "tga_rle"}
                         else:
                             kwargs = {}
                         pil_image.save(buffer,
