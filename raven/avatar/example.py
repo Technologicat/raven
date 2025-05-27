@@ -344,6 +344,7 @@ def tts_speak(voice: str,
         if pygame.mixer.music.get_busy():
             pygame.mixer.music.stop()
         pygame.mixer.music.load(audio_buffer)
+        # pygame.mixer.music.load(stream_response.raw)  # can't do this at least with mp3 since the raw stream doesn't support seeking.
 
         if start_callback is not None:
             start_callback()
