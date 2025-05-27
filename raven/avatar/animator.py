@@ -1119,11 +1119,11 @@ class Animator:
             output_image.add_(1.0)
             output_image.mul_(0.5)
 
-            self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
-            output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
-
             if self.upscaler is not None:
                 output_image = self.upscaler.upscale(output_image)
+
+            self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
+            output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
 
             # convert [c, h, w] float -> [h, w, c] uint8
             c, h, w = output_image.shape
