@@ -671,8 +671,8 @@ class ResultFeedReader:
     def is_running(self):
         return self.gen is not None
 
-    def get_frame(self):  # next-gen lol
-        return next(self.gen)
+    def get_frame(self):
+        return next(self.gen)  # next-gen lol
 
     def stop(self):
         self.gen.close()
@@ -707,7 +707,7 @@ def update_live_texture(task_env):
         dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
 
         # Update FPS counter.
-        # NOTE: Since we wait on `gen`, the refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS.
+        # NOTE: Since we wait on the server to send a frame, the refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS.
         #       If the machine could render faster, this just means less than 100% CPU/GPU usage.
         elapsed_time = time.time_ns() - frame_start_time
         fps = 1.0 / (elapsed_time / 10**9)
