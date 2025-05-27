@@ -248,6 +248,9 @@ def talkinghead_result_feed(chunk_size: int = 4096) -> Generator[bytes, None, No
     Due to the server's framerate control, the result feed attempts to feed data to the client at TARGET_FPS (default 25).
     New frames are not generated until the previous one has been consumed. Thus, while the animator is in the running state,
     it is recommended to continuously read the stream in a background thread.
+
+    To close the connection (so that the server stops sending), call the `.close()` method of the generator.
+    The connection also auto-closes when the generator is garbage-collected.
     """
     headers = copy.copy(default_headers)
     headers["Accept"] = "multipart/x-mixed-replace"
