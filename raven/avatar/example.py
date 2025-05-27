@@ -19,12 +19,14 @@ import pathlib
 import re
 import requests
 import time
-from typing import Dict, Generator, Iterator, List, Union
+from typing import Callable, Dict, Generator, Iterator, List, Optional, Union
 
 import PIL.Image
 
 from unpythonic.env import env as envcls
 from unpythonic.net.util import ReceiveBuffer
+
+import pygame  # for audio (text to speech) support
 
 import numpy as np
 
@@ -53,6 +55,15 @@ if os.path.exists(api_key_file):  # TODO: test this (I have no idea what I'm doi
     with open(api_key_file, "r", encoding="utf-8") as f:
         api_key = f.read()
     default_headers["Authorization"] = api_key.strip()
+
+# AI speech synthesizer - OpenAI compatible
+# https://github.com/remsky/Kokoro-FastAPI
+# TODO: add API key support for this too (Authorization: Bearer xxxx)
+tts_url = "http://localhost:8880"
+tts_default_headers = {
+}
+
+pygame.mixer.init()
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -271,6 +282,80 @@ def talkinghead_result_feed(chunk_size: int = 4096) -> Generator[bytes, None, No
 # sys.exit(0)
 
 # --------------------------------------------------------------------------------
+# Python client for AI speech synthesizer
+
+def tts_available() -> bool:
+    """Return whether the speech synthesizer is available."""
+    headers = copy.copy(tts_default_headers)
+    response = requests.get(f"{tts_url}/health", headers=headers)
+    if response.status_code != 200:
+        return False
+    return True
+
+def tts_voices() -> None:
+    """Return a list of voice names supported by the TTS endpoint."""
+    headers = copy.copy(tts_default_headers)
+    response = requests.get(f"{tts_url}/v1/audio/voices", headers=headers)
+    yell_on_error(response)
+    output_data = response.json()
+    return output_data["voices"]
+
+def tts_speak(voice: str,
+              text: str,
+              start_callback: Optional[Callable],
+              stop_callback: Optional[Callable]) -> None:
+    """Using the speech synthesizer, speak `text` using `voice`.
+
+    If `start_callback` is provided, call it when the TTS starts speaking.
+    If `stop_callback` is provided, call it when the TTS has stopped speaking.
+    """
+    headers = copy.copy(tts_default_headers)
+    headers["Content-Type"] = "application/json"
+    data = {"model": "kokoro",
+            "voice": voice,
+            "input": text,
+            "response_format": "mp3",  # flac would be nice (faster to encode), but seems currently broken in kokoro (the audio may repeat twice)
+            "speed": 1,
+            "stream": True,
+            "return_download_link": False}
+    stream_response = requests.post(f"{tts_url}/v1/audio/speech", headers=headers, json=data)
+    yell_on_error(stream_response)
+
+    # We run this in the background to
+    def speak(task_env) -> None:
+        it = stream_response.iter_content(chunk_size=4096)
+        audio_buffer = io.BytesIO()
+        try:
+            while True:
+                if task_env.cancelled:
+                    return
+                chunk = next(it)
+                audio_buffer.write(chunk)
+        except StopIteration:
+            pass
+
+        # # DEBUG - dump response to audio file
+        # audio_buffer.seek(0)
+        # with open("temp.mp3", "wb") as audio_file:
+        #     audio_file.write(audio_buffer.getvalue())
+
+        # play audio
+        audio_buffer.seek(0)
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.stop()
+        pygame.mixer.music.load(audio_buffer)
+
+        if start_callback is not None:
+            start_callback()
+        pygame.mixer.music.play()
+
+        if stop_callback is not None:
+            while pygame.mixer.music.get_busy():
+                time.sleep(0.01)
+            stop_callback()
+    task_manager.submit(speak, envcls())
+
+# --------------------------------------------------------------------------------
 # DPG init
 
 dpg.create_context()
@@ -295,6 +380,25 @@ with dpg.theme() as global_theme:
         dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8, category=dpg.mvThemeCat_Core)
         dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
 dpg.bind_theme(global_theme)  # set this theme as the default
+
+# FIX disabled controls not showing as disabled.
+# DPG does not provide a default disabled-item theme, so we provide our own.
+# Everything else is automatically inherited from DPG's global theme.
+#     https://github.com/hoffstadt/DearPyGui/issues/2068
+# TODO: Figure out how to get colors from a theme. Might not always be `(45, 45, 48)`.
+#   - Maybe see how DPG's built-in theme editor does it - unless it's implemented at the C++ level.
+#   - See also the theme color editor in https://github.com/hoffstadt/DearPyGui/wiki/Tools-and-Widgets
+disabled_color = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
+disabled_button_color = (45, 45, 48)
+disabled_button_hover_color = (45, 45, 48)
+disabled_button_active_color = (45, 45, 48)
+with dpg.theme(tag="disablable_button_theme"):
+    # We customize just this. Everything else is inherited from the global theme.
+    with dpg.theme_component(dpg.mvButton, enabled_state=False):
+        dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
+        dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
+        dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
+        dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
 
 viewport_width = 1600
 viewport_height = 700
@@ -531,6 +635,22 @@ class TalkingheadExampleGUI:
                     dpg.add_text("Toggles")
                     dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
                     dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
+                    dpg.add_spacer(height=8)
+
+                    # AI speech synthesizer
+                    tts_alive = tts_available()
+                    if tts_alive:
+                        heading_label = f"Voice [Ctrl+V] [{tts_url}]"
+                        self.voice_names = tts_voices()
+                    else:
+                        heading_label = "Voice [Ctrl+V] [not connected]"
+                        self.voice_names = ["[TTS server not available]"]
+                    dpg.add_text(heading_label)
+                    self.voice_choice = dpg.add_combo(items=self.voice_names,
+                                                      default_value=self.voice_names[0],
+                                                      width=self.button_width)
+                    dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_speak, enabled=tts_alive, tag="speak_button")
+                    dpg.bind_item_theme("speak_button", "disablable_button_theme")
 
     def on_send_emotion(self, sender, app_data):  # GUI event handler
         # On clicking a choice in the combobox, `app_data` is that choice, but on arrow key, `app_data` is the keycode.
@@ -600,6 +720,13 @@ class TalkingheadExampleGUI:
             dpg.set_item_label("pause_resume_button", "Pause animator [Ctrl+P]")
         self.animator_running = not self.animator_running
 
+    def on_speak(self, sender, app_data) -> None:
+        current_voice = dpg.get_value(self.voice_choice)
+        tts_speak(voice=current_voice,
+                  text="Testing the AI speech synthesizer.",  # TODO
+                  start_callback=talkinghead_start_talking,
+                  stop_callback=talkinghead_stop_talking)
+
 # Hotkey support
 choice_map = None
 def talkinghead_example_hotkeys_callback(sender, app_data):
@@ -630,6 +757,10 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
             gui_instance.toggle_animator_paused()
         elif key == dpg.mvKey_E:
             dpg.focus_item(gui_instance.emotion_choice)
+        elif key == dpg.mvKey_V:
+            dpg.focus_item(gui_instance.voice_choice)
+        elif key == dpg.mvKey_S:
+            gui_instance.on_speak(sender, app_data)
 
     # Bare key
     #
@@ -638,7 +769,8 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
         # {widget_tag_or_id: list_of_choices}
         global choice_map
         if choice_map is None:  # build on first use
-            choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion)}
+            choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
+                          gui_instance.voice_choice: (gui_instance.voice_names, None)}
         def browse(choice_widget, data):
             choices, callback = data
             index = choices.index(dpg.get_value(choice_widget))
@@ -654,7 +786,8 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
                 new_index = None
             if new_index is not None:
                 dpg.set_value(choice_widget, choices[new_index])
-                callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
+                if callback is not None:
+                    callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
         focused_item = dpg.get_focused_item()
         if focused_item in choice_map.keys():
             browse(focused_item, choice_map[focused_item])
@@ -682,7 +815,7 @@ class ResultFeedReader:
         self.gen = None
 
 # We must continuously retrieve new frames as they become ready, so this runs in the background.
-def update_live_texture(task_env):
+def update_live_texture(task_env) -> None:
     assert task_env is not None
     reader = ResultFeedReader()
     reader.start()
@@ -724,14 +857,14 @@ if __name__ == "__main__":
     gui_instance = TalkingheadExampleGUI()
 
     bg = concurrent.futures.ThreadPoolExecutor()
-    task_manager = bgtask.TaskManager(name="avatar_updater",
+    task_manager = bgtask.TaskManager(name="talkinghead_example_client",
                                       mode="concurrent",
                                       executor=bg)
     talkinghead_load("example.png")  # this will also start the animator if it was paused
     talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
     talkinghead_load_animator_settings({})  # send empty dict -> reset to server defaults
     talkinghead_set_emotion("curiosity")
-    def shutdown():
+    def shutdown() -> None:
         task_manager.clear(wait=True)
         animation.animator.clear()
         global gui_instance
@@ -746,8 +879,22 @@ if __name__ == "__main__":
     _default_path = os.getcwd()
     initialize_filedialogs(_default_path)
 
+    # last_tts_check_time = 0
+    # tts_check_interval = 5.0  # seconds
     def update_animations():
         animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
+
+        # # Enable/disable speech synthesizer controls depending on whether the TTS server is available
+        # global last_tts_check_time
+        # t0 = time.monotonic()
+        # if t0 - last_tts_check_time >= tts_check_interval:
+        #     last_tts_check_time = t0
+        #     if tts_available():
+        #         dpg.enable_item(gui_instance.voice_choice)
+        #         dpg.enable_item("speak_button")
+        #     else:
+        #         dpg.disable_item(gui_instance.voice_choice)
+        #         dpg.disable_item("speak_button")
 
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
     while dpg.is_dearpygui_running():
