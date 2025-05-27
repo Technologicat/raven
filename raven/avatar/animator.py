@@ -1281,7 +1281,10 @@ class Upscaler:
         self.upscaled_width = upscaled_width
         self.upscaled_height = upscaled_height
 
-        # Implementation of preset A (HQ) - for fp16, 512x512 -> 768x768, about 20 ms on the same machine as the encoder measurements
+        self.render_duration_statistics = RunningAverage()
+        self.last_report_time = None
+
+        # Implementation of preset A (HQ) - for fp16, 512x512 -> 768x768, about 2 ms on the same machine as the encoder measurements
         self.pipeline = anime4k.Anime4KPipeline(
             anime4k.ClampHighlight(),
             anime4k.create_model("Upscale_Denoise_VL"),
@@ -1299,6 +1302,8 @@ class Upscaler:
 
         `image_tensor`: [c, h, w], where c = 3 (RGB) or c = 4 (RGBA).
         """
+        time_render_start = time.time_ns()
+
         c, h, w = image_tensor.shape
         if c == 4:
             rgb_image_tensor = image_tensor[:3, :, :]
@@ -1312,16 +1317,30 @@ class Upscaler:
         upscaled_rgb_tensor = self.pipeline(data)[0]
 
         if c == 3:
-            return upscaled_rgb_tensor
+            result = upscaled_rgb_tensor
+        else:  # c == 4
+            # anime4k supports RGB only; upscale alpha channel using a rough method.
+            upscaled_alpha = torch.nn.functional.interpolate(image_tensor[3, :, :].unsqueeze(0).unsqueeze(0),  # [w, h] -> [batch, c, w, h]
+                                                             (self.upscaled_height, self.upscaled_width),
+                                                             mode="bilinear")
+            upscaled_rgba_tensor = torch.cat([upscaled_rgb_tensor, upscaled_alpha[0]], dim=0)  # RGB [3, w, h], alpha [1, w, h]
 
-        # c == 4
-        # anime4k supports RGB only; upscale alpha channel using a rough method.
-        upscaled_alpha = torch.nn.functional.interpolate(image_tensor[3, :, :].unsqueeze(0).unsqueeze(0),  # [w, h] -> [batch, c, w, h]
-                                                         (self.upscaled_height, self.upscaled_width),
-                                                         mode="bilinear")
-        upscaled_rgba_tensor = torch.cat([upscaled_rgb_tensor, upscaled_alpha[0]], dim=0)  # RGB [3, w, h], alpha [1, w, h]
+            result = upscaled_rgba_tensor
 
-        return upscaled_rgba_tensor
+        # Measure the performance of the postprocessor.
+        time_now = time.time_ns()
+        render_elapsed_sec = (time_now - time_render_start) / 10**9
+        self.render_duration_statistics.add_datapoint(render_elapsed_sec)
+
+        # Log the FPS counter in 5-second intervals.
+        if (self.last_report_time is None or time_now - self.last_report_time > 5e9):
+            avg_render_sec = self.render_duration_statistics.average()
+            msec = round(1000 * avg_render_sec, 1)
+            fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
+            logger.info(f"upscale: {msec:.1f}ms [{fps} FPS available]")
+            self.last_report_time = time_now
+
+        return result
 
         # original_pil_image = PIL.Image.open(image_file)  # input, 512x512
         # image_tensor = anime4k.to_tensor(original_pil_image.convert("RGB")).unsqueeze(0).to(device).half()
