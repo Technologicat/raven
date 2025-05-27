@@ -1139,9 +1139,19 @@ class Animator:
         time_now = time.time_ns()
         if self.source_image is not None:
             render_elapsed_sec = (time_now - time_render_start) / 10**9
-            # remove the average per-frame postprocessing time, to measure render time only
-            render_elapsed_sec -= self.postprocessor.render_duration_statistics.average()
+            # remove the average per-frame upscale and postprocessing time, to measure render time only
+            avg_postproc_sec = self.postprocessor.render_duration_statistics.average()
+            render_elapsed_sec -= avg_postproc_sec
+            if self.upscaler is not None:
+                avg_upscale_sec = self.upscaler.render_duration_statistics.average()
+                render_elapsed_sec -= avg_upscale_sec
+            else:
+                avg_upscale_sec = 0.0
             self.render_duration_statistics.add_datapoint(render_elapsed_sec)
+        else:
+            render_elapsed_sec = 0.0
+            avg_postproc_sec = 0.0
+            avg_upscale_sec = 0.0
 
         # Set the new rendered frame as the output image, and mark the frame as ready for consumption.
         with _animator_output_lock:
@@ -1153,7 +1163,13 @@ class Animator:
             avg_render_sec = self.render_duration_statistics.average()
             msec = round(1000 * avg_render_sec, 1)
             fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
-            logger.info(f"render: {msec:.1f}ms [{fps} FPS available]")  # NOTE: "render" includes upscaling time when upscaler is in use
+            logger.info(f"render: {msec:.1f}ms [{fps} FPS available]")
+
+            avg_total_sec = avg_render_sec + avg_upscale_sec + avg_postproc_sec
+            msec = round(1000 * avg_total_sec, 1)
+            fps = round(1 / avg_total_sec, 1) if avg_total_sec > 0.0 else 0.0
+            logger.info(f"animator total (render + upscale + postproc): {msec:.1f}ms [{fps} FPS available]")
+
             self.last_report_time = time_now
 
 
