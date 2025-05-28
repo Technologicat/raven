@@ -29,6 +29,8 @@ from typing import Any, Dict, List, NoReturn, Optional, Union
 
 from colorama import Fore, Style
 
+from unpythonic import timer
+
 import qoi
 import PIL
 
@@ -354,16 +356,24 @@ def is_available():
 class Animator:
     """uWu Waifu"""
 
-    def __init__(self, poser: Poser, device: torch.device):
+    def __init__(self, poser: Poser, device: torch.device, metrics_enabled: bool = False):
+        """`metrics_enabled`: Whether to print detailed performance log messages.
+
+                              This is for troubleshooting performance issues, by showing how fast each part of the render process completes.
+                              On CUDA getting this information requires synchronization, so with metrics enabled, the renderer will run slower overall.
+                              The data is typically noisy, but should be good enough to get some idea of the performance.
+
+                              Note the average render FPS is always recorded for framerate compensation purposes, and does not need metrics enabled.
+        """
         self.poser = poser
         self.device = device
 
         self.target_size = poser.get_image_size()
         self.upscaler = None
         self.postprocessor = Postprocessor(device,
-                                           dtype=torch.float16,  # dtype must match `output_image` in `Animator.render_animation_frame`
-                                           performance_log_enabled=False)  # we do centralized logging in `Animator.render_animation_frame`
-        self.render_duration_statistics = RunningAverage()
+                                           dtype=torch.float16)  # dtype must match `output_image` in `Animator.render_animation_frame`
+        self.render_duration_statistics = RunningAverage()  # used for FPS compensation in animation routines
+        self.metrics_enabled = metrics_enabled
         self.animator_thread = None
 
         self.source_image: Optional[torch.tensor] = None
@@ -542,9 +552,9 @@ class Animator:
             logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, setting up upscaler")
             self.target_size = int(settings["upscale"] * self.poser.get_image_size())
             self.upscaler = Upscaler(device=self.device,
+                                     dtype=torch.float16,
                                      upscaled_width=self.target_size,
-                                     upscaled_height=self.target_size,
-                                     performance_log_enabled=False)  # we do centralized logging in `Animator.render_animation_frame`
+                                     upscaled_height=self.target_size)
         else:
             logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, no upscaler needed")
             self.target_size = self.poser.get_image_size()
@@ -1089,6 +1099,13 @@ class Animator:
         if self.source_image is None:
             return
 
+        do_crop = any(self._settings[key] != 0 for key in ("crop_left", "crop_right", "crop_top", "crop_bottom"))
+
+        def maybe_sync_cuda():
+            if self.metrics_enabled:
+                torch.cuda.synchronize()
+
+        maybe_sync_cuda()
         time_render_start = time.time_ns()
 
         if self.current_pose is None:  # initialize character pose at plugin startup
@@ -1109,52 +1126,71 @@ class Animator:
         # Update this last so that animation drivers have access to the old emotion, too.
         self.last_emotion = current_emotion
 
-        do_crop = any(self._settings[key] != 0 for key in ("crop_left", "crop_right", "crop_top", "crop_bottom"))
-
-        pose = torch.tensor(self.current_pose, device=self.device, dtype=self.poser.get_dtype())
-
         with torch.no_grad():
+            # Detailed performance measurement protocol: sync CUDA (i.e. finish pending async CUDA operations), start timer, do desired CUDA operation(s), sync CUDA again, stop timer.
             # - [0]: model's output index for the full result image
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
-            output_image = self.poser.pose(self.source_image, pose)[0].half()
+            with timer() as tim_pose:
+                pose = torch.tensor(self.current_pose, device=self.device, dtype=self.poser.get_dtype())
+                output_image = self.poser.pose(self.source_image, pose)[0].half()
+                maybe_sync_cuda()
 
             # [-1, 1] -> [0, 1]
             # output_image = (output_image + 1.0) / 2.0
-            output_image.add_(1.0)
-            output_image.mul_(0.5)
+            with timer() as tim_normalize:
+                output_image.add_(1.0)
+                output_image.mul_(0.5)
+                maybe_sync_cuda()
 
-            if self.upscaler is not None:
-                output_image = self.upscaler.upscale(output_image)
+            with timer() as tim_upscale:
+                if self.upscaler is not None:
+                    output_image = self.upscaler.upscale(output_image)
+                    maybe_sync_cuda()
 
             # A simple crop filter, for removing empty space around character.
             # Apply this now so that if we're cropping, the postprocessor has fewer pixels to process.
-            if do_crop:
-                c, h, w = output_image.shape
-                x1 = int((self._settings["crop_left"] / 2.0) * w)
-                x2 = int((1 - (self._settings["crop_right"] / 2.0)) * w)
-                y1 = int((self._settings["crop_top"] / 2.0) * h)
-                y2 = int((1 - (self._settings["crop_bottom"] / 2.0)) * h)
-                output_image = output_image[:, y1:y2, x1:x2]
+            with timer() as tim_crop:
+                if do_crop:
+                    c, h, w = output_image.shape
+                    x1 = int((self._settings["crop_left"] / 2.0) * w)
+                    x2 = int((1 - (self._settings["crop_right"] / 2.0)) * w)
+                    y1 = int((self._settings["crop_top"] / 2.0) * h)
+                    y2 = int((1 - (self._settings["crop_bottom"] / 2.0)) * h)
+                    output_image = output_image[:, y1:y2, x1:x2]
+                    maybe_sync_cuda()
 
-            self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
-            output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
+            with timer() as tim_postproc:
+                self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
+                maybe_sync_cuda()
+
+            with timer() as tim_gamma:
+                output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
+                maybe_sync_cuda()
 
             # convert [c, h, w] float -> [h, w, c] uint8
-            c, h, w = output_image.shape
-            output_image = torch.transpose(output_image.reshape(c, h * w), 0, 1).reshape(h, w, c)
-            output_image = (255.0 * output_image).byte()
+            with timer() as tim_dataformat:
+                c, h, w = output_image.shape
+                output_image = torch.transpose(output_image.reshape(c, h * w), 0, 1).reshape(h, w, c)
+                output_image = (255.0 * output_image).byte()
+                maybe_sync_cuda()
 
-            output_image_numpy = output_image.detach().cpu().numpy()
+            with timer() as tim_sendtocpu:
+                output_image_numpy = output_image.detach().cpu().numpy()
+                maybe_sync_cuda()
 
-        # Update FPS counter, measuring animation frame render time only.
+        # Update FPS counter, measuring the complete render process.
         #
-        # This says how fast the renderer *can* run on the current hardware;
-        # note we don't actually render more frames than the client consumes.
+        # This is used for FPS compensation by the animation routines, and works regardless of whether metrics are enabled.
+        # (CUDA will perform all its pending async operations at the latest when we send the final tensor to the CPU.)
+        #
+        # This says how fast the renderer *can* run on the current hardware; note we never render more frames than the client consumes.
         time_now = time.time_ns()
         if self.source_image is not None:
-            # For measurements: measure the complete render process (this is used for FPS compensation by the animation routines)
             render_elapsed_sec = (time_now - time_render_start) / 10**9
             self.render_duration_statistics.add_datapoint(render_elapsed_sec)
+
+        if self.metrics_enabled:
+            logger.info(f"total {1000 * render_elapsed_sec:0.1f} ms; pose {1000 * tim_pose.dt:0.1f} ms, norm {1000 * tim_normalize.dt:0.1f} ms, upscale {1000 * tim_upscale.dt:0.1f} ms, crop {1000 * tim_crop.dt:0.1f} ms, post {1000 * tim_postproc.dt:0.1f} ms, gamma {1000 * tim_gamma.dt:0.1f} ms, chw->hwc {1000 * tim_dataformat.dt:0.1f} ms, to CPU {1000 * tim_sendtocpu.dt:0.1f} ms")
 
         # Set the new rendered frame as the output image, and mark the frame as ready for consumption.
         with _animator_output_lock:
@@ -1163,20 +1199,10 @@ class Animator:
 
         # Log the FPS counter in 5-second intervals.
         if animation_running and (self.last_report_time is None or time_now - self.last_report_time > 5e9):
-            # For itemized performance logging, account for the average per-frame upscale and postprocessing time
-            # (which are part of the render time), to measure pose time only.
             avg_render_sec = self.render_duration_statistics.average()
-            avg_postproc_sec = self.postprocessor.render_duration_statistics.average()
-            avg_upscale_sec = self.upscaler.render_duration_statistics.average() if self.upscaler is not None else 0.0
-            avg_pose_sec = avg_render_sec - avg_upscale_sec - avg_postproc_sec
-            def fps(label, sec):
-                msec = round(1000 * sec, 1)
-                fps = round(1 / sec, 1) if sec > 0.0 else 0.0
-                logger.info(f"{label}: {msec:.1f}ms [{fps} FPS]")
-            fps("render total (pose + upscale + postproc)", avg_render_sec)
-            fps("    pose", avg_pose_sec)
-            fps("    upscale", avg_upscale_sec)
-            fps("    postproc", avg_postproc_sec)
+            msec = round(1000 * avg_render_sec, 1)
+            fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
+            logger.info(f"render {msec:.1f}ms [{fps} FPS available]")
             self.last_report_time = time_now
 
 
@@ -1300,22 +1326,16 @@ class Encoder:
 class Upscaler:
     def __init__(self,
                  device: torch.device,
+                 dtype: torch.dtype,
                  upscaled_width: int,
-                 upscaled_height: int,
-                 use_fp16: bool = True,
-                 performance_log_enabled: bool = True) -> None:
+                 upscaled_height: int) -> None:
         """
         `upscaled_width`, `upscaled_height`: Target (output) image size.
-        `use_fp16`: If so, use FP16 (half precision); else use FP32 (float, single precision).
-                    Both the upscaling filter chain and the output image will have this dtype.
-        `performance_log_enabled`: Whether to log average render FPS. Statistics are gathered regardless; you can get
-                                   the average FPS as `your_postprocessor.render_duration_statistics.average()`.
         """
         self.device = device
-        self.use_fp16 = use_fp16
+        self.dtype = dtype
         self.upscaled_width = upscaled_width
         self.upscaled_height = upscaled_height
-        self._performance_log_enabled = performance_log_enabled
 
         self.render_duration_statistics = RunningAverage()
         self.last_report_time = None
@@ -1328,18 +1348,13 @@ class Upscaler:
             anime4k.create_model("Upscale_S"),  # anime4k.create_model("Upscale_M"),
             screen_width=upscaled_width, screen_height=upscaled_height,
             final_stage_upscale_mode="bilinear"
-        ).to(self.device)
-
-        if self.use_fp16:
-            self.pipeline = self.pipeline.half()
+        ).to(self.device).to(self.dtype)
 
     def upscale(self, image_tensor: torch.Tensor) -> torch.Tensor:
         """Upscale `image_tensor` to size target x target, where `target = self.target_size`.
 
         `image_tensor`: [c, h, w], where c = 3 (RGB) or c = 4 (RGBA).
         """
-        time_render_start = time.time_ns()
-
         c, h, w = image_tensor.shape
         if c == 4:
             rgb_image_tensor = image_tensor[:3, :, :]
@@ -1347,9 +1362,7 @@ class Upscaler:
             rgb_image_tensor = image_tensor
         else:
             raise ValueError(f"Upscaler.upscale: Expected [c, h, w] image tensor with 3 (RGB) or 4 (RGBA) channels, got {c} instead (shape {image_tensor.shape}).")
-        data = rgb_image_tensor.unsqueeze(0).to(self.device)
-        if self.use_fp16:
-            data = data.half()
+        data = rgb_image_tensor.unsqueeze(0).to(self.device).to(self.dtype)
         upscaled_rgb_tensor = self.pipeline(data)[0]
 
         if c == 3:
@@ -1363,14 +1376,6 @@ class Upscaler:
 
             result = upscaled_rgba_tensor
 
-        # Measure the performance of the upscaler.
-        time_now = time.time_ns()
-        render_elapsed_sec = (time_now - time_render_start) / 10**9
-        self.render_duration_statistics.add_datapoint(render_elapsed_sec)
-
-        if self._performance_log_enabled:
-            self.log()
-
         # original_pil_image = PIL.Image.open(image_file)  # input, 512x512
         # image_tensor = anime4k.to_tensor(original_pil_image.convert("RGB")).unsqueeze(0).to(device).half()
         # upscaled_image_tensor = self.pipeline(image_tensor)
@@ -1381,13 +1386,3 @@ class Upscaler:
         # dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
 
         return result
-
-    def log(self) -> None:
-        """Log the average-FPS counter, if at least 5 seconds have elapsed since it was last logged."""
-        time_now = time.time_ns()
-        if (self.last_report_time is None or time_now - self.last_report_time > 5e9):
-            avg_render_sec = self.render_duration_statistics.average()
-            msec = round(1000 * avg_render_sec, 1)
-            fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
-            logger.info(f"upscale: {msec:.1f}ms [{fps} FPS available]")
-            self.last_report_time = time_now
