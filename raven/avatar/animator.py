@@ -357,6 +357,7 @@ class Animator:
         self.poser = poser
         self.device = device
 
+        self.target_size = poser.get_image_size()
         self.upscaler = None
         self.postprocessor = Postprocessor(device,
                                            dtype=torch.float16,  # dtype must match `output_image` in `Animator.render_animation_frame`
