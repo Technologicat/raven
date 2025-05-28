@@ -1332,12 +1332,11 @@ class Upscaler:
         self.render_duration_statistics = RunningAverage()
         self.last_report_time = None
 
-        # Implementation of preset A (HQ) - for fp16, 512x512 -> 768x768, about 2 ms on the same machine as the encoder measurements
         self.pipeline = anime4k.Anime4KPipeline(
             anime4k.ClampHighlight(),
-            anime4k.create_model("Upscale_Denoise_S"),  # anime4k.create_model("Upscale_Denoise_VL"),
+            anime4k.create_model("Upscale_Denoise_S"),  # for slower but higher quality, try `anime4k.create_model("Upscale_Denoise_VL")`
             anime4k.AutoDownscalePre(4),
-            anime4k.create_model("Upscale_S"),  # anime4k.create_model("Upscale_M"),
+            anime4k.create_model("Upscale_S"),  # for slower but higher quality, try `anime4k.create_model("Upscale_M")`
             screen_width=upscaled_width, screen_height=upscaled_height,
             final_stage_upscale_mode="bilinear"
         ).to(self.device).to(self.dtype)
