@@ -867,6 +867,12 @@ def update_live_texture(task_env) -> None:
             image_file = io.BytesIO(image_data)
 
             pil_image = PIL.Image.open(image_file)
+            # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
+            w, h = pil_image.size
+            if w != gui_instance.image_size or h != gui_instance.image_size:
+                logger.warning(f"update_live_texture: Server sent frame of wrong (old?) size {w}x{h}; resizing to {gui_instance.image_size}x{gui_instance.image_size} for display (on CPU, slow!)")
+                pil_image = pil_image.resize((gui_instance.image_size, gui_instance.image_size),
+                                             resample=PIL.Image.LANCZOS)
             arr = np.asarray(pil_image.convert("RGBA"))
             arr = np.array(arr, dtype=np.float32) / 255
             raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
@@ -901,10 +907,10 @@ if __name__ == "__main__":
     task_manager = bgtask.TaskManager(name="talkinghead_example_client",
                                       mode="concurrent",
                                       executor=bg)
-    talkinghead_load("example.png")  # this will also start the animator if it was paused
     talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
     talkinghead_load_animator_settings(gui_instance.custom_animator_settings)
     talkinghead_set_emotion("curiosity")
+    talkinghead_load("example.png")  # this will also start the animator if it was paused
     def shutdown() -> None:
         task_manager.clear(wait=True)
         animation.animator.clear()
