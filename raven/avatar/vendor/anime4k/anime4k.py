@@ -245,14 +245,13 @@ def main():
     #@title Create pipeline and warmup
     USE_FP16 = True  # @param {type:"boolean"}
     OPTIMIZATION = "None"  # @param ["TorchDynamo", "Torch-TensorRT", "OpenVINO", "None"]
-    #@markdown Change arguments passing to Anime4KPipeline to implement another preset.
+
+    #@markdown Change arguments to Anime4KPipeline to implement another preset.
     #@markdown For example, preset A (HQ) is
     #@markdown ```
     #@markdown ~~/shaders/Anime4K_Clamp_Highlights.glsl;~~/shaders/Anime4K_Restore_CNN_VL.glsl;~~/shaders/Anime4K_Upscale_CNN_x2_VL.glsl;~~/shaders/Anime4K_AutoDownscalePre_x2.glsl;~~/shaders/Anime4K_AutoDownscalePre_x4.glsl;~~/shaders/Anime4K_Upscale_CNN_x2_M.glsl
     #@markdown ```
-    #@markdown can be implemented as the predefined pipeline. `screen_width` and `screen_height` are size of output images.
-
-    #Implementation of preset A (HQ)
+    #@markdown `screen_width` and `screen_height` are the size of output images.
     pipeline = Anime4KPipeline(
         ClampHighlight(),
         create_model("Upscale_Denoise_VL"),
