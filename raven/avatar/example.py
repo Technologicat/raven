@@ -870,7 +870,7 @@ def update_live_texture(task_env) -> None:
             # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
             w, h = pil_image.size
             if w != gui_instance.image_size or h != gui_instance.image_size:
-                logger.warning(f"update_live_texture: Server sent frame of wrong (old?) size {w}x{h}; resizing to {gui_instance.image_size}x{gui_instance.image_size} for display (on CPU, slow!)")
+                logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {gui_instance.image_size}x{gui_instance.image_size}")
                 pil_image = pil_image.resize((gui_instance.image_size, gui_instance.image_size),
                                              resample=PIL.Image.LANCZOS)
             arr = np.asarray(pil_image.convert("RGBA"))
