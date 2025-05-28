@@ -353,7 +353,9 @@ class Animator:
         self.device = device
 
         self.upscaler = None
-        self.postprocessor = Postprocessor(device, dtype=torch.float16)  # dtype must match `output_image` in `Animator.render_animation_frame`
+        self.postprocessor = Postprocessor(device,
+                                           dtype=torch.float16,  # dtype must match `output_image` in `Animator.render_animation_frame`
+                                           performance_log_enabled=False)  # we do centralized logging in `Animator.render_animation_frame`
         self.render_duration_statistics = RunningAverage()
         self.animator_thread = None
 
@@ -534,7 +536,8 @@ class Animator:
             self.target_size = int(settings["upscale"] * self.poser.get_image_size())
             self.upscaler = Upscaler(device=self.device,
                                      upscaled_width=self.target_size,
-                                     upscaled_height=self.target_size)
+                                     upscaled_height=self.target_size,
+                                     performance_log_enabled=False)  # we do centralized logging in `Animator.render_animation_frame`
         else:
             self.target_size = self.poser.get_image_size()
             self.upscaler = None
@@ -1161,15 +1164,15 @@ class Animator:
         # Log the FPS counter in 5-second intervals.
         if animation_running and (self.last_report_time is None or time_now - self.last_report_time > 5e9):
             avg_render_sec = self.render_duration_statistics.average()
-            msec = round(1000 * avg_render_sec, 1)
-            fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
-            logger.info(f"render: {msec:.1f}ms [{fps} FPS available]")
-
             avg_total_sec = avg_render_sec + avg_upscale_sec + avg_postproc_sec
-            msec = round(1000 * avg_total_sec, 1)
-            fps = round(1 / avg_total_sec, 1) if avg_total_sec > 0.0 else 0.0
-            logger.info(f"animator total (render + upscale + postproc): {msec:.1f}ms [{fps} FPS available]")
-
+            def fps(label, sec):
+                msec = round(1000 * sec, 1)
+                fps = round(1 / sec, 1) if sec > 0.0 else 0.0
+                logger.info(f"{label}: {msec:.1f}ms [{fps} FPS]")
+            fps("animator total (render + upscale + postproc)", avg_total_sec)
+            fps("    render", avg_render_sec)
+            fps("    upscale", avg_upscale_sec)
+            fps("    postproc", avg_postproc_sec)
             self.last_report_time = time_now
 
 
@@ -1291,11 +1294,20 @@ class Upscaler:
                  device: torch.device,
                  upscaled_width: int,
                  upscaled_height: int,
-                 use_fp16: bool = True) -> None:
+                 use_fp16: bool = True,
+                 performance_log_enabled: bool = True) -> None:
+        """
+        `upscaled_width`, `upscaled_height`: Target (output) image size.
+        `use_fp16`: If so, use FP16 (half precision); else use FP32 (float, single precision).
+                    Both the upscaling filter chain and the output image will have this dtype.
+        `performance_log_enabled`: Whether to log average render FPS. Statistics are gathered regardless; you can get
+                                   the average FPS as `your_postprocessor.render_duration_statistics.average()`.
+        """
         self.device = device
         self.use_fp16 = use_fp16
         self.upscaled_width = upscaled_width
         self.upscaled_height = upscaled_height
+        self._performance_log_enabled = performance_log_enabled
 
         self.render_duration_statistics = RunningAverage()
         self.last_report_time = None
@@ -1348,15 +1360,8 @@ class Upscaler:
         render_elapsed_sec = (time_now - time_render_start) / 10**9
         self.render_duration_statistics.add_datapoint(render_elapsed_sec)
 
-        # Log the FPS counter in 5-second intervals.
-        if (self.last_report_time is None or time_now - self.last_report_time > 5e9):
-            avg_render_sec = self.render_duration_statistics.average()
-            msec = round(1000 * avg_render_sec, 1)
-            fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
-            logger.info(f"upscale: {msec:.1f}ms [{fps} FPS available]")
-            self.last_report_time = time_now
-
-        return result
+        if self._performance_log_enabled:
+            self.log()
 
         # original_pil_image = PIL.Image.open(image_file)  # input, 512x512
         # image_tensor = anime4k.to_tensor(original_pil_image.convert("RGB")).unsqueeze(0).to(device).half()
@@ -1366,3 +1371,15 @@ class Upscaler:
         # arr = np.array(arr, dtype=np.float32) / 255
         # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
         # dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
+
+        return result
+
+    def log(self) -> None:
+        """Log the average-FPS counter, if at least 5 seconds have elapsed since it was last logged."""
+        time_now = time.time_ns()
+        if (self.last_report_time is None or time_now - self.last_report_time > 5e9):
+            avg_render_sec = self.render_duration_statistics.average()
+            msec = round(1000 * avg_render_sec, 1)
+            fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
+            logger.info(f"upscale: {msec:.1f}ms [{fps} FPS available]")
+            self.last_report_time = time_now

@@ -58,13 +58,20 @@ class Postprocessor:
 
                  my_postprocessor.chain = my_new_chain
 
+    `performance_log_enabled`: Whether to log average render FPS. Statistics are gathered regardless; you can get
+                               the average FPS as `your_postprocessor.render_duration_statistics.average()`.
+
     In filter descriptions:
         [static] := depends only on input image, no explicit time dependence.
         [dynamic] := beside input image, also depends on time. In other words,
                      produces animation even for a stationary input image.
     """
 
-    def __init__(self, device: torch.device, dtype: torch.dtype, chain: List[Tuple[str, Dict[str, MaybeContained[Atom]]]] = None):
+    def __init__(self,
+                 device: torch.device,
+                 dtype: torch.dtype,
+                 chain: List[Tuple[str, Dict[str, MaybeContained[Atom]]]] = None,
+                 performance_log_enabled: bool = True):
         # We intentionally keep very little state in this class, for a more FP/REST approach with less bugs.
         # Filters for static effects are stateless.
         #
@@ -75,6 +82,7 @@ class Postprocessor:
         self.device = device
         self.dtype = dtype
         self.chain = chain
+        self._performance_log_enabled = performance_log_enabled
 
         # Meshgrid cache for geometric position of each pixel
         self._yy = None
@@ -121,10 +129,10 @@ class Postprocessor:
             #
             # We don't strictly keep state here - we just cache. :P
 
-            # Seems the deformation geometry must be float32 no matter the image data type.
-            self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
-            self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
-            self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
+            with torch.no_grad():
+                self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
+                self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
+                self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
             self._prev_h = h
             self._prev_w = w
             logger.info("render_into: Pixel position tensors cached")
@@ -185,16 +193,22 @@ class Postprocessor:
 
         # Apply the current filter chain.
         chain = self.chain  # read just once; other threads might reassign it while we're rendering
-        for filter_name, settings in chain:
-            apply_filter = getattr(self, filter_name)
-            apply_filter(image, **settings)
+        with torch.no_grad():
+            for filter_name, settings in chain:
+                apply_filter = getattr(self, filter_name)
+                apply_filter(image, **settings)
 
         # Measure the performance of the postprocessor.
         time_now = time.time_ns()
         render_elapsed_sec = (time_now - time_render_start) / 10**9
         self.render_duration_statistics.add_datapoint(render_elapsed_sec)
 
-        # Log the FPS counter in 5-second intervals.
+        if self._performance_log_enabled:
+            self.log()
+
+    def log(self) -> None:
+        """Log the average-FPS counter, if at least 5 seconds have elapsed since it was last logged."""
+        time_now = time.time_ns()
         if (self.last_report_time is None or time_now - self.last_report_time > 5e9):
             avg_render_sec = self.render_duration_statistics.average()
             msec = round(1000 * avg_render_sec, 1)
