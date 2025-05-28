@@ -45,7 +45,8 @@ dependencies = [
     "torchvision>=0.22.0",  # AI avatar server
     "huggingface-hub>=0.31.4",  # AI avatar server (for THA3 models autodownloader)
     "waitress>=3.0.2",  # AI avatar server
-    "pygame>=2.6.1"  # AI avatar client, for TTS support
+    "pygame>=2.6.1",  # AI avatar client, for TTS support
+    "qoi>=0.7.2"  # AI avatar client, fast image format for streaming
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]

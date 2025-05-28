@@ -29,6 +29,7 @@ from typing import Any, Dict, List, NoReturn, Optional, Union
 
 from colorama import Fore, Style
 
+import qoi
 import PIL
 
 import torch
@@ -1209,11 +1210,6 @@ class Encoder:
                 # If a new frame arrived, pack it for sending (only once for each new frame).
                 if have_new_frame:
                     try:
-                        pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
-                        if image_rgba.shape[2] == 4:
-                            alpha_channel = image_rgba[:, :, 3]
-                            pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
-
                         # Save as PNG with RGBA mode. Use the fastest compression level available.
                         #
                         # On an i7-12700H @ 2.3 GHz (laptop optimized for low fan noise), 512x512 resolution:
@@ -1225,17 +1221,26 @@ class Encoder:
                         #    - uncompressed, about 5 ms
                         #
                         # time_now = time.time_ns()
-                        buffer = io.BytesIO()
-                        if output_format == "PNG":
-                            kwargs = {"compress_level": 1}
-                        elif output_format == "TGA":
-                            kwargs = {"compression": "tga_rle"}
-                        else:
-                            kwargs = {}
-                        pil_image.save(buffer,
-                                       format=output_format,
-                                       **kwargs)
-                        image_bytes = buffer.getvalue()
+                        if output_format == "QOI":  # Quite OK Image format - like PNG, but fast
+                            # Ugh, we must copy because the data isn't C-contiguous... but this is still faster than the other formats.
+                            image_bytes = qoi.encode(image_rgba.copy(order="C"))  # input: uint8 array of shape (h, w, c)
+                        else:  # use PIL
+                            pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
+                            if image_rgba.shape[2] == 4:
+                                alpha_channel = image_rgba[:, :, 3]
+                                pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
+
+                            buffer = io.BytesIO()
+                            if output_format == "PNG":
+                                kwargs = {"compress_level": 1}
+                            elif output_format == "TGA":
+                                kwargs = {"compression": "tga_rle"}
+                            else:
+                                kwargs = {}
+                            pil_image.save(buffer,
+                                           format=output_format,
+                                           **kwargs)
+                            image_bytes = buffer.getvalue()
                         # pack_duration_sec = (time.time_ns() - time_now) / 10**9
 
                         # We now have a new encoded frame; but first, sync with network send.

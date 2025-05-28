@@ -21,6 +21,7 @@ import requests
 import time
 from typing import Callable, Dict, Generator, Iterator, List, Optional, Union
 
+import qoi
 import PIL.Image
 
 from unpythonic.env import env as envcls
@@ -577,7 +578,7 @@ class TalkingheadExampleGUI:
         self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed...
         self.upscale = 1.5  # ...but the animator has a realtime super-resolution filter (anime4k, preset A (HQ)). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
         self.target_fps = 25  # default 25; maybe better to lower this when upscaling (see the server's terminal output for available FPS)
-        self.comm_format = "TGA"  # For send from server to client; anything that supports RGBA that Pillow can write (faster and smaller better). Try "PNG", "IM", "TGA" (the last one is fastest and reasonably small).
+        self.comm_format = "QOI"  # Frame format for video stream
 
         self.image_size = int(self.upscale * self.source_image_size)  # final size in GUI
 
@@ -864,18 +865,31 @@ def update_live_texture(task_env) -> None:
                 time.sleep(0.01)
                 continue
 
-            image_file = io.BytesIO(image_data)
-
-            pil_image = PIL.Image.open(image_file)
-            # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
-            w, h = pil_image.size
-            if w != gui_instance.image_size or h != gui_instance.image_size:
-                logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {gui_instance.image_size}x{gui_instance.image_size}")
-                pil_image = pil_image.resize((gui_instance.image_size, gui_instance.image_size),
-                                             resample=PIL.Image.LANCZOS)
-            arr = np.asarray(pil_image.convert("RGBA"))
-            arr = np.array(arr, dtype=np.float32) / 255
-            raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
+            if gui_instance.comm_format == "QOI":
+                image_rgba = qoi.decode(image_data)  # -> uint8 array of shape (h, w, c)
+                # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
+                h, w = image_rgba.shape[:2]
+                if w != gui_instance.image_size or h != gui_instance.image_size:
+                    logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {gui_instance.image_size}x{gui_instance.image_size}")
+                    pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
+                    if image_rgba.shape[2] == 4:
+                        alpha_channel = image_rgba[:, :, 3]
+                        pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
+                    pil_image = pil_image.resize((gui_instance.image_size, gui_instance.image_size),
+                                                 resample=PIL.Image.LANCZOS)
+                    image_rgba = np.asarray(pil_image.convert("RGBA"))
+            else:  # use PIL
+                image_file = io.BytesIO(image_data)
+                pil_image = PIL.Image.open(image_file)
+                # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
+                w, h = pil_image.size
+                if w != gui_instance.image_size or h != gui_instance.image_size:
+                    logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {gui_instance.image_size}x{gui_instance.image_size}")
+                    pil_image = pil_image.resize((gui_instance.image_size, gui_instance.image_size),
+                                                 resample=PIL.Image.LANCZOS)
+                image_rgba = np.asarray(pil_image.convert("RGBA"))
+            image_rgba = np.array(image_rgba, dtype=np.float32) / 255
+            raw_data = image_rgba.ravel()  # shape [h, w, c] -> linearly indexed
             dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
 
             # Update FPS counter.

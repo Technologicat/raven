@@ -77,14 +77,12 @@ animator_defaults = {
     # available to smooth over the occasional hiccup due to other running programs.
     "target_fps": 25,
 
-    # For available output formats, see:
+    # The video stream is sent as a multipart-x-mixed-replace of frame images.
+    # Available output formats for a frame are "QOI" (Quite OK Image, lossless, fast) and RGBA formats supported by Pillow: "TGA" (RLE compressed), "PNG", "IM" (IFUNC/LabEye).
+    # For Pillow, see:
     #     https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html
     #
-    # SillyTavern expects PNG. To optimize encoding speed with custom clients, we recommend the uncompressed IM:
-    #
-    #   "IM is a format used by LabEye and other applications based on the IFUNC image processing library.
-    #    The library reads and writes most uncompressed interchange versions of this format.
-    #    IM is the only format that can store all internal Pillow formats."
+    # SillyTavern expects PNG. To optimize encoding speed with a custom Python client, we recommend QOI.
     #
     "format": "PNG",
     "upscale": 1.0,  # 1.0 = send as-is; e.g. 2.0 = upscale 2x (using anime4k) before sending
