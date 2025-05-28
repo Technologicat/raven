@@ -85,7 +85,9 @@ animator_defaults = {
     # SillyTavern expects PNG. To optimize encoding speed with a custom Python client, we recommend QOI.
     #
     "format": "PNG",
-    "upscale": 1.0,  # 1.0 = send as-is; e.g. 2.0 = upscale 2x (using anime4k) before sending
+    "upscale": 1.0,  # 1.0 = send as-is (512x512); e.g. 2.0 = upscale 2x -> 1024x1024 using anime4k before sending
+
+    "metrics_enabled": False,  # Detailed performance logging; slows the renderer down, but shows how much time each step takes. Average FPS calculation is always on and doesn't slow anything.
 
     # If the avatar does not occupy the whole 512x512 canvas, it is possible to cut away the empty space from the edges,
     # which makes postprocessing faster (since fewer pixels).

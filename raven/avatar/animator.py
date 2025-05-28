@@ -356,15 +356,7 @@ def is_available():
 class Animator:
     """uWu Waifu"""
 
-    def __init__(self, poser: Poser, device: torch.device, metrics_enabled: bool = False):
-        """`metrics_enabled`: Whether to print detailed performance log messages.
-
-                              This is for troubleshooting performance issues, by showing how fast each part of the render process completes.
-                              On CUDA getting this information requires synchronization, so with metrics enabled, the renderer will run slower overall.
-                              The data is typically noisy, but should be good enough to get some idea of the performance.
-
-                              Note the average render FPS is always recorded for framerate compensation purposes, and does not need metrics enabled.
-        """
+    def __init__(self, poser: Poser, device: torch.device):
         self.poser = poser
         self.device = device
 
@@ -373,7 +365,6 @@ class Animator:
         self.postprocessor = Postprocessor(device,
                                            dtype=torch.float16)  # dtype must match `output_image` in `Animator.render_animation_frame`
         self.render_duration_statistics = RunningAverage()  # used for FPS compensation in animation routines
-        self.metrics_enabled = metrics_enabled
         self.animator_thread = None
 
         self.source_image: Optional[torch.tensor] = None
@@ -1101,8 +1092,9 @@ class Animator:
 
         do_crop = any(self._settings[key] != 0 for key in ("crop_left", "crop_right", "crop_top", "crop_bottom"))
 
+        metrics_enabled = self._settings["metrics_enabled"]
         def maybe_sync_cuda():
-            if self.metrics_enabled:
+            if metrics_enabled:
                 torch.cuda.synchronize()
 
         maybe_sync_cuda()
@@ -1189,7 +1181,7 @@ class Animator:
             render_elapsed_sec = (time_now - time_render_start) / 10**9
             self.render_duration_statistics.add_datapoint(render_elapsed_sec)
 
-        if self.metrics_enabled:
+        if metrics_enabled:
             logger.info(f"total {1000 * render_elapsed_sec:0.1f} ms; pose {1000 * tim_pose.dt:0.1f} ms, norm {1000 * tim_normalize.dt:0.1f} ms, upscale {1000 * tim_upscale.dt:0.1f} ms, crop {1000 * tim_crop.dt:0.1f} ms, post {1000 * tim_postproc.dt:0.1f} ms, gamma {1000 * tim_gamma.dt:0.1f} ms, chw->hwc {1000 * tim_dataformat.dt:0.1f} ms, to CPU {1000 * tim_sendtocpu.dt:0.1f} ms")
 
         # Set the new rendered frame as the output image, and mark the frame as ready for consumption.
