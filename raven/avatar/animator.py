@@ -1109,6 +1109,8 @@ class Animator:
         # Update this last so that animation drivers have access to the old emotion, too.
         self.last_emotion = current_emotion
 
+        do_crop = any(self._settings[key] != 0 for key in ("crop_left", "crop_right", "crop_top", "crop_bottom"))
+
         pose = torch.tensor(self.current_pose, device=self.device, dtype=self.poser.get_dtype())
 
         with torch.no_grad():
@@ -1126,12 +1128,13 @@ class Animator:
 
             # A simple crop filter, for removing empty space around character.
             # Apply this now so that if we're cropping, the postprocessor has fewer pixels to process.
-            c, h, w = output_image.shape
-            x1 = int((self._settings["crop_left"] / 2.0) * w)
-            x2 = int((1 - (self._settings["crop_right"] / 2.0)) * w)
-            y1 = int((self._settings["crop_top"] / 2.0) * h)
-            y2 = int((1 - (self._settings["crop_bottom"] / 2.0)) * h)
-            output_image = output_image[:, y1:y2, x1:x2]
+            if do_crop:
+                c, h, w = output_image.shape
+                x1 = int((self._settings["crop_left"] / 2.0) * w)
+                x2 = int((1 - (self._settings["crop_right"] / 2.0)) * w)
+                y1 = int((self._settings["crop_top"] / 2.0) * h)
+                y2 = int((1 - (self._settings["crop_bottom"] / 2.0)) * h)
+                output_image = output_image[:, y1:y2, x1:x2]
 
             self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
             output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
