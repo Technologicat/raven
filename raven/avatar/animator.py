@@ -1148,20 +1148,9 @@ class Animator:
         # note we don't actually render more frames than the client consumes.
         time_now = time.time_ns()
         if self.source_image is not None:
+            # For measurements: measure the complete render process (this is used for FPS compensation by the animation routines)
             render_elapsed_sec = (time_now - time_render_start) / 10**9
-            # remove the average per-frame upscale and postprocessing time, to measure render time only
-            avg_postproc_sec = self.postprocessor.render_duration_statistics.average()
-            render_elapsed_sec -= avg_postproc_sec
-            if self.upscaler is not None:
-                avg_upscale_sec = self.upscaler.render_duration_statistics.average()
-                render_elapsed_sec -= avg_upscale_sec
-            else:
-                avg_upscale_sec = 0.0
             self.render_duration_statistics.add_datapoint(render_elapsed_sec)
-        else:
-            render_elapsed_sec = 0.0
-            avg_postproc_sec = 0.0
-            avg_upscale_sec = 0.0
 
         # Set the new rendered frame as the output image, and mark the frame as ready for consumption.
         with _animator_output_lock:
@@ -1170,14 +1159,18 @@ class Animator:
 
         # Log the FPS counter in 5-second intervals.
         if animation_running and (self.last_report_time is None or time_now - self.last_report_time > 5e9):
+            # For itemized performance logging, account for the average per-frame upscale and postprocessing time
+            # (which are part of the render time), to measure pose time only.
             avg_render_sec = self.render_duration_statistics.average()
-            avg_total_sec = avg_render_sec + avg_upscale_sec + avg_postproc_sec
+            avg_postproc_sec = self.postprocessor.render_duration_statistics.average()
+            avg_upscale_sec = self.upscaler.render_duration_statistics.average() if self.upscaler is not None else 0.0
+            avg_pose_sec = avg_render_sec - avg_upscale_sec - avg_postproc_sec
             def fps(label, sec):
                 msec = round(1000 * sec, 1)
                 fps = round(1 / sec, 1) if sec > 0.0 else 0.0
                 logger.info(f"{label}: {msec:.1f}ms [{fps} FPS]")
-            fps("animator total (render + upscale + postproc)", avg_total_sec)
-            fps("    render", avg_render_sec)
+            fps("render total (pose + upscale + postproc)", avg_render_sec)
+            fps("    pose", avg_pose_sec)
             fps("    upscale", avg_upscale_sec)
             fps("    postproc", avg_postproc_sec)
             self.last_report_time = time_now
