@@ -236,6 +236,11 @@ def result_feed() -> Response:
                     yield (b"--frame\r\n" +
                            content_type_header +
                            content_length_header +
+                           b'Pragma-directive: no-cache\r\n'
+                           b'Cache-directive: no-cache\r\n'
+                           b'Cache-control: no-cache\r\n'
+                           b'Pragma: no-cache\r\n'
+                           b'Expires: 0\r\n'
                            b"\r\n" +  # A second successive CRLF sequence signals the end of the headers for this frame.
                            image_bytes +
                            b"\r\n")
