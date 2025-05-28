@@ -410,7 +410,7 @@ with dpg.theme(tag="disablable_button_theme"):
         dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
 
 viewport_width = 1600
-viewport_height = 800
+viewport_height = 1040
 dpg.create_viewport(title="Talkinghead",
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
@@ -576,7 +576,7 @@ def is_any_modal_window_visible():
 class TalkingheadExampleGUI:
     def __init__(self):
         self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed...
-        self.upscale = 1.5  # ...but the animator has a realtime super-resolution filter (anime4k, preset A (HQ)). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
+        self.upscale = 2.0  # ...but the animator has a realtime super-resolution filter (anime4k). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
         self.target_fps = 25  # default 25; maybe better to lower this when upscaling (see the server's terminal output for available FPS)
         self.comm_format = "QOI"  # Frame format for video stream
 
