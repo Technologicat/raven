@@ -3,7 +3,7 @@
  "crop_right": 0.0,
  "crop_top": 0.0,
  "crop_bottom": 0.0,
- "pose_interpolator_step": 0.1,
+ "pose_interpolator_step": 0.3,
  "blink_interval_min": 2.0,
  "blink_interval_max": 5.0,
  "blink_probability": 0.03,
@@ -14,6 +14,6 @@
  "sway_interval_min": 5.0,
  "sway_interval_max": 10.0,
  "sway_macro_strength": 0.6,
- "sway_micro_strength": 0.02,
+ "sway_micro_strength": 0.01,
  "breathing_cycle_duration": 4.0,
  "postprocessor_chain": []}
