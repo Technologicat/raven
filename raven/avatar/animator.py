@@ -537,14 +537,15 @@ class Animator:
         logger.debug("load_animator_settings: Sending new effect chain to postprocessor")
         self.postprocessor.chain = settings.pop("postprocessor_chain")  # ...and that's where the postprocessor reads its filter settings from.
 
-        logger.debug("load_animator_settings: Setting up upscaler")
         if settings["upscale"] != 1.0:
+            logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, setting up upscaler")
             self.target_size = int(settings["upscale"] * self.poser.get_image_size())
             self.upscaler = Upscaler(device=self.device,
                                      upscaled_width=self.target_size,
                                      upscaled_height=self.target_size,
                                      performance_log_enabled=False)  # we do centralized logging in `Animator.render_animation_frame`
         else:
+            logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, no upscaler needed")
             self.target_size = self.poser.get_image_size()
             self.upscaler = None
 
