@@ -1,10 +1,90 @@
-# Anime4K-PyTorch:
-#   https://colab.research.google.com/drive/11xAn4fyAUJPZOjrxwnL2ipl_1DGGegkB#scrollTo=KVBLI1M20vWQ
-#
-# based on Anime4K:
-#   https://github.com/bloc97/Anime4K
-#
-# Used under the MIT License.
+"""Anime4K-PyTorch.
+
+See:
+    https://colab.research.google.com/drive/11xAn4fyAUJPZOjrxwnL2ipl_1DGGegkB#scrollTo=KVBLI1M20vWQ
+
+Based on Anime4K:
+    https://github.com/bloc97/Anime4K
+
+Used under the MIT License.
+
+Documentation, from:
+    https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
+
+
+Overview of Anime4K's default modes
+===================================
+
+A    Restore -> Upscale -> Upscale
+B    Restore_Soft -> Upscale -> Upscale
+C    Upscale_Denoise -> Upscale
+
+
+Mode    Optimized for?                         Positive effects                    Negative effects (If used incorrectly)
+=========================================================================================================================
+A        Most 1080p anime                      High perceptual quality             Can amplify ringing if already present
+         Some older 720p anime                 Reduces compression artifacts       Can amplify banding if already present
+         Most old SD anime                     Reconstructs most degraded lines    Strong denoising might blur textures
+         (High amounts of blur)                Reduces large amounts of blur
+         (A lot of resampling artifacts)       Reduces noise
+         (Smearing due to compression)
+
+B        Some 1080p anime                      Reduces compression artifacts       Some artifacts might not be removed
+         Most 720p anime                       Reconstructs some degraded lines    Some lines might still be blurry
+         1080p->720p downscaled anime          Reduces some blur                   Strong denoising might blur textures
+         (Low amounts of blur)                 Reduces noise
+         (Some resampling artifacts)           Reduces ringing
+         (Ringing due to downsampling)         Reduces aliasing
+
+C        1080p->480p downscaled anime          Highest PSNR                        Low perceptual quality
+         Very rarely, 1080p animated movies    Reduces noise                       Can amplify ringing if already present
+         Images with no degradation                                                Can amplify resampling artifacts
+         Wallpapers
+         Pixiv art
+
+
+Overview of Anime4K's shader types
+==================================
+
+Of these, we support Upscale, Upscale_Denoise, Restore, and Restore_Soft.
+
+Restore
+    The shader that makes Anime4K different from other upscalers. Restores image, best used before upscaling.
+    Removes compression artifacts, blur, ringing, etc. Restore is more optimized for upsampling artifacts and blur,
+    while Restore_Soft is more optimized for downsampling artifacts and aliasing.
+
+Upscale
+    Upscales an image by a factor of x2, assumes image contains no degradation.
+
+Upscale_Denoise
+    Upscales an image by a factor of x2 and denoises it with no GPU performance penality.
+
+Clamp_Highlights
+    Computes and saves image statistics at the location it is placed in the shader stage,
+    then clamps the image highlights at the end after all the shaders to prevent overshoot and reduce ringing.
+
+Darken
+    Darkens lines in image. As what constitutes a line is ambiguous, might darken other stuff. Use according to personal taste.
+
+Thin
+    Makes lines thinner in image. As what constitutes a line is ambiguous, might thin other stuff. Use according to personal taste.
+
+Denoise
+    Applies a denoising filter to the image.
+
+Deblur
+    Applies a deblur filter to the image. Sharpens details without overshoot or ringing.
+
+AutoDownscalePre_x4
+    Downscales an image after a first upscaling step, so that the second x2 upscaling step exactly matches screen size.
+    This improves performance without noticeably impacting quality as you will not be working with images larger than the screen size.
+    Should be placed between two Upscale shaders. Without this shader, the default behaviour is to downscale to the screen size after running all shaders.
+
+AutoDownscalePre_x2
+    Downscales an image after a first upscaling step to match screen size. This improves performance without noticeably impacting quality
+    as you will not be working with images larger than the screen size. Should be placed after the first Upscale shader. Without this shader,
+    the default behaviour is to downscale to the screen size after running all shaders.
+"""
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -257,14 +337,12 @@ def main():
         create_model("Upscale_Denoise_VL"),
         AutoDownscalePre(4),
         create_model("Upscale_M"),
-        # screen_width=1920, screen_height=1080,
-        screen_width=1024, screen_height=1024,
+        screen_width=1920, screen_height=1080,
         final_stage_upscale_mode="bilinear"
     )
 
     def make_rand_image():
-        # return torch.rand(1, 3, 720, 1280).to(device)
-        return torch.rand(1, 3, 512, 512).to(device)
+        return torch.rand(1, 3, 720, 1280).to(device)
 
     if OPTIMIZATION == "TorchDynamo":
         torch._inductor.config.conv_1x1_as_mm = True
@@ -356,7 +434,7 @@ def main():
     # PyTorch Inference
 
     # wget https://cdni.fancaps.net/file/fancaps-animeimages/6486130.jpg -nc
-    image_filename = os.path.join(os.path.dirname(__file__), "images", "example.png")
+    image_filename = os.path.join(os.path.dirname(__file__), "images", "6486130.png")
     image = to_tensor(PIL.Image.open(image_filename).convert("RGB")).unsqueeze(0).to(device)
     if USE_FP16:
         image = image.half()
