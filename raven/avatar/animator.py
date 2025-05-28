@@ -1363,7 +1363,7 @@ class Upscaler:
 
             result = upscaled_rgba_tensor
 
-        # Measure the performance of the postprocessor.
+        # Measure the performance of the upscaler.
         time_now = time.time_ns()
         render_elapsed_sec = (time_now - time_render_start) / 10**9
         self.render_duration_statistics.add_datapoint(render_elapsed_sec)
