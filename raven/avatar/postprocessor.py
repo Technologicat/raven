@@ -116,87 +116,87 @@ class Postprocessor:
     def render_into(self, image):
         """Apply current postprocess chain, modifying `image` in-place."""
         time_render_start = time.time_ns()
-
-        c, h, w = image.shape
-        if h != self._prev_h or w != self._prev_w:
-            logger.info(f"render_into: Computing pixel position tensors for image size {w}x{h}")
-            # Compute base meshgrid for the geometric position of each pixel.
-            # This is needed by filters that either vary by geometric position (e.g. `vignetting`),
-            # or deform the image (e.g. `analog_badhsync`).
-            #
-            # This postprocessor is typically applied to a video stream. As long as
-            # the image dimensions stay constant, we can re-use the previous meshgrid.
-            #
-            # We don't strictly keep state here - we just cache. :P
-
-            with torch.no_grad():
-                self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
-                self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
-                self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
-            self._prev_h = h
-            self._prev_w = w
-            logger.info("render_into: Pixel position tensors cached")
-
-        # Update the frame counter.
-        #
-        # We consider the frame number to be a float, so that dynamic filters can decide what
-        # to do at fractional frame positions. For continuously animated effects (e.g. banding)
-        # it makes sense to interpolate continuously, whereas other effects (e.g. scanlines)
-        # can make their decisions based on the integer part.
-        #
-        # As always with floats, we must be careful. Note that we operate in a mindset of robust
-        # engineering. Since doing the Right Thing here does not cost significantly more engineering
-        # effort than doing the intuitive but Wrong Thing, it is preferable to go for the proper solution,
-        # regardless of whether it would take a centuries-long session to actually trigger a failure
-        # in the less robust approach.
-        #
-        # So, floating point accuracy considerations? First, we note that accumulation invites
-        # disaster in two ways:
-        #
-        #   - Accumulating the result accumulates also representation error and roundoff error.
-        #   - When accumulating small positive numbers to a sum total, the update eventually
-        #     becomes too small to add, causing the counter to get stuck. (For floats, `x + ϵ = x`
-        #     for sufficiently small ϵ dependent on the magnitude of `x`.)
-        #
-        # Fortunately, frame number is a linear function of time, and time diffs can be measured
-        # precisely. Thus, we can freshly compute the current frame number at each frame, completely
-        # bypassing the need for accumulation:
-        #
-        seconds_since_stream_start = (time_render_start - self.stream_start_timestamp) / 10**9
-        self.last_frame_no = self.frame_no
-        self.frame_no = self.CALIBRATION_FPS * seconds_since_stream_start  # float!
-
-        # That leaves just the questions of how accurate the calculation is, and for how long.
-        # As to the first question:
-        #
-        #  - Timestamps are an integer number of nanoseconds, so they are exact.
-        #  - Dividing by 10**9, we move the decimal point. But floats are base-2, so 0.1
-        #    is not representable in IEEE-754. So there will be some small representation error,
-        #    which for float64 likely appears in the ~15th significant digit.
-        #  - Basic arithmetic, such as multiplication, is guaranteed by IEEE-754
-        #    to be accurate to the ULP.
-        #
-        # Thus, as the result, we obtain the closest number that is representable in IEEE-754,
-        # and the strategy works for the whole range of float64.
-        #
-        # As for the second question, floats are logarithmically spaced. So if this is left running
-        # "for long enough" during the same session, accuracy will eventually suffer. Instead of the
-        # counter getting stuck, however, this will manifest as the frame number updating by more
-        # than `1.0` each time it updates (i.e. whenever the elapsed number of frames reaches the
-        # next representable float).
-        #
-        # This could be fixed by resetting `stream_start_timestamp` once the frame number
-        # becomes too large. But in practice, how long does it take for this issue to occur?
-        # The ULP becomes 1.0 at ~5e15. To reach frame number 5e15, at the reference 25 FPS,
-        # the time required is 2e14 seconds, i.e. 2.31e9 days, or 6.34 million years.
-        # While I can almost imagine the eventual bug report, I think it's safe to ignore this.
-
-        # Apply the current filter chain.
         chain = self.chain  # read just once; other threads might reassign it while we're rendering
-        with torch.no_grad():
-            for filter_name, settings in chain:
-                apply_filter = getattr(self, filter_name)
-                apply_filter(image, **settings)
+        if chain:
+            c, h, w = image.shape
+            if h != self._prev_h or w != self._prev_w:
+                logger.info(f"render_into: Computing pixel position tensors for image size {w}x{h}")
+                # Compute base meshgrid for the geometric position of each pixel.
+                # This is needed by filters that either vary by geometric position (e.g. `vignetting`),
+                # or deform the image (e.g. `analog_badhsync`).
+                #
+                # This postprocessor is typically applied to a video stream. As long as
+                # the image dimensions stay constant, we can re-use the previous meshgrid.
+                #
+                # We don't strictly keep state here - we just cache. :P
+
+                with torch.no_grad():
+                    self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
+                    self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
+                    self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
+                self._prev_h = h
+                self._prev_w = w
+                logger.info("render_into: Pixel position tensors cached")
+
+            # Update the frame counter.
+            #
+            # We consider the frame number to be a float, so that dynamic filters can decide what
+            # to do at fractional frame positions. For continuously animated effects (e.g. banding)
+            # it makes sense to interpolate continuously, whereas other effects (e.g. scanlines)
+            # can make their decisions based on the integer part.
+            #
+            # As always with floats, we must be careful. Note that we operate in a mindset of robust
+            # engineering. Since doing the Right Thing here does not cost significantly more engineering
+            # effort than doing the intuitive but Wrong Thing, it is preferable to go for the proper solution,
+            # regardless of whether it would take a centuries-long session to actually trigger a failure
+            # in the less robust approach.
+            #
+            # So, floating point accuracy considerations? First, we note that accumulation invites
+            # disaster in two ways:
+            #
+            #   - Accumulating the result accumulates also representation error and roundoff error.
+            #   - When accumulating small positive numbers to a sum total, the update eventually
+            #     becomes too small to add, causing the counter to get stuck. (For floats, `x + ϵ = x`
+            #     for sufficiently small ϵ dependent on the magnitude of `x`.)
+            #
+            # Fortunately, frame number is a linear function of time, and time diffs can be measured
+            # precisely. Thus, we can freshly compute the current frame number at each frame, completely
+            # bypassing the need for accumulation:
+            #
+            seconds_since_stream_start = (time_render_start - self.stream_start_timestamp) / 10**9
+            self.last_frame_no = self.frame_no
+            self.frame_no = self.CALIBRATION_FPS * seconds_since_stream_start  # float!
+
+            # That leaves just the questions of how accurate the calculation is, and for how long.
+            # As to the first question:
+            #
+            #  - Timestamps are an integer number of nanoseconds, so they are exact.
+            #  - Dividing by 10**9, we move the decimal point. But floats are base-2, so 0.1
+            #    is not representable in IEEE-754. So there will be some small representation error,
+            #    which for float64 likely appears in the ~15th significant digit.
+            #  - Basic arithmetic, such as multiplication, is guaranteed by IEEE-754
+            #    to be accurate to the ULP.
+            #
+            # Thus, as the result, we obtain the closest number that is representable in IEEE-754,
+            # and the strategy works for the whole range of float64.
+            #
+            # As for the second question, floats are logarithmically spaced. So if this is left running
+            # "for long enough" during the same session, accuracy will eventually suffer. Instead of the
+            # counter getting stuck, however, this will manifest as the frame number updating by more
+            # than `1.0` each time it updates (i.e. whenever the elapsed number of frames reaches the
+            # next representable float).
+            #
+            # This could be fixed by resetting `stream_start_timestamp` once the frame number
+            # becomes too large. But in practice, how long does it take for this issue to occur?
+            # The ULP becomes 1.0 at ~5e15. To reach frame number 5e15, at the reference 25 FPS,
+            # the time required is 2e14 seconds, i.e. 2.31e9 days, or 6.34 million years.
+            # While I can almost imagine the eventual bug report, I think it's safe to ignore this.
+
+            # Apply the current filter chain.
+            with torch.no_grad():
+                for filter_name, settings in chain:
+                    apply_filter = getattr(self, filter_name)
+                    apply_filter(image, **settings)
 
         # Measure the performance of the postprocessor.
         time_now = time.time_ns()
