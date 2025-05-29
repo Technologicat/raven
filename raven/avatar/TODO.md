@@ -11,6 +11,16 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 ### General
 
+- Feature orthogonality
+  - Classify should just classify; call `/api/talkinghead/set_emotion` to set the talkinghead emotion
+  - `/api/talkinghead/load` should just load a character; should have separate `/api/talkinghead/start` (now called "reload") and `/api/talkinghead/stop` (now called "unload")
+
+- Is it possible to discard the server's output stream (flushing away the remaining frames waiting for send) when the animator is paused?
+
+- Web API pose control
+  - Low-level: body rotation, head rotation, iris position
+  - High-level: look at camera, look away (on which side), stand straight, randomize new sway pose
+
 - Split into a separate repo and think about branding.
   - This is essentially a drop-in replacement for *SillyTavern-extras*, with modules `talkinghead`, `classify` (which Talkinghead needs), `websearch` (which Raven needs), and `embeddings` (fast endpoint for SillyTavern).
   - But as development continues, we will likely take things into a new direction, so this is effectively no longer ST-extras.
@@ -27,7 +37,7 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
     - Examples of generated poses, highlighting both success and failure cases. How the live talking head looks in the actual SillyTavern GUI. Link the original THA tech reports.
     - Examples of postprocessor filter results.
     - How each postprocessor example config looks when rendering the example character.
-  - Update/rewrite the user manual, based on the new README.
+  - Update the character-making instructions for SD Forge with Wai v14.0, RemBG extension with isnet-general-use/isnet-anime.
 
 ### Examples
 
