@@ -362,7 +362,8 @@ class Animator:
 
         self.target_size = poser.get_image_size()
         self.upscaler = None
-        self._last_upscale_setting = None  # so that we can re-instantiate the upscaler only when the setting actually changes
+        self.upscale_factor = None  # Nice to know; but also so that we can re-instantiate the upscaler only when the settings actually change.
+        self.upscale_quality = None
         self.postprocessor = Postprocessor(device,
                                            dtype=torch.float16)  # dtype must match `output_image` in `Animator.render_animation_frame`
         self.render_duration_statistics = RunningAverage()  # used for FPS compensation in animation routines
@@ -541,21 +542,26 @@ class Animator:
         self.postprocessor.chain = settings.pop("postprocessor_chain")  # ...and that's where the postprocessor reads its filter settings from.
 
         if settings["upscale"] != 1.0:
-            if settings["upscale"] == self._last_upscale_setting:  # avoid unnecessary hiccup (if the settings are changed while the animator is running) by re-instantiating the upscaler only when we have to
-                logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, no change; reusing existing upscaler instance")
+            # Avoid unnecessary hiccup (if the settings are changed while the animator is running) by re-instantiating the upscaler only when we have to.
+            if settings["upscale"] == self.upscale_factor and settings["upscale_quality"] == self.upscale_quality:
+                logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, quality {settings['upscale_quality']}; reusing existing upscaler.")
                 # Can only happen when this is the second or later settings load in the same server session, so `self.target_size` has already been initialized.
             else:
-                logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, setting up upscaler")
+                logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, quality {settings['upscale_quality']}; configuring upscaler.")
                 self.target_size = int(settings["upscale"] * self.poser.get_image_size())
                 self.upscaler = Upscaler(device=self.device,
                                          dtype=torch.float16,
                                          upscaled_width=self.target_size,
-                                         upscaled_height=self.target_size)
+                                         upscaled_height=self.target_size,
+                                         quality=settings["upscale_quality"])
+            self.upscale_factor = settings["upscale"]
+            self.upscale_quality = settings["upscale_quality"]
         else:
-            logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, no upscaler needed")
+            logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x; switching upscaler off.")
             self.target_size = self.poser.get_image_size()
             self.upscaler = None
-        self._last_upscale_setting = settings["upscale"]
+            self.upscale_factor = None
+            self.upscale_quality = None
 
         # The rest of the settings we can just store in an attribute, and let the animation drivers read them from there.
         self._settings = settings
@@ -1326,10 +1332,17 @@ class Upscaler:
                  device: torch.device,
                  dtype: torch.dtype,
                  upscaled_width: int,
-                 upscaled_height: int) -> None:
+                 upscaled_height: int,
+                 quality: str = "low") -> None:
         """
         `upscaled_width`, `upscaled_height`: Target (output) image size.
+        `quality`: One of:
+                   "low": fast, with acceptable quality
+                   "high": slow, with good quality
         """
+        if quality not in ("low", "high"):
+            raise ValueError(f"Unknown quality '{quality}'; valid: 'low', 'high'.")
+
         self.device = device
         self.dtype = dtype
         self.upscaled_width = upscaled_width
@@ -1338,13 +1351,17 @@ class Upscaler:
         self.render_duration_statistics = RunningAverage()
         self.last_report_time = None
 
+        # See `anime4k` for explanation, and `anime4k.model_dict` for available choices.
+        self.step1_model = "Upscale_Denoise_VL" if quality == "high" else "Upscale_Denoise_S"
+        self.step2_model = "Upscale_M" if quality == "high" else "Upscale_S"
+
         self.pipeline = anime4k.Anime4KPipeline(
             anime4k.ClampHighlight(),
-            anime4k.create_model("Upscale_Denoise_S"),  # for slower but higher quality, try `anime4k.create_model("Upscale_Denoise_VL")`
-            anime4k.AutoDownscalePre(4),
-            anime4k.create_model("Upscale_S"),  # for slower but higher quality, try `anime4k.create_model("Upscale_M")`
+            anime4k.create_model(self.step1_model),
+            anime4k.AutoDownscalePre(4),  # auto scale down so that when we upscale once, we hit target res
+            anime4k.create_model(self.step2_model),
             screen_width=upscaled_width, screen_height=upscaled_height,
-            final_stage_upscale_mode="bilinear"
+            final_stage_upscale_mode="bilinear"  # bilinear is usually sufficient here
         ).to(self.device).to(self.dtype)
 
     def upscale(self, image_tensor: torch.Tensor) -> torch.Tensor:

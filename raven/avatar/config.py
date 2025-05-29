@@ -86,6 +86,7 @@ animator_defaults = {
     #
     "format": "PNG",
     "upscale": 1.0,  # 1.0 = send as-is (512x512); e.g. 2.0 = upscale 2x -> 1024x1024 using anime4k before sending
+    "upscale_quality": "low",  # only used if upscale != 1.0; quality "low": fast, acceptable image quality; "high": slow, good image quality
 
     "metrics_enabled": False,  # Detailed performance logging; slows the renderer down, but shows how much time each step takes. Average FPS calculation is always on and doesn't slow anything.
 

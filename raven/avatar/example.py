@@ -577,6 +577,7 @@ class TalkingheadExampleGUI:
     def __init__(self):
         self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed...
         self.upscale = 2.0  # ...but the animator has a realtime super-resolution filter (anime4k). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
+        self.upscale_quality = "low"  # "low": fast, acceptable quality; "high": slow, good quality
         self.target_fps = 25  # default 25; maybe better to lower this when upscaling (see the server's terminal output for available FPS)
         self.comm_format = "QOI"  # Frame format for video stream
 
@@ -584,6 +585,7 @@ class TalkingheadExampleGUI:
 
         self.custom_animator_settings = {"format": self.comm_format,
                                          "upscale": self.upscale,
+                                         "upscale_quality": self.upscale_quality,
                                          "target_fps": self.target_fps}  # any missing keys are auto-populated from server defaults
         self.button_width = 300
 
@@ -847,6 +849,21 @@ def si_prefix(number):
 # We must continuously retrieve new frames as they become ready, so this runs in the background.
 def update_live_texture(task_env) -> None:
     assert task_env is not None
+    def describe_performance(gui, video_height, video_width):  # actual received video height/width of the frame being described
+        if gui is None:
+            return "RX (avg) -- B/s @ -- FPS; avg -- B per frame (--x--, -- px)"
+
+        avg_fps = gui.fps_statistics.average()
+        avg_bytes = int(gui.frame_size_statistics.average())
+        pixels = video_height * video_width
+
+        if gui.upscale != 1.0:
+            upscale_str = f"@{gui.upscale}x {gui.upscale_quality}Q -> "
+        else:
+            upscale_str = ""
+
+        return f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({upscale_str}{video_width}x{video_height}, {si_prefix(pixels)}px)"
+
     reader = ResultFeedReader()
     reader.start()
     try:
@@ -856,7 +873,7 @@ def update_live_texture(task_env) -> None:
             if gui_instance:
                 if not gui_instance.animator_running and reader.is_running():
                     reader.stop()
-                    dpg.set_value("fps_text", "RX (avg) -- B/s @ -- FPS; avg -- B per frame (--x--, -- px)")
+                    dpg.set_value("fps_text", describe_performance(None, None, None))
                 elif gui_instance.animator_running and not reader.is_running():
                     reader.start()
 
@@ -900,10 +917,8 @@ def update_live_texture(task_env) -> None:
             elapsed_time = time.time_ns() - frame_start_time
             fps = 1.0 / (elapsed_time / 10**9)
             gui_instance.fps_statistics.add_datapoint(fps)
-            avg_fps = gui_instance.fps_statistics.average()
-            avg_bytes = int(gui_instance.frame_size_statistics.average())
-            pixels = h * w
-            dpg.set_value("fps_text", f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({h}x{w}, {si_prefix(pixels)}px)")
+
+            dpg.set_value("fps_text", describe_performance(gui_instance, h, w))
     except Exception as exc:
         logger.error(f"TalkingheadExampleGUI.update_live_texture: {type(exc)}: {exc}")
 
@@ -913,7 +928,7 @@ def update_live_texture(task_env) -> None:
             dpg.set_value("please_standby_text", "[Connection lost]")
             dpg.show_item("please_standby_text")
             dpg.hide_item("live_image")
-            dpg.set_value("fps_text", "RX (avg) -- B/s @ -- FPS; avg -- B per frame (--x--, -- px)")
+            dpg.set_value("fps_text", describe_performance(None, None, None))
 
 
 # --------------------------------------------------------------------------------
