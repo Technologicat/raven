@@ -831,16 +831,18 @@ class ResultFeedReader:
         self.gen.close()
         self.gen = None
 
-def human_size(size_bytes):
-    """Convert bytes to human-readable format.
+def si_prefix(number):
+    """Convert a number to SI format (1000 -> 1K).
 
     https://medium.com/@ryan_forrester_/getting-file-sizes-in-python-a-complete-guide-01293aaa68ef
     """
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.2f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.2f} EB"
+    if number < 1000:
+        return f"{number:.2f}"
+    for unit in ['', 'K', 'M', 'G', 'T', 'P']:
+        if number < 1000:
+            return f"{number:.2f} {unit}"
+        number /= 1000
+    return f"{number:.2f} E"
 
 # We must continuously retrieve new frames as they become ready, so this runs in the background.
 def update_live_texture(task_env) -> None:
@@ -854,7 +856,7 @@ def update_live_texture(task_env) -> None:
             if gui_instance:
                 if not gui_instance.animator_running and reader.is_running():
                     reader.stop()
-                    dpg.set_value("fps_text", "RX (avg) -- FPS; --x--; avg -- B per frame")
+                    dpg.set_value("fps_text", "RX (avg) -- B/s @ -- FPS; avg -- B per frame (--x--, -- px)")
                 elif gui_instance.animator_running and not reader.is_running():
                     reader.start()
 
@@ -898,7 +900,10 @@ def update_live_texture(task_env) -> None:
             elapsed_time = time.time_ns() - frame_start_time
             fps = 1.0 / (elapsed_time / 10**9)
             gui_instance.fps_statistics.add_datapoint(fps)
-            dpg.set_value("fps_text", f"RX (avg) {gui_instance.fps_statistics.average():0.2f} FPS; {h}x{w}; avg {human_size(int(gui_instance.frame_size_statistics.average()))} per frame")
+            avg_fps = gui_instance.fps_statistics.average()
+            avg_bytes = int(gui_instance.frame_size_statistics.average())
+            pixels = h * w
+            dpg.set_value("fps_text", f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({h}x{w}, {si_prefix(pixels)}px)")
     except Exception as exc:
         logger.error(f"TalkingheadExampleGUI.update_live_texture: {type(exc)}: {exc}")
 
@@ -908,7 +913,7 @@ def update_live_texture(task_env) -> None:
             dpg.set_value("please_standby_text", "[Connection lost]")
             dpg.show_item("please_standby_text")
             dpg.hide_item("live_image")
-            dpg.set_value("fps_text", "RX (avg) -- FPS; --x--; avg -- B per frame")
+            dpg.set_value("fps_text", "RX (avg) -- B/s @ -- FPS; avg -- B per frame (--x--, -- px)")
 
 
 # --------------------------------------------------------------------------------
