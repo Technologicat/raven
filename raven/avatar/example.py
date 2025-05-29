@@ -577,6 +577,7 @@ class TalkingheadExampleGUI:
     def __init__(self):
         self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed...
         self.upscale = 2.0  # ...but the animator has a realtime super-resolution filter (anime4k). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
+        self.upscale_preset = "C"  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
         self.upscale_quality = "low"  # "low": fast, acceptable quality; "high": slow, good quality
         self.target_fps = 25  # default 25; maybe better to lower this when upscaling (see the server's terminal output for available FPS)
         self.comm_format = "QOI"  # Frame format for video stream
@@ -585,6 +586,7 @@ class TalkingheadExampleGUI:
 
         self.custom_animator_settings = {"format": self.comm_format,
                                          "upscale": self.upscale,
+                                         "upscale_preset": self.upscale_preset,
                                          "upscale_quality": self.upscale_quality,
                                          "target_fps": self.target_fps}  # any missing keys are auto-populated from server defaults
         self.button_width = 300
@@ -858,7 +860,7 @@ def update_live_texture(task_env) -> None:
         pixels = video_height * video_width
 
         if gui.upscale != 1.0:
-            upscale_str = f"@{gui.upscale}x {gui.upscale_quality}Q -> "
+            upscale_str = f"@{gui.upscale}x {gui.upscale_preset} {gui.upscale_quality}Q -> "
         else:
             upscale_str = ""
 
