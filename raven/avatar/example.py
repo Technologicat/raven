@@ -35,7 +35,7 @@ import dearpygui.dearpygui as dpg
 
 from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 from .. import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from .. import bgtask  # TODO: read the result_feed in a bgtask; see Raven's preprocessor.py for how to use bgtask for things like this
+from .. import bgtask
 from .. import utils as raven_utils
 
 from . import client_util
@@ -59,7 +59,7 @@ if os.path.exists(api_key_file):  # TODO: test this (I have no idea what I'm doi
 
 # AI speech synthesizer - OpenAI compatible
 # https://github.com/remsky/Kokoro-FastAPI
-# TODO: add API key support for this too (Authorization: Bearer xxxx)
+# TODO: add API key support for TTS too (Authorization: Bearer xxxx)
 tts_url = "http://localhost:8880"
 tts_default_headers = {
 }
@@ -158,7 +158,7 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
 # --------------------------------------------------------------------------------
 # Python client for Talkinghead web API
 
-# TODO: move into a new module
+# TODO: move the Python API into a new module
 
 def classify_labels() -> List[str]:
     """Get list of emotion names from server."""
@@ -740,7 +740,7 @@ class TalkingheadExampleGUI:
     def on_speak(self, sender, app_data) -> None:
         current_voice = dpg.get_value(self.voice_choice)
         tts_speak(voice=current_voice,
-                  text="Testing the AI speech synthesizer.",  # TODO
+                  text="Testing the AI speech synthesizer.",  # TODO: GUI control to enter text to speak
                   start_callback=talkinghead_start_talking,
                   stop_callback=talkinghead_stop_talking)
 
