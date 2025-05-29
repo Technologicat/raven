@@ -362,6 +362,7 @@ class Animator:
 
         self.target_size = poser.get_image_size()
         self.upscaler = None
+        self._last_upscale_setting = None  # so that we can re-instantiate the upscaler only when the setting actually changes
         self.postprocessor = Postprocessor(device,
                                            dtype=torch.float16)  # dtype must match `output_image` in `Animator.render_animation_frame`
         self.render_duration_statistics = RunningAverage()  # used for FPS compensation in animation routines
@@ -540,16 +541,21 @@ class Animator:
         self.postprocessor.chain = settings.pop("postprocessor_chain")  # ...and that's where the postprocessor reads its filter settings from.
 
         if settings["upscale"] != 1.0:
-            logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, setting up upscaler")
-            self.target_size = int(settings["upscale"] * self.poser.get_image_size())
-            self.upscaler = Upscaler(device=self.device,
-                                     dtype=torch.float16,
-                                     upscaled_width=self.target_size,
-                                     upscaled_height=self.target_size)
+            if settings["upscale"] == self._last_upscale_setting:
+                logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, no change; reusing existing upscaler instance")
+                # Can only happen when this is the second or later settings load in the same server session, so `self.target_size` has already been initialized.
+            else:
+                logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, setting up upscaler")
+                self.target_size = int(settings["upscale"] * self.poser.get_image_size())
+                self.upscaler = Upscaler(device=self.device,
+                                         dtype=torch.float16,
+                                         upscaled_width=self.target_size,
+                                         upscaled_height=self.target_size)
         else:
             logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, no upscaler needed")
             self.target_size = self.poser.get_image_size()
             self.upscaler = None
+        self._last_upscale_setting = settings["upscale"]
 
         # The rest of the settings we can just store in an attribute, and let the animation drivers read them from there.
         self._settings = settings
