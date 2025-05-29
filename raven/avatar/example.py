@@ -860,7 +860,7 @@ def update_live_texture(task_env) -> None:
         pixels = video_height * video_width
 
         if gui.upscale != 1.0:
-            upscale_str = f"@{gui.upscale}x {gui.upscale_preset} {gui.upscale_quality}Q -> "
+            upscale_str = f"up {gui.upscale_preset} {gui.upscale_quality[0].upper()}Q @{gui.upscale}x -> "
         else:
             upscale_str = ""
 
