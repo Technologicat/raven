@@ -862,7 +862,7 @@ def update_live_texture(task_env) -> None:
                 image_data = reader.get_frame()
                 gui_instance.frame_size_statistics.add_datapoint(len(image_data))
             if gui_instance is None or not reader.is_running():
-                time.sleep(0.01)
+                time.sleep(0.04)   # 1/25 s
                 continue
 
             if gui_instance.comm_format == "QOI":
