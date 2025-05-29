@@ -541,7 +541,7 @@ class Animator:
         self.postprocessor.chain = settings.pop("postprocessor_chain")  # ...and that's where the postprocessor reads its filter settings from.
 
         if settings["upscale"] != 1.0:
-            if settings["upscale"] == self._last_upscale_setting:
+            if settings["upscale"] == self._last_upscale_setting:  # avoid unnecessary hiccup (if the settings are changed while the animator is running) by re-instantiating the upscaler only when we have to
                 logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, no change; reusing existing upscaler instance")
                 # Can only happen when this is the second or later settings load in the same server session, so `self.target_size` has already been initialized.
             else:
