@@ -643,7 +643,7 @@ class TalkingheadExampleGUI:
                                                         default_value=self.emotion_names[0],
                                                         width=self.button_width,
                                                         callback=self.on_send_emotion)
-                    talkinghead_set_emotion(self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
+                    self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
                     dpg.add_spacer(height=8)
 
                     dpg.add_text("Toggles")
@@ -669,9 +669,9 @@ class TalkingheadExampleGUI:
     def on_send_emotion(self, sender, app_data):  # GUI event handler
         # On clicking a choice in the combobox, `app_data` is that choice, but on arrow key, `app_data` is the keycode.
         logger.info(f"TalkingheadExampleGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
-        current_emotion_name = dpg.get_value(self.emotion_choice)
-        logger.info(f"TalkingheadExampleGUI.on_send_emotion: sending emotion '{current_emotion_name}'")
-        talkinghead_set_emotion(current_emotion_name)
+        self.current_emotion = dpg.get_value(self.emotion_choice)
+        logger.info(f"TalkingheadExampleGUI.on_send_emotion: sending emotion '{self.current_emotion}'")
+        talkinghead_set_emotion(self.current_emotion)
 
     def load_image(self, filename: Union[pathlib.Path, str]) -> None:
         try:
@@ -923,7 +923,7 @@ if __name__ == "__main__":
                                       executor=bg)
     talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
     talkinghead_load_animator_settings(gui_instance.custom_animator_settings)
-    talkinghead_set_emotion("curiosity")
+    # talkinghead_set_emotion("curiosity")  # if you want a non-default emotion at startup
     talkinghead_load("example.png")  # this will also start the animator if it was paused
     def shutdown() -> None:
         task_manager.clear(wait=True)
