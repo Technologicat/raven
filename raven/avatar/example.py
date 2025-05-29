@@ -854,7 +854,7 @@ def update_live_texture(task_env) -> None:
             if gui_instance:
                 if not gui_instance.animator_running and reader.is_running():
                     reader.stop()
-                    dpg.set_value("fps_text", "RX (avg) -- FPS; avg -- B per frame")
+                    dpg.set_value("fps_text", "RX (avg) -- FPS; --x--; avg -- B per frame")
                 elif gui_instance.animator_running and not reader.is_running():
                     reader.start()
 
@@ -898,7 +898,7 @@ def update_live_texture(task_env) -> None:
             elapsed_time = time.time_ns() - frame_start_time
             fps = 1.0 / (elapsed_time / 10**9)
             gui_instance.fps_statistics.add_datapoint(fps)
-            dpg.set_value("fps_text", f"RX (avg) {gui_instance.fps_statistics.average():0.2f} FPS; avg {human_size(int(gui_instance.frame_size_statistics.average()))} per frame")
+            dpg.set_value("fps_text", f"RX (avg) {gui_instance.fps_statistics.average():0.2f} FPS; {h}x{w}; avg {human_size(int(gui_instance.frame_size_statistics.average()))} per frame")
     except Exception as exc:
         logger.error(f"TalkingheadExampleGUI.update_live_texture: {type(exc)}: {exc}")
 
@@ -908,7 +908,7 @@ def update_live_texture(task_env) -> None:
             dpg.set_value("please_standby_text", "[Connection lost]")
             dpg.show_item("please_standby_text")
             dpg.hide_item("live_image")
-            dpg.set_value("fps_text", "RX (avg) -- FPS; avg -- B per frame")
+            dpg.set_value("fps_text", "RX (avg) -- FPS; --x--; avg -- B per frame")
 
 
 # --------------------------------------------------------------------------------
