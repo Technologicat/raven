@@ -1,9 +1,6 @@
 """Example Python client for Talkinghead, showing how to use its web API.
 
-Convenient for testing.
-
-Unlike the rest of `raven-avatar`, this example program is licensed under the 2-clause BSD license,
-to facilitate integrating Talkinghead regardless of the license of your own software.
+This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """
 
 import logging

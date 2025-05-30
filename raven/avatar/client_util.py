@@ -1,4 +1,7 @@
-"""DPG GUI utilities."""
+"""DPG GUI utilities.
+
+This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
+"""
 
 __all__ = ["modal_dialog", "recenter_window"]
 

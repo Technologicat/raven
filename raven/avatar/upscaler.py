@@ -1,4 +1,7 @@
-"""Anime upscaler based on Anime4K-PyTorch."""
+"""Anime upscaler based on Anime4K-PyTorch.
+
+This module is licensed under the MIT license, to facilitate integration anywhere.
+"""
 
 __all__ = ["Upscaler"]
 
