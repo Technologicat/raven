@@ -36,19 +36,26 @@ class HistogramEqualizer:
     def __init__(self,
                  device: torch.device,
                  dtype: torch.dtype,
-                 nbins: int = 16):
+                 nbins: int = 256):
         self.device = device
         self.dtype = dtype
         self.nbins = nbins
 
         self.display_range = np.log(255.0 / 1.0)  # max/min brightness, ~45 dB for 8 bits per channel
 
-    def _compute_cdf(self, x: torch.Tensor, bin_edges: torch.Tensor):
+    def _compute_cdf(self,
+                     x: torch.Tensor,
+                     bin_edges: torch.Tensor,
+                     discard_first_bin: bool = False,
+                     discard_last_bin: bool = False):
         """Compute the cumulative distribution function of the data, given `bin_edges`.
 
         The result with have `n_bins + 2` entries, where `n_bins = len(bin_edges) - 1`;
         the first and last elements correspond to data less than the first bin edge,
         and data greater than the last bin edge, respectively.
+
+        `discard_first_bin`: Optionally, drop the first bin. Useful for ignoring data less than the first bin edge.
+        `discard_last_bin`: Optionally, drop the last bin. Useful for ignoring data greater than the last bin edge.
 
         Needed because `torch.histogram` doesn't support the CUDA backend:
             https://github.com/pytorch/pytorch/issues/69519
@@ -57,6 +64,10 @@ class HistogramEqualizer:
         count = x.new_zeros(len(bin_edges) + 1, dtype=torch.float32)
         count.index_put_((level,), count.new_ones(1), True)
 
+        if discard_first_bin:
+            count = count[1:]
+        if discard_last_bin:
+            count = count[:-1]
         norm = x.numel()
         cdf = torch.cumsum(count, dim=0) / norm
         pdf = count / norm
@@ -66,9 +77,12 @@ class HistogramEqualizer:
         # Histogramming linearly in logarithmic space gives us a logarithmically spaced histogram.
         log_bin_edges = torch.linspace(torch.log(min_nonzero_x), torch.log(max_x), self.nbins, dtype=self.dtype, device=self.device)
         bin_edges = torch.exp(log_bin_edges)
-        pdf, cdf = self._compute_cdf(x, bin_edges)
-        pdf = pdf[:-1]  # cut away the greater-than-last-bin slot since we put the last bin edge at max(x)
-        cdf = cdf[:-1]
+        # - Ignore the less-than-first-bin-edge slot to ignore black pixels (empty background). (TODO: should do this for *blank*, not *black*, but that would need some kind of mask support.)
+        # - Ignore the greater-than-last-bin-edge slot, since we always put the last bin edge at max(x).
+        pdf, cdf = self._compute_cdf(x, bin_edges, discard_first_bin=True, discard_last_bin=True)
+        zero = torch.tensor([0.0], device=self.device, dtype=self.dtype)
+        pdf = torch.cat([zero, pdf], dim=0)  # pretend there's no data below the first bin edge
+        cdf = torch.cat([zero, cdf], dim=0)  # a CDF should start from zero
         return bin_edges, pdf, cdf
 
     def loghist(self, x: torch.Tensor):
@@ -78,7 +92,8 @@ class HistogramEqualizer:
         - negative values are ignored (these get mapped to the first bin)
         """
         max_x = torch.max(x)
-        min_nonzero_x = torch.min(torch.where(x > 0.0, x, max_x))
+        # min_nonzero_x = torch.min(torch.where(x > 0.0, x, max_x))  # for general data
+        min_nonzero_x = torch.tensor(0.01, device=self.device, dtype=self.dtype)  # for images
         return self._loghist(x, min_nonzero_x, max_x)
 
     def larson(self, x: torch.Tensor):
@@ -91,12 +106,13 @@ class HistogramEqualizer:
         This typically looks better than simple log scaling, and brings out details in the data.
         """
         max_x = torch.max(x)
-        min_nonzero_x = torch.min(torch.where(x > 0.0, x, max_x))
+        # min_nonzero_x = torch.min(torch.where(x > 0.0, x, max_x))  # for general data
+        min_nonzero_x = torch.tensor(0.01, device=self.device, dtype=self.dtype)  # for images
+        bin_edges, pdf, cdf = self._loghist(x, min_nonzero_x, max_x)
+
         data_range = torch.log(max_x / min_nonzero_x).cpu()
         if data_range <= self.display_range:  # data is LDR, nothing to do
-            return x
-
-        bin_edges, pdf, cdf = self._loghist(x, min_nonzero_x, max_x)
+            return bin_edges, pdf, cdf
         orig_pdf = pdf
         orig_cdf = cdf
 
@@ -109,7 +125,7 @@ class HistogramEqualizer:
 
         delta_b = data_range / self.nbins  # width of one logarithmic bin
 
-        trimmings = torch.tensor(np.inf, dtype=self.dtype, device=self.device)  # loop at least once
+        trimmings = torch.tensor(np.inf, device=self.device, dtype=self.dtype)  # loop at least once
         while trimmings > tol:
             pdf_sum = torch.sum(pdf)
             if pdf_sum < tol:  # degenerate case: histogram has been zeroed out -> return original image
@@ -355,10 +371,9 @@ class Postprocessor:
         image[:3, :, :] = 1.0 - torch.exp(-image[:3, :, :] * hdr_exposure)  # RGB: tonemap
 
         # # TEST - apply Larson's adaptive histogram remapper to the Y (luminance) channel, and keep the color channels (U, V) as-is.
-        # # TODO: There is the issue that most of the image is blank, so the low end gets allocated lots of the brightness space
-        # #       (because in the RGB data, there are lots of black pixels). We should filter out the blank background first.
+        # # Doesn't look that good, the classical method seems better for this use.
         # hdr_Y = luminance(image[:3, :, :])  # Eris have mercy on us, this function isn't designed for HDR data. Seems to work fine, though.
-        # bin_edges, pdf, cdf = self.histeq.larson(hdr_Y)  # or use `self.histeq.loghist` for classical histogram equalization
+        # bin_edges, pdf, cdf = self.histeq.loghist(hdr_Y)  # or use `self.histeq.loghist` for classical histogram equalization
         # ldr_Y = self.histeq.equalize_by_cdf(hdr_Y, bin_edges, cdf)
         # image[:3, :, :] = yuv_to_rgb(torch.cat([ldr_Y.unsqueeze(0), original_yuv[1:]], dim=0))
 
