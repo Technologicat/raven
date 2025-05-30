@@ -19,13 +19,12 @@ import pathlib
 import re
 import requests
 import time
-from typing import Callable, Dict, Generator, Iterator, List, Optional, Union
+from typing import Callable, Dict, Generator, List, Optional, Union
 
 import qoi
 import PIL.Image
 
 from unpythonic.env import env as envcls
-from unpythonic.net.util import ReceiveBuffer
 
 import pygame  # for audio (text to speech) support
 
@@ -40,6 +39,7 @@ from .. import utils as raven_utils
 
 from . import client_util
 from . import config
+from . import netutil
 from .util import RunningAverage
 
 # ----------------------------------------
@@ -74,86 +74,6 @@ def yell_on_error(response: requests.Response) -> None:
         logger.error(f"Avatar server returned error: {response.status_code} {response.reason}. Content of error response follows.")
         logger.error(response.text)
         raise RuntimeError(f"While calling avatar server: HTTP {response.status_code} {response.reason}")
-
-# TODO: split to a new `netutil.py` or something
-def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
-                                                boundary_prefix: str,
-                                                expected_mimetype: Optional[str]) -> Generator[bytes, None, None]:
-    """Generator: yield payloads from `source`, which is reading from a "multipart/x-mixed-replace" stream.
-
-    The server MUST send the Content-Type and Content-Length headers.
-
-    If `expected_mimetype` is provided, the actual received Content-Type must match, e.g. "image/png".
-
-    Loosely based on `unpythonic.net.msg.decodemsg`.
-    """
-    stream_iterator = iter(source)
-    boundary_prefix = boundary_prefix.encode()  # str -> bytes
-    payload_buffer = ReceiveBuffer()
-
-    def read_more_input() -> None:
-        try:
-            data = next(stream_iterator)
-        except StopIteration:
-            raise EOFError
-        payload_buffer.append(data)
-
-    def synchronize() -> None:
-        """Synchronize `payload_buffer` to the start of the next payload boundary marker (e.g. "--frame")."""
-        while True:
-            val = payload_buffer.getvalue()
-            idx = val.rfind(boundary_prefix)
-            if idx != -1:
-                junk, start_of_payload = val[:idx], val[idx:]  # noqa: F841
-                payload_buffer.set(start_of_payload)
-                return
-            # Clear the receive buffer after each chunk that didn't have a sync
-            # marker in it. This prevents a malicious sender from crashing the
-            # receiver by flooding it with nothing but junk.
-            payload_buffer.set(b"")
-            read_more_input()
-
-    def read_headers() -> int:
-        """Read and validate headers for one payload. Return the length of the payload body, in bytes."""
-        while True:
-            val = payload_buffer.getvalue()
-            end_of_headers_idx = val.find(b"\r\n\r\n")
-            if end_of_headers_idx != -1:  # headers completely streamed? (have a blank line at the end)
-                break
-        headers, start_of_body = val[:end_of_headers_idx], val[end_of_headers_idx + 4:]
-        headers = headers.split(b"\r\n")
-        if headers[0] != boundary_prefix:  # after sync, we should always have the payload boundary marker at the start of the buffer
-            assert False
-        body_length_bytes = None
-        for field in headers[1:]:
-            field = field.decode("utf-8")
-            field_name, field_value = [text.strip().lower() for text in field.split(":")]
-            if field_name == "content-type":
-                if expected_mimetype is not None and field_value != expected_mimetype:  # wrong type of data?
-                    raise ValueError(f"multipart_x_mixed_replace_payload_extractor.read_headers: expected mimetype '{expected_mimetype}', got '{field_value}'")
-            if field_name == "content-length":
-                body_length_bytes = int(field_value)  # and let it raise if the value is invalid
-        if body_length_bytes is None:
-            raise ValueError("read_headers: payload is missing the 'Content-Length' header (mandatory for this client)")
-        payload_buffer.set(start_of_body)
-        return body_length_bytes
-
-    def read_body(body_length_bytes: int) -> bytes:
-        """Read the payload body and return it as a `bytes` object."""
-        while True:
-            val = payload_buffer.getvalue()
-            if len(val) >= body_length_bytes:
-                break
-            read_more_input()
-        body, leftovers = val[:body_length_bytes], val[body_length_bytes:]
-        payload_buffer.set(leftovers)
-        return body
-
-    while True:
-        synchronize()
-        body_length_bytes = read_headers()
-        payload = read_body(body_length_bytes)
-        yield payload
 
 # --------------------------------------------------------------------------------
 # Python client for Talkinghead web API
@@ -261,9 +181,9 @@ def talkinghead_result_feed(chunk_size: int = 4096, format: str = "png") -> Gene
     stream_iterator = stream_response.iter_content(chunk_size=chunk_size)
     boundary = re.search(r"boundary=(\S+)", stream_response.headers["Content-Type"]).group(1)
     boundary_prefix = f"--{boundary}"  # e.g., '--frame'
-    gen = multipart_x_mixed_replace_payload_extractor(source=stream_iterator,
-                                                      boundary_prefix=boundary_prefix,
-                                                      expected_mimetype=f"image/{format}")  # if provided, must match the format we send in `talkinghead_load_animator_settings`
+    gen = netutil.multipart_x_mixed_replace_payload_extractor(source=stream_iterator,
+                                                              boundary_prefix=boundary_prefix,
+                                                              expected_mimetype=f"image/{format}")  # if provided, must match the format we send in `talkinghead_load_animator_settings`
     return gen
 
 # # DEBUG/TEST - exercise each of the API endpoints
