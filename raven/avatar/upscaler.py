@@ -36,8 +36,6 @@ class Upscaler:
         self.preset = preset
         self.quality = quality
 
-        self.last_report_time = None
-
         # For the models, see `anime4k` for explanation, and `anime4k.model_dict` for available choices.
         if preset == "A":  # Restore -> Upscale -> Upscale
             self.step1_model = "Restore_VL" if quality == "high" else "Restore_S"
