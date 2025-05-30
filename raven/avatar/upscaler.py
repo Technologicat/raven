@@ -7,8 +7,6 @@ import torch.nn.functional
 
 from .vendor.anime4k import anime4k
 
-from .util import RunningAverage
-
 class Upscaler:
     def __init__(self,
                  device: torch.device,
@@ -38,7 +36,6 @@ class Upscaler:
         self.preset = preset
         self.quality = quality
 
-        self.render_duration_statistics = RunningAverage()
         self.last_report_time = None
 
         # For the models, see `anime4k` for explanation, and `anime4k.model_dict` for available choices.
