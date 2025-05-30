@@ -72,10 +72,10 @@ class HistogramEqualizer:
         return bin_edges, pdf, cdf
 
     def loghist(self, x: torch.Tensor):
-        """Compute a histogram with logarithmically spaced bins.
+        """Logarithmically spaced histogram.
 
-        - data is in a floating-point type
-        - negative data is ignored (gets mapped to the first bin)
+        - `x` must be in a floating-point type
+        - negative values are ignored (these get mapped to the first bin)
         """
         max_x = torch.max(x)
         min_nonzero_x = torch.min(torch.where(x > 0.0, x, max_x))
