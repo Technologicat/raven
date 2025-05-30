@@ -1,4 +1,4 @@
-"""Example Python client for Talkinghead, showing how to use its web API.
+"""Example Python client app for Talkinghead.
 
 This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """
@@ -8,22 +8,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import concurrent.futures
-import copy
 import io
 import json
 import os
 import pathlib
-import re
-import requests
 import time
-from typing import Callable, Dict, Generator, List, Optional, Union
+from typing import Union
 
 import qoi
 import PIL.Image
 
 from unpythonic.env import env as envcls
-
-import pygame  # for audio (text to speech) support
 
 import numpy as np
 
@@ -34,252 +29,33 @@ from .. import animation  # Raven's GUI animation system, nothing to do with the
 from .. import bgtask
 from .. import utils as raven_utils
 
-from . import client_util
+from . import client_api  # convenient Python functions that abstract away the web API
+from . import client_util  # DPG GUI utilities
 from . import config
-from . import netutil
 from .util import RunningAverage
 
 # ----------------------------------------
 # Module bootup
 
-avatar_url = "http://localhost:5100"
+avatar_url = "http://localhost:5100"  # Avatar server
+tts_url = "http://localhost:8880"  # AI speech synthesizer server, https://github.com/remsky/Kokoro-FastAPI
+
 config_dir = pathlib.Path(config.config_base_dir).expanduser().resolve()
-api_key_file = config_dir / "api_key.txt"
+avatar_api_key_file = config_dir / "api_key.txt"
+tts_api_key_file = config_dir / "tts_api_key.txt"
 
-default_headers = {
-}
-
-if os.path.exists(api_key_file):  # TODO: test this (I have no idea what I'm doing; check against `avatar/server.py`)
-    with open(api_key_file, "r", encoding="utf-8") as f:
-        api_key = f.read()
-    default_headers["Authorization"] = api_key.strip()
-
-# AI speech synthesizer - OpenAI compatible
-# https://github.com/remsky/Kokoro-FastAPI
-# TODO: add API key support for TTS too (Authorization: Bearer xxxx)
-tts_url = "http://localhost:8880"
-tts_default_headers = {
-}
-
-pygame.mixer.init()
+bg = concurrent.futures.ThreadPoolExecutor()
+task_manager = bgtask.TaskManager(name="talkinghead_example_client",
+                                  mode="concurrent",
+                                  executor=bg)
+client_api.init_module(avatar_url=avatar_url,
+                       avatar_api_key_file=avatar_api_key_file,
+                       tts_url=tts_url,
+                       tts_api_key_file=tts_api_key_file,
+                       executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
 
 # --------------------------------------------------------------------------------
 # Utilities
-
-def yell_on_error(response: requests.Response) -> None:
-    if response.status_code != 200:
-        logger.error(f"Avatar server returned error: {response.status_code} {response.reason}. Content of error response follows.")
-        logger.error(response.text)
-        raise RuntimeError(f"While calling avatar server: HTTP {response.status_code} {response.reason}")
-
-# --------------------------------------------------------------------------------
-# Python client for Talkinghead web API
-
-# TODO: move the Python API into a new module
-
-def classify_labels() -> List[str]:
-    """Get list of emotion names from server."""
-    headers = copy.copy(default_headers)
-    response = requests.get(f"{avatar_url}/api/classify/labels", headers=headers)
-    yell_on_error(response)
-    output_data = response.json()  # -> {"labels": [emotion0, ...]}
-    return list(sorted(output_data["labels"]))
-
-def classify(text: str) -> Dict[str, float]:  # TODO: feature orthogonality
-    """Classify the emotion of `text` and auto-update the avatar's emotion from that."""
-    headers = copy.copy(default_headers)
-    headers["Content-Type"] = "application/json"
-    input_data = {"text": text}
-    response = requests.post(f"{avatar_url}/api/classify", headers=headers, json=input_data)
-    yell_on_error(response)
-    output_data = response.json()  # -> ["classification": [{"label": "curiosity", "score": 0.5329479575157166}, ...]]
-
-    sorted_records = output_data["classification"]  # sorted already
-    return {record["label"]: record["score"] for record in sorted_records}
-
-def talkinghead_load(filename: Union[pathlib.Path, str]) -> None:
-    """Send a character (512x512 RGBA PNG image) to the animator.
-
-    Then, if the animator is not running, start it automatically.
-    """
-    headers = copy.copy(default_headers)
-    # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
-    with open(filename, "rb") as image_file:
-        files = {"file": image_file}
-        response = requests.post(f"{avatar_url}/api/talkinghead/load", headers=headers, files=files)
-    yell_on_error(response)
-
-def talkinghead_unload() -> None:
-    """Actually just pause the animator, don't unload anything."""
-    headers = copy.copy(default_headers)
-    response = requests.get(f"{avatar_url}/api/talkinghead/unload", headers=headers)
-    yell_on_error(response)
-
-def talkinghead_reload() -> None:
-    """Resume the animator after it was paused via `talkinghead_unload`, without sending a new character."""
-    headers = copy.copy(default_headers)
-    response = requests.get(f"{avatar_url}/api/talkinghead/reload", headers=headers)
-    yell_on_error(response)
-
-def talkinghead_load_emotion_templates(emotions: Dict) -> None:
-    headers = copy.copy(default_headers)
-    headers["Content-Type"] = "application/json"
-    response = requests.post(f"{avatar_url}/api/talkinghead/load_emotion_templates", json=emotions, headers=headers)
-    yell_on_error(response)
-
-def talkinghead_load_emotion_templates_from_file(filename: Union[pathlib.Path, str]) -> None:
-    with open(filename, "r", encoding="utf-8") as json_file:
-        emotions = json.load(json_file)
-    talkinghead_load_emotion_templates(emotions)
-
-def talkinghead_load_animator_settings(animator_settings: Dict) -> None:
-    headers = copy.copy(default_headers)
-    headers["Content-Type"] = "application/json"
-    response = requests.post(f"{avatar_url}/api/talkinghead/load_animator_settings", json=animator_settings, headers=headers)
-    yell_on_error(response)
-
-def talkinghead_load_animator_settings_from_file(filename: Union[pathlib.Path, str]) -> None:
-    with open(filename, "r", encoding="utf-8") as json_file:
-        animator_settings = json.load(json_file)
-    talkinghead_load_animator_settings(animator_settings)
-
-def talkinghead_start_talking() -> None:
-    headers = copy.copy(default_headers)
-    response = requests.get(f"{avatar_url}/api/talkinghead/start_talking", headers=headers)
-    yell_on_error(response)
-
-def talkinghead_stop_talking() -> None:
-    headers = copy.copy(default_headers)
-    response = requests.get(f"{avatar_url}/api/talkinghead/stop_talking", headers=headers)
-    yell_on_error(response)
-
-def talkinghead_set_emotion(emotion_name: str) -> None:
-    headers = copy.copy(default_headers)
-    headers["Content-Type"] = "application/json"
-    data = {"emotion_name": emotion_name}
-    response = requests.post(f"{avatar_url}/api/talkinghead/set_emotion", headers=headers, json=data)
-    yell_on_error(response)
-
-def talkinghead_result_feed(chunk_size: int = 4096, format: str = "png") -> Generator[bytes, None, None]:
-    """Return a generator that yields `bytes` objects, one per video frame, as PNG.
-
-    Due to the server's framerate control, the result feed attempts to feed data to the client at TARGET_FPS (default 25).
-    New frames are not generated until the previous one has been consumed. Thus, while the animator is in the running state,
-    it is recommended to continuously read the stream in a background thread.
-
-    To close the connection (so that the server stops sending), call the `.close()` method of the generator.
-    The connection also auto-closes when the generator is garbage-collected.
-    """
-    headers = copy.copy(default_headers)
-    headers["Accept"] = "multipart/x-mixed-replace"
-    stream_response = requests.get(f"{avatar_url}/api/talkinghead/result_feed", headers=headers, stream=True)
-    yell_on_error(stream_response)
-
-    stream_iterator = stream_response.iter_content(chunk_size=chunk_size)
-    boundary = re.search(r"boundary=(\S+)", stream_response.headers["Content-Type"]).group(1)
-    boundary_prefix = f"--{boundary}"  # e.g., '--frame'
-    gen = netutil.multipart_x_mixed_replace_payload_extractor(source=stream_iterator,
-                                                              boundary_prefix=boundary_prefix,
-                                                              expected_mimetype=f"image/{format}")  # if provided, must match the format we send in `talkinghead_load_animator_settings`
-    return gen
-
-# # DEBUG/TEST - exercise each of the API endpoints
-# print(classify_labels())  # get available emotion names from server
-# talkinghead_load("example.png")  # send the avatar - mandatory
-# talkinghead_load_animator_settings(os.path.join(os.path.dirname(__file__), "animator.json"))  # send animator config - optional, server defaults used if not sent
-# talkinghead_load_emotion_templates(os.path.join(os.path.dirname(__file__), "emotions", "_defaults.json"))  # send the morph parameters for emotions - optional, server defaults used if not sent
-# gen = talkinghead_result_feed()
-# talkinghead_start_talking()  # start "talking right now" animation
-# print(classify("What is the airspeed velocity of an unladen swallow?"))  # classify some text, auto-update emotion from result
-# talkinghead_set_emotion("surprise")  # manually update emotion
-# for _ in range(5):
-#     image_data = next(gen)  # next-gen lol
-#     image_file = io.BytesIO(image_data)
-#     image = PIL.Image.open(image_file)
-# talkinghead_stop_talking()  # stop "talking right now" animation
-# talkinghead_unload()  # pause animating the talkinghead
-# talkinghead_reload()  # resume animating the talkinghead
-# import sys
-# sys.exit(0)
-
-# --------------------------------------------------------------------------------
-# Python client for AI speech synthesizer
-
-def tts_available() -> bool:
-    """Return whether the speech synthesizer is available."""
-    headers = copy.copy(tts_default_headers)
-    try:
-        response = requests.get(f"{tts_url}/health", headers=headers)
-    except Exception as exc:
-        logger.error(f"TalkingheadExampleGUI.tts_available: {type(exc)}: {exc}")
-        return False
-    if response.status_code != 200:
-        return False
-    return True
-
-def tts_voices() -> None:
-    """Return a list of voice names supported by the TTS endpoint."""
-    headers = copy.copy(tts_default_headers)
-    response = requests.get(f"{tts_url}/v1/audio/voices", headers=headers)
-    yell_on_error(response)
-    output_data = response.json()
-    return output_data["voices"]
-
-def tts_speak(voice: str,
-              text: str,
-              start_callback: Optional[Callable],
-              stop_callback: Optional[Callable]) -> None:
-    """Using the speech synthesizer, speak `text` using `voice`.
-
-    If `start_callback` is provided, call it when the TTS starts speaking.
-    If `stop_callback` is provided, call it when the TTS has stopped speaking.
-    """
-    headers = copy.copy(tts_default_headers)
-    headers["Content-Type"] = "application/json"
-    data = {"model": "kokoro",
-            "voice": voice,
-            "input": text,
-            "response_format": "mp3",  # flac would be nice (faster to encode), but seems currently broken in kokoro (the audio may repeat twice)
-            "speed": 1,
-            "stream": True,
-            "return_download_link": False}
-    stream_response = requests.post(f"{tts_url}/v1/audio/speech", headers=headers, json=data, stream=True)
-    yell_on_error(stream_response)
-
-    # We run this in the background to
-    def speak(task_env) -> None:
-        it = stream_response.iter_content(chunk_size=4096)
-        audio_buffer = io.BytesIO()
-        try:
-            while True:
-                if task_env.cancelled:
-                    return
-                chunk = next(it)
-                audio_buffer.write(chunk)
-        except StopIteration:
-            pass
-
-        # # DEBUG - dump response to audio file
-        # audio_buffer.seek(0)
-        # with open("temp.mp3", "wb") as audio_file:
-        #     audio_file.write(audio_buffer.getvalue())
-
-        # play audio
-        audio_buffer.seek(0)
-        if pygame.mixer.music.get_busy():
-            pygame.mixer.music.stop()
-        pygame.mixer.music.load(audio_buffer)
-        # pygame.mixer.music.load(stream_response.raw)  # can't do this at least with mp3 since the raw stream doesn't support seeking.
-
-        if start_callback is not None:
-            start_callback()
-        pygame.mixer.music.play()
-
-        if stop_callback is not None:
-            while pygame.mixer.music.get_busy():
-                time.sleep(0.01)
-            stop_callback()
-    task_manager.submit(speak, envcls())
 
 # --------------------------------------------------------------------------------
 # DPG init
@@ -556,7 +332,7 @@ class TalkingheadExampleGUI:
                     dpg.add_spacer(height=8)
 
                     dpg.add_text("Emotion [Ctrl+E]")
-                    self.emotion_names = classify_labels()
+                    self.emotion_names = client_api.classify_labels()
                     if "neutral" in self.emotion_names:
                         self.emotion_names.remove("neutral")
                         self.emotion_names = ["neutral"] + self.emotion_names
@@ -573,10 +349,10 @@ class TalkingheadExampleGUI:
                     dpg.add_spacer(height=8)
 
                     # AI speech synthesizer
-                    tts_alive = tts_available()
+                    tts_alive = client_api.tts_available()
                     if tts_alive:
                         heading_label = f"Voice [Ctrl+V] [{tts_url}]"
-                        self.voice_names = tts_voices()
+                        self.voice_names = client_api.tts_voices()
                     else:
                         heading_label = "Voice [Ctrl+V] [not connected]"
                         self.voice_names = ["[TTS server not available]"]
@@ -592,11 +368,11 @@ class TalkingheadExampleGUI:
         logger.info(f"TalkingheadExampleGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
         self.current_emotion = dpg.get_value(self.emotion_choice)
         logger.info(f"TalkingheadExampleGUI.on_send_emotion: sending emotion '{self.current_emotion}'")
-        talkinghead_set_emotion(self.current_emotion)
+        client_api.talkinghead_set_emotion(self.current_emotion)
 
     def load_image(self, filename: Union[pathlib.Path, str]) -> None:
         try:
-            talkinghead_load(filename)
+            client_api.talkinghead_load(filename)
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_image: {type(exc)}: {exc}")
             client_util.modal_dialog(window_title="Error",
@@ -608,7 +384,7 @@ class TalkingheadExampleGUI:
 
     def load_json(self, filename: Union[pathlib.Path, str]) -> None:
         try:
-            talkinghead_load_emotion_templates_from_file(filename)
+            client_api.talkinghead_load_emotion_templates_from_file(filename)
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_json: {type(exc)}: {exc}")
             client_util.modal_dialog(window_title="Error",
@@ -623,7 +399,7 @@ class TalkingheadExampleGUI:
             with open(filename, "r", encoding="utf-8") as json_file:
                 animator_settings = json.load(json_file)
             animator_settings.update(self.custom_animator_settings)  # setup overrides
-            talkinghead_load_animator_settings(animator_settings)
+            client_api.talkinghead_load_animator_settings(animator_settings)
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_animator_settings: {type(exc)}: {exc}")
             client_util.modal_dialog(window_title="Error",
@@ -636,23 +412,23 @@ class TalkingheadExampleGUI:
     def toggle_talking(self) -> None:
         """Toggle the talkinghead's talking state."""
         if not self.talking:
-            talkinghead_start_talking()
+            client_api.talkinghead_start_talking()
             dpg.set_item_label("start_stop_talking_button", "Stop talking [Ctrl+T]")
         else:
-            talkinghead_stop_talking()
+            client_api.talkinghead_stop_talking()
             dpg.set_item_label("start_stop_talking_button", "Start talking [Ctrl+T]")
         self.talking = not self.talking
 
     def toggle_animator_paused(self) -> None:
         """Pause or resume the animation. Pausing when the talkinghead won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
         if self.animator_running:
-            talkinghead_unload()
+            client_api.talkinghead_unload()
             dpg.set_value("please_standby_text", "[Animator is paused]")
             dpg.show_item("please_standby_text")
             dpg.hide_item("live_image")
             dpg.set_item_label("pause_resume_button", "Resume animator [Ctrl+P]")
         else:
-            talkinghead_reload()
+            client_api.talkinghead_reload()
             dpg.hide_item("please_standby_text")
             dpg.show_item("live_image")
             dpg.set_item_label("pause_resume_button", "Pause animator [Ctrl+P]")
@@ -660,10 +436,10 @@ class TalkingheadExampleGUI:
 
     def on_speak(self, sender, app_data) -> None:
         current_voice = dpg.get_value(self.voice_choice)
-        tts_speak(voice=current_voice,
-                  text="Testing the AI speech synthesizer.",  # TODO: GUI control to enter text to speak
-                  start_callback=talkinghead_start_talking,
-                  stop_callback=talkinghead_stop_talking)
+        client_api.tts_speak(voice=current_voice,
+                             text="Testing the AI speech synthesizer.",  # TODO: GUI control to enter text to speak
+                             start_callback=client_api.talkinghead_start_talking,
+                             stop_callback=client_api.talkinghead_stop_talking)
 
 # Hotkey support
 choice_map = None
@@ -740,7 +516,7 @@ class ResultFeedReader:
         self.gen = None
 
     def start(self):
-        self.gen = talkinghead_result_feed(format=gui_instance.comm_format.lower())
+        self.gen = client_api.talkinghead_result_feed(expected_format=gui_instance.comm_format)
 
     def is_running(self):
         return self.gen is not None
@@ -856,14 +632,10 @@ def update_live_texture(task_env) -> None:
 if __name__ == "__main__":
     gui_instance = TalkingheadExampleGUI()
 
-    bg = concurrent.futures.ThreadPoolExecutor()
-    task_manager = bgtask.TaskManager(name="talkinghead_example_client",
-                                      mode="concurrent",
-                                      executor=bg)
-    talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
-    talkinghead_load_animator_settings(gui_instance.custom_animator_settings)
-    # talkinghead_set_emotion("curiosity")  # if you want a non-default emotion at startup
-    talkinghead_load("example.png")  # this will also start the animator if it was paused
+    client_api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
+    client_api.talkinghead_load_animator_settings(gui_instance.custom_animator_settings)
+    # client_api.talkinghead_set_emotion("curiosity")  # if you want a non-default emotion at startup
+    client_api.talkinghead_load("example.png")  # this will also start the animator if it was paused
     def shutdown() -> None:
         task_manager.clear(wait=True)
         animation.animator.clear()
