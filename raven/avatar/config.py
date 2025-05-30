@@ -1,3 +1,8 @@
+"""Avatar configuration.
+
+This module is licensed under the 2-clause BSD licensed, to facilitate Talkinghead integration anywhere.
+"""
+
 # Port the raven-avatar app is hosted on. Can be overridden on the command line.
 #
 DEFAULT_PORT = 5100
