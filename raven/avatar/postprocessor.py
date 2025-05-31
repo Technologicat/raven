@@ -969,7 +969,8 @@ class Postprocessor:
     def scanlines(self, image: torch.tensor, *,
                   field: int = 0,
                   dynamic: bool = True,
-                  channel: str = "Y") -> None:
+                  channel: str = "Y",
+                  strength: float = 0.5) -> None:
         """[dynamic] CRT TV like scanlines.
 
         `field`: Which CRT field is dimmed at the first frame. 0 = top, 1 = bottom.
@@ -978,6 +979,7 @@ class Postprocessor:
         `channel`: One of:
                      "Y": darken the luminance (converts to YUV and back, slower)
                      "A": darken the alpha channel (fast, but makes the darkened lines translucent)
+        `strength`: E.g. 0.25 -> dim to 75% brightness/alpha.
 
         Note that "frame" here refers to the normalized frame number, at a reference of 25 FPS.
         """
@@ -985,10 +987,11 @@ class Postprocessor:
             start = (field + int(self.frame_no)) % 2
         else:
             start = field
+        dim = 1.0 - strength
         if channel == "A":  # alpha
-            image[3, start::2, :].mul_(0.5)
+            image[3, start::2, :].mul_(dim)
         else:  # "Y", luminance
             image_yuv = rgb_to_yuv(image[:3, :, :])
-            image_yuv[0, start::2, :].mul_(0.5)
+            image_yuv[0, start::2, :].mul_(dim)
             image_rgb = yuv_to_rgb(image_yuv)
             image[:3, :, :] = image_rgb
