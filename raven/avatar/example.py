@@ -13,6 +13,7 @@ import json
 import os
 import pathlib
 import time
+import traceback
 from typing import Union
 
 import qoi
@@ -102,7 +103,7 @@ with dpg.theme(tag="disablable_button_theme"):
         dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
         dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
 
-viewport_width = 1600
+viewport_width = 1850
 viewport_height = 1040
 dpg.create_viewport(title="Talkinghead",
                     width=viewport_width,
@@ -269,23 +270,21 @@ def is_any_modal_window_visible():
 class TalkingheadExampleGUI:
     def __init__(self):
         self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed...
+
+        # TODO: allow changing upscale settings while running (need to re-create DPG texture)
         self.upscale = 2.0  # ...but the animator has a realtime super-resolution filter (anime4k). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
         self.upscale_preset = "C"  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
-        self.upscale_quality = "low"  # "low": fast, acceptable quality; "high": slow, good quality
+        self.upscale_quality = "high"  # "low": fast, acceptable quality; "high": slow, good quality
+        self.image_size = int(self.upscale * self.source_image_size)  # final size in GUI (for pixel-perfect texture)
+
         self.target_fps = 25  # default 25; maybe better to lower this when upscaling (see the server's terminal output for available FPS)
         self.comm_format = "QOI"  # Frame format for video stream
 
-        self.image_size = int(self.upscale * self.source_image_size)  # final size in GUI
-
-        self.custom_animator_settings = {"format": self.comm_format,
-                                         "upscale": self.upscale,
-                                         "upscale_preset": self.upscale_preset,
-                                         "upscale_quality": self.upscale_quality,
-                                         "target_fps": self.target_fps}  # any missing keys are auto-populated from server defaults
         self.button_width = 300
 
         self.talking = False
         self.animator_running = True
+        self.animator_settings = None  # not loaded yet
 
         with dpg.texture_registry(tag="talkinghead_example_textures"):
             self.blank_texture = np.zeros([self.image_size,  # height
@@ -321,47 +320,349 @@ class TalkingheadExampleGUI:
                 dpg.set_frame_callback(10, position_please_standby_text)
 
                 # TODO: reposition talkinghead on window resize
+                # TODO: editor for main animator config too (target FPS, talking speed, ...)
                 # TODO: robustness: don't crash if the server is/goes down
-                # TODO: animator/postproc settings editor
-                # TODO: zooming (client-side, based on image data)
-                with dpg.group(horizontal=False):
-                    dpg.add_text("Load")
-                    dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_image_dialog, tag="open_image_button")
-                    dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
-                    dpg.add_button(label="Load animator settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
-                    dpg.add_spacer(height=8)
+                # TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming.)
+                with dpg.group(horizontal=True):
+                    with dpg.group(horizontal=False):
+                        dpg.add_text("Load / save")
+                        dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_image_dialog, tag="open_image_button")
+                        dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
+                        dpg.add_text("[Use raven.avatar.editor to edit templates.]", color=(140, 140, 140))
+                        dpg.add_spacer(height=4)
+                        dpg.add_button(label="Load animator settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
+                        dpg.add_button(label="Save animator settings", width=self.button_width, tag="save_animator_settings_button")  # TODO: implement
+                        dpg.add_spacer(height=8)
 
-                    dpg.add_text("Emotion [Ctrl+E]")
-                    self.emotion_names = client_api.classify_labels()
-                    if "neutral" in self.emotion_names:
-                        self.emotion_names.remove("neutral")
-                        self.emotion_names = ["neutral"] + self.emotion_names
-                    self.emotion_choice = dpg.add_combo(items=self.emotion_names,
-                                                        default_value=self.emotion_names[0],
-                                                        width=self.button_width,
-                                                        callback=self.on_send_emotion)
-                    self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
-                    dpg.add_spacer(height=8)
+                        dpg.add_text("Emotion [Ctrl+E]")
+                        self.emotion_names = client_api.classify_labels()
+                        if "neutral" in self.emotion_names:
+                            self.emotion_names.remove("neutral")
+                            self.emotion_names = ["neutral"] + self.emotion_names
+                        self.emotion_choice = dpg.add_combo(items=self.emotion_names,
+                                                            default_value=self.emotion_names[0],
+                                                            width=self.button_width,
+                                                            callback=self.on_send_emotion)
+                        self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
+                        dpg.add_spacer(height=8)
 
-                    dpg.add_text("Toggles")
-                    dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
-                    dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
-                    dpg.add_spacer(height=8)
+                        dpg.add_text("Toggles")
+                        dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
+                        dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
+                        dpg.add_spacer(height=8)
 
-                    # AI speech synthesizer
-                    tts_alive = client_api.tts_available()
-                    if tts_alive:
-                        heading_label = f"Voice [Ctrl+V] [{tts_url}]"
-                        self.voice_names = client_api.tts_voices()
-                    else:
-                        heading_label = "Voice [Ctrl+V] [not connected]"
-                        self.voice_names = ["[TTS server not available]"]
-                    dpg.add_text(heading_label)
-                    self.voice_choice = dpg.add_combo(items=self.voice_names,
-                                                      default_value=self.voice_names[0],
-                                                      width=self.button_width)
-                    dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_speak, enabled=tts_alive, tag="speak_button")
-                    dpg.bind_item_theme("speak_button", "disablable_button_theme")
+                        # AI speech synthesizer
+                        tts_alive = client_api.tts_available()
+                        if tts_alive:
+                            heading_label = f"Voice [Ctrl+V] [{tts_url}]"
+                            self.voice_names = client_api.tts_voices()
+                        else:
+                            heading_label = "Voice [Ctrl+V] [not connected]"
+                            self.voice_names = ["[TTS server not available]"]
+                        dpg.add_text(heading_label)
+                        self.voice_choice = dpg.add_combo(items=self.voice_names,
+                                                          default_value=self.voice_names[0],
+                                                          width=self.button_width)
+                        dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_speak, enabled=tts_alive, tag="speak_button")
+                        dpg.bind_item_theme("speak_button", "disablable_button_theme")
+                        dpg.add_spacer(height=8)
+
+                        # Upscaler settings editor
+                        # TODO: implementation (must re-generate GUI texture, and skip rendering in the background thread until the new "canvas" is ready)
+                        dpg.add_text("Upscaler [Ctrl+click to set a numeric value]")
+                        dpg.add_slider_int(label="x 0.1x", default_value=20, min_value=10, max_value=40, clamped=True, width=self.button_width)
+                        self.upscale_presets = ["A", "B", "C"]
+                        with dpg.group(horizontal=True):
+                            dpg.add_combo(items=self.upscale_presets,
+                                          default_value=self.upscale_preset,
+                                          width=self.button_width)
+                            dpg.add_text("Preset")
+                        with dpg.group(horizontal=True):
+                            self.upscale_qualities = ["low", "high"]
+                            dpg.add_combo(items=self.upscale_qualities,
+                                          default_value=self.upscale_quality,
+                                          width=self.button_width)
+                            dpg.add_text("Quality")
+                        dpg.add_spacer(height=8)
+
+                    dpg.add_spacer(width=8)
+
+                    # Postprocessor settings editor
+                    #
+                    # NOTE: In this client, defaults for postprocessor parameters are set in two places:
+                    #   - In the GUI controls, for any filters that are not enabled in the config file.
+                    #   - In `canonize_postprocessor_parameters_for_gui` for any missing parameters for filters that are enabled in the config file.
+                    #
+                    # TODO: implementation
+                    #  - save dialog for saving animator settings from GUI
+                    # TODO: add GUI for:
+                    #   - shift_distort (glitchy digital video stream as sometimes depicted in sci-fi)
+                    #   - analog_vhsglitches (glitchy VHS tape)
+                    #   - analog_vhstracking (bad VHS tracking)
+                    # TODO: add GUI for any parameters of the supported filters that are not supported yet by the GUI
+                    # TODO: rename some of the postproc filters more descriptively
+                    #
+                    with dpg.group(horizontal=False):
+                        dpg.add_text("Postprocessor [Ctrl+click to set a numeric value]")
+                        # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
+
+                        dpg.add_text("Scene")
+                        dpg.add_checkbox(label="Bloom", default_value=True,
+                                         tag="bloom_checkbox", callback=self.on_postprocessor_settings_change)
+                        with dpg.group(horizontal=True):
+                            dpg.add_spacer(width=8)
+                            with dpg.group():
+                                dpg.add_slider_float(label="threshold", default_value=0.5, min_value=0.1, max_value=1.0, clamped=True, width=self.button_width,
+                                                     tag="bloom_threshold_slider", callback=self.on_postprocessor_settings_change)
+                                dpg.add_slider_float(label="exposure", default_value=0.5, min_value=0.1, max_value=5.0, clamped=True, width=self.button_width,
+                                                     tag="bloom_exposure_slider", callback=self.on_postprocessor_settings_change)
+                                dpg.add_spacer(height=4)
+
+                        dpg.add_text("Optics")
+                        dpg.add_checkbox(label="Chromatic aberration", default_value=True,
+                                         tag="chromatic_aberration_checkbox", callback=self.on_postprocessor_settings_change)
+                        with dpg.group(horizontal=True):
+                            dpg.add_spacer(width=8)
+                            with dpg.group():
+                                dpg.add_slider_float(label="sigma", default_value=1.0, min_value=0.1, max_value=3.0, clamped=True, width=self.button_width,
+                                                     tag="chromatic_aberration_sigma_slider", callback=self.on_postprocessor_settings_change)
+                                dpg.add_slider_float(label="scale", default_value=0.005, min_value=0.001, max_value=0.050, clamped=True, width=self.button_width,
+                                                     tag="chromatic_aberration_scale_slider", callback=self.on_postprocessor_settings_change)
+                        dpg.add_checkbox(label="Vignetting", default_value=True,
+                                         tag="vignetting_checkbox", callback=self.on_postprocessor_settings_change)
+                        with dpg.group(horizontal=True):
+                            dpg.add_spacer(width=8)
+                            with dpg.group():
+                                dpg.add_slider_float(label="strength", default_value=0.42, min_value=0.1, max_value=0.5, clamped=True, width=self.button_width,
+                                                     tag="vignetting_strength_slider", callback=self.on_postprocessor_settings_change)
+                        dpg.add_spacer(height=4)
+
+                        dpg.add_text("Hologram")
+                        with dpg.group(horizontal=True):
+                            dpg.add_checkbox(label="Translucency", default_value=True,
+                                             tag="translucency_checkbox", callback=self.on_postprocessor_settings_change)
+                            dpg.add_text("[looks best with a background image]", color=(140, 140, 140))
+                        with dpg.group(horizontal=True):
+                            dpg.add_spacer(width=8)
+                            with dpg.group():
+                                dpg.add_slider_float(label="alpha", default_value=0.9, min_value=0.1, max_value=0.9, clamped=True, width=self.button_width,
+                                                     tag="translucency_alpha_slider", callback=self.on_postprocessor_settings_change)
+                        dpg.add_spacer(height=4)
+
+                        dpg.add_text("Analog video")
+                        dpg.add_checkbox(label="Low resolution", default_value=True,
+                                         tag="analog_lowres_checkbox", callback=self.on_postprocessor_settings_change)
+                        with dpg.group(horizontal=True):
+                            dpg.add_spacer(width=8)
+                            with dpg.group():
+                                # TODO: Kernel size affects the sensible range of sigma. Doing the easy thing for now and keeping the kernel size fixed at 13 pixels (on each axis).
+                                dpg.add_slider_float(label="sigma", default_value=1.5, min_value=0.5, max_value=3.0, clamped=True, width=self.button_width,
+                                                     tag="analog_lowres_sigma_slider", callback=self.on_postprocessor_settings_change)
+                        dpg.add_checkbox(label="Rippling H-sync", default_value=True,
+                                         tag="analog_badhsync_checkbox", callback=self.on_postprocessor_settings_change)
+                        with dpg.group(horizontal=True):
+                            dpg.add_spacer(width=8)
+                            with dpg.group():
+                                # TODO: urg, amplitude and density settings for the ripples.
+                                dpg.add_slider_float(label="speed", default_value=8.0, min_value=1.0, max_value=16.0, clamped=True, width=self.button_width,
+                                                     tag="analog_badhsync_speed_slider", callback=self.on_postprocessor_settings_change)
+                        dpg.add_checkbox(label="Runaway H-sync", default_value=True,
+                                         tag="analog_distort_checkbox", callback=self.on_postprocessor_settings_change)
+                        with dpg.group(horizontal=True):
+                            dpg.add_spacer(width=8)
+                            with dpg.group():
+                                dpg.add_slider_float(label="speed", default_value=8.0, min_value=1.0, max_value=16.0, clamped=True, width=self.button_width,
+                                                     tag="analog_distort_speed_slider", callback=self.on_postprocessor_settings_change)
+                                dpg.add_slider_float(label="asymmetry", default_value=0.1, min_value=0.0, max_value=0.5, clamped=True, width=self.button_width,
+                                                     tag="analog_distort_strength_slider", callback=self.on_postprocessor_settings_change)
+                                with dpg.group(horizontal=True):
+                                    self.analog_distort_placements = ["bottom", "top"]
+                                    dpg.add_combo(items=self.analog_distort_placements,
+                                                  default_value=self.analog_distort_placements[0],
+                                                  width=self.button_width,
+                                                  tag="analog_distort_edge_choice", callback=self.on_postprocessor_settings_change)
+                                    dpg.add_text("placement")
+                        dpg.add_spacer(height=4)
+
+                        dpg.add_text("Television")
+                        dpg.add_checkbox(label="Desaturate", default_value=True,
+                                         tag="desaturate_checkbox", callback=self.on_postprocessor_settings_change)
+                        # TODO: tint color
+                        # TODO: bandpass color, bandpass Q value
+
+                        dpg.add_checkbox(label="Banding", default_value=True,
+                                         tag="banding_checkbox", callback=self.on_postprocessor_settings_change)
+                        with dpg.group(horizontal=True):
+                            dpg.add_spacer(width=8)
+                            with dpg.group():
+                                dpg.add_slider_float(label="strength", default_value=0.4, min_value=0.1, max_value=0.9, clamped=True, width=self.button_width,
+                                                     tag="banding_strength_slider", callback=self.on_postprocessor_settings_change)
+                                dpg.add_slider_float(label="density", default_value=2.0, min_value=1.0, max_value=4.0, clamped=True, width=self.button_width,
+                                                     tag="banding_density_slider", callback=self.on_postprocessor_settings_change)
+                                dpg.add_slider_float(label="speed", default_value=16.0, min_value=1.0, max_value=32.0, clamped=True, width=self.button_width,
+                                                     tag="banding_speed_slider", callback=self.on_postprocessor_settings_change)
+
+                        dpg.add_checkbox(label="Scanlines", default_value=True,
+                                         tag="scanlines_checkbox", callback=self.on_postprocessor_settings_change)
+                        with dpg.group(horizontal=True):
+                            dpg.add_spacer(width=8)
+                            with dpg.group():
+                                dpg.add_checkbox(label="dynamic", default_value=True,
+                                                 tag="scanlines_dynamic_checkbox", callback=self.on_postprocessor_settings_change)
+                                dpg.add_slider_float(label="strength", default_value=0.5, min_value=0.1, max_value=0.9, clamped=True, width=self.button_width,
+                                                     tag="scanlines_strength_slider", callback=self.on_postprocessor_settings_change)
+                                with dpg.group(horizontal=True):
+                                    self.scanlines_channels = ["Y", "A"]  # Y = luminance, A = alpha
+                                    dpg.add_combo(items=self.scanlines_channels,
+                                                  default_value=self.scanlines_channels[0],
+                                                  width=self.button_width,
+                                                  tag="scanlines_channel_choice", callback=self.on_postprocessor_settings_change)
+                                    dpg.add_text("channel")
+                        dpg.add_spacer(height=4)
+
+    # TODO: Would be really nice to have a code generator for all this data <-> GUI conversion.
+    _gui_supported_filters = ["bloom",
+                              "chromatic_aberration",
+                              "vignetting",
+                              "translucency",
+                              "analog_lowres",
+                              "analog_badhsync",  # rippling h-sync
+                              "analog_distort",  # runaway h-sync
+                              "desaturate",
+                              "banding",
+                              "scanlines"]
+
+    def strip_postprocessor_chain_for_gui(self, postprocessor_chain):
+        """Strip to what we can set up in the GUI. Fixed ordering of filters; not all filters supported; at most one copy of each supported filter."""
+        input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
+        return [(filt, input_dict[filt]) for filt in self._gui_supported_filters if filt in input_dict]
+
+    def canonize_postprocessor_parameters_for_gui(self, postprocessor_chain):
+        """Strip fields not editable in GUI. Auto-populate missing fields, that are editable in the GUI, to their default values.
+
+        Be sure to feed your postprocessor chain through `strip_postprocessor_chain_for_gui` first.
+        """
+        validated_postprocessor_chain = []
+        for filt, filter_settings in postprocessor_chain:
+            validated_settings = {}
+            # Here we follow the ordering in `postprocessor.py`.
+            if filt == "bloom":
+                validated_settings["luma_threshold"] = filter_settings.get("luma_threshold", 0.5)
+                validated_settings["hdr_exposure"] = filter_settings.get("hdr_exposure", 0.5)
+            elif filt == "chromatic_aberration":
+                validated_settings["transverse_sigma"] = filter_settings.get("transverse_sigma", 1.0)
+                validated_settings["axial_scale"] = filter_settings.get("axial_scale", 0.005)
+            elif filt == "vignetting":
+                validated_settings["strength"] = filter_settings.get("strength", 0.42)
+            elif filt == "translucency":
+                validated_settings["alpha"] = filter_settings.get("alpha", 0.9)
+            # "alphanoise", "lumanoise" filters currently not supported in GUI
+            elif filt == "analog_lowres":
+                # "kernel_size" currently not adjustable in GUI
+                validated_settings["sigma"] = filter_settings.get("sigma", 1.5)
+            elif filt == "analog_badhsync":  # rippling h-sync
+                # amplitude1...3 and density1...3 currently not adjustable in GUI
+                validated_settings["speed"] = filter_settings.get("speed", 8.0)
+            elif filt == "analog_distort":  # runaway h-sync
+                validated_settings["speed"] = filter_settings.get("speed", 8.0)
+                validated_settings["strength"] = filter_settings.get("strength", 0.1)
+                validated_settings["edge"] = filter_settings.get("edge", "bottom")
+            # "analog_vhsglitches", "analog_vhstracking", "shift_distort" filters currently not supported in GUI
+            elif filt == "desaturate":
+                pass  # tint and hue bandpass currently not supported in GUI
+            elif filt == "banding":
+                validated_settings["strength"] = filter_settings.get("strength", 0.4)
+                validated_settings["density"] = filter_settings.get("strength", 2.0)
+                validated_settings["speed"] = filter_settings.get("strength", 16.0)
+            elif filt == "scanlines":
+                validated_settings["dynamic"] = filter_settings.get("dynamic", True)
+                validated_settings["strength"] = filter_settings.get("strength", 0.5)
+                validated_settings["channel"] = filter_settings.get("channel", "Y")
+            validated_postprocessor_chain.append((filt, validated_settings))
+        return validated_postprocessor_chain
+
+    def populate_gui_from_canonized_postprocessor_chain(self, postprocessor_chain):
+        """Ordering: strip -> canonize -> populate GUI"""
+        input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
+        for filt in self._gui_supported_filters:
+            if filt not in input_dict:
+                dpg.set_value(f"{filt}_checkbox", False)
+                continue  # parameter values in GUI don't matter if the filter is disabled
+            dpg.set_value(f"{filt}_checkbox", True)
+            if filt == "bloom":
+                dpg.set_value(f"{filt}_threshold_slider", input_dict[filt]["luma_threshold"])
+                dpg.set_value(f"{filt}_exposure_slider", input_dict[filt]["hdr_exposure"])
+            elif filt == "chromatic_aberration":
+                dpg.set_value(f"{filt}_sigma_slider", input_dict[filt]["transverse_sigma"])
+                dpg.set_value(f"{filt}_scale_slider", input_dict[filt]["axial_scale"])
+            elif filt == "vignetting":
+                dpg.set_value(f"{filt}_strength_slider", input_dict[filt]["strength"])
+            elif filt == "translucency":
+                dpg.set_value(f"{filt}_alpha_slider", input_dict[filt]["alpha"])
+                # "alphanoise", "lumanoise" filters currently not supported in GUI
+            elif filt == "analog_lowres":
+                # "kernel_size" currently not adjustable in GUI
+                dpg.set_value(f"{filt}_sigma_slider", input_dict[filt]["sigma"])
+            elif filt == "analog_badhsync":
+                # amplitude1...3 and density1...3 currently not adjustable in GUI
+                dpg.set_value(f"{filt}_speed_slider", input_dict[filt]["speed"])
+            elif filt == "analog_distort":
+                dpg.set_value(f"{filt}_speed_slider", input_dict[filt]["speed"])
+                dpg.set_value(f"{filt}_strength_slider", input_dict[filt]["strength"])
+                dpg.set_value(f"{filt}_edge_choice", input_dict[filt]["edge"])
+            # "analog_vhsglitches", "analog_vhstracking", "shift_distort" filters currently not supported in GUI
+            elif filt == "desaturate":
+                pass  # tint and hue bandpass currently not supported in GUI
+            elif filt == "banding":
+                dpg.set_value(f"{filt}_strength_slider", input_dict[filt]["strength"])
+                dpg.set_value(f"{filt}_density_slider", input_dict[filt]["density"])
+                dpg.set_value(f"{filt}_speed_slider", input_dict[filt]["speed"])
+            elif filt == "scanlines":
+                dpg.set_value(f"{filt}_dynamic_checkbox", input_dict[filt]["dynamic"])
+                dpg.set_value(f"{filt}_strength_slider", input_dict[filt]["strength"])
+                dpg.set_value(f"{filt}_channel_choice", input_dict[filt]["channel"])
+
+    def generate_postprocessor_chain_from_gui(self):
+        """Return a postprocessor_chain representing the postprocessor settings currently in the GUI. For saving."""
+        postprocessor_chain = []
+        for filt in self._gui_supported_filters:
+            if dpg.get_value(f"{filt}_checkbox") is False:
+                continue
+            settings = {}
+            if filt == "bloom":
+                settings["luma_threshold"] = dpg.get_value(f"{filt}_threshold_slider")
+                settings["hdr_exposure"] = dpg.get_value(f"{filt}_exposure_slider")
+            elif filt == "chromatic_aberration":
+                settings["transverse_sigma"] = dpg.get_value(f"{filt}_sigma_slider")
+                settings["axial_scale"] = dpg.get_value(f"{filt}_scale_slider")
+            elif filt == "vignetting":
+                settings["strength"] = dpg.get_value(f"{filt}_strength_slider")
+            elif filt == "translucency":
+                settings["alpha"] = dpg.get_value(f"{filt}_alpha_slider")
+                # "alphanoise", "lumanoise" filters currently not supported in GUI
+            elif filt == "analog_lowres":
+                # "kernel_size" currently not adjustable in GUI
+                settings["sigma"] = dpg.get_value(f"{filt}_sigma_slider")
+            elif filt == "analog_badhsync":
+                # amplitude1...3 and density1...3 currently not adjustable in GUI
+                settings["speed"] = dpg.get_value(f"{filt}_speed_slider")
+            elif filt == "analog_distort":
+                settings["speed"] = dpg.get_value(f"{filt}_speed_slider")
+                settings["strength"] = dpg.get_value(f"{filt}_strength_slider")
+                settings["edge"] = dpg.get_value(f"{filt}_edge_choice")
+            # "analog_vhsglitches", "analog_vhstracking", "shift_distort" filters currently not supported in GUI
+            elif filt == "desaturate":
+                pass  # tint and hue bandpass currently not supported in GUI
+            elif filt == "banding":
+                settings["strength"] = dpg.get_value(f"{filt}_strength_slider")
+                settings["density"] = dpg.get_value(f"{filt}_density_slider")
+                settings["speed"] = dpg.get_value(f"{filt}_speed_slider")
+            elif filt == "scanlines":
+                settings["dynamic"] = dpg.get_value(f"{filt}_dynamic_checkbox")
+                settings["strength"] = dpg.get_value(f"{filt}_strength_slider")
+                settings["channel"] = dpg.get_value(f"{filt}_channel_choice")
+            postprocessor_chain.append((filt, settings))
+        return postprocessor_chain
 
     def on_send_emotion(self, sender, app_data):  # GUI event handler
         # On clicking a choice in the combobox, `app_data` is that choice, but on arrow key, `app_data` is the keycode.
@@ -375,6 +676,7 @@ class TalkingheadExampleGUI:
             client_api.talkinghead_load(filename)
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_image: {type(exc)}: {exc}")
+            traceback.print_exc()
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
@@ -387,6 +689,7 @@ class TalkingheadExampleGUI:
             client_api.talkinghead_load_emotion_templates_from_file(filename)
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_json: {type(exc)}: {exc}")
+            traceback.print_exc()
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load emotion templates JSON '{filename}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
@@ -394,14 +697,41 @@ class TalkingheadExampleGUI:
                                      cancel_button="Close",
                                      centering_reference_window=self.window)
 
+    def on_postprocessor_settings_change(self, sender, app_data):
+        """Send new postprocessor settings to server whenever a value changes in the GUI.
+
+        Requires a settings file to be loaded.
+        """
+        try:
+            ppc = self.generate_postprocessor_chain_from_gui()
+            self.animator_settings["postprocessor_chain"] = ppc
+            client_api.talkinghead_load_animator_settings(self.animator_settings)
+        except Exception as exc:
+            logger.error(f"TalkingheadExampleGUI.on_postprocessor_settings_change: {type(exc)}: {exc}")
+            traceback.print_exc()
+
     def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
         try:
             with open(filename, "r", encoding="utf-8") as json_file:
                 animator_settings = json.load(json_file)
-            animator_settings.update(self.custom_animator_settings)  # setup overrides
+
+            ppc = animator_settings["postprocessor_chain"] if "postprocessor_chain" in animator_settings else {}
+            ppc = self.strip_postprocessor_chain_for_gui(ppc)
+            ppc = self.canonize_postprocessor_parameters_for_gui(ppc)
+            self.populate_gui_from_canonized_postprocessor_chain(ppc)
+            animator_settings["postprocessor_chain"] = ppc
+
+            custom_animator_settings = {"format": self.comm_format,
+                                        "upscale": self.upscale,
+                                        "upscale_preset": self.upscale_preset,
+                                        "upscale_quality": self.upscale_quality,
+                                        "target_fps": self.target_fps}  # any missing keys are auto-populated from server defaults
+            animator_settings.update(custom_animator_settings)  # setup overrides
             client_api.talkinghead_load_animator_settings(animator_settings)
+            self.animator_settings = animator_settings
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_animator_settings: {type(exc)}: {exc}")
+            traceback.print_exc()
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load animator settings JSON '{filename}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
@@ -630,12 +960,12 @@ def update_live_texture(task_env) -> None:
 # Main program
 
 if __name__ == "__main__":
-    gui_instance = TalkingheadExampleGUI()
-
     client_api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
-    client_api.talkinghead_load_animator_settings(gui_instance.custom_animator_settings)
-    # client_api.talkinghead_set_emotion("curiosity")  # if you want a non-default emotion at startup
+
+    gui_instance = TalkingheadExampleGUI()  # will load animator settings
+
     client_api.talkinghead_load("example.png")  # this will also start the animator if it was paused
+
     def shutdown() -> None:
         task_manager.clear(wait=True)
         animation.animator.clear()
@@ -650,6 +980,16 @@ if __name__ == "__main__":
 
     _default_path = os.getcwd()
     initialize_filedialogs(_default_path)
+
+    # Load default animator settings from disk.
+    #
+    # We must defer loading the animator settings until after the GUI has been rendered at least once,
+    # so that the GUI controls for the postprocessor are available, and so that if there are any issues
+    # during loading, we can open a modal dialog.
+    def _load_initial_animator_settings():
+        animator_json_path = os.path.join(os.path.dirname(__file__), "animator.json")
+        gui_instance.load_animator_settings(animator_json_path)
+    dpg.set_frame_callback(2, _load_initial_animator_settings)
 
     # last_tts_check_time = 0
     # tts_check_interval = 5.0  # seconds
