@@ -401,6 +401,8 @@ class Postprocessor:
         resulting from the different geometric scalings of just three wavelengths (instead of a continuous spectrum, like
         a scene lit with natural light would have).
 
+        The kernel size used for transverse CA blur (for R and B channels) is fixed to 13, which is enough up to sigma = 3.0.
+
         See:
             https://en.wikipedia.org/wiki/Chromatic_aberration
         """
@@ -418,15 +420,19 @@ class Postprocessor:
         warped_B = warped_B.squeeze(0)  # [1, c, h, w] -> [c, h, w]
 
         # Transverse (blur to simulate wrong focal distance for R and B)
-        warped_R[:, :, :] = torchvision.transforms.GaussianBlur((5, 5), sigma=transverse_sigma)(warped_R)
-        warped_B[:, :, :] = torchvision.transforms.GaussianBlur((5, 5), sigma=transverse_sigma)(warped_B)
+        warped_R[:, :, :] = torchvision.transforms.GaussianBlur((13, 1), sigma=transverse_sigma)(warped_R)  # blur along x
+        warped_R[:, :, :] = torchvision.transforms.GaussianBlur((1, 13), sigma=transverse_sigma)(warped_R)  # blur along y
+        warped_B[:, :, :] = torchvision.transforms.GaussianBlur((13, 1), sigma=transverse_sigma)(warped_B)  # blur along x
+        warped_B[:, :, :] = torchvision.transforms.GaussianBlur((1, 13), sigma=transverse_sigma)(warped_B)  # blur along y
 
         # Alpha channel: treat similarly to each of R,G,B and average the three resulting alpha channels
         image_batch_A = image[3, :, :].unsqueeze(0).unsqueeze(0)
         warped_A1 = torch.nn.functional.grid_sample(image_batch_A, grid_R, mode="bilinear", padding_mode="border", align_corners=False)
-        warped_A1[:, :, :] = torchvision.transforms.GaussianBlur((5, 5), sigma=transverse_sigma)(warped_A1)
+        warped_A1[:, :, :] = torchvision.transforms.GaussianBlur((13, 1), sigma=transverse_sigma)(warped_A1)
+        warped_A1[:, :, :] = torchvision.transforms.GaussianBlur((1, 13), sigma=transverse_sigma)(warped_A1)
         warped_A2 = torch.nn.functional.grid_sample(image_batch_A, grid_B, mode="bilinear", padding_mode="border", align_corners=False)
-        warped_A2[:, :, :] = torchvision.transforms.GaussianBlur((5, 5), sigma=transverse_sigma)(warped_A2)
+        warped_A2[:, :, :] = torchvision.transforms.GaussianBlur((13, 1), sigma=transverse_sigma)(warped_A2)
+        warped_A2[:, :, :] = torchvision.transforms.GaussianBlur((1, 13), sigma=transverse_sigma)(warped_A2)
         averaged_alpha = (warped_A1 + image[3, :, :] + warped_A2) / 3.0
 
         image[0, :, :] = warped_R
@@ -511,8 +517,8 @@ class Postprocessor:
         `sigma`: If nonzero, apply a Gaussian blur to the noise, thus reducing its spatial frequency
                  (i.e. making larger and smoother "noise blobs").
 
-                 The blur kernel size is fixed to 5, so `sigma = 1.0` is the largest that will be
-                 somewhat accurate. Nevertheless, `sigma = 2.0` looks acceptable, too, producing
+                 The blur kernel size is fixed to 13, so `sigma = 3.0` is the largest that will be
+                 somewhat accurate. Nevertheless, `sigma = 6.0` looks acceptable, too, producing
                  square blobs.
 
         `name`: Optional name for this filter instance in the chain. Used as cache key.
@@ -529,7 +535,8 @@ class Postprocessor:
             noise_image = torch.rand(h, w, device=self.device, dtype=image.dtype)
             if sigma > 0.0:
                 noise_image = noise_image.unsqueeze(0)  # [h, w] -> [c, h, w] (where c=1)
-                noise_image = torchvision.transforms.GaussianBlur((5, 5), sigma=sigma)(noise_image)
+                noise_image = torchvision.transforms.GaussianBlur((13, 1), sigma=sigma)(noise_image)
+                noise_image = torchvision.transforms.GaussianBlur((1, 13), sigma=sigma)(noise_image)
                 noise_image = noise_image.squeeze(0)  # -> [h, w]
             self.lumanoise_last_image[name] = noise_image
         else:
@@ -544,7 +551,7 @@ class Postprocessor:
     # Lo-fi analog video
 
     def analog_lowres(self, image: torch.tensor, *,
-                      kernel_size: int = 5,
+                      kernel_size: int = 13,
                       sigma: float = 0.75) -> None:
         """[static] Low-resolution analog video signal, simulated by blurring.
 
@@ -556,8 +563,12 @@ class Postprocessor:
         cuts the tail. "2 sigma" (95% mass) is also acceptable, to save some compute.
 
         The default settings create a slight blur without destroying much detail.
+
+        Note a `kernel_size` of 5 would be enough up to sigma = 1.0; the default is
+        good for up to sigma = 3.0 (which is already really blurry).
         """
-        image[:, :, :] = torchvision.transforms.GaussianBlur((kernel_size, kernel_size), sigma=sigma)(image)
+        image[:, :, :] = torchvision.transforms.GaussianBlur((kernel_size, 1), sigma=sigma)(image)  # blur along x
+        image[:, :, :] = torchvision.transforms.GaussianBlur((1, kernel_size), sigma=sigma)(image)  # blur along y
 
     def analog_badhsync(self, image: torch.tensor, *,
                         speed: float = 8.0,
