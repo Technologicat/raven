@@ -396,13 +396,51 @@ class TalkingheadExampleGUI:
                     #  - save dialog for saving animator settings from GUI
                     #
                     def build_postprocessor_gui():
+                        def make_reset_filter_callback(filter_name):  # freeze by closure
+                            def reset_filter():
+                                logger.warning(f"reset_filter: resetting '{filter_name}' to defaults.")
+                                all_filters = dict(postprocessor.Postprocessor.get_filters())
+                                defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
+                                ranges = all_filters[filter_name]["ranges"]  # for GUI hints
+                                for param_name in defaults:
+                                    param_range = ranges[param_name]
+                                    if len(param_range) == 1 and param_range[0].startswith("!"):
+                                        gui_hint = param_range[0]
+                                        if gui_hint == "!ignore":
+                                            continue
+                                        elif gui_hint == "!RGB":
+                                            pass  # no need for special processing
+                                        else:
+                                            logger.warning(f"reset_filter: '{filter_name}.{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
+                                            continue
+                                    widget = self.filter_param_to_gui_widget(filter_name, param_name, defaults[param_name])
+                                    if widget is None:
+                                        logger.warning(f"reset_filter: unknown parameter type {type(default_value)}, skipping '{filter_name}.{param_name}'.")
+                                    dpg.set_value(widget, defaults[param_name])
+                                self.on_postprocessor_settings_change(None, None)
+                            return reset_filter
+
+                        def make_reset_param_callback(filter_name, param_name, default_value):  # freeze by closure
+                            def reset_param():
+                                logger.warning(f"reset_param: resetting '{filter_name}.{param_name}' to defaults.")
+                                widget = self.filter_param_to_gui_widget(filter_name, param_name, default_value)
+                                if widget is None:
+                                    logger.warning(f"Unknown parameter type {type(default_value)}, cannot reset '{filter_name}.{param_name}'.")
+                                    return
+                                dpg.set_value(widget, default_value)
+                                self.on_postprocessor_settings_change(None, None)
+                            return reset_param
+
                         def prettify(name):
                             pretty = name.replace("_", " ")
                             pretty = pretty[0].upper() + pretty[1:]
                             return pretty
+
                         for filter_name, param_info in postprocessor.Postprocessor.get_filters():
-                            dpg.add_checkbox(label=prettify(filter_name), default_value=False,
-                                             tag=f"{filter_name}_checkbox", callback=self.on_postprocessor_settings_change)
+                            with dpg.group(horizontal=True):
+                                dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
+                                dpg.add_checkbox(label=prettify(filter_name), default_value=False,
+                                                 tag=f"{filter_name}_checkbox", callback=self.on_postprocessor_settings_change)
                             with dpg.group(horizontal=True):
                                 dpg.add_spacer(width=4)
                                 with dpg.group(horizontal=False):
@@ -412,31 +450,38 @@ class TalkingheadExampleGUI:
                                             gui_hint = param_range[0]
                                             if gui_hint == "!ignore":
                                                 continue
-                                            logger.warning(f"build_postprocessor_gui: filter '{filter_name}', parameter '{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
+                                            logger.warning(f"build_postprocessor_gui: {filter_name}.{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
                                             continue  # TODO: implement color picker when the hint is "!RGB"
 
                                         # Create GUI control depending on parameter's type
                                         if isinstance(default_value, bool):
-                                            dpg.add_checkbox(label=prettify(param_name), default_value=default_value,
-                                                             tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_postprocessor_settings_change)
+                                            with dpg.group(horizontal=True):
+                                                dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                                dpg.add_checkbox(label=prettify(param_name), default_value=default_value,
+                                                                 tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_postprocessor_settings_change)
                                         elif isinstance(default_value, float):
                                             assert len(param_range) == 2  # param_range = [min, max]
-                                            dpg.add_slider_float(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
-                                                                 tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                            with dpg.group(horizontal=True):
+                                                dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                                dpg.add_slider_float(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
+                                                                     tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
                                         elif isinstance(default_value, int):
                                             assert len(param_range) == 2  # param_range = [min, max]
-                                            dpg.add_slider_int(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
-                                                               tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                            with dpg.group(horizontal=True):
+                                                dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                                dpg.add_slider_int(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
+                                                                   tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
                                         elif isinstance(default_value, str):
                                             # param_range = list of choices
                                             with dpg.group(horizontal=True):
+                                                dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
                                                 dpg.add_combo(items=param_range,
                                                               default_value=param_range[0],
                                                               width=self.button_width,
                                                               tag=f"{filter_name}_{param_name}_choice", callback=self.on_postprocessor_settings_change)
                                                 dpg.add_text(prettify(param_name))
                                         else:
-                                            assert False, f"Unknown parameter type {type(default_value)}"
+                                            assert False, f"{filter_name}.{param_name}: Unknown parameter type {type(default_value)}"
                             dpg.add_spacer(height=4)
 
                     with dpg.group(horizontal=False):
@@ -472,6 +517,20 @@ class TalkingheadExampleGUI:
             validated_postprocessor_chain.append((filter_name, validated_settings))
         return validated_postprocessor_chain
 
+    def filter_param_to_gui_widget(self, filter_name, param_name, example_value):
+        """Given a postprocessor filter name, a name for one of its parameters, and an example value for that parameter, return the DPG tag for the corresponding GUI widget.
+
+        If the type of `example_value` is not supported, return `None`.
+        """
+        if isinstance(example_value, bool):
+            return f"{filter_name}_{param_name}_checkbox"
+        elif isinstance(example_value, (float, int)):
+            return f"{filter_name}_{param_name}_slider"
+        elif isinstance(example_value, str):
+            return f"{filter_name}_{param_name}_choice"
+        return None
+        raise ValueError(f"filter_param_to_gui_widget: Unknown value type {type(example_value)}.")
+
     def populate_gui_from_canonized_postprocessor_chain(self, postprocessor_chain):
         """Ordering: strip -> canonize -> populate GUI"""
         all_filters = dict(postprocessor.Postprocessor.get_filters())
@@ -482,13 +541,8 @@ class TalkingheadExampleGUI:
                 continue  # parameter values in GUI don't matter if the filter is disabled
             dpg.set_value(f"{filter_name}_checkbox", True)
             for param_name, param_value in input_dict[filter_name].items():
-                if isinstance(param_value, bool):
-                    widget = f"{filter_name}_{param_name}_checkbox"
-                elif isinstance(param_value, (float, int)):
-                    widget = f"{filter_name}_{param_name}_slider"
-                elif isinstance(param_value, str):
-                    widget = f"{filter_name}_{param_name}_choice"
-                else:
+                widget = self.filter_param_to_gui_widget(filter_name, param_name, param_value)
+                if widget is None:
                     logger.warning(f"Unknown parameter type {type(param_value)}, ignoring this parameter.")
                     continue
                 dpg.set_value(widget, param_value)
@@ -503,13 +557,8 @@ class TalkingheadExampleGUI:
             defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
             settings = {}
             for param_name in defaults:
-                if isinstance(defaults[param_name], bool):
-                    widget = f"{filter_name}_{param_name}_checkbox"
-                elif isinstance(defaults[param_name], (float, int)):
-                    widget = f"{filter_name}_{param_name}_slider"
-                elif isinstance(defaults[param_name], str):
-                    widget = f"{filter_name}_{param_name}_choice"
-                else:
+                widget = self.filter_param_to_gui_widget(filter_name, param_name, defaults[param_name])
+                if widget is None:
                     logger.warning(f"Unknown parameter type {type(defaults[param_name])}, ignoring this parameter.")
                     continue
                 settings[param_name] = dpg.get_value(widget)
