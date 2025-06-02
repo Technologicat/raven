@@ -72,9 +72,7 @@ Not scheduled for now.
       - Constant-color rectangle
       - Missing data (zero out the alpha?)
       - Blur (leads to replacing by average color, with controllable sigma)
-      - Zigzag deformation (perhaps not needed now that we have `shift_distort`, which is similar, but with a rectangular shape, and applied to full lines of video)
-- Investigate if some particular emotions could use a small random per-frame oscillation applied to "iris_small",
-  for that anime "intense emotion" effect (since THA3 doesn't have a morph specifically for the specular reflections in the eyes).
+      - Zigzag deformation (perhaps not needed now that we have `digital_glitches`, which is similar, but with a rectangular shape, and applied to full lines of video)
 
 ### Frontend
 
