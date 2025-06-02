@@ -1,4 +1,6 @@
-"""Example Python client app for Talkinghead.
+"""Postprocessor settings editor for Talkinghead. Doubles as a tech demo.
+
+!!! Start `server.py` first before running this app! !!!
 
 This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """
