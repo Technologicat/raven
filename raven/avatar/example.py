@@ -9,7 +9,6 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 
 # high priority (must have):
 #
-# TODO: write a default animator.json if the file is missing
 # TODO: implement color picker when a postprocessor parameter's GUI hint is "!RGB"
 # TODO: add text entry for speech synthesizer testing
 #
@@ -30,6 +29,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import concurrent.futures
+import copy
 import io
 import json
 import os
@@ -1132,6 +1132,24 @@ if __name__ == "__main__":
     # during loading, we can open a modal dialog.
     def _load_initial_animator_settings():
         animator_json_path = os.path.join(os.path.dirname(__file__), "animator.json")
+
+        if not os.path.exists(animator_json_path):
+            logger.info(f"_load_initial_animator_settings: Default animator settings file '{animator_json_path}' missing, writing a default config.")
+            try:
+                animator_settings = copy.copy(config.animator_defaults)
+                custom_animator_settings = {"format": gui_instance.comm_format,
+                                            "target_fps": gui_instance.target_fps,
+                                            "upscale": gui_instance.upscale,
+                                            "upscale_preset": gui_instance.upscale_preset,
+                                            "upscale_quality": gui_instance.upscale_quality}
+                animator_settings.update(custom_animator_settings)
+                with open(animator_json_path, "w", encoding="utf-8") as json_file:
+                    json.dump(animator_settings, json_file, indent=4)
+            except Exception as exc:
+                logger.error(f"_load_initial_animator_settings: Failed to write default config, bailing out: {type(exc)}: {exc}")
+                traceback.print_exc()
+                raise
+
         gui_instance.load_animator_settings(animator_json_path)
     dpg.set_frame_callback(2, _load_initial_animator_settings)
 
