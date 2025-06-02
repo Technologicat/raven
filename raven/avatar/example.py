@@ -415,18 +415,18 @@ class TalkingheadExampleGUI:
                                             continue
                                     widget = self.filter_param_to_gui_widget(filter_name, param_name, defaults[param_name])
                                     if widget is None:
-                                        logger.warning(f"reset_filter: unknown parameter type {type(default_value)}, skipping '{filter_name}.{param_name}'.")
+                                        logger.warning(f"reset_filter: '{filter_name}.{param_name}': unknown parameter type {type(default_value)}, skipping.")
                                     dpg.set_value(widget, defaults[param_name])
                                 self.on_postprocessor_settings_change(None, None)
                             return reset_filter
 
                         def make_reset_param_callback(filter_name, param_name, default_value):  # freeze by closure
+                            widget = self.filter_param_to_gui_widget(filter_name, param_name, default_value)
+                            if widget is None:
+                                logger.warning(f"make_reset_param_callback: '{filter_name}.{param_name}': Unknown parameter type {type(default_value)}, returning no-op callback.")
+                                return lambda: None
                             def reset_param():
-                                logger.warning(f"reset_param: resetting '{filter_name}.{param_name}' to defaults.")
-                                widget = self.filter_param_to_gui_widget(filter_name, param_name, default_value)
-                                if widget is None:
-                                    logger.warning(f"Unknown parameter type {type(default_value)}, cannot reset '{filter_name}.{param_name}'.")
-                                    return
+                                logger.warning(f"reset_param: resetting '{filter_name}.{param_name}' to default.")
                                 dpg.set_value(widget, default_value)
                                 self.on_postprocessor_settings_change(None, None)
                             return reset_param
