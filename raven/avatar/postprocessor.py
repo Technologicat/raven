@@ -852,7 +852,7 @@ class Postprocessor:
     def analog_vhstracking(self, image: torch.tensor, *,
                            base_offset: float = 0.03,
                            max_dynamic_offset: float = 0.01,
-                           speed: float = 2.5) -> None:
+                           speed: float = 8.0) -> None:
         """[dynamic] 1980s VHS tape with bad tracking.
 
         Image floats up and down, and a band of black and white noise appears at the bottom.
