@@ -52,11 +52,11 @@ postprocessor_defaults = [
 
     # scifi hologram output
     ("translucency", {}),
-    # ("noise", {"magnitude": 0.1, "sigma": 0.0, "channel": "A"}),
+    # ("noise", {"strength": 0.1, "sigma": 0.0, "channel": "A"}),
 
     # # lo-fi analog video
     # ("analog_lowres", {}),
-    # ("noise", {"magnitude": 0.2, "sigma": 2.0, "channel": "A"}),
+    # ("noise", {"strength": 0.2, "sigma": 2.0, "channel": "A"}),
     # ("analog_rippling_hsync", {}),
     # # ("analog_vhsglitches", {}),
     # ("analog_vhstracking", {}),

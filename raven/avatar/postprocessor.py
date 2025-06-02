@@ -550,14 +550,14 @@ class Postprocessor:
     # --------------------------------------------------------------------------------
     # General use
 
-    @with_metadata(magnitude=[0.1, 1.0],
+    @with_metadata(strength=[0.1, 1.0],
                    sigma=[0.1, 3.0],
                    channel=["Y", "A"],
                    name=["!ignore"],  # hint for GUI to ignore this parameter
                    _priority=4.0)
     def noise(self, image: torch.tensor, *,
-              magnitude: float = 0.1,
-              sigma: float = 3.0,
+              strength: float = 0.3,
+              sigma: float = 1.0,
               channel: str = "Y",
               name: str = "noise0") -> None:
         """[dynamic] Add noise to the luminance or to the alpha channel.
@@ -565,19 +565,19 @@ class Postprocessor:
         NOTE: At small values of `sigma`, this filter causes the video to use a lot of bandwidth
         during network transfer, because noise is impossible to compress.
 
-        `magnitude`: Fraction of noise in the output's Y or A channel.
+        `strength`: Fraction of noise in the output's Y or A channel.
 
-                     How much noise to apply. 0 is no noise, 1 replaces the input image with noise.
+                    How much noise to apply. 0 is no noise, 1 replaces the input image with noise.
 
-                     The formula is:
+                    The formula is:
 
-                         out = in * ((1 - magnitude) + magnitude * noise_texture)
+                        out = in * ((1 - magnitude) + magnitude * noise_texture)
 
-                     The filter is multiplicative, so it never brightens the image, and
-                     never makes visible pixels that are fully translucent (alpha = 0.0) in the input.
+                    The filter is multiplicative, so it never brightens the image, and
+                    never makes visible pixels that are fully translucent (alpha = 0.0) in the input.
 
-                     A larger `magnitude` makes the image darker/more translucent overall, because
-                     then a larger portion of the luminance/alpha axis is reserved for the noise.
+                    A larger `strength` makes the image darker/more translucent overall, because
+                    then a larger portion of the luminance/alpha axis is reserved for the noise.
 
         `sigma`: If nonzero, apply a Gaussian blur to the noise, thus reducing its spatial frequency
                  (i.e. making larger and smoother "noise blobs").
@@ -596,8 +596,8 @@ class Postprocessor:
                  affects the texture.)
 
         Suggested settings:
-            Scifi hologram:   magnitude=0.1, sigma=0.0
-            Analog VHS tape:  magnitude=0.2, sigma=2.0
+            Scifi hologram:   strength=0.1, sigma=0.0
+            Analog VHS tape:  strength=0.2, sigma=2.0
         """
         # Re-randomize the noise texture whenever the normalized frame number changes
         if self.noise_last_image[name] is None or int(self.frame_no) > int(self.last_frame_no):
@@ -611,13 +611,13 @@ class Postprocessor:
             self.noise_last_image[name] = noise_image
         else:
             noise_image = self.noise_last_image[name]
-        base_magnitude = 1.0 - magnitude
+        base_multiplier = 1.0 - strength
 
         if channel == "A":  # alpha
-            image[3, :, :].mul_(base_magnitude + magnitude * noise_image)
+            image[3, :, :].mul_(base_multiplier + strength * noise_image)
         else:  # "Y", luminance
             image_yuv = rgb_to_yuv(image[:3, :, :])
-            image_yuv[0, :, :].mul_(base_magnitude + magnitude * noise_image)
+            image_yuv[0, :, :].mul_(base_multiplier + strength * noise_image)
             image_rgb = yuv_to_rgb(image_yuv)
             image[:3, :, :] = image_rgb
 
