@@ -565,6 +565,7 @@ class TalkingheadExampleGUI:
                     build_postprocessor_gui()
 
     def init_live_texture(self, new_image_size):
+        """Initialize (or re-initialize) the texture and image widgets for rendering the video stream of the live AI avatar."""
         with self.upscale_change_lock:
             old_texture_id = self.texture_id_counter
             new_texture_id = old_texture_id + 1
