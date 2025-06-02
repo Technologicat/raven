@@ -309,6 +309,7 @@ class TalkingheadExampleGUI:
 
         self.upscale_change_lock = threading.Lock()
         self.texture_id_counter = 0  # For creating unique DPG IDs when the size changes on the fly, since the delete might not take immediately.
+        self.last_image_rgba = None
 
         self.talking = False
         self.animator_running = True
@@ -510,29 +511,42 @@ class TalkingheadExampleGUI:
                                            new_image_size,  # width
                                            4],  # RGBA
                                           dtype=np.float32).ravel()
+            if self.last_image_rgba is not None:
+                # To reduce flicker when the texture is replaced: take the last frame we have,
+                # rescale it, and use that as the initial content of the new texture.
+                image_rgba = self.last_image_rgba  # from the background thread
+                pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
+                if image_rgba.shape[2] == 4:
+                    alpha_channel = image_rgba[:, :, 3]
+                    pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
+                pil_image = pil_image.resize((new_image_size, new_image_size),
+                                             resample=PIL.Image.LANCZOS)
+                image_rgba = pil_image.convert("RGBA")
+                image_rgba = np.asarray(image_rgba, dtype=np.float32) / 255
+                default_image = image_rgba.ravel()
+            else:
+                default_image = self.blank_texture
             self.live_texture = dpg.add_raw_texture(width=new_image_size,
                                                     height=new_image_size,
-                                                    default_value=self.blank_texture,
+                                                    default_value=default_image,
                                                     format=dpg.mvFormat_Float_rgba,
                                                     tag=f"live_texture_{new_texture_id}",
                                                     parent="talkinghead_example_textures")
-            # TODO: should update these two atomically, add a lock
             self.texture_id_counter += 1  # now the new texture exists so it's safe to write to (in the background thread)
             self.image_size = new_image_size
 
             logger.info(f"init_live_texture: Creating new GUI item live_image_{new_texture_id}")
             dpg.add_image(f"live_texture_{new_texture_id}", pos=(0, viewport_height - new_image_size - 8),
                           tag=f"live_image_{new_texture_id}",
-                          show=False,
                           parent="live_texture_group",
                           before="fps_text")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
 
-            dpg.show_item(f"live_image_{new_texture_id}")
             try:
                 dpg.hide_item(f"live_image_{old_texture_id}")
-                dpg.split_frame()  # this is safe because we only get here if the `hide_item` succeeded (so not at startup when the old image doeesn't exist yet)
             except SystemError:  # does not exist
                 pass
+            else:
+                dpg.split_frame()  # Only safe after startup, once the GUI render loop is running. At startup, the old image widget doesn't exist, so we detect the situation from that.
             def maybe_delete_item(tag):
                 logger.info(f"init_live_texture.maybe_delete_item: deleting old GUI item {tag}")
                 try:
@@ -940,6 +954,7 @@ def update_live_texture(task_env) -> None:
                     pil_image = pil_image.resize((expected_w, expected_h),
                                                  resample=PIL.Image.LANCZOS)
                 image_rgba = np.asarray(pil_image.convert("RGBA"))
+            gui_instance.last_image_rgba = image_rgba  # for reducing flicker when upscaler settings change
             image_rgba = np.array(image_rgba, dtype=np.float32) / 255
             raw_data = image_rgba.ravel()  # shape [h, w, c] -> linearly indexed
             try:  # EAFP to avoid TOCTTOU
