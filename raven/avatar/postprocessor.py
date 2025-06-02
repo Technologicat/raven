@@ -395,12 +395,13 @@ class Postprocessor:
     # --------------------------------------------------------------------------------
     # Physical input signal
 
+    # Defaults chosen so that they look good for a handful of characters rendered in SD Forge, with the Wai 14.0 Illustrious-SDXL checkpoint.
     @with_metadata(threshold=[0.0, 1.0],
                    exposure=[0.1, 5.0],
                    _priority=0.0)
     def bloom(self, image: torch.tensor, *,
-              threshold: float = 0.5,
-              exposure: float = 0.5) -> None:
+              threshold: float = 0.560,
+              exposure: float = 0.842) -> None:
         """[static] Bloom effect (fake HDR). Makes the image look brighter. Popular in early 2000s anime.
 
         Can also be used as just a camera exposure adjustment by setting `threshold=1.0` to disable the glow.
