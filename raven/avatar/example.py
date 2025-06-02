@@ -396,40 +396,47 @@ class TalkingheadExampleGUI:
                     #  - save dialog for saving animator settings from GUI
                     #
                     def build_postprocessor_gui():
+                        def prettify(name):
+                            pretty = name.replace("_", " ")
+                            pretty = pretty[0].upper() + pretty[1:]
+                            return pretty
                         for filter_name, param_info in postprocessor.Postprocessor.get_filters():
-                            dpg.add_checkbox(label=filter_name, default_value=False,
+                            dpg.add_checkbox(label=prettify(filter_name), default_value=False,
                                              tag=f"{filter_name}_checkbox", callback=self.on_postprocessor_settings_change)
-                            for param_name, default_value in param_info["defaults"].items():
-                                param_range = param_info["ranges"][param_name]
-                                if len(param_range) == 1 and param_range[0].startswith("!"):  # GUI hint?
-                                    gui_hint = param_range[0]
-                                    if gui_hint == "!ignore":
-                                        continue
-                                    logger.warning(f"build_postprocessor_gui: filter '{filter_name}', parameter '{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
-                                    continue  # TODO: implement color picker when the hint is "!RGB"
+                            with dpg.group(horizontal=True):
+                                dpg.add_spacer(width=4)
+                                with dpg.group(horizontal=False):
+                                    for param_name, default_value in param_info["defaults"].items():
+                                        param_range = param_info["ranges"][param_name]
+                                        if len(param_range) == 1 and param_range[0].startswith("!"):  # GUI hint?
+                                            gui_hint = param_range[0]
+                                            if gui_hint == "!ignore":
+                                                continue
+                                            logger.warning(f"build_postprocessor_gui: filter '{filter_name}', parameter '{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
+                                            continue  # TODO: implement color picker when the hint is "!RGB"
 
-                                # Create GUI control depending on parameter's type
-                                if isinstance(default_value, bool):
-                                    dpg.add_checkbox(label=param_name, default_value=default_value,
-                                                     tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_postprocessor_settings_change)
-                                elif isinstance(default_value, float):
-                                    assert len(param_range) == 2  # param_range = [min, max]
-                                    dpg.add_slider_float(label=param_name, default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
-                                                         tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
-                                elif isinstance(default_value, int):
-                                    assert len(param_range) == 2  # param_range = [min, max]
-                                    dpg.add_slider_int(label=param_name, default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
-                                                       tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
-                                elif isinstance(default_value, str):
-                                    # param_range = list of choices
-                                    with dpg.group(horizontal=True):
-                                        dpg.add_combo(items=param_range,
-                                                      default_value=param_range[0],
-                                                      width=self.button_width,
-                                                      tag=f"{filter_name}_{param_name}_choice", callback=self.on_postprocessor_settings_change)
-                                        dpg.add_text(param_name)
-                                else:
-                                    assert False, f"Unknown parameter type {type(default_value)}"
+                                        # Create GUI control depending on parameter's type
+                                        if isinstance(default_value, bool):
+                                            dpg.add_checkbox(label=prettify(param_name), default_value=default_value,
+                                                             tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_postprocessor_settings_change)
+                                        elif isinstance(default_value, float):
+                                            assert len(param_range) == 2  # param_range = [min, max]
+                                            dpg.add_slider_float(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
+                                                                 tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                        elif isinstance(default_value, int):
+                                            assert len(param_range) == 2  # param_range = [min, max]
+                                            dpg.add_slider_int(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
+                                                               tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                        elif isinstance(default_value, str):
+                                            # param_range = list of choices
+                                            with dpg.group(horizontal=True):
+                                                dpg.add_combo(items=param_range,
+                                                              default_value=param_range[0],
+                                                              width=self.button_width,
+                                                              tag=f"{filter_name}_{param_name}_choice", callback=self.on_postprocessor_settings_change)
+                                                dpg.add_text(prettify(param_name))
+                                        else:
+                                            assert False, f"Unknown parameter type {type(default_value)}"
                             dpg.add_spacer(height=4)
 
                     with dpg.group(horizontal=False):
