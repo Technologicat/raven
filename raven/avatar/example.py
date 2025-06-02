@@ -29,6 +29,8 @@ import io
 import json
 import os
 import pathlib
+import platform
+import threading
 import time
 import traceback
 from typing import Union
@@ -39,6 +41,11 @@ import PIL.Image
 from unpythonic.env import env as envcls
 
 import numpy as np
+
+# WORKAROUND: Deleting a texture or image widget causes DPG to segfault, but with Nvidia on Linux only.
+# https://github.com/hoffstadt/DearPyGui/issues/554
+if platform.system().upper() == "LINUX":
+    os.environ["__GLVND_DISALLOW_PATCHING"] = "1"
 
 import dearpygui.dearpygui as dpg
 
@@ -301,21 +308,14 @@ class TalkingheadExampleGUI:
 
         self.button_width = 300
 
+        self.upscale_change_lock = threading.Lock()
+        self.texture_id_counter = 0  # For creating unique DPG IDs when the size changes on the fly, since the delete might not take immediately.
+
         self.talking = False
         self.animator_running = True
         self.animator_settings = None  # not loaded yet
 
-        with dpg.texture_registry(tag="talkinghead_example_textures"):
-            self.blank_texture = np.zeros([self.image_size,  # height
-                                           self.image_size,  # width
-                                           4],  # RGBA
-                                          dtype=np.float32).ravel()
-            self.live_texture = dpg.add_raw_texture(width=self.image_size,
-                                                    height=self.image_size,
-                                                    default_value=self.blank_texture,
-                                                    format=dpg.mvFormat_Float_rgba,
-                                                    tag="live_texture")
-
+        dpg.add_texture_registry(tag="talkinghead_example_textures")  # the DPG live texture will be stored here
         dpg.set_viewport_title(f"Talkinghead [{avatar_url}]")
 
         with dpg.window(tag="talkinghead_main_window",
@@ -323,14 +323,14 @@ class TalkingheadExampleGUI:
             with dpg.group(horizontal=True):
                 with dpg.group(tag="live_texture_group"):
                     dpg.add_spacer(width=1024, height=0)  # keep the group at the image's width even when the image is hidden
-                    dpg.add_image("live_texture", pos=(0, viewport_height - self.image_size - 8), tag="live_image")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
+                    self.init_live_texture()
                     dpg.add_text("FPS counter will appear here", color=(0, 255, 0), pos=(8, 0), tag="fps_text")
                     self.fps_statistics = RunningAverage()
                     self.frame_size_statistics = RunningAverage()
 
                 def position_please_standby_text():
-                    # x0, y0 = raven_utils.get_widget_relative_pos("live_image", reference="main_window")
-                    x0, y0 = raven_utils.get_widget_pos("live_image")
+                    # x0, y0 = raven_utils.get_widget_relative_pos(f"live_image_{self.texture_id_counter}", reference="main_window")
+                    x0, y0 = raven_utils.get_widget_pos(f"live_image_{self.texture_id_counter}")
                     dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
                                                            y0 + self.image_size / 2 - (font_size / 2)),
                                  tag="please_standby_text",
@@ -382,9 +382,9 @@ class TalkingheadExampleGUI:
                     dpg.add_spacer(height=8)
 
                     # Upscaler settings editor
-                    # TODO: implement the upscale slider (must re-generate GUI texture, and skip rendering in the background thread until the new "canvas" is ready)
                     dpg.add_text("Upscaler [Ctrl+click to set a numeric value]")
-                    dpg.add_slider_int(label="x 0.1x", default_value=20, min_value=10, max_value=40, clamped=True, width=self.button_width - 64, tag="upscale_slider")
+                    dpg.add_slider_int(label="x 0.1x", default_value=int(10 * self.upscale), min_value=10, max_value=20, clamped=True, width=self.button_width - 64,
+                                       callback=self.on_upscaler_settings_change, tag="upscale_slider")
                     self.upscale_presets = ["A", "B", "C"]
                     with dpg.group(horizontal=True):
                         dpg.add_combo(items=self.upscale_presets,
@@ -501,6 +501,45 @@ class TalkingheadExampleGUI:
                     # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
                     build_postprocessor_gui()
 
+    def init_live_texture(self):
+        with self.upscale_change_lock:
+            try:
+                dpg.hide_item(f"live_image_{self.texture_id_counter}")
+                dpg.split_frame()  # this is safe because we only get here if the `hide_item` succeeded (so not at startup when the old image doeesn't exist yet)
+            except SystemError:  # does not exist
+                pass
+            def maybe_delete_item(tag):
+                logger.info(f"init_live_texture.maybe_delete_item: deleting GUI item {tag}")
+                try:
+                    dpg.delete_item(tag)
+                except SystemError:  # does not exist
+                    pass
+            self.animator_running = False
+            maybe_delete_item(f"live_image_{self.texture_id_counter}")
+            maybe_delete_item(f"live_texture_{self.texture_id_counter}")
+
+            self.texture_id_counter += 1
+
+            logger.info(f"init_live_texture: Creating texture for size {self.image_size}x{self.image_size}")
+            self.blank_texture = np.zeros([self.image_size,  # height
+                                           self.image_size,  # width
+                                           4],  # RGBA
+                                          dtype=np.float32).ravel()
+            self.live_texture = dpg.add_raw_texture(width=self.image_size,
+                                                    height=self.image_size,
+                                                    default_value=self.blank_texture,
+                                                    format=dpg.mvFormat_Float_rgba,
+                                                    tag=f"live_texture_{self.texture_id_counter}",
+                                                    parent="talkinghead_example_textures")
+
+            logger.info("init_live_texture: Creating image widget")
+            dpg.add_image(f"live_texture_{self.texture_id_counter}", pos=(0, viewport_height - self.image_size - 8),
+                          tag=f"live_image_{self.texture_id_counter}",
+                          parent="live_texture_group",
+                          before="fps_text")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
+            logger.info("init_live_texture: done!")
+            self.animator_running = True
+
     def filter_param_to_gui_widget(self, filter_name, param_name, example_value):
         """Given a postprocessor filter name, a name for one of its parameters, and an example value for that parameter, return the DPG tag for the corresponding GUI widget.
 
@@ -616,7 +655,12 @@ class TalkingheadExampleGUI:
 
     def on_upscaler_settings_change(self, sender, app_data):
         """Update the upscaler status and send changes to server."""
+        old_image_size = self.image_size
         self.upscale = dpg.get_value("upscale_slider") / 10
+        self.image_size = int(self.upscale * self.source_image_size)
+        if self.image_size != old_image_size:
+            self.init_live_texture()
+
         self.upscale_preset = dpg.get_value("upscale_preset_choice")
         self.upscale_quality = dpg.get_value("upscale_quality_choice")
         self.on_postprocessor_settings_change(sender, app_data)
@@ -700,12 +744,12 @@ class TalkingheadExampleGUI:
             client_api.talkinghead_unload()
             dpg.set_value("please_standby_text", "[Animator is paused]")
             dpg.show_item("please_standby_text")
-            dpg.hide_item("live_image")
+            dpg.hide_item(f"live_image_{self.texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Resume animator [Ctrl+P]")
         else:
             client_api.talkinghead_reload()
             dpg.hide_item("please_standby_text")
-            dpg.show_item("live_image")
+            dpg.show_item(f"live_image_{self.texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Pause animator [Ctrl+P]")
         self.animator_running = not self.animator_running
 
@@ -880,7 +924,10 @@ def update_live_texture(task_env) -> None:
             image_rgba = np.array(image_rgba, dtype=np.float32) / 255
             raw_data = image_rgba.ravel()  # shape [h, w, c] -> linearly indexed
             try:  # EAFP to avoid TOCTTOU
-                dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
+                # Before blitting, make sure the texture is of the expected size. When an upscale change is underway, it will be temporarily of the wrong size.
+                config = dpg.get_item_configuration(gui_instance.live_texture)
+                if config["width"] == w and config["height"] == h:
+                    dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
             except SystemError:  # does not exist
                 pass
 
@@ -900,7 +947,7 @@ def update_live_texture(task_env) -> None:
             gui_instance.animator_running = False
             dpg.set_value("please_standby_text", "[Connection lost]")
             dpg.show_item("please_standby_text")
-            dpg.hide_item("live_image")
+            dpg.hide_item(f"live_image_{gui_instance.texture_id_counter}")
             dpg.set_value("fps_text", describe_performance(None, None, None))
 
 
