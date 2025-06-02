@@ -3,6 +3,18 @@
 This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """
 
+# TODO: save dialog for saving animator settings from GUI
+# TODO: crash with an *informative* message when server is offline
+# TODO: fit everything into window
+# TODO: implement upscale slider
+# TODO: reposition talkinghead on window resize
+
+# TODO: implement color picker when a postprocessor parameter's GUI hint is "!RGB"
+# TODO: add text entry for speech synthesizer testing
+# TODO: robustness: don't crash if the server is/goes down
+# TODO: editor for main animator config too (target FPS, talking speed, ...)
+# TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming.)
+
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -272,7 +284,6 @@ class TalkingheadExampleGUI:
     def __init__(self):
         self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed...
 
-        # TODO: allow changing upscale settings while running (need to re-create DPG texture)
         self.upscale = 2.0  # ...but the animator has a realtime super-resolution filter (anime4k). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
         self.upscale_preset = "C"  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
         self.upscale_quality = "high"  # "low": fast, acceptable quality; "high": slow, good quality
@@ -320,10 +331,6 @@ class TalkingheadExampleGUI:
                                  show=False)
                 dpg.set_frame_callback(10, position_please_standby_text)
 
-                # TODO: reposition talkinghead on window resize
-                # TODO: editor for main animator config too (target FPS, talking speed, ...)
-                # TODO: robustness: don't crash if the server is/goes down
-                # TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming.)
                 with dpg.group(horizontal=True):
                     with dpg.group(horizontal=False):
                         dpg.add_text("Load / save")
@@ -395,9 +402,6 @@ class TalkingheadExampleGUI:
                     # Postprocessor settings editor
                     #
                     # NOTE: Defaults and ranges for postprocessor parameters are set in `postprocessor.py`.
-                    #
-                    # TODO: implementation
-                    #  - save dialog for saving animator settings from GUI
                     #
                     def build_postprocessor_gui():
                         def make_reset_filter_callback(filter_name):  # freeze by closure
