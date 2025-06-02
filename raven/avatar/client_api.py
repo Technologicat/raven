@@ -244,8 +244,9 @@ def tts_voices() -> None:
 
 def tts_speak(voice: str,
               text: str,
-              start_callback: Optional[Callable],
-              stop_callback: Optional[Callable]) -> None:
+              speed: float = 1.0,
+              start_callback: Optional[Callable] = None,
+              stop_callback: Optional[Callable] = None) -> None:
     """Using the speech synthesizer, speak `text` using `voice`.
 
     If `start_callback` is provided, call it when the TTS starts speaking.
@@ -258,14 +259,14 @@ def tts_speak(voice: str,
     data = {"model": "kokoro",  # https://github.com/remsky/Kokoro-FastAPI
             "voice": voice,
             "input": text,
-            "response_format": "mp3",  # flac would be nice (faster to encode), but seems currently broken in kokoro (the audio may repeat twice)
-            "speed": 1,
+            "response_format": "wav",  # flac would be nice (small, fast to encode), but seems currently broken in kokoro (the audio may repeat twice).
+            "speed": speed,
             "stream": True,
             "return_download_link": False}
     stream_response = requests.post(f"{config.tts_url}/v1/audio/speech", headers=headers, json=data, stream=True)
     yell_on_error(stream_response)
 
-    # We run this in the background to
+    # We run this in the background
     def speak(task_env) -> None:
         it = stream_response.iter_content(chunk_size=4096)
         audio_buffer = io.BytesIO()

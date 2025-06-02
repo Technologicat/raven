@@ -10,7 +10,6 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 # high priority (must have):
 #
 # TODO: implement color picker when a postprocessor parameter's GUI hint is "!RGB"
-# TODO: add text entry for speech synthesizer testing
 #
 # medium priority (will probably do these too):
 #
@@ -440,7 +439,15 @@ class TalkingheadExampleGUI:
                     self.voice_choice = dpg.add_combo(items=self.voice_names,
                                                       default_value=self.voice_names[0],
                                                       width=self.button_width)
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 10))
+                        dpg.add_slider_int(label="x 0.1x", default_value=10, min_value=5, max_value=20, clamped=True, width=self.button_width - 80,
+                                           tag="speak_speed_slider")
                     dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_speak, enabled=tts_alive, tag="speak_button")
+                    dpg.add_input_text(default_value="",
+                                       hint="[Enter text to speak]",
+                                       width=self.button_width,
+                                       tag="speak_input_text")
                     dpg.bind_item_theme("speak_button", "disablable_button_theme")
                     dpg.add_spacer(height=8)
 
@@ -884,8 +891,14 @@ class TalkingheadExampleGUI:
 
     def on_speak(self, sender, app_data) -> None:
         current_voice = dpg.get_value(self.voice_choice)
+        text = dpg.get_value("speak_input_text")
+        if text == "":
+            # text = "Testing the AI speech synthesizer."
+            # text = "Sharon Apple is a computer-generated virtual idol and a central character in the Macross Plus franchise, created by Shoji Kawamori."
+            text = "Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts."
         client_api.tts_speak(voice=current_voice,
-                             text="Testing the AI speech synthesizer.",  # TODO: GUI control to enter text to speak
+                             text=text,
+                             speed=dpg.get_value("speak_speed_slider") / 10,
                              start_callback=client_api.talkinghead_start_talking,
                              stop_callback=client_api.talkinghead_stop_talking)
 
