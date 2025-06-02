@@ -322,7 +322,7 @@ class TalkingheadExampleGUI:
             with dpg.group(horizontal=True):
                 with dpg.group(tag="live_texture_group"):
                     dpg.add_spacer(width=1024, height=0)  # keep the group at the image's width even when the image is hidden
-                    self.init_live_texture()
+                    self.init_live_texture(self.image_size)
                     dpg.add_text("FPS counter will appear here", color=(0, 255, 0), pos=(8, 0), tag="fps_text")
                     self.fps_statistics = RunningAverage()
                     self.frame_size_statistics = RunningAverage()
@@ -500,33 +500,36 @@ class TalkingheadExampleGUI:
                     # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
                     build_postprocessor_gui()
 
-    def init_live_texture(self):
+    def init_live_texture(self, new_image_size):
         with self.upscale_change_lock:
-            old_texture_id_counter = self.texture_id_counter
-            self.texture_id_counter += 1
+            old_texture_id = self.texture_id_counter
+            new_texture_id = old_texture_id + 1
 
-            logger.info(f"init_live_texture: Creating new GUI item live_texture_{self.texture_id_counter} for new size {self.image_size}x{self.image_size}")
-            self.blank_texture = np.zeros([self.image_size,  # height
-                                           self.image_size,  # width
+            logger.info(f"init_live_texture: Creating new GUI item live_texture_{new_texture_id} for new size {new_image_size}x{new_image_size}")
+            self.blank_texture = np.zeros([new_image_size,  # height
+                                           new_image_size,  # width
                                            4],  # RGBA
                                           dtype=np.float32).ravel()
-            self.live_texture = dpg.add_raw_texture(width=self.image_size,
-                                                    height=self.image_size,
+            self.live_texture = dpg.add_raw_texture(width=new_image_size,
+                                                    height=new_image_size,
                                                     default_value=self.blank_texture,
                                                     format=dpg.mvFormat_Float_rgba,
-                                                    tag=f"live_texture_{self.texture_id_counter}",
+                                                    tag=f"live_texture_{new_texture_id}",
                                                     parent="talkinghead_example_textures")
+            # TODO: should update these two atomically, add a lock
+            self.texture_id_counter += 1  # now the new texture exists so it's safe to write to (in the background thread)
+            self.image_size = new_image_size
 
-            logger.info(f"init_live_texture: Creating new GUI item live_image_{self.texture_id_counter}")
-            dpg.add_image(f"live_texture_{self.texture_id_counter}", pos=(0, viewport_height - self.image_size - 8),
-                          tag=f"live_image_{self.texture_id_counter}",
+            logger.info(f"init_live_texture: Creating new GUI item live_image_{new_texture_id}")
+            dpg.add_image(f"live_texture_{new_texture_id}", pos=(0, viewport_height - new_image_size - 8),
+                          tag=f"live_image_{new_texture_id}",
                           show=False,
                           parent="live_texture_group",
                           before="fps_text")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
 
-            dpg.show_item(f"live_image_{self.texture_id_counter}")
+            dpg.show_item(f"live_image_{new_texture_id}")
             try:
-                dpg.hide_item(f"live_image_{old_texture_id_counter}")
+                dpg.hide_item(f"live_image_{old_texture_id}")
                 dpg.split_frame()  # this is safe because we only get here if the `hide_item` succeeded (so not at startup when the old image doeesn't exist yet)
             except SystemError:  # does not exist
                 pass
@@ -537,8 +540,8 @@ class TalkingheadExampleGUI:
                 except SystemError:  # does not exist
                     pass
             # Now the old image widget is guaranteed to be hidden, so we can delete it without breaking GUI render
-            maybe_delete_item(f"live_image_{old_texture_id_counter}")
-            maybe_delete_item(f"live_texture_{old_texture_id_counter}")
+            maybe_delete_item(f"live_image_{old_texture_id}")
+            maybe_delete_item(f"live_texture_{old_texture_id}")
 
             logger.info("init_live_texture: done!")
 
@@ -658,11 +661,12 @@ class TalkingheadExampleGUI:
     def on_upscaler_settings_change(self, sender, app_data):
         """Update the upscaler status and send changes to server."""
         old_image_size = self.image_size
-        self.upscale = dpg.get_value("upscale_slider") / 10
-        self.image_size = int(self.upscale * self.source_image_size)
-        if self.image_size != old_image_size:
-            self.init_live_texture()
+        new_upscale = dpg.get_value("upscale_slider") / 10
+        new_image_size = int(new_upscale * self.source_image_size)
+        if new_image_size != old_image_size:
+            self.init_live_texture(new_image_size)
 
+        self.upscale = new_upscale
         self.upscale_preset = dpg.get_value("upscale_preset_choice")
         self.upscale_quality = dpg.get_value("upscale_quality_choice")
         self.on_postprocessor_settings_change(sender, app_data)
@@ -903,17 +907,27 @@ def update_live_texture(task_env) -> None:
                 time.sleep(0.04)   # 1/25 s
                 continue
 
+            try:  # EAFP to avoid TOCTTOU
+                # Before blitting, make sure the texture is of the expected size. When an upscale change is underway, it will be temporarily of the wrong size.
+                tex = gui_instance.live_texture  # Get the reference only once, since it could change at any time if the user changes the upscaler settings.
+                config = dpg.get_item_configuration(tex)
+                expected_w = config["width"]
+                expected_h = config["height"]
+            except SystemError:  # does not exist
+                time.sleep(0.04)   # 1/25 s
+                continue  # can't do anything without a texture to blit to, so discard this frame
+
             if gui_instance.comm_format == "QOI":
                 image_rgba = qoi.decode(image_data)  # -> uint8 array of shape (h, w, c)
                 # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
                 h, w = image_rgba.shape[:2]
-                if w != gui_instance.image_size or h != gui_instance.image_size:
-                    logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {gui_instance.image_size}x{gui_instance.image_size}")
+                if w != expected_w or h != expected_h:
+                    logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {expected_w}x{expected_h}")
                     pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
                     if image_rgba.shape[2] == 4:
                         alpha_channel = image_rgba[:, :, 3]
                         pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
-                    pil_image = pil_image.resize((gui_instance.image_size, gui_instance.image_size),
+                    pil_image = pil_image.resize((expected_w, expected_h),
                                                  resample=PIL.Image.LANCZOS)
                     image_rgba = np.asarray(pil_image.convert("RGBA"))
             else:  # use PIL
@@ -921,20 +935,17 @@ def update_live_texture(task_env) -> None:
                 pil_image = PIL.Image.open(image_file)
                 # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
                 w, h = pil_image.size
-                if w != gui_instance.image_size or h != gui_instance.image_size:
-                    logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {gui_instance.image_size}x{gui_instance.image_size}")
-                    pil_image = pil_image.resize((gui_instance.image_size, gui_instance.image_size),
+                if w != expected_w or h != expected_h:
+                    logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {expected_w}x{expected_h}")
+                    pil_image = pil_image.resize((expected_w, expected_h),
                                                  resample=PIL.Image.LANCZOS)
                 image_rgba = np.asarray(pil_image.convert("RGBA"))
             image_rgba = np.array(image_rgba, dtype=np.float32) / 255
             raw_data = image_rgba.ravel()  # shape [h, w, c] -> linearly indexed
             try:  # EAFP to avoid TOCTTOU
-                # Before blitting, make sure the texture is of the expected size. When an upscale change is underway, it will be temporarily of the wrong size.
-                config = dpg.get_item_configuration(gui_instance.live_texture)
-                if config["width"] == w and config["height"] == h:
-                    dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
-            except SystemError:  # does not exist
-                pass
+                dpg.set_value(tex, raw_data)  # to GUI
+            except SystemError:  # does not exist (might have gone bye-bye while we were decoding)
+                continue  # can't do anything without a texture to blit to, so discard this frame
 
             # Update FPS counter.
             # NOTE: Since we wait on the server to send a frame, the refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS.
