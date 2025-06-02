@@ -9,17 +9,18 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 
 # high priority (must have):
 #
-# TODO: save dialog for saving animator settings from GUI
-# TODO: reposition talkinghead on window resize
-#
-# medium priority (will probably add these too):
-#
+# TODO: write a default animator.json if the file is missing
 # TODO: implement color picker when a postprocessor parameter's GUI hint is "!RGB"
 # TODO: add text entry for speech synthesizer testing
 #
+# medium priority (will probably do these too):
+#
+# TODO: reposition talkinghead on window resize
+# TODO: viewport size on window resize, e.g. maximize, then restore -> wrong size
+#
 # nice to have (maybe later):
 #
-# TODO: robustness: don't crash if the server is/goes down
+# TODO: robustness: don't crash if the server suddenly goes down
 # TODO: editor for main animator config too (target FPS, talking speed, ...)
 # TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming.)
 # TODO: support loading a background image (aligned to bottom left?)
@@ -152,12 +153,14 @@ gui_instance = None  # initialized later, when the app starts
 filedialog_open_image = None
 filedialog_open_json = None
 filedialog_open_animator_settings = None
+filedialog_save_animator_settings = None
 
 def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
     """Create the file dialogs."""
     global filedialog_open_image
     global filedialog_open_json
     global filedialog_open_animator_settings
+    global filedialog_save_animator_settings
     filedialog_open_image = FileDialog(title="Open input image",
                                        tag="open_image_dialog",
                                        callback=_open_image_callback,
@@ -183,6 +186,16 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                                    filter_list=[".json"],
                                                    file_filter=".json",
                                                    multi_selection=False,
+                                                   allow_drag=False,
+                                                   default_path=default_path)
+    filedialog_save_animator_settings = FileDialog(title="Save animator settings JSON file",
+                                                   tag="save_animator_settings_dialog",
+                                                   callback=_save_animator_settings_callback,
+                                                   modal=True,
+                                                   filter_list=[".json"],
+                                                   file_filter=".json",
+                                                   save_mode=True,
+                                                   default_file_extension=".json",  # used if the user does not provide a file extension when naming the save-as
                                                    allow_drag=False,
                                                    default_path=default_path)
 
@@ -292,6 +305,41 @@ def is_animator_settings_dialog_visible():
     return dpg.is_item_visible("open_animator_settings_dialog")  # tag
 
 # --------------------------------------------------------------------------------
+# "Save JSON" dialog (animator settings)
+
+def show_save_animator_settings_dialog():
+    """Button callback. Show the save file dialog, for the user to pick a filename to save as.
+
+    If you need to close it programmatically, call `filedialog_save_animator_settings.cancel()` so it'll trigger the callback.
+    """
+    if gui_instance is None:
+        return
+    logger.debug("show_save_animator_settings_dialog: Showing save file dialog.")
+    filedialog_save_animator_settings.show_file_dialog()
+    logger.debug("show_save_animator_settings_dialog: Done.")
+
+def _save_animator_settings_callback(selected_files):
+    """Callback that fires when the save image dialog closes."""
+    logger.debug("_save_animator_settings_callback: Save file dialog callback triggered.")
+    if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
+        raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
+    if selected_files:
+        selected_file = selected_files[0]
+        logger.debug(f"_save_animator_settings_callback: User selected the file '{selected_file}'.")
+        gui_instance.save_animator_settings(selected_file)
+    else:  # empty selection -> cancelled
+        logger.debug("_save_animator_settings_callback: Cancelled.")
+
+def is_save_animator_settings_dialog_visible():
+    """Return whether the open image dialog is open.
+
+    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
+    """
+    if filedialog_save_animator_settings is None:
+        return False
+    return dpg.is_item_visible("save_animator_settings_dialog")  # tag
+
+# --------------------------------------------------------------------------------
 # GUI controls
 
 def is_any_modal_window_visible():
@@ -299,7 +347,8 @@ def is_any_modal_window_visible():
 
     Currently these are file dialogs.
     """
-    return (is_open_image_dialog_visible() or is_open_json_dialog_visible() or is_animator_settings_dialog_visible())
+    return (is_open_image_dialog_visible() or is_open_json_dialog_visible() or
+            is_animator_settings_dialog_visible() or is_save_animator_settings_dialog_visible())
 
 class TalkingheadExampleGUI:
     def __init__(self):
@@ -355,7 +404,7 @@ class TalkingheadExampleGUI:
                     dpg.add_text("[Use raven.avatar.editor to edit templates.]", color=(140, 140, 140))
                     dpg.add_spacer(height=4)
                     dpg.add_button(label="Load animator settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
-                    dpg.add_button(label="Save animator settings", width=self.button_width, tag="save_animator_settings_button")  # TODO: implement
+                    dpg.add_button(label="Save animator settings [Ctrl+Shift+S]", width=self.button_width, callback=show_save_animator_settings_dialog, tag="save_animator_settings_button")
                     dpg.add_spacer(height=8)
 
                     dpg.add_text("Emotion [Ctrl+E]")
@@ -378,9 +427,12 @@ class TalkingheadExampleGUI:
                     # AI speech synthesizer
                     tts_alive = client_api.tts_available()
                     if tts_alive:
+                        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS server at {tts_url}.{Style.RESET_ALL}")
                         heading_label = f"Voice [Ctrl+V] [{tts_url}]"
                         self.voice_names = client_api.tts_voices()
                     else:
+                        print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS server at {tts_url}.{Style.RESET_ALL} Is the server running?")
+                        print(f"{Fore.YELLOW}{Style.BRIGHT}Speech synthesis is not available.{Style.RESET_ALL}")
                         heading_label = "Voice [Ctrl+V] [not connected]"
                         self.voice_names = ["[TTS server not available]"]
                     dpg.add_text(heading_label)
@@ -439,7 +491,7 @@ class TalkingheadExampleGUI:
                                 if widget is None:
                                     logger.warning(f"reset_filter: '{filter_name}.{param_name}': unknown parameter type {type(default_value)}, skipping.")
                                 dpg.set_value(widget, defaults[param_name])
-                            self.on_postprocessor_settings_change(None, None)
+                            self.on_gui_settings_change(None, None)
                         return reset_filter
 
                     def make_reset_param_callback(filter_name, param_name, default_value):  # freeze by closure
@@ -450,7 +502,7 @@ class TalkingheadExampleGUI:
                         def reset_param():
                             logger.warning(f"reset_param: resetting '{filter_name}.{param_name}' to default.")
                             dpg.set_value(widget, default_value)
-                            self.on_postprocessor_settings_change(None, None)
+                            self.on_gui_settings_change(None, None)
                         return reset_param
 
                     def prettify(name):
@@ -462,7 +514,7 @@ class TalkingheadExampleGUI:
                         with dpg.group(horizontal=True):
                             dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
                             dpg.add_checkbox(label=prettify(filter_name), default_value=False,
-                                             tag=f"{filter_name}_checkbox", callback=self.on_postprocessor_settings_change)
+                                             tag=f"{filter_name}_checkbox", callback=self.on_gui_settings_change)
                         with dpg.group(horizontal=True):
                             dpg.add_spacer(width=4)
                             with dpg.group(horizontal=False):
@@ -480,19 +532,19 @@ class TalkingheadExampleGUI:
                                         with dpg.group(horizontal=True):
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
                                             dpg.add_checkbox(label=prettify(param_name), default_value=default_value,
-                                                             tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_postprocessor_settings_change)
+                                                             tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_gui_settings_change)
                                     elif isinstance(default_value, float):
                                         assert len(param_range) == 2  # param_range = [min, max]
                                         with dpg.group(horizontal=True):
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
                                             dpg.add_slider_float(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
-                                                                 tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                                                 tag=f"{filter_name}_{param_name}_slider", callback=self.on_gui_settings_change)
                                     elif isinstance(default_value, int):
                                         assert len(param_range) == 2  # param_range = [min, max]
                                         with dpg.group(horizontal=True):
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
                                             dpg.add_slider_int(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
-                                                               tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                                               tag=f"{filter_name}_{param_name}_slider", callback=self.on_gui_settings_change)
                                     elif isinstance(default_value, str):
                                         # param_range = list of choices
                                         with dpg.group(horizontal=True):
@@ -500,7 +552,7 @@ class TalkingheadExampleGUI:
                                             dpg.add_combo(items=param_range,
                                                           default_value=param_range[0],
                                                           width=self.button_width,
-                                                          tag=f"{filter_name}_{param_name}_choice", callback=self.on_postprocessor_settings_change)
+                                                          tag=f"{filter_name}_{param_name}_choice", callback=self.on_gui_settings_change)
                                             dpg.add_text(prettify(param_name))
                                     else:
                                         assert False, f"{filter_name}.{param_name}: Unknown parameter type {type(default_value)}"
@@ -607,7 +659,7 @@ class TalkingheadExampleGUI:
             defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
             validated_settings = {}
             for param_name in defaults:
-                validated_settings[param_name] = filter_settings.get("param_name", defaults[param_name])
+                validated_settings[param_name] = filter_settings.get(param_name, defaults[param_name])
             validated_postprocessor_chain.append((filter_name, validated_settings))
         return validated_postprocessor_chain
 
@@ -654,6 +706,7 @@ class TalkingheadExampleGUI:
 
     def load_image(self, filename: Union[pathlib.Path, str]) -> None:
         try:
+            logger.info(f"TalkingheadExampleGUI.load_image: loading avatar image '{filename}'")
             client_api.talkinghead_load(filename)
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_image: {type(exc)}: {exc}")
@@ -667,6 +720,7 @@ class TalkingheadExampleGUI:
 
     def load_json(self, filename: Union[pathlib.Path, str]) -> None:
         try:
+            logger.info(f"TalkingheadExampleGUI.load_json: loading emotion templates '{filename}'")
             client_api.talkinghead_load_emotion_templates_from_file(filename)
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_json: {type(exc)}: {exc}")
@@ -680,7 +734,7 @@ class TalkingheadExampleGUI:
 
     def on_toggle_postprocessor(self, sender, app_data):
         self.postprocessor_enabled = not self.postprocessor_enabled
-        self.on_postprocessor_settings_change(sender, app_data)
+        self.on_gui_settings_change(sender, app_data)
 
     def on_upscaler_settings_change(self, sender, app_data):
         """Update the upscaler status and send changes to server."""
@@ -693,32 +747,45 @@ class TalkingheadExampleGUI:
         self.upscale = new_upscale
         self.upscale_preset = dpg.get_value("upscale_preset_choice")
         self.upscale_quality = dpg.get_value("upscale_quality_choice")
-        self.on_postprocessor_settings_change(sender, app_data)
+        self.on_gui_settings_change(sender, app_data)
 
-    def on_postprocessor_settings_change(self, sender, app_data):
-        """Send new postprocessor and upscaler settings to server whenever a value changes in the GUI.
+    def on_gui_settings_change(self, sender, app_data):
+        """Send new animator settings to the avatar server whenever a value changes in the GUI.
 
-        Requires a settings file to be loaded.
+        A settings file must have been loaded before calling this.
         """
         try:
+            if self.animator_settings is None:
+                raise RuntimeError("TalkingheadExampleGUI.on_gui_settings_change: no animator settings loaded, no base for update")
+            # self.animator_settings is valid
+
+            # Update the stuff that can be edited in the GUI:
+            #
+            # Postprocessor settings
             if self.postprocessor_enabled:
                 ppc = self.generate_postprocessor_chain_from_gui()
             else:
                 ppc = []
             self.animator_settings["postprocessor_chain"] = ppc
 
-            ups = {"upscale": self.upscale,
-                   "upscale_preset": self.upscale_preset,
-                   "upscale_quality": self.upscale_quality}
-            self.animator_settings.update(ups)
+            # Upscaler settings, plus anything tracked by `TalkingheadExampleGUI`
+            custom_animator_settings = {"format": self.comm_format,
+                                        "target_fps": self.target_fps,
+                                        "upscale": self.upscale,
+                                        "upscale_preset": self.upscale_preset,
+                                        "upscale_quality": self.upscale_quality}
+            self.animator_settings.update(custom_animator_settings)
 
+            # Send to server
             client_api.talkinghead_load_animator_settings(self.animator_settings)
         except Exception as exc:
-            logger.error(f"TalkingheadExampleGUI.on_postprocessor_settings_change: {type(exc)}: {exc}")
+            logger.error(f"TalkingheadExampleGUI.on_gui_settings_change: {type(exc)}: {exc}")
             traceback.print_exc()
 
     def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
+        """Load an animator settings JSON file and send the settings to the avatar server."""
         try:
+            logger.info(f"TalkingheadExampleGUI.load_animator_settings: loading '{filename}'")
             with open(filename, "r", encoding="utf-8") as json_file:
                 animator_settings = json.load(json_file)
 
@@ -733,26 +800,54 @@ class TalkingheadExampleGUI:
                 dpg.set_value("upscale_slider", int(self.upscale * 10))
             if "upscale_preset" in animator_settings:
                 self.upscale_preset = animator_settings["upscale_preset"]
-                dpg.set_value("upscale_preset", self.upscale_preset)
+                dpg.set_value("upscale_preset_choice", self.upscale_preset)
             if "upscale_quality" in animator_settings:
                 self.upscale_quality = animator_settings["upscale_quality"]
-                dpg.set_value("upscale_quality", self.upscale_quality)
+                dpg.set_value("upscale_quality_choice", self.upscale_quality)
 
+            # Make sure these fields exist (in case they didn't yet).
+            # They're not mandatory (any missing keys are always auto-populated from server defaults),
+            # but they're something `TalkingheadExampleGUI` tracks, so we should sync our state to the server.
             custom_animator_settings = {"format": self.comm_format,
                                         "target_fps": self.target_fps,
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
                                         "upscale_quality": self.upscale_quality}
-            animator_settings.update(custom_animator_settings)  # setup overrides
+            animator_settings.update(custom_animator_settings)
 
-            # Any missing keys are auto-populated from server defaults.
+            # Send to server
             client_api.talkinghead_load_animator_settings(animator_settings)
+
+            # ...and only if that is successful, remember the settings.
             self.animator_settings = animator_settings
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.load_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load animator settings JSON '{filename}', reason {type(exc)}: {exc}",
+                                     buttons=["Close"],
+                                     ok_button="Close",
+                                     cancel_button="Close",
+                                     centering_reference_window=self.window)
+
+    def save_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
+        # We have done any necessary preparations (sync GUI state to `self.animator_settings`)
+        # when the settings were last sent to the server, via one of:
+        #    `on_gui_settings_change`
+        #    `load_animator_settings`
+        #
+        # Hence we can just save the JSON file.
+        try:
+            logger.info(f"TalkingheadExampleGUI.save_animator_settings: saving as '{filename}'")
+            if self.animator_settings is None:
+                raise RuntimeError("save_animator_settings: no animator settings loaded, nothing to save")
+            with open(filename, "w", encoding="utf-8") as json_file:
+                json.dump(self.animator_settings, json_file, indent=4)
+        except Exception as exc:
+            logger.error(f"TalkingheadExampleGUI.save_animator_settings: {type(exc)}: {exc}")
+            traceback.print_exc()
+            client_util.modal_dialog(window_title="Error",
+                                     message=f"Could not save animator settings JSON '{filename}', reason {type(exc)}: {exc}",
                                      buttons=["Close"],
                                      ok_button="Close",
                                      cancel_button="Close",
@@ -807,8 +902,10 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
     if ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_E:  # emotions
             show_open_json_dialog()
-        elif key == dpg.mvKey_A:  # animator settings
+        elif key == dpg.mvKey_A:  # load animator settings
             show_open_animator_settings_dialog()
+        elif key == dpg.mvKey_S:  # save animator settings
+            show_save_animator_settings_dialog()
 
     # Ctrl+...
     elif ctrl_pressed:
