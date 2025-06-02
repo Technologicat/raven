@@ -493,6 +493,20 @@ class TalkingheadExampleGUI:
                         # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
                         build_postprocessor_gui()
 
+    def filter_param_to_gui_widget(self, filter_name, param_name, example_value):
+        """Given a postprocessor filter name, a name for one of its parameters, and an example value for that parameter, return the DPG tag for the corresponding GUI widget.
+
+        If the type of `example_value` is not supported, return `None`.
+        """
+        if isinstance(example_value, bool):
+            return f"{filter_name}_{param_name}_checkbox"
+        elif isinstance(example_value, (float, int)):
+            return f"{filter_name}_{param_name}_slider"
+        elif isinstance(example_value, str):
+            return f"{filter_name}_{param_name}_choice"
+        return None
+        raise ValueError(f"filter_param_to_gui_widget: Unknown value type {type(example_value)}.")
+
     def strip_postprocessor_chain_for_gui(self, postprocessor_chain):
         """Strip to what we can currently set up in the GUI. Fixed render order, with at most one copy of each filter."""
         input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
@@ -520,20 +534,6 @@ class TalkingheadExampleGUI:
                 validated_settings[param_name] = filter_settings.get("param_name", defaults[param_name])
             validated_postprocessor_chain.append((filter_name, validated_settings))
         return validated_postprocessor_chain
-
-    def filter_param_to_gui_widget(self, filter_name, param_name, example_value):
-        """Given a postprocessor filter name, a name for one of its parameters, and an example value for that parameter, return the DPG tag for the corresponding GUI widget.
-
-        If the type of `example_value` is not supported, return `None`.
-        """
-        if isinstance(example_value, bool):
-            return f"{filter_name}_{param_name}_checkbox"
-        elif isinstance(example_value, (float, int)):
-            return f"{filter_name}_{param_name}_slider"
-        elif isinstance(example_value, str):
-            return f"{filter_name}_{param_name}_choice"
-        return None
-        raise ValueError(f"filter_param_to_gui_widget: Unknown value type {type(example_value)}.")
 
     def populate_gui_from_canonized_postprocessor_chain(self, postprocessor_chain):
         """Ordering: strip -> canonize -> populate GUI"""
