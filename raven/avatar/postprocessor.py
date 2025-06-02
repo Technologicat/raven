@@ -6,10 +6,13 @@ These effects work in linear intensity space, before gamma correction.
 __all__ = ["Postprocessor"]
 
 from collections import defaultdict
+import inspect
 import logging
 import math
 import time
 from typing import Dict, List, Optional, Tuple, TypeVar, Union
+
+from unpythonic import getfunc
 
 import numpy as np
 
@@ -237,6 +240,31 @@ class Postprocessor:
         self.shift_distort_interval = defaultdict(lambda: 0.0)
         self.shift_distort_last_frame_no = defaultdict(lambda: 0.0)
         self.shift_distort_grid = defaultdict(lambda: None)
+
+    @classmethod
+    def get_filters(cls):
+        """Return a list of available postprocessing filters and their default configurations.
+
+        This is convenient for dynamically populating a GUI.
+
+        Return format is `[(name0: settings0), ...]`
+        """
+        filters = []
+        for name in dir(cls):
+            if name.startswith("_"):
+                continue
+            if name in ("get_filters", "render_into"):
+                continue
+
+            # The authoritative source for parameter defaults is the source code, so:
+            meth = getattr(cls, name)  # get the class method
+            func, _ = getfunc(meth)  # get the underlying raw function, for use with `inspect.signature`
+            sig = inspect.signature(func)
+            # All of our filter settings have a default value.
+            settings = {v.name: v.default for v in sig.parameters.values() if v.default is not inspect.Parameter.empty}
+
+            filters.append((name, settings))
+        return list(sorted(filters))
 
     def render_into(self, image):
         """Apply current postprocess chain, modifying `image` in-place."""
