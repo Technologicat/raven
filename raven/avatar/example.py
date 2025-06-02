@@ -2,7 +2,7 @@
 
 !!! Start `server.py` first before running this app! !!!
 
-To edit the emotion templates, see the separate app `editor.py`.
+This app is an editor for the postprocessor settings. To edit the emotion templates, see the separate app `editor.py`.
 
 This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """

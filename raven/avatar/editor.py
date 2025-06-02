@@ -2,6 +2,8 @@
 
 Pose an anime character, based on a suitable 512×512 static input image and some neural networks.
 
+This app is an editor for the emotion templates. To edit postprocessor settings, see the separate app `example.py`.
+
 
 **What**:
 
