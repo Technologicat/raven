@@ -16,10 +16,10 @@
  "sway_macro_strength": 0.6,
  "sway_micro_strength": 0.01,
  "breathing_cycle_duration": 4.0,
- "postprocessor_chain": [["bloom", {"luma_threshold": 0.6, "hdr_exposure": 0.5}],
+ "postprocessor_chain": [["bloom", {}],
                          ["chromatic_aberration", {}],
                          ["vignetting", {}],
                          ["translucency", {}],
-                         ["noise", {"strength": 0.1, "sigma": 0.0, "channel": "A"}],
+                         ["noise", {}],
                          ["banding", {}],
                          ["scanlines", {}]]}
