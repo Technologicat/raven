@@ -7,13 +7,19 @@ This app is an editor for the postprocessor settings. To edit the emotion templa
 This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """
 
+# high priority (must have):
+#
 # TODO: save dialog for saving animator settings from GUI
-# TODO: crash with an *informative* message when server is offline
-# TODO: fit everything into window
 # TODO: reposition talkinghead on window resize
-
+# TODO: crash with an *informative* message at startup when the Avatar server is not running
+#
+# medium priority (will probably add these too):
+#
 # TODO: implement color picker when a postprocessor parameter's GUI hint is "!RGB"
 # TODO: add text entry for speech synthesizer testing
+#
+# nice to have (maybe later):
+#
 # TODO: robustness: don't crash if the server is/goes down
 # TODO: editor for main animator config too (target FPS, talking speed, ...)
 # TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming.)
