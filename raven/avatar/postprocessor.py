@@ -556,10 +556,13 @@ class Postprocessor:
                    _priority=4.0)
     def noise(self, image: torch.tensor, *,
               magnitude: float = 0.1,
-              sigma: float = 0.0,
+              sigma: float = 3.0,
               channel: str = "Y",
               name: str = "noise0") -> None:
         """[dynamic] Add noise to the luminance or to the alpha channel.
+
+        NOTE: At small values of `sigma`, this filter causes the video to use a lot of bandwidth
+        during network transfer, because noise is impossible to compress.
 
         `magnitude`: Fraction of noise in the output's Y or A channel.
 
