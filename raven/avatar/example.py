@@ -599,7 +599,7 @@ class TalkingheadExampleGUI:
             self.image_size = new_image_size
 
             logger.info(f"init_live_texture: Creating new GUI item live_image_{new_texture_id}")
-            dpg.add_image(f"live_texture_{new_texture_id}", pos=(0, viewport_height - new_image_size - 8),
+            dpg.add_image(f"live_texture_{new_texture_id}", pos=(512 - new_image_size // 2, viewport_height - new_image_size - 8),
                           show=self.animator_running,  # if paused, leave it hidden
                           tag=f"live_image_{new_texture_id}",
                           parent="live_texture_group",
