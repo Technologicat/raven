@@ -879,7 +879,10 @@ def update_live_texture(task_env) -> None:
                 image_rgba = np.asarray(pil_image.convert("RGBA"))
             image_rgba = np.array(image_rgba, dtype=np.float32) / 255
             raw_data = image_rgba.ravel()  # shape [h, w, c] -> linearly indexed
-            dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
+            try:  # EAFP to avoid TOCTTOU
+                dpg.set_value(gui_instance.live_texture, raw_data)  # to GUI
+            except SystemError:  # does not exist
+                pass
 
             # Update FPS counter.
             # NOTE: Since we wait on the server to send a frame, the refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS.
