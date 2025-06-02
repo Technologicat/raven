@@ -20,6 +20,6 @@
                          ["chromatic_aberration", {}],
                          ["vignetting", {}],
                          ["translucency", {}],
-                         ["alphanoise", {"magnitude": 0.1, "sigma": 0.0}],
+                         ["noise", {"magnitude": 0.1, "sigma": 0.0, "channel": "A"}],
                          ["banding", {}],
                          ["scanlines", {}]]}

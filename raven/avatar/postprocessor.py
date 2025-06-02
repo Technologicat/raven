@@ -6,6 +6,7 @@ These effects work in linear intensity space, before gamma correction.
 __all__ = ["Postprocessor"]
 
 from collections import defaultdict
+from functools import wraps
 import inspect
 import logging
 import math
@@ -160,6 +161,32 @@ class HistogramEqualizer:
 
 # --------------------------------------------------------------------------------
 
+# Gaussian blur kernel size for most filters that use Gaussian blur.
+#
+# The largest sensible value for `sigma` is such that
+#
+#     kernel_size = 2 * (2 * sigma) + 1,
+#
+# so that the kernel reaches its "2 sigma" (95% mass) point where the
+# finitely sized kernel cuts the tail. If you want to be really hi-fi,
+# you could go for the "3 sigma" (99.7% mass) point, but in practice
+# this isn't necessary.
+#
+# Hence, the largest sensible value is `sigma = 3.0` (which is already
+# really blurry).
+#
+_kernel_size = 13
+
+# Convenient for GUI auto-population so that we can specify sensible ranges for parameters once, at the implementation site (not separately at each GUI use site).
+def with_metadata(**metadata):
+    def decorator(func):
+        @wraps(func)
+        def func_with_metadata(*args, **kwargs):
+            return func(*args, **kwargs)
+        func_with_metadata.metadata = metadata  # stash it on the function object
+        return func_with_metadata
+    return decorator
+
 class Postprocessor:
     """
     `chain`: Postprocessor filter chain configuration.
@@ -231,8 +258,7 @@ class Postprocessor:
         self.last_frame_no = -1
 
         # Caches for individual dynamic effects
-        self.alphanoise_last_image = defaultdict(lambda: None)
-        self.lumanoise_last_image = defaultdict(lambda: None)
+        self.noise_last_image = defaultdict(lambda: None)
         self.vhs_glitch_interval = defaultdict(lambda: 0.0)
         self.vhs_glitch_last_frame_no = defaultdict(lambda: 0.0)
         self.vhs_glitch_last_image = defaultdict(lambda: None)
@@ -257,14 +283,25 @@ class Postprocessor:
                 continue
 
             # The authoritative source for parameter defaults is the source code, so:
-            meth = getattr(cls, name)  # get the class method
+            meth = getattr(cls, name)  # get the method from the class
+            if not callable(meth):  # some other kind of attribute? (e.g. cache data for filters)
+                continue
+            # is a method
+
             func, _ = getfunc(meth)  # get the underlying raw function, for use with `inspect.signature`
             sig = inspect.signature(func)
             # All of our filter settings have a default value.
             settings = {v.name: v.default for v in sig.parameters.values() if v.default is not inspect.Parameter.empty}
-
-            filters.append((name, settings))
-        return list(sorted(filters))
+            # Parameter ranges are specified at definition site via our internal `with_metadata` mechanism.
+            ranges = {name: meth.metadata[name] for name in settings}
+            param_info = {"defaults": settings,
+                          "ranges": ranges}
+            filters.append((name, param_info))
+        def rendering_priority(metadata_record):
+            name, _ = metadata_record
+            meth = getattr(cls, name)
+            return meth.metadata["_priority"]
+        return list(sorted(filters, key=rendering_priority))
 
     def render_into(self, image):
         """Apply current postprocess chain, modifying `image` in-place."""
@@ -279,7 +316,7 @@ class Postprocessor:
             logger.info(f"render_into: Computing pixel position tensors for image size {w}x{h}")
             # Compute base meshgrid for the geometric position of each pixel.
             # This is needed by filters that either vary by geometric position (e.g. `vignetting`),
-            # or deform the image (e.g. `analog_badhsync`).
+            # or deform the image (e.g. `analog_rippling_hsync`).
             #
             # This postprocessor is typically applied to a video stream. As long as
             # the image dimensions stay constant, we can re-use the previous meshgrid.
@@ -357,46 +394,52 @@ class Postprocessor:
     # --------------------------------------------------------------------------------
     # Physical input signal
 
+    @with_metadata(threshold=[0.0, 1.0],
+                   exposure=[0.1, 5.0],
+                   _priority=0.0)
     def bloom(self, image: torch.tensor, *,
-              luma_threshold: float = 0.8,
-              hdr_exposure: float = 0.7) -> None:
+              threshold: float = 0.5,
+              exposure: float = 0.5) -> None:
         """[static] Bloom effect (fake HDR). Makes the image look brighter. Popular in early 2000s anime.
+
+        Can also be used as just a camera exposure adjustment by setting `threshold=1.0` to disable the glow.
 
         Makes bright parts of the image bleed light into their surroundings, enhancing perceived contrast.
         Only makes sense when the talkinghead is rendered on a dark-ish background.
 
-        `luma_threshold`: How bright is bright. 0.0 is full black, 1.0 is full white.
-                          (Technically, true relative luminance, not luma, since we work in linear RGB space.)
-        `hdr_exposure`: Controls the overall brightness of the output. Like in photography,
-                        higher exposure means brighter image (saturating toward white).
+        `threshold`: How bright is bright. 0.0 is full black (all pixels glow), 1.0 is full white (bloom disabled).
+                     Technically, this is true relative luminance, not luma, since we work in linear RGB space.
+        `exposure`: Overall brightness of the output. Like in photography, higher exposure means brighter image,
+                    saturating toward white.
         """
         # There are online tutorials for how to create this effect, see e.g.:
         #   https://learnopengl.com/Advanced-Lighting/Bloom
 
-        # Find the bright parts.
-        # original_yuv = rgb_to_yuv(image[:3, :, :])
-        # Y = original_yuv[0, :, :]
-        Y = luminance(image[:3, :, :])
-        mask = torch.ge(Y, luma_threshold)  # [h, w]
+        if threshold < 1.0:
+            # Find the bright parts.
+            # original_yuv = rgb_to_yuv(image[:3, :, :])
+            # Y = original_yuv[0, :, :]
+            Y = luminance(image[:3, :, :])
+            mask = torch.ge(Y, threshold)  # [h, w]
 
-        # Make a copy of the image with just the bright parts.
-        mask = torch.unsqueeze(mask, 0)  # -> [1, h, w]
-        brights = image * mask  # [c, h, w]
+            # Make a copy of the image with just the bright parts.
+            mask = torch.unsqueeze(mask, 0)  # -> [1, h, w]
+            brights = image * mask  # [c, h, w]
 
-        # Blur the bright parts. Two-pass blur to save compute, since we need a very large blur kernel.
-        # It seems that in Torch, one large 1D blur is faster than looping with a smaller one.
-        #
-        # Although everything else in Torch takes (height, width), kernel size is given as (size_x, size_y);
-        # see `gaussian_blur_image` in https://pytorch.org/vision/main/_modules/torchvision/transforms/v2/functional/_misc.html
-        # for a hint (the part where it computes the padding).
-        brights = torchvision.transforms.GaussianBlur((21, 1), sigma=7.0)(brights)  # blur along x
-        brights = torchvision.transforms.GaussianBlur((1, 21), sigma=7.0)(brights)  # blur along y
+            # Blur the bright parts. Two-pass blur to save compute, since we need a very large blur kernel.
+            # It seems that in Torch, one large 1D blur is faster than looping with a smaller one.
+            #
+            # Although everything else in Torch takes (height, width), kernel size is given as (size_x, size_y);
+            # see `gaussian_blur_image` in https://pytorch.org/vision/main/_modules/torchvision/transforms/v2/functional/_misc.html
+            # for a hint (the part where it computes the padding).
+            brights = torchvision.transforms.GaussianBlur((21, 1), sigma=7.0)(brights)  # blur along x
+            brights = torchvision.transforms.GaussianBlur((1, 21), sigma=7.0)(brights)  # blur along y
 
-        # Additively blend the images. Note we are working in linear intensity space, and we will now go over 1.0 intensity.
-        image.add_(brights)
+            # Additively blend the images. Note we are working in linear intensity space, and we will now go over 1.0 intensity.
+            image.add_(brights)
 
         # We now have a fake HDR image. Tonemap it back to LDR.
-        image[:3, :, :] = 1.0 - torch.exp(-image[:3, :, :] * hdr_exposure)  # RGB: tonemap
+        image[:3, :, :] = 1.0 - torch.exp(-image[:3, :, :] * exposure)  # RGB: tonemap
 
         # # TEST - apply Larson's adaptive histogram remapper to the Y (luminance) channel, and keep the color channels (U, V) as-is.
         # # Doesn't look that good, the classical method seems better for this use.
@@ -405,20 +448,28 @@ class Postprocessor:
         # ldr_Y = self.histeq.equalize_by_cdf(hdr_Y, bin_edges, cdf)
         # image[:3, :, :] = yuv_to_rgb(torch.cat([ldr_Y.unsqueeze(0), original_yuv[1:]], dim=0))
 
-        image[3, :, :] = torch.maximum(image[3, :, :], brights[3, :, :])  # alpha: max-combine
+        if threshold < 1.0:
+            image[3, :, :] = torch.maximum(image[3, :, :], brights[3, :, :])  # alpha: max-combine
+
         torch.clamp_(image, min=0.0, max=1.0)
 
     # --------------------------------------------------------------------------------
     # Video camera
 
+    @with_metadata(scale=[0.001, 0.05],
+                   sigma=[0.1, 3.0],
+                   _priority=1.0)
     def chromatic_aberration(self, image: torch.tensor, *,
-                             transverse_sigma: float = 0.5,
-                             axial_scale: float = 0.005) -> None:
+                             scale: float = 0.005,
+                             sigma: float = 1.0) -> None:
         """[static] Simulate the two types of chromatic aberration in a camera lens.
 
         Like everything else here, this is of course made of smoke and mirrors. We simulate the axial effect
         (index of refraction varying w.r.t. wavelength) by geometrically scaling the RGB channels individually,
         and the transverse effect (focal distance varying w.r.t. wavelength) by a gaussian blur.
+
+        `scale`: Axial CA geometric distortion parameter.
+        `sigma`: Transverse CA blur parameter.
 
         Note that in a real lens:
           - Axial CA is typical at long focal lengths (e.g. tele/zoom lens)
@@ -429,15 +480,13 @@ class Postprocessor:
         resulting from the different geometric scalings of just three wavelengths (instead of a continuous spectrum, like
         a scene lit with natural light would have).
 
-        The kernel size used for transverse CA blur (for R and B channels) is fixed to 13, which is enough up to sigma = 3.0.
-
         See:
             https://en.wikipedia.org/wiki/Chromatic_aberration
         """
-        # Axial: Shrink R (deflected less), pass G through (lens reference wavelength), enlarge B (deflected more).
-        grid_R = torch.stack((self._meshx * (1.0 + axial_scale), self._meshy * (1.0 + axial_scale)), 2)
+        # Axial CA: Shrink R (deflected less), pass G through (lens reference wavelength), enlarge B (deflected more).
+        grid_R = torch.stack((self._meshx * (1.0 + scale), self._meshy * (1.0 + scale)), 2)
         grid_R = grid_R.unsqueeze(0)
-        grid_B = torch.stack((self._meshx * (1.0 - axial_scale), self._meshy * (1.0 - axial_scale)), 2)
+        grid_B = torch.stack((self._meshx * (1.0 - scale), self._meshy * (1.0 - scale)), 2)
         grid_B = grid_B.unsqueeze(0)
 
         image_batch_R = image[0, :, :].unsqueeze(0).unsqueeze(0)  # [h, w] -> [c, h, w] -> [n, c, h, w]
@@ -447,20 +496,20 @@ class Postprocessor:
         warped_B = torch.nn.functional.grid_sample(image_batch_B, grid_B, mode="bilinear", padding_mode="border", align_corners=False)
         warped_B = warped_B.squeeze(0)  # [1, c, h, w] -> [c, h, w]
 
-        # Transverse (blur to simulate wrong focal distance for R and B)
-        warped_R[:, :, :] = torchvision.transforms.GaussianBlur((13, 1), sigma=transverse_sigma)(warped_R)  # blur along x
-        warped_R[:, :, :] = torchvision.transforms.GaussianBlur((1, 13), sigma=transverse_sigma)(warped_R)  # blur along y
-        warped_B[:, :, :] = torchvision.transforms.GaussianBlur((13, 1), sigma=transverse_sigma)(warped_B)  # blur along x
-        warped_B[:, :, :] = torchvision.transforms.GaussianBlur((1, 13), sigma=transverse_sigma)(warped_B)  # blur along y
+        # Transverse CA (blur to simulate wrong focal distance for R and B)
+        warped_R[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(warped_R)  # blur along x
+        warped_R[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(warped_R)  # blur along y
+        warped_B[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(warped_B)  # blur along x
+        warped_B[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(warped_B)  # blur along y
 
         # Alpha channel: treat similarly to each of R,G,B and average the three resulting alpha channels
         image_batch_A = image[3, :, :].unsqueeze(0).unsqueeze(0)
         warped_A1 = torch.nn.functional.grid_sample(image_batch_A, grid_R, mode="bilinear", padding_mode="border", align_corners=False)
-        warped_A1[:, :, :] = torchvision.transforms.GaussianBlur((13, 1), sigma=transverse_sigma)(warped_A1)
-        warped_A1[:, :, :] = torchvision.transforms.GaussianBlur((1, 13), sigma=transverse_sigma)(warped_A1)
+        warped_A1[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(warped_A1)
+        warped_A1[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(warped_A1)
         warped_A2 = torch.nn.functional.grid_sample(image_batch_A, grid_B, mode="bilinear", padding_mode="border", align_corners=False)
-        warped_A2[:, :, :] = torchvision.transforms.GaussianBlur((13, 1), sigma=transverse_sigma)(warped_A2)
-        warped_A2[:, :, :] = torchvision.transforms.GaussianBlur((1, 13), sigma=transverse_sigma)(warped_A2)
+        warped_A2[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(warped_A2)
+        warped_A2[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(warped_A2)
         averaged_alpha = (warped_A1 + image[3, :, :] + warped_A2) / 3.0
 
         image[0, :, :] = warped_R
@@ -468,6 +517,8 @@ class Postprocessor:
         image[2, :, :] = warped_B
         image[3, :, :] = averaged_alpha
 
+    @with_metadata(strength=[0.1, 0.5],
+                   _priority=2.0)
     def vignetting(self, image: torch.tensor, *,
                    strength: float = 0.42) -> None:
         """[static] Simulate vignetting (less light hitting the corners of a film frame or CCD sensor).
@@ -484,6 +535,8 @@ class Postprocessor:
     # --------------------------------------------------------------------------------
     # Scifi hologram
 
+    @with_metadata(alpha=[0.1, 0.9],
+                   _priority=3.0)
     def translucency(self, image: torch.tensor, *,
                      alpha: float = 0.9) -> None:
         """[static] A simple translucency filter for a hologram look.
@@ -495,114 +548,101 @@ class Postprocessor:
     # --------------------------------------------------------------------------------
     # General use
 
-    def alphanoise(self, image: torch.tensor, *,
-                   magnitude: float = 0.1,
-                   sigma: float = 0.0,
-                   name: str = "alphanoise0") -> None:
-        """[dynamic] Dynamic noise to alpha channel.
+    @with_metadata(magnitude=[0.1, 1.0],
+                   sigma=[0.1, 3.0],
+                   channel=["Y", "A"],
+                   name=["!ignore"],  # hint for GUI to ignore this parameter
+                   _priority=4.0)
+    def noise(self, image: torch.tensor, *,
+              magnitude: float = 0.1,
+              sigma: float = 0.0,
+              channel: str = "Y",
+              name: str = "noise0") -> None:
+        """[dynamic] Add noise to the luminance or to the alpha channel.
 
-        `magnitude`: How much noise to apply. 0 is off, 1 is as much noise as possible.
+        `magnitude`: Fraction of noise in the output's Y or A channel.
+
+                     How much noise to apply. 0 is no noise, 1 replaces the input image with noise.
+
+                     The formula is:
+
+                         out = in * ((1 - magnitude) + magnitude * noise_texture)
+
+                     The filter is multiplicative, so it never brightens the image, and
+                     never makes visible pixels that are fully translucent (alpha = 0.0) in the input.
+
+                     A larger `magnitude` makes the image darker/more translucent overall, because
+                     then a larger portion of the luminance/alpha axis is reserved for the noise.
 
         `sigma`: If nonzero, apply a Gaussian blur to the noise, thus reducing its spatial frequency
                  (i.e. making larger and smoother "noise blobs").
 
-                 The blur kernel size is fixed to 5, so `sigma = 1.0` is the largest that will be
-                 somewhat accurate. Nevertheless, `sigma = 2.0` looks acceptable, too, producing
-                 square blobs.
+        `channel`: One of:
+                     "Y": modulate the luminance (converts to YUV and back; slower)
+                     "A": modulate the alpha channel (fast; perhaps less effect on image file size
+                          in compressed RGBA formats; makes the noise translucent)
 
-        `name`: Optional name for this filter instance in the chain. Used as cache key.
-                If you have more than one `alphanoise` in the chain, they should have
-                different names so that each one gets its own cache.
+        `name`: Optional name for this filter instance in the chain. Used as cache key to store the noise texture.
+                If you have more than one `noise` filter in the chain, they should have different names so that
+                each one gets its own noise texture.
+
+                (Of course, to save some compute, you can give them the same name; then they'll use the same
+                 noise texture. But be aware that then the sigma values should be the same, because sigma
+                 affects the texture.)
 
         Suggested settings:
             Scifi hologram:   magnitude=0.1, sigma=0.0
             Analog VHS tape:  magnitude=0.2, sigma=2.0
         """
-        # Re-randomize the noise image whenever the normalized frame changes
-        if self.alphanoise_last_image[name] is None or int(self.frame_no) > int(self.last_frame_no):
+        # Re-randomize the noise texture whenever the normalized frame number changes
+        if self.noise_last_image[name] is None or int(self.frame_no) > int(self.last_frame_no):
             c, h, w = image.shape
             noise_image = torch.rand(h, w, device=self.device, dtype=image.dtype)
             if sigma > 0.0:
                 noise_image = noise_image.unsqueeze(0)  # [h, w] -> [c, h, w] (where c=1)
-                noise_image = torchvision.transforms.GaussianBlur((5, 5), sigma=sigma)(noise_image)
+                noise_image = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(noise_image)
+                noise_image = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(noise_image)
                 noise_image = noise_image.squeeze(0)  # -> [h, w]
-            self.alphanoise_last_image[name] = noise_image
+            self.noise_last_image[name] = noise_image
         else:
-            noise_image = self.alphanoise_last_image[name]
+            noise_image = self.noise_last_image[name]
         base_magnitude = 1.0 - magnitude
-        image[3, :, :].mul_(base_magnitude + magnitude * noise_image)
 
-    def lumanoise(self, image: torch.tensor, *,
-                  magnitude: float = 0.1,
-                  sigma: float = 0.0,
-                  name: str = "lumanoise0") -> None:
-        """[dynamic] Dynamic noise to luminance, without touching colors or alpha.
-
-        Based on converting `image` from RGB to YUV, noising it there, and converting back.
-
-        `magnitude`: How much noise to apply. 0 is off, 1 is as much noise as possible.
-
-        `sigma`: If nonzero, apply a Gaussian blur to the noise, thus reducing its spatial frequency
-                 (i.e. making larger and smoother "noise blobs").
-
-                 The blur kernel size is fixed to 13, so `sigma = 3.0` is the largest that will be
-                 somewhat accurate. Nevertheless, `sigma = 6.0` looks acceptable, too, producing
-                 square blobs.
-
-        `name`: Optional name for this filter instance in the chain. Used as cache key.
-                If you have more than one `alphanoise` in the chain, they should have
-                different names so that each one gets its own cache.
-
-        Suggested settings:
-            Scifi hologram:   magnitude=0.1, sigma=0.0
-            Analog VHS tape:  magnitude=0.2, sigma=2.0
-        """
-        # Re-randomize the noise image whenever the normalized frame changes
-        if self.lumanoise_last_image[name] is None or int(self.frame_no) > int(self.last_frame_no):
-            c, h, w = image.shape
-            noise_image = torch.rand(h, w, device=self.device, dtype=image.dtype)
-            if sigma > 0.0:
-                noise_image = noise_image.unsqueeze(0)  # [h, w] -> [c, h, w] (where c=1)
-                noise_image = torchvision.transforms.GaussianBlur((13, 1), sigma=sigma)(noise_image)
-                noise_image = torchvision.transforms.GaussianBlur((1, 13), sigma=sigma)(noise_image)
-                noise_image = noise_image.squeeze(0)  # -> [h, w]
-            self.lumanoise_last_image[name] = noise_image
-        else:
-            noise_image = self.lumanoise_last_image[name]
-        base_magnitude = 1.0 - magnitude
-        image_yuv = rgb_to_yuv(image[:3, :, :])
-        image_yuv[0, :, :].mul_(base_magnitude + magnitude * noise_image)
-        image_rgb = yuv_to_rgb(image_yuv)
-        image[:3, :, :] = image_rgb
+        if channel == "A":  # alpha
+            image[3, :, :].mul_(base_magnitude + magnitude * noise_image)
+        else:  # "Y", luminance
+            image_yuv = rgb_to_yuv(image[:3, :, :])
+            image_yuv[0, :, :].mul_(base_magnitude + magnitude * noise_image)
+            image_rgb = yuv_to_rgb(image_yuv)
+            image[:3, :, :] = image_rgb
 
     # --------------------------------------------------------------------------------
     # Lo-fi analog video
 
+    @with_metadata(sigma=[0.1, 3.0],
+                   _priority=5.0)
     def analog_lowres(self, image: torch.tensor, *,
-                      kernel_size: int = 13,
-                      sigma: float = 0.75) -> None:
+                      sigma: float = 1.5) -> None:
         """[static] Low-resolution analog video signal, simulated by blurring.
 
-        `kernel_size`: size of the Gaussian blur kernel, in pixels.
         `sigma`: standard deviation of the Gaussian blur kernel, in pixels.
-
-        Ideally, `kernel_size` should be `2 * (3 * sigma) + 1`, so that the kernel
-        reaches its "3 sigma" (99.7% mass) point where the finitely sized kernel
-        cuts the tail. "2 sigma" (95% mass) is also acceptable, to save some compute.
-
-        The default settings create a slight blur without destroying much detail.
-
-        Note a `kernel_size` of 5 would be enough up to sigma = 1.0; the default is
-        good for up to sigma = 3.0 (which is already really blurry).
         """
-        image[:, :, :] = torchvision.transforms.GaussianBlur((kernel_size, 1), sigma=sigma)(image)  # blur along x
-        image[:, :, :] = torchvision.transforms.GaussianBlur((1, kernel_size), sigma=sigma)(image)  # blur along y
+        image[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(image)  # blur along x
+        image[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(image)  # blur along y
 
-    def analog_badhsync(self, image: torch.tensor, *,
-                        speed: float = 8.0,
-                        amplitude1: float = 0.001, density1: float = 4.0,
-                        amplitude2: Optional[float] = 0.001, density2: Optional[float] = 13.0,
-                        amplitude3: Optional[float] = 0.001, density3: Optional[float] = 27.0) -> None:
+    @with_metadata(speed=[1.0, 16.0],
+                   amplitude1=[0.001, 0.01],
+                   density1=[1.0, 100.0],
+                   amplitude2=[0.001, 0.01],
+                   density2=[1.0, 100.0],
+                   amplitude3=[0.001, 0.01],
+                   density3=[1.0, 100.0],
+                   _priority=6.0)
+    def analog_rippling_hsync(self, image: torch.tensor, *,
+                              speed: float = 8.0,
+                              amplitude1: float = 0.001, density1: float = 4.0,
+                              amplitude2: Optional[float] = 0.001, density2: Optional[float] = 13.0,
+                              amplitude3: Optional[float] = 0.001, density3: Optional[float] = 27.0) -> None:
         """[dynamic] Analog video signal with fluctuating hsync.
 
         In practice, this looks like a rippling effect added to the outline of the character.
@@ -619,7 +659,7 @@ class Postprocessor:
                  `image_height` frames. So effectively the cycle position updates by
                  `speed * (1 / image_height)` at each frame.
 
-        Note that "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
         """
         c, h, w = image.shape
 
@@ -634,9 +674,9 @@ class Postprocessor:
         meshy = self._meshy
         meshx = self._meshx + amplitude1 * torch.sin((density1 * (self._meshy + cycle_pos)) * math.pi)
         if amplitude2 and density2:
-            meshx = self._meshx + amplitude2 * torch.sin((density2 * (self._meshy + cycle_pos)) * math.pi)
+            meshx = meshx + amplitude2 * torch.sin((density2 * (self._meshy + cycle_pos)) * math.pi)
         if amplitude3 and density3:
-            meshx = self._meshx + amplitude3 * torch.sin((density3 * (self._meshy + cycle_pos)) * math.pi)
+            meshx = meshx + amplitude3 * torch.sin((density3 * (self._meshy + cycle_pos)) * math.pi)
 
         grid = torch.stack((meshx, meshy), 2)
         grid = grid.unsqueeze(0)  # batch of one
@@ -645,14 +685,22 @@ class Postprocessor:
         warped = warped.squeeze(0)  # [1, c, h, w] -> [c, h, w]
         image[:, :, :] = warped
 
-    def analog_distort(self, image: torch.tensor, *,
-                       speed: float = 8.0,
-                       strength: float = 0.1,
-                       ripple_amplitude: float = 0.05,
-                       ripple_density1: float = 4.0,
-                       ripple_density2: Optional[float] = 13.0,
-                       ripple_density3: Optional[float] = 27.0,
-                       edge: str = "top") -> None:
+    @with_metadata(speed=[1.0, 16.0],
+                   asymmetry=[0.0, 0.5],
+                   ripple_amplitude=[0.001, 0.01],
+                   ripple_density1=[1.0, 100.0],
+                   ripple_density2=[1.0, 100.0],
+                   ripple_density3=[1.0, 100.0],
+                   placement=["bottom", "top"],
+                   _priority=7.0)
+    def analog_runaway_hsync(self, image: torch.tensor, *,
+                             speed: float = 8.0,
+                             asymmetry: float = 0.1,
+                             ripple_amplitude: float = 0.05,
+                             ripple_density1: float = 4.0,
+                             ripple_density2: Optional[float] = 13.0,
+                             ripple_density3: Optional[float] = 27.0,
+                             placement: str = "bottom") -> None:
         """[dynamic] Analog video signal distorted by a runaway hsync near the top or bottom edge.
 
         A bad video cable connection can do this, e.g. when connecting a game console to a display
@@ -662,19 +710,22 @@ class Postprocessor:
 
         `speed`: At speed 1.0, a full cycle of the rippling effect completes every `image_height` frames.
                  So effectively the cycle position updates by `speed * (1 / image_height)` at each frame.
-        `strength`: Base strength for maximum distortion at the edge of the image.
-                    In units where the height and width of the image are both 2.0.
-        `ripple_amplitude`: Variation on top of `strength`.
-        `ripple_density1`: Like `density` in `analog_badhsync`, but in time. How many cycles the first
+        `asymmetry`: Base strength for maximum distortion at the edge of the image. The image will ripple
+                     around this base strength.
+
+                     In units where the height and width of the image are both 2.0.
+                     Positive values shift toward the right.
+        `ripple_amplitude`: Strength variation, added on top of `asymmetry`.
+        `ripple_density1`: Like `density` in `analog_rippling_hsync`, but in time. How many cycles the first
                            component wave completes per one cycle of the ripple effect.
         `ripple_density2`: Like `ripple_density1`, but for the second component wave.
                            Set to `None` or to 0.0 to disable the second component wave.
         `ripple_density3`: Like `ripple_density1`, but for the third component wave.
                            Set to `None` or to 0.0 to disable the third component wave.
-        `edge`: one of "top", "bottom". Near which edge of the image to apply the maximal distortion.
-                The distortion then decays to zero, with a quadratic profile, in 1/8 of the image height.
+        `placement`: one of "top", "bottom". Near which edge of the image to apply the maximal distortion.
+                     The distortion then decays to zero, with a quadratic profile, in 1/8 of the image height.
 
-        Note that "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
         """
         c, h, w = image.shape
 
@@ -687,18 +738,17 @@ class Postprocessor:
         # Deformation
         # The spatial distort profile is a quadratic curve [0, 1], for 1/8 of the image height.
         meshy = self._meshy
-        if edge == "top":
+        if placement == "top":
             spatial_distort_profile = (torch.clamp(meshy + 0.75, max=0.0) * 4.0)**2  # distort near y = -1
-        else:  # edge == "bottom":
+        else:  # placement == "bottom":
             spatial_distort_profile = (torch.clamp(meshy - 0.75, min=0.0) * 4.0)**2  # distort near y = +1
-        ripple_amplitude = ripple_amplitude
         ripple = math.sin(ripple_density1 * cycle_pos * math.pi)
         if ripple_density2:
             ripple += math.sin(ripple_density2 * cycle_pos * math.pi)
         if ripple_density3:
             ripple += math.sin(ripple_density3 * cycle_pos * math.pi)
-        instantaneous_strength = (1.0 - ripple_amplitude) * strength + ripple_amplitude * ripple
-        # The minus sign: read coordinates toward the left -> shift the image toward the right.
+        instantaneous_strength = (1.0 - ripple_amplitude) * asymmetry + ripple_amplitude * ripple
+        # The minus sign: with positive strength, read coordinates toward the left -> shift the image toward the right.
         meshx = self._meshx - instantaneous_strength * spatial_distort_profile
 
         # Then just the usual incantation for applying a geometric distortion in Torch:
@@ -724,6 +774,15 @@ class Postprocessor:
         noise_image = torchvision.transforms.GaussianBlur((5, 1), sigma=2.0)(noise_image)
         return noise_image
 
+    @with_metadata(strength=[0.1, 0.9],
+                   unboost=[0.1, 10.0],
+                   max_glitches=[1, 10],
+                   min_glitch_height=[1, 3],
+                   max_glitch_height=[3, 10],
+                   hold_min=[1, 3],
+                   hold_max=[3, 6],
+                   name=["!ignore"],
+                   _priority=8.0)
     def analog_vhsglitches(self, image: torch.tensor, *,
                            strength: float = 0.1,
                            unboost: float = 4.0,
@@ -781,6 +840,10 @@ class Postprocessor:
             strength_field = strength * vhs_glitch_mask  # "field" as in physics, NOT as in CRT TV
             image[:3, :, :] = (1.0 - strength_field) * image[:3, :, :] + strength_field * vhs_glitch_image
 
+    @with_metadata(base_offset=[0.0, 1.0],
+                   max_dynamic_offset=[0.0, 1.0],
+                   speed=[1.0, 16.0],
+                   _priority=9.0)
     def analog_vhstracking(self, image: torch.tensor, *,
                            base_offset: float = 0.03,
                            max_dynamic_offset: float = 0.01,
@@ -789,7 +852,7 @@ class Postprocessor:
 
         Image floats up and down, and a band of black and white noise appears at the bottom.
 
-        Units like in `analog_badhsync`:
+        Units like in `analog_rippling_hsync`:
 
         Offsets are given in units where the height of the image is 2.0.
 
@@ -797,7 +860,7 @@ class Postprocessor:
                  `image_height` frames. So effectively the cycle position updates by
                  `speed * (1 / image_height)` at each frame.
 
-        Note that "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
         """
         c, h, w = image.shape
 
@@ -832,6 +895,15 @@ class Postprocessor:
             # fade = fade.unsqueeze(0)  # [1, w]
             # image[3, -noise_pixels:, :] = fade
 
+    @with_metadata(strength=[-0.1, 0.1],
+                   unboost=[0.1, 10.0],
+                   max_glitches=[1, 10],
+                   min_glitch_height=[1, 20],
+                   max_glitch_height=[30, 100],
+                   hold_min=[1, 3],
+                   hold_max=[3, 6],
+                   name=["!ignore"],
+                   _priority=10.0)
     def shift_distort(self, image: torch.tensor, *,
                       strength: float = 0.05,
                       unboost: float = 4.0,
@@ -902,6 +974,11 @@ class Postprocessor:
         return hue
 
     # This filter is adapted from an old GLSL code I made for Panda3D 1.8 back in 2014.
+    @with_metadata(strength=[0.0, 1.0],
+                   tint_rgb=["!RGB"],  # hint the GUI that this parameter needs an RGB color picker
+                   bandpass_reference_rgb=["!RGB"],
+                   bandpass_q=[0.01, 1.0],
+                   _priority=11.0)
     def desaturate(self, image: torch.tensor, *,
                    strength: float = 1.0,
                    tint_rgb: List[float] = [1.0, 1.0, 1.0],
@@ -976,6 +1053,10 @@ class Postprocessor:
         # Final blend
         image[:3, :, :] = (1.0 - strength_field) * image[:3, :, :] + strength_field * tinted_desat_image
 
+    @with_metadata(strength=[0.1, 0.9],
+                   density=[1.0, 4.0],
+                   speed=[1.0, 32.0],
+                   _priority=12.0)
     def banding(self, image: torch.tensor, *,
                 strength: float = 0.4,
                 density: float = 2.0,
@@ -988,7 +1069,7 @@ class Postprocessor:
         `density`: how many banding cycles per full image height
         `speed`: band movement, in pixels per frame
 
-        Note that "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
         """
         c, h, w = image.shape
         yy = torch.linspace(0, math.pi, h, dtype=image.dtype, device=self.device)
@@ -1005,6 +1086,11 @@ class Postprocessor:
         image[:3, :, :].mul_(1.0 + strength * band_effect)
         torch.clamp_(image, min=0.0, max=1.0)
 
+    @with_metadata(field=[0, 1],
+                   dynamic=[False, True],
+                   channel=["Y", "A"],
+                   strength=[0.1, 0.9],
+                   _priority=13.0)
     def scanlines(self, image: torch.tensor, *,
                   field: int = 0,
                   dynamic: bool = True,
@@ -1016,11 +1102,11 @@ class Postprocessor:
         `dynamic`: If `True`, the dimmed field will alternate each frame (top, bottom, top, bottom, ...)
                    for a more authentic CRT look (like Phosphor deinterlacer in VLC).
         `channel`: One of:
-                     "Y": darken the luminance (converts to YUV and back, slower)
-                     "A": darken the alpha channel (fast, but makes the darkened lines translucent)
+                     "Y": darken the luminance (converts to YUV and back; slower)
+                     "A": darken the alpha channel (fast; makes the darkened lines translucent)
         `strength`: E.g. 0.25 -> dim to 75% brightness/alpha.
 
-        Note that "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
         """
         if dynamic:
             start = (field + int(self.frame_no)) % 2

@@ -232,8 +232,8 @@ The following postprocessing filters are available. Options for each filter are 
 **Transport**:
 
 - `analog_lowres`: Simulates a low-resolution analog video signal by blurring the image.
-- `analog_badhsync`: Simulates bad horizontal synchronization (hsync) of an analog video signal, causing a wavy effect that causes the outline of the character to ripple.
-- `analog_distort`: Simulates a rippling, runaway hsync near the top or bottom edge of an image. This can happen with some equipment if the video cable is too long.
+- `analog_rippling_hsync`: Simulates bad horizontal synchronization (hsync) of an analog video signal, causing a wavy effect that causes the outline of the character to ripple.
+- `analog_runaway_hsync`: Simulates a rippling, runaway hsync near the top or bottom edge of an image. This can happen with some equipment if the video cable is too long.
 - `analog_vhsglitches`: Simulates a damaged 1980s VHS tape. In each 25 FPS frame, causes random lines to glitch with VHS noise.
 - `analog_vhstracking`: Simulates a 1980s VHS tape with bad tracking. The image floats up and down, and a band of VHS noise appears at the bottom.
 - `shift_distort`: A glitchy digital video transport as sometimes depicted in sci-fi, with random blocks of lines suddenly shifted horizontally temporarily.
@@ -248,8 +248,7 @@ The following postprocessing filters are available. Options for each filter are 
 
 **General use**:
 
-- `alphanoise`: Adds noise to the alpha channel (translucency).
-- `lumanoise`: Adds noise to the brightness (luminance).
+- `noise`: Adds noise to the brightness (luminance) or to the alpha channel (translucency).
 - `desaturate`: A desaturation filter with bells and whistles. Beside converting the image to grayscale, can optionally pass through colors that match the hue of a given RGB color (e.g. keep red things, while desaturating the rest), and tint the final result (e.g. for an amber monochrome computer monitor look).
 
 The noise filters could represent the display of a lo-fi scifi hologram, as well as noise in an analog video tape (which in this scheme belongs to "transport").
@@ -258,11 +257,11 @@ The `desaturate` filter could represent either a black and white video camera, o
 
 #### Postprocessor example: HDR, scifi hologram
 
-The bloom works best on a dark background. We use `lumanoise` to add an imperfection to the simulated display device, causing individual pixels to dynamically vary in their brightness (luminance). The `banding` and `scanlines` filters complete the look of how holograms are often depicted in scifi video games and movies. The `"dynamic": true` makes the dimmed field (top or bottom) flip each frame, like on a CRT television, and `"channel": "A"` applies the effect to the alpha channel, making the "hologram" translucent. (The default is `"channel": "Y"`, affecting the brightness, but not translucency.)
+The bloom works best on a dark background. We use `noise` to add an imperfection to the simulated display device, causing individual pixels to dynamically vary in their brightness (luminance). The `banding` and `scanlines` filters complete the look of how holograms are often depicted in scifi video games and movies. The `"dynamic": true` makes the dimmed field (top or bottom) flip each frame, like on a CRT television, and `"channel": "A"` applies the effect to the alpha channel, making the "hologram" translucent. (The default is `"channel": "Y"`, affecting the brightness, but not translucency.)
 
 ```
 "postprocessor_chain": [["bloom", {}],
-                        ["lumanoise", {"magnitude": 0.1, "sigma": 0.0}],
+                        ["noise", {"magnitude": 0.1, "sigma": 0.0, "channel": "Y"}],
                         ["banding", {}],
                         ["scanlines", {"dynamic": true, "channel": "A"}]
                        ]
@@ -277,7 +276,7 @@ Also, for some glitching video transport that shifts random blocks of lines hori
 ["shift_distort", {"strength": -0.05, "name": "shift_left"}],
 ```
 
-Having a unique name for each instance is important, because the name acts as a cache key.
+Having a unique name for each instance is important, because the name acts as a texture cache key.
 
 #### Postprocessor example: cheap video camera, amber monochrome computer monitor
 
@@ -298,15 +297,15 @@ The `banding` and `scanlines` filters suit this look, so we apply them here, too
 
 #### Postprocessor example: HDR, cheap video camera, 1980s VHS tape
 
-After capturing the light with a cheap video camera (just like in the previous example), we simulate the effects of transporting the signal on a 1980s VHS tape. First, we blur the image with `analog_lowres`. Then we apply `alphanoise` with a nonzero `sigma` to make the noise blobs larger than a single pixel, and a rather high `magnitude`. This simulates the brightness noise on a VHS tape. Then we make the image ripple horizontally with `analog_badhsync`, and add a damaged video tape effect with `analog_vhsglitches`. Finally, we add a bad VHS tracking effect to complete the "bad analog video tape" look.
+After capturing the light with a cheap video camera (just like in the previous example), we simulate the effects of transporting the signal on a 1980s VHS tape. First, we blur the image with `analog_lowres`. Then we apply `noise` with a nonzero `sigma` to make the noise blobs larger than a single pixel, and a rather high `magnitude`. This simulates the brightness noise on a VHS tape. Then we make the image ripple horizontally with `analog_rippling_hsync`, and add a damaged video tape effect with `analog_vhsglitches`. Finally, we add a bad VHS tracking effect to complete the "bad analog video tape" look.
 
 Then we again render the output on a simulated CRT TV, as appropriate for the 1980s time period.
 
 ```
 "postprocessor_chain": [["bloom", {}],
                         ["analog_lowres", {}],
-                        ["lumanoise", {"magnitude": 0.3, "sigma": 2.0}],
-                        ["analog_badhsync", {}],
+                        ["noise", {"magnitude": 0.3, "sigma": 2.0, "channel": "Y"}],
+                        ["analog_rippling_hsync", {}],
                         ["analog_vhsglitches", {"unboost": 1.0}],
                         ["analog_vhstracking", {}],
                         ["banding", {}],
@@ -343,7 +342,7 @@ This part goes **at the client end** as `SillyTavern/public/characters/yourchara
 ```json
 {"postprocessor_chain": [["bloom", {}],
                          ["translucency", {"alpha": 0.9}],
-                         ["alphanoise", {"magnitude": 0.1, "sigma": 0.0}],
+                         ["noise", {"magnitude": 0.1, "sigma": 0.0, "channel": "A"}],
                          ["banding", {}],
                          ["scanlines", {"dynamic": true}]
                         ]

@@ -33,6 +33,7 @@ from .. import utils as raven_utils
 from . import client_api  # convenient Python functions that abstract away the web API
 from . import client_util  # DPG GUI utilities
 from . import config
+from . import postprocessor
 from .util import RunningAverage
 
 # ----------------------------------------
@@ -389,279 +390,123 @@ class TalkingheadExampleGUI:
 
                     # Postprocessor settings editor
                     #
-                    # NOTE: In this client, defaults for postprocessor parameters are set in two places:
-                    #   - In the GUI controls, for any filters that are not enabled in the config file.
-                    #   - In `canonize_postprocessor_parameters_for_gui` for any missing parameters for filters that are enabled in the config file.
+                    # NOTE: Defaults and ranges for postprocessor parameters are set in `postprocessor.py`.
                     #
                     # TODO: implementation
                     #  - save dialog for saving animator settings from GUI
-                    # TODO: add GUI for:
-                    #   - shift_distort (glitchy digital video stream as sometimes depicted in sci-fi)
-                    #   - analog_vhsglitches (glitchy VHS tape)
-                    #   - analog_vhstracking (bad VHS tracking)
-                    # TODO: add GUI for any parameters of the supported filters that are not supported yet by the GUI
-                    # TODO: rename some of the postproc filters more descriptively
                     #
+                    def build_postprocessor_gui():
+                        for filter_name, param_info in postprocessor.Postprocessor.get_filters():
+                            dpg.add_checkbox(label=filter_name, default_value=False,
+                                             tag=f"{filter_name}_checkbox", callback=self.on_postprocessor_settings_change)
+                            for param_name, default_value in param_info["defaults"].items():
+                                param_range = param_info["ranges"][param_name]
+                                if len(param_range) == 1 and param_range[0].startswith("!"):  # GUI hint?
+                                    gui_hint = param_range[0]
+                                    if gui_hint == "!ignore":
+                                        continue
+                                    logger.warning(f"build_postprocessor_gui: filter '{filter_name}', parameter '{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
+                                    continue  # TODO: implement color picker when the hint is "!RGB"
+
+                                # Create GUI control depending on parameter's type
+                                if isinstance(default_value, bool):
+                                    dpg.add_checkbox(label=param_name, default_value=default_value,
+                                                     tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_postprocessor_settings_change)
+                                elif isinstance(default_value, float):
+                                    assert len(param_range) == 2  # param_range = [min, max]
+                                    dpg.add_slider_float(label=param_name, default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
+                                                         tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                elif isinstance(default_value, int):
+                                    assert len(param_range) == 2  # param_range = [min, max]
+                                    dpg.add_slider_int(label=param_name, default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
+                                                       tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                elif isinstance(default_value, str):
+                                    # param_range = list of choices
+                                    with dpg.group(horizontal=True):
+                                        dpg.add_combo(items=param_range,
+                                                      default_value=param_range[0],
+                                                      width=self.button_width,
+                                                      tag=f"{filter_name}_{param_name}_choice", callback=self.on_postprocessor_settings_change)
+                                        dpg.add_text(param_name)
+                                else:
+                                    assert False, f"Unknown parameter type {type(default_value)}"
+                            dpg.add_spacer(height=4)
+
                     with dpg.group(horizontal=False):
                         dpg.add_text("Postprocessor [Ctrl+click to set a numeric value]")
                         # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
-
-                        dpg.add_text("Scene")
-                        dpg.add_checkbox(label="Bloom", default_value=True,
-                                         tag="bloom_checkbox", callback=self.on_postprocessor_settings_change)
-                        with dpg.group(horizontal=True):
-                            dpg.add_spacer(width=8)
-                            with dpg.group():
-                                dpg.add_slider_float(label="threshold", default_value=0.5, min_value=0.1, max_value=1.0, clamped=True, width=self.button_width,
-                                                     tag="bloom_threshold_slider", callback=self.on_postprocessor_settings_change)
-                                dpg.add_slider_float(label="exposure", default_value=0.5, min_value=0.1, max_value=5.0, clamped=True, width=self.button_width,
-                                                     tag="bloom_exposure_slider", callback=self.on_postprocessor_settings_change)
-                                dpg.add_spacer(height=4)
-
-                        dpg.add_text("Optics")
-                        dpg.add_checkbox(label="Chromatic aberration", default_value=True,
-                                         tag="chromatic_aberration_checkbox", callback=self.on_postprocessor_settings_change)
-                        with dpg.group(horizontal=True):
-                            dpg.add_spacer(width=8)
-                            with dpg.group():
-                                dpg.add_slider_float(label="sigma", default_value=1.0, min_value=0.1, max_value=3.0, clamped=True, width=self.button_width,
-                                                     tag="chromatic_aberration_sigma_slider", callback=self.on_postprocessor_settings_change)
-                                dpg.add_slider_float(label="scale", default_value=0.005, min_value=0.001, max_value=0.050, clamped=True, width=self.button_width,
-                                                     tag="chromatic_aberration_scale_slider", callback=self.on_postprocessor_settings_change)
-                        dpg.add_checkbox(label="Vignetting", default_value=True,
-                                         tag="vignetting_checkbox", callback=self.on_postprocessor_settings_change)
-                        with dpg.group(horizontal=True):
-                            dpg.add_spacer(width=8)
-                            with dpg.group():
-                                dpg.add_slider_float(label="strength", default_value=0.42, min_value=0.1, max_value=0.5, clamped=True, width=self.button_width,
-                                                     tag="vignetting_strength_slider", callback=self.on_postprocessor_settings_change)
-                        dpg.add_spacer(height=4)
-
-                        dpg.add_text("Hologram")
-                        with dpg.group(horizontal=True):
-                            dpg.add_checkbox(label="Translucency", default_value=True,
-                                             tag="translucency_checkbox", callback=self.on_postprocessor_settings_change)
-                            dpg.add_text("[looks best with a background image]", color=(140, 140, 140))
-                        with dpg.group(horizontal=True):
-                            dpg.add_spacer(width=8)
-                            with dpg.group():
-                                dpg.add_slider_float(label="alpha", default_value=0.9, min_value=0.1, max_value=0.9, clamped=True, width=self.button_width,
-                                                     tag="translucency_alpha_slider", callback=self.on_postprocessor_settings_change)
-                        dpg.add_spacer(height=4)
-
-                        dpg.add_text("Analog video")
-                        dpg.add_checkbox(label="Low resolution", default_value=True,
-                                         tag="analog_lowres_checkbox", callback=self.on_postprocessor_settings_change)
-                        with dpg.group(horizontal=True):
-                            dpg.add_spacer(width=8)
-                            with dpg.group():
-                                # TODO: Kernel size affects the sensible range of sigma. Doing the easy thing for now and keeping the kernel size fixed at 13 pixels (on each axis).
-                                dpg.add_slider_float(label="sigma", default_value=1.5, min_value=0.5, max_value=3.0, clamped=True, width=self.button_width,
-                                                     tag="analog_lowres_sigma_slider", callback=self.on_postprocessor_settings_change)
-                        dpg.add_checkbox(label="Rippling H-sync", default_value=True,
-                                         tag="analog_badhsync_checkbox", callback=self.on_postprocessor_settings_change)
-                        with dpg.group(horizontal=True):
-                            dpg.add_spacer(width=8)
-                            with dpg.group():
-                                # TODO: urg, amplitude and density settings for the ripples.
-                                dpg.add_slider_float(label="speed", default_value=8.0, min_value=1.0, max_value=16.0, clamped=True, width=self.button_width,
-                                                     tag="analog_badhsync_speed_slider", callback=self.on_postprocessor_settings_change)
-                        dpg.add_checkbox(label="Runaway H-sync", default_value=True,
-                                         tag="analog_distort_checkbox", callback=self.on_postprocessor_settings_change)
-                        with dpg.group(horizontal=True):
-                            dpg.add_spacer(width=8)
-                            with dpg.group():
-                                dpg.add_slider_float(label="speed", default_value=8.0, min_value=1.0, max_value=16.0, clamped=True, width=self.button_width,
-                                                     tag="analog_distort_speed_slider", callback=self.on_postprocessor_settings_change)
-                                dpg.add_slider_float(label="asymmetry", default_value=0.1, min_value=0.0, max_value=0.5, clamped=True, width=self.button_width,
-                                                     tag="analog_distort_strength_slider", callback=self.on_postprocessor_settings_change)
-                                with dpg.group(horizontal=True):
-                                    self.analog_distort_placements = ["bottom", "top"]
-                                    dpg.add_combo(items=self.analog_distort_placements,
-                                                  default_value=self.analog_distort_placements[0],
-                                                  width=self.button_width,
-                                                  tag="analog_distort_edge_choice", callback=self.on_postprocessor_settings_change)
-                                    dpg.add_text("placement")
-                        dpg.add_spacer(height=4)
-
-                        dpg.add_text("Television")
-                        dpg.add_checkbox(label="Desaturate", default_value=True,
-                                         tag="desaturate_checkbox", callback=self.on_postprocessor_settings_change)
-                        # TODO: tint color
-                        # TODO: bandpass color, bandpass Q value
-
-                        dpg.add_checkbox(label="Banding", default_value=True,
-                                         tag="banding_checkbox", callback=self.on_postprocessor_settings_change)
-                        with dpg.group(horizontal=True):
-                            dpg.add_spacer(width=8)
-                            with dpg.group():
-                                dpg.add_slider_float(label="strength", default_value=0.4, min_value=0.1, max_value=0.9, clamped=True, width=self.button_width,
-                                                     tag="banding_strength_slider", callback=self.on_postprocessor_settings_change)
-                                dpg.add_slider_float(label="density", default_value=2.0, min_value=1.0, max_value=4.0, clamped=True, width=self.button_width,
-                                                     tag="banding_density_slider", callback=self.on_postprocessor_settings_change)
-                                dpg.add_slider_float(label="speed", default_value=16.0, min_value=1.0, max_value=32.0, clamped=True, width=self.button_width,
-                                                     tag="banding_speed_slider", callback=self.on_postprocessor_settings_change)
-
-                        dpg.add_checkbox(label="Scanlines", default_value=True,
-                                         tag="scanlines_checkbox", callback=self.on_postprocessor_settings_change)
-                        with dpg.group(horizontal=True):
-                            dpg.add_spacer(width=8)
-                            with dpg.group():
-                                dpg.add_checkbox(label="dynamic", default_value=True,
-                                                 tag="scanlines_dynamic_checkbox", callback=self.on_postprocessor_settings_change)
-                                dpg.add_slider_float(label="strength", default_value=0.5, min_value=0.1, max_value=0.9, clamped=True, width=self.button_width,
-                                                     tag="scanlines_strength_slider", callback=self.on_postprocessor_settings_change)
-                                with dpg.group(horizontal=True):
-                                    self.scanlines_channels = ["Y", "A"]  # Y = luminance, A = alpha
-                                    dpg.add_combo(items=self.scanlines_channels,
-                                                  default_value=self.scanlines_channels[0],
-                                                  width=self.button_width,
-                                                  tag="scanlines_channel_choice", callback=self.on_postprocessor_settings_change)
-                                    dpg.add_text("channel")
-                        dpg.add_spacer(height=4)
-
-    # TODO: Would be really nice to have a code generator for all this data <-> GUI conversion.
-    _gui_supported_filters = ["bloom",
-                              "chromatic_aberration",
-                              "vignetting",
-                              "translucency",
-                              "analog_lowres",
-                              "analog_badhsync",  # rippling h-sync
-                              "analog_distort",  # runaway h-sync
-                              "desaturate",
-                              "banding",
-                              "scanlines"]
+                        build_postprocessor_gui()
 
     def strip_postprocessor_chain_for_gui(self, postprocessor_chain):
-        """Strip to what we can set up in the GUI. Fixed ordering of filters; not all filters supported; at most one copy of each supported filter."""
+        """Strip to what we can set up in the GUI. Fixed render order, with at most one copy of each filter."""
         input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
-        return [(filt, input_dict[filt]) for filt in self._gui_supported_filters if filt in input_dict]
+        gui_postprocessor_chain = []
+        for filter_name, param_info in postprocessor.Postprocessor.get_filters():  # this performs the reordering
+            if filter_name in input_dict:
+                gui_postprocessor_chain.append((filter_name, input_dict[filter_name]))
+        return gui_postprocessor_chain
 
     def canonize_postprocessor_parameters_for_gui(self, postprocessor_chain):
-        """Strip fields not editable in GUI. Auto-populate missing fields, that are editable in the GUI, to their default values.
+        """Strip fields not editable in GUI. Auto-populate missing fields to their default values.
 
         Be sure to feed your postprocessor chain through `strip_postprocessor_chain_for_gui` first.
         """
+        all_filters = dict(postprocessor.Postprocessor.get_filters())
+
         validated_postprocessor_chain = []
-        for filt, filter_settings in postprocessor_chain:
+        for filter_name, filter_settings in postprocessor_chain:
+            if filter_name not in all_filters:
+                logger.warning(f"canonize_postprocessor_parameters_for_gui: Unknown filter '{filter_name}', ignoring.")
+                continue
+            defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
             validated_settings = {}
-            # Here we follow the ordering in `postprocessor.py`.
-            if filt == "bloom":
-                validated_settings["luma_threshold"] = filter_settings.get("luma_threshold", 0.5)
-                validated_settings["hdr_exposure"] = filter_settings.get("hdr_exposure", 0.5)
-            elif filt == "chromatic_aberration":
-                validated_settings["transverse_sigma"] = filter_settings.get("transverse_sigma", 1.0)
-                validated_settings["axial_scale"] = filter_settings.get("axial_scale", 0.005)
-            elif filt == "vignetting":
-                validated_settings["strength"] = filter_settings.get("strength", 0.42)
-            elif filt == "translucency":
-                validated_settings["alpha"] = filter_settings.get("alpha", 0.9)
-            # "alphanoise", "lumanoise" filters currently not supported in GUI
-            elif filt == "analog_lowres":
-                # "kernel_size" currently not adjustable in GUI
-                validated_settings["sigma"] = filter_settings.get("sigma", 1.5)
-            elif filt == "analog_badhsync":  # rippling h-sync
-                # amplitude1...3 and density1...3 currently not adjustable in GUI
-                validated_settings["speed"] = filter_settings.get("speed", 8.0)
-            elif filt == "analog_distort":  # runaway h-sync
-                validated_settings["speed"] = filter_settings.get("speed", 8.0)
-                validated_settings["strength"] = filter_settings.get("strength", 0.1)
-                validated_settings["edge"] = filter_settings.get("edge", "bottom")
-            # "analog_vhsglitches", "analog_vhstracking", "shift_distort" filters currently not supported in GUI
-            elif filt == "desaturate":
-                pass  # tint and hue bandpass currently not supported in GUI
-            elif filt == "banding":
-                validated_settings["strength"] = filter_settings.get("strength", 0.4)
-                validated_settings["density"] = filter_settings.get("strength", 2.0)
-                validated_settings["speed"] = filter_settings.get("strength", 16.0)
-            elif filt == "scanlines":
-                validated_settings["dynamic"] = filter_settings.get("dynamic", True)
-                validated_settings["strength"] = filter_settings.get("strength", 0.5)
-                validated_settings["channel"] = filter_settings.get("channel", "Y")
-            validated_postprocessor_chain.append((filt, validated_settings))
+            for param_name in defaults:
+                validated_settings[param_name] = filter_settings.get("param_name", defaults[param_name])
+            validated_postprocessor_chain.append((filter_name, validated_settings))
         return validated_postprocessor_chain
 
     def populate_gui_from_canonized_postprocessor_chain(self, postprocessor_chain):
         """Ordering: strip -> canonize -> populate GUI"""
+        all_filters = dict(postprocessor.Postprocessor.get_filters())
         input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
-        for filt in self._gui_supported_filters:
-            if filt not in input_dict:
-                dpg.set_value(f"{filt}_checkbox", False)
+        for filter_name in all_filters:
+            if filter_name not in input_dict:
+                dpg.set_value(f"{filter_name}_checkbox", False)
                 continue  # parameter values in GUI don't matter if the filter is disabled
-            dpg.set_value(f"{filt}_checkbox", True)
-            if filt == "bloom":
-                dpg.set_value(f"{filt}_threshold_slider", input_dict[filt]["luma_threshold"])
-                dpg.set_value(f"{filt}_exposure_slider", input_dict[filt]["hdr_exposure"])
-            elif filt == "chromatic_aberration":
-                dpg.set_value(f"{filt}_sigma_slider", input_dict[filt]["transverse_sigma"])
-                dpg.set_value(f"{filt}_scale_slider", input_dict[filt]["axial_scale"])
-            elif filt == "vignetting":
-                dpg.set_value(f"{filt}_strength_slider", input_dict[filt]["strength"])
-            elif filt == "translucency":
-                dpg.set_value(f"{filt}_alpha_slider", input_dict[filt]["alpha"])
-                # "alphanoise", "lumanoise" filters currently not supported in GUI
-            elif filt == "analog_lowres":
-                # "kernel_size" currently not adjustable in GUI
-                dpg.set_value(f"{filt}_sigma_slider", input_dict[filt]["sigma"])
-            elif filt == "analog_badhsync":
-                # amplitude1...3 and density1...3 currently not adjustable in GUI
-                dpg.set_value(f"{filt}_speed_slider", input_dict[filt]["speed"])
-            elif filt == "analog_distort":
-                dpg.set_value(f"{filt}_speed_slider", input_dict[filt]["speed"])
-                dpg.set_value(f"{filt}_strength_slider", input_dict[filt]["strength"])
-                dpg.set_value(f"{filt}_edge_choice", input_dict[filt]["edge"])
-            # "analog_vhsglitches", "analog_vhstracking", "shift_distort" filters currently not supported in GUI
-            elif filt == "desaturate":
-                pass  # tint and hue bandpass currently not supported in GUI
-            elif filt == "banding":
-                dpg.set_value(f"{filt}_strength_slider", input_dict[filt]["strength"])
-                dpg.set_value(f"{filt}_density_slider", input_dict[filt]["density"])
-                dpg.set_value(f"{filt}_speed_slider", input_dict[filt]["speed"])
-            elif filt == "scanlines":
-                dpg.set_value(f"{filt}_dynamic_checkbox", input_dict[filt]["dynamic"])
-                dpg.set_value(f"{filt}_strength_slider", input_dict[filt]["strength"])
-                dpg.set_value(f"{filt}_channel_choice", input_dict[filt]["channel"])
+            dpg.set_value(f"{filter_name}_checkbox", True)
+            for param_name, param_value in input_dict[filter_name].items():
+                if isinstance(param_value, bool):
+                    widget = f"{filter_name}_{param_name}_checkbox"
+                elif isinstance(param_value, (float, int)):
+                    widget = f"{filter_name}_{param_name}_slider"
+                elif isinstance(param_value, str):
+                    widget = f"{filter_name}_{param_name}_choice"
+                else:
+                    logger.warning(f"Unknown parameter type {type(param_value)}, ignoring this parameter.")
+                    continue
+                dpg.set_value(widget, param_value)
 
     def generate_postprocessor_chain_from_gui(self):
         """Return a postprocessor_chain representing the postprocessor settings currently in the GUI. For saving."""
+        all_filters = dict(postprocessor.Postprocessor.get_filters())
         postprocessor_chain = []
-        for filt in self._gui_supported_filters:
-            if dpg.get_value(f"{filt}_checkbox") is False:
+        for filter_name in all_filters:
+            if dpg.get_value(f"{filter_name}_checkbox") is False:
                 continue
+            defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
             settings = {}
-            if filt == "bloom":
-                settings["luma_threshold"] = dpg.get_value(f"{filt}_threshold_slider")
-                settings["hdr_exposure"] = dpg.get_value(f"{filt}_exposure_slider")
-            elif filt == "chromatic_aberration":
-                settings["transverse_sigma"] = dpg.get_value(f"{filt}_sigma_slider")
-                settings["axial_scale"] = dpg.get_value(f"{filt}_scale_slider")
-            elif filt == "vignetting":
-                settings["strength"] = dpg.get_value(f"{filt}_strength_slider")
-            elif filt == "translucency":
-                settings["alpha"] = dpg.get_value(f"{filt}_alpha_slider")
-                # "alphanoise", "lumanoise" filters currently not supported in GUI
-            elif filt == "analog_lowres":
-                # "kernel_size" currently not adjustable in GUI
-                settings["sigma"] = dpg.get_value(f"{filt}_sigma_slider")
-            elif filt == "analog_badhsync":
-                # amplitude1...3 and density1...3 currently not adjustable in GUI
-                settings["speed"] = dpg.get_value(f"{filt}_speed_slider")
-            elif filt == "analog_distort":
-                settings["speed"] = dpg.get_value(f"{filt}_speed_slider")
-                settings["strength"] = dpg.get_value(f"{filt}_strength_slider")
-                settings["edge"] = dpg.get_value(f"{filt}_edge_choice")
-            # "analog_vhsglitches", "analog_vhstracking", "shift_distort" filters currently not supported in GUI
-            elif filt == "desaturate":
-                pass  # tint and hue bandpass currently not supported in GUI
-            elif filt == "banding":
-                settings["strength"] = dpg.get_value(f"{filt}_strength_slider")
-                settings["density"] = dpg.get_value(f"{filt}_density_slider")
-                settings["speed"] = dpg.get_value(f"{filt}_speed_slider")
-            elif filt == "scanlines":
-                settings["dynamic"] = dpg.get_value(f"{filt}_dynamic_checkbox")
-                settings["strength"] = dpg.get_value(f"{filt}_strength_slider")
-                settings["channel"] = dpg.get_value(f"{filt}_channel_choice")
-            postprocessor_chain.append((filt, settings))
+            for param_name in defaults:
+                if isinstance(defaults[param_name], bool):
+                    widget = f"{filter_name}_{param_name}_checkbox"
+                elif isinstance(defaults[param_name], (float, int)):
+                    widget = f"{filter_name}_{param_name}_slider"
+                elif isinstance(defaults[param_name], str):
+                    widget = f"{filter_name}_{param_name}_choice"
+                else:
+                    logger.warning(f"Unknown parameter type {type(defaults[param_name])}, ignoring this parameter.")
+                    continue
+                settings[param_name] = dpg.get_value(widget)
+            postprocessor_chain.append((filter_name, settings))
         return postprocessor_chain
 
     def on_send_emotion(self, sender, app_data):  # GUI event handler
