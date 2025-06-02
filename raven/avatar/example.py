@@ -289,6 +289,8 @@ class TalkingheadExampleGUI:
     def __init__(self):
         self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed...
 
+        self.postprocessor_enabled = True
+
         self.upscale = 2.0  # ...but the animator has a realtime super-resolution filter (anime4k). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
         self.upscale_preset = "C"  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
         self.upscale_quality = "high"  # "low": fast, acceptable quality; "high": slow, good quality
@@ -320,7 +322,7 @@ class TalkingheadExampleGUI:
                         label="Talkinghead main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 with dpg.group(tag="live_texture_group"):
-                    dpg.add_spacer(width=self.image_size, height=0)  # keep the group at the image's width even when the image is hidden
+                    dpg.add_spacer(width=1024, height=0)  # keep the group at the image's width even when the image is hidden
                     dpg.add_image("live_texture", pos=(0, viewport_height - self.image_size - 8), tag="live_image")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
                     dpg.add_text("FPS counter will appear here", color=(0, 255, 0), pos=(8, 0), tag="fps_text")
                     self.fps_statistics = RunningAverage()
@@ -336,171 +338,168 @@ class TalkingheadExampleGUI:
                                  show=False)
                 dpg.set_frame_callback(10, position_please_standby_text)
 
-                with dpg.group(horizontal=True):
-                    with dpg.group(horizontal=False):
-                        dpg.add_text("Load / save")
-                        dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_image_dialog, tag="open_image_button")
-                        dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
-                        dpg.add_text("[Use raven.avatar.editor to edit templates.]", color=(140, 140, 140))
-                        dpg.add_spacer(height=4)
-                        dpg.add_button(label="Load animator settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
-                        dpg.add_button(label="Save animator settings", width=self.button_width, tag="save_animator_settings_button")  # TODO: implement
-                        dpg.add_spacer(height=8)
+                with dpg.child_window(width=self.button_width + 16, autosize_y=True):
+                    dpg.add_text("Load / save")
+                    dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_image_dialog, tag="open_image_button")
+                    dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
+                    dpg.add_text("[Use raven.avatar.editor to edit templates.]", color=(140, 140, 140))
+                    dpg.add_spacer(height=4)
+                    dpg.add_button(label="Load animator settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
+                    dpg.add_button(label="Save animator settings", width=self.button_width, tag="save_animator_settings_button")  # TODO: implement
+                    dpg.add_spacer(height=8)
 
-                        dpg.add_text("Emotion [Ctrl+E]")
-                        self.emotion_names = client_api.classify_labels()
-                        if "neutral" in self.emotion_names:
-                            self.emotion_names.remove("neutral")
-                            self.emotion_names = ["neutral"] + self.emotion_names
-                        self.emotion_choice = dpg.add_combo(items=self.emotion_names,
-                                                            default_value=self.emotion_names[0],
-                                                            width=self.button_width,
-                                                            callback=self.on_send_emotion)
-                        self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
-                        dpg.add_spacer(height=8)
+                    dpg.add_text("Emotion [Ctrl+E]")
+                    self.emotion_names = client_api.classify_labels()
+                    if "neutral" in self.emotion_names:
+                        self.emotion_names.remove("neutral")
+                        self.emotion_names = ["neutral"] + self.emotion_names
+                    self.emotion_choice = dpg.add_combo(items=self.emotion_names,
+                                                        default_value=self.emotion_names[0],
+                                                        width=self.button_width,
+                                                        callback=self.on_send_emotion)
+                    self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
+                    dpg.add_spacer(height=8)
 
-                        dpg.add_text("Toggles")
-                        dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
-                        dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
-                        dpg.add_spacer(height=8)
+                    dpg.add_text("Toggles")
+                    dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
+                    dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
+                    dpg.add_spacer(height=8)
 
-                        # AI speech synthesizer
-                        tts_alive = client_api.tts_available()
-                        if tts_alive:
-                            heading_label = f"Voice [Ctrl+V] [{tts_url}]"
-                            self.voice_names = client_api.tts_voices()
-                        else:
-                            heading_label = "Voice [Ctrl+V] [not connected]"
-                            self.voice_names = ["[TTS server not available]"]
-                        dpg.add_text(heading_label)
-                        self.voice_choice = dpg.add_combo(items=self.voice_names,
-                                                          default_value=self.voice_names[0],
-                                                          width=self.button_width)
-                        dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_speak, enabled=tts_alive, tag="speak_button")
-                        dpg.bind_item_theme("speak_button", "disablable_button_theme")
-                        dpg.add_spacer(height=8)
+                    # AI speech synthesizer
+                    tts_alive = client_api.tts_available()
+                    if tts_alive:
+                        heading_label = f"Voice [Ctrl+V] [{tts_url}]"
+                        self.voice_names = client_api.tts_voices()
+                    else:
+                        heading_label = "Voice [Ctrl+V] [not connected]"
+                        self.voice_names = ["[TTS server not available]"]
+                    dpg.add_text(heading_label)
+                    self.voice_choice = dpg.add_combo(items=self.voice_names,
+                                                      default_value=self.voice_names[0],
+                                                      width=self.button_width)
+                    dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_speak, enabled=tts_alive, tag="speak_button")
+                    dpg.bind_item_theme("speak_button", "disablable_button_theme")
+                    dpg.add_spacer(height=8)
 
-                        # Upscaler settings editor
-                        # TODO: implement the upscale slider (must re-generate GUI texture, and skip rendering in the background thread until the new "canvas" is ready)
-                        dpg.add_text("Upscaler [Ctrl+click to set a numeric value]")
-                        dpg.add_slider_int(label="x 0.1x", default_value=20, min_value=10, max_value=40, clamped=True, width=self.button_width, tag="upscale_slider")
-                        self.upscale_presets = ["A", "B", "C"]
+                    # Upscaler settings editor
+                    # TODO: implement the upscale slider (must re-generate GUI texture, and skip rendering in the background thread until the new "canvas" is ready)
+                    dpg.add_text("Upscaler [Ctrl+click to set a numeric value]")
+                    dpg.add_slider_int(label="x 0.1x", default_value=20, min_value=10, max_value=40, clamped=True, width=self.button_width - 64, tag="upscale_slider")
+                    self.upscale_presets = ["A", "B", "C"]
+                    with dpg.group(horizontal=True):
+                        dpg.add_combo(items=self.upscale_presets,
+                                      default_value=self.upscale_preset,
+                                      width=self.button_width - 64,
+                                      callback=self.on_upscaler_settings_change,
+                                      tag="upscale_preset_choice")
+                        dpg.add_text("Preset")
+                    with dpg.group(horizontal=True):
+                        self.upscale_qualities = ["low", "high"]
+                        dpg.add_combo(items=self.upscale_qualities,
+                                      default_value=self.upscale_quality,
+                                      width=self.button_width - 64,
+                                      callback=self.on_upscaler_settings_change,
+                                      tag="upscale_quality_choice")
+                        dpg.add_text("Quality")
+                    dpg.add_spacer(height=8)
+
+                # Postprocessor settings editor
+                #
+                # NOTE: Defaults and ranges for postprocessor parameters are set in `postprocessor.py`.
+                #
+                def build_postprocessor_gui():
+                    def make_reset_filter_callback(filter_name):  # freeze by closure
+                        def reset_filter():
+                            logger.warning(f"reset_filter: resetting '{filter_name}' to defaults.")
+                            all_filters = dict(postprocessor.Postprocessor.get_filters())
+                            defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
+                            ranges = all_filters[filter_name]["ranges"]  # for GUI hints
+                            for param_name in defaults:
+                                param_range = ranges[param_name]
+                                if len(param_range) == 1 and param_range[0].startswith("!"):
+                                    gui_hint = param_range[0]
+                                    if gui_hint == "!ignore":
+                                        continue
+                                    elif gui_hint == "!RGB":
+                                        pass  # no need for special processing
+                                    else:
+                                        logger.warning(f"reset_filter: '{filter_name}.{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
+                                        continue
+                                widget = self.filter_param_to_gui_widget(filter_name, param_name, defaults[param_name])
+                                if widget is None:
+                                    logger.warning(f"reset_filter: '{filter_name}.{param_name}': unknown parameter type {type(default_value)}, skipping.")
+                                dpg.set_value(widget, defaults[param_name])
+                            self.on_postprocessor_settings_change(None, None)
+                        return reset_filter
+
+                    def make_reset_param_callback(filter_name, param_name, default_value):  # freeze by closure
+                        widget = self.filter_param_to_gui_widget(filter_name, param_name, default_value)
+                        if widget is None:
+                            logger.warning(f"make_reset_param_callback: '{filter_name}.{param_name}': Unknown parameter type {type(default_value)}, returning no-op callback.")
+                            return lambda: None
+                        def reset_param():
+                            logger.warning(f"reset_param: resetting '{filter_name}.{param_name}' to default.")
+                            dpg.set_value(widget, default_value)
+                            self.on_postprocessor_settings_change(None, None)
+                        return reset_param
+
+                    def prettify(name):
+                        pretty = name.replace("_", " ")
+                        pretty = pretty[0].upper() + pretty[1:]
+                        return pretty
+
+                    for filter_name, param_info in postprocessor.Postprocessor.get_filters():
                         with dpg.group(horizontal=True):
-                            dpg.add_combo(items=self.upscale_presets,
-                                          default_value=self.upscale_preset,
-                                          width=self.button_width,
-                                          callback=self.on_upscaler_settings_change,
-                                          tag="upscale_preset_choice")
-                            dpg.add_text("Preset")
+                            dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
+                            dpg.add_checkbox(label=prettify(filter_name), default_value=False,
+                                             tag=f"{filter_name}_checkbox", callback=self.on_postprocessor_settings_change)
                         with dpg.group(horizontal=True):
-                            self.upscale_qualities = ["low", "high"]
-                            dpg.add_combo(items=self.upscale_qualities,
-                                          default_value=self.upscale_quality,
-                                          width=self.button_width,
-                                          callback=self.on_upscaler_settings_change,
-                                          tag="upscale_quality_choice")
-                            dpg.add_text("Quality")
-                        dpg.add_spacer(height=8)
-
-                    dpg.add_spacer(width=8)
-
-                    # Postprocessor settings editor
-                    #
-                    # NOTE: Defaults and ranges for postprocessor parameters are set in `postprocessor.py`.
-                    #
-                    def build_postprocessor_gui():
-                        def make_reset_filter_callback(filter_name):  # freeze by closure
-                            def reset_filter():
-                                logger.warning(f"reset_filter: resetting '{filter_name}' to defaults.")
-                                all_filters = dict(postprocessor.Postprocessor.get_filters())
-                                defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
-                                ranges = all_filters[filter_name]["ranges"]  # for GUI hints
-                                for param_name in defaults:
-                                    param_range = ranges[param_name]
-                                    if len(param_range) == 1 and param_range[0].startswith("!"):
+                            dpg.add_spacer(width=4)
+                            with dpg.group(horizontal=False):
+                                for param_name, default_value in param_info["defaults"].items():
+                                    param_range = param_info["ranges"][param_name]
+                                    if len(param_range) == 1 and param_range[0].startswith("!"):  # GUI hint?
                                         gui_hint = param_range[0]
                                         if gui_hint == "!ignore":
                                             continue
-                                        elif gui_hint == "!RGB":
-                                            pass  # no need for special processing
-                                        else:
-                                            logger.warning(f"reset_filter: '{filter_name}.{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
-                                            continue
-                                    widget = self.filter_param_to_gui_widget(filter_name, param_name, defaults[param_name])
-                                    if widget is None:
-                                        logger.warning(f"reset_filter: '{filter_name}.{param_name}': unknown parameter type {type(default_value)}, skipping.")
-                                    dpg.set_value(widget, defaults[param_name])
-                                self.on_postprocessor_settings_change(None, None)
-                            return reset_filter
+                                        logger.warning(f"build_postprocessor_gui: {filter_name}.{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
+                                        continue  # TODO: implement color picker when the hint is "!RGB"
 
-                        def make_reset_param_callback(filter_name, param_name, default_value):  # freeze by closure
-                            widget = self.filter_param_to_gui_widget(filter_name, param_name, default_value)
-                            if widget is None:
-                                logger.warning(f"make_reset_param_callback: '{filter_name}.{param_name}': Unknown parameter type {type(default_value)}, returning no-op callback.")
-                                return lambda: None
-                            def reset_param():
-                                logger.warning(f"reset_param: resetting '{filter_name}.{param_name}' to default.")
-                                dpg.set_value(widget, default_value)
-                                self.on_postprocessor_settings_change(None, None)
-                            return reset_param
+                                    # Create GUI control depending on parameter's type
+                                    if isinstance(default_value, bool):
+                                        with dpg.group(horizontal=True):
+                                            dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            dpg.add_checkbox(label=prettify(param_name), default_value=default_value,
+                                                             tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_postprocessor_settings_change)
+                                    elif isinstance(default_value, float):
+                                        assert len(param_range) == 2  # param_range = [min, max]
+                                        with dpg.group(horizontal=True):
+                                            dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            dpg.add_slider_float(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
+                                                                 tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                    elif isinstance(default_value, int):
+                                        assert len(param_range) == 2  # param_range = [min, max]
+                                        with dpg.group(horizontal=True):
+                                            dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            dpg.add_slider_int(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
+                                                               tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
+                                    elif isinstance(default_value, str):
+                                        # param_range = list of choices
+                                        with dpg.group(horizontal=True):
+                                            dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            dpg.add_combo(items=param_range,
+                                                          default_value=param_range[0],
+                                                          width=self.button_width,
+                                                          tag=f"{filter_name}_{param_name}_choice", callback=self.on_postprocessor_settings_change)
+                                            dpg.add_text(prettify(param_name))
+                                    else:
+                                        assert False, f"{filter_name}.{param_name}: Unknown parameter type {type(default_value)}"
+                        dpg.add_spacer(height=4)
 
-                        def prettify(name):
-                            pretty = name.replace("_", " ")
-                            pretty = pretty[0].upper() + pretty[1:]
-                            return pretty
-
-                        for filter_name, param_info in postprocessor.Postprocessor.get_filters():
-                            with dpg.group(horizontal=True):
-                                dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
-                                dpg.add_checkbox(label=prettify(filter_name), default_value=False,
-                                                 tag=f"{filter_name}_checkbox", callback=self.on_postprocessor_settings_change)
-                            with dpg.group(horizontal=True):
-                                dpg.add_spacer(width=4)
-                                with dpg.group(horizontal=False):
-                                    for param_name, default_value in param_info["defaults"].items():
-                                        param_range = param_info["ranges"][param_name]
-                                        if len(param_range) == 1 and param_range[0].startswith("!"):  # GUI hint?
-                                            gui_hint = param_range[0]
-                                            if gui_hint == "!ignore":
-                                                continue
-                                            logger.warning(f"build_postprocessor_gui: {filter_name}.{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
-                                            continue  # TODO: implement color picker when the hint is "!RGB"
-
-                                        # Create GUI control depending on parameter's type
-                                        if isinstance(default_value, bool):
-                                            with dpg.group(horizontal=True):
-                                                dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
-                                                dpg.add_checkbox(label=prettify(param_name), default_value=default_value,
-                                                                 tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_postprocessor_settings_change)
-                                        elif isinstance(default_value, float):
-                                            assert len(param_range) == 2  # param_range = [min, max]
-                                            with dpg.group(horizontal=True):
-                                                dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
-                                                dpg.add_slider_float(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
-                                                                     tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
-                                        elif isinstance(default_value, int):
-                                            assert len(param_range) == 2  # param_range = [min, max]
-                                            with dpg.group(horizontal=True):
-                                                dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
-                                                dpg.add_slider_int(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
-                                                                   tag=f"{filter_name}_{param_name}_slider", callback=self.on_postprocessor_settings_change)
-                                        elif isinstance(default_value, str):
-                                            # param_range = list of choices
-                                            with dpg.group(horizontal=True):
-                                                dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
-                                                dpg.add_combo(items=param_range,
-                                                              default_value=param_range[0],
-                                                              width=self.button_width,
-                                                              tag=f"{filter_name}_{param_name}_choice", callback=self.on_postprocessor_settings_change)
-                                                dpg.add_text(prettify(param_name))
-                                        else:
-                                            assert False, f"{filter_name}.{param_name}: Unknown parameter type {type(default_value)}"
-                            dpg.add_spacer(height=4)
-
-                    with dpg.group(horizontal=False):
-                        dpg.add_text("Postprocessor [Ctrl+click to set a numeric value]")
-                        # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
-                        build_postprocessor_gui()
+                with dpg.child_window(autosize_x=True, autosize_y=True):
+                    dpg.add_checkbox(label="Postprocessor [Ctrl+click to set a numeric value]", default_value=True, callback=self.on_toggle_postprocessor)
+                    # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
+                    build_postprocessor_gui()
 
     def filter_param_to_gui_widget(self, filter_name, param_name, example_value):
         """Given a postprocessor filter name, a name for one of its parameters, and an example value for that parameter, return the DPG tag for the corresponding GUI widget.
@@ -556,7 +555,7 @@ class TalkingheadExampleGUI:
             for param_name, param_value in input_dict[filter_name].items():
                 widget = self.filter_param_to_gui_widget(filter_name, param_name, param_value)
                 if widget is None:
-                    logger.warning(f"Unknown parameter type {type(param_value)}, ignoring this parameter.")
+                    logger.warning(f"populate_gui_from_canonized_postprocessor_chain: Unknown parameter type {type(param_value)}, ignoring this parameter.")
                     continue
                 dpg.set_value(widget, param_value)
 
@@ -572,7 +571,7 @@ class TalkingheadExampleGUI:
             for param_name in defaults:
                 widget = self.filter_param_to_gui_widget(filter_name, param_name, defaults[param_name])
                 if widget is None:
-                    logger.warning(f"Unknown parameter type {type(defaults[param_name])}, ignoring this parameter.")
+                    logger.warning(f"generate_postprocessor_chain_from_gui: Unknown parameter type {type(defaults[param_name])}, ignoring this parameter.")
                     continue
                 settings[param_name] = dpg.get_value(widget)
             postprocessor_chain.append((filter_name, settings))
@@ -611,6 +610,10 @@ class TalkingheadExampleGUI:
                                      cancel_button="Close",
                                      centering_reference_window=self.window)
 
+    def on_toggle_postprocessor(self, sender, app_data):
+        self.postprocessor_enabled = not self.postprocessor_enabled
+        self.on_postprocessor_settings_change(sender, app_data)
+
     def on_upscaler_settings_change(self, sender, app_data):
         """Update the upscaler status and send changes to server."""
         self.upscale = dpg.get_value("upscale_slider") / 10
@@ -624,7 +627,10 @@ class TalkingheadExampleGUI:
         Requires a settings file to be loaded.
         """
         try:
-            ppc = self.generate_postprocessor_chain_from_gui()
+            if self.postprocessor_enabled:
+                ppc = self.generate_postprocessor_chain_from_gui()
+            else:
+                ppc = []
             self.animator_settings["postprocessor_chain"] = ppc
 
             ups = {"upscale": self.upscale,
