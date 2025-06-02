@@ -137,8 +137,8 @@ with dpg.theme(tag="disablable_button_theme"):
         dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
         dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
 
-viewport_width = 1850
-viewport_height = 1040
+viewport_width = 1900
+viewport_height = 980
 dpg.create_viewport(title="Talkinghead",
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
