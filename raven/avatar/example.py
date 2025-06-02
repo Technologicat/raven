@@ -369,20 +369,24 @@ class TalkingheadExampleGUI:
                         dpg.add_spacer(height=8)
 
                         # Upscaler settings editor
-                        # TODO: implementation (must re-generate GUI texture, and skip rendering in the background thread until the new "canvas" is ready)
+                        # TODO: implement the upscale slider (must re-generate GUI texture, and skip rendering in the background thread until the new "canvas" is ready)
                         dpg.add_text("Upscaler [Ctrl+click to set a numeric value]")
-                        dpg.add_slider_int(label="x 0.1x", default_value=20, min_value=10, max_value=40, clamped=True, width=self.button_width)
+                        dpg.add_slider_int(label="x 0.1x", default_value=20, min_value=10, max_value=40, clamped=True, width=self.button_width, tag="upscale_slider")
                         self.upscale_presets = ["A", "B", "C"]
                         with dpg.group(horizontal=True):
                             dpg.add_combo(items=self.upscale_presets,
                                           default_value=self.upscale_preset,
-                                          width=self.button_width)
+                                          width=self.button_width,
+                                          callback=self.on_upscaler_settings_change,
+                                          tag="upscale_preset_choice")
                             dpg.add_text("Preset")
                         with dpg.group(horizontal=True):
                             self.upscale_qualities = ["low", "high"]
                             dpg.add_combo(items=self.upscale_qualities,
                                           default_value=self.upscale_quality,
-                                          width=self.button_width)
+                                          width=self.button_width,
+                                          callback=self.on_upscaler_settings_change,
+                                          tag="upscale_quality_choice")
                             dpg.add_text("Quality")
                         dpg.add_spacer(height=8)
 
@@ -598,14 +602,27 @@ class TalkingheadExampleGUI:
                                      cancel_button="Close",
                                      centering_reference_window=self.window)
 
+    def on_upscaler_settings_change(self, sender, app_data):
+        """Update the upscaler status and send changes to server."""
+        self.upscale = dpg.get_value("upscale_slider") / 10
+        self.upscale_preset = dpg.get_value("upscale_preset_choice")
+        self.upscale_quality = dpg.get_value("upscale_quality_choice")
+        self.on_postprocessor_settings_change(sender, app_data)
+
     def on_postprocessor_settings_change(self, sender, app_data):
-        """Send new postprocessor settings to server whenever a value changes in the GUI.
+        """Send new postprocessor and upscaler settings to server whenever a value changes in the GUI.
 
         Requires a settings file to be loaded.
         """
         try:
             ppc = self.generate_postprocessor_chain_from_gui()
             self.animator_settings["postprocessor_chain"] = ppc
+
+            ups = {"upscale": self.upscale,
+                   "upscale_preset": self.upscale_preset,
+                   "upscale_quality": self.upscale_quality}
+            self.animator_settings.update(ups)
+
             client_api.talkinghead_load_animator_settings(self.animator_settings)
         except Exception as exc:
             logger.error(f"TalkingheadExampleGUI.on_postprocessor_settings_change: {type(exc)}: {exc}")
@@ -623,11 +640,13 @@ class TalkingheadExampleGUI:
             animator_settings["postprocessor_chain"] = ppc
 
             custom_animator_settings = {"format": self.comm_format,
+                                        "target_fps": self.target_fps,
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
-                                        "upscale_quality": self.upscale_quality,
-                                        "target_fps": self.target_fps}  # any missing keys are auto-populated from server defaults
+                                        "upscale_quality": self.upscale_quality}
             animator_settings.update(custom_animator_settings)  # setup overrides
+
+            # Any missing keys are auto-populated from server defaults.
             client_api.talkinghead_load_animator_settings(animator_settings)
             self.animator_settings = animator_settings
         except Exception as exc:
