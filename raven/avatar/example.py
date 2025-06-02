@@ -1,6 +1,8 @@
-"""Postprocessor settings editor for Talkinghead. Doubles as a tech demo.
+"""Postprocessor settings editor app for Talkinghead. Doubles as a tech demo.
 
 !!! Start `server.py` first before running this app! !!!
+
+To edit the emotion templates, see the separate app `editor.py`.
 
 This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """
