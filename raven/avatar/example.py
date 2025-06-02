@@ -463,6 +463,7 @@ class TalkingheadExampleGUI:
                                       callback=self.on_upscaler_settings_change,
                                       tag="upscale_quality_choice")
                         dpg.add_text("Quality")
+                    dpg.add_text("[Presets as in Anime4K.]", color=(140, 140, 140))
                     dpg.add_spacer(height=8)
 
                 # Postprocessor settings editor
