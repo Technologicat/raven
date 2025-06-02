@@ -10,7 +10,6 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 # TODO: save dialog for saving animator settings from GUI
 # TODO: crash with an *informative* message when server is offline
 # TODO: fit everything into window
-# TODO: implement upscale slider
 # TODO: reposition talkinghead on window resize
 
 # TODO: implement color picker when a postprocessor parameter's GUI hint is "!RGB"
