@@ -639,6 +639,16 @@ class TalkingheadExampleGUI:
             self.populate_gui_from_canonized_postprocessor_chain(ppc)
             animator_settings["postprocessor_chain"] = ppc
 
+            if "upscale" in animator_settings:
+                self.upscale = animator_settings["upscale"]
+                dpg.set_value("upscale_slider", int(self.upscale * 10))
+            if "upscale_preset" in animator_settings:
+                self.upscale_preset = animator_settings["upscale_preset"]
+                dpg.set_value("upscale_preset", self.upscale_preset)
+            if "upscale_quality" in animator_settings:
+                self.upscale_quality = animator_settings["upscale_quality"]
+                dpg.set_value("upscale_quality", self.upscale_quality)
+
             custom_animator_settings = {"format": self.comm_format,
                                         "target_fps": self.target_fps,
                                         "upscale": self.upscale,
