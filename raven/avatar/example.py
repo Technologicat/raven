@@ -494,7 +494,7 @@ class TalkingheadExampleGUI:
                         build_postprocessor_gui()
 
     def strip_postprocessor_chain_for_gui(self, postprocessor_chain):
-        """Strip to what we can set up in the GUI. Fixed render order, with at most one copy of each filter."""
+        """Strip to what we can currently set up in the GUI. Fixed render order, with at most one copy of each filter."""
         input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
         gui_postprocessor_chain = []
         for filter_name, param_info in postprocessor.Postprocessor.get_filters():  # this performs the reordering
@@ -503,7 +503,7 @@ class TalkingheadExampleGUI:
         return gui_postprocessor_chain
 
     def canonize_postprocessor_parameters_for_gui(self, postprocessor_chain):
-        """Strip fields not editable in GUI. Auto-populate missing fields to their default values.
+        """Auto-populate missing fields to their default values.
 
         Be sure to feed your postprocessor chain through `strip_postprocessor_chain_for_gui` first.
         """
