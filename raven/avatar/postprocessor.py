@@ -13,7 +13,7 @@ import math
 import time
 from typing import Dict, List, Optional, Tuple, TypeVar, Union
 
-from unpythonic import getfunc
+from unpythonic import getfunc, memoize
 
 import numpy as np
 
@@ -268,6 +268,7 @@ class Postprocessor:
         self.shift_distort_grid = defaultdict(lambda: None)
 
     @classmethod
+    @memoize
     def get_filters(cls):
         """Return a list of available postprocessing filters and their default configurations.
 
