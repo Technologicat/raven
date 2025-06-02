@@ -428,11 +428,12 @@ class TalkingheadExampleGUI:
                     tts_alive = client_api.tts_available()
                     if tts_alive:
                         print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS server at {tts_url}.{Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}{Style.BRIGHT}Speech synthesis is available.{Style.RESET_ALL}")
                         heading_label = f"Voice [Ctrl+V] [{tts_url}]"
                         self.voice_names = client_api.tts_voices()
                     else:
                         print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS server at {tts_url}.{Style.RESET_ALL} Is the server running?")
-                        print(f"{Fore.YELLOW}{Style.BRIGHT}Speech synthesis is not available.{Style.RESET_ALL}")
+                        print(f"{Fore.YELLOW}{Style.BRIGHT}Speech synthesis is NOT available.{Style.RESET_ALL}")
                         heading_label = "Voice [Ctrl+V] [not connected]"
                         self.voice_names = ["[TTS server not available]"]
                     dpg.add_text(heading_label)
