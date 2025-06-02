@@ -889,7 +889,10 @@ def update_live_texture(task_env) -> None:
             if gui_instance:
                 if not gui_instance.animator_running and reader.is_running():
                     reader.stop()
-                    dpg.set_value("fps_text", describe_performance(None, None, None))
+                    try:
+                        dpg.set_value("fps_text", describe_performance(None, None, None))
+                    except SystemError:  # does not exist (can happen at app shutdown)
+                        pass
                 elif gui_instance.animator_running and not reader.is_running():
                     reader.start()
 
