@@ -502,24 +502,10 @@ class TalkingheadExampleGUI:
 
     def init_live_texture(self):
         with self.upscale_change_lock:
-            try:
-                dpg.hide_item(f"live_image_{self.texture_id_counter}")
-                dpg.split_frame()  # this is safe because we only get here if the `hide_item` succeeded (so not at startup when the old image doeesn't exist yet)
-            except SystemError:  # does not exist
-                pass
-            def maybe_delete_item(tag):
-                logger.info(f"init_live_texture.maybe_delete_item: deleting GUI item {tag}")
-                try:
-                    dpg.delete_item(tag)
-                except SystemError:  # does not exist
-                    pass
-            self.animator_running = False
-            maybe_delete_item(f"live_image_{self.texture_id_counter}")
-            maybe_delete_item(f"live_texture_{self.texture_id_counter}")
-
+            old_texture_id_counter = self.texture_id_counter
             self.texture_id_counter += 1
 
-            logger.info(f"init_live_texture: Creating texture for size {self.image_size}x{self.image_size}")
+            logger.info(f"init_live_texture: Creating new GUI item live_texture_{self.texture_id_counter} for new size {self.image_size}x{self.image_size}")
             self.blank_texture = np.zeros([self.image_size,  # height
                                            self.image_size,  # width
                                            4],  # RGBA
@@ -531,13 +517,30 @@ class TalkingheadExampleGUI:
                                                     tag=f"live_texture_{self.texture_id_counter}",
                                                     parent="talkinghead_example_textures")
 
-            logger.info("init_live_texture: Creating image widget")
+            logger.info(f"init_live_texture: Creating new GUI item live_image_{self.texture_id_counter}")
             dpg.add_image(f"live_texture_{self.texture_id_counter}", pos=(0, viewport_height - self.image_size - 8),
                           tag=f"live_image_{self.texture_id_counter}",
+                          show=False,
                           parent="live_texture_group",
                           before="fps_text")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
+
+            dpg.show_item(f"live_image_{self.texture_id_counter}")
+            try:
+                dpg.hide_item(f"live_image_{old_texture_id_counter}")
+                dpg.split_frame()  # this is safe because we only get here if the `hide_item` succeeded (so not at startup when the old image doeesn't exist yet)
+            except SystemError:  # does not exist
+                pass
+            def maybe_delete_item(tag):
+                logger.info(f"init_live_texture.maybe_delete_item: deleting old GUI item {tag}")
+                try:
+                    dpg.delete_item(tag)
+                except SystemError:  # does not exist
+                    pass
+            # Now the old image widget is guaranteed to be hidden, so we can delete it without breaking GUI render
+            maybe_delete_item(f"live_image_{old_texture_id_counter}")
+            maybe_delete_item(f"live_texture_{old_texture_id_counter}")
+
             logger.info("init_live_texture: done!")
-            self.animator_running = True
 
     def filter_param_to_gui_widget(self, filter_name, param_name, example_value):
         """Given a postprocessor filter name, a name for one of its parameters, and an example value for that parameter, return the DPG tag for the corresponding GUI widget.
@@ -937,7 +940,10 @@ def update_live_texture(task_env) -> None:
             fps = 1.0 / (elapsed_time / 10**9)
             gui_instance.fps_statistics.add_datapoint(fps)
 
-            dpg.set_value("fps_text", describe_performance(gui_instance, h, w))
+            try:
+                dpg.set_value("fps_text", describe_performance(gui_instance, h, w))
+            except SystemError:  # does not exist (can happen at app shutdown)
+                pass
     except Exception as exc:
         logger.error(f"TalkingheadExampleGUI.update_live_texture: {type(exc)}: {exc}")
 
