@@ -11,7 +11,6 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 #
 # TODO: save dialog for saving animator settings from GUI
 # TODO: reposition talkinghead on window resize
-# TODO: crash with an *informative* message at startup when the Avatar server is not running
 #
 # medium priority (will probably add these too):
 #
@@ -35,6 +34,8 @@ import json
 import os
 import pathlib
 import platform
+import requests
+import sys
 import threading
 import time
 import traceback
@@ -43,9 +44,12 @@ from typing import Union
 import qoi
 import PIL.Image
 
+from colorama import Fore, Style, init as colorama_init
 from unpythonic.env import env as envcls
 
 import numpy as np
+
+colorama_init()
 
 # WORKAROUND: Deleting a texture or image widget causes DPG to segfault, but with Nvidia on Linux only.
 # https://github.com/hoffstadt/DearPyGui/issues/554
@@ -995,7 +999,14 @@ def update_live_texture(task_env) -> None:
 # Main program
 
 if __name__ == "__main__":
-    client_api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
+    try:
+        client_api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
+    except requests.exceptions.ConnectionError as exc:
+        print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {avatar_url}.{Style.RESET_ALL} Is the server running?")
+        logger.error(f"Cannot connect to avatar server at {avatar_url}: {type(exc)}: {exc}")
+        sys.exit(255)
+    else:
+        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {avatar_url}.{Style.RESET_ALL}")
 
     gui_instance = TalkingheadExampleGUI()  # will load animator settings
 
