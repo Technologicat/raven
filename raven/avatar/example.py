@@ -14,6 +14,7 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 # TODO: robustness: don't crash if the server is/goes down
 # TODO: editor for main animator config too (target FPS, talking speed, ...)
 # TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming.)
+# TODO: support loading a background image (aligned to bottom left?)
 
 import logging
 logging.basicConfig(level=logging.INFO)
