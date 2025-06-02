@@ -263,9 +263,9 @@ class Postprocessor:
         self.vhs_glitch_last_frame_no = defaultdict(lambda: 0.0)
         self.vhs_glitch_last_image = defaultdict(lambda: None)
         self.vhs_glitch_last_mask = defaultdict(lambda: None)
-        self.shift_distort_interval = defaultdict(lambda: 0.0)
-        self.shift_distort_last_frame_no = defaultdict(lambda: 0.0)
-        self.shift_distort_grid = defaultdict(lambda: None)
+        self.digital_glitches_interval = defaultdict(lambda: 0.0)
+        self.digital_glitches_last_frame_no = defaultdict(lambda: 0.0)
+        self.digital_glitches_grid = defaultdict(lambda: None)
 
     @classmethod
     @memoize
@@ -909,13 +909,13 @@ class Postprocessor:
                    hold_max=[3, 6],
                    name=["!ignore"],
                    _priority=10.0)
-    def shift_distort(self, image: torch.tensor, *,
-                      strength: float = 0.05,
-                      unboost: float = 4.0,
-                      max_glitches: int = 3,
-                      min_glitch_height: int = 20, max_glitch_height: int = 30,
-                      hold_min: int = 1, hold_max: int = 3,
-                      name: str = "shift_distort0") -> None:
+    def digital_glitches(self, image: torch.tensor, *,
+                         strength: float = 0.05,
+                         unboost: float = 4.0,
+                         max_glitches: int = 3,
+                         min_glitch_height: int = 20, max_glitch_height: int = 30,
+                         hold_min: int = 1, hold_max: int = 3,
+                         name: str = "digital_glitches0") -> None:
         """[dynamic] Glitchy digital video transport, with transient (per-frame) blocks of lines shifted left or right.
 
         `strength`: Amount of the horizontal shift, in units where 2.0 is the width of the full image.
@@ -931,11 +931,11 @@ class Postprocessor:
                                 filter holds one glitch pattern before randomizing the next one.
 
         `name`: Optional name for this filter instance in the chain. Used as cache key.
-                If you have more than one `shift_distort` in the chain, they should have
+                If you have more than one `digital_glitches` in the chain, they should have
                 different names so that each one gets its own cache.
         """
         # Re-randomize the glitch pattern whenever enough frames have elapsed after last randomization
-        if self.shift_distort_grid[name] is None or (int(self.frame_no) - int(self.shift_distort_last_frame_no[name])) >= self.shift_distort_interval[name]:
+        if self.digital_glitches_grid[name] is None or (int(self.frame_no) - int(self.digital_glitches_last_frame_no[name])) >= self.digital_glitches_interval[name]:
             n_glitches = torch.rand(1, device="cpu")**unboost  # unboost: increase probability of having none or few glitching lines
             n_glitches = int(max_glitches * n_glitches[0])
             meshy = self._meshy
@@ -948,17 +948,17 @@ class Postprocessor:
                     glitch_height = torch.rand(1, device="cpu")
                     glitch_height = int(min_glitch_height + (max_glitch_height - min_glitch_height) * glitch_height[0])
                     meshx[line:(line + glitch_height), :] -= strength
-            shift_distort_grid = torch.stack((meshx, meshy), 2)
-            shift_distort_grid = shift_distort_grid.unsqueeze(0)  # batch of one
-            self.shift_distort_grid[name] = shift_distort_grid
+            digital_glitches_grid = torch.stack((meshx, meshy), 2)
+            digital_glitches_grid = digital_glitches_grid.unsqueeze(0)  # batch of one
+            self.digital_glitches_grid[name] = digital_glitches_grid
             # Randomize time until next change of glitch pattern
-            self.shift_distort_interval[name] = round(hold_min + float(torch.rand(1, device="cpu")[0]) * (hold_max - hold_min))
-            self.shift_distort_last_frame_no[name] = self.frame_no
+            self.digital_glitches_interval[name] = round(hold_min + float(torch.rand(1, device="cpu")[0]) * (hold_max - hold_min))
+            self.digital_glitches_last_frame_no[name] = self.frame_no
         else:
-            shift_distort_grid = self.shift_distort_grid[name]
+            digital_glitches_grid = self.digital_glitches_grid[name]
 
         image_batch = image.unsqueeze(0)  # batch of one -> [1, c, h, w]
-        warped = torch.nn.functional.grid_sample(image_batch, shift_distort_grid, mode="bilinear", padding_mode="border", align_corners=False)
+        warped = torch.nn.functional.grid_sample(image_batch, digital_glitches_grid, mode="bilinear", padding_mode="border", align_corners=False)
         warped = warped.squeeze(0)  # [1, c, h, w] -> [c, h, w]
         image[:, :, :] = warped
 

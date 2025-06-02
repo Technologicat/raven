@@ -236,7 +236,7 @@ The following postprocessing filters are available. Options for each filter are 
 - `analog_runaway_hsync`: Simulates a rippling, runaway hsync near the top or bottom edge of an image. This can happen with some equipment if the video cable is too long.
 - `analog_vhsglitches`: Simulates a damaged 1980s VHS tape. In each 25 FPS frame, causes random lines to glitch with VHS noise.
 - `analog_vhstracking`: Simulates a 1980s VHS tape with bad tracking. The image floats up and down, and a band of VHS noise appears at the bottom.
-- `shift_distort`: A glitchy digital video transport as sometimes depicted in sci-fi, with random blocks of lines suddenly shifted horizontally temporarily.
+- `digital_glitches`: A glitchy digital video transport as sometimes depicted in sci-fi, with random blocks of lines suddenly shifted horizontally temporarily.
 
 **Display**:
 
@@ -272,8 +272,8 @@ Note that we could also use the `translucency` filter to make the character tran
 Also, for some glitching video transport that shifts random blocks of lines horizontally, we could add these:
 
 ```
-["shift_distort", {"strength": 0.05, "name": "shift_right"}],
-["shift_distort", {"strength": -0.05, "name": "shift_left"}],
+["digital_glitches", {"strength": 0.05, "name": "shift_right"}],
+["digital_glitches", {"strength": -0.05, "name": "shift_left"}],
 ```
 
 Having a unique name for each instance is important, because the name acts as a texture cache key.
