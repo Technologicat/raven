@@ -369,7 +369,8 @@ class TalkingheadExampleGUI:
         self.texture_id_counter = 0  # For creating unique DPG IDs when the size changes on the fly, since the delete might not take immediately.
         self.last_image_rgba = None
 
-        self.talking = False
+        self.talking_animation_running = False  # simple mouth randomizing animation
+        self.speaking = False  # TTS
         self.animator_running = True
         self.animator_settings = None  # not loaded yet
 
@@ -419,7 +420,7 @@ class TalkingheadExampleGUI:
                     dpg.add_spacer(height=8)
 
                     dpg.add_text("Toggles")
-                    dpg.add_button(label="Start talking [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
+                    dpg.add_button(label="Start talking animation [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
                     dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
                     dpg.add_spacer(height=8)
 
@@ -439,15 +440,16 @@ class TalkingheadExampleGUI:
                     self.voice_choice = dpg.add_combo(items=self.voice_names,
                                                       default_value=self.voice_names[0],
                                                       width=self.button_width)
+                    dpg.add_checkbox(label="Lip sync", default_value=True, tag="speak_lipsync_checkbox")
                     with dpg.group(horizontal=True):
                         dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 10))
                         dpg.add_slider_int(label="x 0.1x", default_value=10, min_value=5, max_value=20, clamped=True, width=self.button_width - 80,
                                            tag="speak_speed_slider")
-                    dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_speak, enabled=tts_alive, tag="speak_button")
                     dpg.add_input_text(default_value="",
                                        hint="[Enter text to speak]",
                                        width=self.button_width,
                                        tag="speak_input_text")
+                    dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_start_speaking, enabled=tts_alive, tag="speak_button")
                     dpg.bind_item_theme("speak_button", "disablable_button_theme")
                     dpg.add_spacer(height=8)
 
@@ -866,14 +868,14 @@ class TalkingheadExampleGUI:
                                      centering_reference_window=self.window)
 
     def toggle_talking(self) -> None:
-        """Toggle the talkinghead's talking state."""
-        if not self.talking:
+        """Toggle the talkinghead's talking state (simple randomized mouth animation)."""
+        if not self.talking_animation_running:
             client_api.talkinghead_start_talking()
-            dpg.set_item_label("start_stop_talking_button", "Stop talking [Ctrl+T]")
+            dpg.set_item_label("start_stop_talking_button", "Stop talking animation [Ctrl+T]")
         else:
             client_api.talkinghead_stop_talking()
-            dpg.set_item_label("start_stop_talking_button", "Start talking [Ctrl+T]")
-        self.talking = not self.talking
+            dpg.set_item_label("start_stop_talking_button", "Start talking animation [Ctrl+T]")
+        self.talking_animation_running = not self.talking_animation_running
 
     def toggle_animator_paused(self) -> None:
         """Pause or resume the animation. Pausing when the talkinghead won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
@@ -890,18 +892,42 @@ class TalkingheadExampleGUI:
             dpg.set_item_label("pause_resume_button", "Pause animator [Ctrl+P]")
         self.animator_running = not self.animator_running
 
-    def on_speak(self, sender, app_data) -> None:
-        current_voice = dpg.get_value(self.voice_choice)
+    def on_stop_speaking(self, sender, app_data) -> None:
+        client_api.tts_stop()
+        dpg.set_item_label("speak_button", "Start speaking [Ctrl+S]")
+        dpg.set_item_callback("speak_button", self.on_start_speaking)
+        self.speaking = False
+
+    def on_start_speaking(self, sender, app_data) -> None:
+        self.speaking = True
+        dpg.set_item_label("speak_button", "Stop speaking [Ctrl+S]")
+        dpg.set_item_callback("speak_button", self.on_stop_speaking)
+
+        selected_voice = dpg.get_value(self.voice_choice)
         text = dpg.get_value("speak_input_text")
         if text == "":
             # text = "Testing the AI speech synthesizer."
             # text = "Sharon Apple is a computer-generated virtual idol and a central character in the Macross Plus franchise, created by Shoji Kawamori."
             text = "Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts."
-        client_api.tts_speak_lipsynced(voice=current_voice,
-                                       text=text,
-                                       speed=dpg.get_value("speak_speed_slider") / 10,
-                                       start_callback=client_api.talkinghead_start_talking,
-                                       stop_callback=client_api.talkinghead_stop_talking)
+        if dpg.get_value("speak_lipsync_checkbox"):
+            def stop_lipsync_speaking():
+                self.on_stop_speaking(None, None)  # stop the TTS and update the GUI
+            client_api.tts_speak_lipsynced(voice=selected_voice,
+                                           text=text,
+                                           speed=dpg.get_value("speak_speed_slider") / 10,
+                                           start_callback=None,  # no start callback needed, the TTS client will start lipsyncing once the audio starts.
+                                           stop_callback=stop_lipsync_speaking)
+        else:
+            def start_nonlipsync_speaking():
+                client_api.talkinghead_start_talking()
+            def stop_nonlipsync_speaking():
+                client_api.talkinghead_stop_talking()
+                self.on_stop_speaking(None, None)  # stop the TTS and update the GUI
+            client_api.tts_speak(voice=selected_voice,
+                                 text=text,
+                                 speed=dpg.get_value("speak_speed_slider") / 10,
+                                 start_callback=start_nonlipsync_speaking,
+                                 stop_callback=stop_nonlipsync_speaking)
 
 # Hotkey support
 choice_map = None
@@ -938,7 +964,10 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_V:
             dpg.focus_item(gui_instance.voice_choice)
         elif key == dpg.mvKey_S:
-            gui_instance.on_speak(sender, app_data)
+            if not gui_instance.speaking:
+                gui_instance.on_start_speaking(sender, app_data)
+            else:
+                gui_instance.on_stop_speaking(sender, app_data)
 
     # Bare key
     #

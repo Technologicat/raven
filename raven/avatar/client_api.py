@@ -536,6 +536,7 @@ def tts_speak_lipsynced(voice: str,
                 else:  # e.g. punctuation
                     phoneme_stream.append((phoneme, "!close_mouth", t_start, t_end))
         phoneme_start_times = [item[2] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
+        phoneme_end_times = [item[3] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
 
         # Example of phoneme stream data:
         # [
@@ -565,6 +566,10 @@ def tts_speak_lipsynced(voice: str,
         pygame.mixer.music.load(audio_buffer)
 
         def apply_lipsync_at_audio_time(t):
+            # Sanity check: don't do anything before the first phoneme.
+            if t < phoneme_start_times[0]:
+                return
+
             overrides = {
                 "mouth_aaa_index": 0.0,
                 "mouth_eee_index": 0.0,
@@ -573,13 +578,16 @@ def tts_speak_lipsynced(voice: str,
                 "mouth_uuu_index": 0.0,
                 "mouth_delta": 0.0,
             }
+            # Close the mouth if the last phoneme has ended (but the audio stream is still running, likely with silence at the end).
+            if t > phoneme_end_times[-1]:
+                talkinghead_set_overrides(overrides)
+                return
 
             # Find position in phoneme stream
-            idx = bisect.bisect_left(phoneme_start_times, t)
-            if idx < len(phoneme_stream):
-                morph = phoneme_stream[idx][1]
-            else:
-                morph = "!close_mouth"
+            idx = bisect.bisect_right(phoneme_start_times, t) - 1
+            assert 0 <= idx <= len(phoneme_start_times)
+
+            morph = phoneme_stream[idx][1]
 
             # Set mouth position
             if morph == "!close_mouth":
