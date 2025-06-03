@@ -1159,11 +1159,11 @@ class Animator:
 
         target_pose = self.apply_emotion_to_pose(emotion_posedict, self.current_pose)
         target_pose = self.compute_sway_target_pose(target_pose)
+        target_pose = self.apply_overrides(target_pose)  # this makes the lipsync overrides take effect smoothly (looks good at pose interpolator step = 0.3)
 
         self.current_pose = self.interpolate_pose(self.current_pose, target_pose)
         self.current_pose = self.animate_blinking(self.current_pose)
         self.current_pose = self.animate_talking(self.current_pose, target_pose)
-        self.current_pose = self.apply_overrides(self.current_pose)
         self.current_pose = self.animate_breathing(self.current_pose)
 
         # Update this last so that animation drivers have access to the old emotion, too.
