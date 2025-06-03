@@ -934,6 +934,9 @@ class TalkingheadExampleGUI:
         text = dpg.get_value("speak_input_text")
         if text == "":
             # text = "Testing the AI speech synthesizer."
+            # text = '"Wait", I said, but the cat said "meow".'  # includes quotes
+            # text = "INFO:raven.avatar.client_api:tts_speak_lipsynced.speak: starting"  # log message
+            # text = 'close mouth only if the pause is at least half a second, else act like "!keep".'  # code comment
             # text = "Sharon Apple is a computer-generated virtual idol and a central character in the Macross Plus franchise, created by Shoji Kawamori."
             text = "Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts."
         if dpg.get_value("speak_lipsync_checkbox"):
