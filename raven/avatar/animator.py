@@ -793,7 +793,8 @@ class Animator:
         This is useful for lipsyncing.
         """
         new_pose = list(pose)  # copy
-        for key, value in self.morph_overrides.items():
+        overrides = self.morph_overrides  # get ref so it doesn't matter if it's replaced while we're rendering
+        for key, value in overrides.items():
             idx = posedict_key_to_index[key]
             new_pose[idx] = value
         return new_pose
