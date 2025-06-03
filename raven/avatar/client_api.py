@@ -338,7 +338,7 @@ def tts_speak(voice: str,
 def tts_speak_lipsynced(voice: str,
                         text: str,
                         speed: float = 1.0,
-                        lipsync_offset: float = -0.4,
+                        lipsync_offset: float = 0.0,
                         start_callback: Optional[Callable] = None,
                         stop_callback: Optional[Callable] = None) -> None:
     """Like `tts_speak`, but with lip sync.
@@ -346,7 +346,9 @@ def tts_speak_lipsynced(voice: str,
     Requires the Kokoro-FastAPI TTS backend so that we can get the phoneme data
     and timestamps.
 
-    `lipsync_offset`: seconds. Positive values delay the animation (with respect to the audio).
+    `lipsync_offset`: seconds.
+        - Positive values: animation comes later (with respect to the audio).
+        - Negative values: animation comes earlier (with respect to the audio).
 
     See:
         https://github.com/remsky/Kokoro-FastAPI
