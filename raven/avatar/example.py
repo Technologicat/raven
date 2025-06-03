@@ -22,11 +22,6 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 # TODO: editor for main animator config too (target FPS, talking speed, ...)
 # TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming.)
 # TODO: support loading a background image (aligned to bottom left?)
-# TODO: lip-sync the animation to the TTS.
-#  - We can use Kokoro's /dev/phonemize (phonemized text) and /dev/captioned_speech (audio + word-level timestamps) endpoints.
-#  - Get word timestamps, then .split() the phoneme string, hopefully producing phonemized words. Interpolate time linearly within the phoneme sequence of each word.
-#  - In a background thread, control the animator's mouth_aaa et al. using the phoneme data. This needs a new endpoint for overriding morphs directly, and for stopping the override.
-#  - We may need a better audio player approach to control to sync to the correct latency.
 
 import logging
 logging.basicConfig(level=logging.INFO)
