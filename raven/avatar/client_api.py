@@ -24,6 +24,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import bisect
 import concurrent.futures
 import copy
 import io
@@ -33,6 +34,7 @@ import pathlib
 import re
 import requests
 import time
+import traceback
 from typing import Callable, Dict, Generator, List, Optional, Union
 
 from unpythonic.env import env as envcls
@@ -241,7 +243,7 @@ def tts_available() -> bool:
     try:
         response = requests.get(f"{config.tts_url}/health", headers=headers)
     except Exception as exc:
-        logger.error(f"TalkingheadExampleGUI.tts_available: {type(exc)}: {exc}")
+        logger.error(f"tts_available: {type(exc)}: {exc}")
         return False
     if response.status_code != 200:
         return False
@@ -313,14 +315,22 @@ def tts_speak(voice: str,
 
         logger.info("tts_speak.speak: starting playback")
         if start_callback is not None:
-            start_callback()
+            try:
+                start_callback()
+            except Exception as exc:
+                logger.error(f"tts_speak.speak: in start callback: {type(exc)}: {exc}")
+                traceback.print_exc()
         pygame.mixer.music.play()
 
         if stop_callback is not None:
             while pygame.mixer.music.get_busy():
                 time.sleep(0.01)
             logger.info("tts_speak.speak: playback finished")
-            stop_callback()
+            try:
+                stop_callback()
+            except Exception as exc:
+                logger.error(f"tts_speak.speak: in stop callback: {type(exc)}: {exc}")
+                traceback.print_exc()
         else:
             logger.info("tts_speak.speak: no stop callback, all done.")
     config.task_manager.submit(speak, envcls())
@@ -357,19 +367,24 @@ def tts_speak_lipsynced(voice: str,
         # 🇬🇧 British-only
         "Q": "əʊ",  # Capital letter representing the British "oh" vowel sound. Expands to əʊ in IPA.
     }
-    # Stress Marks (2)
-    #     ˈ: Primary stress, visually looks similar to an apostrophe.
-    #     ˌ: Secondary stress.
+    # TODO: Lipsync: improve the phoneme to morph conversion table.
+    #   - For more fine-grained control, we could use the value channel too, not just always set the morph to 1.0. Could also combine morphs (use a list).
+    #
+    # value: animator morph name, or one of the special commands:
+    #   "!close_mouth" - as it says on the tin
+    #   "!keep" - keep previous mouth position
     phoneme_to_morph = {
         # IPA Consonants
-        "b": "mouth_iii_index",
+        "b": "!close_mouth",
         "d": "mouth_delta",
         "f": "mouth_iii_index",
         "h": "mouth_delta",
         "j": "mouth_aaa_index",  # As in yes => jˈɛs.
         "k": "mouth_aaa_index",
         "l": "mouth_iii_index",
+        "m": "!close_mouth",
         "n": "mouth_iii_index",
+        "p": "!close_mouth",
         "s": "mouth_iii_index",
         "t": "mouth_iii_index",
         "w": "mouth_ooo_index",
@@ -405,7 +420,10 @@ def tts_speak_lipsynced(voice: str,
         "a": "mouth_aaa_index",  # The vowel sound at the start of ash => ˈaʃ.
         "ɒ": "mouth_ooo_index",  # The sound at the start of on => ˌɒn. Easy to confuse with ɑ, which is a shared phoneme.
         # Other
-        "ː": None,  # Vowel extender, visually looks similar to a colon. Possibly dubious, because Americans extend vowels too, but the gold US dictionary somehow lacks these. Often used by the Brits instead of ɹ: Americans say or => ɔɹ, but Brits say or => ɔː.
+        "ː": "!keep",  # Vowel extender, visually looks similar to a colon. Possibly dubious, because Americans extend vowels too, but the gold US dictionary somehow lacks these. Often used by the Brits instead of ɹ: Americans say or => ɔɹ, but Brits say or => ɔː.
+        # Stress Marks
+        "ˈ": "!keep",  # Primary stress, visually looks similar to an apostrophe (but is U+02C8).
+        "ˌ": "!keep",  # Secondary stress (not a comma, but U+02CC).
         # for dipthong expansion
         "e": "mouth_eee_index",
         "o": "mouth_ooo_index",
@@ -490,13 +508,17 @@ def tts_speak_lipsynced(voice: str,
         while not phonemes_task_env.done:
             time.sleep(0.01)
 
-        # consolidate data for convenience
+        # Now we have:
+        #   - `timestamps`: words, with word-level start and end times
+        #   - `phonemes`: phonemes for each word
+        #
+        # Consolidate data for convenience
         for timestamp, phonemes in zip(timestamps, phonemes_task_env.phonemess):
             timestamp["phonemes"] = phonemes
 
         # Transform data into phoneme stream with interpolated timestamps
         def get_timestamp_for_phoneme(t0, t1, phonemes, idx):
-            """Given word start/end times `t0` and `t1`, interpolate the start/end times for a phoneme in the word."""
+            """Given word start/end times `t0` and `t1`, linearly interpolate the start/end times for a phoneme in the word."""
             L = len(phonemes)
             rel_start = idx / L
             rel_end = (idx + 1) / L
@@ -511,15 +533,29 @@ def tts_speak_lipsynced(voice: str,
                 t_start, t_end = get_timestamp_for_phoneme(record["start_time"], record["end_time"], phonemes, idx)
                 if phoneme in phoneme_to_morph:
                     phoneme_stream.append((phoneme, phoneme_to_morph[phoneme], t_start, t_end))
-                else:
-                    phoneme_stream.append((phoneme, "mouth_closed", t_start, t_end))  # not a morph, but a special command
+                else:  # e.g. punctuation
+                    phoneme_stream.append((phoneme, "!close_mouth", t_start, t_end))
+        phoneme_start_times = [item[2] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
 
-        # TODO: control the animator's morphs using the computed phoneme stream while playing the audio
-        # TODO: sync to the audio playback (latency?)
-        # TODO: account for possibly skipped phonemes (continue to next one if end time passed)
-        # TODO: always close mouth at end of stream, or if the player errors out (try/finally)
-        for record in phoneme_stream:
-            print(record)  # DEBUG
+        # Example of phoneme stream data:
+        # [
+        #   ('ʃ', 'mouth_ooo_index', 0.4, 0.45416666666666666),
+        #   ('ˈ', '!keep', 0.45416666666666666, 0.5083333333333333),
+        #   ('ɛ', 'mouth_eee_index', 0.5083333333333333, 0.5625),
+        #   ('ɹ', 'mouth_aaa_index', 0.5625, 0.6166666666666667),
+        #   ('ə', 'mouth_delta', 0.6166666666666667, 0.6708333333333334),
+        #   ('n', 'mouth_iii_index', 0.6708333333333334, 0.725),
+        #   ('ˈ', '!keep', 0.725, 0.8125),
+        #   ('æ', 'mouth_delta', 0.8125, 0.8999999999999999),
+        #   ('p', '!close_mouth', 0.8999999999999999, 0.9875),
+        #   ('ᵊ', 'mouth_delta', 0.9875, 1.075),
+        #   ('l', 'mouth_iii_index', 1.075, 1.1625),
+        #   ('.', '!close_mouth', 1.1625, 1.25),
+        #   ...,
+        # }
+        #
+        # for record in phoneme_stream:
+        #     print(record)  # DEBUG
 
         # play audio
         logger.info("tts_speak_lipsynced.speak: loading audio into mixer")
@@ -527,20 +563,62 @@ def tts_speak_lipsynced(voice: str,
         if pygame.mixer.music.get_busy():
             pygame.mixer.music.stop()
         pygame.mixer.music.load(audio_buffer)
-        # pygame.mixer.music.load(stream_response.raw)  # can't do this at least with mp3 since the raw stream doesn't support seeking.
+
+        def apply_lipsync_at_audio_time(t):
+            overrides = {
+                "mouth_aaa_index": 0.0,
+                "mouth_eee_index": 0.0,
+                "mouth_iii_index": 0.0,
+                "mouth_ooo_index": 0.0,
+                "mouth_uuu_index": 0.0,
+                "mouth_delta": 0.0,
+            }
+
+            # Find position in phoneme stream
+            idx = bisect.bisect_left(phoneme_start_times, t)
+            if idx < len(phoneme_stream):
+                morph = phoneme_stream[idx][1]
+            else:
+                morph = "!close_mouth"
+
+            # Set mouth position
+            if morph == "!close_mouth":
+                talkinghead_set_overrides(overrides)  # set all mouth morphs to zero
+            elif morph == "!keep":
+                pass  # keep previous mouth position
+            else:  # activate one mouth morph, set others to zero
+                overrides[morph] = 1.0
+                talkinghead_set_overrides(overrides)
 
         logger.info("tts_speak_lipsynced.speak: starting playback")
         if start_callback is not None:
-            start_callback()
-        pygame.mixer.music.play()
+            try:
+                start_callback()
+            except Exception as exc:
+                logger.error(f"tts_speak_lipsynced.speak: in start callback: {type(exc)}: {exc}")
+                traceback.print_exc()
+        try:
+            playback_start_time = time.time_ns()
+            pygame.mixer.music.play()
 
-        if stop_callback is not None:
             while pygame.mixer.music.get_busy():
+                # TODO: Lipsync: account for audio playback latency (and allow adjusting an offset, like VLC)
+                t = (time.time_ns() - playback_start_time) / 10**9  # seconds from start of audio
+                apply_lipsync_at_audio_time(t)  # lipsync
                 time.sleep(0.01)
+        finally:
             logger.info("tts_speak_lipsynced.speak: playback finished")
-            stop_callback()
-        else:
-            logger.info("tts_speak_lipsynced.speak: no stop callback, all done.")
+
+            if stop_callback is not None:
+                try:
+                    stop_callback()
+                except Exception as exc:
+                    logger.error(f"tts_speak_lipsynced.speak: in stop callback: {type(exc)}: {exc}")
+                    traceback.print_exc()
+
+            # TTS is exiting, so stop lipsyncing.
+            talkinghead_set_overrides({})
+
     config.task_manager.submit(speak, envcls())
 
 def tts_stop():
