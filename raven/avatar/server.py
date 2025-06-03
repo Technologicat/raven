@@ -345,6 +345,35 @@ def api_talkinghead_stop_talking():
     """Stop the mouth animation for talking."""
     return animator.stop_talking()
 
+@app.route('/api/talkinghead/set_overrides', methods=["POST"])
+def api_talkinghead_set_overrides():
+    """Directly control the animator's morphs from the client side.
+
+    Useful for lipsyncing.
+
+    Input format is JSON::
+
+        {"morph0": value0,
+         ...}
+
+    To unset overrides, send a blank JSON.
+
+    See `raven.avatar.editor` for available morphs. Value range for most morphs is [0, 1],
+    and for morphs taking also negative values, it is [-1, 1].
+
+    This API endpoint becomes available after the talkinghead has been launched.
+    """
+    if not animator.is_available():
+        abort(400, 'avatar not launched')
+    data = request.get_json()
+    if not len(data):
+        data = {}
+    try:
+        animator.global_animator_instance.set_overrides(data)
+    except Exception as exc:
+        abort(400, f"api_talkinghead_set_overrides: failed, reason: {type(exc)}: {exc}")
+    return "OK"
+
 @app.route('/api/talkinghead/set_emotion', methods=["POST"])
 def api_talkinghead_set_emotion():
     """Set talkinghead character emotion to that posted in the request.

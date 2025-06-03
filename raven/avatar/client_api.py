@@ -171,6 +171,12 @@ def talkinghead_stop_talking() -> None:
     response = requests.get(f"{config.avatar_url}/api/talkinghead/stop_talking", headers=headers)
     yell_on_error(response)
 
+def talkinghead_set_overrides(data: Dict[str, float]) -> None:
+    headers = copy.copy(config.default_headers)
+    headers["Content-Type"] = "application/json"
+    response = requests.post(f"{config.avatar_url}/api/talkinghead/set_overrides", json=data, headers=headers)
+    yell_on_error(response)
+
 def talkinghead_set_emotion(emotion_name: str) -> None:
     headers = copy.copy(config.default_headers)
     headers["Content-Type"] = "application/json"

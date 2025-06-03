@@ -427,6 +427,8 @@ class Animator:
         self.last_talking_target_value = None
         self.was_talking = False
 
+        self.morph_overrides = {}
+
         self.breathing_epoch = time.time_ns()
 
     def load_emotion_templates(self, emotions: Optional[Dict[str, Dict[str, float]]] = None) -> None:
@@ -764,6 +766,36 @@ class Animator:
             new_pose[idx] = 0.0
 
         self.was_talking = True
+        return new_pose
+
+    def set_overrides(self, data: Dict[str, float]) -> None:
+        """Set morph overrides.
+
+        All previous overrides are replaced by the new ones.
+
+        To unset all overrides, use `data = {}`.
+        """
+        logger.info(f"set_overrides: got data {data}")
+        # Validate
+        for key in data:
+            if key not in posedict_key_to_index:
+                logger.error(f"set_overrides: unknown morph key '{key}', rejecting overrides")
+                raise ValueError(f"Unknown morph key '{key}'; see `raven.avatar.util` for available morph keys.")
+        # Save
+        logger.info("set_overrides: data is valid, applying.")
+        self.morph_overrides = data
+
+    def apply_overrides(self, pose: List[float]) -> List[float]:
+        """Apply any morph overrides sent by the client.
+
+        This is actual the animation driver, called by `render_animation_frame`.
+
+        This is useful for lipsyncing.
+        """
+        new_pose = list(pose)  # copy
+        for key, value in self.morph_overrides.items():
+            idx = posedict_key_to_index[key]
+            new_pose[idx] = value
         return new_pose
 
     def compute_sway_target_pose(self, original_target_pose: List[float]) -> List[float]:
@@ -1130,6 +1162,7 @@ class Animator:
         self.current_pose = self.interpolate_pose(self.current_pose, target_pose)
         self.current_pose = self.animate_blinking(self.current_pose)
         self.current_pose = self.animate_talking(self.current_pose, target_pose)
+        self.current_pose = self.apply_overrides(self.current_pose)
         self.current_pose = self.animate_breathing(self.current_pose)
 
         # Update this last so that animation drivers have access to the old emotion, too.
