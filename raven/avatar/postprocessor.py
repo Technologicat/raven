@@ -983,7 +983,7 @@ class Postprocessor:
     @with_metadata(strength=[0.0, 1.0],
                    tint_rgb=["!RGB"],  # hint the GUI that this parameter needs an RGB color picker
                    bandpass_reference_rgb=["!RGB"],
-                   bandpass_q=[0.01, 1.0],
+                   bandpass_q=[0.0, 1.0],
                    _priority=11.0)
     def desaturate(self, image: torch.tensor, *,
                    strength: float = 1.0,
