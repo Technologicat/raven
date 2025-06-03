@@ -274,7 +274,7 @@ def tts_speak(voice: str,
         data = {"model": "kokoro",  # https://github.com/remsky/Kokoro-FastAPI
                 "voice": voice,
                 "input": text,
-                "response_format": "wav",  # flac would be nice (small, fast to encode), but seems currently broken in kokoro (the audio may repeat twice).
+                "response_format": "mp3",  # flac would be nice (small, fast to encode), but seems currently broken in kokoro (the audio may repeat twice).
                 "speed": speed,
                 "stream": True,
                 "return_download_link": False}
@@ -452,7 +452,7 @@ def tts_speak_lipsynced(voice: str,
         data = {"model": "kokoro",
                 "voice": voice,
                 "input": text,
-                "response_format": "wav",
+                "response_format": "mp3",
                 "speed": speed,
                 "stream": True,
                 "return_timestamps": True}
