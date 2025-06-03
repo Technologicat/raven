@@ -1,3 +1,5 @@
+"""General framework for DPG GUI animations."""
+
 __all__ = ["Animator", "animator",  # controller and its global instance (need only one per app)
            "Animation", "Overlay",  # base classes
            "Dimmer",  # overlays
