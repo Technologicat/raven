@@ -487,7 +487,7 @@ class TalkingheadExampleGUI:
                 def build_postprocessor_gui():
                     def make_reset_filter_callback(filter_name):  # freeze by closure
                         def reset_filter():
-                            logger.warning(f"reset_filter: resetting '{filter_name}' to defaults.")
+                            logger.info(f"reset_filter: resetting '{filter_name}' to defaults.")
                             all_filters = dict(postprocessor.Postprocessor.get_filters())
                             defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
                             ranges = all_filters[filter_name]["ranges"]  # for GUI hints
@@ -515,7 +515,7 @@ class TalkingheadExampleGUI:
                             logger.warning(f"make_reset_param_callback: '{filter_name}.{param_name}': Unknown parameter type {type(default_value)}, returning no-op callback.")
                             return lambda: None
                         def reset_param():
-                            logger.warning(f"reset_param: resetting '{filter_name}.{param_name}' to default.")
+                            logger.info(f"reset_param: resetting '{filter_name}.{param_name}' to default.")
                             dpg.set_value(widget, default_value)
                             self.on_gui_settings_change(None, None)
                         return reset_param
