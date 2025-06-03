@@ -508,6 +508,10 @@ def tts_speak_lipsynced(voice: str,
                 else:
                     phoneme_stream.append((phoneme, "mouth_closed", t_start, t_end))  # not a morph, but a special command
 
+        # TODO: control the animator's morphs using the computed phoneme stream while playing the audio
+        # TODO: sync to the audio playback (latency?)
+        # TODO: account for possibly skipped phonemes (continue to next one if end time passed)
+        # TODO: always close mouth at end of stream, or if the player errors out (try/finally)
         for record in phoneme_stream:
             print(record)  # DEBUG
 
