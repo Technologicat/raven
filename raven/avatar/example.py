@@ -847,6 +847,7 @@ class TalkingheadExampleGUI:
                                      centering_reference_window=self.window)
 
     def save_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
+        """Save the current settings from the GUI into an animator settings JSON file."""
         # We have done any necessary preparations (sync GUI state to `self.animator_settings`)
         # when the settings were last sent to the server, via one of:
         #    `on_gui_settings_change`
