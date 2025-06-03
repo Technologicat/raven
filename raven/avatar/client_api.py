@@ -552,7 +552,7 @@ def tts_speak_lipsynced(voice: str,
         if len(phonemes_task_env.phonemess) != len(timestamps):  # should have exactly one phoneme sequence for each word
             logger.error(f"Number of phoneme sequences ({len(phonemes_task_env.phonemess)}) does not match number of words ({len(timestamps)}), can't lipsync. Use `tts_speak` instead.")
             for record in timestamps:
-                print(record)  # DEBUG once more, with feeling! (show where each phoneme went)
+                print(record)  # DEBUG, show timestamped words
             print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
             assert False
 
