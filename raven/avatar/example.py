@@ -902,11 +902,11 @@ class TalkingheadExampleGUI:
             # text = "Testing the AI speech synthesizer."
             # text = "Sharon Apple is a computer-generated virtual idol and a central character in the Macross Plus franchise, created by Shoji Kawamori."
             text = "Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts."
-        client_api.tts_speak(voice=current_voice,
-                             text=text,
-                             speed=dpg.get_value("speak_speed_slider") / 10,
-                             start_callback=client_api.talkinghead_start_talking,
-                             stop_callback=client_api.talkinghead_stop_talking)
+        client_api.tts_speak_lipsynced(voice=current_voice,
+                                       text=text,
+                                       speed=dpg.get_value("speak_speed_slider") / 10,
+                                       start_callback=client_api.talkinghead_start_talking,
+                                       stop_callback=client_api.talkinghead_stop_talking)
 
 # Hotkey support
 choice_map = None

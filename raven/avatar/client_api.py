@@ -18,7 +18,7 @@ __all__ = ["init_module",
            "talkinghead_set_emotion",
            "talkinghead_result_feed",
            "tts_available", "tts_voices",
-           "tts_speak", "tts_stop"]
+           "tts_speak", "tts_speak_lipsynced", "tts_stop"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -265,18 +265,22 @@ def tts_speak(voice: str,
         return
     headers = copy.copy(config.tts_default_headers)
     headers["Content-Type"] = "application/json"
-    data = {"model": "kokoro",  # https://github.com/remsky/Kokoro-FastAPI
-            "voice": voice,
-            "input": text,
-            "response_format": "wav",  # flac would be nice (small, fast to encode), but seems currently broken in kokoro (the audio may repeat twice).
-            "speed": speed,
-            "stream": True,
-            "return_download_link": False}
-    stream_response = requests.post(f"{config.tts_url}/v1/audio/speech", headers=headers, json=data, stream=True)
-    yell_on_error(stream_response)
 
     # We run this in the background
     def speak(task_env) -> None:
+        logger.info("tts_speak.speak: getting audio")
+
+        # Audio format
+        data = {"model": "kokoro",  # https://github.com/remsky/Kokoro-FastAPI
+                "voice": voice,
+                "input": text,
+                "response_format": "wav",  # flac would be nice (small, fast to encode), but seems currently broken in kokoro (the audio may repeat twice).
+                "speed": speed,
+                "stream": True,
+                "return_download_link": False}
+        stream_response = requests.post(f"{config.tts_url}/v1/audio/speech", headers=headers, json=data, stream=True)
+        yell_on_error(stream_response)
+
         it = stream_response.iter_content(chunk_size=4096)
         audio_buffer = io.BytesIO()
         try:
@@ -294,12 +298,14 @@ def tts_speak(voice: str,
         #     audio_file.write(audio_buffer.getvalue())
 
         # play audio
+        logger.info("tts_speak.speak: loading audio into mixer")
         audio_buffer.seek(0)
         if pygame.mixer.music.get_busy():
             pygame.mixer.music.stop()
         pygame.mixer.music.load(audio_buffer)
         # pygame.mixer.music.load(stream_response.raw)  # can't do this at least with mp3 since the raw stream doesn't support seeking.
 
+        logger.info("tts_speak.speak: starting playback")
         if start_callback is not None:
             start_callback()
         pygame.mixer.music.play()
@@ -307,7 +313,224 @@ def tts_speak(voice: str,
         if stop_callback is not None:
             while pygame.mixer.music.get_busy():
                 time.sleep(0.01)
+            logger.info("tts_speak.speak: playback finished")
             stop_callback()
+        else:
+            logger.info("tts_speak.speak: no stop callback, all done.")
+    config.task_manager.submit(speak, envcls())
+
+def tts_speak_lipsynced(voice: str,
+                        text: str,
+                        speed: float = 1.0,
+                        start_callback: Optional[Callable] = None,
+                        stop_callback: Optional[Callable] = None) -> None:
+    """Like `tts_speak`, but with lip sync.
+
+    Requires the Kokoro-FastAPI TTS backend so that we can get the phoneme data
+    and timestamps.
+
+    See:
+        https://github.com/remsky/Kokoro-FastAPI
+    """
+    if config.tts_url is None:
+        return
+    headers = copy.copy(config.tts_default_headers)
+    headers["Content-Type"] = "application/json"
+
+    # Phoneme characters and individual phoneme comments from Misaki docs (Kokoro uses the Misaki engine for phonemization):
+    #   https://github.com/hexgrad/misaki/blob/main/EN_PHONES.md
+    #
+    # For the animator morph names, see `util.py`
+    dipthong_vowels = {
+        "A": "eɪ",  # The "eh" vowel sound, like hey => hˈA. Expands to eɪ in IPA.
+        "I": "aɪ",  # The "eye" vowel sound, like high => hˈI. Expands to aɪ in IPA.
+        "W": "aʊ",  # The "ow" vowel sound, like how => hˌW. Expands to aʊ in IPA.
+        "Y": "ɔɪ",  # The "oy" vowel sound, like soy => sˈY. Expands to ɔɪ in IPA.
+        # 🇺🇸 American-only
+        "O": "oʊ",  # Capital letter representing the American "oh" vowel sound. Expands to oʊ in IPA.
+        # 🇬🇧 British-only
+        "Q": "əʊ",  # Capital letter representing the British "oh" vowel sound. Expands to əʊ in IPA.
+    }
+    # Stress Marks (2)
+    #     ˈ: Primary stress, visually looks similar to an apostrophe.
+    #     ˌ: Secondary stress.
+    phoneme_map = {
+        # IPA Consonants
+        "b": "mouth_iii_index",
+        "d": "mouth_delta",
+        "f": "mouth_iii_index",
+        "h": "mouth_delta",
+        "j": "mouth_aaa_index",  # As in yes => jˈɛs.
+        "k": "mouth_aaa_index",
+        "l": "mouth_iii_index",
+        "n": "mouth_iii_index",
+        "s": "mouth_iii_index",
+        "t": "mouth_iii_index",
+        "w": "mouth_ooo_index",
+        "z": "mouth_iii_index",
+        "ɡ": "mouth_aaa_index",  # Hard "g" sound, like get => ɡɛt. Visually looks like the lowercase letter g, but its actually U+0261.
+        "ŋ": "mouth_aaa_index",  # The "ng" sound, like sung => sˈʌŋ.
+        "ɹ": "mouth_aaa_index",  # Upside-down r is just an "r" sound, like red => ɹˈɛd.
+        "ʃ": "mouth_ooo_index",  # The "sh" sound, like shin => ʃˈɪn.
+        "ʒ": "mouth_eee_index",  # The "zh" sound, like Asia => ˈAʒə.
+        "ð": "mouth_aaa_index",  # Soft "th" sound, like than => ðən.
+        "θ": "mouth_aaa_index",  # Hard "th" sound, like thin => θˈɪn.
+        # Consonant Clusters
+        "ʤ": "mouth_ooo_index",  # A "j" or "dg" sound, merges dʒ, like jump => ʤˈʌmp or lunge => lˈʌnʤ.
+        "ʧ": "mouth_ooo_index",  # The "ch" sound, merges tʃ, like chump => ʧˈʌmp or lunch => lˈʌnʧ.
+        # IPA Vowels
+        "ə": "mouth_delta",  # The schwa is a common, unstressed vowel sound, like a 🍌 => ə 🍌.
+        "i": "mouth_iii_index",  # As in easy => ˈizi.
+        "u": "mouth_uuu_index",  # As in flu => flˈu.
+        "ɑ": "mouth_aaa_index",  # As in spa => spˈɑ.
+        "ɔ": "mouth_ooo_index",  # As in all => ˈɔl.
+        "ɛ": "mouth_eee_index",  # As in hair => hˈɛɹ or bed => bˈɛd. Possibly dubious, because those vowel sounds do not sound similar to my ear.
+        "ɜ": "mouth_delta",  # As in her => hɜɹ. Easy to confuse with ɛ above.
+        "ɪ": "mouth_iii_index",  # As in brick => bɹˈɪk.
+        "ʊ": "mouth_uuu_index",  # As in wood => wˈʊd.
+        "ʌ": "mouth_aaa_index",  # As in sun => sˈʌn.
+        # Custom Vowel (Misaki)
+        "ᵊ": "mouth_delta",  # Small schwa, muted version of ə, like pixel => pˈɪksᵊl. I made this one up, so I'm not entirely sure if it's correct.
+        # 🇺🇸 American-only
+        "æ": "mouth_delta",  # The vowel sound at the start of ash => ˈæʃ.
+        "ᵻ": "mouth_delta",  # A sound somewhere in between ə and ɪ, often used in certain -s suffixes like boxes => bˈɑksᵻz.
+        "ɾ": "mouth_iii_index",  # A sound somewhere in between t and d, like butter => bˈʌɾəɹ.
+        # 🇬🇧 British-only
+        "a": "mouth_aaa_index",  # The vowel sound at the start of ash => ˈaʃ.
+        "ɒ": "mouth_ooo_index",  # The sound at the start of on => ˌɒn. Easy to confuse with ɑ, which is a shared phoneme.
+        # Other
+        "ː": None,  # Vowel extender, visually looks similar to a colon. Possibly dubious, because Americans extend vowels too, but the gold US dictionary somehow lacks these. Often used by the Brits instead of ɹ: Americans say or => ɔɹ, but Brits say or => ɔː.
+        # for dipthong expansion
+        "e": "mouth_eee_index",
+        "o": "mouth_ooo_index",
+    }
+
+    def get_phonemes(task_env) -> None:
+        logger.info("tts_speak_lipsynced.get_phonemes: starting")
+        # Language codes:
+        #   https://github.com/hexgrad/kokoro
+        #   🇺🇸 'a' => American English, 🇬🇧 'b' => British English
+        #   🇪🇸 'e' => Spanish es
+        #   🇫🇷 'f' => French fr-fr
+        #   🇮🇳 'h' => Hindi hi
+        #   🇮🇹 'i' => Italian it
+        #   🇯🇵 'j' => Japanese: pip install misaki[ja]
+        #   🇧🇷 'p' => Brazilian Portuguese pt-br
+        #   🇨🇳 'z' => Mandarin Chinese: pip install misaki[zh]
+        data = {"text": text,
+                "language": "a"}
+        response = requests.post(f"{config.tts_url}/dev/phonemize", headers=headers, json=data, stream=True)
+        yell_on_error(response)
+        response_json = response.json()
+        phonemes = response_json["phonemes"]
+        for dipthong, expanded in dipthong_vowels.items():
+            phonemes = phonemes.replace(dipthong, expanded)
+        phonemess = phonemes.split()  # -> [word0, word1, ...]
+        task_env.phonemess = phonemess
+        task_env.done = True
+        logger.info("tts_speak_lipsynced.get_phonemes: done")
+    phonemes_task_env = envcls(done=False)
+    config.task_manager.submit(get_phonemes, phonemes_task_env)
+
+    def speak(task_env) -> None:
+        logger.info("tts_speak_lipsynced.speak: starting")
+        def isword(s):
+            return len(s) > 1 or s.isalnum()
+
+        def clean_timestamps(timestamps):
+            """Remove consecutive duplicate timestamps (some versions of Kokoro produce those) and any timestamps for punctuation."""
+            out = []
+            last_start_time = None
+            for record in timestamps:  # format: [{"word": "blah", "start_time": 1.23, "end_time": 1.45}, ...]
+                if record["start_time"] != last_start_time and isword(record["word"]):
+                    out.append(record)
+                    last_start_time = record["start_time"]
+            return out
+
+        # Get audio and word timestamps
+        logger.info("tts_speak_lipsynced.speak: getting audio with word timestamps")
+        data = {"model": "kokoro",
+                "voice": voice,
+                "input": text,
+                "response_format": "wav",
+                "speed": speed,
+                "stream": True,
+                "return_timestamps": True}
+        stream_response = requests.post(f"{config.tts_url}/dev/captioned_speech", headers=headers, json=data, stream=True)
+        yell_on_error(stream_response)
+
+        # The API docs are wrong; using a running Kokoro-FastAPI and sending an example
+        # request at http://localhost:8880/docs helped to figure out what to do here.
+        timestamps = json.loads(stream_response.headers["x-word-timestamps"])
+        timestamps = clean_timestamps(timestamps)
+        it = stream_response.iter_content(chunk_size=4096)
+        audio_buffer = io.BytesIO()
+        try:
+            while True:
+                if task_env.cancelled:
+                    return
+                chunk = next(it)
+                audio_buffer.write(chunk)
+        except StopIteration:
+            pass
+        logger.info("tts_speak_lipsynced.speak: getting audio: done")
+
+        # Wait until phonemization background task completes (usually it completes faster than audio, so likely completed already)
+        while not phonemes_task_env.done:
+            time.sleep(0.01)
+
+        # consolidate data for convenience
+        for timestamp, phonemes in zip(timestamps, phonemes_task_env.phonemess):
+            timestamp["phonemes"] = phonemes
+
+        # Transform data into phoneme stream with interpolated timestamps
+        def get_timestamp_for_phoneme(t0, t1, phonemes, idx):
+            """Given word start/end times `t0` and `t1`, interpolate the start/end times for a phoneme in the word."""
+            L = len(phonemes)
+            rel_start = idx / L
+            rel_end = (idx + 1) / L
+            dt = t1 - t0
+            t_start = t0 + dt * rel_start
+            t_end = t0 + dt * rel_end
+            return t_start, t_end
+        phoneme_stream = []
+        for record in timestamps:
+            phonemes = record["phonemes"]
+            for idx, phoneme in enumerate(phonemes):  # mˈaɪnd -> m, ˈ, a, ɪ, n, d
+                t_start, t_end = get_timestamp_for_phoneme(record["start_time"], record["end_time"], phonemes, idx)
+                if phoneme in phoneme_map:
+                    phoneme_stream.append((phoneme, phoneme_map[phoneme], t_start, t_end))
+                else:
+                    phoneme_stream.append((phoneme, "mouth_closed", t_start, t_end))  # not a morph, but a special command
+
+        for record in phoneme_stream:
+            print(record)  # DEBUG
+
+        # # DEBUG - dump response to audio file
+        # audio_buffer.seek(0)
+        # with open("temp.mp3", "wb") as audio_file:
+        #     audio_file.write(audio_buffer.getvalue())
+
+        # play audio
+        logger.info("tts_speak_lipsynced.speak: loading audio into mixer")
+        audio_buffer.seek(0)
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.stop()
+        pygame.mixer.music.load(audio_buffer)
+        # pygame.mixer.music.load(stream_response.raw)  # can't do this at least with mp3 since the raw stream doesn't support seeking.
+
+        logger.info("tts_speak_lipsynced.speak: starting playback")
+        if start_callback is not None:
+            start_callback()
+        pygame.mixer.music.play()
+
+        if stop_callback is not None:
+            while pygame.mixer.music.get_busy():
+                time.sleep(0.01)
+            logger.info("tts_speak_lipsynced.speak: playback finished")
+            stop_callback()
+        else:
+            logger.info("tts_speak_lipsynced.speak: no stop callback, all done.")
     config.task_manager.submit(speak, envcls())
 
 def tts_stop():
