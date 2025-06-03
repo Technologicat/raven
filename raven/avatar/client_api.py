@@ -475,6 +475,11 @@ def tts_speak_lipsynced(voice: str,
             pass
         logger.info("tts_speak_lipsynced.speak: getting audio: done")
 
+        # # DEBUG - dump response to audio file
+        # audio_buffer.seek(0)
+        # with open("temp.mp3", "wb") as audio_file:
+        #     audio_file.write(audio_buffer.getvalue())
+
         # Wait until phonemization background task completes (usually it completes faster than audio, so likely completed already)
         while not phonemes_task_env.done:
             time.sleep(0.01)
@@ -505,11 +510,6 @@ def tts_speak_lipsynced(voice: str,
 
         for record in phoneme_stream:
             print(record)  # DEBUG
-
-        # # DEBUG - dump response to audio file
-        # audio_buffer.seek(0)
-        # with open("temp.mp3", "wb") as audio_file:
-        #     audio_file.write(audio_buffer.getvalue())
 
         # play audio
         logger.info("tts_speak_lipsynced.speak: loading audio into mixer")
