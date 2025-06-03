@@ -942,7 +942,7 @@ class TalkingheadExampleGUI:
             client_api.tts_speak_lipsynced(voice=selected_voice,
                                            text=text,
                                            speed=dpg.get_value("speak_speed_slider") / 10,
-                                           lipsync_offset=dpg.get_value("speak_lipsync_offset") / 10,
+                                           video_offset=dpg.get_value("speak_video_offset") / 10,
                                            start_callback=None,  # no start callback needed, the TTS client will start lipsyncing once the audio starts.
                                            stop_callback=stop_lipsync_speaking)
         else:

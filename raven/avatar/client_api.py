@@ -49,7 +49,9 @@ from . import netutil
 # Module bootup
 
 config = envcls(default_headers={},
-                tts_default_headers={})
+                tts_default_headers={},
+                audio_frequency=44100,
+                audio_buffer_size=512)
 def init_module(avatar_url: str,
                 avatar_api_key_file: Optional[str],
                 tts_url: Optional[str],
@@ -83,7 +85,11 @@ def init_module(avatar_url: str,
         # Format for OpenAI compatible endpoints is "Authorization: Bearer xxxx"; the API key file should contain the "Bearer xxxx" part.
         config.default_headers["Authorization"] = tts_api_key.strip()
 
-    pygame.mixer.init()
+    # https://www.pygame.org/docs/ref/mixer.html
+    pygame.mixer.init(frequency=config.audio_frequency,
+                      size=-16,
+                      channels=2,
+                      buffer=config.audio_buffer_size)  # there seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it.
 
 def yell_on_error(response: requests.Response) -> None:
     if response.status_code != 200:
@@ -338,7 +344,7 @@ def tts_speak(voice: str,
 def tts_speak_lipsynced(voice: str,
                         text: str,
                         speed: float = 1.0,
-                        lipsync_offset: float = 0.0,
+                        video_offset: float = 0.0,
                         start_callback: Optional[Callable] = None,
                         stop_callback: Optional[Callable] = None) -> None:
     """Like `tts_speak`, but with lip sync.
@@ -346,9 +352,9 @@ def tts_speak_lipsynced(voice: str,
     Requires the Kokoro-FastAPI TTS backend so that we can get the phoneme data
     and timestamps.
 
-    `lipsync_offset`: seconds.
-        - Positive values: animation comes later (with respect to the audio).
-        - Negative values: animation comes earlier (with respect to the audio).
+    `video_offset`: seconds, for adjusting lipsync animation.
+        - Positive values: Use if the video is early. Shifts video later with respect to the audio.
+        - Negative values: Use if the video is late. Shifts video earlier with respect to the audio.
 
     See:
         https://github.com/remsky/Kokoro-FastAPI
@@ -392,6 +398,8 @@ def tts_speak_lipsynced(voice: str,
         "p": "!close_mouth",
         "s": "mouth_iii_index",
         "t": "mouth_iii_index",
+        "T": "mouth_iii_index",  # getting this too from Misaki
+        "v": "mouth_iii_index",  # getting this too from Misaki
         "w": "mouth_ooo_index",
         "z": "mouth_iii_index",
         "ɡ": "mouth_aaa_index",  # Hard "g" sound, like get => ɡɛt. Visually looks like the lowercase letter g, but its actually U+0261.
@@ -429,6 +437,13 @@ def tts_speak_lipsynced(voice: str,
         # Stress Marks
         "ˈ": "!keep",  # Primary stress, visually looks similar to an apostrophe (but is U+02C8).
         "ˌ": "!keep",  # Secondary stress (not a comma, but U+02CC).
+        # punctuation
+        ",": "!keep",  # comma, U+2C
+        ";": "!keep",  # semicolon, U+3B
+        ":": "!keep",  # colon, U+3A
+        ".": "!maybe_close_mouth",  # period, U+2E
+        "!": "!maybe_close_mouth",  # exclamation mark, U+21
+        "?": "!maybe_close_mouth",  # question mark, U+3F
         # for dipthong expansion
         "e": "mouth_eee_index",
         "o": "mouth_ooo_index",
@@ -560,8 +575,8 @@ def tts_speak_lipsynced(voice: str,
         #   ...,
         # }
         #
-        # for record in phoneme_stream:
-        #     print(record)  # DEBUG
+        for record in phoneme_stream:
+            logger.info(f"tts_speak_lipsynced.speak: phoneme data: {record}")  # DEBUG
 
         # play audio
         logger.info("tts_speak_lipsynced.speak: loading audio into mixer")
@@ -575,6 +590,7 @@ def tts_speak_lipsynced(voice: str,
             if t < phoneme_start_times[0]:
                 return
 
+            # Mouth morphs
             overrides = {
                 "mouth_aaa_index": 0.0,
                 "mouth_eee_index": 0.0,
@@ -583,6 +599,7 @@ def tts_speak_lipsynced(voice: str,
                 "mouth_uuu_index": 0.0,
                 "mouth_delta": 0.0,
             }
+
             # Close the mouth if the last phoneme has ended (but the audio stream is still running, likely with silence at the end).
             if t > phoneme_end_times[-1]:
                 talkinghead_set_overrides(overrides)
@@ -593,12 +610,17 @@ def tts_speak_lipsynced(voice: str,
             assert 0 <= idx <= len(phoneme_start_times)
 
             morph = phoneme_stream[idx][1]
+            # print(t, phoneme_stream[idx][0], morph)  # DEBUG (very spammy, 100 messages per second)
 
             # Set mouth position
             if morph == "!close_mouth":
-                talkinghead_set_overrides(overrides)  # set all mouth morphs to zero
+                talkinghead_set_overrides(overrides)  # set all mouth morphs to zero -> close mouth
             elif morph == "!keep":
                 pass  # keep previous mouth position
+            elif morph == "!maybe_close_mouth":  # close mouth only if the pause is at least half a second, else act like "!keep".
+                phoneme_length = phoneme_end_times[idx] - phoneme_start_times[idx]
+                if phoneme_length >= 0.5:
+                    talkinghead_set_overrides(overrides)
             else:  # activate one mouth morph, set others to zero
                 overrides[morph] = 1.0
                 talkinghead_set_overrides(overrides)
@@ -614,9 +636,10 @@ def tts_speak_lipsynced(voice: str,
             playback_start_time = time.time_ns()
             pygame.mixer.music.play()
 
+            latency = config.audio_buffer_size / config.audio_frequency  # seconds
             while pygame.mixer.music.get_busy():
                 # TODO: Lipsync: account for audio playback latency, how?
-                t = (time.time_ns() - playback_start_time) / 10**9 - lipsync_offset  # seconds from start of audio
+                t = (time.time_ns() - playback_start_time) / 10**9 - latency - video_offset  # seconds from start of audio
                 apply_lipsync_at_audio_time(t)  # lipsync
                 time.sleep(0.01)
         finally:
