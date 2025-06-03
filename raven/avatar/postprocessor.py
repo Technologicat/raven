@@ -976,6 +976,7 @@ class Postprocessor:
         alpha = 0.5 * (2.0 * R - G - B)
         beta = 3.0**0.5 / 2.0 * (G - B)
         hue = math.atan2(beta, alpha) / (2.0 * math.pi)  # note atan2(0, 0) := 0
+        hue = hue + 0.5  # convert from `[-0.5, 0.5)` to `[0, 1)`
         return hue
 
     # This filter is adapted from an old GLSL code I made for Panda3D 1.8 back in 2014.
@@ -1026,7 +1027,7 @@ class Postprocessor:
             desat_alpha = 0.5 * (2.0 * R - G - B)
             desat_beta = 3.0**0.5 / 2.0 * (G - B)
             desat_hue = torch.atan2(desat_beta, desat_alpha) / (2.0 * math.pi)  # note atan2(0, 0) := 0
-            desat_hue = desat_hue + torch.where(torch.lt(desat_hue, 0.0), 0.5, 0.0)  # convert from `[-0.5, 0.5)` to `[0, 1)`
+            desat_hue += 0.5  # convert from `[-0.5, 0.5)` to `[0, 1)`
             # -> [h, w]
 
             # Determine whether to keep this pixel or desaturate (and by how much).
