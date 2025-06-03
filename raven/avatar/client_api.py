@@ -498,7 +498,7 @@ def tts_speak_lipsynced(voice: str,
             t_start = t0 + dt * rel_start
             t_end = t0 + dt * rel_end
             return t_start, t_end
-        phoneme_stream = []
+        phoneme_stream = []  # [(phoneme0, morph0, t_start, t_end), ...]
         for record in timestamps:
             phonemes = record["phonemes"]
             for idx, phoneme in enumerate(phonemes):  # mˈaɪnd -> m, ˈ, a, ɪ, n, d
