@@ -364,6 +364,14 @@ def tts_speak_lipsynced(voice: str,
     headers = copy.copy(config.tts_default_headers)
     headers["Content-Type"] = "application/json"
 
+    # Phonemize and word-level timestamping treat underscores differently: phonemize treats them as spaces,
+    # whereas word-level timestamping doesn't (no word split at underscore). Better to remove them.
+    #
+    # TODO: See if we could use Misaki directly to phonemize the individual timestamped words returned by Kokoro, bypassing the thorny subtly-different-word-splittings issue.
+    def prefilter(text):
+        return text.replace("_", " ")
+    text = prefilter(text)
+
     # Phoneme characters and individual phoneme comments from Misaki docs (Kokoro uses the Misaki engine for phonemization):
     #   https://github.com/hexgrad/misaki/blob/main/EN_PHONES.md
     #
@@ -469,7 +477,11 @@ def tts_speak_lipsynced(voice: str,
         phonemes = response_json["phonemes"]
         for dipthong, ipa_expansion in dipthong_vowel_to_ipa.items():
             phonemes = phonemes.replace(dipthong, ipa_expansion)
-        phonemess = re.split(r"\s|,|;|:|\.|!|\?", phonemes)  # -> [word0, word1, ...]
+        # phonemess = phonemes.split()  # -> [word0, word1, ...]
+        # phonemess = re.split(r"\s|,|;|:|\.|!|\?|“|”", phonemes)  # -> [word0, word1, ...], dropping punctuation
+        # Word-level timestamping splits at ":" (even if inside a word), so we should too. But it doesn't split at periods in dotted names, so we shouldn't either.
+        phonemess = re.split(r"\s|:", phonemes)  # -> [word0, word1, ...]
+        phonemess = [p for p in phonemess if p]  # drop empty strings
         task_env.phonemess = phonemess
         task_env.done = True
         logger.info("tts_speak_lipsynced.get_phonemes: done")
@@ -478,12 +490,15 @@ def tts_speak_lipsynced(voice: str,
 
     def speak(task_env) -> None:
         logger.info("tts_speak_lipsynced.speak: starting")
+        def isword(s):
+            return len(s) > 1 or s.isalnum()
+
         def clean_timestamps(timestamps):
-            """Remove consecutive duplicate timestamps (some versions of Kokoro produce those)."""
+            """Remove consecutive duplicate timestamps (some versions of Kokoro produce those) and any timestamps for punctuation."""
             out = []
             last_start_time = None
             for record in timestamps:  # format: [{"word": "blah", "start_time": 1.23, "end_time": 1.45}, ...]
-                if record["start_time"] != last_start_time:
+                if record["start_time"] != last_start_time and isword(record["word"]):
                     out.append(record)
                     last_start_time = record["start_time"]
             return out
@@ -504,8 +519,6 @@ def tts_speak_lipsynced(voice: str,
         # request at http://localhost:8880/docs helped to figure out what to do here.
         timestamps = json.loads(stream_response.headers["x-word-timestamps"])
         timestamps = clean_timestamps(timestamps)
-        # for record in timestamps:
-        #     print(record)  # DEBUG
         it = stream_response.iter_content(chunk_size=4096)
         audio_buffer = io.BytesIO()
         try:
@@ -527,15 +540,27 @@ def tts_speak_lipsynced(voice: str,
         while not phonemes_task_env.done:
             time.sleep(0.01)
 
-        # print(phonemes_task_env.phonemess)  # DEBUG
+        # for record in timestamps:
+        #     print(record)  # DEBUG, show word-level timestamps
+        # print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
 
         # Now we have:
         #   - `timestamps`: words, with word-level start and end times
         #   - `phonemes`: phonemes for each word
         #
         # Consolidate data for convenience
+        if len(phonemes_task_env.phonemess) != len(timestamps):  # should have exactly one phoneme sequence for each word
+            logger.error(f"Number of phoneme sequences ({len(phonemes_task_env.phonemess)}) does not match number of words ({len(timestamps)}), can't lipsync. Use `tts_speak` instead.")
+            for record in timestamps:
+                print(record)  # DEBUG once more, with feeling! (show where each phoneme went)
+            print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
+            assert False
+
         for timestamp, phonemes in zip(timestamps, phonemes_task_env.phonemess):
             timestamp["phonemes"] = phonemes
+
+        # for record in timestamps:
+        #     print(record)  # DEBUG once more, with feeling! (show where each phoneme went)
 
         # Transform data into phoneme stream with interpolated timestamps
         def get_timestamp_for_phoneme(t0, t1, phonemes, idx):
@@ -552,10 +577,13 @@ def tts_speak_lipsynced(voice: str,
             phonemes = record["phonemes"]
             for idx, phoneme in enumerate(phonemes):  # mˈaɪnd -> m, ˈ, a, ɪ, n, d
                 t_start, t_end = get_timestamp_for_phoneme(record["start_time"], record["end_time"], phonemes, idx)
-                if phoneme in phoneme_to_morph:
+                if phoneme in phoneme_to_morph:  # accept only phonemes we know about
                     phoneme_stream.append((phoneme, phoneme_to_morph[phoneme], t_start, t_end))
         phoneme_start_times = [item[2] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
         phoneme_end_times = [item[3] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
+
+        # for record in phoneme_stream:
+        #     logger.info(f"tts_speak_lipsynced.speak: phoneme data: {record}")  # DEBUG, show final phoneme stream
 
         # Example of phoneme stream data:
         # [
@@ -572,9 +600,6 @@ def tts_speak_lipsynced(voice: str,
         #   ('l', 'mouth_eee_index', 0.815, 0.875),
         #   ...,
         # }
-        #
-        # for record in phoneme_stream:
-        #     logger.info(f"tts_speak_lipsynced.speak: phoneme data: {record}")  # DEBUG
 
         # play audio
         logger.info("tts_speak_lipsynced.speak: loading audio into mixer")
