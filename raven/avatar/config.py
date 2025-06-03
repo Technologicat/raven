@@ -110,7 +110,7 @@ animator_defaults = {
     "blink_probability": 0.03,  # At each frame at a reference of 25 FPS; FPS-corrected automatically.
     "blink_confusion_duration": 10.0,  # seconds, upon entering "confusion" emotion, during which blinking quickly in succession is allowed.
 
-    "talking_fps": 12,  # How often to re-randomize mouth during talking animation.
+    "talking_fps": 12,  # How often to re-randomize mouth during the simple mouth randomizer talking animation. Not used when lipsyncing.
                         # Early 2000s anime used ~12 FPS as the fastest actual framerate of new cels (not counting camera panning effects and such).
     "talking_morph": "mouth_aaa_index",  # which mouth-open morph to use for talking; for available values, see `util.posedict_keys`
 
