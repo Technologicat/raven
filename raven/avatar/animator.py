@@ -783,7 +783,7 @@ class Animator:
                 raise ValueError(f"Unknown morph key '{key}'; see `raven.avatar.util` for available morph keys.")
         # Save
         logger.info("set_overrides: data is valid, applying.")
-        self.morph_overrides = data
+        self.morph_overrides = data  # atomic replace
 
     def apply_overrides(self, pose: List[float]) -> List[float]:
         """Apply any morph overrides sent by the client.
