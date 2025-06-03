@@ -388,20 +388,20 @@ def tts_speak_lipsynced(voice: str,
         # IPA Consonants
         "b": "!close_mouth",
         "d": "mouth_delta",
-        "f": "mouth_iii_index",
+        "f": "mouth_eee_index",
         "h": "mouth_delta",
         "j": "mouth_aaa_index",  # As in yes => jˈɛs.
         "k": "mouth_aaa_index",
-        "l": "mouth_iii_index",
+        "l": "mouth_eee_index",
         "m": "!close_mouth",
-        "n": "mouth_iii_index",
+        "n": "mouth_eee_index",
         "p": "!close_mouth",
-        "s": "mouth_iii_index",
-        "t": "mouth_iii_index",
-        "T": "mouth_iii_index",  # getting this too from Misaki
+        "s": "mouth_eee_index",
+        "t": "mouth_eee_index",
+        "T": "mouth_eee_index",  # getting this too from Misaki
         "v": "mouth_iii_index",  # getting this too from Misaki
         "w": "mouth_ooo_index",
-        "z": "mouth_iii_index",
+        "z": "mouth_eee_index",
         "ɡ": "mouth_aaa_index",  # Hard "g" sound, like get => ɡɛt. Visually looks like the lowercase letter g, but its actually U+0261.
         "ŋ": "mouth_aaa_index",  # The "ng" sound, like sung => sˈʌŋ.
         "ɹ": "mouth_aaa_index",  # Upside-down r is just an "r" sound, like red => ɹˈɛd.
@@ -428,7 +428,7 @@ def tts_speak_lipsynced(voice: str,
         # 🇺🇸 American-only
         "æ": "mouth_delta",  # The vowel sound at the start of ash => ˈæʃ.
         "ᵻ": "mouth_delta",  # A sound somewhere in between ə and ɪ, often used in certain -s suffixes like boxes => bˈɑksᵻz.
-        "ɾ": "mouth_iii_index",  # A sound somewhere in between t and d, like butter => bˈʌɾəɹ.
+        "ɾ": "mouth_eee_index",  # A sound somewhere in between t and d, like butter => bˈʌɾəɹ.
         # 🇬🇧 British-only
         "a": "mouth_aaa_index",  # The vowel sound at the start of ash => ˈaʃ.
         "ɒ": "mouth_ooo_index",  # The sound at the start of on => ˌɒn. Easy to confuse with ɑ, which is a shared phoneme.
