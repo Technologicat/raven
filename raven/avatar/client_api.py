@@ -469,7 +469,7 @@ def tts_speak_lipsynced(voice: str,
         phonemes = response_json["phonemes"]
         for dipthong, ipa_expansion in dipthong_vowel_to_ipa.items():
             phonemes = phonemes.replace(dipthong, ipa_expansion)
-        phonemess = phonemes.split()  # -> [word0, word1, ...]
+        phonemess = re.split(r"\s|,|;|:|\.|!|\?", phonemes)  # -> [word0, word1, ...]
         task_env.phonemess = phonemess
         task_env.done = True
         logger.info("tts_speak_lipsynced.get_phonemes: done")
@@ -478,15 +478,12 @@ def tts_speak_lipsynced(voice: str,
 
     def speak(task_env) -> None:
         logger.info("tts_speak_lipsynced.speak: starting")
-        def isword(s):
-            return len(s) > 1 or s.isalnum()
-
         def clean_timestamps(timestamps):
-            """Remove consecutive duplicate timestamps (some versions of Kokoro produce those) and any timestamps for punctuation."""
+            """Remove consecutive duplicate timestamps (some versions of Kokoro produce those)."""
             out = []
             last_start_time = None
             for record in timestamps:  # format: [{"word": "blah", "start_time": 1.23, "end_time": 1.45}, ...]
-                if record["start_time"] != last_start_time and isword(record["word"]):
+                if record["start_time"] != last_start_time:
                     out.append(record)
                     last_start_time = record["start_time"]
             return out
@@ -507,6 +504,8 @@ def tts_speak_lipsynced(voice: str,
         # request at http://localhost:8880/docs helped to figure out what to do here.
         timestamps = json.loads(stream_response.headers["x-word-timestamps"])
         timestamps = clean_timestamps(timestamps)
+        # for record in timestamps:
+        #     print(record)  # DEBUG
         it = stream_response.iter_content(chunk_size=4096)
         audio_buffer = io.BytesIO()
         try:
@@ -527,6 +526,8 @@ def tts_speak_lipsynced(voice: str,
         # Wait until phonemization background task completes (usually it completes faster than audio, so likely completed already)
         while not phonemes_task_env.done:
             time.sleep(0.01)
+
+        # print(phonemes_task_env.phonemess)  # DEBUG
 
         # Now we have:
         #   - `timestamps`: words, with word-level start and end times
@@ -553,30 +554,27 @@ def tts_speak_lipsynced(voice: str,
                 t_start, t_end = get_timestamp_for_phoneme(record["start_time"], record["end_time"], phonemes, idx)
                 if phoneme in phoneme_to_morph:
                     phoneme_stream.append((phoneme, phoneme_to_morph[phoneme], t_start, t_end))
-                else:  # e.g. punctuation
-                    phoneme_stream.append((phoneme, "!close_mouth", t_start, t_end))
         phoneme_start_times = [item[2] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
         phoneme_end_times = [item[3] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
 
         # Example of phoneme stream data:
         # [
-        #   ('ʃ', 'mouth_ooo_index', 0.4, 0.45416666666666666),
-        #   ('ˈ', '!keep', 0.45416666666666666, 0.5083333333333333),
-        #   ('ɛ', 'mouth_eee_index', 0.5083333333333333, 0.5625),
-        #   ('ɹ', 'mouth_aaa_index', 0.5625, 0.6166666666666667),
-        #   ('ə', 'mouth_delta', 0.6166666666666667, 0.6708333333333334),
-        #   ('n', 'mouth_iii_index', 0.6708333333333334, 0.725),
-        #   ('ˈ', '!keep', 0.725, 0.8125),
-        #   ('æ', 'mouth_delta', 0.8125, 0.8999999999999999),
-        #   ('p', '!close_mouth', 0.8999999999999999, 0.9875),
-        #   ('ᵊ', 'mouth_delta', 0.9875, 1.075),
-        #   ('l', 'mouth_iii_index', 1.075, 1.1625),
-        #   ('.', '!close_mouth', 1.1625, 1.25),
+        #   ('ʃ', 'mouth_ooo_index', 0.275, 0.325),
+        #   ('ˈ', '!keep', 0.325, 0.375),
+        #   ('ɛ', 'mouth_eee_index', 0.375, 0.425),
+        #   ('ɹ', 'mouth_aaa_index', 0.425, 0.475),
+        #   ('ə', 'mouth_delta', 0.475, 0.5249999999999999),
+        #   ('n', 'mouth_eee_index', 0.5249999999999999, 0.575),
+        #   ('ˈ', '!keep', 0.575, 0.635),
+        #   ('æ', 'mouth_delta', 0.635, 0.695),
+        #   ('p', '!close_mouth', 0.695, 0.755),
+        #   ('ᵊ', 'mouth_delta', 0.755, 0.815),
+        #   ('l', 'mouth_eee_index', 0.815, 0.875),
         #   ...,
         # }
         #
-        for record in phoneme_stream:
-            logger.info(f"tts_speak_lipsynced.speak: phoneme data: {record}")  # DEBUG
+        # for record in phoneme_stream:
+        #     logger.info(f"tts_speak_lipsynced.speak: phoneme data: {record}")  # DEBUG
 
         # play audio
         logger.info("tts_speak_lipsynced.speak: loading audio into mixer")
