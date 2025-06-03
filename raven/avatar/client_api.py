@@ -338,12 +338,15 @@ def tts_speak(voice: str,
 def tts_speak_lipsynced(voice: str,
                         text: str,
                         speed: float = 1.0,
+                        lipsync_offset: float = -0.4,
                         start_callback: Optional[Callable] = None,
                         stop_callback: Optional[Callable] = None) -> None:
     """Like `tts_speak`, but with lip sync.
 
     Requires the Kokoro-FastAPI TTS backend so that we can get the phoneme data
     and timestamps.
+
+    `lipsync_offset`: seconds. Positive values delay the animation (with respect to the audio).
 
     See:
         https://github.com/remsky/Kokoro-FastAPI
@@ -610,8 +613,8 @@ def tts_speak_lipsynced(voice: str,
             pygame.mixer.music.play()
 
             while pygame.mixer.music.get_busy():
-                # TODO: Lipsync: account for audio playback latency (and allow adjusting an offset, like VLC)
-                t = (time.time_ns() - playback_start_time) / 10**9  # seconds from start of audio
+                # TODO: Lipsync: account for audio playback latency, how?
+                t = (time.time_ns() - playback_start_time) / 10**9 - lipsync_offset  # seconds from start of audio
                 apply_lipsync_at_audio_time(t)  # lipsync
                 time.sleep(0.01)
         finally:

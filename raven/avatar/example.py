@@ -440,11 +440,15 @@ class TalkingheadExampleGUI:
                     self.voice_choice = dpg.add_combo(items=self.voice_names,
                                                       default_value=self.voice_names[0],
                                                       width=self.button_width)
+                    with dpg.group(horizontal=True):
+                        dpg.add_text("Speed")
+                        dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 10))
+                        dpg.add_slider_int(label="x 0.1x", default_value=10, min_value=5, max_value=20, clamped=True, width=self.button_width - 122,
+                                           tag="speak_speed_slider")
                     dpg.add_checkbox(label="Lip sync", default_value=True, tag="speak_lipsync_checkbox")
                     with dpg.group(horizontal=True):
-                        dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 10))
-                        dpg.add_slider_int(label="x 0.1x", default_value=10, min_value=5, max_value=20, clamped=True, width=self.button_width - 80,
-                                           tag="speak_speed_slider")
+                        dpg.add_text("Offset")
+                        dpg.add_slider_int(label="x 0.1 s", default_value=-4, min_value=-10, max_value=10, width=self.button_width - 98, tag="speak_lipsync_offset")
                     dpg.add_input_text(default_value="",
                                        hint="[Enter text to speak]",
                                        width=self.button_width,
@@ -915,6 +919,7 @@ class TalkingheadExampleGUI:
             client_api.tts_speak_lipsynced(voice=selected_voice,
                                            text=text,
                                            speed=dpg.get_value("speak_speed_slider") / 10,
+                                           lipsync_offset=dpg.get_value("speak_lipsync_offset") / 10,
                                            start_callback=None,  # no start callback needed, the TTS client will start lipsyncing once the audio starts.
                                            stop_callback=stop_lipsync_speaking)
         else:
