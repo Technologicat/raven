@@ -341,7 +341,7 @@ def tts_speak_lipsynced(voice: str,
     #   https://github.com/hexgrad/misaki/blob/main/EN_PHONES.md
     #
     # For the animator morph names, see `util.py`
-    dipthong_vowels = {
+    dipthong_vowel_to_ipa = {
         "A": "eɪ",  # The "eh" vowel sound, like hey => hˈA. Expands to eɪ in IPA.
         "I": "aɪ",  # The "eye" vowel sound, like high => hˈI. Expands to aɪ in IPA.
         "W": "aʊ",  # The "ow" vowel sound, like how => hˌW. Expands to aʊ in IPA.
@@ -354,7 +354,7 @@ def tts_speak_lipsynced(voice: str,
     # Stress Marks (2)
     #     ˈ: Primary stress, visually looks similar to an apostrophe.
     #     ˌ: Secondary stress.
-    phoneme_map = {
+    phoneme_to_morph = {
         # IPA Consonants
         "b": "mouth_iii_index",
         "d": "mouth_delta",
@@ -423,8 +423,8 @@ def tts_speak_lipsynced(voice: str,
         yell_on_error(response)
         response_json = response.json()
         phonemes = response_json["phonemes"]
-        for dipthong, expanded in dipthong_vowels.items():
-            phonemes = phonemes.replace(dipthong, expanded)
+        for dipthong, ipa_expansion in dipthong_vowel_to_ipa.items():
+            phonemes = phonemes.replace(dipthong, ipa_expansion)
         phonemess = phonemes.split()  # -> [word0, word1, ...]
         task_env.phonemess = phonemess
         task_env.done = True
@@ -503,8 +503,8 @@ def tts_speak_lipsynced(voice: str,
             phonemes = record["phonemes"]
             for idx, phoneme in enumerate(phonemes):  # mˈaɪnd -> m, ˈ, a, ɪ, n, d
                 t_start, t_end = get_timestamp_for_phoneme(record["start_time"], record["end_time"], phonemes, idx)
-                if phoneme in phoneme_map:
-                    phoneme_stream.append((phoneme, phoneme_map[phoneme], t_start, t_end))
+                if phoneme in phoneme_to_morph:
+                    phoneme_stream.append((phoneme, phoneme_to_morph[phoneme], t_start, t_end))
                 else:
                     phoneme_stream.append((phoneme, "mouth_closed", t_start, t_end))  # not a morph, but a special command
 
