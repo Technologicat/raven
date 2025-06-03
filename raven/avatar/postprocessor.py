@@ -965,7 +965,7 @@ class Postprocessor:
     # --------------------------------------------------------------------------------
     # CRT TV output
 
-    def _rgb_to_hue(rgb: List[float]) -> float:
+    def _rgb_to_hue(self, rgb: List[float]) -> float:
         """Convert an RGB color to an HSL hue, for use as `bandpass_hue` in `desaturate`.
 
         This uses a cartesian-to-polar approximation of the HSL representation,
