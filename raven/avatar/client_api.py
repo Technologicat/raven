@@ -9,7 +9,16 @@ We support:
 This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """
 
-__all__ = ["init_module"]
+__all__ = ["init_module",
+           "classify_labels", "classify",
+           "talkinghead_load", "talkinghead_unload", "talkinghead_reload",
+           "talkinghead_load_emotion_templates", "talkinghead_load_emotion_templates_from_file",
+           "talkinghead_load_animator_settings", "talkinghead_load_animator_settings_from_file",
+           "talkinghead_start_talking", "talkinghead_stop_talking",
+           "talkinghead_set_emotion",
+           "talkinghead_result_feed",
+           "tts_available", "tts_voices",
+           "tts_speak"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
