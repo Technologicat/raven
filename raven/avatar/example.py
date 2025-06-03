@@ -448,7 +448,7 @@ class TalkingheadExampleGUI:
                     dpg.add_checkbox(label="Lip sync", default_value=True, tag="speak_lipsync_checkbox")
                     with dpg.group(horizontal=True):
                         dpg.add_text("Offset")
-                        dpg.add_slider_int(label="x 0.1 s", default_value=-4, min_value=-10, max_value=10, width=self.button_width - 98, tag="speak_lipsync_offset")
+                        dpg.add_slider_int(label="x 0.1 s", default_value=-6, min_value=-10, max_value=10, width=self.button_width - 98, tag="speak_lipsync_offset")
                     dpg.add_input_text(default_value="",
                                        hint="[Enter text to speak]",
                                        width=self.button_width,
