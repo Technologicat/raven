@@ -7,10 +7,6 @@ This app is an editor for the postprocessor settings. To edit the emotion templa
 This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """
 
-# high priority (must have):
-#
-# TODO: implement color picker when a postprocessor parameter's GUI hint is "!RGB"
-#
 # medium priority (will probably do these too):
 #
 # TODO: reposition talkinghead on window resize
@@ -493,19 +489,20 @@ class TalkingheadExampleGUI:
                             ranges = all_filters[filter_name]["ranges"]  # for GUI hints
                             for param_name in defaults:
                                 param_range = ranges[param_name]
+                                default_value = defaults[param_name]
                                 if len(param_range) == 1 and param_range[0].startswith("!"):
                                     gui_hint = param_range[0]
                                     if gui_hint == "!ignore":
                                         continue
                                     elif gui_hint == "!RGB":
-                                        pass  # no need for special processing
+                                        default_value = [int(255 * x) for x in default_value]  # float -> uint8 for DPG color picker
                                     else:
                                         logger.warning(f"reset_filter: '{filter_name}.{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
                                         continue
-                                widget = self.filter_param_to_gui_widget(filter_name, param_name, defaults[param_name])
+                                widget = self.filter_param_to_gui_widget(filter_name, param_name, default_value)
                                 if widget is None:
                                     logger.warning(f"reset_filter: '{filter_name}.{param_name}': unknown parameter type {type(default_value)}, skipping.")
-                                dpg.set_value(widget, defaults[param_name])
+                                dpg.set_value(widget, default_value)
                             self.on_gui_settings_change(None, None)
                         return reset_filter
 
@@ -514,6 +511,8 @@ class TalkingheadExampleGUI:
                         if widget is None:
                             logger.warning(f"make_reset_param_callback: '{filter_name}.{param_name}': Unknown parameter type {type(default_value)}, returning no-op callback.")
                             return lambda: None
+                        if self._iscolor(default_value):
+                            default_value = [int(255 * x) for x in default_value]  # float -> uint8 for DPG color picker
                         def reset_param():
                             logger.info(f"reset_param: resetting '{filter_name}.{param_name}' to default.")
                             dpg.set_value(widget, default_value)
@@ -537,10 +536,13 @@ class TalkingheadExampleGUI:
                                     param_range = param_info["ranges"][param_name]
                                     if len(param_range) == 1 and param_range[0].startswith("!"):  # GUI hint?
                                         gui_hint = param_range[0]
-                                        if gui_hint == "!ignore":
+                                        if gui_hint == "!ignore":  # don't add a GUI for this parameter, ok (e.g. filter name, since in the GUI, we have only one instance of each filter type)
                                             continue
-                                        logger.warning(f"build_postprocessor_gui: {filter_name}.{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
-                                        continue  # TODO: implement color picker when the hint is "!RGB"
+                                        elif gui_hint == "!RGB":  # requested a color picker, ok
+                                            pass
+                                        else:
+                                            logger.warning(f"build_postprocessor_gui: {filter_name}.{param_name}': unrecognized GUI hint '{gui_hint}', ignoring this parameter.")
+                                            continue
 
                                     # Create GUI control depending on parameter's type
                                     if isinstance(default_value, bool):
@@ -569,6 +571,15 @@ class TalkingheadExampleGUI:
                                                           width=self.button_width,
                                                           tag=f"{filter_name}_{param_name}_choice", callback=self.on_gui_settings_change)
                                             dpg.add_text(prettify(param_name))
+                                    elif self._iscolor(default_value):  # RGB or RGBA color
+                                        # no param_range (it was used for the GUI hint)
+                                        with dpg.group(horizontal=True):
+                                            dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            dpg.add_text(prettify(param_name))
+                                        dpg.add_color_picker(default_value=[int(x * 255) for x in default_value],  # float -> uint8 for DPG color picker
+                                                             display_type=dpg.mvColorEdit_uint8, display_hsv=True, no_alpha=True, alpha_bar=False, no_side_preview=True,
+                                                             tag=f"{filter_name}_{param_name}_color_picker", callback=self.on_gui_settings_change)
+
                                     else:
                                         assert False, f"{filter_name}.{param_name}: Unknown parameter type {type(default_value)}"
                         dpg.add_spacer(height=4)
@@ -638,6 +649,10 @@ class TalkingheadExampleGUI:
 
             logger.info("init_live_texture: done!")
 
+    def _iscolor(self, value) -> bool:
+        """Return whether `value` is likely an RGB or RGBA color in float or uint8 format."""
+        return isinstance(value, list) and 3 <= len(value) <= 4 and all(isinstance(x, (float, int)) for x in value)
+
     def filter_param_to_gui_widget(self, filter_name, param_name, example_value):
         """Given a postprocessor filter name, a name for one of its parameters, and an example value for that parameter, return the DPG tag for the corresponding GUI widget.
 
@@ -649,8 +664,10 @@ class TalkingheadExampleGUI:
             return f"{filter_name}_{param_name}_slider"
         elif isinstance(example_value, str):
             return f"{filter_name}_{param_name}_choice"
+        elif self._iscolor(example_value):
+            return f"{filter_name}_{param_name}_color_picker"
+        logger.warning(f"filter_param_to_gui_widget: Unknown value type {type(example_value)}.")
         return None
-        raise ValueError(f"filter_param_to_gui_widget: Unknown value type {type(example_value)}.")
 
     def strip_postprocessor_chain_for_gui(self, postprocessor_chain):
         """Strip to what we can currently set up in the GUI. Fixed render order, with at most one copy of each filter."""
@@ -694,6 +711,8 @@ class TalkingheadExampleGUI:
                 if widget is None:
                     logger.warning(f"populate_gui_from_canonized_postprocessor_chain: Unknown parameter type {type(param_value)}, ignoring this parameter.")
                     continue
+                if self._iscolor(param_value):
+                    param_value = [int(x * 255) for x in param_value]  # float -> uint8 for DPG color picker
                 dpg.set_value(widget, param_value)
 
     def generate_postprocessor_chain_from_gui(self):
@@ -710,7 +729,11 @@ class TalkingheadExampleGUI:
                 if widget is None:
                     logger.warning(f"generate_postprocessor_chain_from_gui: Unknown parameter type {type(defaults[param_name])}, ignoring this parameter.")
                     continue
-                settings[param_name] = dpg.get_value(widget)
+                param_value = dpg.get_value(widget)
+                if self._iscolor(param_value):
+                    param_value = [x / 255.0 for x in param_value]  # uint8 -> float from DPG color picker
+                    param_value = param_value[:3]  # currently the postprocessor settings have RGB colors only (no RGBA)
+                settings[param_name] = param_value
             postprocessor_chain.append((filter_name, settings))
         return postprocessor_chain
 
