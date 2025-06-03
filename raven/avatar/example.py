@@ -794,7 +794,7 @@ class TalkingheadExampleGUI:
             traceback.print_exc()
 
     def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
-        """Load an animator settings JSON file and send the settings to the avatar server."""
+        """Load an animator settings JSON file and send the settings both to the GUI and to the avatar server."""
         try:
             logger.info(f"TalkingheadExampleGUI.load_animator_settings: loading '{filename}'")
             with open(filename, "r", encoding="utf-8") as json_file:
