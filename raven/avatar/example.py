@@ -1133,6 +1133,7 @@ if __name__ == "__main__":
     client_api.talkinghead_load("example.png")  # this will also start the animator if it was paused
 
     def shutdown() -> None:
+        client_api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
         task_manager.clear(wait=True)
         animation.animator.clear()
         global gui_instance

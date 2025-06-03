@@ -18,7 +18,7 @@ __all__ = ["init_module",
            "talkinghead_set_emotion",
            "talkinghead_result_feed",
            "tts_available", "tts_voices",
-           "tts_speak"]
+           "tts_speak", "tts_stop"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -309,3 +309,8 @@ def tts_speak(voice: str,
                 time.sleep(0.01)
             stop_callback()
     config.task_manager.submit(speak, envcls())
+
+def tts_stop():
+    """Stop the speech synthesizer."""
+    logger.info("tts_stop: stopping audio")
+    pygame.mixer.music.stop()
