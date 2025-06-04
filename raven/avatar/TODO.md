@@ -11,6 +11,12 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 ### General
 
+- Reorganize the directory structure
+
+- Rename example.py to something sensible, it is a postproc effect chain editor now
+
+- Rename client_util -> guiutil or dpgutil
+
 - Feature orthogonality
   - Classify should just classify; call `/api/talkinghead/set_emotion` to set the talkinghead emotion
   - `/api/talkinghead/load` should just load a character; should have separate `/api/talkinghead/start` (now called "reload") and `/api/talkinghead/stop` (now called "unload")
@@ -29,14 +35,15 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 - localhost:5100 is serving the wrong README. Fix the directory layout.
 
-- Document the web API endpoints.
+- Update README, document the web API endpoints.
 
 - Polish up the documentation:
-  - Add pictures to Talkinghead README.
+  - Add pictures to README.
     - Screenshot of the pose editor. Anything else we should say about it?
     - Examples of generated poses, highlighting both success and failure cases. How the live talking head looks in the actual SillyTavern GUI. Link the original THA tech reports.
     - Examples of postprocessor filter results.
     - How each postprocessor example config looks when rendering the example character.
+  - Document the postproc chain editor.
   - Update the character-making instructions for SD Forge with Wai v14.0, RemBG extension with isnet-general-use/isnet-anime.
 
 ### Examples
