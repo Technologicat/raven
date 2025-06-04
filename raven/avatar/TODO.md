@@ -12,10 +12,14 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 ### General
 
 - Reorganize the directory structure
+  - Server and pose editor: developed from old Talkinghead, AGPL-licensed
+  - Client and postproc editor: all new code, BSD-licensed
 
 - Rename example.py to something sensible, it is a postproc effect chain editor now
 
 - Rename client_util -> guiutil or dpgutil
+
+- Option to apply postproc before/after upscale? Currently always applied after upscale.
 
 - Feature orthogonality
   - Classify should just classify; call `/api/talkinghead/set_emotion` to set the talkinghead emotion
