@@ -40,7 +40,7 @@ import numpy as np
 
 colorama_init()
 
-# WORKAROUND: Deleting a texture or image widget causes DPG to segfault, but with Nvidia on Linux only.
+# WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
 # https://github.com/hoffstadt/DearPyGui/issues/554
 if platform.system().upper() == "LINUX":
     os.environ["__GLVND_DISALLOW_PATCHING"] = "1"
