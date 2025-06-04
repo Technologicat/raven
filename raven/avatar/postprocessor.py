@@ -1041,17 +1041,35 @@ class Postprocessor:
                                                      desat_temp3)  # [0, 0.5] -> [0, 1]
             # -> [h, w]
 
+            # How to interpret the following factor:
+            #    0: far away from reference hue, pixel should be desaturated
+            #    1: at reference hue, pixel should be kept as-is
+            #
             # - Pixels with their hue at least `bandpass_q` away from `bandpass_hue` are fully desaturated.
             # - As distance falls below `bandpass_q`, a blend starts very gradually.
             # - As the hue difference approaches zero, the pixel is fully passed through.
             # - The 1.0 - ... together with the square makes a sharp spike at the reference hue.
-            desat_diff2 = (1.0 - torch.clamp(desat_hue_distance / bandpass_q, max=1.0))**2
+            desat_diff2 = (1.0 - torch.clamp(desat_hue_distance / bandpass_q, min=0.0, max=1.0))**2
+
+            # Gray pixels should always be desaturated, so that they get the tint applied.
+            # In HSL computations, gray pixels have an arbitrary hue, usually red, so we must filter them out separately.
+            # We can do this in YUV space.
+            YUV = rgb_to_yuv(image[:3, :, :])
+            Y = YUV[0, :, :]  # -> [h, w]
+            U = YUV[1, :, :]  # -> [h, w]
+            V = YUV[2, :, :]  # -> [h, w]
+            notgray_threshold = 0.05
+            urel = torch.clamp(torch.abs(U) / notgray_threshold, min=0.0, max=1.0)
+            vrel = torch.clamp(torch.abs(V) / notgray_threshold, min=0.0, max=1.0)
+            notgray = (urel**2 + vrel**2)**0.5  # [h, w]; 0: completely gray; 1: has at least some color
+            desat_diff2 *= notgray
+
             strength_field = strength * (1.0 - desat_diff2)  # [h, w]; "field" as in physics, NOT as in CRT TV
         else:
+            Y = luminance(image[:3, :, :])  # save some compute since in this case we don't need U and V
             strength_field = strength  # just a scalar!
 
         # Desaturate, then apply tint
-        Y = luminance(image[:3, :, :])  # -> [h, w]
         Y = Y.unsqueeze(0)  # -> [1, h, w]
         tint_color = torch.tensor(tint_rgb, device=self.device, dtype=image.dtype).unsqueeze(1).unsqueeze(2)  # [c, 1, 1]
         tinted_desat_image = Y * tint_color  # -> [c, h, w]
