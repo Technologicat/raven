@@ -577,7 +577,7 @@ class TalkingheadExampleGUI:
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
                                             dpg.add_text(prettify(param_name))
                                         dpg.add_color_picker(default_value=[int(x * 255) for x in default_value],  # float -> uint8 for DPG color picker
-                                                             display_type=dpg.mvColorEdit_uint8, display_hsv=True, no_alpha=True, alpha_bar=False, no_side_preview=True,
+                                                             display_type=dpg.mvColorEdit_uint8, no_alpha=True, alpha_bar=False, no_side_preview=True,
                                                              tag=f"{filter_name}_{param_name}_color_picker", callback=self.on_gui_settings_change)
 
                                     else:
