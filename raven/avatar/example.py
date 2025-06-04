@@ -14,8 +14,6 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 # TODO: robustness: don't crash if the server suddenly goes down
 # TODO: support loading a background image (aligned to bottom left?)
 
-# TODO: pose editor button width, fit them into GUI
-
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
