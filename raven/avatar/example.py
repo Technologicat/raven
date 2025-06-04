@@ -10,7 +10,6 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 # nice to have (maybe later):
 #
 # TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming - or for a cheap solution, just distort in torch.)
-# TODO: editor for main animator config too (target FPS, talking speed, ...)
 # TODO: robustness: don't crash if the server suddenly goes down
 # TODO: support loading a background image (aligned to bottom left?)
 
@@ -391,15 +390,60 @@ class TalkingheadExampleGUI:
                 dpg.set_frame_callback(10, position_please_standby_text)
 
                 with dpg.child_window(width=self.button_width + 16, autosize_y=True):
-                    dpg.add_text("Load / save")
+                    dpg.add_button(label="Fullscreen/windowed [F11]", width=self.button_width, callback=toggle_fullscreen, tag="fullscreen_button")
+                    dpg.add_spacer(height=8)
+
+                    dpg.add_text("Load")
                     dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_image_dialog, tag="open_image_button")
                     dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
                     dpg.add_text("[Use raven.avatar.editor to edit templates.]", color=(140, 140, 140))
-                    dpg.add_spacer(height=4)
-                    dpg.add_button(label="Load animator settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
-                    dpg.add_button(label="Save animator settings [Ctrl+Shift+S]", width=self.button_width, callback=show_save_animator_settings_dialog, tag="save_animator_settings_button")
                     dpg.add_spacer(height=8)
 
+                    # Main animator settings
+                    dpg.add_text("Animator [Ctrl+click to set a numeric value]")
+                    with dpg.group(horizontal=True):
+                        def reset_target_fps():
+                            dpg.set_value("target_fps_slider", 25)
+                            self.on_gui_settings_change(None, None)
+                        dpg.add_button(label="X", tag="target_fps_reset_button", callback=reset_target_fps)
+                        dpg.add_slider_int(label="FPS", default_value=25, min_value=10, max_value=60, clamped=True, width=self.button_width - 80,
+                                           callback=self.on_gui_settings_change, tag="target_fps_slider")
+                    with dpg.group(horizontal=True):
+                        def reset_pose_interpolator_step():
+                            dpg.set_value("pose_interpolator_step_slider", 3)
+                            self.on_gui_settings_change(None, None)
+                        dpg.add_button(label="X", tag="pose_interpolator_step_reset_button", callback=reset_pose_interpolator_step)
+                        dpg.add_slider_int(label="Speed", default_value=3, min_value=1, max_value=9, clamped=True, width=self.button_width - 80,
+                                           callback=self.on_gui_settings_change, tag="pose_interpolator_step_slider")
+                    dpg.add_button(label="Pause [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
+                    dpg.add_button(label="Load settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
+                    dpg.add_button(label="Save settings [Ctrl+Shift+S]", width=self.button_width, callback=show_save_animator_settings_dialog, tag="save_animator_settings_button")
+                    dpg.add_spacer(height=8)
+
+                    # Upscaler settings
+                    dpg.add_text("Upscaler [Ctrl+click to set a numeric value]")
+                    dpg.add_slider_int(label="x 0.1x", default_value=int(10 * self.upscale), min_value=10, max_value=20, clamped=True, width=self.button_width - 64,
+                                       callback=self.on_upscaler_settings_change, tag="upscale_slider")
+                    self.upscale_presets = ["A", "B", "C"]
+                    with dpg.group(horizontal=True):
+                        dpg.add_combo(items=self.upscale_presets,
+                                      default_value=self.upscale_preset,
+                                      width=self.button_width - 64,
+                                      callback=self.on_upscaler_settings_change,
+                                      tag="upscale_preset_choice")
+                        dpg.add_text("Preset")
+                    with dpg.group(horizontal=True):
+                        self.upscale_qualities = ["low", "high"]
+                        dpg.add_combo(items=self.upscale_qualities,
+                                      default_value=self.upscale_quality,
+                                      width=self.button_width - 64,
+                                      callback=self.on_upscaler_settings_change,
+                                      tag="upscale_quality_choice")
+                        dpg.add_text("Quality")
+                    dpg.add_text("[Presets as in Anime4K.]", color=(140, 140, 140))
+                    dpg.add_spacer(height=8)
+
+                    # Interactive demo controls
                     dpg.add_text("Emotion [Ctrl+E]")
                     self.emotion_names = client_api.classify_labels()
                     if "neutral" in self.emotion_names:
@@ -412,10 +456,15 @@ class TalkingheadExampleGUI:
                     self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
                     dpg.add_spacer(height=8)
 
-                    dpg.add_text("Toggles")
+                    dpg.add_text("Talking (generic, non-lipsync)")
                     dpg.add_button(label="Start talking animation [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
-                    dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
-                    dpg.add_button(label="Fullscreen/windowed [F11]", width=self.button_width, callback=toggle_fullscreen, tag="fullscreen_button")
+                    with dpg.group(horizontal=True):
+                        def reset_talking_fps():
+                            dpg.set_value("talking_fps_slider", 12)
+                            self.on_gui_settings_change(None, None)
+                        dpg.add_button(label="X", tag="talking_fps_reset_button", callback=reset_talking_fps)
+                        dpg.add_slider_int(label="Talk FPS", default_value=12, min_value=6, max_value=24, clamped=True, width=self.button_width - 86,
+                                           callback=self.on_gui_settings_change, tag="talking_fps_slider")
                     dpg.add_spacer(height=8)
 
                     # AI speech synthesizer
@@ -439,39 +488,16 @@ class TalkingheadExampleGUI:
                         dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 10))
                         dpg.add_slider_int(label="x 0.1x", default_value=10, min_value=5, max_value=20, clamped=True, width=self.button_width - 122,
                                            tag="speak_speed_slider")
-                    dpg.add_checkbox(label="Lip sync", default_value=True, tag="speak_lipsync_checkbox")
-                    with dpg.group(horizontal=True):
-                        dpg.add_text("Offset")
-                        dpg.add_slider_int(label="x 0.1 s", default_value=-8, min_value=-20, max_value=20, width=self.button_width - 98, tag="speak_video_offset")
+                    dpg.add_spacer(height=4)
+                    dpg.add_checkbox(label="Lip sync [adjust video timing below]", default_value=True, tag="speak_lipsync_checkbox")
+                    dpg.add_slider_int(label="x 0.1 s", default_value=-8, min_value=-20, max_value=20, clamped=True, width=self.button_width - 64, tag="speak_video_offset")
+                    dpg.add_spacer(height=4)
                     dpg.add_input_text(default_value="",
                                        hint="[Enter text to speak]",
                                        width=self.button_width,
                                        tag="speak_input_text")
                     dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_start_speaking, enabled=tts_alive, tag="speak_button")
                     dpg.bind_item_theme("speak_button", "disablable_button_theme")
-                    dpg.add_spacer(height=8)
-
-                    # Upscaler settings editor
-                    dpg.add_text("Upscaler [Ctrl+click to set a numeric value]")
-                    dpg.add_slider_int(label="x 0.1x", default_value=int(10 * self.upscale), min_value=10, max_value=20, clamped=True, width=self.button_width - 64,
-                                       callback=self.on_upscaler_settings_change, tag="upscale_slider")
-                    self.upscale_presets = ["A", "B", "C"]
-                    with dpg.group(horizontal=True):
-                        dpg.add_combo(items=self.upscale_presets,
-                                      default_value=self.upscale_preset,
-                                      width=self.button_width - 64,
-                                      callback=self.on_upscaler_settings_change,
-                                      tag="upscale_preset_choice")
-                        dpg.add_text("Preset")
-                    with dpg.group(horizontal=True):
-                        self.upscale_qualities = ["low", "high"]
-                        dpg.add_combo(items=self.upscale_qualities,
-                                      default_value=self.upscale_quality,
-                                      width=self.button_width - 64,
-                                      callback=self.on_upscaler_settings_change,
-                                      tag="upscale_quality_choice")
-                        dpg.add_text("Quality")
-                    dpg.add_text("[Presets as in Anime4K.]", color=(140, 140, 140))
                     dpg.add_spacer(height=8)
 
                 # Postprocessor settings editor
@@ -803,7 +829,7 @@ class TalkingheadExampleGUI:
         self.on_gui_settings_change(sender, app_data)
 
     def on_gui_settings_change(self, sender, app_data):
-        """Send new animator settings to the avatar server whenever a value changes in the GUI.
+        """Send new animator/upscaler/postprocessor settings to the avatar server whenever a value changes in the GUI.
 
         A settings file must have been loaded before calling this.
         """
@@ -823,7 +849,9 @@ class TalkingheadExampleGUI:
 
             # Upscaler settings, plus anything tracked by `TalkingheadExampleGUI`
             custom_animator_settings = {"format": self.comm_format,
-                                        "target_fps": self.target_fps,
+                                        "target_fps": dpg.get_value("target_fps_slider"),
+                                        "talking_fps": dpg.get_value("talking_fps_slider"),
+                                        "pose_interpolator_step": dpg.get_value("pose_interpolator_step_slider") / 10,
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
                                         "upscale_quality": self.upscale_quality}
@@ -848,6 +876,13 @@ class TalkingheadExampleGUI:
             self.populate_gui_from_canonized_postprocessor_chain(ppc)
             animator_settings["postprocessor_chain"] = ppc
 
+            if "target_fps" in animator_settings:
+                dpg.set_value("target_fps_slider", animator_settings["target_fps"])
+            if "talking_fps" in animator_settings:
+                dpg.set_value("talking_fps_slider", animator_settings["talking_fps"])
+            if "pose_interpolator_step" in animator_settings:
+                dpg.set_value("pose_interpolator_step_slider", int(animator_settings["pose_interpolator_step"] * 10))
+
             if "upscale" in animator_settings:
                 self.upscale = animator_settings["upscale"]
                 dpg.set_value("upscale_slider", int(self.upscale * 10))
@@ -862,7 +897,9 @@ class TalkingheadExampleGUI:
             # They're not mandatory (any missing keys are always auto-populated from server defaults),
             # but they're something `TalkingheadExampleGUI` tracks, so we should sync our state to the server.
             custom_animator_settings = {"format": self.comm_format,
-                                        "target_fps": self.target_fps,
+                                        "target_fps": dpg.get_value("target_fps_slider"),
+                                        "talking_fps": dpg.get_value("talking_fps_slider"),
+                                        "pose_interpolator_step": dpg.get_value("pose_interpolator_step_slider") / 10,
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
                                         "upscale_quality": self.upscale_quality}
@@ -924,12 +961,12 @@ class TalkingheadExampleGUI:
             dpg.set_value("please_standby_text", "[Animator is paused]")
             dpg.show_item("please_standby_text")
             dpg.hide_item(f"live_image_{self.texture_id_counter}")
-            dpg.set_item_label("pause_resume_button", "Resume animator [Ctrl+P]")
+            dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")
         else:
             client_api.talkinghead_reload()
             dpg.hide_item("please_standby_text")
             dpg.show_item(f"live_image_{self.texture_id_counter}")
-            dpg.set_item_label("pause_resume_button", "Pause animator [Ctrl+P]")
+            dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")
         self.animator_running = not self.animator_running
 
     def on_stop_speaking(self, sender, app_data) -> None:
