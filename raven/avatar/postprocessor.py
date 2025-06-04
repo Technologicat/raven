@@ -328,8 +328,6 @@ class Postprocessor:
                 self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
                 self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
                 self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
-            self._prev_h = h
-            self._prev_w = w
             logger.info("render_into: Pixel position tensors cached")
 
         # Update the frame counter.
@@ -391,6 +389,10 @@ class Postprocessor:
             for filter_name, settings in chain:
                 apply_filter = getattr(self, filter_name)
                 apply_filter(image, **settings)
+
+        # Remember last seen video stream size (for caches that store grids/images)
+        self._prev_h = h
+        self._prev_w = w
 
     # --------------------------------------------------------------------------------
     # Physical input signal
@@ -599,8 +601,10 @@ class Postprocessor:
             Scifi hologram:   strength=0.1, sigma=0.0
             Analog VHS tape:  strength=0.2, sigma=2.0
         """
-        # Re-randomize the noise texture whenever the normalized frame number changes
-        if self.noise_last_image[name] is None or int(self.frame_no) > int(self.last_frame_no):
+        # Re-randomize the noise texture whenever the normalized frame number changes, or the video stream size changes.
+        c, h, w = image.shape
+        size_changed = (h != self._prev_h or w != self._prev_w)
+        if self.noise_last_image[name] is None or size_changed or int(self.frame_no) > int(self.last_frame_no):
             c, h, w = image.shape
             noise_image = torch.rand(h, w, device=self.device, dtype=image.dtype)
             if sigma > 0.0:
@@ -813,8 +817,10 @@ class Postprocessor:
                 If you have more than one `analog_vhsglitches` in the chain, they should have
                 different names so that each one gets its own cache.
         """
-        # Re-randomize the glitch noise image whenever enough frames have elapsed after last randomization
-        if self.vhs_glitch_last_image[name] is None or (int(self.frame_no) - int(self.vhs_glitch_last_frame_no[name])) >= self.vhs_glitch_interval[name]:
+        # Re-randomize the glitch noise image whenever enough frames have elapsed after last randomization, or the video stream size changes.
+        c, h, w = image.shape
+        size_changed = (h != self._prev_h or w != self._prev_w)
+        if self.vhs_glitch_last_image[name] is None or size_changed or (int(self.frame_no) - int(self.vhs_glitch_last_frame_no[name])) >= self.vhs_glitch_interval[name]:
             n_glitches = torch.rand(1, device="cpu")**unboost  # unboost: increase probability of having none or few glitching lines
             n_glitches = int(max_glitches * n_glitches[0])
             if not n_glitches:
@@ -934,8 +940,10 @@ class Postprocessor:
                 If you have more than one `digital_glitches` in the chain, they should have
                 different names so that each one gets its own cache.
         """
-        # Re-randomize the glitch pattern whenever enough frames have elapsed after last randomization
-        if self.digital_glitches_grid[name] is None or (int(self.frame_no) - int(self.digital_glitches_last_frame_no[name])) >= self.digital_glitches_interval[name]:
+        # Re-randomize the glitch pattern whenever enough frames have elapsed after last randomization, or the video stream size changes.
+        c, h, w = image.shape
+        size_changed = (h != self._prev_h or w != self._prev_w)
+        if self.digital_glitches_grid[name] is None or size_changed or (int(self.frame_no) - int(self.digital_glitches_last_frame_no[name])) >= self.digital_glitches_interval[name]:
             n_glitches = torch.rand(1, device="cpu")**unboost  # unboost: increase probability of having none or few glitching lines
             n_glitches = int(max_glitches * n_glitches[0])
             meshy = self._meshy
