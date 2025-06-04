@@ -1112,19 +1112,23 @@ class Postprocessor:
 
     @with_metadata(field=[0, 1],
                    dynamic=[False, True],
+                   double_size=[False, True],
                    channel=["Y", "A"],
                    strength=[0.1, 0.9],
                    _priority=13.0)
     def scanlines(self, image: torch.tensor, *,
                   field: int = 0,
                   dynamic: bool = True,
+                  double_size: bool = True,
                   channel: str = "Y",
-                  strength: float = 0.5) -> None:
+                  strength: float = 0.1) -> None:
         """[dynamic] CRT TV like scanlines.
 
         `field`: Which CRT field is dimmed at the first frame. 0 = top, 1 = bottom.
         `dynamic`: If `True`, the dimmed field will alternate each frame (top, bottom, top, bottom, ...)
                    for a more authentic CRT look (like Phosphor deinterlacer in VLC).
+        `double_size`: If `True`, each "scanline" consists of two actual lines.
+                       Useful to obtain a lofi look on a high-resolution monitor.
         `channel`: One of:
                      "Y": darken the luminance (converts to YUV and back; slower)
                      "A": darken the alpha channel (fast; makes the darkened lines translucent)
@@ -1138,9 +1142,17 @@ class Postprocessor:
             start = field
         dim = 1.0 - strength
         if channel == "A":  # alpha
-            image[3, start::2, :].mul_(dim)
+            if double_size:
+                image[3, start::4, :].mul_(dim)
+                image[3, start + 1::4, :].mul_(dim)
+            else:
+                image[3, start::2, :].mul_(dim)
         else:  # "Y", luminance
             image_yuv = rgb_to_yuv(image[:3, :, :])
-            image_yuv[0, start::2, :].mul_(dim)
+            if double_size:
+                image_yuv[0, start::4, :].mul_(dim)
+                image_yuv[0, start + 1::4, :].mul_(dim)
+            else:
+                image_yuv[0, start::2, :].mul_(dim)
             image_rgb = yuv_to_rgb(image_yuv)
             image[:3, :, :] = image_rgb
