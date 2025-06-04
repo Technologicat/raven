@@ -20,6 +20,7 @@ import numpy as np
 import torch
 import torchvision
 
+from .upscaler import Upscaler
 from .util import luminance, rgb_to_yuv, yuv_to_rgb
 
 logging.basicConfig(level=logging.INFO)
@@ -258,6 +259,7 @@ class Postprocessor:
         self.last_frame_no = -1
 
         # Caches for individual dynamic effects
+        self.zoom_data = defaultdict(lambda: None)
         self.noise_last_image = defaultdict(lambda: None)
         self.vhs_glitch_interval = defaultdict(lambda: 0.0)
         self.vhs_glitch_last_frame_no = defaultdict(lambda: 0.0)
@@ -396,6 +398,98 @@ class Postprocessor:
 
     # --------------------------------------------------------------------------------
     # Physical input signal
+
+    @with_metadata(center_x=[-1.0, 1.0],
+                   center_y=[-1.0, 1.0],
+                   factor=[1.0, 4.0],
+                   quality=["low", "high", "ultra"],
+                   name=["!ignore"],
+                   _priority=-1.0)
+    def zoom(self, image: torch.tensor, *,
+             center_x: float = 0.0,
+             center_y: float = -0.867,
+             factor: float = 2.0,
+             quality: str = "low",
+             name: str = "zoom0"):
+        """[dynamic] Simulated optical zoom for anime video.
+
+        The default settings zoom to the head/shoulders of most characters.
+
+        `center_x`: Center position of zoom on x axis, where image is [-1, 1].
+        `center_y`: Center position of zoom on y axis, where image is [-1, 1],
+                    negative upward.
+        `factor`: Zoom by this much. Values larger than 1.0 zoom in.
+                  At exactly 1.0, the zoom filter is disabled.
+        `quality`: One of:
+                   "low": geometric distortion with bilinear interpolation (fast)
+                   "high": crop, then low-quality Anime4K upscale (fast-ish)
+                   "ultra": crop, then high-quality Anime4K upscale
+
+        How much quality you need depends on what other filters are enabled,
+        how large `factor` is, and how large the final size of the avatar is.
+        If you upscale the avatar by 2x, without much other postprocessing
+        than this zoom filter, and zoom in by `factor=4.0`, then the "ultra"
+        quality may be necessary, and might still not look good. But if you
+        use lots of other filters, and limit to at most `factor=2.0`, then
+        even "low" might look acceptable.
+
+        Dynamic only to save compute; we cache the distortion mesh and upscaler.
+        """
+        if factor == 1.0:
+            return
+
+        # Recompute mesh when the filter settings change, or the video stream size changes.
+        do_setup = True
+        c, h, w = image.shape
+        size_changed = (h != self._prev_h or w != self._prev_w)
+        if not size_changed and name in self.zoom_data:
+            if (factor == self.zoom_data[name]["factor"] and
+                    center_x == self.zoom_data[name]["center_x"] and
+                    center_y == self.zoom_data[name]["center_y"] and
+                    quality == self.zoom_data[name]["quality"]):
+                do_setup = False
+                grid = self.zoom_data[name]["grid"]
+                upscaler = self.zoom_data[name]["upscaler"]
+        if do_setup:
+            meshx = center_x + (self._meshx - center_x) / factor  # x coordinate, [h, w]
+            meshy = center_y + (self._meshy - center_y) / factor  # y coordinate, [h, w]
+            grid = torch.stack((meshx, meshy), 2)  # [h, w, x/y]
+            grid = grid.unsqueeze(0)  # batch of one
+            if quality in ("high", "ultra"):  # need an Anime4K?
+                old_upscaler = self.zoom_data[name]["upscaler"] if name in self.zoom_data else None
+                old_quality = self.zoom_data[name]["quality"] if name in self.zoom_data else None
+                if size_changed or old_upscaler is None or quality != old_quality:
+                    upscaler_quality = "high" if quality == "ultra" else "low"
+                    upscaler = Upscaler(device=self.device, dtype=self.dtype,
+                                        upscaled_width=w, upscaled_height=h,
+                                        preset="C", quality=upscaler_quality)
+                else:
+                    upscaler = old_upscaler  # only factor/center changed - save some compute by recycling the existing upscaler.
+            else:
+                upscaler = None
+            self.zoom_data[name] = {"center_x": center_x,
+                                    "center_y": center_y,
+                                    "factor": factor,
+                                    "quality": quality,
+                                    "grid": grid,
+                                    "upscaler": upscaler}
+
+        if quality == "low":  # geometric distortion
+            image_batch = image.unsqueeze(0)  # batch of one -> [1, c, h, w]
+            warped = torch.nn.functional.grid_sample(image_batch, grid, mode="bilinear", padding_mode="border", align_corners=False)
+            warped = warped.squeeze(0)  # [1, c, h, w] -> [c, h, w]
+            image[:, :, :] = warped
+        else:  # "high" or "ultra" - crop, then Anime4K upscale
+            g = grid.squeeze(0)
+            top_left_xy = g[0, 0]
+            bottom_right_xy = g[-1, -1]
+            x0 = int((top_left_xy[0] + 1.0) / 2 * w)
+            y0 = int((top_left_xy[1] + 1.0) / 2 * h)
+            x1 = int((bottom_right_xy[0] + 1.0) / 2 * w)
+            y1 = int((bottom_right_xy[1] + 1.0) / 2 * h)
+            # print(x0, y0, x1, y1)  # DEBUG
+            cropped = torchvision.transforms.functional.crop(image, top=y0, left=x0, height=(y1 - y0), width=(x1 - x0))
+            image[:, :, :] = upscaler.upscale(cropped)
 
     # Defaults chosen so that they look good for a handful of characters rendered in SD Forge, with the Wai 14.0 Illustrious-SDXL checkpoint.
     @with_metadata(threshold=[0.0, 1.0],
