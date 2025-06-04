@@ -9,7 +9,6 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 
 # nice to have (maybe later):
 #
-# TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming - or for a cheap solution, just distort in torch.)
 # TODO: robustness: don't crash if the server suddenly goes down
 # TODO: support loading a background image (aligned to bottom left?)
 
