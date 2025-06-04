@@ -7,17 +7,14 @@ This app is an editor for the postprocessor settings. To edit the emotion templa
 This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
 """
 
-# medium priority (will probably do these too):
-#
-# TODO: reposition talkinghead on window resize
-# TODO: viewport size on window resize, e.g. maximize, then restore -> wrong size
-#
 # nice to have (maybe later):
 #
 # TODO: zooming (add a zoom filter on the server - before postproc? Should be able to use crop + Anime4K for zooming - or for a cheap solution, just distort in torch.)
 # TODO: editor for main animator config too (target FPS, talking speed, ...)
 # TODO: robustness: don't crash if the server suddenly goes down
 # TODO: support loading a background image (aligned to bottom left?)
+
+# TODO: pose editor button width, fit them into GUI
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -363,7 +360,9 @@ class TalkingheadExampleGUI:
 
         self.upscale_change_lock = threading.Lock()
         self.texture_id_counter = 0  # For creating unique DPG IDs when the size changes on the fly, since the delete might not take immediately.
-        self.last_image_rgba = None
+        self.last_image_rgba = None  # For rescaling last received frame on upscaler size change before we get new data
+        self.live_texture = None
+        self.live_image_widget = None
 
         self.talking_animation_running = False  # simple mouth randomizing animation
         self.speaking = False  # TTS
@@ -418,6 +417,7 @@ class TalkingheadExampleGUI:
                     dpg.add_text("Toggles")
                     dpg.add_button(label="Start talking animation [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
                     dpg.add_button(label="Pause animator [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
+                    dpg.add_button(label="Fullscreen/windowed [F11]", width=self.button_width, callback=toggle_fullscreen, tag="fullscreen_button")
                     dpg.add_spacer(height=8)
 
                     # AI speech synthesizer
@@ -577,6 +577,7 @@ class TalkingheadExampleGUI:
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
                                             dpg.add_text(prettify(param_name))
                                         dpg.add_color_picker(default_value=[int(x * 255) for x in default_value],  # float -> uint8 for DPG color picker
+                                                             width=self.button_width + 54,
                                                              display_type=dpg.mvColorEdit_uint8, no_alpha=True, alpha_bar=False, no_side_preview=True,
                                                              tag=f"{filter_name}_{param_name}_color_picker", callback=self.on_gui_settings_change)
 
@@ -624,12 +625,17 @@ class TalkingheadExampleGUI:
             self.texture_id_counter += 1  # now the new texture exists so it's safe to write to (in the background thread)
             self.image_size = new_image_size
 
+            first_time = (self.live_image_widget is None)
             logger.info(f"init_live_texture: Creating new GUI item live_image_{new_texture_id}")
-            dpg.add_image(f"live_texture_{new_texture_id}", pos=(512 - new_image_size // 2, viewport_height - new_image_size - 8),
-                          show=self.animator_running,  # if paused, leave it hidden
-                          tag=f"live_image_{new_texture_id}",
-                          parent="live_texture_group",
-                          before="fps_text")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
+            self.live_image_widget = dpg.add_image(f"live_texture_{new_texture_id}",
+                                                   show=self.animator_running,  # if paused, leave it hidden
+                                                   tag=f"live_image_{new_texture_id}",
+                                                   parent="live_texture_group",
+                                                   before="fps_text")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
+            if first_time:  # first frame; window size not initialized yet, so we can't rely on `self._resize_gui`
+                dpg.set_item_pos(self.live_image_widget, (512 - self.image_size // 2, viewport_height - self.image_size - 8))
+            else:
+                self._resize_gui()
 
             try:
                 dpg.hide_item(f"live_image_{old_texture_id}")
@@ -648,6 +654,15 @@ class TalkingheadExampleGUI:
             maybe_delete_item(f"live_texture_{old_texture_id}")
 
             logger.info("init_live_texture: done!")
+
+    def _resize_gui(self):
+        """Window resize handler."""
+        try:
+            w, h = raven_utils.get_widget_size(self.window)
+            if self.live_image_widget is not None:
+                dpg.set_item_pos(self.live_image_widget, (512 - self.image_size // 2, h - self.image_size - 8))
+        except SystemError:  # main window or live image widget does not exist
+            pass
 
     def _iscolor(self, value) -> bool:
         """Return whether `value` is likely an RGB or RGBA color in float or uint8 format."""
@@ -960,6 +975,28 @@ class TalkingheadExampleGUI:
                                  start_callback=start_nonlipsync_speaking,
                                  stop_callback=stop_nonlipsync_speaking)
 
+def toggle_fullscreen():
+    dpg.toggle_viewport_fullscreen()
+    resize_gui()  # see below
+
+def resize_gui():
+    """Wait for the viewport size to actually change, then resize dynamically sized GUI elements.
+
+    This is handy for toggling fullscreen, because the size changes at the next frame at the earliest.
+    For the viewport resize callback, that one fires (*almost* always?) after the size has already changed.
+    """
+    logger.debug("resize_gui: Entered. Waiting for viewport size change.")
+    if raven_utils.wait_for_resize(gui_instance.window):
+        _resize_gui()
+    logger.debug("resize_gui: Done.")
+
+def _resize_gui():
+    if gui_instance is None:
+        return
+    gui_instance._resize_gui()
+
+dpg.set_viewport_resize_callback(_resize_gui)
+
 # Hotkey support
 choice_map = None
 def talkinghead_example_hotkeys_callback(sender, app_data):
@@ -1004,31 +1041,34 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
     #
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
     else:
-        # {widget_tag_or_id: list_of_choices}
-        global choice_map
-        if choice_map is None:  # build on first use
-            choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
-                          gui_instance.voice_choice: (gui_instance.voice_names, None)}
-        def browse(choice_widget, data):
-            choices, callback = data
-            index = choices.index(dpg.get_value(choice_widget))
-            if key == dpg.mvKey_Down:
-                new_index = min(index + 1, len(choices) - 1)
-            elif key == dpg.mvKey_Up:
-                new_index = max(index - 1, 0)
-            elif key == dpg.mvKey_Home:
-                new_index = 0
-            elif key == dpg.mvKey_End:
-                new_index = len(choices) - 1
-            else:
-                new_index = None
-            if new_index is not None:
-                dpg.set_value(choice_widget, choices[new_index])
-                if callback is not None:
-                    callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
-        focused_item = dpg.get_focused_item()
-        if focused_item in choice_map.keys():
-            browse(focused_item, choice_map[focused_item])
+        if key == dpg.mvKey_F11:
+            toggle_fullscreen()
+        else:
+            # {widget_tag_or_id: list_of_choices}
+            global choice_map
+            if choice_map is None:  # build on first use
+                choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
+                              gui_instance.voice_choice: (gui_instance.voice_names, None)}
+            def browse(choice_widget, data):
+                choices, callback = data
+                index = choices.index(dpg.get_value(choice_widget))
+                if key == dpg.mvKey_Down:
+                    new_index = min(index + 1, len(choices) - 1)
+                elif key == dpg.mvKey_Up:
+                    new_index = max(index - 1, 0)
+                elif key == dpg.mvKey_Home:
+                    new_index = 0
+                elif key == dpg.mvKey_End:
+                    new_index = len(choices) - 1
+                else:
+                    new_index = None
+                if new_index is not None:
+                    dpg.set_value(choice_widget, choices[new_index])
+                    if callback is not None:
+                        callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
+            focused_item = dpg.get_focused_item()
+            if focused_item in choice_map.keys():
+                browse(focused_item, choice_map[focused_item])
 with dpg.handler_registry(tag="talkinghead_example_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="talkinghead_example_hotkeys_handler", callback=talkinghead_example_hotkeys_callback)
 
