@@ -3,7 +3,7 @@
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["modal_dialog", "recenter_window"]
+__all__ = ["modal_dialog", "recenter_window", "maybe_delete_item"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -141,3 +141,11 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
     dpg.set_item_pos(thewindow,
                      (max(0, (main_window_w - w) // 2),
                       max(0, (main_window_h - h) // 2)))
+
+def maybe_delete_item(item):
+    """Delete `item` (DPG ID or tag), if it exists. If not, the error is ignored."""
+    logger.info(f"maybe_delete_item: deleting old GUI item {item}")
+    try:
+        dpg.delete_item(item)
+    except SystemError:  # does not exist
+        pass
