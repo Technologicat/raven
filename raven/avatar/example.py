@@ -128,7 +128,7 @@ with dpg.theme(tag="disablable_button_theme"):
 
 viewport_width = 1900
 viewport_height = 980
-dpg.create_viewport(title="Talkinghead",
+dpg.create_viewport(title="Talkinghead settings editor",
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()
@@ -419,10 +419,10 @@ class PostprocessorSettingsEditorGUI:
         self.animator_settings = None  # not loaded yet
 
         dpg.add_texture_registry(tag="talkinghead_example_textures")  # the DPG live texture and the window backdrop texture will be stored here
-        dpg.set_viewport_title(f"Talkinghead [{avatar_url}]")
+        dpg.set_viewport_title(f"Talkinghead settings editor [{avatar_url}]")
 
         with dpg.window(tag="talkinghead_main_window",
-                        label="Talkinghead main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
+                        label="Talkinghead settings editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 # We can use a borderless child window as a fixed-size canvas that crops anything outside it (instead of automatically showing a scrollbar).
                 # DPG adds its theme's margins, which in our case is 8 pixels of padding per side, hence the -16 to exactly cover the viewport's actually available height.
