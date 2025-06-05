@@ -17,10 +17,6 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
   - Add license note:
       All parts where I'm the only author have been relicensed under 2-clause BSD. Only the server and pose editor folders, which each contain a separate app, are licensed under AGPL. The upscaler is licensed under MIT, matching the license of the Anime4K engine it uses.
 
-- Feature orthogonality
-  - Classify should just classify; call `/api/talkinghead/set_emotion` to set the talkinghead emotion
-  - `/api/talkinghead/load` should just load a character; should have separate `/api/talkinghead/start` (now called "reload") and `/api/talkinghead/stop` (now called "unload")
-
 - Is it possible to discard the server's output stream (flushing away the remaining frames waiting for send) when the animator is paused?
 
 - Later: split into a separate repo and think about branding.
