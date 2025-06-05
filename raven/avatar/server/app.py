@@ -168,7 +168,7 @@ def _websearch_impl():
 
     return websearch.search(query, engine=engine, max_links=max_links)
 
-# ST-compatible websearch endpoint
+# legacy ST-compatible websearch endpoint
 @app.route("/api/websearch", methods=["POST"])
 def api_websearch():
     """Perform a web search with the query posted in the request.
@@ -210,6 +210,9 @@ def api_websearch2():
 
       - "engine": valid values are "duckduckgo" (default) and "google".
       - "max_links": default 10.
+
+    The "max_links" field is a hint; the search engine may return more
+    results, especially if you set it to a small value (e.g. 3).
 
     Output is also JSON:
 

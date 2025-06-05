@@ -4,12 +4,13 @@ This talks with the server so you can just call regular Python functions.
 
 For documentation, see the server side in `raven.avatar.server.app`.
 
-We support these modules served by `raven.avatar.server.app`:
+We support all modules served by `raven.avatar.server.app`:
 
   - classify
   - embeddings (to enable this module, start the server with the "--embeddings" command-line option)
   - talkinghead
   - TTS with and without lip-syncing the talkinghead, via https://github.com/remsky/Kokoro-FastAPI
+  - websearch
 
 This module is licensed under the 2-clause BSD license.
 """
@@ -40,7 +41,7 @@ import re
 import requests
 import time
 import traceback
-from typing import Callable, Dict, Generator, List, Optional, Union
+from typing import Callable, Dict, Generator, List, Optional, Tuple, Union
 
 from unpythonic.env import env as envcls
 
@@ -55,10 +56,10 @@ from ..common import netutil
 # ----------------------------------------
 # Module bootup
 
-config = envcls(default_headers={},
-                tts_default_headers={},
-                audio_frequency=44100,
-                audio_buffer_size=512)
+api_config = envcls(avatar_default_headers={},
+                    tts_default_headers={},
+                    audio_frequency=44100,
+                    audio_buffer_size=512)
 def init_module(avatar_url: str,
                 avatar_api_key_file: Optional[str],
                 tts_url: Optional[str],
@@ -73,30 +74,30 @@ def init_module(avatar_url: str,
     """
     if executor is None:
         executor = concurrent.futures.ThreadPoolExecutor()
-    config.task_manager = bgtask.TaskManager(name="talkinghead_client_api",
-                                             mode="concurrent",
-                                             executor=executor)
+    api_config.task_manager = bgtask.TaskManager(name="talkinghead_client_api",
+                                                 mode="concurrent",
+                                                 executor=executor)
 
-    config.avatar_url = avatar_url
-    config.tts_url = tts_url
+    api_config.avatar_url = avatar_url
+    api_config.tts_url = tts_url
 
     if avatar_api_key_file is not None and os.path.exists(avatar_api_key_file):  # TODO: test this (I have no idea what I'm doing)
         with open(avatar_api_key_file, "r", encoding="utf-8") as f:
             avatar_api_key = f.read()
-        # See `server.py`.
-        config.default_headers["Authorization"] = avatar_api_key.strip()
+        # See `raven.avatar.server.app`.
+        api_config.avatar_default_headers["Authorization"] = avatar_api_key.strip()
 
     if tts_api_key_file is not None and os.path.exists(tts_api_key_file):  # TODO: test this
         with open(tts_api_key_file, "r", encoding="utf-8") as f:
             tts_api_key = f.read()
         # Format for OpenAI compatible endpoints is "Authorization: Bearer xxxx"; the API key file should contain the "Bearer xxxx" part.
-        config.default_headers["Authorization"] = tts_api_key.strip()
+        api_config.tts_default_headers["Authorization"] = tts_api_key.strip()
 
     # https://www.pygame.org/docs/ref/mixer.html
-    pygame.mixer.init(frequency=config.audio_frequency,
+    pygame.mixer.init(frequency=api_config.audio_frequency,
                       size=-16,
                       channels=2,
-                      buffer=config.audio_buffer_size)  # there seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it.
+                      buffer=api_config.audio_buffer_size)  # There seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it to know it.
 
 def yell_on_error(response: requests.Response) -> None:
     if response.status_code != 200:
@@ -109,18 +110,18 @@ def yell_on_error(response: requests.Response) -> None:
 
 def classify_labels() -> List[str]:
     """Get list of emotion names from server."""
-    headers = copy.copy(config.default_headers)
-    response = requests.get(f"{config.avatar_url}/api/classify/labels", headers=headers)
+    headers = copy.copy(api_config.avatar_default_headers)
+    response = requests.get(f"{api_config.avatar_url}/api/classify/labels", headers=headers)
     yell_on_error(response)
     output_data = response.json()  # -> {"labels": [emotion0, ...]}
     return list(sorted(output_data["labels"]))
 
 def classify(text: str) -> Dict[str, float]:  # TODO: feature orthogonality
     """Classify the emotion of `text` and auto-update the avatar's emotion from that."""
-    headers = copy.copy(config.default_headers)
+    headers = copy.copy(api_config.avatar_default_headers)
     headers["Content-Type"] = "application/json"
     input_data = {"text": text}
-    response = requests.post(f"{config.avatar_url}/api/classify", headers=headers, json=input_data)
+    response = requests.post(f"{api_config.avatar_url}/api/classify", headers=headers, json=input_data)
     yell_on_error(response)
     output_data = response.json()  # -> ["classification": [{"label": "curiosity", "score": 0.5329479575157166}, ...]]
 
@@ -131,11 +132,13 @@ def classify(text: str) -> Dict[str, float]:  # TODO: feature orthogonality
 # Embeddings
 
 def embeddings_compute(text: Union[str, List[str]]) -> np.array:
-    headers = copy.copy(config.default_headers)
-    data = {"text": text}
-    response = requests.post(f"{config.avatar_url}/api/embeddings/compute", json=data, headers=headers)
+    headers = copy.copy(api_config.avatar_default_headers)
+    headers["Content-Type"] = "application/json"
+    input_data = {"text": text}
+    response = requests.post(f"{api_config.avatar_url}/api/embeddings/compute", json=input_data, headers=headers)
     yell_on_error(response)
     output_data = response.json()
+
     vectors = output_data["embedding"]
     return np.array(vectors)
 
@@ -147,29 +150,29 @@ def talkinghead_load(filename: Union[pathlib.Path, str]) -> None:
 
     Then, if the animator is not running, start it automatically.
     """
-    headers = copy.copy(config.default_headers)
+    headers = copy.copy(api_config.avatar_default_headers)
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
     with open(filename, "rb") as image_file:
         files = {"file": image_file}
-        response = requests.post(f"{config.avatar_url}/api/talkinghead/load", headers=headers, files=files)
+        response = requests.post(f"{api_config.avatar_url}/api/talkinghead/load", headers=headers, files=files)
     yell_on_error(response)
 
 def talkinghead_unload() -> None:
     """Actually just pause the animator, don't unload anything."""
-    headers = copy.copy(config.default_headers)
-    response = requests.get(f"{config.avatar_url}/api/talkinghead/unload", headers=headers)
+    headers = copy.copy(api_config.avatar_default_headers)
+    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/unload", headers=headers)
     yell_on_error(response)
 
 def talkinghead_reload() -> None:
     """Resume the animator after it was paused via `talkinghead_unload`, without sending a new character."""
-    headers = copy.copy(config.default_headers)
-    response = requests.get(f"{config.avatar_url}/api/talkinghead/reload", headers=headers)
+    headers = copy.copy(api_config.avatar_default_headers)
+    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/reload", headers=headers)
     yell_on_error(response)
 
 def talkinghead_load_emotion_templates(emotions: Dict) -> None:
-    headers = copy.copy(config.default_headers)
+    headers = copy.copy(api_config.avatar_default_headers)
     headers["Content-Type"] = "application/json"
-    response = requests.post(f"{config.avatar_url}/api/talkinghead/load_emotion_templates", json=emotions, headers=headers)
+    response = requests.post(f"{api_config.avatar_url}/api/talkinghead/load_emotion_templates", json=emotions, headers=headers)
     yell_on_error(response)
 
 def talkinghead_load_emotion_templates_from_file(filename: Union[pathlib.Path, str]) -> None:
@@ -178,9 +181,9 @@ def talkinghead_load_emotion_templates_from_file(filename: Union[pathlib.Path, s
     talkinghead_load_emotion_templates(emotions)
 
 def talkinghead_load_animator_settings(animator_settings: Dict) -> None:
-    headers = copy.copy(config.default_headers)
+    headers = copy.copy(api_config.avatar_default_headers)
     headers["Content-Type"] = "application/json"
-    response = requests.post(f"{config.avatar_url}/api/talkinghead/load_animator_settings", json=animator_settings, headers=headers)
+    response = requests.post(f"{api_config.avatar_url}/api/talkinghead/load_animator_settings", json=animator_settings, headers=headers)
     yell_on_error(response)
 
 def talkinghead_load_animator_settings_from_file(filename: Union[pathlib.Path, str]) -> None:
@@ -189,26 +192,26 @@ def talkinghead_load_animator_settings_from_file(filename: Union[pathlib.Path, s
     talkinghead_load_animator_settings(animator_settings)
 
 def talkinghead_start_talking() -> None:
-    headers = copy.copy(config.default_headers)
-    response = requests.get(f"{config.avatar_url}/api/talkinghead/start_talking", headers=headers)
+    headers = copy.copy(api_config.avatar_default_headers)
+    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/start_talking", headers=headers)
     yell_on_error(response)
 
 def talkinghead_stop_talking() -> None:
-    headers = copy.copy(config.default_headers)
-    response = requests.get(f"{config.avatar_url}/api/talkinghead/stop_talking", headers=headers)
+    headers = copy.copy(api_config.avatar_default_headers)
+    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/stop_talking", headers=headers)
     yell_on_error(response)
 
 def talkinghead_set_overrides(data: Dict[str, float]) -> None:
-    headers = copy.copy(config.default_headers)
+    headers = copy.copy(api_config.avatar_default_headers)
     headers["Content-Type"] = "application/json"
-    response = requests.post(f"{config.avatar_url}/api/talkinghead/set_overrides", json=data, headers=headers)
+    response = requests.post(f"{api_config.avatar_url}/api/talkinghead/set_overrides", json=data, headers=headers)
     yell_on_error(response)
 
 def talkinghead_set_emotion(emotion_name: str) -> None:
-    headers = copy.copy(config.default_headers)
+    headers = copy.copy(api_config.avatar_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"emotion_name": emotion_name}
-    response = requests.post(f"{config.avatar_url}/api/talkinghead/set_emotion", headers=headers, json=data)
+    response = requests.post(f"{api_config.avatar_url}/api/talkinghead/set_emotion", headers=headers, json=data)
     yell_on_error(response)
 
 def talkinghead_result_feed(chunk_size: int = 4096, expected_format: Optional[str] = None) -> Generator[bytes, None, None]:
@@ -224,9 +227,9 @@ def talkinghead_result_feed(chunk_size: int = 4096, expected_format: Optional[st
     To close the connection (so that the server stops sending), call the `.close()` method of the generator.
     The connection also auto-closes when the generator is garbage-collected.
     """
-    headers = copy.copy(config.default_headers)
+    headers = copy.copy(api_config.avatar_default_headers)
     headers["Accept"] = "multipart/x-mixed-replace"
-    stream_response = requests.get(f"{config.avatar_url}/api/talkinghead/result_feed", headers=headers, stream=True)
+    stream_response = requests.get(f"{api_config.avatar_url}/api/talkinghead/result_feed", headers=headers, stream=True)
     yell_on_error(stream_response)
 
     stream_iterator = stream_response.iter_content(chunk_size=chunk_size)
@@ -239,15 +242,15 @@ def talkinghead_result_feed(chunk_size: int = 4096, expected_format: Optional[st
     return gen
 
 # --------------------------------------------------------------------------------
-# AI speech synthesizer client (for an OpenAI-compatible endpoint)
+# TTS - AI speech synthesizer client
 
 def tts_available() -> bool:
     """Return whether the speech synthesizer is available."""
-    if config.tts_url is None:
+    if api_config.tts_url is None:
         return False
-    headers = copy.copy(config.tts_default_headers)
+    headers = copy.copy(api_config.tts_default_headers)
     try:
-        response = requests.get(f"{config.tts_url}/health", headers=headers)
+        response = requests.get(f"{api_config.tts_url}/health", headers=headers)
     except Exception as exc:
         logger.error(f"tts_available: {type(exc)}: {exc}")
         return False
@@ -257,10 +260,10 @@ def tts_available() -> bool:
 
 def tts_voices() -> None:
     """Return a list of voice names supported by the TTS endpoint (if the endpoint is available)."""
-    if config.tts_url is None:
+    if api_config.tts_url is None:
         return []
-    headers = copy.copy(config.tts_default_headers)
-    response = requests.get(f"{config.tts_url}/v1/audio/voices", headers=headers)
+    headers = copy.copy(api_config.tts_default_headers)
+    response = requests.get(f"{api_config.tts_url}/v1/audio/voices", headers=headers)
     yell_on_error(response)
     output_data = response.json()
     return output_data["voices"]
@@ -275,9 +278,9 @@ def tts_speak(voice: str,
     If `start_callback` is provided, call it when the TTS starts speaking.
     If `stop_callback` is provided, call it when the TTS has stopped speaking.
     """
-    if config.tts_url is None:
+    if api_config.tts_url is None:
         return
-    headers = copy.copy(config.tts_default_headers)
+    headers = copy.copy(api_config.tts_default_headers)
     headers["Content-Type"] = "application/json"
 
     # We run this in the background
@@ -292,7 +295,7 @@ def tts_speak(voice: str,
                 "speed": speed,
                 "stream": True,
                 "return_download_link": False}
-        stream_response = requests.post(f"{config.tts_url}/v1/audio/speech", headers=headers, json=data, stream=True)
+        stream_response = requests.post(f"{api_config.tts_url}/v1/audio/speech", headers=headers, json=data, stream=True)
         yell_on_error(stream_response)
 
         it = stream_response.iter_content(chunk_size=4096)
@@ -339,7 +342,7 @@ def tts_speak(voice: str,
                 traceback.print_exc()
         else:
             logger.info("tts_speak.speak: no stop callback, all done.")
-    config.task_manager.submit(speak, envcls())
+    api_config.task_manager.submit(speak, envcls())
 
 def tts_speak_lipsynced(voice: str,
                         text: str,
@@ -359,9 +362,9 @@ def tts_speak_lipsynced(voice: str,
     See:
         https://github.com/remsky/Kokoro-FastAPI
     """
-    if config.tts_url is None:
+    if api_config.tts_url is None:
         return
-    headers = copy.copy(config.tts_default_headers)
+    headers = copy.copy(api_config.tts_default_headers)
     headers["Content-Type"] = "application/json"
 
     # Phonemize and word-level timestamping treat underscores differently: phonemize treats them as spaces,
@@ -471,7 +474,7 @@ def tts_speak_lipsynced(voice: str,
         #   🇨🇳 'z' => Mandarin Chinese: pip install misaki[zh]
         data = {"text": text,
                 "language": "a"}
-        response = requests.post(f"{config.tts_url}/dev/phonemize", headers=headers, json=data, stream=True)
+        response = requests.post(f"{api_config.tts_url}/dev/phonemize", headers=headers, json=data, stream=True)
         yell_on_error(response)
         response_json = response.json()
         phonemes = response_json["phonemes"]
@@ -486,7 +489,7 @@ def tts_speak_lipsynced(voice: str,
         task_env.done = True
         logger.info("tts_speak_lipsynced.get_phonemes: done")
     phonemes_task_env = envcls(done=False)
-    config.task_manager.submit(get_phonemes, phonemes_task_env)
+    api_config.task_manager.submit(get_phonemes, phonemes_task_env)
 
     def speak(task_env) -> None:
         logger.info("tts_speak_lipsynced.speak: starting")
@@ -512,7 +515,7 @@ def tts_speak_lipsynced(voice: str,
                 "speed": speed,
                 "stream": True,
                 "return_timestamps": True}
-        stream_response = requests.post(f"{config.tts_url}/dev/captioned_speech", headers=headers, json=data, stream=True)
+        stream_response = requests.post(f"{api_config.tts_url}/dev/captioned_speech", headers=headers, json=data, stream=True)
         yell_on_error(stream_response)
 
         # The API docs are wrong; using a running Kokoro-FastAPI and sending an example
@@ -659,7 +662,7 @@ def tts_speak_lipsynced(voice: str,
             playback_start_time = time.time_ns()
             pygame.mixer.music.play()
 
-            latency = config.audio_buffer_size / config.audio_frequency  # seconds
+            latency = api_config.audio_buffer_size / api_config.audio_frequency  # seconds
             while pygame.mixer.music.get_busy():
                 # TODO: Lipsync: account for audio playback latency, how?
                 t = (time.time_ns() - playback_start_time) / 10**9 - latency - video_offset  # seconds from start of audio
@@ -678,12 +681,31 @@ def tts_speak_lipsynced(voice: str,
             # TTS is exiting, so stop lipsyncing.
             talkinghead_set_overrides({})
 
-    config.task_manager.submit(speak, envcls())
+    api_config.task_manager.submit(speak, envcls())
 
 def tts_stop():
     """Stop the speech synthesizer."""
     logger.info("tts_stop: stopping audio")
     pygame.mixer.music.stop()
+
+# --------------------------------------------------------------------------------
+# Websearch
+
+def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple[str, Dict]:
+    """Perform a websearch, using the Avatar server to handle the interaction with the search engine and the parsing of the results page.
+
+    Uses the "/api/websearch2" endpoint on the server, which see.
+    """
+    headers = copy.copy(api_config.avatar_default_headers)
+    headers["Content-Type"] = "application/json"
+    input_data = {"query": query,
+                  "engine": engine,
+                  "max_links": max_links}
+    response = requests.post(f"{api_config.avatar_url}/api/websearch2", headers=headers, json=input_data)
+    yell_on_error(response)
+
+    output_data = response.json()
+    return output_data
 
 # --------------------------------------------------------------------------------
 
@@ -693,25 +715,47 @@ def selftest():
 
     from . import config as client_config
 
+    logger.info("selftest: initialize module")
     init_module(avatar_url=client_config.avatar_url,
                 avatar_api_key_file=client_config.avatar_api_key_file,
                 tts_url=client_config.tts_url,
                 tts_api_key_file=client_config.tts_api_key_file)  # let it create a default executor
 
+    logger.info("selftest: classify_labels")
     print(classify_labels())  # get available emotion names from server
+
+    logger.info("selftest: initialize talkinghead")
     talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))  # send an avatar - mandatory
     talkinghead_load_animator_settings_from_file(os.path.join(os.path.dirname(__file__), "..", "animator.json"))  # send animator config - optional, server defaults used if not sent
     talkinghead_load_emotion_templates_from_file(os.path.join(os.path.dirname(__file__), "..", "emotions", "_defaults.json"))  # send the morph parameters for emotions - optional, server defaults used if not sent
     gen = talkinghead_result_feed()  # start receiving animation frames
     talkinghead_start_talking()  # start "talking right now" animation (generic, non-lipsync, random mouth)
+
+    logger.info("selftest: classify")
     text = "What is the airspeed velocity of an unladen swallow?"
     print(classify(text))  # classify some text, auto-update avatar's emotion from result
+
+    # logger.info("selftest: websearch")
+    # print(f"{text}\n")
+    # out = websearch_search(text, max_links=3)
+    # for item in out["data"]:
+    #     if "title" in item and "link" in item:
+    #         print(f"{item['title']}\n{item['link']}\n")
+    #     elif "title" in item:
+    #         print(f"{item['title']}\n")
+    #     elif "link" in item:
+    #         print(f"{item['link']}\n")
+    #     print(f"{item['text']}\n")
+    # # There's also out["results"] with preformatted text only.
+
+    logger.info("selftest: embeddings")
     try:
         print(embeddings_compute(text).shape)  # needs `raven.avatar.server.app` to be running with the "--embeddings" command-line option
         print(embeddings_compute([text, "Testing, 1, 2, 3."]).shape)
     except RuntimeError as exc:
-        logger.error(f"selftest: Failed to call `embeddings` module. If this is a 403, the module likely isn't running. Error details follow. {type(exc)}: {exc}")
-        traceback.print_exc()
+        logger.error(f"selftest: Failed to call `raven.avatar.server`'s `embeddings` module. If the error is a 403, the module likely isn't running. {type(exc)}: {exc}")
+
+    logger.info("selftest: more talkinghead tests")
     talkinghead_set_emotion("surprise")  # manually update emotion
     for _ in range(5):  # get a few frames
         image_data = next(gen)  # next-gen lol
@@ -720,7 +764,9 @@ def selftest():
     talkinghead_stop_talking()  # stop "talking right now" animation
     talkinghead_unload()  # pause animating the talkinghead
     talkinghead_reload()  # resume animating the talkinghead
-    gen.close()  # close the stream
+    gen.close()  # close the connection
+
+    logger.info("selftest: all done")
 
 if __name__ == "__main__":
     selftest()
