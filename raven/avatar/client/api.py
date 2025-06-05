@@ -4,11 +4,12 @@ This talks with the server so you can just call regular Python functions.
 
 For documentation, see the server side in `raven.avatar.server.app`.
 
-We support:
+We support these modules served by `raven.avatar.server.app`:
 
   - classify
+  - embeddings (to enable this module, start the server with the "--embeddings" command-line option)
   - talkinghead
-  - TTS (with and without lip-syncing the talkinghead), via https://github.com/remsky/Kokoro-FastAPI
+  - TTS with and without lip-syncing the talkinghead, via https://github.com/remsky/Kokoro-FastAPI
 
 This module is licensed under the 2-clause BSD license.
 """
@@ -42,6 +43,8 @@ import traceback
 from typing import Callable, Dict, Generator, List, Optional, Union
 
 from unpythonic.env import env as envcls
+
+import numpy as np
 
 import pygame  # for audio (text to speech) support
 
@@ -123,6 +126,18 @@ def classify(text: str) -> Dict[str, float]:  # TODO: feature orthogonality
 
     sorted_records = output_data["classification"]  # sorted already
     return {record["label"]: record["score"] for record in sorted_records}
+
+# --------------------------------------------------------------------------------
+# Embeddings
+
+def embeddings_compute(text: Union[str, List[str]]) -> np.array:
+    headers = copy.copy(config.default_headers)
+    data = {"text": text}
+    response = requests.post(f"{config.avatar_url}/api/embeddings/compute", json=data, headers=headers)
+    yell_on_error(response)
+    output_data = response.json()
+    vectors = output_data["embedding"]
+    return np.array(vectors)
 
 # --------------------------------------------------------------------------------
 # Talkinghead
@@ -222,25 +237,6 @@ def talkinghead_result_feed(chunk_size: int = 4096, expected_format: Optional[st
                                                               boundary_prefix=boundary_prefix,
                                                               expected_mimetype=mimetype)
     return gen
-
-# # DEBUG/TEST - exercise each of the API endpoints
-# print(classify_labels())  # get available emotion names from server
-# talkinghead_load("example.png")  # send the avatar - mandatory
-# talkinghead_load_animator_settings(os.path.join(os.path.dirname(__file__), "animator.json"))  # send animator config - optional, server defaults used if not sent
-# talkinghead_load_emotion_templates(os.path.join(os.path.dirname(__file__), "emotions", "_defaults.json"))  # send the morph parameters for emotions - optional, server defaults used if not sent
-# gen = talkinghead_result_feed()
-# talkinghead_start_talking()  # start "talking right now" animation
-# print(classify("What is the airspeed velocity of an unladen swallow?"))  # classify some text, auto-update emotion from result
-# talkinghead_set_emotion("surprise")  # manually update emotion
-# for _ in range(5):
-#     image_data = next(gen)  # next-gen lol
-#     image_file = io.BytesIO(image_data)
-#     image = PIL.Image.open(image_file)
-# talkinghead_stop_talking()  # stop "talking right now" animation
-# talkinghead_unload()  # pause animating the talkinghead
-# talkinghead_reload()  # resume animating the talkinghead
-# import sys
-# sys.exit(0)
 
 # --------------------------------------------------------------------------------
 # AI speech synthesizer client (for an OpenAI-compatible endpoint)
@@ -688,3 +684,43 @@ def tts_stop():
     """Stop the speech synthesizer."""
     logger.info("tts_stop: stopping audio")
     pygame.mixer.music.stop()
+
+# --------------------------------------------------------------------------------
+
+def selftest():
+    """DEBUG/TEST - exercise each of the API endpoints."""
+    import PIL.Image
+
+    from . import config as client_config
+
+    init_module(avatar_url=client_config.avatar_url,
+                avatar_api_key_file=client_config.avatar_api_key_file,
+                tts_url=client_config.tts_url,
+                tts_api_key_file=client_config.tts_api_key_file)  # let it create a default executor
+
+    print(classify_labels())  # get available emotion names from server
+    talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))  # send an avatar - mandatory
+    talkinghead_load_animator_settings_from_file(os.path.join(os.path.dirname(__file__), "..", "animator.json"))  # send animator config - optional, server defaults used if not sent
+    talkinghead_load_emotion_templates_from_file(os.path.join(os.path.dirname(__file__), "..", "emotions", "_defaults.json"))  # send the morph parameters for emotions - optional, server defaults used if not sent
+    gen = talkinghead_result_feed()  # start receiving animation frames
+    talkinghead_start_talking()  # start "talking right now" animation (generic, non-lipsync, random mouth)
+    text = "What is the airspeed velocity of an unladen swallow?"
+    print(classify(text))  # classify some text, auto-update avatar's emotion from result
+    try:
+        print(embeddings_compute(text).shape)  # needs `raven.avatar.server.app` to be running with the "--embeddings" command-line option
+        print(embeddings_compute([text, "Testing, 1, 2, 3."]).shape)
+    except RuntimeError as exc:
+        logger.error(f"selftest: Failed to call `embeddings` module. If this is a 403, the module likely isn't running. Error details follow. {type(exc)}: {exc}")
+        traceback.print_exc()
+    talkinghead_set_emotion("surprise")  # manually update emotion
+    for _ in range(5):  # get a few frames
+        image_data = next(gen)  # next-gen lol
+        image_file = io.BytesIO(image_data)
+        image = PIL.Image.open(image_file)  # noqa: F841, we're only interested in testing whether the transport works.
+    talkinghead_stop_talking()  # stop "talking right now" animation
+    talkinghead_unload()  # pause animating the talkinghead
+    talkinghead_reload()  # resume animating the talkinghead
+    gen.close()  # close the stream
+
+if __name__ == "__main__":
+    selftest()

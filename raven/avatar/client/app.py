@@ -53,30 +53,24 @@ from ...common import animation  # Raven's GUI animation system, nothing to do w
 from ...common import bgtask
 from ...common import guiutils
 
-from ..common import config
+from ..common import config as common_config
 from ..common.postprocessor import Postprocessor  # so we can query the filters (TODO: add a web API to get them from the actual running server?)
 from ..common.running_average import RunningAverage
 
+from . import config as client_config
 from . import api  # convenient Python functions that abstract away the web API
 
 # ----------------------------------------
 # Module bootup
 
-avatar_url = "http://localhost:5100"  # Avatar server
-tts_url = "http://localhost:8880"  # AI speech synthesizer server, https://github.com/remsky/Kokoro-FastAPI
-
-config_dir = pathlib.Path(config.config_base_dir).expanduser().resolve()
-avatar_api_key_file = config_dir / "api_key.txt"
-tts_api_key_file = config_dir / "tts_api_key.txt"
-
 bg = concurrent.futures.ThreadPoolExecutor()
 task_manager = bgtask.TaskManager(name="avatar_client",
                                   mode="concurrent",
                                   executor=bg)
-api.init_module(avatar_url=avatar_url,
-                avatar_api_key_file=avatar_api_key_file,
-                tts_url=tts_url,
-                tts_api_key_file=tts_api_key_file,
+api.init_module(avatar_url=client_config.avatar_url,
+                avatar_api_key_file=client_config.avatar_api_key_file,
+                tts_url=client_config.tts_url,
+                tts_api_key_file=client_config.tts_api_key_file,
                 executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
 
 # --------------------------------------------------------------------------------
@@ -420,7 +414,7 @@ class PostprocessorSettingsEditorGUI:
         self.animator_settings = None  # not loaded yet
 
         dpg.add_texture_registry(tag="talkinghead_example_textures")  # the DPG live texture and the window backdrop texture will be stored here
-        dpg.set_viewport_title(f"Raven-avatar [{avatar_url}]")
+        dpg.set_viewport_title(f"Raven-avatar [{client_config.avatar_url}]")
 
         with dpg.window(tag="talkinghead_main_window",
                         label="Raven-avatar main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
@@ -538,12 +532,12 @@ class PostprocessorSettingsEditorGUI:
                     # AI speech synthesizer
                     tts_alive = api.tts_available()
                     if tts_alive:
-                        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS server at {tts_url}.{Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS server at {client_config.tts_url}.{Style.RESET_ALL}")
                         print(f"{Fore.GREEN}{Style.BRIGHT}Speech synthesis is available.{Style.RESET_ALL}")
-                        heading_label = f"Voice [Ctrl+V] [{tts_url}]"
+                        heading_label = f"Voice [Ctrl+V] [{client_config.tts_url}]"
                         self.voice_names = api.tts_voices()
                     else:
-                        print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS server at {tts_url}.{Style.RESET_ALL} Is the server running?")
+                        print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS server at {client_config.tts_url}.{Style.RESET_ALL} Is the server running?")
                         print(f"{Fore.YELLOW}{Style.BRIGHT}Speech synthesis is NOT available.{Style.RESET_ALL}")
                         heading_label = "Voice [Ctrl+V] [not connected]"
                         self.voice_names = ["[TTS server not available]"]
@@ -1378,11 +1372,11 @@ def update_live_texture(task_env) -> None:
 try:
     api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
 except requests.exceptions.ConnectionError as exc:
-    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {avatar_url}.{Style.RESET_ALL} Is the server running?")
-    logger.error(f"Cannot connect to avatar server at {avatar_url}: {type(exc)}: {exc}")
+    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {client_config.avatar_url}.{Style.RESET_ALL} Is the server running?")
+    logger.error(f"Cannot connect to avatar server at {client_config.avatar_url}: {type(exc)}: {exc}")
     sys.exit(255)
 else:
-    print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {avatar_url}.{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {client_config.avatar_url}.{Style.RESET_ALL}")
 
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
@@ -1414,7 +1408,7 @@ def _load_initial_animator_settings():
     if not os.path.exists(animator_json_path):
         logger.info(f"_load_initial_animator_settings: Default animator settings file '{animator_json_path}' missing, writing a default config.")
         try:
-            animator_settings = copy.copy(config.animator_defaults)
+            animator_settings = copy.copy(common_config.animator_defaults)
             custom_animator_settings = {"format": gui_instance.comm_format,
                                         "target_fps": gui_instance.target_fps,
                                         "upscale": gui_instance.upscale,
