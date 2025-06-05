@@ -43,16 +43,23 @@ from . import chattree
 from . import config
 from . import hybridir
 
+from .avatar.client import api  # raven-avatar client communication setup is in `raven.avatar.client.config`, used automatically.
+from .avatar.client import config as client_config
+
 # --------------------------------------------------------------------------------
 # Module bootup
 
 config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
 
+api.init_module(avatar_url=client_config.avatar_url,
+                avatar_api_key_file=client_config.avatar_api_key_file,
+                tts_url=client_config.tts_url,
+                tts_api_key_file=client_config.tts_api_key_file)  # let it create a default executor
+
 # ----------------------------------------
 # LLM communication setup
 
 api_key_file = config_dir / "api_key.txt"
-avatar_api_key_file = config_dir / "avatar_api_key.txt"
 
 # HTTP headers for LLM requests
 headers = {
@@ -67,40 +74,13 @@ if os.path.exists(api_key_file):  # TODO: test this (implemented according to sp
     # https://github.com/oobabooga/text-generation-webui/wiki/12-%E2%80%90-OpenAI-API
     headers["Authorization"] = api_key.strip()
 
-# ----------------------------------------
-# Avatar communication setup
-
-avatar_url = "http://localhost:5100"
-
-avatar_api_key_file = config_dir / "avatar_api_key.txt"
-
-avatar_headers = {
-    "Content-Type": "application/json"
-}
-
-if os.path.exists(avatar_api_key_file):  # TODO: test this (I have no idea what I'm doing; check against `avatar/server.py`)
-    with open(api_key_file, "r", encoding="utf-8") as f:
-        api_key = f.read()
-    avatar_headers["Authorization"] = api_key.strip()
-
 # --------------------------------------------------------------------------------
 # Websearch integration (requires `raven.avatar.server`)
 
-def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 10) -> (List[str], List[str]):
+def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 10) -> str:
     """Perform a websearch, using the Avatar server to handle the interaction with the search engine and the parsing of the results page."""
-    data = {"query": query,
-            "engine": engine,
-            "max_links": max_links}
-    response = requests.post(f"{avatar_url}/api/websearch2", headers=avatar_headers, json=data)
-
-    if response.status_code != 200:
-        logger.error(f"Avatar server returned error: {response.status_code} {response.reason}. Content of error response follows.")
-        logger.error(response.text)
-        raise RuntimeError(f"While calling avatar server: HTTP {response.status_code} {response.reason}")
-
-    payload = response.json()
-
-    return payload["results"]  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
+    data = api.websearch_search(query, engine, max_links)
+    return data["results"]  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
 
 # --------------------------------------------------------------------------------
 # Utilities
