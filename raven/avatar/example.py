@@ -1378,7 +1378,7 @@ if __name__ == "__main__":
 
     gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
-    client_api.talkinghead_load("example.png")  # this will also start the animator if it was paused
+    client_api.talkinghead_load(os.path.join(os.path.dirname(__file__), "images", "example.png"))  # this will also start the animator if it was paused
 
     def shutdown() -> None:
         client_api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
