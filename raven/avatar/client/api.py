@@ -288,8 +288,11 @@ def talkinghead_set_emotion(emotion_name: str) -> None:
     response = requests.post(f"{api_config.avatar_url}/api/talkinghead/set_emotion", headers=headers, json=data)
     yell_on_error(response)
 
-def talkinghead_result_feed(chunk_size: int = 4096, expected_format: Optional[str] = None) -> Generator[bytes, None, None]:
+def talkinghead_result_feed(chunk_size: int = 4096, expected_format: Optional[str] = None) -> Generator[Tuple[Optional[str], bytes], None, None]:
     """Return a generator that yields `bytes` objects, one per video frame, in the image file format received from the server.
+
+    The yielded value is the tuple `(received_mimetype, payload)`, where `received_mimetype` is set to whatever the server
+    sent in the Content-Type header. Talkinghead always sends a mimetype, which specifies the file format.
 
     `expected_format`: If provided, string identifying the file format for video frames expected by your client, e.g. "PNG".
     If the server sends some other format, `ValueError` is raised. If not provided, no format checking is done.
@@ -841,7 +844,8 @@ def selftest():
     logger.info("selftest: more talkinghead tests")
     talkinghead_set_emotion("surprise")  # manually update emotion
     for _ in range(5):  # get a few frames
-        image_data = next(gen)  # next-gen lol
+        image_format, image_data = next(gen)  # next-gen lol
+        print(image_format, len(image_data))
         image_file = io.BytesIO(image_data)
         image = PIL.Image.open(image_file)  # noqa: F841, we're only interested in testing whether the transport works.
     talkinghead_stop_talking()  # stop "talking right now" animation

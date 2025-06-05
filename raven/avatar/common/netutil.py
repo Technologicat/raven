@@ -5,14 +5,17 @@ This module is licensed under the 2-clause BSD license.
 
 __all__ = ["multipart_x_mixed_replace_payload_extractor"]
 
-from typing import Generator, Iterator, Optional
+from typing import Generator, Iterator, Optional, Tuple
 
 from unpythonic.net.util import ReceiveBuffer
 
 def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
                                                 boundary_prefix: str,
-                                                expected_mimetype: Optional[str]) -> Generator[bytes, None, None]:
+                                                expected_mimetype: Optional[str]) -> Generator[Tuple[Optional[str], bytes], None, None]:
     """Instantiate a generator that yield payloads from `source`, which is reading from a "multipart/x-mixed-replace" stream.
+
+    The yielded value is the tuple `(received_mimetype, payload)`, where `received_mimetype` is set to whatever the server
+    sent in the Content-Type header. If Content-Type was not set, then `received_mimetype is None`.
 
     The server MUST send the Content-Length header for this reader to work. If it is missing, `ValueError` is raised.
 
@@ -76,7 +79,7 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
         if body_length_bytes is None:
             raise ValueError("read_headers: payload is missing the 'Content-Length' header (mandatory for this client)")
         payload_buffer.set(start_of_body)
-        return body_length_bytes
+        return received_mimetype, body_length_bytes
 
     def read_body(body_length_bytes: int) -> bytes:
         """Read the payload body and return it as a `bytes` object."""
@@ -91,6 +94,6 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
 
     while True:
         synchronize()
-        body_length_bytes = read_headers()
+        received_mimetype, body_length_bytes = read_headers()
         payload = read_body(body_length_bytes)
-        yield payload
+        yield received_mimetype, payload

@@ -78,7 +78,7 @@ global_reload_image = None
 
 # values overridden by `load_animator_settings` at animator startup
 target_fps = 25
-output_format = "PNG"
+encoder_output_format = "PNG"
 
 # --------------------------------------------------------------------------------
 # Implementations for API endpoints served by `server.py`
@@ -209,7 +209,6 @@ def result_feed() -> Response:
     """Return a Flask `Response` that repeatedly yields the current image as an image file in the configured format."""
     def generate():
         global global_latest_frame_sent
-        global output_format  # to document intent only; we don't write to it
         global target_fps  # to document intent only; we don't write to it
 
         last_frame_send_complete_time = None
@@ -219,9 +218,9 @@ def result_feed() -> Response:
 
         while True:
             # Send the latest available animation frame.
-            # Important: grab reference to `image_bytes` only once, since it will be atomically updated without a lock.
-            image_bytes = global_encoder_instance.image_bytes
-            if image_bytes is not None:
+            # Important: grab reference to `current_frame` only once, since it will be atomically updated without a lock.
+            current_frame = global_encoder_instance.current_frame
+            if current_frame is not None:
                 # How often should we send?
                 #  - Excessive spamming can DoS the SillyTavern GUI, so there needs to be a rate limit.
                 #  - OTOH, we must constantly send something, or the GUI will lock up waiting.
@@ -237,8 +236,9 @@ def result_feed() -> Response:
 
                 if time_until_frame_deadline <= 0.0:
                     time_now = time.time_ns()
-                    content_type_header = f"Content-Type: image/{output_format.lower()}\r\n".encode()
-                    content_length_header = f"Content-Length: {len(image_bytes)}\r\n".encode()
+                    image_format, image_data = current_frame
+                    content_type_header = f"Content-Type: image/{image_format.lower()}\r\n".encode()
+                    content_length_header = f"Content-Length: {len(image_data)}\r\n".encode()
                     yield (b"--frame\r\n" +
                            content_type_header +
                            content_length_header +
@@ -248,9 +248,9 @@ def result_feed() -> Response:
                            b'Pragma: no-cache\r\n'
                            b'Expires: 0\r\n'
                            b"\r\n" +  # A second successive CRLF sequence signals the end of the headers for this frame.
-                           image_bytes +
+                           image_data +
                            b"\r\n")
-                    global_latest_frame_sent = id(image_bytes)  # atomic update, no need for lock
+                    global_latest_frame_sent = id(current_frame)  # atomic update, no need for lock
                     send_duration_sec = (time.time_ns() - time_now) / 10**9  # about 0.12 ms on localhost (compress_level=1 or 6, doesn't matter)
                     # print(f"send {send_duration_sec:0.6g}s")  # DEBUG
 
@@ -485,7 +485,7 @@ class Animator:
         see `postprocessor.py`.
         """
         global target_fps
-        global output_format
+        global encoder_output_format
 
         if settings is None:
             settings = {}
@@ -542,7 +542,7 @@ class Animator:
         target_fps = settings.pop("target_fps")  # global variable, controls the network send rate.
 
         logger.debug(f"load_animator_settings: Setting output format = {settings['format']}")
-        output_format = settings.pop("format")
+        encoder_output_format = settings.pop("format")
 
         logger.debug("load_animator_settings: Sending new effect chain to postprocessor")
         self.postprocessor.chain = settings.pop("postprocessor_chain")  # ...and that's where the postprocessor reads its filter settings from.
@@ -1254,13 +1254,13 @@ class Animator:
 class Encoder:
     """Network transport encoder.
 
-    We read each frame from the animator as it becomes ready, and keep it available in `self.image_bytes`
-    until the next frame arrives. The `self.image_bytes` buffer is replaced atomically, so this needs no lock
-    (you always get the latest available frame at the time you access `image_bytes`).
+    We read each frame from the animator as it becomes ready, and keep it available in `self.current_frame`
+    until the next frame arrives. The `self.current_frame` reference is replaced atomically, so this needs no lock
+    (you always get the latest available frame at the time you access `current_frame`).
     """
 
     def __init__(self) -> None:
-        self.image_bytes = None
+        self.current_frame = None
         self.encoder_thread = None
 
     def start(self) -> None:
@@ -1295,9 +1295,9 @@ class Encoder:
                         #    - uncompressed, about 5 ms
                         #
                         # time_now = time.time_ns()
-                        if output_format == "QOI":  # Quite OK Image format - like PNG, but fast
+                        if encoder_output_format == "QOI":  # Quite OK Image format - like PNG, but fast
                             # Ugh, we must copy because the data isn't C-contiguous... but this is still faster than the other formats.
-                            image_bytes = qoi.encode(image_rgba.copy(order="C"))  # input: uint8 array of shape (h, w, c)
+                            current_frame = (encoder_output_format, qoi.encode(image_rgba.copy(order="C")))  # input: uint8 array of shape (h, w, c)
                         else:  # use PIL
                             pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
                             if image_rgba.shape[2] == 4:
@@ -1305,21 +1305,21 @@ class Encoder:
                                 pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
 
                             buffer = io.BytesIO()
-                            if output_format == "PNG":
+                            if encoder_output_format == "PNG":
                                 kwargs = {"compress_level": 1}
-                            elif output_format == "TGA":
+                            elif encoder_output_format == "TGA":
                                 kwargs = {"compression": "tga_rle"}
                             else:
                                 kwargs = {}
                             pil_image.save(buffer,
-                                           format=output_format,
+                                           format=encoder_output_format,
                                            **kwargs)
-                            image_bytes = buffer.getvalue()
+                            current_frame = (encoder_output_format, buffer.getvalue())
                         # pack_duration_sec = (time.time_ns() - time_now) / 10**9
 
                         # We now have a new encoded frame; but first, sync with network send.
                         # This prevents from rendering/encoding more frames than are actually sent.
-                        previous_frame = self.image_bytes
+                        previous_frame = self.current_frame
                         if previous_frame is not None:
                             time_wait_start = time.time_ns()
                             # Wait in 1ms increments until the previous encoded frame has been sent
@@ -1330,7 +1330,7 @@ class Encoder:
                         else:
                             wait_elapsed_sec = 0.0
 
-                        self.image_bytes = image_bytes  # atomic replace so no need for a lock
+                        self.current_frame = current_frame  # atomic replace so no need for a lock
                     except Exception as exc:
                         logger.error(exc)
                         traceback.print_exc()

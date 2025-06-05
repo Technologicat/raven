@@ -14,7 +14,6 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 - Final touches for first version:
   - Move assets to an assets subfolder, to clean up the main level of avatar
   - Add web API to get postproc filters metadata from the running server as JSON. Needed for web clients that want to provide a postprocessor editor GUI.
-  - Client: don't crash on wrong image format, just discard the frame. May get a few frames in the wrong format after a format change in a running server.
   - Add license note:
       All parts where I'm the only author have been relicensed under 2-clause BSD. Only the server and pose editor folders, which each contain a separate app, are licensed under AGPL. The upscaler is licensed under MIT, matching the license of the Anime4K engine it uses.
 

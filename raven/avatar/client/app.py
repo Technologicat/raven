@@ -28,7 +28,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
 import qoi
 import PIL.Image
@@ -1234,20 +1234,21 @@ class ResultFeedReader:
     def __init__(self):
         self.gen = None
 
-    def start(self):
-        self.gen = api.talkinghead_result_feed(expected_format=gui_instance.comm_format)
+    def start(self) -> None:
+        self.gen = api.talkinghead_result_feed()
 
-    def is_running(self):
+    def is_running(self) -> bool:
         return self.gen is not None
 
-    def get_frame(self):
+    def get_frame(self) -> Tuple[Optional[str], bytes]:
+        """-> (received_mimetype, payload)"""
         return next(self.gen)  # next-gen lol
 
-    def stop(self):
+    def stop(self) -> None:
         self.gen.close()
         self.gen = None
 
-def si_prefix(number):
+def si_prefix(number: Union[int, float]) -> str:
     """Convert a number to SI format (1000 -> 1K).
 
     https://medium.com/@ryan_forrester_/getting-file-sizes-in-python-a-complete-guide-01293aaa68ef
@@ -1263,9 +1264,9 @@ def si_prefix(number):
 # We must continuously retrieve new frames as they become ready, so this runs in the background.
 def update_live_texture(task_env) -> None:
     assert task_env is not None
-    def describe_performance(gui, video_height, video_width):  # actual received video height/width of the frame being described
+    def describe_performance(gui: PostprocessorSettingsEditorGUI, video_format: str, video_height: int, video_width: int):  # actual received video height/width of the frame being described
         if gui is None:
-            return "RX (avg) -- B/s @ -- FPS; avg -- B per frame (--x--, -- px)"
+            return "RX (avg) -- B/s @ -- FPS; avg -- B per frame (--x--, -- px, --)"
 
         avg_fps = gui.fps_statistics.average()
         avg_bytes = int(gui.frame_size_statistics.average())
@@ -1276,7 +1277,7 @@ def update_live_texture(task_env) -> None:
         else:
             upscale_str = ""
 
-        return f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({upscale_str}{video_width}x{video_height}, {si_prefix(pixels)}px)"
+        return f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({upscale_str}{video_width}x{video_height}, {si_prefix(pixels)}px, {video_format})"
 
     reader = ResultFeedReader()
     reader.start()
@@ -1288,14 +1289,14 @@ def update_live_texture(task_env) -> None:
                 if not gui_instance.animator_running and reader.is_running():
                     reader.stop()
                     try:
-                        dpg.set_value("fps_text", describe_performance(None, None, None))
+                        dpg.set_value("fps_text", describe_performance(None, None, None, None))
                     except SystemError:  # does not exist (can happen at app shutdown)
                         pass
                 elif gui_instance.animator_running and not reader.is_running():
                     reader.start()
 
             if reader.is_running():
-                image_data = reader.get_frame()
+                mimetype, image_data = reader.get_frame()
                 gui_instance.frame_size_statistics.add_datapoint(len(image_data))
             if gui_instance is None or not reader.is_running():
                 time.sleep(0.04)   # 1/25 s
@@ -1311,7 +1312,7 @@ def update_live_texture(task_env) -> None:
                 time.sleep(0.04)   # 1/25 s
                 continue  # can't do anything without a texture to blit to, so discard this frame
 
-            if gui_instance.comm_format == "QOI":
+            if mimetype == "image/qoi":
                 image_rgba = qoi.decode(image_data)  # -> uint8 array of shape (h, w, c)
                 # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
                 h, w = image_rgba.shape[:2]
@@ -1350,7 +1351,7 @@ def update_live_texture(task_env) -> None:
             gui_instance.fps_statistics.add_datapoint(fps)
 
             try:
-                dpg.set_value("fps_text", describe_performance(gui_instance, h, w))
+                dpg.set_value("fps_text", describe_performance(gui_instance, mimetype, h, w))
             except SystemError:  # does not exist (can happen at app shutdown)
                 pass
     except Exception as exc:
@@ -1362,7 +1363,7 @@ def update_live_texture(task_env) -> None:
             dpg.set_value("please_standby_text", "[Connection lost]")
             dpg.show_item("please_standby_text")
             dpg.hide_item(f"live_image_{gui_instance.live_texture_id_counter}")
-            dpg.set_value("fps_text", describe_performance(None, None, None))
+            dpg.set_value("fps_text", describe_performance(None, None, None, None))
 
 
 # --------------------------------------------------------------------------------
