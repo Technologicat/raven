@@ -1176,6 +1176,8 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
     elif ctrl_pressed:
         if key == dpg.mvKey_O:
             show_open_input_image_dialog()
+        if key == dpg.mvKey_B:
+            show_open_backdrop_image_dialog()
         elif key == dpg.mvKey_T:
             gui_instance.toggle_talking()
         elif key == dpg.mvKey_P:
