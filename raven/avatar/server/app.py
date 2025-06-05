@@ -308,7 +308,7 @@ def api_classify_labels():
 
 @app.route("/api/talkinghead/load", methods=["POST"])
 def api_talkinghead_load():
-    """Load the avatar sprite posted as a file in the request. Resume animation if the talkinghead module was paused.
+    """Load the avatar sprite posted as a file in the request.
 
     The request should be posted as "multipart/form-data", with one file attachment, named "file".
 
@@ -317,23 +317,7 @@ def api_talkinghead_load():
     file = request.files['file']
     return animator.load_image_from_stream(file.stream)
 
-@app.route('/api/talkinghead/unload')
-def api_talkinghead_unload():
-    """Pause the avatar.
-
-    To resume, use '/api/talkinghead/reload'.
-
-    To resume, you can also load a character via '/api/talkinghead/load'.
-    This is slower, so if you want to resume the same animation, prefer reload.
-    """
-    return animator.unload()
-
-@app.route('/api/talkinghead/reload')
-def api_talkinghead_reload():
-    """Resume the avatar."""
-    return animator.reload()
-
-@app.route('/api/talkinghead/load_emotion_templates', methods=["POST"])
+@app.route("/api/talkinghead/load_emotion_templates", methods=["POST"])
 def api_talkinghead_load_emotion_templates():
     """Load custom emotion templates for talkinghead, or reset to defaults.
 
@@ -343,7 +327,7 @@ def api_talkinghead_load_emotion_templates():
                       ...}
          ...}
 
-    For details, see `Animator.load_emotion_templates` in `talkinghead/tha3/app/app.py`.
+    For details, see `Animator.load_emotion_templates` in `animator.py`.
 
     To reload server defaults, send a blank JSON.
 
@@ -357,7 +341,7 @@ def api_talkinghead_load_emotion_templates():
     animator.global_animator_instance.load_emotion_templates(data)
     return "OK"
 
-@app.route('/api/talkinghead/load_animator_settings', methods=["POST"])
+@app.route("/api/talkinghead/load_animator_settings", methods=["POST"])
 def api_talkinghead_load_animator_settings():
     """Load custom settings for talkinghead animator and postprocessor, or reset to defaults.
 
@@ -366,7 +350,7 @@ def api_talkinghead_load_animator_settings():
         {"name0": value0,
          ...}
 
-    For details, see `Animator.load_animator_settings` in `talkinghead/tha3/app/app.py`.
+    For details, see `Animator.load_animator_settings` in `animator.py`.
 
     To reload server defaults, send a blank JSON.
 
@@ -380,17 +364,66 @@ def api_talkinghead_load_animator_settings():
     animator.global_animator_instance.load_animator_settings(data)
     return "OK"
 
-@app.route('/api/talkinghead/start_talking')
+@app.route("/api/talkinghead/start")
+def api_talkinghead_start():
+    """Start the avatar animation.
+
+    A character must be loaded first; use '/api/talkinghead/load'.
+
+    To pause, use '/api/talkinghead/stop'.
+    """
+    return animator.start()
+
+@app.route("/api/talkinghead/stop")
+def api_talkinghead_stop():
+    """Pause the avatar animation.
+
+    To resume, use '/api/talkinghead/start'.
+    """
+    return animator.stop()
+
+@app.route("/api/talkinghead/start_talking")
 def api_talkinghead_start_talking():
-    """Start the mouth animation for talking."""
+    """Start the mouth animation for talking.
+
+    This is the generic, non-lipsync animation that randomizes the mouth.
+    This is useful for things like visual novels without actual voiced audio.
+
+    For lip sync, see `tts_speak_lipsynced`.
+    """
     return animator.start_talking()
 
-@app.route('/api/talkinghead/stop_talking')
+@app.route("/api/talkinghead/stop_talking")
 def api_talkinghead_stop_talking():
-    """Stop the mouth animation for talking."""
+    """Stop the mouth animation for talking.
+
+    This is the generic, non-lipsync animation that randomizes the mouth.
+    This is useful for things like visual novels without actual voiced audio.
+
+    For lip sync, see `tts_speak_lipsynced`.
+    """
     return animator.stop_talking()
 
-@app.route('/api/talkinghead/set_overrides', methods=["POST"])
+@app.route("/api/talkinghead/set_emotion", methods=["POST"])
+def api_talkinghead_set_emotion():
+    """Set talkinghead character emotion to that posted in the request.
+
+    Input format is JSON::
+
+        {"emotion_name": "curiosity"}
+
+    where the key "emotion_name" is literal, and the value is the emotion to set.
+
+    There is no getter, because SillyTavern keeps its state in the frontend
+    and the plugins only act as slaves (in the technological sense of the word).
+    """
+    data = request.get_json()
+    if "emotion_name" not in data or not isinstance(data["emotion_name"], str):
+        abort(400, '"emotion_name" is required')
+    emotion_name = data["emotion_name"]
+    return animator.set_emotion(emotion_name)
+
+@app.route("/api/talkinghead/set_overrides", methods=["POST"])
 def api_talkinghead_set_overrides():
     """Directly control the animator's morphs from the client side.
 
@@ -419,28 +452,16 @@ def api_talkinghead_set_overrides():
         abort(400, f"api_talkinghead_set_overrides: failed, reason: {type(exc)}: {exc}")
     return "OK"
 
-@app.route('/api/talkinghead/set_emotion', methods=["POST"])
-def api_talkinghead_set_emotion():
-    """Set talkinghead character emotion to that posted in the request.
-
-    Input format is JSON::
-
-        {"emotion_name": "curiosity"}
-
-    where the key "emotion_name" is literal, and the value is the emotion to set.
-
-    There is no getter, because SillyTavern keeps its state in the frontend
-    and the plugins only act as slaves (in the technological sense of the word).
-    """
-    data = request.get_json()
-    if "emotion_name" not in data or not isinstance(data["emotion_name"], str):
-        abort(400, '"emotion_name" is required')
-    emotion_name = data["emotion_name"]
-    return animator.set_emotion(emotion_name)
-
-@app.route('/api/talkinghead/result_feed')
+@app.route("/api/talkinghead/result_feed")
 def api_talkinghead_result_feed():
-    """Live character output. Stream of video frames, each as a PNG encoded image."""
+    """Video output.
+
+    A "multipart/x-mixed-replace" stream of video frames, each as an image file.
+    The payload separator is "--frame".
+
+    The file format can be set in the animator settings. The frames are always sent
+    with the Content-Type and Content-Length headers set.
+    """
     return animator.result_feed()
 
 
@@ -448,7 +469,7 @@ def api_talkinghead_result_feed():
 # Script arguments
 
 parser = argparse.ArgumentParser(
-    prog="Raven Avatar", description="Talkinghead (THA3) server compatible with the discontinued SillyTavern-extras"
+    prog="Raven-avatar", description="Talkinghead (THA3) server based on the discontinued SillyTavern-extras"
 )
 parser.add_argument(
     "--port", type=int, help=f"Specify the port on which the application is hosted (default {config.DEFAULT_PORT})"

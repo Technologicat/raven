@@ -11,7 +11,7 @@ See also the example client app, `example.py`.
 
 __all__ = ["init_module", "is_available",
            "set_emotion",
-           "unload", "reload",
+           "start", "stop",
            "start_talking", "stop_talking",
            "result_feed",
            "load_image_from_stream"]
@@ -28,7 +28,7 @@ import time
 import numpy as np
 import threading
 import traceback
-from typing import Any, Dict, List, NoReturn, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from colorama import Fore, Style
 
@@ -98,7 +98,17 @@ def set_emotion(emotion: str) -> str:
     current_emotion = emotion
     return f"emotion set to {emotion}"
 
-def unload() -> str:
+def start() -> str:
+    """Start/resume animation.
+
+    Return a status message for passing over HTTP.
+    """
+    global animation_running
+    animation_running = True
+    logger.info("reload: animation resumed")
+    return "animation resumed"
+
+def stop() -> str:
     """Stop animation.
 
     The animator remains paused, nothing is actually unloaded.
@@ -109,16 +119,6 @@ def unload() -> str:
     animation_running = False
     logger.info("unload: animation paused")
     return "animation paused"
-
-def reload() -> str:
-    """Resume animation.
-
-    Return a status message for passing over HTTP.
-    """
-    global animation_running
-    animation_running = True
-    logger.info("reload: animation resumed")
-    return "animation resumed"
 
 def start_talking() -> str:
     """Start talking animation.
@@ -271,8 +271,6 @@ def load_image_from_stream(stream) -> str:
     logger.info("load_image_from_stream: loading new input image from stream")
 
     try:
-        animation_running = False  # pause animation while loading a new image
-
         # Load the image using Pillow
         pil_image = PIL.Image.open(stream)
 
@@ -286,15 +284,15 @@ def load_image_from_stream(stream) -> str:
         logger.warning("Could not load input image from stream, loading blank")
         full_path = str(vendor_basedir / "tha3" / "images" / "inital.png")
         global_reload_image = PIL.Image.open(full_path)
-    finally:
-        animation_running = True
     return "OK"
 
-def init_module(device: str, model: str) -> Union[None, NoReturn]:
+def init_module(device: str, model: str) -> None:
     """Launch the avatar (live mode), served over HTTP.
 
     device: "cpu" or "cuda"
     model: one of the folder names inside "vendor/tha3/models/"
+
+    If something goes horribly wrong, raise `RuntimeError`.
     """
     global global_animator_instance
     global global_encoder_instance
@@ -324,6 +322,7 @@ def init_module(device: str, model: str) -> Union[None, NoReturn]:
     except RuntimeError as exc:
         print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL}")
         logger.error(exc)
+        traceback.print_exc()
         if global_animator_instance is not None:
             global_animator_instance.exit()
             global_animator_instance = None

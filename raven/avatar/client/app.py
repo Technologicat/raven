@@ -1076,13 +1076,13 @@ class PostprocessorSettingsEditorGUI:
     def toggle_animator_paused(self) -> None:
         """Pause or resume the animation. Pausing when the talkinghead won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
         if self.animator_running:
-            api.talkinghead_unload()
+            api.talkinghead_stop()
             dpg.set_value("please_standby_text", "[Animator is paused]")
             dpg.show_item("please_standby_text")
             dpg.hide_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")
         else:
-            api.talkinghead_reload()
+            api.talkinghead_start()
             dpg.hide_item("please_standby_text")
             dpg.show_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")
@@ -1378,7 +1378,8 @@ else:
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
 api.talkinghead_load_emotion_templates({})  # send empty dict -> reset emotion templates to server defaults
-api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))  # this will also start the animator if it was paused (TODO: feature orthogonality)
+api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))
+api.talkinghead_start()
 
 def shutdown() -> None:
     api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
