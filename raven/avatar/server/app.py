@@ -281,8 +281,6 @@ def api_classify():
     classification = classify.classify_text(data["text"])
     print("Classification output:", classification, sep="\n")
     gc.collect()
-    print("Updating avatar emotion from classification results")
-    animator.set_emotion_from_classification(classification)
     return jsonify({"classification": classification})
 
 @app.route("/api/classify/labels", methods=["GET"])

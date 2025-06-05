@@ -10,7 +10,7 @@ See also the example client app, `example.py`.
 """
 
 __all__ = ["init_module", "is_available",
-           "set_emotion_from_classification", "set_emotion",
+           "set_emotion",
            "unload", "reload",
            "start_talking", "stop_talking",
            "result_feed",
@@ -82,24 +82,6 @@ encoder_output_format = "PNG"
 
 # --------------------------------------------------------------------------------
 # Implementations for API endpoints served by `server.py`
-
-def set_emotion_from_classification(emotion_scores: List[Dict[str, Union[str, float]]]) -> str:
-    """Set the current emotion of the character based on sentiment analysis results.
-
-    Currently, we pick the emotion with the highest confidence score.
-
-    `emotion_scores`: results from classify module: [{"label": emotion0, "score": confidence0}, ...]
-
-    Return a status message for passing over HTTP.
-    """
-    highest_score = float("-inf")
-    highest_label = None
-    for item in emotion_scores:
-        if item["score"] > highest_score:
-            highest_score = item["score"]
-            highest_label = item["label"]
-    logger.info(f"set_emotion_from_classification: winning score: {highest_label} = {highest_score}")
-    return set_emotion(highest_label)
 
 def set_emotion(emotion: str) -> str:
     """Set the current emotion of the character.
