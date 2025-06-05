@@ -1,4 +1,4 @@
-"""Utilities for the avatar subapp."""
+"""Utilities for `raven.avatar.server` and `raven.avatar.pose_editor`."""
 
 __all__ = ["posedict_keys", "posedict_key_to_index",
            "load_emotion_presets",
