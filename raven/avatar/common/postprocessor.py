@@ -1,6 +1,8 @@
 """Smoke and mirrors. Glitch artistry. Pixel-space postprocessing effects.
 
 These effects work in linear intensity space, before gamma correction.
+
+This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["Postprocessor"]
@@ -20,8 +22,8 @@ import numpy as np
 import torch
 import torchvision
 
+from .colorspace import rgb_to_yuv, yuv_to_rgb, luminance
 from .upscaler import Upscaler
-from .util import luminance, rgb_to_yuv, yuv_to_rgb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

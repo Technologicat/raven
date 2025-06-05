@@ -1,27 +1,15 @@
 """THA3 pose editor.
 
-Pose an anime character, based on a suitable 512×512 static input image and some neural networks.
+Pose an anime character, based on a suitable 512×512 static input image and THA3, an AI poser model.
 
-This app is an editor for the emotion templates. To edit postprocessor settings, see the separate app `example.py`.
+This GUI app is an editor for the emotion templates. To edit postprocessor settings in a GUI and to
+test your characters, see the separate app `raven.avatar.client.app`.
 
-
-**What**:
-
-This app is an alternative to the live plugin mode of `talkinghead`. Given one static input image,
-this allows the automatic generation of the 28 emotional expression sprites for your AI character,
-for use with distilbert classification.
-
-There are two motivations:
-
-  - Much faster than inpainting all 28 expressions manually in Stable Diffusion. Enables agile experimentation
-    on the look of your character, since you only need to produce one new image to change the look.
-  - No CPU or GPU load while the AI avatar is running, unlike the animator.
-
-For best results for generating the static input image in Stable Diffusion, consider the various vtuber checkpoints
-available on the internet. These should reduce the amount of work it takes to get SD to render your character in
-a pose suitable for use as input.
-
-Results are often not perfect, but serviceable.
+Beside being the pose editor, this app also allows the automatic generation of the 28 emotional expression sprites
+for your AI character from one static input image, for use with distilbert classification in SillyTavern
+(Character Expressions extension). This is much faster than inpainting all 28 expressions manually in
+Stable Diffusion, enables agile experimentation on the look of your character, since you only need to produce
+one new image to change the look.
 
 
 **Who**:
@@ -35,7 +23,16 @@ This fork was originally maintained by the SillyTavern-extras project.
 At this point, the pose editor app was improved and documented by Juha Jeronen (@Technologicat).
 
 After SillyTavern-extras was discontinued, talkinghead was moved to the Raven project by Juha Jeronen (@Technologicat).
+
+
+This module was part of the old Talkinghead, and is licensed under the GNU AGPL, see `server/LICENSE`.
 """
+
+# Note that the AGPL license means that any BSD-licensed module must not import anything from this module. The other way is allowed,
+# i.e. this module may import names from BSD-licensed modules; it's then using those modules under the BSD license.
+#
+# The parts of GUI code that look common to this and the postproc editor are actually originally adapted from Raven-visualizer,
+# which is BSD-licensed.
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -59,21 +56,22 @@ import torch
 
 import dearpygui.dearpygui as dpg
 
-from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
-from ..common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from ..common import guiutils
+from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
+from ...common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common import guiutils
 
-from .vendor.tha3.poser.modes.load_poser import load_poser
-from .vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
-from .vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
+from ..vendor.tha3.poser.modes.load_poser import load_poser
+from ..vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
+from ..vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
-from .util import load_emotion_presets, posedict_to_pose, pose_to_posedict, RunningAverage, maybe_install_models, convert_linear_to_srgb, convert_float_to_uint8
+from ..common.running_average import RunningAverage
+from ..server.util import load_emotion_presets, posedict_to_pose, pose_to_posedict, maybe_install_models, convert_linear_to_srgb, convert_float_to_uint8
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
-talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "vendor")).expanduser().resolve()
+talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "vendor")).expanduser().resolve()
 print(f"Talkinghead is installed at '{str(talkinghead_path)}'")
 sys.path.append(str(talkinghead_path))
 
@@ -107,9 +105,8 @@ with dpg.font_registry() as the_font_registry:
     # Change the default font to something that looks clean and has good on-screen readability.
     # https://fonts.google.com/specimen/Open+Sans
     font_size = 20
-    with dpg.font(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf"),  # load font from Raven's main assets
+    with dpg.font(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf"),  # load font from Raven's main assets
                   font_size) as default_font:
-        pass
         guiutils.setup_font_ranges()
     dpg.bind_font(default_font)
 
@@ -144,6 +141,7 @@ def initialize_filedialogs():  # called at app startup
     global filedialog_save_image
     global filedialog_open_json
     global filedialog_save_all_emotions
+    cwd = os.getcwd()  # might change during filedialog init
     filedialog_open_image = FileDialog(title="Open input image",
                                        tag="open_image_dialog",
                                        callback=_open_image_callback,
@@ -152,7 +150,7 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".png",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "images"))
+                                       default_path=os.path.join(os.path.dirname(__file__), "..", "images"))
     filedialog_save_image = FileDialog(title="Save output image as PNG",
                                        tag="save_image_dialog",
                                        callback=_save_image_callback,
@@ -162,7 +160,7 @@ def initialize_filedialogs():  # called at app startup
                                        save_mode=True,
                                        default_file_extension=".png",  # used if the user does not provide a file extension when naming the save-as
                                        allow_drag=False,
-                                       default_path=os.getcwd())
+                                       default_path=cwd)
     filedialog_open_json = FileDialog(title="Open emotion JSON file",
                                        tag="open_json_dialog",
                                        callback=_open_json_callback,
@@ -171,7 +169,7 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".json",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "emotions"))
+                                       default_path=os.path.join(os.path.dirname(__file__), "..", "emotions"))
     filedialog_save_all_emotions = FileDialog(title="Save all emotions as JSON",
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
@@ -182,7 +180,7 @@ def initialize_filedialogs():  # called at app startup
                                               save_mode=True,
                                               default_file_extension="",  # used if the user does not provide a file extension when naming the save-as
                                               allow_drag=False,
-                                              default_path=os.getcwd())
+                                              default_path=cwd)
 
 # --------------------------------------------------------------------------------
 # "Open image" dialog
@@ -645,7 +643,7 @@ class PoseEditorGUI:
                          tag="source_no_image_loaded_text")
 
             # Emotion picker.
-            emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "emotions")).expanduser().resolve()
+            emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "emotions")).expanduser().resolve()
             self.emotions, self.emotion_names = load_emotion_presets(emotions_dir)
 
             with dpg.group():
@@ -955,7 +953,7 @@ class PoseEditorGUI:
 
         current_emotion_name = dpg.get_value(self.emotion_choice)
 
-        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "emotions")).expanduser().resolve()
+        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "emotions")).expanduser().resolve()
         self.emotions, self.emotion_names = load_emotion_presets(emotions_dir)
 
         dpg.configure_item(self.emotion_choice, items=self.emotion_names)
@@ -1173,7 +1171,6 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Install the THA3 models if needed
-    talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "vendor")).expanduser().resolve()
     modelsdir = str(talkinghead_path / "tha3" / "models")
     maybe_install_models(hf_reponame=args.models, modelsdir=modelsdir)
 
@@ -1217,3 +1214,6 @@ if __name__ == "__main__":
     # dpg.start_dearpygui()  # automatic render loop
 
     dpg.destroy_context()
+
+def main():  # TODO: we don't really need this; it's just for console_scripts so that we can provide a command-line entrypoint.
+    pass

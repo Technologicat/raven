@@ -1,12 +1,16 @@
-"""Python client-side API for Talkinghead. This talks with the server through the web API so you don't have to.
+"""Python bindings for raven-avatar web API.
+
+This talks with the server so you can just call regular Python functions.
+
+For documentation, see the server side in `raven.avatar.server.app`.
 
 We support:
 
   - classify
   - talkinghead
-  - TTS, via https://github.com/remsky/Kokoro-FastAPI
+  - TTS (with and without lip-syncing the talkinghead), via https://github.com/remsky/Kokoro-FastAPI
 
-This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
+This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["init_module",
@@ -41,9 +45,9 @@ from unpythonic.env import env as envcls
 
 import pygame  # for audio (text to speech) support
 
-from ..common import bgtask
+from ...common import bgtask
 
-from . import netutil
+from ..common import netutil
 
 # ----------------------------------------
 # Module bootup

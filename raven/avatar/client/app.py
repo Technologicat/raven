@@ -1,10 +1,11 @@
-"""Postprocessor settings editor app for Talkinghead. Doubles as a tech demo.
+"""Avatar client.
 
-!!! Start `server.py` first before running this app! !!!
+!!! Start `raven.avatar.server.app` first before running this app! !!!
 
-This app is an editor for the postprocessor settings. To edit the emotion templates, see the separate app `editor.py`.
+This GUI app is an editor for the avatar's postprocessor settings, and a live test environment for your characters.
+To edit the emotion templates, see the separate app `raven.avatar.pose_editor.app`.
 
-This module is licensed under the 2-clause BSD license, to facilitate Talkinghead integration anywhere.
+This module is licensed under the 2-clause BSD license.
 """
 
 # nice to have (maybe later):
@@ -47,15 +48,16 @@ if platform.system().upper() == "LINUX":
 
 import dearpygui.dearpygui as dpg
 
-from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
-from ..common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from ..common import bgtask
-from ..common import guiutils
+from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
+from ...common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common import bgtask
+from ...common import guiutils
 
-from . import client_api  # convenient Python functions that abstract away the web API
-from . import config
-from . import postprocessor
-from .util import RunningAverage
+from ..common import config
+from ..common.postprocessor import Postprocessor  # so we can query the filters (TODO: add a web API to get them from the actual running server?)
+from ..common.running_average import RunningAverage
+
+from . import api  # convenient Python functions that abstract away the web API
 
 # ----------------------------------------
 # Module bootup
@@ -68,14 +70,14 @@ avatar_api_key_file = config_dir / "api_key.txt"
 tts_api_key_file = config_dir / "tts_api_key.txt"
 
 bg = concurrent.futures.ThreadPoolExecutor()
-task_manager = bgtask.TaskManager(name="talkinghead_example_client",
+task_manager = bgtask.TaskManager(name="avatar_client",
                                   mode="concurrent",
                                   executor=bg)
-client_api.init_module(avatar_url=avatar_url,
-                       avatar_api_key_file=avatar_api_key_file,
-                       tts_url=tts_url,
-                       tts_api_key_file=tts_api_key_file,
-                       executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
+api.init_module(avatar_url=avatar_url,
+                avatar_api_key_file=avatar_api_key_file,
+                tts_url=tts_url,
+                tts_api_key_file=tts_api_key_file,
+                executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -91,9 +93,8 @@ with dpg.font_registry() as the_font_registry:
     # Change the default font to something that looks clean and has good on-screen readability.
     # https://fonts.google.com/specimen/Open+Sans
     font_size = 20
-    with dpg.font(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf"),  # load font from Raven's main assets
+    with dpg.font(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf"),  # load font from Raven's main assets
                   font_size) as default_font:
-        pass
         guiutils.setup_font_ranges()
     dpg.bind_font(default_font)
 
@@ -127,7 +128,7 @@ with dpg.theme(tag="disablable_button_theme"):
 
 viewport_width = 1900
 viewport_height = 980
-dpg.create_viewport(title="Talkinghead settings editor",
+dpg.create_viewport(title="Avatar client",
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()
@@ -150,6 +151,7 @@ def initialize_filedialogs():  # called at app startup
     global filedialog_open_json
     global filedialog_open_animator_settings
     global filedialog_save_animator_settings
+    cwd = os.getcwd()  # might change during filedialog init
     filedialog_open_input_image = FileDialog(title="Open input image",
                                              tag="open_input_image_dialog",
                                              callback=_open_input_image_callback,
@@ -158,7 +160,7 @@ def initialize_filedialogs():  # called at app startup
                                              file_filter=".png",
                                              multi_selection=False,
                                              allow_drag=False,
-                                             default_path=os.path.join(os.path.dirname(__file__), "images"))
+                                             default_path=os.path.join(os.path.dirname(__file__), "..", "images"))
     filedialog_open_backdrop_image = FileDialog(title="Open backdrop image",
                                                 tag="open_backdrop_image_dialog",
                                                 callback=_open_backdrop_image_callback,
@@ -167,7 +169,7 @@ def initialize_filedialogs():  # called at app startup
                                                 file_filter=".png",
                                                 multi_selection=False,
                                                 allow_drag=False,
-                                                default_path=os.path.join(os.path.dirname(__file__), "backdrops"))
+                                                default_path=os.path.join(os.path.dirname(__file__), "..", "backdrops"))
     filedialog_open_json = FileDialog(title="Open emotion JSON file",
                                        tag="open_json_dialog",
                                        callback=_open_json_callback,
@@ -176,7 +178,7 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".json",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "emotions"))
+                                       default_path=os.path.join(os.path.dirname(__file__), "..", "emotions"))
     filedialog_open_animator_settings = FileDialog(title="Open animator settings JSON file",
                                                    tag="open_animator_settings_dialog",
                                                    callback=_open_animator_settings_callback,
@@ -185,7 +187,7 @@ def initialize_filedialogs():  # called at app startup
                                                    file_filter=".json",
                                                    multi_selection=False,
                                                    allow_drag=False,
-                                                   default_path=os.path.dirname(__file__))
+                                                   default_path=os.path.join(os.path.dirname(__file__), ".."))
     filedialog_save_animator_settings = FileDialog(title="Save animator settings JSON file",
                                                    tag="save_animator_settings_dialog",
                                                    callback=_save_animator_settings_callback,
@@ -195,7 +197,7 @@ def initialize_filedialogs():  # called at app startup
                                                    save_mode=True,
                                                    default_file_extension=".json",  # used if the user does not provide a file extension when naming the save-as
                                                    allow_drag=False,
-                                                   default_path=os.getcwd())
+                                                   default_path=cwd)
 
 # --------------------------------------------------------------------------------
 # "Open input image" dialog
@@ -418,10 +420,10 @@ class PostprocessorSettingsEditorGUI:
         self.animator_settings = None  # not loaded yet
 
         dpg.add_texture_registry(tag="talkinghead_example_textures")  # the DPG live texture and the window backdrop texture will be stored here
-        dpg.set_viewport_title(f"Talkinghead settings editor [{avatar_url}]")
+        dpg.set_viewport_title(f"Avatar client [{avatar_url}]")
 
         with dpg.window(tag="talkinghead_main_window",
-                        label="Talkinghead settings editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
+                        label="Avatar client main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 # We can use a borderless child window as a fixed-size canvas that crops anything outside it (instead of automatically showing a scrollbar).
                 # DPG adds its theme's margins, which in our case is 8 pixels of padding per side, hence the -16 to exactly cover the viewport's actually available height.
@@ -511,7 +513,7 @@ class PostprocessorSettingsEditorGUI:
 
                     # Interactive demo controls
                     dpg.add_text("Emotion [Ctrl+E]")
-                    self.emotion_names = client_api.classify_labels()
+                    self.emotion_names = api.classify_labels()
                     if "neutral" in self.emotion_names:
                         self.emotion_names.remove("neutral")
                         self.emotion_names = ["neutral"] + self.emotion_names
@@ -534,12 +536,12 @@ class PostprocessorSettingsEditorGUI:
                     dpg.add_spacer(height=8)
 
                     # AI speech synthesizer
-                    tts_alive = client_api.tts_available()
+                    tts_alive = api.tts_available()
                     if tts_alive:
                         print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS server at {tts_url}.{Style.RESET_ALL}")
                         print(f"{Fore.GREEN}{Style.BRIGHT}Speech synthesis is available.{Style.RESET_ALL}")
                         heading_label = f"Voice [Ctrl+V] [{tts_url}]"
-                        self.voice_names = client_api.tts_voices()
+                        self.voice_names = api.tts_voices()
                     else:
                         print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS server at {tts_url}.{Style.RESET_ALL} Is the server running?")
                         print(f"{Fore.YELLOW}{Style.BRIGHT}Speech synthesis is NOT available.{Style.RESET_ALL}")
@@ -574,7 +576,7 @@ class PostprocessorSettingsEditorGUI:
                     def make_reset_filter_callback(filter_name):  # freeze by closure
                         def reset_filter():
                             logger.info(f"reset_filter: resetting '{filter_name}' to defaults.")
-                            all_filters = dict(postprocessor.Postprocessor.get_filters())
+                            all_filters = dict(Postprocessor.get_filters())
                             defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
                             ranges = all_filters[filter_name]["ranges"]  # for GUI hints
                             for param_name in defaults:
@@ -614,7 +616,7 @@ class PostprocessorSettingsEditorGUI:
                         pretty = pretty[0].upper() + pretty[1:]
                         return pretty
 
-                    for filter_name, param_info in postprocessor.Postprocessor.get_filters():
+                    for filter_name, param_info in Postprocessor.get_filters():
                         with dpg.group(horizontal=True):
                             dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
                             dpg.add_checkbox(label=prettify(filter_name), default_value=False,
@@ -836,7 +838,7 @@ class PostprocessorSettingsEditorGUI:
         """Strip to what we can currently set up in the GUI. Fixed render order, with at most one copy of each filter."""
         input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
         gui_postprocessor_chain = []
-        for filter_name, param_info in postprocessor.Postprocessor.get_filters():  # this performs the reordering
+        for filter_name, param_info in Postprocessor.get_filters():  # this performs the reordering
             if filter_name in input_dict:
                 gui_postprocessor_chain.append((filter_name, input_dict[filter_name]))
         return gui_postprocessor_chain
@@ -846,7 +848,7 @@ class PostprocessorSettingsEditorGUI:
 
         Be sure to feed your postprocessor chain through `strip_postprocessor_chain_for_gui` first.
         """
-        all_filters = dict(postprocessor.Postprocessor.get_filters())
+        all_filters = dict(Postprocessor.get_filters())
 
         validated_postprocessor_chain = []
         for filter_name, filter_settings in postprocessor_chain:
@@ -862,7 +864,7 @@ class PostprocessorSettingsEditorGUI:
 
     def populate_gui_from_canonized_postprocessor_chain(self, postprocessor_chain):
         """Ordering: strip -> canonize -> populate GUI"""
-        all_filters = dict(postprocessor.Postprocessor.get_filters())
+        all_filters = dict(Postprocessor.get_filters())
         input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
         for filter_name in all_filters:
             if filter_name not in input_dict:
@@ -880,7 +882,7 @@ class PostprocessorSettingsEditorGUI:
 
     def generate_postprocessor_chain_from_gui(self):
         """Return a postprocessor_chain representing the postprocessor settings currently in the GUI. For saving."""
-        all_filters = dict(postprocessor.Postprocessor.get_filters())
+        all_filters = dict(Postprocessor.get_filters())
         postprocessor_chain = []
         for filter_name in all_filters:
             if dpg.get_value(f"{filter_name}_checkbox") is False:
@@ -905,12 +907,12 @@ class PostprocessorSettingsEditorGUI:
         logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
         self.current_emotion = dpg.get_value(self.emotion_choice)
         logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sending emotion '{self.current_emotion}'")
-        client_api.talkinghead_set_emotion(self.current_emotion)
+        api.talkinghead_set_emotion(self.current_emotion)
 
     def load_input_image(self, filename: Union[pathlib.Path, str]) -> None:
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_input_image: loading avatar image '{filename}'")
-            client_api.talkinghead_load(filename)
+            api.talkinghead_load(filename)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_input_image: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -924,7 +926,7 @@ class PostprocessorSettingsEditorGUI:
     def load_json(self, filename: Union[pathlib.Path, str]) -> None:
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_json: loading emotion templates '{filename}'")
-            client_api.talkinghead_load_emotion_templates_from_file(filename)
+            api.talkinghead_load_emotion_templates_from_file(filename)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_json: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -982,7 +984,7 @@ class PostprocessorSettingsEditorGUI:
             self.animator_settings.update(custom_animator_settings)
 
             # Send to server
-            client_api.talkinghead_load_animator_settings(self.animator_settings)
+            api.talkinghead_load_animator_settings(self.animator_settings)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.on_gui_settings_change: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -1030,7 +1032,7 @@ class PostprocessorSettingsEditorGUI:
             animator_settings.update(custom_animator_settings)
 
             # Send to server
-            client_api.talkinghead_load_animator_settings(animator_settings)
+            api.talkinghead_load_animator_settings(animator_settings)
 
             # ...and only if that is successful, remember the settings.
             self.animator_settings = animator_settings
@@ -1071,30 +1073,30 @@ class PostprocessorSettingsEditorGUI:
     def toggle_talking(self) -> None:
         """Toggle the talkinghead's talking state (simple randomized mouth animation)."""
         if not self.talking_animation_running:
-            client_api.talkinghead_start_talking()
+            api.talkinghead_start_talking()
             dpg.set_item_label("start_stop_talking_button", "Stop [Ctrl+T]")
         else:
-            client_api.talkinghead_stop_talking()
+            api.talkinghead_stop_talking()
             dpg.set_item_label("start_stop_talking_button", "Start [Ctrl+T]")
         self.talking_animation_running = not self.talking_animation_running
 
     def toggle_animator_paused(self) -> None:
         """Pause or resume the animation. Pausing when the talkinghead won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
         if self.animator_running:
-            client_api.talkinghead_unload()
+            api.talkinghead_unload()
             dpg.set_value("please_standby_text", "[Animator is paused]")
             dpg.show_item("please_standby_text")
             dpg.hide_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")
         else:
-            client_api.talkinghead_reload()
+            api.talkinghead_reload()
             dpg.hide_item("please_standby_text")
             dpg.show_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")
         self.animator_running = not self.animator_running
 
     def on_stop_speaking(self, sender, app_data) -> None:
-        client_api.tts_stop()
+        api.tts_stop()
         dpg.set_item_label("speak_button", "Start speaking [Ctrl+S]")
         dpg.set_item_callback("speak_button", self.on_start_speaking)
         self.speaking = False
@@ -1109,30 +1111,30 @@ class PostprocessorSettingsEditorGUI:
         if text == "":
             # text = "Testing the AI speech synthesizer."
             # text = '"Wait", I said, but the cat said "meow".'  # includes quotes
-            # text = "INFO:raven.avatar.client_api:tts_speak_lipsynced.speak: starting"  # log message
+            # text = "INFO:raven.avatar.client.api:tts_speak_lipsynced.speak: starting"  # log message
             # text = 'close mouth only if the pause is at least half a second, else act like "!keep".'  # code comment
             # text = "Sharon Apple is a computer-generated virtual idol and a central character in the Macross Plus franchise, created by Shoji Kawamori."
             text = "Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts."
         if dpg.get_value("speak_lipsync_checkbox"):
             def stop_lipsync_speaking():
                 self.on_stop_speaking(None, None)  # stop the TTS and update the GUI
-            client_api.tts_speak_lipsynced(voice=selected_voice,
-                                           text=text,
-                                           speed=dpg.get_value("speak_speed_slider") / 10,
-                                           video_offset=dpg.get_value("speak_video_offset") / 10,
-                                           start_callback=None,  # no start callback needed, the TTS client will start lipsyncing once the audio starts.
-                                           stop_callback=stop_lipsync_speaking)
+            api.tts_speak_lipsynced(voice=selected_voice,
+                                    text=text,
+                                    speed=dpg.get_value("speak_speed_slider") / 10,
+                                    video_offset=dpg.get_value("speak_video_offset") / 10,
+                                    start_callback=None,  # no start callback needed, the TTS client will start lipsyncing once the audio starts.
+                                    stop_callback=stop_lipsync_speaking)
         else:
             def start_nonlipsync_speaking():
-                client_api.talkinghead_start_talking()
+                api.talkinghead_start_talking()
             def stop_nonlipsync_speaking():
-                client_api.talkinghead_stop_talking()
+                api.talkinghead_stop_talking()
                 self.on_stop_speaking(None, None)  # stop the TTS and update the GUI
-            client_api.tts_speak(voice=selected_voice,
-                                 text=text,
-                                 speed=dpg.get_value("speak_speed_slider") / 10,
-                                 start_callback=start_nonlipsync_speaking,
-                                 stop_callback=stop_nonlipsync_speaking)
+            api.tts_speak(voice=selected_voice,
+                          text=text,
+                          speed=dpg.get_value("speak_speed_slider") / 10,
+                          start_callback=start_nonlipsync_speaking,
+                          stop_callback=stop_nonlipsync_speaking)
 
 def toggle_fullscreen():
     dpg.toggle_viewport_fullscreen()
@@ -1240,7 +1242,7 @@ class ResultFeedReader:
         self.gen = None
 
     def start(self):
-        self.gen = client_api.talkinghead_result_feed(expected_format=gui_instance.comm_format)
+        self.gen = api.talkinghead_result_feed(expected_format=gui_instance.comm_format)
 
     def is_running(self):
         return self.gen is not None
@@ -1375,7 +1377,7 @@ def update_live_texture(task_env) -> None:
 
 if __name__ == "__main__":
     try:
-        client_api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
+        api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
     except requests.exceptions.ConnectionError as exc:
         print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {avatar_url}.{Style.RESET_ALL} Is the server running?")
         logger.error(f"Cannot connect to avatar server at {avatar_url}: {type(exc)}: {exc}")
@@ -1385,10 +1387,10 @@ if __name__ == "__main__":
 
     gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
-    client_api.talkinghead_load(os.path.join(os.path.dirname(__file__), "images", "example.png"))  # this will also start the animator if it was paused
+    api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))  # this will also start the animator if it was paused
 
     def shutdown() -> None:
-        client_api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
+        api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
         task_manager.clear(wait=True)
         animation.animator.clear()
         global gui_instance
@@ -1408,7 +1410,7 @@ if __name__ == "__main__":
     # so that the GUI controls for the postprocessor are available, and so that if there are any issues
     # during loading, we can open a modal dialog.
     def _load_initial_animator_settings():
-        animator_json_path = os.path.join(os.path.dirname(__file__), "animator.json")
+        animator_json_path = os.path.join(os.path.dirname(__file__), "..", "animator.json")
 
         if not os.path.exists(animator_json_path):
             logger.info(f"_load_initial_animator_settings: Default animator settings file '{animator_json_path}' missing, writing a default config.")
@@ -1429,7 +1431,7 @@ if __name__ == "__main__":
 
         gui_instance.load_animator_settings(animator_json_path)
 
-        # gui_instance.load_backdrop_image(os.path.join(os.path.dirname(__file__), "backdrops", "anime-plains.png"))  # DEBUG
+        # gui_instance.load_backdrop_image(os.path.join(os.path.dirname(__file__), "..", "backdrops", "anime-plains.png"))  # DEBUG
 
     dpg.set_frame_callback(2, _load_initial_animator_settings)
 

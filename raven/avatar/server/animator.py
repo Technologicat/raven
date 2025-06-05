@@ -41,16 +41,18 @@ import torch
 
 from flask import Response
 
-from .vendor.tha3.poser.modes.load_poser import load_poser
-from .vendor.tha3.poser.poser import Poser
-from .vendor.tha3.util import (resize_PIL_image,
-                               extract_PIL_image_from_filelike,
-                               extract_pytorch_image_from_PIL_image)
+from ..vendor.tha3.poser.modes.load_poser import load_poser
+from ..vendor.tha3.poser.poser import Poser
+from ..vendor.tha3.util import (resize_PIL_image,
+                                extract_PIL_image_from_filelike,
+                                extract_pytorch_image_from_PIL_image)
 
-from . import config
-from .postprocessor import Postprocessor
-from .upscaler import Upscaler
-from .util import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, RunningAverage, convert_linear_to_srgb
+from ..common import config
+from ..common.postprocessor import Postprocessor
+from ..common.running_average import RunningAverage
+from ..common.upscaler import Upscaler
+
+from .util import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, convert_linear_to_srgb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,7 +60,7 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------------
 # Global variables
 
-vendor_basedir = pathlib.Path(os.path.join(os.path.dirname(__file__), "vendor")).expanduser().resolve()
+vendor_basedir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "vendor")).expanduser().resolve()
 
 global_animator_instance = None
 _animator_output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
@@ -455,7 +457,7 @@ class Animator:
                     If still in doubt, see the GUI panel implementations in `editor.py`.
         """
         # Load defaults as a base
-        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "emotions")).expanduser().resolve()
+        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "emotions")).expanduser().resolve()
         self.emotions, self.emotion_names = load_emotion_presets(emotions_dir)
 
         # Then override defaults, and add any new custom emotions
@@ -492,7 +494,7 @@ class Animator:
 
         # Load server-side settings
         try:
-            animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "animator.json")).expanduser().resolve()
+            animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "animator.json")).expanduser().resolve()
             with open(animator_json_path, "r") as json_file:
                 server_settings = json.load(json_file)
         except Exception as exc:

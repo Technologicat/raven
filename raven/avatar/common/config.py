@@ -1,6 +1,6 @@
 """Avatar configuration.
 
-This module is licensed under the 2-clause BSD licensed, to facilitate Talkinghead integration anywhere.
+This module is licensed under the 2-clause BSD license.
 """
 
 # Port the raven-avatar app is hosted on. Can be overridden on the command line.

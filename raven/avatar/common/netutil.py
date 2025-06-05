@@ -1,6 +1,6 @@
 """Networking-related utilities.
 
-This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
+This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["multipart_x_mixed_replace_payload_extractor"]

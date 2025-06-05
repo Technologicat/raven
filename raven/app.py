@@ -62,11 +62,14 @@ with timer() as tim:
     from .vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     from .vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
-    from . import animation
-    from . import bgtask
+    from .common import animation
+    from .common import bgtask
+    from .common import guiutils
+    from .common import numutils
+    from .common import utils
+
     from . import config
     from . import preprocess
-    from . import utils
 
     gui_config = config.gui_config  # shorthand, this is used a lot
 
@@ -106,7 +109,7 @@ def get_data_idxs_at_mouse():
     global dataset  # only for documenting intent (we don't write to it)
     if dataset is None:  # nothing plotted when no dataset loaded
         return utils.make_blank_index_array()
-    pixels_per_data_unit_x, pixels_per_data_unit_y = utils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
+    pixels_per_data_unit_x, pixels_per_data_unit_y = guiutils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
     if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:
         return utils.make_blank_index_array()
 
@@ -399,37 +402,6 @@ def is_any_modal_window_visible():
             is_open_import_dialog_visible() or is_save_import_dialog_visible() or
             is_help_window_visible())
 
-def recenter_window(thewindow):  # TODO: fix regression: currently doesn't place correctly the first time a given window is opened.
-    """Reposition `thewindow` (DPG ID or tag), if visible, so that it is centered in the viewport."""
-    if thewindow is None:  # Some windows in Raven are created on the fly, and the handle is `None` until the window has been created.
-        return
-    # Sanity check. Just try to call *some* DPG function with `thewindow` to check that the handle is valid.
-    try:
-        dpg.get_item_alias(thewindow)
-    except Exception:
-        logger.debug(f"recenter_window: {thewindow} does not exist, skipping.")
-        return
-
-    main_window_w, main_window_h = utils.get_widget_size(main_window)  # Get the size of the main window, and hence also the viewport, in pixels.
-    logger.debug(f"recenter_window: Main window size is {main_window_w}x{main_window_h}.")
-
-    # # Render offscreen so we get the final size. Only needed if the size can change.
-    # dpg.set_item_pos(thewindow,
-    #                  (main_window_w,
-    #                   main_window_h))
-    # dpg.show_item(thewindow)
-    # logger.debug(f"recenter_window: After show command: Window is visible? {dpg.is_item_visible(thewindow)}.")
-    # dpg.split_frame()  # wait for render
-    # logger.debug(f"recenter_window: After wait for render: Window is visible? {dpg.is_item_visible(thewindow)}.")
-
-    w, h = utils.get_widget_size(thewindow)
-    logger.debug(f"recenter_window: window {thewindow} (tag '{dpg.get_item_alias(thewindow)}', type {dpg.get_item_type(thewindow)}) size is {w}x{h}.")
-
-    # Center the window in the viewport
-    dpg.set_item_pos(thewindow,
-                     (max(0, (main_window_w - w) // 2),
-                      max(0, (main_window_h - h) // 2)))
-
 # --------------------------------------------------------------------------------
 # Word cloud
 
@@ -630,7 +602,7 @@ with timer() as tim:
         # https://fonts.google.com/specimen/Open+Sans
         with dpg.font(os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Regular.ttf"),
                       gui_config.font_size) as default_font:
-            utils.setup_font_ranges()
+            guiutils.setup_font_ranges()
         dpg.bind_font(default_font)
 
         # FontAwesome 6 for symbols (toolbar button icons etc.).
@@ -660,7 +632,7 @@ with timer() as tim:
     # After the app has started, it's fine to call it as often as needed.
     #
     dpg_markdown.set_font_registry(the_font_registry)
-    dpg_markdown.set_add_font_function(utils.markdown_add_font_callback)
+    dpg_markdown.set_add_font_function(guiutils.markdown_add_font_callback)
     # Set a font that renders scientific Unicode text acceptably.
     # # https://fonts.google.com/specimen/Inter+Tight
     # dpg_markdown.set_font(font_size=gui_config.font_size,
@@ -1036,7 +1008,7 @@ def toggle_preprocessor_window():
         dpg.hide_item("preprocessor_window")
     else:
         dpg.show_item("preprocessor_window")
-        recenter_window("preprocessor_window")
+        guiutils.recenter_window("preprocessor_window", reference_window=main_window)
 
 def show_open_import_dialog():
     """Button callback. Show the open import file dialog, for the user to pick which BibTeX files to import."""
@@ -1271,8 +1243,8 @@ class PlotterPulsatingGlow(animation.Animation):  # this animation is set up by 
         a0_dim = 32
         a1_dim = 64
         # Interpolate the coefficients from bright to dim, smoothly, depending on relative data mass.
-        relative_data_mass = utils.clamp(n_data / n_many)  # 0 ... 1, linear clamp
-        r = utils.nonanalytic_smooth_transition(relative_data_mass, m=2.0)  # 0 ... 1, smoothed
+        relative_data_mass = numutils.clamp(n_data / n_many)  # 0 ... 1, linear clamp
+        r = numutils.nonanalytic_smooth_transition(relative_data_mass, m=2.0)  # 0 ... 1, smoothed
         a0 = a0_bright * (1.0 - r) + a0_dim * r
         a1 = a1_bright * (1.0 - r) + a1_dim * r
         # Compute the final alpha using the interpolated coefficients.
@@ -2379,21 +2351,21 @@ def _update_annotation(*, task_env, env=None):
                     dpg.show_item(annotation_window)
 
                     # Tooltip window dimensions after autosizing not available yet, so we need to wait until we can compute the final position the tooltip.
-                    utils.wait_for_resize(annotation_window)
+                    guiutils.wait_for_resize(annotation_window)
                     tooltip_size = dpg.get_item_rect_size(annotation_window)
 
                     # Position the tooltip elegantly, trying to keep the whole tooltip within the viewport area.
                     #
                     # IMPORTANT: This automatically positions the tooltip a bit off from the mouse cursor position so that the cursor won't hover over it.
                     # This keeps `get_plot_mouse_pos` working, as well as improves tooltip readability since the mouse cursor doesn't cover part of it.
-                    xpos = utils.compute_tooltip_position_scalar(algorithm="snap",
-                                                                 cursor_pos=mouse_pos[0],
-                                                                 tooltip_size=tooltip_size[0],
-                                                                 viewport_size=w)
-                    ypos = utils.compute_tooltip_position_scalar(algorithm="smooth",
-                                                                 cursor_pos=mouse_pos[1],
-                                                                 tooltip_size=tooltip_size[1],
-                                                                 viewport_size=h)
+                    xpos = guiutils.compute_tooltip_position_scalar(algorithm="snap",
+                                                                    cursor_pos=mouse_pos[0],
+                                                                    tooltip_size=tooltip_size[0],
+                                                                    viewport_size=w)
+                    ypos = guiutils.compute_tooltip_position_scalar(algorithm="smooth",
+                                                                    cursor_pos=mouse_pos[1],
+                                                                    tooltip_size=tooltip_size[1],
+                                                                    viewport_size=h)
 
                     dpg.set_item_pos(annotation_window, [xpos, ypos])
                 dpg.show_item(annotation_window)  # just in case it's hidden
@@ -2470,7 +2442,7 @@ report_markdown = box("")  # Text report of full content of info panel, in Markd
 def get_info_panel_content_area_start_pos():
     """Return `(x0, y0)`, the upper left corner of the content area of the info panel, in viewport coordinates."""
     # Item info panel starts at, in viewport coordinates:
-    x0, y0 = utils.get_widget_pos("item_information_panel")  # tag
+    x0, y0 = guiutils.get_widget_pos("item_information_panel")  # tag
     # Its content area starts at, in viewport coordinates:
     x0_content = x0 + 8 + 3  # 8px outer padding + 3px inner padding
     y0_content = y0 + 8 + 3  # 8px outer padding + 3px inner padding
@@ -2479,7 +2451,7 @@ def get_info_panel_content_area_start_pos():
 def get_info_panel_content_area_size():
     """Return `(width, height), the size of the content area of the info panel, in pixels.`"""
     _update_info_panel_height()  # HACK: at app startup, the main window thinks it has height=100, which is wrong.
-    return utils.get_widget_size("item_information_panel")  # tag
+    return guiutils.get_widget_size("item_information_panel")  # tag
 
 # ----------------------------------------
 # Info panel updater: task submitter.
@@ -2615,15 +2587,15 @@ def info_panel_find_next_or_prev_item(widgets, *, _next=True, kluge=True, extra_
     else:
         kluge = 0
     def is_completely_below_top_of_content_area(widget):
-        if utils.is_completely_below_target_y(widget, target_y=y0_content + kluge + extra_y_offset) is not None:
+        if guiutils.is_completely_below_target_y(widget, target_y=y0_content + kluge + extra_y_offset) is not None:
             return widget
         return None
     # logger.debug(f"info_panel_find_next_or_prev_item: frame {dpg.get_frame_count()}: searching (_next = {_next}, kluge = {kluge}, extra_y_offset = {extra_y_offset}).")
-    return utils.binary_search_widget(widgets=widgets,
-                                      accept=is_completely_below_top_of_content_area,
-                                      consider=None,
-                                      skip=None,
-                                      direction=("right" if _next else "left"))
+    return guiutils.binary_search_widget(widgets=widgets,
+                                         accept=is_completely_below_top_of_content_area,
+                                         consider=None,
+                                         skip=None,
+                                         direction=("right" if _next else "left"))
 
 def scroll_info_panel_to_position(target_y_scroll):
     """Scroll the info panel to given position.
@@ -2651,7 +2623,7 @@ def scroll_info_panel_to_position(target_y_scroll):
     max_y_scroll = dpg.get_y_scroll_max("item_information_panel")  # tag
     if target_y_scroll is None:
         target_y_scroll = max_y_scroll
-    target_y_scroll = utils.clamp(target_y_scroll, min_y_scroll, max_y_scroll)
+    target_y_scroll = numutils.clamp(target_y_scroll, min_y_scroll, max_y_scroll)
 
     # Dispatch the animation.
     #
@@ -2809,7 +2781,7 @@ def _copy_entry_to_clipboard(item):
         data_idx = info_panel_widget_to_data_idx[item]
         entry = dataset.sorted_entries[data_idx]
 
-        button = utils.find_widget_depth_first(item, accept=is_copy_entry_to_clipboard_button)
+        button = guiutils.find_widget_depth_first(item, accept=is_copy_entry_to_clipboard_button)
         user_data = get_user_data(button)
         kind_, data = user_data
         tooltip, tooltip_text = data
@@ -3283,12 +3255,12 @@ def _update_info_panel(*, task_env=None, env=None):
             else:
                 logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Selection not changed; can anchor on any info panel item.")
                 possible_anchors_only = list(info_panel_entry_title_widgets.values())
-            is_partially_below_top_of_viewport = functools.partial(utils.is_partially_below_target_y, target_y=0)
-            item = utils.binary_search_widget(widgets=possible_anchors_only,
-                                              accept=is_partially_below_top_of_viewport,
-                                              consider=None,
-                                              skip=None,
-                                              direction="right")
+            is_partially_below_top_of_viewport = functools.partial(guiutils.is_partially_below_target_y, target_y=0)
+            item = guiutils.binary_search_widget(widgets=possible_anchors_only,
+                                                 accept=is_partially_below_top_of_viewport,
+                                                 consider=None,
+                                                 skip=None,
+                                                 direction="right")
 
             # Multi-anchor: anchor using any item visible in viewport.
             #
@@ -3299,7 +3271,7 @@ def _update_info_panel(*, task_env=None, env=None):
                 # There are only a few due to screen estate being limited (even at 4k resolution), so we can linearly scan them.
                 start_display_idx = info_panel_widget_to_display_idx[item]  # how-manyth item in the info panel
                 _, info_panel_h = get_info_panel_content_area_size()
-                is_partially_above_bottom_of_viewport = functools.partial(utils.is_partially_above_target_y, target_y=info_panel_h)
+                is_partially_above_bottom_of_viewport = functools.partial(guiutils.is_partially_above_target_y, target_y=info_panel_h)
                 visible_items = []
                 for item_ in islice(info_panel_entry_title_widgets.values())[start_display_idx:]:
                     if not is_partially_above_bottom_of_viewport(item_):
@@ -4053,7 +4025,7 @@ def show_help_window():
     logger.debug("show_help_window: Ensuring help window exists.")
     make_help_window()
     logger.debug("show_help_window: Recentering help window.")
-    recenter_window(help_window)
+    guiutils.recenter_window(help_window, reference_window=main_window)
     logger.debug("show_help_window: Showing help window.")
     dpg.show_item(help_window)  # For some reason, we need to do this *after* `set_item_pos` for a modal window, or this works only every other time (1, 3, 5, ...). Maybe a modal must be inside the viewport to successfully show it?
     enter_modal_mode()
@@ -4089,13 +4061,13 @@ def resize_gui():
     For the viewport resize callback, that one fires (*almost* always?) after the size has already changed.
     """
     logger.debug("resize_gui: Entered. Waiting for viewport size change.")
-    if utils.wait_for_resize(main_window):
+    if guiutils.wait_for_resize(main_window):
         _resize_gui()
     logger.debug("resize_gui: Done.")
 
 def _update_info_panel_height():
     """Resize the info panel content area RIGHT NOW, based on main window height."""
-    w, h = utils.get_widget_size(main_window)
+    w, h = guiutils.get_widget_size(main_window)
     dpg.set_item_height("item_information_panel", h - gui_config.info_panel_reserved_h)  # tag
 
 def _resize_gui():
@@ -4106,7 +4078,7 @@ def _resize_gui():
     logger.debug("_resize_gui: Updating info panel current item on-screen coordinates.")
     update_current_item_info()
     logger.debug("_resize_gui: Recentering help window.")
-    recenter_window(help_window)
+    guiutils.recenter_window(help_window, reference_window=main_window)
     logger.debug("_resize_gui: Updating annotation tooltip.")
     update_mouse_hover(force=True, wait=False)
     logger.debug("_resize_gui: Rebuilding dimmer overlay.")
@@ -4151,7 +4123,7 @@ def draw_select_radius_indicator():
 
     # Avoid unnecessary clear/redraw to prevent flickering
     p = dpg.get_plot_mouse_pos()
-    pixels_per_data_unit_x, pixels_per_data_unit_y = utils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")
+    pixels_per_data_unit_x, pixels_per_data_unit_y = guiutils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
     if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:  # no dataset open?
         clear_select_radius_indicator()
         return
@@ -4185,10 +4157,10 @@ def draw_select_radius_indicator():
 
 def mouse_inside_plot_widget():
     """Return whether the mouse cursor is inside the plot widget."""
-    return utils.is_mouse_inside_widget("plot")  # tag
+    return guiutils.is_mouse_inside_widget("plot")  # tag
 def mouse_inside_info_panel():
     """Return whether the mouse cursor is inside the info panel."""
-    return utils.is_mouse_inside_widget("item_information_panel")  # tag
+    return guiutils.is_mouse_inside_widget("item_information_panel")  # tag
 
 def mouse_wheel_callback(sender, app_data):
     """Update the plotter data tooltip when the user zooms with the mouse wheel.

@@ -28,9 +28,10 @@ from flask_compress import Compress
 
 import torch
 
+from ..common import config  # default models
+
 from . import animator
 from . import classify
-from . import config
 from . import embed
 from . import util
 from . import websearch
@@ -88,7 +89,7 @@ def after_request(response):
 
 @app.route("/", methods=["GET"])
 def index():
-    with open("./README.md", "r", encoding="utf8") as f:
+    with open(os.path.join(os.path.dirname(__file__), "..", "README.md"), "r", encoding="utf8") as f:
         content = f.read()
     return render_template_string(markdown.markdown(content, extensions=["tables"]))
 
@@ -504,7 +505,7 @@ classify.init_module(classification_model, device_string, torch_dtype)
 # --------------------
 # Talkinghead
 
-talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "vendor")).expanduser().resolve()
+talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "vendor")).expanduser().resolve()
 print(f"Talkinghead is installed at '{str(talkinghead_path)}'")
 
 sys.path.append(str(talkinghead_path))  # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy

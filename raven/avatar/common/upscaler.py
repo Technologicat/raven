@@ -1,6 +1,6 @@
 """Anime upscaler based on Anime4K-PyTorch.
 
-This module is licensed under the MIT license, to facilitate integration anywhere.
+This module is licensed under the MIT license (same license as Anime4K).
 """
 
 __all__ = ["Upscaler"]
@@ -8,7 +8,7 @@ __all__ = ["Upscaler"]
 import torch
 import torch.nn.functional
 
-from .vendor.anime4k import anime4k
+from ..vendor.anime4k import anime4k
 
 class Upscaler:
     def __init__(self,

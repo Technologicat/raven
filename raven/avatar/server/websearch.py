@@ -1,4 +1,4 @@
-"""Web search client for Raven.
+"""Web search client for Raven-avatar.
 
 Based on:
 
@@ -36,7 +36,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from unpythonic import memoize
 
-from . import config
+from ..common import config
 
 # --------------------------------------------------------------------------------
 # Bootup
