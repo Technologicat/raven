@@ -119,8 +119,8 @@ with dpg.theme() as global_theme:
         dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
 dpg.bind_theme(global_theme)  # set this theme as the default
 
-# TODO: viewport size depends on the image size, so it needs to be set up after `PoseEditorGUI` initializes
-dpg.create_viewport(title="THA3 Pose Editor",
+# Viewport size depends on the image size, so it needs to be tuned after `PoseEditorGUI` initializes
+dpg.create_viewport(title="Raven-avatar pose editor",
                     width=1600,
                     height=1000)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()
@@ -581,7 +581,7 @@ class MorphCategoryControlPanel:
 
 
 class PoseEditorGUI:
-    """Main app window for THA3 pose editor."""
+    """Main app window for pose editor."""
     def __init__(self, poser: Poser, device: torch.device, model: str):
         self.poser = poser
         self.dtype = self.poser.get_dtype()
@@ -609,10 +609,10 @@ class PoseEditorGUI:
             disp_device = torch.cuda.get_device_name(args.device)
         else:
             disp_device = "CPU"
-        dpg.set_viewport_title(f"THA3 Pose Editor [{disp_device}] [{model}]")
+        dpg.set_viewport_title(f"Raven-avatar pose editor [{disp_device}] [THA3:{model}]")
 
         with dpg.window(tag="pose_editor_window",
-                        label="THA3 Pose Editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
+                        label="Raven-avatar poser editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 self.init_left_panel()
                 self.init_control_panel()
