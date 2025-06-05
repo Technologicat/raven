@@ -114,25 +114,25 @@ The *THA3 Pose Editor* app included with *raven-avatar* is a GUI editor for thes
 
 The batch export of the pose editor produces a set of static expression images (and corresponding emotion templates), but also an `_emotions.json`, in your chosen output folder. You can use this file at the client end as `SillyTavern/public/characters/yourcharacternamehere/_emotions.json`. This is convenient if you have customized your emotion templates, and wish to share one of your characters with other users, making it automatically use your version of the templates.
 
-The file `_emotions.json` uses the same format as the factory settings in `raven/avatar/emotions/_defaults.json`.
+The file `_emotions.json` uses the same format as the factory settings in `raven/avatar/assets/emotions/_defaults.json`.
 
 Emotion template lookup order is:
 
 - The set of per-character custom templates sent by the ST client, read from `SillyTavern/public/characters/yourcharacternamehere/_emotions.json` if it exists.
-- Server defaults, from the individual files `raven/avatar/emotions/emotionnamehere.json`.
+- Server defaults, from the individual files `raven/avatar/assets/emotions/emotionnamehere.json`.
   - These are customizable. You can e.g. overwrite `curiosity.json` to change the default template for the *"curiosity"* emotion.
   - **IMPORTANT**: *However, updating SillyTavern-extras from git may overwrite your changes to the server-side default emotion templates. Keep a backup if you customize these.*
-- Factory settings, from `raven/avatar/emotions/_defaults.json`.
+- Factory settings, from `raven/avatar/assets/emotions/_defaults.json`.
   - **IMPORTANT**: Never overwrite or remove this file.
 
 Any emotion that is missing from a particular level in the lookup order falls through to be looked up at the next level.
 
 If you want to edit the emotion templates manually (without using the GUI) for some reason, the following may be useful sources of information:
 
-- `posedict_keys` in [`raven/avatar/util.py`](raven/avatar/util.py) lists the morphs available in THA3.
-- [`raven/avatar/vendor/tha3/poser/modes/pose_parameters.py`](raven/avatar/vendor/tha3/poser/modes/pose_parameters.py) contains some more detail.
+- `posedict_keys` in [`raven/avatar/server/util.py`](server/util.py) lists the morphs available in THA3.
+- [`raven/avatar/vendor/tha3/poser/modes/pose_parameters.py`](vendor/tha3/poser/modes/pose_parameters.py) contains some more detail.
   - *"Arity 2"* means `posedict_keys` has separate left/right morphs.
-- The GUI panel implementations in [`raven/avatar/editor.py`](raven/avatar/editor.py).
+- The GUI panel implementations in [`raven/avatar/pose_editor/app.py`](pose_editor/app.py).
 
 Any morph that is not mentioned for a particular emotion defaults to zero. Thus only those morphs that have nonzero values need to be mentioned.
 
@@ -144,10 +144,10 @@ Any morph that is not mentioned for a particular emotion defaults to zero. Thus 
 Animator and postprocessor settings lookup order is:
 
 - The custom per-character settings sent by the ST client, read from `SillyTavern/public/characters/yourcharacternamehere/_animator.json` if it exists.
-- Server defaults, from `raven/avatar/animator.json`, if it exists.
+- Server defaults, from `raven/avatar/assets/settings/animator.json`, if it exists.
   - This file is customizable.
   - **IMPORTANT**: *However, updating SillyTavern-extras from git may overwrite your changes to the server-side animator and postprocessor configuration. Keep a backup if you customize this.*
-- Built-in defaults, hardcoded as `animator_defaults` in [`raven/avatar/config.py`](raven/avatar/config.py).
+- Built-in defaults, hardcoded as `animator_defaults` in [`raven/avatar/common/config.py`](common/config.py).
   - **IMPORTANT**: Never change these!
   - The built-in defaults are used for validation of available settings, so they are guaranteed to be complete.
 
@@ -155,7 +155,7 @@ Any setting that is missing from a particular level in the lookup order falls th
 
 The idea of per-character animator and postprocessor settings is that this allows giving some personality to different characters. For example, they may sway by different amounts, the breathing cycle duration may be different, and importantly, the postprocessor settings may be different - which allows e.g. making a specific character into a scifi hologram, while others render normally.
 
-Here is a complete example of `animator.json`, showing the default values:
+Here is a complete example of `animator.json`, showing the default values (TODO: this example is out of date):
 
 ```json
 {"target_fps": 25,
@@ -181,7 +181,7 @@ Here is a complete example of `animator.json`, showing the default values:
 
 Note that some settings make more sense as server defaults, while others make more sense as per-character settings.
 
-Particularly, `target_fps` makes the most sense to set globally at the server side, in `raven/avatar/animator.json`, while almost everything else makes more sense per-character, in `SillyTavern/public/characters/yourcharacternamehere/_animator.json`. Nevertheless, providing server-side defaults is a good idea, since the per-character animation configuration is optional.
+Particularly, `target_fps` makes the most sense to set globally at the server side, in `raven/avatar/assets/settings/animator.json`, while almost everything else makes more sense per-character, in `SillyTavern/public/characters/yourcharacternamehere/_animator.json`. Nevertheless, providing server-side defaults is a good idea, since the per-character animation configuration is optional.
 
 **What each settings does**:
 
@@ -317,7 +317,7 @@ Then we again render the output on a simulated CRT TV, as appropriate for the 19
 
 This example combines the default values for the animator with the "scifi hologram" postprocessor example above.
 
-This part goes **at the server end** as `raven/avatar/animator.json`, to make it apply to all avatars that do not provide their own values for these settings:
+This part goes **at the server end** as `raven/avatar/assets/settings/animator.json`, to make it apply to all avatars that do not provide their own values for these settings:
 
 ```json
 {"target_fps": 25,
@@ -361,11 +361,11 @@ The pose editor uses the same THA3 poser models as the live mode. If the directo
 With this app, you can:
 
 - **Graphically edit the emotion templates** used by the live mode.
-  - They are JSON files, found in `raven/avatar/emotions/`.
+  - They are JSON files, found in `raven/avatar/assets/emotions/`.
     - The GUI also has a dropdown to quickload any preset.
   - **NEVER** delete or modify `_defaults.json`. That file stores the factory settings, and the app will not run without it.
   - For blunder recovery: to reset an emotion back to its factory setting, see the `--factory-reset=EMOTION` command-line option, which will use the factory settings to overwrite the corresponding emotion preset JSON. To reset **all** emotion presets to factory settings, see `--factory-reset-all`. Careful, these operations **cannot** be undone!
-    - Currently, these options do **NOT** regenerate the example images also provided in `raven/avatar/emotions/`.
+    - Currently, these options do **NOT** regenerate the example images also provided in `raven/avatar/assets/emotions/`.
 - **Batch-generate the 28 static expression sprites** for a character.
   - Input is the same single static image format as used by the live mode.
   - You can then use the generated images as the static expression sprites for your AI character. No need to run the live mode.

@@ -153,7 +153,7 @@ def initialize_filedialogs():  # called at app startup
                                              file_filter=".png",
                                              multi_selection=False,
                                              allow_drag=False,
-                                             default_path=os.path.join(os.path.dirname(__file__), "..", "images"))
+                                             default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "images"))
     filedialog_open_backdrop_image = FileDialog(title="Open backdrop image",
                                                 tag="open_backdrop_image_dialog",
                                                 callback=_open_backdrop_image_callback,
@@ -162,7 +162,7 @@ def initialize_filedialogs():  # called at app startup
                                                 file_filter=".png",
                                                 multi_selection=False,
                                                 allow_drag=False,
-                                                default_path=os.path.join(os.path.dirname(__file__), "..", "backdrops"))
+                                                default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops"))
     filedialog_open_json = FileDialog(title="Open emotion JSON file",
                                        tag="open_json_dialog",
                                        callback=_open_json_callback,
@@ -171,7 +171,7 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".json",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "..", "emotions"))
+                                       default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "emotions"))
     filedialog_open_animator_settings = FileDialog(title="Open animator settings JSON file",
                                                    tag="open_animator_settings_dialog",
                                                    callback=_open_animator_settings_callback,
@@ -180,7 +180,7 @@ def initialize_filedialogs():  # called at app startup
                                                    file_filter=".json",
                                                    multi_selection=False,
                                                    allow_drag=False,
-                                                   default_path=os.path.join(os.path.dirname(__file__), ".."))
+                                                   default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "settings"))
     filedialog_save_animator_settings = FileDialog(title="Save animator settings JSON file",
                                                    tag="save_animator_settings_dialog",
                                                    callback=_save_animator_settings_callback,
@@ -985,7 +985,7 @@ class PostprocessorSettingsEditorGUI:
     def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
         """Load an animator settings JSON file and send the settings both to the GUI and to the avatar server."""
         try:
-            logger.info(f"PostprocessorSettingsEditorGUI.load_animator_settings: loading '{filename}'")
+            logger.info(f"PostprocessorSettingsEditorGUI.load_animator_settings: loading '{str(filename)}'")
             with open(filename, "r", encoding="utf-8") as json_file:
                 animator_settings = json.load(json_file)
 
@@ -1033,7 +1033,7 @@ class PostprocessorSettingsEditorGUI:
             logger.error(f"PostprocessorSettingsEditorGUI.load_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
             guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not load animator settings JSON '{filename}', reason {type(exc)}: {exc}",
+                                  message=f"Could not load animator settings JSON '{str(filename)}', reason {type(exc)}: {exc}",
                                   buttons=["Close"],
                                   ok_button="Close",
                                   cancel_button="Close",
@@ -1048,7 +1048,7 @@ class PostprocessorSettingsEditorGUI:
         #
         # Hence we can just save the JSON file.
         try:
-            logger.info(f"PostprocessorSettingsEditorGUI.save_animator_settings: saving as '{filename}'")
+            logger.info(f"PostprocessorSettingsEditorGUI.save_animator_settings: saving as '{str(filename)}'")
             if self.animator_settings is None:
                 raise RuntimeError("save_animator_settings: no animator settings loaded, nothing to save")
             with open(filename, "w", encoding="utf-8") as json_file:
@@ -1057,7 +1057,7 @@ class PostprocessorSettingsEditorGUI:
             logger.error(f"PostprocessorSettingsEditorGUI.save_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
             guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not save animator settings JSON '{filename}', reason {type(exc)}: {exc}",
+                                  message=f"Could not save animator settings JSON '{str(filename)}', reason {type(exc)}: {exc}",
                                   buttons=["Close"],
                                   ok_button="Close",
                                   cancel_button="Close",
@@ -1378,7 +1378,7 @@ else:
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
 api.talkinghead_load_emotion_templates({})  # send empty dict -> reset emotion templates to server defaults
-api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))
+api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "assets", "images", "example.png"))
 api.talkinghead_start()
 
 def shutdown() -> None:
@@ -1402,10 +1402,10 @@ initialize_filedialogs()
 # so that the GUI controls for the postprocessor are available, and so that if there are any issues
 # during loading, we can open a modal dialog.
 def _load_initial_animator_settings():
-    animator_json_path = os.path.join(os.path.dirname(__file__), "..", "animator.json")
+    animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "settings", "animator.json")).expanduser().resolve()
 
     if not os.path.exists(animator_json_path):
-        logger.info(f"_load_initial_animator_settings: Default animator settings file '{animator_json_path}' missing, writing a default config.")
+        logger.info(f"_load_initial_animator_settings: Default animator settings file '{str(animator_json_path)}' missing, writing a default config.")
         try:
             animator_settings = copy.copy(common_config.animator_defaults)
             custom_animator_settings = {"format": gui_instance.comm_format,
@@ -1423,7 +1423,7 @@ def _load_initial_animator_settings():
 
     gui_instance.load_animator_settings(animator_json_path)
 
-    # gui_instance.load_backdrop_image(os.path.join(os.path.dirname(__file__), "..", "backdrops", "anime-plains.png"))  # DEBUG
+    # gui_instance.load_backdrop_image(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops", "anime-plains.png"))  # DEBUG
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
 

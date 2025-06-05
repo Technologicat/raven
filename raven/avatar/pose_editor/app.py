@@ -150,7 +150,7 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".png",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "..", "images"))
+                                       default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "images"))
     filedialog_save_image = FileDialog(title="Save output image as PNG",
                                        tag="save_image_dialog",
                                        callback=_save_image_callback,
@@ -169,7 +169,7 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".json",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "..", "emotions"))
+                                       default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "emotions"))
     filedialog_save_all_emotions = FileDialog(title="Save all emotions as JSON",
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
@@ -643,7 +643,7 @@ class PoseEditorGUI:
                          tag="source_no_image_loaded_text")
 
             # Emotion picker.
-            emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "emotions")).expanduser().resolve()
+            emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve()
             self.emotions, self.emotion_names = load_emotion_presets(emotions_dir)
 
             with dpg.group():
@@ -949,11 +949,11 @@ class PoseEditorGUI:
         self.save_numpy_image(self.last_output_numpy_image, posedict, image_file_name)
         logger.info(f"Saved image {image_file_name}")
 
-        # Since it is possible to save the image and JSON to "tha3/emotions", on a successful save, refresh the emotion presets list.
+        # Since it is possible to save the image and JSON to "raven/avatar/assets/emotions", on a successful save, refresh the emotion presets list.
 
         current_emotion_name = dpg.get_value(self.emotion_choice)
 
-        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "emotions")).expanduser().resolve()
+        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve()
         self.emotions, self.emotion_names = load_emotion_presets(emotions_dir)
 
         dpg.configure_item(self.emotion_choice, items=self.emotion_names)
@@ -1150,24 +1150,24 @@ args = parser.parse_args()
 # Blunder recovery options
 if args.factory_reset_all:
     print("Factory-resetting all emotion templates...")
-    with open(os.path.join("emotions", "_defaults.json"), "r") as json_file:
+    with open(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json"), "r") as json_file:
         factory_default_emotions = json.load(json_file)
     factory_default_emotions.pop("zero")  # not an actual emotion
     for key in factory_default_emotions:
-        with open(os.path.join("emotions", f"{key}.json"), "w") as file:
+        with open(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json"), "w") as file:
             json.dump({key: factory_default_emotions[key]}, file, indent=4)
     print("Done.")
     sys.exit(0)
 if args.factory_reset:
     key = args.factory_reset
     print(f"Factory-resetting emotion template '{key}'...")
-    with open(os.path.join("emotions", "_defaults.json"), "r") as json_file:
+    with open(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json"), "r") as json_file:
         factory_default_emotions = json.load(json_file)
     factory_default_emotions.pop("zero")  # not an actual emotion
     if key not in factory_default_emotions:
         print(f"No such factory-defined emotion: '{key}'. Valid values: {sorted(list(factory_default_emotions.keys()))}")
         sys.exit(1)
-    with open(os.path.join("emotions", f"{key}.json"), "w") as file:
+    with open(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json"), "w") as file:
         json.dump({key: factory_default_emotions[key]}, file, indent=4)
     print("Done.")
     sys.exit(0)

@@ -70,7 +70,7 @@ def load_emotion_presets(directory: str) -> Tuple[Dict[str, Dict[str, float]], L
     that can be used to map a linear index (e.g. the choice index in a GUI dropdown)
     to the corresponding key of `emotions`.
 
-    The directory "talkinghead/emotions" must also contain a "_defaults.json" file,
+    The directory "avatar/assets/emotions" must also contain a "_defaults.json" file,
     containing factory defaults (as a fallback) for the 28 standard emotions
     (as recognized by distilbert), as well as a hidden "zero" preset that represents
     a neutral pose. (This is separate from the "neutral" emotion, which is allowed

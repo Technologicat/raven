@@ -421,24 +421,24 @@ class Animator:
                     Optional dict of custom emotion templates.
 
                     If not given, this loads the templates from the emotion JSON files
-                    in `emotions/`.
+                    in `avatar/assets/emotions/`.
 
                     If given:
                       - Each emotion NOT supplied is populated from the defaults.
                       - In each emotion that IS supplied, each morph that is NOT mentioned
                         is implicitly set to zero (due to how `apply_emotion_to_pose` works).
 
-                    For an example JSON file containing a suitable dictionary, see `emotions/_defaults.json`.
+                    For an example JSON file containing a suitable dictionary, see `avatar/assets/emotions/_defaults.json`.
 
                     For available morph names, see `posedict_keys` in `util.py`.
 
-                    For some more detail, see `vendor/tha3/poser/modes/pose_parameters.py`.
+                    For some more detail, see `avatar/vendor/tha3/poser/modes/pose_parameters.py`.
                     "Arity 2" means `posedict_keys` has separate left/right morphs.
 
                     If still in doubt, see the GUI panel implementations in `editor.py`.
         """
         # Load defaults as a base
-        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "emotions")).expanduser().resolve()
+        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve()
         self.emotions, self.emotion_names = load_emotion_presets(emotions_dir)
 
         # Then override defaults, and add any new custom emotions
@@ -475,7 +475,7 @@ class Animator:
 
         # Load server-side settings
         try:
-            animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "animator.json")).expanduser().resolve()
+            animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "settings", "animator.json")).expanduser().resolve()
             with open(animator_json_path, "r") as json_file:
                 server_settings = json.load(json_file)
         except Exception as exc:
