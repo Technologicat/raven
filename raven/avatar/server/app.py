@@ -270,7 +270,12 @@ def api_websearch2():
 def api_classify():
     """Perform sentiment analysis (emotion classification) on the text posted in the request. Return the result.
 
-    Also, automatically update the AI avatar's emotion based on the classification result.
+    Output is JSON::
+
+        {"classification": [{"label": emotion0, "score": confidence0},
+                            ...]}
+
+    sorted by score, descending, so that the most probable emotion is first.
     """
     data = request.get_json()
 
@@ -287,7 +292,12 @@ def api_classify():
 def api_classify_labels():
     """Return the available classifier labels for text sentiment (character emotion).
 
-    These depend on the classifier model.
+    Output is JSON::
+
+        {"labels": [emotion0,
+                    ...]}
+
+    The actual labels depend on the classifier model.
     """
     classification = classify.classify_text("")
     labels = [x["label"] for x in classification]
@@ -299,6 +309,8 @@ def api_classify_labels():
 @app.route("/api/talkinghead/load", methods=["POST"])
 def api_talkinghead_load():
     """Load the avatar sprite posted as a file in the request. Resume animation if the talkinghead module was paused.
+
+    The request should be posted as "multipart/form-data", with one file attachment, named "file".
 
     The file should be in a format that Pillow can read.
     """
