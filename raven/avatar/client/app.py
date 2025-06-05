@@ -1375,87 +1375,89 @@ def update_live_texture(task_env) -> None:
 # --------------------------------------------------------------------------------
 # Main program
 
-if __name__ == "__main__":
-    try:
-        api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
-    except requests.exceptions.ConnectionError as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {avatar_url}.{Style.RESET_ALL} Is the server running?")
-        logger.error(f"Cannot connect to avatar server at {avatar_url}: {type(exc)}: {exc}")
-        sys.exit(255)
-    else:
-        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {avatar_url}.{Style.RESET_ALL}")
+try:
+    api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
+except requests.exceptions.ConnectionError as exc:
+    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {avatar_url}.{Style.RESET_ALL} Is the server running?")
+    logger.error(f"Cannot connect to avatar server at {avatar_url}: {type(exc)}: {exc}")
+    sys.exit(255)
+else:
+    print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {avatar_url}.{Style.RESET_ALL}")
 
-    gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
+gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
-    api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))  # this will also start the animator if it was paused
+api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))  # this will also start the animator if it was paused
 
-    def shutdown() -> None:
-        api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
-        task_manager.clear(wait=True)
-        animation.animator.clear()
-        global gui_instance
-        gui_instance = None
-    dpg.set_exit_callback(shutdown)
-    task_manager.submit(update_live_texture, envcls())
+def shutdown() -> None:
+    api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
+    task_manager.clear(wait=True)
+    animation.animator.clear()
+    global gui_instance
+    gui_instance = None
+dpg.set_exit_callback(shutdown)
+task_manager.submit(update_live_texture, envcls())
 
-    dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
-    dpg.set_viewport_vsync(True)
-    dpg.show_viewport()
+dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
+dpg.set_viewport_vsync(True)
+dpg.show_viewport()
 
-    initialize_filedialogs()
+initialize_filedialogs()
 
-    # Load default animator settings from disk.
-    #
-    # We must defer loading the animator settings until after the GUI has been rendered at least once,
-    # so that the GUI controls for the postprocessor are available, and so that if there are any issues
-    # during loading, we can open a modal dialog.
-    def _load_initial_animator_settings():
-        animator_json_path = os.path.join(os.path.dirname(__file__), "..", "animator.json")
+# Load default animator settings from disk.
+#
+# We must defer loading the animator settings until after the GUI has been rendered at least once,
+# so that the GUI controls for the postprocessor are available, and so that if there are any issues
+# during loading, we can open a modal dialog.
+def _load_initial_animator_settings():
+    animator_json_path = os.path.join(os.path.dirname(__file__), "..", "animator.json")
 
-        if not os.path.exists(animator_json_path):
-            logger.info(f"_load_initial_animator_settings: Default animator settings file '{animator_json_path}' missing, writing a default config.")
-            try:
-                animator_settings = copy.copy(config.animator_defaults)
-                custom_animator_settings = {"format": gui_instance.comm_format,
-                                            "target_fps": gui_instance.target_fps,
-                                            "upscale": gui_instance.upscale,
-                                            "upscale_preset": gui_instance.upscale_preset,
-                                            "upscale_quality": gui_instance.upscale_quality}
-                animator_settings.update(custom_animator_settings)
-                with open(animator_json_path, "w", encoding="utf-8") as json_file:
-                    json.dump(animator_settings, json_file, indent=4)
-            except Exception as exc:
-                logger.error(f"_load_initial_animator_settings: Failed to write default config, bailing out: {type(exc)}: {exc}")
-                traceback.print_exc()
-                raise
+    if not os.path.exists(animator_json_path):
+        logger.info(f"_load_initial_animator_settings: Default animator settings file '{animator_json_path}' missing, writing a default config.")
+        try:
+            animator_settings = copy.copy(config.animator_defaults)
+            custom_animator_settings = {"format": gui_instance.comm_format,
+                                        "target_fps": gui_instance.target_fps,
+                                        "upscale": gui_instance.upscale,
+                                        "upscale_preset": gui_instance.upscale_preset,
+                                        "upscale_quality": gui_instance.upscale_quality}
+            animator_settings.update(custom_animator_settings)
+            with open(animator_json_path, "w", encoding="utf-8") as json_file:
+                json.dump(animator_settings, json_file, indent=4)
+        except Exception as exc:
+            logger.error(f"_load_initial_animator_settings: Failed to write default config, bailing out: {type(exc)}: {exc}")
+            traceback.print_exc()
+            raise
 
-        gui_instance.load_animator_settings(animator_json_path)
+    gui_instance.load_animator_settings(animator_json_path)
 
-        # gui_instance.load_backdrop_image(os.path.join(os.path.dirname(__file__), "..", "backdrops", "anime-plains.png"))  # DEBUG
+    # gui_instance.load_backdrop_image(os.path.join(os.path.dirname(__file__), "..", "backdrops", "anime-plains.png"))  # DEBUG
 
-    dpg.set_frame_callback(2, _load_initial_animator_settings)
+dpg.set_frame_callback(2, _load_initial_animator_settings)
 
-    # last_tts_check_time = 0
-    # tts_check_interval = 5.0  # seconds
-    def update_animations():
-        animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
+# last_tts_check_time = 0
+# tts_check_interval = 5.0  # seconds
+def update_animations():
+    animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
 
-        # # Enable/disable speech synthesizer controls depending on whether the TTS server is available
-        # global last_tts_check_time
-        # t0 = time.monotonic()
-        # if t0 - last_tts_check_time >= tts_check_interval:
-        #     last_tts_check_time = t0
-        #     if tts_available():
-        #         dpg.enable_item(gui_instance.voice_choice)
-        #         dpg.enable_item("speak_button")
-        #     else:
-        #         dpg.disable_item(gui_instance.voice_choice)
-        #         dpg.disable_item("speak_button")
+    # # Enable/disable speech synthesizer controls depending on whether the TTS server is available
+    # global last_tts_check_time
+    # t0 = time.monotonic()
+    # if t0 - last_tts_check_time >= tts_check_interval:
+    #     last_tts_check_time = t0
+    #     if tts_available():
+    #         dpg.enable_item(gui_instance.voice_choice)
+    #         dpg.enable_item("speak_button")
+    #     else:
+    #         dpg.disable_item(gui_instance.voice_choice)
+    #         dpg.disable_item("speak_button")
 
-    # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
-    while dpg.is_dearpygui_running():
-        update_animations()
-        dpg.render_dearpygui_frame()
-    # dpg.start_dearpygui()  # automatic render loop
+# We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
+while dpg.is_dearpygui_running():
+    update_animations()
+    dpg.render_dearpygui_frame()
+# dpg.start_dearpygui()  # automatic render loop
 
-    dpg.destroy_context()
+dpg.destroy_context()
+
+def main():  # TODO: we don't really need this; it's just for console_scripts.
+    pass

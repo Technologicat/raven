@@ -1116,104 +1116,106 @@ def pose_editor_hotkeys_callback(sender, app_data):
 with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="pose_editor_hotkeys_handler", callback=pose_editor_hotkeys_callback)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="THA 3 Manual Poser. Pose a character image manually. Useful for generating static expression images.")
-    parser.add_argument("--device",
-                        type=str,
-                        required=False,
-                        default="cuda",
-                        choices=["cpu", "cuda"],
-                        help='The device to use for PyTorch ("cuda" for GPU, "cpu" for CPU).')
-    parser.add_argument("--model",
-                        type=str,
-                        required=False,
-                        default="separable_float",
-                        choices=["standard_float", "separable_float", "standard_half", "separable_half"],
-                        help="The model to use. 'float' means fp32, 'half' means fp16.")
-    parser.add_argument("--models",
-                        metavar="HFREPO",
-                        type=str,
-                        help="If THA3 models are not yet installed, use the given HuggingFace repository to install them. Defaults to OktayAlpk/talking-head-anime-3.",
-                        default="OktayAlpk/talking-head-anime-3")
-    parser.add_argument("--factory-reset",
-                        metavar="EMOTION",
-                        type=str,
-                        help="Overwrite the emotion preset EMOTION with its factory default, and exit. This CANNOT be undone!",
-                        default="")
-    parser.add_argument("--factory-reset-all",
-                        action="store_true",
-                        help="Overwrite ALL emotion presets with their factory defaults, and exit. This CANNOT be undone!")
-    args = parser.parse_args()
+# --------------------------------------------------------------------------------
+# Start the app
 
-    # Blunder recovery options
-    if args.factory_reset_all:
-        print("Factory-resetting all emotion templates...")
-        with open(os.path.join("emotions", "_defaults.json"), "r") as json_file:
-            factory_default_emotions = json.load(json_file)
-        factory_default_emotions.pop("zero")  # not an actual emotion
-        for key in factory_default_emotions:
-            with open(os.path.join("emotions", f"{key}.json"), "w") as file:
-                json.dump({key: factory_default_emotions[key]}, file, indent=4)
-        print("Done.")
-        sys.exit(0)
-    if args.factory_reset:
-        key = args.factory_reset
-        print(f"Factory-resetting emotion template '{key}'...")
-        with open(os.path.join("emotions", "_defaults.json"), "r") as json_file:
-            factory_default_emotions = json.load(json_file)
-        factory_default_emotions.pop("zero")  # not an actual emotion
-        if key not in factory_default_emotions:
-            print(f"No such factory-defined emotion: '{key}'. Valid values: {sorted(list(factory_default_emotions.keys()))}")
-            sys.exit(1)
+parser = argparse.ArgumentParser(description="THA 3 Manual Poser. Pose a character image manually. Useful for generating static expression images.")
+parser.add_argument("--device",
+                    type=str,
+                    required=False,
+                    default="cuda",
+                    choices=["cpu", "cuda"],
+                    help='The device to use for PyTorch ("cuda" for GPU, "cpu" for CPU).')
+parser.add_argument("--model",
+                    type=str,
+                    required=False,
+                    default="separable_float",
+                    choices=["standard_float", "separable_float", "standard_half", "separable_half"],
+                    help="The model to use. 'float' means fp32, 'half' means fp16.")
+parser.add_argument("--models",
+                    metavar="HFREPO",
+                    type=str,
+                    help="If THA3 models are not yet installed, use the given HuggingFace repository to install them. Defaults to OktayAlpk/talking-head-anime-3.",
+                    default="OktayAlpk/talking-head-anime-3")
+parser.add_argument("--factory-reset",
+                    metavar="EMOTION",
+                    type=str,
+                    help="Overwrite the emotion preset EMOTION with its factory default, and exit. This CANNOT be undone!",
+                    default="")
+parser.add_argument("--factory-reset-all",
+                    action="store_true",
+                    help="Overwrite ALL emotion presets with their factory defaults, and exit. This CANNOT be undone!")
+args = parser.parse_args()
+
+# Blunder recovery options
+if args.factory_reset_all:
+    print("Factory-resetting all emotion templates...")
+    with open(os.path.join("emotions", "_defaults.json"), "r") as json_file:
+        factory_default_emotions = json.load(json_file)
+    factory_default_emotions.pop("zero")  # not an actual emotion
+    for key in factory_default_emotions:
         with open(os.path.join("emotions", f"{key}.json"), "w") as file:
             json.dump({key: factory_default_emotions[key]}, file, indent=4)
-        print("Done.")
-        sys.exit(0)
+    print("Done.")
+    sys.exit(0)
+if args.factory_reset:
+    key = args.factory_reset
+    print(f"Factory-resetting emotion template '{key}'...")
+    with open(os.path.join("emotions", "_defaults.json"), "r") as json_file:
+        factory_default_emotions = json.load(json_file)
+    factory_default_emotions.pop("zero")  # not an actual emotion
+    if key not in factory_default_emotions:
+        print(f"No such factory-defined emotion: '{key}'. Valid values: {sorted(list(factory_default_emotions.keys()))}")
+        sys.exit(1)
+    with open(os.path.join("emotions", f"{key}.json"), "w") as file:
+        json.dump({key: factory_default_emotions[key]}, file, indent=4)
+    print("Done.")
+    sys.exit(0)
 
-    # Install the THA3 models if needed
-    modelsdir = str(talkinghead_path / "tha3" / "models")
-    maybe_install_models(hf_reponame=args.models, modelsdir=modelsdir)
+# Install the THA3 models if needed
+modelsdir = str(talkinghead_path / "tha3" / "models")
+maybe_install_models(hf_reponame=args.models, modelsdir=modelsdir)
 
-    try:
-        device = torch.device(args.device)
-        poser = load_poser(args.model, device, modelsdir=modelsdir)
-    except RuntimeError as e:
-        logger.error(e)
-        sys.exit(255)
+try:
+    device = torch.device(args.device)
+    poser = load_poser(args.model, device, modelsdir=modelsdir)
+except RuntimeError as e:
+    logger.error(e)
+    sys.exit(255)
 
-    # Create the "talkinghead/output" directory if it doesn't exist. This is our default save location.
-    p = pathlib.Path("output").expanduser().resolve()
-    pathlib.Path.mkdir(p, parents=True, exist_ok=True)
+# Create the "talkinghead/output" directory if it doesn't exist. This is our default save location.
+p = pathlib.Path("output").expanduser().resolve()
+pathlib.Path.mkdir(p, parents=True, exist_ok=True)
 
-    gui_instance = PoseEditorGUI(poser, device, args.model)
+gui_instance = PoseEditorGUI(poser, device, args.model)
 
-    def shutdown():
-        animation.animator.clear()
-    dpg.set_exit_callback(shutdown)
+def shutdown():
+    animation.animator.clear()
+dpg.set_exit_callback(shutdown)
 
-    dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
-    dpg.set_viewport_vsync(True)
-    dpg.show_viewport()
+dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
+dpg.set_viewport_vsync(True)
+dpg.show_viewport()
 
-    initialize_filedialogs()
+initialize_filedialogs()
 
-    def tune_viewport():
-        dpg.set_viewport_width(3 * gui_instance.image_size + 32)
-        dpg.set_viewport_height(gui_instance.image_size + gui_instance.gui_extra_height + 16)
-        dpg.split_frame()
-        dpg.set_viewport_resizable(False)
-    dpg.set_frame_callback(10, tune_viewport)
+def tune_viewport():
+    dpg.set_viewport_width(3 * gui_instance.image_size + 32)
+    dpg.set_viewport_height(gui_instance.image_size + gui_instance.gui_extra_height + 16)
+    dpg.split_frame()
+    dpg.set_viewport_resizable(False)
+dpg.set_frame_callback(10, tune_viewport)
 
-    def update_animations():
-        animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
+def update_animations():
+    animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
 
-    # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
-    while dpg.is_dearpygui_running():
-        update_animations()
-        dpg.render_dearpygui_frame()
-    # dpg.start_dearpygui()  # automatic render loop
+# We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
+while dpg.is_dearpygui_running():
+    update_animations()
+    dpg.render_dearpygui_frame()
+# dpg.start_dearpygui()  # automatic render loop
 
-    dpg.destroy_context()
+dpg.destroy_context()
 
 def main():  # TODO: we don't really need this; it's just for console_scripts so that we can provide a command-line entrypoint.
     pass
