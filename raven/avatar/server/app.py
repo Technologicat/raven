@@ -312,7 +312,7 @@ def api_talkinghead_load():
 
     The request should be posted as "multipart/form-data", with one file attachment, named "file".
 
-    The file should be in a format that Pillow can read.
+    The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
     """
     file = request.files['file']
     return animator.load_image_from_stream(file.stream)
