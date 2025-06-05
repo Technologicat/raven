@@ -384,7 +384,8 @@ def is_any_modal_window_visible():
     return (is_open_input_image_dialog_visible() or is_open_json_dialog_visible() or
             is_animator_settings_dialog_visible() or is_save_animator_settings_dialog_visible())
 
-class TalkingheadExampleGUI:
+class PostprocessorSettingsEditorGUI:
+    """Main app window for the postprocessor settings editor for `raven.avatar`."""
     def __init__(self):
         self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed...
 
@@ -896,17 +897,17 @@ class TalkingheadExampleGUI:
 
     def on_send_emotion(self, sender, app_data):  # GUI event handler
         # On clicking a choice in the combobox, `app_data` is that choice, but on arrow key, `app_data` is the keycode.
-        logger.info(f"TalkingheadExampleGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
+        logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
         self.current_emotion = dpg.get_value(self.emotion_choice)
-        logger.info(f"TalkingheadExampleGUI.on_send_emotion: sending emotion '{self.current_emotion}'")
+        logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sending emotion '{self.current_emotion}'")
         client_api.talkinghead_set_emotion(self.current_emotion)
 
     def load_input_image(self, filename: Union[pathlib.Path, str]) -> None:
         try:
-            logger.info(f"TalkingheadExampleGUI.load_input_image: loading avatar image '{filename}'")
+            logger.info(f"PostprocessorSettingsEditorGUI.load_input_image: loading avatar image '{filename}'")
             client_api.talkinghead_load(filename)
         except Exception as exc:
-            logger.error(f"TalkingheadExampleGUI.load_input_image: {type(exc)}: {exc}")
+            logger.error(f"PostprocessorSettingsEditorGUI.load_input_image: {type(exc)}: {exc}")
             traceback.print_exc()
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
@@ -917,10 +918,10 @@ class TalkingheadExampleGUI:
 
     def load_json(self, filename: Union[pathlib.Path, str]) -> None:
         try:
-            logger.info(f"TalkingheadExampleGUI.load_json: loading emotion templates '{filename}'")
+            logger.info(f"PostprocessorSettingsEditorGUI.load_json: loading emotion templates '{filename}'")
             client_api.talkinghead_load_emotion_templates_from_file(filename)
         except Exception as exc:
-            logger.error(f"TalkingheadExampleGUI.load_json: {type(exc)}: {exc}")
+            logger.error(f"PostprocessorSettingsEditorGUI.load_json: {type(exc)}: {exc}")
             traceback.print_exc()
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load emotion templates JSON '{filename}', reason {type(exc)}: {exc}",
@@ -953,7 +954,7 @@ class TalkingheadExampleGUI:
         """
         try:
             if self.animator_settings is None:
-                raise RuntimeError("TalkingheadExampleGUI.on_gui_settings_change: no animator settings loaded, no base for update")
+                raise RuntimeError("PostprocessorSettingsEditorGUI.on_gui_settings_change: no animator settings loaded, no base for update")
             # self.animator_settings is valid
 
             # Update the stuff that can be edited in the GUI:
@@ -965,7 +966,7 @@ class TalkingheadExampleGUI:
                 ppc = []
             self.animator_settings["postprocessor_chain"] = ppc
 
-            # Upscaler settings, plus anything tracked by `TalkingheadExampleGUI`
+            # Upscaler settings, plus anything tracked by `PostprocessorSettingsEditorGUI`
             custom_animator_settings = {"format": self.comm_format,
                                         "target_fps": dpg.get_value("target_fps_slider"),
                                         "talking_fps": dpg.get_value("talking_fps_slider"),
@@ -978,13 +979,13 @@ class TalkingheadExampleGUI:
             # Send to server
             client_api.talkinghead_load_animator_settings(self.animator_settings)
         except Exception as exc:
-            logger.error(f"TalkingheadExampleGUI.on_gui_settings_change: {type(exc)}: {exc}")
+            logger.error(f"PostprocessorSettingsEditorGUI.on_gui_settings_change: {type(exc)}: {exc}")
             traceback.print_exc()
 
     def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
         """Load an animator settings JSON file and send the settings both to the GUI and to the avatar server."""
         try:
-            logger.info(f"TalkingheadExampleGUI.load_animator_settings: loading '{filename}'")
+            logger.info(f"PostprocessorSettingsEditorGUI.load_animator_settings: loading '{filename}'")
             with open(filename, "r", encoding="utf-8") as json_file:
                 animator_settings = json.load(json_file)
 
@@ -1013,7 +1014,7 @@ class TalkingheadExampleGUI:
 
             # Make sure these fields exist (in case they didn't yet).
             # They're not mandatory (any missing keys are always auto-populated from server defaults),
-            # but they're something `TalkingheadExampleGUI` tracks, so we should sync our state to the server.
+            # but they're something `PostprocessorSettingsEditorGUI` tracks, so we should sync our state to the server.
             custom_animator_settings = {"format": self.comm_format,
                                         "target_fps": dpg.get_value("target_fps_slider"),
                                         "talking_fps": dpg.get_value("talking_fps_slider"),
@@ -1029,7 +1030,7 @@ class TalkingheadExampleGUI:
             # ...and only if that is successful, remember the settings.
             self.animator_settings = animator_settings
         except Exception as exc:
-            logger.error(f"TalkingheadExampleGUI.load_animator_settings: {type(exc)}: {exc}")
+            logger.error(f"PostprocessorSettingsEditorGUI.load_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load animator settings JSON '{filename}', reason {type(exc)}: {exc}",
@@ -1047,13 +1048,13 @@ class TalkingheadExampleGUI:
         #
         # Hence we can just save the JSON file.
         try:
-            logger.info(f"TalkingheadExampleGUI.save_animator_settings: saving as '{filename}'")
+            logger.info(f"PostprocessorSettingsEditorGUI.save_animator_settings: saving as '{filename}'")
             if self.animator_settings is None:
                 raise RuntimeError("save_animator_settings: no animator settings loaded, nothing to save")
             with open(filename, "w", encoding="utf-8") as json_file:
                 json.dump(self.animator_settings, json_file, indent=4)
         except Exception as exc:
-            logger.error(f"TalkingheadExampleGUI.save_animator_settings: {type(exc)}: {exc}")
+            logger.error(f"PostprocessorSettingsEditorGUI.save_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not save animator settings JSON '{filename}', reason {type(exc)}: {exc}",
@@ -1351,7 +1352,7 @@ def update_live_texture(task_env) -> None:
             except SystemError:  # does not exist (can happen at app shutdown)
                 pass
     except Exception as exc:
-        logger.error(f"TalkingheadExampleGUI.update_live_texture: {type(exc)}: {exc}")
+        logger.error(f"PostprocessorSettingsEditorGUI.update_live_texture: {type(exc)}: {exc}")
 
         # TODO: recovery if the server comes back online
         if gui_instance is not None:
@@ -1375,7 +1376,7 @@ if __name__ == "__main__":
     else:
         print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {avatar_url}.{Style.RESET_ALL}")
 
-    gui_instance = TalkingheadExampleGUI()  # will load animator settings
+    gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
     client_api.talkinghead_load("example.png")  # this will also start the animator if it was paused
 
