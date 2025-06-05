@@ -10,7 +10,7 @@ This module is licensed under the 2-clause BSD license, to facilitate Talkinghea
 # nice to have (maybe later):
 #
 # TODO: robustness: don't crash if the server suddenly goes down
-# TODO: support loading a background image (aligned to bottom left?)
+# TODO: support non-square avatar video stream (after server-side crop filter); should get image width/height from video stream
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +28,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Union
+from typing import Optional, Union
 
 import qoi
 import PIL.Image
@@ -138,26 +138,37 @@ dpg.setup_dearpygui()
 
 gui_instance = None  # initialized later, when the app starts
 
-filedialog_open_image = None
+filedialog_open_input_image = None
+filedialog_open_backdrop_image = None
 filedialog_open_json = None
 filedialog_open_animator_settings = None
 filedialog_save_animator_settings = None
 
-def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
+def initialize_filedialogs():  # called at app startup
     """Create the file dialogs."""
-    global filedialog_open_image
+    global filedialog_open_input_image
+    global filedialog_open_backdrop_image
     global filedialog_open_json
     global filedialog_open_animator_settings
     global filedialog_save_animator_settings
-    filedialog_open_image = FileDialog(title="Open input image",
-                                       tag="open_image_dialog",
-                                       callback=_open_image_callback,
-                                       modal=True,
-                                       filter_list=[".png"],
-                                       file_filter=".png",
-                                       multi_selection=False,
-                                       allow_drag=False,
-                                       default_path=default_path)
+    filedialog_open_input_image = FileDialog(title="Open input image",
+                                             tag="open_input_image_dialog",
+                                             callback=_open_input_image_callback,
+                                             modal=True,
+                                             filter_list=[".png"],
+                                             file_filter=".png",
+                                             multi_selection=False,
+                                             allow_drag=False,
+                                             default_path=os.path.join(os.path.dirname(__file__), "images"))
+    filedialog_open_backdrop_image = FileDialog(title="Open backdrop image",
+                                                tag="open_backdrop_image_dialog",
+                                                callback=_open_backdrop_image_callback,
+                                                modal=True,
+                                                filter_list=[".png", ".jpg"],
+                                                file_filter=".png",
+                                                multi_selection=False,
+                                                allow_drag=False,
+                                                default_path=os.path.join(os.path.dirname(__file__), "backdrops"))
     filedialog_open_json = FileDialog(title="Open emotion JSON file",
                                        tag="open_json_dialog",
                                        callback=_open_json_callback,
@@ -166,7 +177,7 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                        file_filter=".json",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=default_path)
+                                       default_path=os.path.join(os.path.dirname(__file__), "emotions"))
     filedialog_open_animator_settings = FileDialog(title="Open animator settings JSON file",
                                                    tag="open_animator_settings_dialog",
                                                    callback=_open_animator_settings_callback,
@@ -175,7 +186,7 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                                    file_filter=".json",
                                                    multi_selection=False,
                                                    allow_drag=False,
-                                                   default_path=default_path)
+                                                   default_path=os.path.dirname(__file__))
     filedialog_save_animator_settings = FileDialog(title="Save animator settings JSON file",
                                                    tag="save_animator_settings_dialog",
                                                    callback=_save_animator_settings_callback,
@@ -185,42 +196,77 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                                    save_mode=True,
                                                    default_file_extension=".json",  # used if the user does not provide a file extension when naming the save-as
                                                    allow_drag=False,
-                                                   default_path=default_path)
+                                                   default_path=os.path.dirname(__file__))
 
 # --------------------------------------------------------------------------------
-# "Open image" dialog
+# "Open input image" dialog
 
-def show_open_image_dialog():
-    """Button callback. Show the open file dialog, for the user to pick an image to open.
+def show_open_input_image_dialog():
+    """Button callback. Show the open file dialog, for the user to pick an input image (avatar) to open.
 
-    If you need to close it programmatically, call `filedialog_open_image.cancel()` so it'll trigger the callback.
+    If you need to close it programmatically, call `filedialog_open_input_image.cancel()` so it'll trigger the callback.
     """
     if gui_instance is None:
         return
-    logger.debug("show_open_image_dialog: Showing open file dialog.")
-    filedialog_open_image.show_file_dialog()
-    logger.debug("show_open_image_dialog: Done.")
+    logger.debug("show_open_input_image_dialog: Showing open file dialog.")
+    filedialog_open_input_image.show_file_dialog()
+    logger.debug("show_open_input_image_dialog: Done.")
 
-def _open_image_callback(selected_files):
-    """Callback that fires when the open image dialog closes."""
-    logger.debug("_open_image_callback: Open file dialog callback triggered.")
+def _open_input_image_callback(selected_files):
+    """Callback that fires when the open input image dialog closes."""
+    logger.debug("_open_input_image_callback: Open file dialog callback triggered.")
     if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
         raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
     if selected_files:
         selected_file = selected_files[0]
-        logger.debug(f"_open_image_callback: User selected the file '{selected_file}'.")
-        gui_instance.load_image(selected_file)
+        logger.debug(f"_open_input_image_callback: User selected the file '{selected_file}'.")
+        gui_instance.load_input_image(selected_file)
     else:  # empty selection -> cancelled
-        logger.debug("_open_image_callback: Cancelled.")
+        logger.debug("_open_input_image_callback: Cancelled.")
 
-def is_open_image_dialog_visible():
-    """Return whether the open image dialog is open.
+def is_open_input_image_dialog_visible():
+    """Return whether the open input image dialog is open.
 
     We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
     """
-    if filedialog_open_image is None:
+    if filedialog_open_input_image is None:
         return False
-    return dpg.is_item_visible("open_image_dialog")  # tag
+    return dpg.is_item_visible("open_input_image_dialog")  # tag
+
+# --------------------------------------------------------------------------------
+# "Open backdrop image" dialog
+
+def show_open_backdrop_image_dialog():
+    """Button callback. Show the open file dialog, for the user to pick a backdrop image to open.
+
+    If you need to close it programmatically, call `filedialog_open_backdrop_image.cancel()` so it'll trigger the callback.
+    """
+    if gui_instance is None:
+        return
+    logger.debug("show_open_backdrop_image_dialog: Showing open file dialog.")
+    filedialog_open_backdrop_image.show_file_dialog()
+    logger.debug("show_open_backdrop_image_dialog: Done.")
+
+def _open_backdrop_image_callback(selected_files):
+    """Callback that fires when the open backdrop image dialog closes."""
+    logger.debug("_open_backdrop_image_callback: Open file dialog callback triggered.")
+    if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
+        raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
+    if selected_files:
+        selected_file = selected_files[0]
+        logger.debug(f"_open_backdrop_image_callback: User selected the file '{selected_file}'.")
+        gui_instance.load_backdrop_image(selected_file)
+    else:  # empty selection -> cancelled
+        logger.debug("_open_backdrop_image_callback: Cancelled.")
+
+def is_open_backdrop_image_dialog_visible():
+    """Return whether the open backdrop image dialog is open.
+
+    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
+    """
+    if filedialog_open_backdrop_image is None:
+        return False
+    return dpg.is_item_visible("open_backdrop_image_dialog")  # tag
 
 # --------------------------------------------------------------------------------
 # "Open JSON" dialog (emotion templates)
@@ -335,7 +381,7 @@ def is_any_modal_window_visible():
 
     Currently these are file dialogs.
     """
-    return (is_open_image_dialog_visible() or is_open_json_dialog_visible() or
+    return (is_open_input_image_dialog_visible() or is_open_json_dialog_visible() or
             is_animator_settings_dialog_visible() or is_save_animator_settings_dialog_visible())
 
 class TalkingheadExampleGUI:
@@ -355,36 +401,47 @@ class TalkingheadExampleGUI:
         self.button_width = 300
 
         self.upscale_change_lock = threading.Lock()
-        self.texture_id_counter = 0  # For creating unique DPG IDs when the size changes on the fly, since the delete might not take immediately.
+        self.live_texture = None  # The raw texture object
+        self.live_texture_id_counter = 0  # For creating unique DPG IDs when the size changes on the fly, since the delete might not take immediately.
+        self.live_image_widget = None  # GUI widget the texture renders to
         self.last_image_rgba = None  # For rescaling last received frame on upscaler size change before we get new data
-        self.live_texture = None
-        self.live_image_widget = None
+
+        self.backdrop_texture = None  # The raw texture object
+        self.backdrop_texture_id_counter = 0
+        self.backdrop_image = None  # PIL image
+        self.last_backdrop_image = None
+        self.last_window_size = (None, None)
 
         self.talking_animation_running = False  # simple mouth randomizing animation
         self.speaking = False  # TTS
         self.animator_running = True
         self.animator_settings = None  # not loaded yet
 
-        dpg.add_texture_registry(tag="talkinghead_example_textures")  # the DPG live texture will be stored here
+        dpg.add_texture_registry(tag="talkinghead_example_textures")  # the DPG live texture and the window backdrop texture will be stored here
         dpg.set_viewport_title(f"Talkinghead [{avatar_url}]")
 
         with dpg.window(tag="talkinghead_main_window",
                         label="Talkinghead main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
-                with dpg.group(tag="live_texture_group"):
-                    dpg.add_spacer(width=1024, height=0)  # keep the group at the image's width even when the image is hidden
+                # We can use a borderless child window as a fixed-size canvas that crops anything outside it (instead of automatically showing a scrollbar).
+                # DPG adds its theme's margins, which in our case is 8 pixels of padding per side, hence the -16 to exactly cover the viewport's actually available height.
+                with dpg.child_window(width=1024, height=viewport_height - 16,
+                                      border=False, no_scrollbar=True, no_scroll_with_mouse=True,
+                                      tag="avatar_child_window"):
+                    dpg.add_drawlist(tag="backdrop_drawlist", width=1024, height=1024, pos=(0, 0))  # for backdrop image
+                    # dpg.add_spacer(width=1024, height=0)  # keep the group at the image's width even when the image is hidden
                     self.init_live_texture(self.image_size)
                     dpg.add_text("FPS counter will appear here", color=(0, 255, 0), pos=(8, 0), tag="fps_text")
                     self.fps_statistics = RunningAverage()
                     self.frame_size_statistics = RunningAverage()
 
                 def position_please_standby_text():
-                    # x0, y0 = raven_utils.get_widget_relative_pos(f"live_image_{self.texture_id_counter}", reference="main_window")
-                    x0, y0 = raven_utils.get_widget_pos(f"live_image_{self.texture_id_counter}")
+                    # x0, y0 = raven_utils.get_widget_relative_pos(f"live_image_{self.live_texture_id_counter}", reference="main_window")
+                    x0, y0 = raven_utils.get_widget_pos(f"live_image_{self.live_texture_id_counter}")
                     dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
                                                            y0 + self.image_size / 2 - (font_size / 2)),
                                  tag="please_standby_text",
-                                 parent="live_texture_group",
+                                 parent="avatar_child_window",
                                  show=False)
                 dpg.set_frame_callback(10, position_please_standby_text)
 
@@ -392,8 +449,12 @@ class TalkingheadExampleGUI:
                     dpg.add_button(label="Fullscreen/windowed [F11]", width=self.button_width, callback=toggle_fullscreen, tag="fullscreen_button")
                     dpg.add_spacer(height=8)
 
-                    dpg.add_text("Load")
-                    dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_image_dialog, tag="open_image_button")
+                    dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_input_image_dialog, tag="open_image_button")
+                    with dpg.group(horizontal=True):
+                        def reset_backdrop():
+                            self.load_backdrop_image(None)
+                        dpg.add_button(label="X", callback=reset_backdrop, tag="backdrop_reset_button")
+                        dpg.add_button(label="Load backdrop [Ctrl+B]", width=self.button_width - 25, callback=show_open_backdrop_image_dialog, tag="open_backdrop_button")
                     dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
                     dpg.add_text("[Use raven.avatar.editor to edit templates.]", color=(140, 140, 140))
                     dpg.add_spacer(height=8)
@@ -404,14 +465,14 @@ class TalkingheadExampleGUI:
                         def reset_target_fps():
                             dpg.set_value("target_fps_slider", 25)
                             self.on_gui_settings_change(None, None)
-                        dpg.add_button(label="X", tag="target_fps_reset_button", callback=reset_target_fps)
+                        dpg.add_button(label="X", callback=reset_target_fps, tag="target_fps_reset_button")
                         dpg.add_slider_int(label="FPS", default_value=25, min_value=10, max_value=60, clamped=True, width=self.button_width - 80,
                                            callback=self.on_gui_settings_change, tag="target_fps_slider")
                     with dpg.group(horizontal=True):
                         def reset_pose_interpolator_step():
                             dpg.set_value("pose_interpolator_step_slider", 3)
                             self.on_gui_settings_change(None, None)
-                        dpg.add_button(label="X", tag="pose_interpolator_step_reset_button", callback=reset_pose_interpolator_step)
+                        dpg.add_button(label="X", callback=reset_pose_interpolator_step, tag="pose_interpolator_step_reset_button")
                         dpg.add_slider_int(label="Speed", default_value=3, min_value=1, max_value=9, clamped=True, width=self.button_width - 80,
                                            callback=self.on_gui_settings_change, tag="pose_interpolator_step_slider")
                     dpg.add_button(label="Pause [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
@@ -461,7 +522,7 @@ class TalkingheadExampleGUI:
                         def reset_talking_fps():
                             dpg.set_value("talking_fps_slider", 12)
                             self.on_gui_settings_change(None, None)
-                        dpg.add_button(label="X", tag="talking_fps_reset_button", callback=reset_talking_fps)
+                        dpg.add_button(label="X", callback=reset_talking_fps, tag="talking_fps_reset_button")
                         dpg.add_slider_int(label="Talk FPS", default_value=12, min_value=6, max_value=24, clamped=True, width=self.button_width - 86,
                                            callback=self.on_gui_settings_change, tag="talking_fps_slider")
                     dpg.add_spacer(height=8)
@@ -613,10 +674,13 @@ class TalkingheadExampleGUI:
                     # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
                     build_postprocessor_gui()
 
-    def init_live_texture(self, new_image_size):
-        """Initialize (or re-initialize) the texture and image widgets for rendering the video stream of the live AI avatar."""
+    def init_live_texture(self, new_image_size: int) -> None:
+        """Initialize (or re-initialize) the texture and image widgets for rendering the video stream of the live AI avatar.
+
+        The image has square aspect ratio;, `new_image_size` is the length of a side, in pixels.
+        """
         with self.upscale_change_lock:
-            old_texture_id = self.texture_id_counter
+            old_texture_id = self.live_texture_id_counter
             new_texture_id = old_texture_id + 1
 
             logger.info(f"init_live_texture: Creating new GUI item live_texture_{new_texture_id} for new size {new_image_size}x{new_image_size}")
@@ -645,7 +709,7 @@ class TalkingheadExampleGUI:
                                                     format=dpg.mvFormat_Float_rgba,
                                                     tag=f"live_texture_{new_texture_id}",
                                                     parent="talkinghead_example_textures")
-            self.texture_id_counter += 1  # now the new texture exists so it's safe to write to (in the background thread)
+            self.live_texture_id_counter += 1  # now the new texture exists so it's safe to write to (in the background thread)
             self.image_size = new_image_size
 
             first_time = (self.live_image_widget is None)
@@ -653,10 +717,10 @@ class TalkingheadExampleGUI:
             self.live_image_widget = dpg.add_image(f"live_texture_{new_texture_id}",
                                                    show=self.animator_running,  # if paused, leave it hidden
                                                    tag=f"live_image_{new_texture_id}",
-                                                   parent="live_texture_group",
-                                                   before="fps_text")  # TODO: should render flush with bottom edge without causing a scrollbar to appear
+                                                   parent="avatar_child_window",
+                                                   before="fps_text")
             if first_time:  # first frame; window size not initialized yet, so we can't rely on `self._resize_gui`
-                dpg.set_item_pos(self.live_image_widget, (512 - self.image_size // 2, viewport_height - self.image_size - 8))
+                dpg.set_item_pos(self.live_image_widget, (512 - self.image_size // 2, viewport_height - self.image_size))
             else:
                 self._resize_gui()
 
@@ -666,26 +730,81 @@ class TalkingheadExampleGUI:
                 pass
             else:
                 dpg.split_frame()  # Only safe after startup, once the GUI render loop is running. At startup, the old image widget doesn't exist, so we detect the situation from that.
-            def maybe_delete_item(tag):
-                logger.info(f"init_live_texture.maybe_delete_item: deleting old GUI item {tag}")
-                try:
-                    dpg.delete_item(tag)
-                except SystemError:  # does not exist
-                    pass
             # Now the old image widget is guaranteed to be hidden, so we can delete it without breaking GUI render
-            maybe_delete_item(f"live_image_{old_texture_id}")
-            maybe_delete_item(f"live_texture_{old_texture_id}")
+            client_util.maybe_delete_item(f"live_image_{old_texture_id}")
+            client_util.maybe_delete_item(f"live_texture_{old_texture_id}")
 
             logger.info("init_live_texture: done!")
 
-    def _resize_gui(self):
+    def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]) -> None:
+        """Load a backdrop image. To clear the background, use `filename=None`."""
+        if filename is not None:
+            self.backdrop_image = PIL.Image.open(filename)
+        else:
+            self.backdrop_image = None
+        self._resize_gui()  # render the new backdrop
+
+    def _resize_gui(self) -> None:
         """Window resize handler."""
         try:
             w, h = raven_utils.get_widget_size(self.window)
+        except SystemError:  # main window does not exist
+            return
+        if w == 0 or h == 0:  # no meaningful main window size yet?
+            return
+
+        try:
             if self.live_image_widget is not None:
-                dpg.set_item_pos(self.live_image_widget, (512 - self.image_size // 2, h - self.image_size - 8))
+                dpg.set_item_pos(self.live_image_widget, (512 - self.image_size // 2, h - self.image_size))
         except SystemError:  # main window or live image widget does not exist
             pass
+
+        try:
+            dpg.set_item_height("avatar_child_window", h - 16)
+        except SystemError:  # main window or live image widget does not exist
+            pass
+
+        old_w, old_h = self.last_window_size
+        old_texture_id = self.backdrop_texture_id_counter
+        if self.backdrop_image is not None and (self.backdrop_image != self.last_backdrop_image or w != old_w or h != old_h):
+            new_texture_id = old_texture_id + 1
+
+            image_w, image_h = self.backdrop_image.size
+
+            # TODO: Consider changing the backdrop region so that if we have enough space in the window for all the controls, it could take more than 1024 pixels of width.
+            # TODO: if the backdrop image is small and/or has a wild aspect ratio, would be more efficient to cut first, then scale.
+            #
+            # Scale image, preserving aspect ratio, to cover the whole backdrop region (1024 x h)
+            # https://stackoverflow.com/questions/1373035/how-do-i-scale-one-rectangle-to-the-maximum-size-possible-within-another-rectang
+            scale = max(1024 / image_w, h / image_h)  # max(dst.w / src.w, dst.h / src.h)
+            pil_image = self.backdrop_image.resize((int(scale * image_w), int(scale * image_h)),
+                                                   resample=PIL.Image.LANCZOS)
+            # Then cut the part we need
+            pil_image = pil_image.crop(box=(0, 0, 1024, h))  # (left, upper, right, lower), in pixels
+
+            image_rgba = pil_image.convert("RGBA")
+            image_rgba = np.asarray(image_rgba, dtype=np.float32) / 255
+            raw_data = image_rgba.ravel()
+
+            logger.info(f"_resize_gui: Creating new GUI item backdrop_texture_{new_texture_id}")
+            self.backdrop_texture = dpg.add_raw_texture(width=1024,
+                                                        height=h,
+                                                        default_value=raw_data,
+                                                        format=dpg.mvFormat_Float_rgba,
+                                                        tag=f"backdrop_texture_{new_texture_id}",
+                                                        parent="talkinghead_example_textures")
+            self.backdrop_texture_id_counter += 1
+            dpg.delete_item("backdrop_drawlist", children_only=True)  # delete old draw items
+            dpg.configure_item("backdrop_drawlist", width=1024, height=h)
+            dpg.draw_image(f"backdrop_texture_{new_texture_id}", (0, 0), (1024, h), uv_min=(0, 0), uv_max=(1, 1), parent="backdrop_drawlist")
+            client_util.maybe_delete_item(f"backdrop_texture_{old_texture_id}")
+        elif self.backdrop_image is None:
+            dpg.delete_item("backdrop_drawlist", children_only=True)  # delete old draw items
+            dpg.configure_item("backdrop_drawlist", width=1024, height=h)
+            client_util.maybe_delete_item(f"backdrop_texture_{old_texture_id}")
+
+        self.last_backdrop_image = self.backdrop_image
+        self.last_window_size = (w, h)
 
     def _iscolor(self, value) -> bool:
         """Return whether `value` is likely an RGB or RGBA color in float or uint8 format."""
@@ -782,12 +901,12 @@ class TalkingheadExampleGUI:
         logger.info(f"TalkingheadExampleGUI.on_send_emotion: sending emotion '{self.current_emotion}'")
         client_api.talkinghead_set_emotion(self.current_emotion)
 
-    def load_image(self, filename: Union[pathlib.Path, str]) -> None:
+    def load_input_image(self, filename: Union[pathlib.Path, str]) -> None:
         try:
-            logger.info(f"TalkingheadExampleGUI.load_image: loading avatar image '{filename}'")
+            logger.info(f"TalkingheadExampleGUI.load_input_image: loading avatar image '{filename}'")
             client_api.talkinghead_load(filename)
         except Exception as exc:
-            logger.error(f"TalkingheadExampleGUI.load_image: {type(exc)}: {exc}")
+            logger.error(f"TalkingheadExampleGUI.load_input_image: {type(exc)}: {exc}")
             traceback.print_exc()
             client_util.modal_dialog(window_title="Error",
                                      message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
@@ -959,12 +1078,12 @@ class TalkingheadExampleGUI:
             client_api.talkinghead_unload()
             dpg.set_value("please_standby_text", "[Animator is paused]")
             dpg.show_item("please_standby_text")
-            dpg.hide_item(f"live_image_{self.texture_id_counter}")
+            dpg.hide_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")
         else:
             client_api.talkinghead_reload()
             dpg.hide_item("please_standby_text")
-            dpg.show_item(f"live_image_{self.texture_id_counter}")
+            dpg.show_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")
         self.animator_running = not self.animator_running
 
@@ -1028,7 +1147,6 @@ def _resize_gui():
     if gui_instance is None:
         return
     gui_instance._resize_gui()
-
 dpg.set_viewport_resize_callback(_resize_gui)
 
 # Hotkey support
@@ -1056,7 +1174,7 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
     # Ctrl+...
     elif ctrl_pressed:
         if key == dpg.mvKey_O:
-            show_open_image_dialog()
+            show_open_input_image_dialog()
         elif key == dpg.mvKey_T:
             gui_instance.toggle_talking()
         elif key == dpg.mvKey_P:
@@ -1240,7 +1358,7 @@ def update_live_texture(task_env) -> None:
             gui_instance.animator_running = False
             dpg.set_value("please_standby_text", "[Connection lost]")
             dpg.show_item("please_standby_text")
-            dpg.hide_item(f"live_image_{gui_instance.texture_id_counter}")
+            dpg.hide_item(f"live_image_{gui_instance.live_texture_id_counter}")
             dpg.set_value("fps_text", describe_performance(None, None, None))
 
 
@@ -1274,8 +1392,7 @@ if __name__ == "__main__":
     dpg.set_viewport_vsync(True)
     dpg.show_viewport()
 
-    _default_path = os.getcwd()
-    initialize_filedialogs(_default_path)
+    initialize_filedialogs()
 
     # Load default animator settings from disk.
     #
@@ -1303,6 +1420,9 @@ if __name__ == "__main__":
                 raise
 
         gui_instance.load_animator_settings(animator_json_path)
+
+        # gui_instance.load_backdrop_image(os.path.join(os.path.dirname(__file__), "backdrops", "anime-plains.png"))  # DEBUG
+
     dpg.set_frame_callback(2, _load_initial_animator_settings)
 
     # last_tts_check_time = 0
