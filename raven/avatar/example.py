@@ -772,7 +772,7 @@ class TalkingheadExampleGUI:
             image_w, image_h = self.backdrop_image.size
 
             # TODO: Consider changing the backdrop region so that if we have enough space in the window for all the controls, it could take more than 1024 pixels of width.
-            # TODO: if the backdrop image is small and/or has a wild aspect ratio, would be more efficient to cut first, then scale.
+            # TODO: If the backdrop image is small and/or has a wild aspect ratio, would be more efficient to cut first, then scale.
             #
             # Scale image, preserving aspect ratio, to cover the whole backdrop region (1024 x h)
             # https://stackoverflow.com/questions/1373035/how-do-i-scale-one-rectangle-to-the-maximum-size-possible-within-another-rectang
