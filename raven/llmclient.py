@@ -43,7 +43,7 @@ from . import chattree
 from . import config
 from . import hybridir
 
-from .avatar.client import api  # raven-avatar client communication setup is in `raven.avatar.client.config`, used automatically.
+from .avatar.client import api as avatar_api  # raven-avatar client communication setup is in `raven.avatar.client.config`, used automatically.
 from .avatar.client import config as client_config
 
 # --------------------------------------------------------------------------------
@@ -51,10 +51,10 @@ from .avatar.client import config as client_config
 
 config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
 
-api.init_module(avatar_url=client_config.avatar_url,
-                avatar_api_key_file=client_config.avatar_api_key_file,
-                tts_url=client_config.tts_url,
-                tts_api_key_file=client_config.tts_api_key_file)  # let it create a default executor
+avatar_api.init_module(avatar_url=client_config.avatar_url,
+                       avatar_api_key_file=client_config.avatar_api_key_file,
+                       tts_url=client_config.tts_url,
+                       tts_api_key_file=client_config.tts_api_key_file)  # let it create a default executor
 
 # ----------------------------------------
 # LLM communication setup
@@ -79,7 +79,7 @@ if os.path.exists(api_key_file):  # TODO: test this (implemented according to sp
 
 def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 10) -> str:
     """Perform a websearch, using the Avatar server to handle the interaction with the search engine and the parsing of the results page."""
-    data = api.websearch_search(query, engine, max_links)
+    data = avatar_api.websearch_search(query, engine, max_links)
     return data["results"]  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
 
 # --------------------------------------------------------------------------------
