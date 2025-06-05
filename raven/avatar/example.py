@@ -458,7 +458,6 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_button(label="Load backdrop [Ctrl+B]", width=self.button_width - 25, callback=show_open_backdrop_image_dialog, tag="open_backdrop_button")
                     dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
                     dpg.add_text("[Use raven.avatar.editor to edit templates.]", color=(140, 140, 140))
-                    dpg.add_spacer(height=8)
 
                     # Main animator settings
                     dpg.add_text("Animator [Ctrl+click to set a numeric value]")
@@ -502,7 +501,14 @@ class PostprocessorSettingsEditorGUI:
                                       tag="upscale_quality_choice")
                         dpg.add_text("Quality")
                     dpg.add_text("[Presets as in Anime4K.]", color=(140, 140, 140))
-                    dpg.add_spacer(height=8)
+
+                    # Separator for section with interactive demo controls
+                    with dpg.drawlist(width=self.button_width, height=1):
+                        dpg.draw_line((0, 0),
+                                      (self.button_width, 0),
+                                      color=(140, 140, 140, 255),
+                                      thickness=1)
+                    dpg.add_text("Test your character!")
 
                     # Interactive demo controls
                     dpg.add_text("Emotion [Ctrl+E]")
@@ -517,8 +523,8 @@ class PostprocessorSettingsEditorGUI:
                     self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
                     dpg.add_spacer(height=8)
 
-                    dpg.add_text("Talking (generic, non-lipsync)")
-                    dpg.add_button(label="Start talking animation [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
+                    dpg.add_text("Talking animation (generic, non-lipsync)")
+                    dpg.add_button(label="Start [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
                     with dpg.group(horizontal=True):
                         def reset_talking_fps():
                             dpg.set_value("talking_fps_slider", 12)
@@ -1067,10 +1073,10 @@ class PostprocessorSettingsEditorGUI:
         """Toggle the talkinghead's talking state (simple randomized mouth animation)."""
         if not self.talking_animation_running:
             client_api.talkinghead_start_talking()
-            dpg.set_item_label("start_stop_talking_button", "Stop talking animation [Ctrl+T]")
+            dpg.set_item_label("start_stop_talking_button", "Stop [Ctrl+T]")
         else:
             client_api.talkinghead_stop_talking()
-            dpg.set_item_label("start_stop_talking_button", "Start talking animation [Ctrl+T]")
+            dpg.set_item_label("start_stop_talking_button", "Start [Ctrl+T]")
         self.talking_animation_running = not self.talking_animation_running
 
     def toggle_animator_paused(self) -> None:
