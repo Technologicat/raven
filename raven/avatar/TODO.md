@@ -11,14 +11,6 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 ### General
 
-- Reorganize the directory structure
-  - Server and pose editor: developed from old Talkinghead, AGPL-licensed
-  - Client and postproc editor: all new code, BSD-licensed
-
-- Rename example.py to something sensible, it is a postproc effect chain editor now
-
-- Rename client_util -> guiutil or dpgutil
-
 - Option to apply postproc before/after upscale? Currently always applied after upscale.
 
 - Feature orthogonality
@@ -37,17 +29,15 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 ### Documentation
 
-- localhost:5100 is serving the wrong README. Fix the directory layout.
-
 - Update README, document the web API endpoints.
 
 - Polish up the documentation:
   - Add pictures to README.
-    - Screenshot of the pose editor. Anything else we should say about it?
+    - Screenshot of the pose editor (`raven.avatar.pose_editor.app`). Anything else we should say about it?
     - Examples of generated poses, highlighting both success and failure cases. How the live talking head looks in the actual SillyTavern GUI. Link the original THA tech reports.
     - Examples of postprocessor filter results.
     - How each postprocessor example config looks when rendering the example character.
-  - Document the postproc chain editor.
+  - Document the postproc chain editor (`raven.avatar.client.app`).
   - Update the character-making instructions for SD Forge with Wai v14.0, RemBG extension with isnet-general-use/isnet-anime.
 
 ### Examples
