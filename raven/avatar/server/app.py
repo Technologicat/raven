@@ -221,6 +221,8 @@ def api_websearch():
 
     where the "links" field contains a list of all links to the search results.
     """
+    if not websearch.is_available():
+        abort(403, "Module 'websearch' not running")
     preformatted_text, structured_results = _websearch_impl()
     output = {"results": preformatted_text,
               "links": [item["link"] for item in structured_results]}
@@ -258,6 +260,8 @@ def api_websearch2():
     This format preserves the connection between the text of the result
     and its corresponding link, which is convenient for citation mechanisms.
     """
+    if not websearch.is_available():
+        abort(403, "Module 'websearch' not running")
     preformatted_text, structured_results = _websearch_impl()
     output = {"results": preformatted_text,
               "data": structured_results}
@@ -277,6 +281,9 @@ def api_classify():
 
     sorted by score, descending, so that the most probable emotion is first.
     """
+    if not classify.is_available():
+        abort(403, "Module 'classify' not running")
+
     data = request.get_json()
 
     if "text" not in data or not isinstance(data["text"], str):
@@ -299,6 +306,9 @@ def api_classify_labels():
 
     The actual labels depend on the classifier model.
     """
+    if not classify.is_available():
+        abort(403, "Module 'classify' not running")
+
     classification = classify.classify_text("")
     labels = [x["label"] for x in classification]
     return jsonify({"labels": labels})
@@ -314,6 +324,9 @@ def api_talkinghead_load():
 
     The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
     """
+    if not animator.is_available():
+        abort(403, "Module 'talkinghead' not running")
+
     file = request.files['file']
     return animator.load_image_from_stream(file.stream)
 
@@ -334,7 +347,8 @@ def api_talkinghead_load_emotion_templates():
     This API endpoint becomes available after the talkinghead has been launched.
     """
     if not animator.is_available():
-        abort(400, 'avatar not launched')
+        abort(403, "Module 'talkinghead' not running")
+
     data = request.get_json()
     if not len(data):
         data = None  # sending `None` to talkinghead will reset to defaults
@@ -357,7 +371,8 @@ def api_talkinghead_load_animator_settings():
     This API endpoint becomes available after the talkinghead has been launched.
     """
     if not animator.is_available():
-        abort(400, 'avatar not launched')
+        abort(403, "Module 'talkinghead' not running")
+
     data = request.get_json()
     if not len(data):
         data = None  # sending `None` to talkinghead will reset to defaults
@@ -372,6 +387,8 @@ def api_talkinghead_start():
 
     To pause, use '/api/talkinghead/stop'.
     """
+    if not animator.is_available():
+        abort(403, "Module 'talkinghead' not running")
     return animator.start()
 
 @app.route("/api/talkinghead/stop")
@@ -380,6 +397,8 @@ def api_talkinghead_stop():
 
     To resume, use '/api/talkinghead/start'.
     """
+    if not animator.is_available():
+        abort(403, "Module 'talkinghead' not running")
     return animator.stop()
 
 @app.route("/api/talkinghead/start_talking")
@@ -391,6 +410,8 @@ def api_talkinghead_start_talking():
 
     For lip sync, see `tts_speak_lipsynced`.
     """
+    if not animator.is_available():
+        abort(403, "Module 'talkinghead' not running")
     return animator.start_talking()
 
 @app.route("/api/talkinghead/stop_talking")
@@ -402,6 +423,8 @@ def api_talkinghead_stop_talking():
 
     For lip sync, see `tts_speak_lipsynced`.
     """
+    if not animator.is_available():
+        abort(403, "Module 'talkinghead' not running")
     return animator.stop_talking()
 
 @app.route("/api/talkinghead/set_emotion", methods=["POST"])
@@ -417,6 +440,8 @@ def api_talkinghead_set_emotion():
     There is no getter, because SillyTavern keeps its state in the frontend
     and the plugins only act as slaves (in the technological sense of the word).
     """
+    if not animator.is_available():
+        abort(403, "Module 'talkinghead' not running")
     data = request.get_json()
     if "emotion_name" not in data or not isinstance(data["emotion_name"], str):
         abort(400, '"emotion_name" is required')
@@ -442,7 +467,7 @@ def api_talkinghead_set_overrides():
     This API endpoint becomes available after the talkinghead has been launched.
     """
     if not animator.is_available():
-        abort(400, 'avatar not launched')
+        abort(403, "Module 'talkinghead' not running")
     data = request.get_json()
     if not len(data):
         data = {}
@@ -462,6 +487,8 @@ def api_talkinghead_result_feed():
     The file format can be set in the animator settings. The frames are always sent
     with the Content-Type and Content-Length headers set.
     """
+    if not animator.is_available():
+        abort(403, "Module 'talkinghead' not running")
     return animator.result_feed()
 
 
