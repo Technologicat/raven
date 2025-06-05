@@ -139,7 +139,7 @@ filedialog_save_image = None
 filedialog_open_json = None
 filedialog_save_all_emotions = None
 
-def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
+def initialize_filedialogs():  # called at app startup
     """Create the file dialogs."""
     global filedialog_open_image
     global filedialog_save_image
@@ -153,7 +153,7 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                        file_filter=".png",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=default_path)
+                                       default_path=os.path.join(os.path.dirname(__file__), "images"))
     filedialog_save_image = FileDialog(title="Save output image as PNG",
                                        tag="save_image_dialog",
                                        callback=_save_image_callback,
@@ -163,7 +163,7 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                        save_mode=True,
                                        default_file_extension=".png",  # used if the user does not provide a file extension when naming the save-as
                                        allow_drag=False,
-                                       default_path=default_path)
+                                       default_path=os.getcwd())
     filedialog_open_json = FileDialog(title="Open emotion JSON file",
                                        tag="open_json_dialog",
                                        callback=_open_json_callback,
@@ -172,7 +172,7 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                        file_filter=".json",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=default_path)
+                                       default_path=os.path.join(os.path.dirname(__file__), "emotions"))
     filedialog_save_all_emotions = FileDialog(title="Save all emotions as JSON",
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
@@ -183,7 +183,7 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                               save_mode=True,
                                               default_file_extension="",  # used if the user does not provide a file extension when naming the save-as
                                               allow_drag=False,
-                                              default_path=default_path)
+                                              default_path=os.getcwd())
 
 # --------------------------------------------------------------------------------
 # "Open image" dialog
@@ -1199,8 +1199,7 @@ if __name__ == "__main__":
     dpg.set_viewport_vsync(True)
     dpg.show_viewport()
 
-    _default_path = os.getcwd()
-    initialize_filedialogs(_default_path)
+    initialize_filedialogs()
 
     def tune_viewport():
         dpg.set_viewport_width(3 * gui_instance.image_size + 32)

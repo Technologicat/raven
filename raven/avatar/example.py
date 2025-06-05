@@ -196,7 +196,7 @@ def initialize_filedialogs():  # called at app startup
                                                    save_mode=True,
                                                    default_file_extension=".json",  # used if the user does not provide a file extension when naming the save-as
                                                    allow_drag=False,
-                                                   default_path=os.path.dirname(__file__))
+                                                   default_path=os.getcwd())
 
 # --------------------------------------------------------------------------------
 # "Open input image" dialog
