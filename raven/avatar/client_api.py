@@ -41,7 +41,7 @@ from unpythonic.env import env as envcls
 
 import pygame  # for audio (text to speech) support
 
-from .. import bgtask
+from ..common import bgtask
 
 from . import netutil
 

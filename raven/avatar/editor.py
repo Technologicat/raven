@@ -60,14 +60,13 @@ import torch
 import dearpygui.dearpygui as dpg
 
 from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
-from .. import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from .. import utils as raven_utils
+from ..common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ..common import guiutils
 
 from .vendor.tha3.poser.modes.load_poser import load_poser
 from .vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from .vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
-from . import client_util
 from .util import load_emotion_presets, posedict_to_pose, pose_to_posedict, RunningAverage, maybe_install_models, convert_linear_to_srgb, convert_float_to_uint8
 
 logging.basicConfig(level=logging.INFO)
@@ -111,7 +110,7 @@ with dpg.font_registry() as the_font_registry:
     with dpg.font(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf"),  # load font from Raven's main assets
                   font_size) as default_font:
         pass
-        # utils.setup_font_ranges()
+        guiutils.setup_font_ranges()
     dpg.bind_font(default_font)
 
 # Modify global theme
@@ -640,7 +639,7 @@ class PoseEditorGUI:
                               no_scroll_with_mouse=True):
             dpg.add_image("source_image_texture", tag="source_image_image")
 
-            x0, y0 = raven_utils.get_widget_relative_pos("source_image_image", reference="left_panel")
+            x0, y0 = guiutils.get_widget_relative_pos("source_image_image", reference="left_panel")
             dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
                                                    y0 + self.image_size / 2 - (font_size / 2)),
                          tag="source_no_image_loaded_text")
@@ -728,7 +727,7 @@ class PoseEditorGUI:
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
             dpg.add_image("result_image_texture", tag="result_image_image")
-            x0, y0 = raven_utils.get_widget_relative_pos("result_image_image", reference="right_panel")
+            x0, y0 = guiutils.get_widget_relative_pos("result_image_image", reference="right_panel")
             dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
                                                    y0 + self.image_size / 2 - (font_size / 2)),
                          tag="result_no_image_loaded_text")
@@ -789,12 +788,12 @@ class PoseEditorGUI:
                 self.source_image_changed = True
         except Exception as exc:
             logger.error(f"Could not load image {image_file_name}, reason: {type(exc)}: {exc}")
-            client_util.modal_dialog(window_title="Error",
-                                     message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}",
-                                     buttons=["Close"],
-                                     ok_button="Close",
-                                     cancel_button="Close",
-                                     centering_reference_window=self.window)
+            guiutils.modal_dialog(window_title="Error",
+                                  message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}",
+                                  buttons=["Close"],
+                                  ok_button="Close",
+                                  cancel_button="Close",
+                                  centering_reference_window=self.window)
         self.update_output()
 
     def load_json(self, json_file_name: str) -> None:
@@ -820,12 +819,12 @@ class PoseEditorGUI:
             dpg.set_value(self.emotion_choice, self.emotion_names[0])
         except Exception as exc:
             logger.error(f"Could not load JSON {json_file_name}, reason: {type(exc)}: {exc}")
-            client_util.modal_dialog(window_title="Error",
-                                     message=f"Could not load JSON '{json_file_name}', reason {type(exc)}: {exc}",
-                                     buttons=["Close"],
-                                     ok_button="Close",
-                                     cancel_button="Close",
-                                     centering_reference_window=self.window)
+            guiutils.modal_dialog(window_title="Error",
+                                  message=f"Could not load JSON '{json_file_name}', reason {type(exc)}: {exc}",
+                                  buttons=["Close"],
+                                  ok_button="Close",
+                                  cancel_button="Close",
+                                  centering_reference_window=self.window)
         else:
             logger.info(f"Loaded JSON {json_file_name}")
             self.update_output()
@@ -927,12 +926,12 @@ class PoseEditorGUI:
                 dpg.set_value(self.result_image_texture, self.blank_texture)
                 dpg.show_item("result_no_image_loaded_text")
                 logger.error(f"Could not render, reason: {type(exc)}: {exc}")
-                client_util.modal_dialog(window_title="Error",
-                                         message=f"Could not render, reason {type(exc)}: {exc}",
-                                         buttons=["Close"],
-                                         ok_button="Close",
-                                         cancel_button="Close",
-                                         centering_reference_window=self.window)
+                guiutils.modal_dialog(window_title="Error",
+                                      message=f"Could not render, reason {type(exc)}: {exc}",
+                                      buttons=["Close"],
+                                      ok_button="Close",
+                                      cancel_button="Close",
+                                      centering_reference_window=self.window)
                 return
             else:
                 # Update FPS counter, measuring the render speed only.

@@ -19,7 +19,7 @@ from unpythonic import sym
 
 import dearpygui.dearpygui as dpg
 
-from . import utils
+from . import numutils
 
 # --------------------------------------------------------------------------------
 # Animation mechanism
@@ -335,8 +335,8 @@ class ButtonFlash(Animation):
         if animation_pos >= 1.0:
             return action_finish
 
-        r = utils.clamp(animation_pos)
-        r = utils.nonanalytic_smooth_transition(r)
+        r = numutils.clamp(animation_pos)
+        r = numutils.nonanalytic_smooth_transition(r)
 
         R0, G0, B0 = self.flash_color
         R1, G1, B1 = 45, 45, 48  # default button background color  TODO: read from global theme
@@ -855,8 +855,8 @@ class ScrollEndFlasher(Overlay, Animation):
 
         scroll_ends_here_color = [196, 196, 255, 64]
 
-        r = utils.clamp(animation_pos)
-        r = utils.nonanalytic_smooth_transition(r)
+        r = numutils.clamp(animation_pos)
+        r = numutils.nonanalytic_smooth_transition(r)
         alpha = (1.0 - r) * scroll_ends_here_color[3]
         scroll_ends_here_color[3] = alpha
 

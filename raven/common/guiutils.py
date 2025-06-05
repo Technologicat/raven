@@ -1,11 +1,14 @@
-__all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
-           "absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
-           "make_blank_index_array",
-           "UnionFilter",
-           "format_bibtex_author", "format_bibtex_authors", "unicodize_basic_markup",
-           "normalize_search_string", "search_string_to_fragments", "search_fragment_to_highlight_regex_fragment",
+"""DPG GUI utilities.
+
+This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
+"""
+
+__all__ = ["modal_dialog",
            "setup_font_ranges", "markdown_add_font_callback",
-           "has_child_items", "get_widget_pos", "get_widget_size", "get_widget_relative_pos", "is_mouse_inside_widget", "wait_for_resize",
+           "maybe_delete_item", "has_child_items",
+           "get_widget_pos", "get_widget_size", "get_widget_relative_pos", "is_mouse_inside_widget",
+           "recenter_window",
+           "wait_for_resize",
            "compute_tooltip_position_scalar",
            "get_pixels_per_plotter_data_unit",
            "is_completely_below_target_y", "is_completely_above_target_y",
@@ -13,350 +16,106 @@ __all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
            "find_widget_depth_first", "binary_search_widget"]
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import functools
-import io
-import os
-import pathlib
-import re
-from typing import Union
-import unicodedata
-import warnings
-
-import numpy as np
+from typing import Callable, List, Optional, Union
 
 import dearpygui.dearpygui as dpg
 
-from . import config
+from . import numutils
 
 # --------------------------------------------------------------------------------
-# Numerical utilities
+# Simple modal dialog for OK/cancel
 
-def clamp(x, ell=0.0, u=1.0):  # not the manga studio
-    """Clamp value `x` between `ell` and `u`. Return clamped value."""
-    return min(max(ell, x), u)
+_modal_dialog_initialized = False
+def init():
+    """Initialize this module. Only call after `setup_dearpygui`."""
+    global _modal_dialog_initialized
+    if _modal_dialog_initialized:
+        return
+    with dpg.window(label="Modal dialog title", autosize=True, modal=True, show=False, tag="modal_dialog_window"):
+        dpg.add_text("Modal dialog message", wrap=600, tag="modal_dialog_message")
+        dpg.add_separator()
+        dpg.add_group(horizontal=True, tag="modal_dialog_button_group")
+    with dpg.handler_registry(tag="modal_dialog_handler_registry"):  # global (whole viewport)
+        dpg.add_key_press_handler(tag="modal_dialog_hotkeys_handler", callback=modal_dialog_hotkeys_callback)
+    _modal_dialog_initialized = True
 
-def nonanalytic_smooth_transition(x, m=1.0):  # from `extrafeathers.pdes.numutil`
-    """Non-analytic smooth transition from 0 to 1, on interval x ∈ [0, 1].
-
-    The transition is reflection-symmetric through the point (1/2, 1/2).
-
-    Outside the interval:
-        s(x, m) = 0  for x < 0
-        s(x, m) = 1  for x > 1
-
-    The parameter `m` controls the steepness of the transition region.
-    Larger `m` packs the transition closer to `x = 1/2`, making it
-    more abrupt (although technically, still infinitely smooth).
-
-    `m` is passed to `psi`, which see.
-    """
-    p = psi(x, m)
-    return p / (p + psi(1.0 - x, m))
-
-def psi(x, m=1.0):  # from `extrafeathers.pdes.numutil`
-    """Building block for non-analytic smooth functions.
-
-        psi(x, m) := exp(-1 / x^m) χ(0, ∞)(x)
-
-    where χ is the indicator function (1 if x is in the set, 0 otherwise).
-
-    Suppresses divide by zero warnings and errors, so can be evaluated
-    also at `x = 0`.
-
-    This is the helper function used in the construction of the standard
-    mollifier in PDE theory.
-    """
-    with warnings.catch_warnings():  # for NumPy arrays
-        warnings.filterwarnings(action="ignore",
-                                message="^divide by zero .*$",
-                                category=RuntimeWarning,
-                                module="__main__")
-        try:
-            return np.exp(-1.0 / x**m) * (x > 0.0)
-        except ZeroDivisionError:  # for scalar x
-            return 0.0
-
-# --------------------------------------------------------------------------------
-# File utilities
-
-def absolutize_filename(filename: str) -> str:
-    """Convert `filename` to an absolute filename."""
-    return str(pathlib.Path(filename).expanduser().resolve())
-
-def strip_ext(filename: str) -> str:
-    """/foo/bar.bib -> /foo/bar"""
-    return os.path.splitext(filename)[0]
-
-def make_cache_filename(origfullpath: Union[str, pathlib.Path], suffix: str, ext: str) -> str:
-    """foo/bar.bib -> foo/bar_<suffix>.<ext>
-
-    Useful e.g. for naming a cache file based on the input filename.
-    """
-    origdirname = os.path.dirname(origfullpath)  # "foo/bar.bib" -> "foo"
-    origfilename = strip_ext(os.path.basename(origfullpath))  # "foo/bar.bib" -> "bar"
-    return os.path.join(origdirname, f"{origfilename}_{suffix}.{ext}")
-
-def validate_cache_mtime(cachefullpath: Union[str, pathlib.Path], origfullpath: Union[str, pathlib.Path]) -> bool:
-    """Return whether a cache file at `cachefullpath` is valid, by comparing its mtime to that of the original file at `origfullpath`."""
-    stat_result_cache = os.stat(cachefullpath)
-    stat_result_orig = os.stat(origfullpath)
-    if stat_result_orig.st_mtime_ns <= stat_result_cache.st_mtime_ns:
-        return True
-    return False
-
-# def delete_directory_recursively(path: str) -> None:
-#     """Delete a directory recursively, like 'rm -rf' in the shell.
-#
-#     Ignores `FileNotFoundError`, but other errors raise. If an error occurs,
-#     some files and directories may already have been deleted.
-#     """
-#     path = pathlib.Path(path).expanduser().resolve()
-#
-#     for root, dirs, files in os.walk(path, topdown=False, followlinks=False):
-#         for x in files:
-#             try:
-#                 os.unlink(os.path.join(root, x))
-#             except FileNotFoundError:
-#                 pass
-#
-#         for x in dirs:
-#             try:
-#                 os.rmdir(os.path.join(root, x))
-#             except FileNotFoundError:
-#                 pass
-#
-#     try:
-#         os.rmdir(path)
-#     except FileNotFoundError:
-#         pass
-
-def create_directory(path: Union[str, pathlib.Path]) -> None:
-    p = pathlib.Path(path).expanduser().resolve()
-    pathlib.Path.mkdir(p, parents=True, exist_ok=True)
-
-# def clear_and_create_directory(path: str) -> None:
-#     delete_directory_recursively(path)
-#     create_directory(path)
-
-# --------------------------------------------------------------------------------
-# Misc utilities
-
-def make_blank_index_array() -> np.array:
-    """Make a blank array of the same type as that used for slicing an array in NumPy."""
-    return np.array([], dtype=np.int64)
-
-class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?  TODO: general utility, move to `unpythonic`
-    def __init__(self, *filters):
-        """A `logging.Filter` that matches a record if at least one of the given `*filters` matches it.
-
-        Based on:
-            https://stackoverflow.com/questions/17275334/what-is-a-correct-way-to-filter-different-loggers-using-python-logging
-            https://docs.python.org/3/library/logging.html#logging.Filter
-
-        For just the current module, one would::
-
-            for handler in logging.root.handlers:
-                handler.addFilter(logging.Filter(__name__))
-
-        For more than one module, enter `UnionFilter`. For example::
-
-            for handler in logging.root.handlers:
-                handler.addFilter(UnionFilter(logging.Filter(__name__),
-                                              logging.Filter("raven.animation"),
-                                              logging.Filter("raven.bgtask"),
-                                              logging.Filter("raven.preprocess"),
-                                              logging.Filter("raven.utils"),
-                                              logging.Filter("raven.vendor.file_dialog.fdialog")))
-        """
-        self.filters = filters
-    def filter(self, record):
-        return any(f.filter(record) for f in self.filters)
-
-# --------------------------------------------------------------------------------
-# String utilities
-
-def format_bibtex_author(author):
-    """Format an author name for use in a citation.
-
-    `author`: output of `bibtexparser.middlewares.SplitNameParts`.
-
-    Examples of `author` format, from `bibtexparser/middlewares/names.py`:
-
-        >>> parse_single_name_into_parts("Donald E. Knuth")
-        {'last': ['Knuth'], 'von': [], 'first': ['Donald', 'E.'], 'jr': []}
-
-        >>> parse_single_name_into_parts("Brinch Hansen, Per")
-        {'last': ['Brinch', 'Hansen'], 'von': [], 'first': ['Per'], 'jr': []}
-
-        >>> parse_single_name_into_parts("Beeblebrox, IV, Zaphod")
-        {'last': ['Beeblebrox'], 'von': [], 'first': ['Zaphod'], 'jr': ['IV']}
-
-        >>> parse_single_name_into_parts("Ludwig van Beethoven")
-        {'last': ['Beethoven'], 'von': ['van'], 'first': ['Ludwig'], 'jr': []}
-
-    In these examples, we return:
-
-        "Knuth"
-        "Brinch Hansen"
-        "Beeblebrox IV"
-        "van Beethoven"
-    """
-    if not author.last:
-        raise ValueError(f"missing last name in author {author}")
-    von_part = f"{' '.join(author.von)} " if author.von else ""
-    last_part = f"{' '.join(author.last)}"
-    jr_part = f" {' '.join(author.jr)}" if author.jr else ""
-    return f"{von_part}{last_part}{jr_part}"
-
-def format_bibtex_authors(authors):
-    """Format an author name for use in a citation.
-
-    `author`: a list, where each element is an outputs of `bibtexparser.middlewares.SplitNameParts`.
-              For details of that format, see the docstring of `format_bibtex_author`.
-
-    Returns an `str` suitable for use in a citation:
-        - One author: "Author"
-        - Two authors: "Author and Other"
-        - Three or more: "Author et al."
-
-    The authors are kept in the same order as in the original list.
-    """
+def modal_dialog_window_exists():
+    # Sanity check. Just try to call *some* DPG function with the modal dialog window to check that the handle is valid (it isn't before `init` has been called).
     try:
-        authors_list = [format_bibtex_author(author) for author in authors]
-    except ValueError as exc:
-        logger.warning(f"format_bibtex_authors: failed, reason: {str(exc)}")
-        return ""
-    if len(authors_list) >= 3:
-        authors_str = f"{authors_list[0]} et al."
-    elif len(authors_list) == 2:
-        authors_str = f"{authors_list[0]} and {authors_list[1]}"
-    elif len(authors_list) == 1:
-        authors_str = authors_list[0]
-    else:  # empty author list
-        logger.warning("format_bibtex_authors: got an empty authors list")
-        authors_str = ""
-    return authors_str
+        dpg.get_item_alias("modal_dialog_window")
+    except Exception:
+        return False
+    return True
 
-# # https://stackoverflow.com/questions/46501292/normalize-whitespace-with-python
-# def normalize_whitespace(s):
-#     return " ".join(s.split())
+def modal_dialog_hotkeys_callback(sender, app_data):
+    if not modal_dialog_window_exists():
+        return
+    if not dpg.is_item_visible("modal_dialog_window"):
+        return
+    key = app_data
+    if current_on_close is not None:
+        if key == dpg.mvKey_Return:
+            current_on_close(sender, app_data, user_data=current_ok_button)
+        elif key == dpg.mvKey_Escape:
+            current_on_close(sender, app_data, user_data=current_cancel_button)
 
-def _substitute_chars(mapping, html_tag_name, match_obj):
-    """Substitute characters in a regex match. Low-level function, used by `unicodize_basic_markup`.
+current_on_close = None
+current_ok_button = None
+current_cancel_button = None
+def modal_dialog(window_title: str,
+                 message: str,
+                 buttons: List[str],
+                 ok_button: str,
+                 cancel_button: str,
+                 callback: Optional[Callable] = None,
+                 centering_reference_window: Union[str, int] = None) -> None:
+    """A simple modal dialog.
 
-    This can be used as a replacer in `re.sub`, e.g. for replacing HTML with Unicode
-    in chemical formulas ("CO₂", "NOₓ") and math (e.g. "x²").
-
-    `mapping`: e.g. `regular_to_subscript`; see `config.py`.
-    `html_tag_name`: str or None. Name of HTML tag to strip (e.g. "sub").
-                     If `None`, omit HTML processing.
-    `match_obj`: provided by `re.sub`.
-
-    Example::
-
-        substitute_sub = functools.partial(_substitute_chars, config.regular_to_subscript, "sub")
-        text = re.sub(r"<sub>(.*?)</sub>", substitute_sub, text, flags=re.IGNORECASE)
+    `buttons`: Texts on buttons. These play a double role as return values.
+    `ok_button`: When Enter is pressed, this value is returned.
+    `cancel_button`: When Esc is pressed, or the window is closed by clicking on the "X", this value is returned.
+    `callback`: CPS due to how DPG works. `modal_dialog` itself returns immediately; put the stuff you want to run
+                (if any) after the modal closes into your `callback`.
+    `centering_reference_window`: Parent window to center the dialog on.
     """
-    s = match_obj.group()
+    init()
 
-    # Strip HTML tag: "<sub>123</sub>" -> "123"
-    if html_tag_name is not None:
-        tag_start = f"<{html_tag_name}>"
-        tag_end = f"</{html_tag_name}>"
-        s = s[len(tag_start):-len(tag_end)]
+    # Remove old buttons, if any
+    for child in dpg.get_item_children("modal_dialog_button_group", slot=1):
+        dpg.delete_item(child)
 
-    sio = io.StringIO()
-    for c in s:
-        sio.write(mapping.get(c, c))  # if `c` in `mapping`, use that, else use `c` itself.
-    return sio.getvalue()
+    def modal_dialog_callback(sender, app_data, user_data):
+        global current_on_close
+        global current_cancel_button
+        current_on_close = None
+        current_cancel_button = None
+        dpg.hide_item("modal_dialog_window")
+        if callback:
+            callback(user_data)  # send the label of the clicked button
+    global current_on_close
+    global current_ok_button
+    global current_cancel_button
+    current_on_close = modal_dialog_callback
+    current_ok_button = ok_button
+    current_cancel_button = cancel_button
 
-def unicodize_basic_markup(s):
-    """Convert applicable parts of HTML and LaTeX in `s` to their Unicode equivalents."""
-    s = " ".join(unicodedata.normalize("NFKC", s).strip().split())
+    dpg.configure_item("modal_dialog_window", label=window_title, on_close=modal_dialog_callback, user_data=cancel_button)
+    dpg.set_value("modal_dialog_message", message)
+    for label in buttons:
+        dpg.add_button(label=label, width=75, callback=modal_dialog_callback, user_data=label, parent="modal_dialog_button_group")
 
-    # Remove some common LaTeX encodings
-    s = s.replace(r"\%", "%")
-    s = s.replace(r"\$", "$")
-
-    # Replace some HTML entities
-    s = s.replace(r"&apos;", "'")
-    s = s.replace(r"&quot;", '"')
-    s = s.replace(r"&Auml;", "Ä")
-    s = s.replace(r"&auml;", "ä")
-    s = s.replace(r"&Ouml;", "Ö")
-    s = s.replace(r"&ouml;", "ö")
-    s = s.replace(r"&Aring;", "Å")
-    s = s.replace(r"&aring;", "å")
-
-    # Replace HTML with Unicode in chemical formulas (e.g. "CO₂", "NOₓ") and math (e.g. "x²")s
-    substitute_sub = functools.partial(_substitute_chars, config.regular_to_subscript, "sub")
-    substitute_sup = functools.partial(_substitute_chars, config.regular_to_superscript, "sup")
-    s = re.sub(r"<sub>(.*?)</sub>", substitute_sub, s, flags=re.IGNORECASE)
-    s = re.sub(r"<sup>(.*?)</sup>", substitute_sup, s, flags=re.IGNORECASE)
-
-    # Prettify some HTML for better plaintext readability
-    s = re.sub(r"<b>(.*?)</b>", r"*\1*", s, flags=re.IGNORECASE)  # bold
-    s = re.sub(r"<i>(.*?)</i>", r"/\1/", s, flags=re.IGNORECASE)  # italic
-    s = re.sub(r"<u>(.*?)</u>", r"_\1_", s, flags=re.IGNORECASE)  # underline
-
-    # Replace < and > entities last
-    s = s.replace(r"&lt;", "<")
-    s = s.replace(r"&gt;", ">")
-
-    return s
-
-def normalize_search_string(s):
-    """Normalize a string for searching.
-
-    This converts subscripts and superscripts into their regular equivalents.
-    """
-    s = " ".join(unicodedata.normalize("NFKC", s).strip().split())
-    for k, v in config.subscript_to_regular.items():
-        s = s.replace(k, v)
-    for k, v in config.superscript_to_regular.items():
-        s = s.replace(k, v)
-    return s
-
-def search_string_to_fragments(s, *, sort):
-    """Convert search string `s` into `(case_sensitive_fragments, case_insensitive_fragments)`.
-
-    `sort`: if `True`, sort the fragments (in each set) from longest to shortest.
-
-    Incremental fragment search, like in Emacs HELM (or in Firefox address bar):
-      - "cat photo" matches "photocatalytic".
-      - Lowercase search term means case-insensitive for that term (handled in functions
-        that perform search, such as `update_search` and `update_info_panel`).
-    """
-    search_terms = [normalize_search_string(x.strip()) for x in s.split()]
-    is_case_sensitive = [x.lower() != x for x in search_terms]
-    case_sensitive_fragments = [x for x, sens in zip(search_terms, is_case_sensitive) if sens]
-    case_insensitive_fragments = [x for x, sens in zip(search_terms, is_case_sensitive) if not sens]
-    if sort:
-        case_sensitive_fragments = list(sorted(case_sensitive_fragments, key=lambda x: -len(x)))  # longest to shortest
-        case_insensitive_fragments = list(sorted(case_insensitive_fragments, key=lambda x: -len(x)))  # longest to shortest
-    return case_sensitive_fragments, case_insensitive_fragments
-
-def search_fragment_to_highlight_regex_fragment(s):
-    """Make a search fragment usable in a regex for search highlighting."""
-    # Escape regex special characters.  TODO: ^, $, others?
-    s = s.replace("(", r"\(")
-    s = s.replace(")", r"\)")
-    s = s.replace("[", r"\[")
-    s = s.replace("]", r"\]")
-    s = s.replace("{", r"\{")
-    s = s.replace("}", r"\}")
-    s = s.replace(".", r"\.")
-    # Look also for superscript and subscript variants of numbers.
-    # We can't do this for letters, because there are simply too many letters in each item title. :)
-    for digit in "0123456789":
-        s = s.replace(digit, f"({digit}|{config.regular_to_subscript_numbers[digit]}|{config.regular_to_superscript_numbers[digit]})")
-    return s
+    dpg.split_frame()  # We might be called when another modal (e.g. `FileDialog`) closes. Give it a chance to close first, to make DPG happy. (Otherwise this modal won't always show.)
+    if centering_reference_window:
+        recenter_window("modal_dialog_window", reference_window=centering_reference_window)
+    else:
+        dpg.show_item("modal_dialog_window")
 
 # --------------------------------------------------------------------------------
-# GUI font loading utilities
+# Font loading utilities
 
 def setup_font_ranges():
     """Set up special characters for a font.
@@ -399,7 +158,15 @@ def markdown_add_font_callback(file, size: int | float, parent=0, **kwargs) -> i
     return font
 
 # --------------------------------------------------------------------------------
-# GUI utilities
+# General GUI utilities
+
+def maybe_delete_item(item):
+    """Delete `item` (DPG ID or tag), if it exists. If not, the error is ignored."""
+    logger.info(f"maybe_delete_item: Deleting old GUI item '{item}', if it exists.")
+    try:
+        dpg.delete_item(item)
+    except SystemError:  # does not exist
+        pass
 
 def has_child_items(widget):
     """Return whether `widget` (DPG tag or ID) has child items in any of its slots."""
@@ -475,6 +242,42 @@ def wait_for_resize(widget, wait_frames_max=10):
         logger.debug(f"wait_for_resize: timeout ({wait_frames_max} frames) when waiting for resize of DPG widget {widget}")
     return False
 
+def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, int]):
+    """Reposition `thewindow` (DPG ID or tag), if visible, so that it is centered on `reference_window`.
+
+    To center on viewport, pass your maximized main window as `reference_window`.
+    """
+    if reference_window is None:
+        return
+    if thewindow is None:
+        return
+    # Sanity check. Just try to call *some* DPG function with `thewindow` to check that the handle is valid.
+    try:
+        dpg.get_item_alias(thewindow)
+    except Exception:
+        logger.debug(f"recenter_window: {thewindow} does not exist, skipping.")
+        return
+
+    reference_window_w, reference_window_h = get_widget_size(reference_window)
+    logger.debug(f"recenter_window: Reference window (tag '{dpg.get_item_alias(reference_window)}', type {dpg.get_item_type(reference_window)}) size is {reference_window_w}x{reference_window_h}.")
+
+    # Render offscreen so we get the final size. Only needed if the size can change.
+    dpg.set_item_pos(thewindow,
+                     (reference_window_w,
+                      reference_window_h))
+    dpg.show_item(thewindow)
+    logger.debug(f"recenter_window: After show command: Window is visible? {dpg.is_item_visible(thewindow)}.")
+    dpg.split_frame()  # wait for render
+    logger.debug(f"recenter_window: After wait for render: Window is visible? {dpg.is_item_visible(thewindow)}.")
+
+    w, h = get_widget_size(thewindow)
+    logger.debug(f"recenter_window: Window {thewindow} (tag '{dpg.get_item_alias(thewindow)}', type {dpg.get_item_type(thewindow)}) size is {w}x{h}.")
+
+    # Center the window in the viewport
+    dpg.set_item_pos(thewindow,
+                     (max(0, (reference_window_w - w) // 2),
+                      max(0, (reference_window_h - h) // 2)))
+
 def compute_tooltip_position_scalar(*, algorithm, cursor_pos, tooltip_size, viewport_size, offset=20):
     """Compute x or y position for a tooltip. (Either one of them; hence "scalar".)
 
@@ -547,8 +350,8 @@ def compute_tooltip_position_scalar(*, algorithm, cursor_pos, tooltip_size, view
         # Weighted average of the two candidates, with a smooth transition.
         # This makes the tooltip x position vary smoothly as a function of the data point location in the plot window.
         # Due to symmetry, this places the tooltip exactly at the middle when the mouse is at the midpoint of the viewport (not necessarily at an axis line; that depends on axis limits).
-        r = clamp(cursor_pos / viewport_size)  # relative coordinate, [0, 1]
-        s = nonanalytic_smooth_transition(r, m=2.0)
+        r = numutils.clamp(cursor_pos / viewport_size)  # relative coordinate, [0, 1]
+        s = numutils.nonanalytic_smooth_transition(r, m=2.0)
         pos = (1.0 - s) * pos1 + s * pos2
 
         return pos
@@ -664,6 +467,7 @@ def find_widget_depth_first(root, *, accept, skip=None, _indent=0):
                 return result
     return None
 
+# TODO: could we do this with the `bisect` stdlib module in the case where we don't need to consider confounders? OTOH, now we have a unified code for both cases.
 def binary_search_widget(widgets, *, accept, consider, skip=None, direction="right"):
     """Binary-search a list of DPG GUI widgets to find the first one in the list that satisfies a monotonic criterion.
 

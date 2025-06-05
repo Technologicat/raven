@@ -44,7 +44,7 @@ from unpythonic.env import env
 from . import config
 from . import chattree
 from . import llmclient
-from . import utils
+from .common import utils
 
 # --------------------------------------------------------------------------------
 # Bootup

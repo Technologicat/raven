@@ -48,12 +48,11 @@ if platform.system().upper() == "LINUX":
 import dearpygui.dearpygui as dpg
 
 from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
-from .. import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from .. import bgtask
-from .. import utils as raven_utils
+from ..common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ..common import bgtask
+from ..common import guiutils
 
 from . import client_api  # convenient Python functions that abstract away the web API
-from . import client_util  # DPG GUI utilities
 from . import config
 from . import postprocessor
 from .util import RunningAverage
@@ -95,7 +94,7 @@ with dpg.font_registry() as the_font_registry:
     with dpg.font(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf"),  # load font from Raven's main assets
                   font_size) as default_font:
         pass
-        # utils.setup_font_ranges()
+        guiutils.setup_font_ranges()
     dpg.bind_font(default_font)
 
 # Modify global theme
@@ -437,8 +436,8 @@ class PostprocessorSettingsEditorGUI:
                     self.frame_size_statistics = RunningAverage()
 
                 def position_please_standby_text():
-                    # x0, y0 = raven_utils.get_widget_relative_pos(f"live_image_{self.live_texture_id_counter}", reference="main_window")
-                    x0, y0 = raven_utils.get_widget_pos(f"live_image_{self.live_texture_id_counter}")
+                    # x0, y0 = guiutils.get_widget_relative_pos(f"live_image_{self.live_texture_id_counter}", reference="main_window")
+                    x0, y0 = guiutils.get_widget_pos(f"live_image_{self.live_texture_id_counter}")
                     dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
                                                            y0 + self.image_size / 2 - (font_size / 2)),
                                  tag="please_standby_text",
@@ -738,8 +737,8 @@ class PostprocessorSettingsEditorGUI:
             else:
                 dpg.split_frame()  # Only safe after startup, once the GUI render loop is running. At startup, the old image widget doesn't exist, so we detect the situation from that.
             # Now the old image widget is guaranteed to be hidden, so we can delete it without breaking GUI render
-            client_util.maybe_delete_item(f"live_image_{old_texture_id}")
-            client_util.maybe_delete_item(f"live_texture_{old_texture_id}")
+            guiutils.maybe_delete_item(f"live_image_{old_texture_id}")
+            guiutils.maybe_delete_item(f"live_texture_{old_texture_id}")
 
             logger.info("init_live_texture: done!")
 
@@ -754,7 +753,7 @@ class PostprocessorSettingsEditorGUI:
     def _resize_gui(self) -> None:
         """Window resize handler."""
         try:
-            w, h = raven_utils.get_widget_size(self.window)
+            w, h = guiutils.get_widget_size(self.window)
         except SystemError:  # main window does not exist
             return
         if w == 0 or h == 0:  # no meaningful main window size yet?
@@ -804,11 +803,11 @@ class PostprocessorSettingsEditorGUI:
             dpg.delete_item("backdrop_drawlist", children_only=True)  # delete old draw items
             dpg.configure_item("backdrop_drawlist", width=1024, height=h)
             dpg.draw_image(f"backdrop_texture_{new_texture_id}", (0, 0), (1024, h), uv_min=(0, 0), uv_max=(1, 1), parent="backdrop_drawlist")
-            client_util.maybe_delete_item(f"backdrop_texture_{old_texture_id}")
+            guiutils.maybe_delete_item(f"backdrop_texture_{old_texture_id}")
         elif self.backdrop_image is None:
             dpg.delete_item("backdrop_drawlist", children_only=True)  # delete old draw items
             dpg.configure_item("backdrop_drawlist", width=1024, height=h)
-            client_util.maybe_delete_item(f"backdrop_texture_{old_texture_id}")
+            guiutils.maybe_delete_item(f"backdrop_texture_{old_texture_id}")
 
         self.last_backdrop_image = self.backdrop_image
         self.last_window_size = (w, h)
@@ -915,12 +914,12 @@ class PostprocessorSettingsEditorGUI:
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_input_image: {type(exc)}: {exc}")
             traceback.print_exc()
-            client_util.modal_dialog(window_title="Error",
-                                     message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
-                                     buttons=["Close"],
-                                     ok_button="Close",
-                                     cancel_button="Close",
-                                     centering_reference_window=self.window)
+            guiutils.modal_dialog(window_title="Error",
+                                  message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
+                                  buttons=["Close"],
+                                  ok_button="Close",
+                                  cancel_button="Close",
+                                  centering_reference_window=self.window)
 
     def load_json(self, filename: Union[pathlib.Path, str]) -> None:
         try:
@@ -929,12 +928,12 @@ class PostprocessorSettingsEditorGUI:
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_json: {type(exc)}: {exc}")
             traceback.print_exc()
-            client_util.modal_dialog(window_title="Error",
-                                     message=f"Could not load emotion templates JSON '{filename}', reason {type(exc)}: {exc}",
-                                     buttons=["Close"],
-                                     ok_button="Close",
-                                     cancel_button="Close",
-                                     centering_reference_window=self.window)
+            guiutils.modal_dialog(window_title="Error",
+                                  message=f"Could not load emotion templates JSON '{filename}', reason {type(exc)}: {exc}",
+                                  buttons=["Close"],
+                                  ok_button="Close",
+                                  cancel_button="Close",
+                                  centering_reference_window=self.window)
 
     def on_toggle_postprocessor(self, sender, app_data):
         self.postprocessor_enabled = not self.postprocessor_enabled
@@ -1038,12 +1037,12 @@ class PostprocessorSettingsEditorGUI:
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
-            client_util.modal_dialog(window_title="Error",
-                                     message=f"Could not load animator settings JSON '{filename}', reason {type(exc)}: {exc}",
-                                     buttons=["Close"],
-                                     ok_button="Close",
-                                     cancel_button="Close",
-                                     centering_reference_window=self.window)
+            guiutils.modal_dialog(window_title="Error",
+                                  message=f"Could not load animator settings JSON '{filename}', reason {type(exc)}: {exc}",
+                                  buttons=["Close"],
+                                  ok_button="Close",
+                                  cancel_button="Close",
+                                  centering_reference_window=self.window)
 
     def save_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
         """Save the current settings from the GUI into an animator settings JSON file."""
@@ -1062,12 +1061,12 @@ class PostprocessorSettingsEditorGUI:
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.save_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
-            client_util.modal_dialog(window_title="Error",
-                                     message=f"Could not save animator settings JSON '{filename}', reason {type(exc)}: {exc}",
-                                     buttons=["Close"],
-                                     ok_button="Close",
-                                     cancel_button="Close",
-                                     centering_reference_window=self.window)
+            guiutils.modal_dialog(window_title="Error",
+                                  message=f"Could not save animator settings JSON '{filename}', reason {type(exc)}: {exc}",
+                                  buttons=["Close"],
+                                  ok_button="Close",
+                                  cancel_button="Close",
+                                  centering_reference_window=self.window)
 
     def toggle_talking(self) -> None:
         """Toggle the talkinghead's talking state (simple randomized mouth animation)."""
@@ -1146,7 +1145,7 @@ def resize_gui():
     For the viewport resize callback, that one fires (*almost* always?) after the size has already changed.
     """
     logger.debug("resize_gui: Entered. Waiting for viewport size change.")
-    if raven_utils.wait_for_resize(gui_instance.window):
+    if guiutils.wait_for_resize(gui_instance.window):
         _resize_gui()
     logger.debug("resize_gui: Done.")
 
