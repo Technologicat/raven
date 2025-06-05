@@ -924,7 +924,7 @@ class FileDialog:
 
     # high-level functions
     def show_file_dialog(self):
-        self.chdir(os.getcwd())
+        self.chdir(self.default_path)
         dpg.show_item(self.tag)
 
         global visible_dialog_instance
