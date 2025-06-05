@@ -12,6 +12,9 @@ We support all modules served by `raven.avatar.server.app`:
   - TTS with and without lip-syncing the talkinghead, via https://github.com/remsky/Kokoro-FastAPI
   - websearch
 
+This must be initialized before the API is used; see `init_module`. Suggested default settings
+for the parameters are provided in `raven.avatar.client.config`.
+
 This module is licensed under the 2-clause BSD license.
 """
 
