@@ -309,7 +309,7 @@ def load_image_from_stream(stream) -> str:
     return "OK"
 
 def init_module(device: str, model: str) -> Union[None, NoReturn]:
-    """Launch the avatar (live mode).
+    """Launch the avatar (live mode), served over HTTP.
 
     device: "cpu" or "cuda"
     model: one of the folder names inside "vendor/tha3/models/"
