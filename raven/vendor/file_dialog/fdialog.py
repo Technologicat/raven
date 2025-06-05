@@ -270,7 +270,7 @@ class FileDialog:
         self.dirs_only = dirs_only
         self.save_mode = save_mode
         self.default_file_extension = default_file_extension
-        self.default_path = default_path
+        self.default_path = os.getcwd() if default_path == "cwd" else default_path
         self.filter_list = filter_list
         self.file_filter = file_filter
         self.callback = callback
@@ -284,6 +284,7 @@ class FileDialog:
         self.user_style = user_style
 
         self.instance_tag = f"0x{id(self):x}"  # for making unique DPG tags
+        self.last_path = default_path  # for returning to last used directory when the dialog is closed and later re-opened
 
         self.PAYLOAD_TYPE = 'ws_' + self.tag
         self.selected_files = []
@@ -917,14 +918,11 @@ class FileDialog:
                 self.btn_ok = dpg.add_button(label="OK", width=100, tag=self.tag + "_return", callback=self.ok)
                 self.btn_cancel = dpg.add_button(label="Cancel", width=100, callback=self.cancel)
 
-            if self.default_path == "cwd":
-                chdir(os.getcwd())
-            else:
-                chdir(self.default_path)
+            chdir(self.default_path)
 
     # high-level functions
     def show_file_dialog(self):
-        self.chdir(self.default_path)
+        self.chdir(self.last_path)
         dpg.show_item(self.tag)
 
         global visible_dialog_instance
@@ -1069,7 +1067,8 @@ class FileDialog:
         dpg.set_value(f"ex_search_{self.instance_tag}", "")  # clear the search when exiting
         self._update_search()  # note this clears `selected_files` because refreshing the view, so should be called *after* the callback.
         self.selected_files.clear()
-        self.reset_dir(default_path=self.default_path)
+        self.last_path = os.getcwd()  # update remembered path when the dialog is closed with OK
+        self.reset_dir(default_path=self.last_path)
 
     def cancel(self):
         """Close dialog without selecting any files.
