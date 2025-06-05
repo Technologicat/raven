@@ -1,4 +1,7 @@
-"""Numerical utilities."""
+"""Numerical utilities.
+
+This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
+"""
 
 __all__ = ["clamp", "nonanalytic_smooth_transition", "psi"]
 
