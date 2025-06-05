@@ -24,7 +24,6 @@ import json
 import os
 import pathlib
 import platform
-import requests
 import sys
 import threading
 import time
@@ -537,7 +536,7 @@ class PostprocessorSettingsEditorGUI:
                         heading_label = f"Voice [Ctrl+V] [{client_config.tts_url}]"
                         self.voice_names = api.tts_voices()
                     else:
-                        print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS server at {client_config.tts_url}.{Style.RESET_ALL} Is the server running?")
+                        print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS server at {client_config.tts_url}.{Style.RESET_ALL} Is the TTS server running?")
                         print(f"{Fore.YELLOW}{Style.BRIGHT}Speech synthesis is NOT available.{Style.RESET_ALL}")
                         heading_label = "Voice [Ctrl+V] [not connected]"
                         self.voice_names = ["[TTS server not available]"]
@@ -1369,18 +1368,16 @@ def update_live_texture(task_env) -> None:
 # --------------------------------------------------------------------------------
 # Main program
 
-try:
-    api.talkinghead_load_emotion_templates({})  # send empty dict -> reset to server defaults
-except requests.exceptions.ConnectionError as exc:
-    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {client_config.avatar_url}.{Style.RESET_ALL} Is the server running?")
-    logger.error(f"Cannot connect to avatar server at {client_config.avatar_url}: {type(exc)}: {exc}")
-    sys.exit(255)
-else:
+if api.avatar_available():
     print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {client_config.avatar_url}.{Style.RESET_ALL}")
+else:
+    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {client_config.avatar_url}.{Style.RESET_ALL} Is the avatar server running?")
+    sys.exit(255)
 
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
-api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))  # this will also start the animator if it was paused
+api.talkinghead_load_emotion_templates({})  # send empty dict -> reset emotion templates to server defaults
+api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "images", "example.png"))  # this will also start the animator if it was paused (TODO: feature orthogonality)
 
 def shutdown() -> None:
     api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.

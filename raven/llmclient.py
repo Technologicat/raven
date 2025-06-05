@@ -811,25 +811,25 @@ def minimal_chat_client(backend_url):
     try:
         # API key already loaded during module bootup; here, we just inform the user.
         if "Authorization" in headers:
+            print()
             print(f"Loaded LLM API key from '{str(api_key_file)}'.")
             print()
         else:
+            print()
             print(f"No LLM API key configured. If your LLM needs an API key to connect, put it into '{str(api_key_file)}'.")
             print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
             print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
             print()
 
         try:
-            print(colorizer.colorize(f"Connecting to LLM backend at {backend_url}", colorizer.Style.BRIGHT))
-
             list_models(backend_url)  # just do something, to try to connect
-        except Exception as exc:
-            print(colorizer.colorize("    Failed!", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
+        except requests.exceptions.ConnectionError as exc:
+            print(colorizer.colorize(f"Cannot connect to LLM backend at {backend_url}.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
             msg = f"Failed to connect to LLM backend at {backend_url}, reason {type(exc)}: {exc}"
             logger.error(msg)
-            raise RuntimeError(msg) from exc
+            sys.exit(255)
         else:
-            print(colorizer.colorize("    Connected!", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+            print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
             settings = setup(backend_url=backend_url)
             chat_show_model_info()
 
@@ -1378,6 +1378,14 @@ def main():
 
     parser.add_argument(dest="backend_url", nargs="?", default=config.llm_backend_url, type=str, metavar="url", help=f"where to access the LLM API (default, currently '{config.llm_backend_url}', is set in `raven/config.py`)")
     opts = parser.parse_args()
+
+    print()
+    if avatar_api.avatar_available():
+        print(colorizer.colorize(f"Connected to avatar server at {client_config.avatar_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+        print(colorizer.colorize("The LLM will have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+    else:
+        print(colorizer.colorize(f"WARNING: Cannot connect to avatar server at {client_config.avatar_url}", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
+        print(colorizer.colorize("The LLM will NOT have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
 
     # print(websearch_wrapper("what is the airspeed velocity of an unladen swallow"))
     minimal_chat_client(opts.backend_url)

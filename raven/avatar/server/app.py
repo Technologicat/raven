@@ -87,14 +87,45 @@ def after_request(response):
     response.headers["X-Request-Duration"] = str(duration)
     return response
 
+# ----------------------------------------
+# general utilities
+
 @app.route("/", methods=["GET"])
 def index():
+    """Return usage documentation, to be rendered in a web browser."""
     with open(os.path.join(os.path.dirname(__file__), "..", "README.md"), "r", encoding="utf8") as f:
         content = f.read()
     return render_template_string(markdown.markdown(content, extensions=["tables"]))
 
+@app.route("/health", methods=["GET"])
+def health():
+    """A simple ping endpoint for clients to check that the server is running.
+
+    No inputs, no outputs - if you get a 200 OK, it means the server heard you.
+    """
+    return "OK"
+
 @app.route("/api/modules", methods=["GET"])
 def get_modules():
+    """Get a list of enabled modules.
+
+    Output format is JSON::
+
+        {"modules": ["modulename0",
+                     ...]}
+
+    Unlike SillyTavern-extras, `raven.avatar.server` always enables the following modules:
+
+    - classify
+    - talkinghead
+    - websearch
+
+    If any of these are missing, it means that there has been an error during startup that has prevented the module from loading.
+
+    Optionally, the following modules can be enabled via a command-line switch when the server is started:
+
+    - embeddings
+    """
     modules = []
     if animator.is_available():
         modules.append("talkinghead")

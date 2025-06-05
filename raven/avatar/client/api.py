@@ -19,6 +19,8 @@ This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["init_module",
+           "avatar_available",
+           "tts_available",
            "classify_labels", "classify",
            "talkinghead_load", "talkinghead_unload", "talkinghead_reload",
            "talkinghead_load_emotion_templates", "talkinghead_load_emotion_templates_from_file",
@@ -26,8 +28,9 @@ __all__ = ["init_module",
            "talkinghead_start_talking", "talkinghead_stop_talking",
            "talkinghead_set_emotion",
            "talkinghead_result_feed",
-           "tts_available", "tts_voices",
-           "tts_speak", "tts_speak_lipsynced", "tts_stop"]
+           "tts_voices",
+           "tts_speak", "tts_speak_lipsynced",
+           "tts_stop"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -112,6 +115,41 @@ def yell_on_error(response: requests.Response) -> None:
         logger.error(f"Avatar server returned error: {response.status_code} {response.reason}. Content of error response follows.")
         logger.error(response.text)
         raise RuntimeError(f"While calling avatar server: HTTP {response.status_code} {response.reason}")
+
+# --------------------------------------------------------------------------------
+# General utilities
+
+def avatar_available() -> bool:
+    """Return whether the avatar server (everything except TTS) is available."""
+    if not module_initialized:
+        raise RuntimeError("avatar_available: The `raven.avatar.client.api` module must be initialized before using the API.")
+    if api_config.avatar_url is None:
+        return False
+    headers = copy.copy(api_config.avatar_default_headers)
+    try:
+        response = requests.get(f"{api_config.avatar_url}/health", headers=headers)
+    except requests.exceptions.ConnectionError as exc:
+        logger.error(f"avatar_available: {type(exc)}: {exc}")
+        return False
+    if response.status_code != 200:
+        return False
+    return True
+
+def tts_available() -> bool:
+    """Return whether the speech synthesizer is available."""
+    if not module_initialized:
+        raise RuntimeError("tts_available: The `raven.avatar.client.api` module must be initialized before using the API.")
+    if api_config.tts_url is None:
+        return False
+    headers = copy.copy(api_config.tts_default_headers)
+    try:
+        response = requests.get(f"{api_config.tts_url}/health", headers=headers)
+    except requests.exceptions.ConnectionError as exc:
+        logger.error(f"tts_available: {type(exc)}: {exc}")
+        return False
+    if response.status_code != 200:
+        return False
+    return True
 
 # --------------------------------------------------------------------------------
 # Classify
@@ -281,22 +319,6 @@ def talkinghead_result_feed(chunk_size: int = 4096, expected_format: Optional[st
 
 # --------------------------------------------------------------------------------
 # TTS - AI speech synthesizer client
-
-def tts_available() -> bool:
-    """Return whether the speech synthesizer is available."""
-    if not module_initialized:
-        raise RuntimeError("tts_available: The `raven.avatar.client.api` module must be initialized before using the API.")
-    if api_config.tts_url is None:
-        return False
-    headers = copy.copy(api_config.tts_default_headers)
-    try:
-        response = requests.get(f"{api_config.tts_url}/health", headers=headers)
-    except Exception as exc:
-        logger.error(f"tts_available: {type(exc)}: {exc}")
-        return False
-    if response.status_code != 200:
-        return False
-    return True
 
 def tts_voices() -> None:
     """Return a list of voice names supported by the TTS endpoint (if the endpoint is available)."""
@@ -761,15 +783,26 @@ def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10
 
 def selftest():
     """DEBUG/TEST - exercise each of the API endpoints."""
+    from colorama import Fore, Style, init as colorama_init
     import PIL.Image
-
     from . import config as client_config
+
+    colorama_init()
 
     logger.info("selftest: initialize module")
     init_module(avatar_url=client_config.avatar_url,
                 avatar_api_key_file=client_config.avatar_api_key_file,
                 tts_url=client_config.tts_url,
                 tts_api_key_file=client_config.tts_api_key_file)  # let it create a default executor
+
+    logger.info(f"selftest: check server availability at {client_config.avatar_url}")
+    if avatar_available():
+        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {client_config.avatar_url}.{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}{Style.BRIGHT}Proceeding with self-test.{Style.RESET_ALL}")
+    else:
+        print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {client_config.avatar_url}.{Style.RESET_ALL} Is the avatar server running?")
+        print(f"{Fore.RED}{Style.BRIGHT}Canceling self-test.{Style.RESET_ALL}")
+        return
 
     logger.info("selftest: classify_labels")
     print(classify_labels())  # get available emotion names from server
