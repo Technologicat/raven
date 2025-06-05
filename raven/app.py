@@ -688,7 +688,7 @@ with timer() as tim:
                                                  format=dpg.mvFormat_Float_rgba,
                                                  tag="word_cloud_texture")
 
-    dpg.create_viewport(title=f"Raven {__version__}",
+    dpg.create_viewport(title=f"Raven-visualizer {__version__}",
                         width=gui_config.main_window_w,
                         height=gui_config.main_window_h)  # OS window (DPG "viewport")
     dpg.setup_dearpygui()
