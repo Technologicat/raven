@@ -5,16 +5,18 @@ This module is licensed under the 2-clause BSD license.
 
 __all__ = ["RunningAverage"]
 
+from collections import deque
+
 class RunningAverage:
     """A simple running average, for things like FPS (frames per second) counters."""
     def __init__(self):
         self.count = 100
-        self.data = []
+        self.data = deque([], maxlen=self.count)
 
     def add_datapoint(self, data: float) -> None:
         self.data.append(data)
         while len(self.data) > self.count:
-            del self.data[0]
+            self.data.popleft()
 
     def average(self) -> float:
         if len(self.data) == 0:
