@@ -840,7 +840,8 @@ def selftest():
     talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "assets", "images", "example.png"))  # send an avatar - mandatory
     talkinghead_load_animator_settings_from_file(os.path.join(os.path.dirname(__file__), "..", "assets", "settings", "animator.json"))  # send animator config - optional, server defaults used if not sent
     talkinghead_load_emotion_templates_from_file(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json"))  # send the morph parameters for emotions - optional, server defaults used if not sent
-    gen = talkinghead_result_feed()  # start receiving animation frames
+    talkinghead_start()  # start the animator
+    gen = talkinghead_result_feed()  # start receiving animation frames (call this *after* you have started the animator)
     talkinghead_start_talking()  # start "talking right now" animation (generic, non-lipsync, random mouth)
 
     logger.info("selftest: classify")
