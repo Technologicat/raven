@@ -9,13 +9,6 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
-### General
-
-- Final touches for first version:
-  - Add web API to get postproc filters metadata from the running server as JSON. Needed for web clients that want to provide a postprocessor editor GUI.
-  - Add license note:
-      All parts where I'm the only author have been relicensed under 2-clause BSD. This includes the video postprocessor. Only the `avatar/server` and `avatar/pose_editor` folders, which each contain a separate app, are licensed under AGPL. The upscaler is licensed under MIT, matching the license of the Anime4K engine it uses.
-
 ### Documentation
 
 - Update README, document all web API endpoints.
@@ -28,11 +21,17 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
     - How each postprocessor example config looks when rendering the example character.
   - Document the postproc chain editor (`raven.avatar.client.app`).
   - Update the character-making instructions for SD Forge with Wai v14.0, RemBG extension with isnet-general-use/isnet-anime.
+  - Add license note:
+      All parts where I (@Technologicat) am the only author have been relicensed under 2-clause BSD. This includes the video postprocessor.
+      Only the `avatar/server` and `avatar/pose_editor` folders, which each contain a separate app, are licensed under AGPL.
+      The upscaler is licensed under MIT, matching the license of the Anime4K engine it uses.
+      The character "avatar/assets/images/example.png" is the example character from the poser engine THA3, copyright Pramook Khungurn, and is licensed for non-commercial use.
+      All other image assets are original to this software, and are licensed under CC-BY-SA 4.0.
 
 ### Examples
 
 - Add some example characters created in Stable Diffusion.
-  - Original characters only.
+  - Original characters.
   - Science legends: Curie, Newton, Lovelace, Archimedes.
 
 
