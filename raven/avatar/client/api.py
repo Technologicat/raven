@@ -341,6 +341,15 @@ def talkinghead_result_feed(chunk_size: int = 4096, expected_mimetype: Optional[
                                                               expected_mimetype=expected_mimetype)
     return gen
 
+def talkinghead_get_available_filters() -> List[Tuple[str, Dict]]:
+    if not module_initialized:
+        raise RuntimeError("talkinghead_get_available_filters: The `raven.avatar.client.api` module must be initialized before using the API.")
+    headers = copy.copy(api_config.avatar_default_headers)
+    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/get_available_filters", headers=headers)
+    yell_on_error(response)
+    output_data = response.json()
+    return output_data["filters"]
+
 # --------------------------------------------------------------------------------
 # TTS - AI speech synthesizer client
 
@@ -867,6 +876,9 @@ def selftest():
         print(embeddings_compute([text, "Testing, 1, 2, 3."]).shape)
     except RuntimeError as exc:
         logger.error(f"selftest: Failed to call `raven.avatar.server`'s `embeddings` module. If the error is a 403, the module likely isn't running. {type(exc)}: {exc}")
+
+    logger.info("selftest: get metadata of available postprocessor filters")
+    print(talkinghead_get_available_filters())
 
     logger.info("selftest: more talkinghead tests")
     talkinghead_set_emotion("surprise")  # manually update emotion

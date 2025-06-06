@@ -53,7 +53,6 @@ from ...common import bgtask
 from ...common import guiutils
 
 from ..common import config as common_config
-from ..common.postprocessor import Postprocessor  # so we can query the filters (TODO: add a web API to get them from the actual running server?)
 from ..common.running_average import RunningAverage
 
 from . import config as client_config
@@ -563,15 +562,18 @@ class PostprocessorSettingsEditorGUI:
 
                 # Postprocessor settings editor
                 #
-                # NOTE: Defaults and ranges for postprocessor parameters are set in `postprocessor.py`.
+                # NOTE: Defaults and ranges for postprocessor parameters are set in `postprocessor.py`,
+                # in the actual source code of the filters. This API endpoint dynamically gets the metadata
+                # from the server.
                 #
+                self.all_postprocessor_filters = dict(api.talkinghead_get_available_filters())
+
                 def build_postprocessor_gui():
                     def make_reset_filter_callback(filter_name):  # freeze by closure
                         def reset_filter():
                             logger.info(f"reset_filter: resetting '{filter_name}' to defaults.")
-                            all_filters = dict(Postprocessor.get_filters())
-                            defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
-                            ranges = all_filters[filter_name]["ranges"]  # for GUI hints
+                            defaults = self.all_postprocessor_filters[filter_name]["defaults"]  # all parameters, with their default values
+                            ranges = self.all_postprocessor_filters[filter_name]["ranges"]  # for GUI hints
                             for param_name in defaults:
                                 param_range = ranges[param_name]
                                 default_value = defaults[param_name]
@@ -609,7 +611,7 @@ class PostprocessorSettingsEditorGUI:
                         pretty = pretty[0].upper() + pretty[1:]
                         return pretty
 
-                    for filter_name, param_info in Postprocessor.get_filters():
+                    for filter_name, param_info in self.all_postprocessor_filters.items():
                         with dpg.group(horizontal=True):
                             dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
                             dpg.add_checkbox(label=prettify(filter_name), default_value=False,
@@ -831,7 +833,7 @@ class PostprocessorSettingsEditorGUI:
         """Strip to what we can currently set up in the GUI. Fixed render order, with at most one copy of each filter."""
         input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
         gui_postprocessor_chain = []
-        for filter_name, param_info in Postprocessor.get_filters():  # this performs the reordering
+        for filter_name, param_info in self.all_postprocessor_filters.items():  # this performs the reordering
             if filter_name in input_dict:
                 gui_postprocessor_chain.append((filter_name, input_dict[filter_name]))
         return gui_postprocessor_chain
@@ -841,14 +843,12 @@ class PostprocessorSettingsEditorGUI:
 
         Be sure to feed your postprocessor chain through `strip_postprocessor_chain_for_gui` first.
         """
-        all_filters = dict(Postprocessor.get_filters())
-
         validated_postprocessor_chain = []
         for filter_name, filter_settings in postprocessor_chain:
-            if filter_name not in all_filters:
+            if filter_name not in self.all_postprocessor_filters:
                 logger.warning(f"canonize_postprocessor_parameters_for_gui: Unknown filter '{filter_name}', ignoring.")
                 continue
-            defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
+            defaults = self.all_postprocessor_filters[filter_name]["defaults"]  # all parameters, with their default values
             validated_settings = {}
             for param_name in defaults:
                 validated_settings[param_name] = filter_settings.get(param_name, defaults[param_name])
@@ -857,9 +857,8 @@ class PostprocessorSettingsEditorGUI:
 
     def populate_gui_from_canonized_postprocessor_chain(self, postprocessor_chain):
         """Ordering: strip -> canonize -> populate GUI"""
-        all_filters = dict(Postprocessor.get_filters())
         input_dict = dict(postprocessor_chain)  # [(filter0, params0), ...] -> {filter0: params0, ...}, keep last copy of each
-        for filter_name in all_filters:
+        for filter_name in self.all_postprocessor_filters:
             if filter_name not in input_dict:
                 dpg.set_value(f"{filter_name}_checkbox", False)
                 continue  # parameter values in GUI don't matter if the filter is disabled
@@ -875,12 +874,11 @@ class PostprocessorSettingsEditorGUI:
 
     def generate_postprocessor_chain_from_gui(self):
         """Return a postprocessor_chain representing the postprocessor settings currently in the GUI. For saving."""
-        all_filters = dict(Postprocessor.get_filters())
         postprocessor_chain = []
-        for filter_name in all_filters:
+        for filter_name in self.all_postprocessor_filters:
             if dpg.get_value(f"{filter_name}_checkbox") is False:
                 continue
-            defaults = all_filters[filter_name]["defaults"]  # all parameters, with their default values
+            defaults = self.all_postprocessor_filters[filter_name]["defaults"]  # all parameters, with their default values
             settings = {}
             for param_name in defaults:
                 widget = self.filter_param_to_gui_widget(filter_name, param_name, defaults[param_name])

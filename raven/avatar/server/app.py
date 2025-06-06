@@ -29,6 +29,7 @@ from flask_compress import Compress
 import torch
 
 from ..common import config  # default models
+from ..common import postprocessor
 
 from . import animator
 from . import classify
@@ -491,6 +492,40 @@ def api_talkinghead_result_feed():
         abort(403, "Module 'talkinghead' not running")
     return animator.result_feed()
 
+@app.route("/api/talkinghead/get_available_filters")
+def api_talkinghead_get_available_filters():
+    """Get metadata of all available postprocessor filters and their available parameters.
+
+    The intended audience of this endpoint is developers; this is useful for dynamically
+    building an editor GUI for the postprocessor chain.
+
+    The output format is JSON::
+
+      {"filters": [
+                    [filter_name, {"defaults": {param0_name: default_value0,
+                                                ...},
+                                   "ranges": {param0_name: [min_value0, max_value0],
+                                              ...}}],
+                     ...
+                  ]
+      }
+
+    For any given parameter, the format of the parameter range depends on the parameter type:
+
+      - numeric (int or float): [min_value, max_value]
+      - bool: [true, false]
+      - multiple-choice str: [choice0, choice1, ...]
+      - RGB color: ["!RGB"]
+      - safe to ignore in GUI: ["!ignore"]
+
+    In the case of an RGB color parameter, the default value is of the form [R, G, B],
+    where each component is in the range [0, 1].
+
+    You can detect the type from the default value.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'talkinghead' not running")
+    return jsonify({"filters": postprocessor.Postprocessor.get_filters()})
 
 # ----------------------------------------
 # Script arguments
