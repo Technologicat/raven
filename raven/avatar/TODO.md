@@ -33,7 +33,7 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 - Add some example characters created in Stable Diffusion.
   - Original characters only.
-  - Science legends: Einstein, Curie, Newton, Lovelace, Archimedes.
+  - Science legends: Curie, Newton, Lovelace, Archimedes.
 
 
 ## Low priority
