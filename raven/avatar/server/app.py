@@ -407,9 +407,11 @@ def api_talkinghead_start_talking():
     """Start the mouth animation for talking.
 
     This is the generic, non-lipsync animation that randomizes the mouth.
-    This is useful for things like visual novels without actual voiced audio.
 
-    For lip sync, see `tts_speak_lipsynced`.
+    This is useful for applications without actual voiced audio, such as
+    an LLM when TTS is offline, or a low-budget visual novel.
+
+    For speech with automatic lip sync, see `tts_speak_lipsynced`.
     """
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
@@ -420,9 +422,11 @@ def api_talkinghead_stop_talking():
     """Stop the mouth animation for talking.
 
     This is the generic, non-lipsync animation that randomizes the mouth.
-    This is useful for things like visual novels without actual voiced audio.
 
-    For lip sync, see `tts_speak_lipsynced`.
+    This is useful for applications without actual voiced audio, such as
+    an LLM when TTS is offline, or a low-budget visual novel.
+
+    For speech with automatic lip sync, see `tts_speak_lipsynced`.
     """
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
