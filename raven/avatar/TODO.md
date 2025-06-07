@@ -9,6 +9,48 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
+- To solve the TTS different splittings issue, use a local Misaki installation directly to phonemize the individual timestamped words we get from Kokoro.
+  - Can we send a batch of words at once, to be phonemized separately each?
+- Call Kokoro directly too? We wouldn't then need the FastAPI server, which would likely save on CPU usage (FastAPI tends to spike one core while waiting for requests).
+  - Then, provide an OpenAI compatible TTS endpoint (mainly for SillyTavern).
+- Kokoro/Misaki should live on the server side, where we use GPU for compute anyway.
+
+- "Images" -> "Characters", update folder name, texts on all buttons, etc.
+- More backdrops, suitable for the different characters.
+
+- Voice mixing (supported by Kokoro). Allows for greater variation for voices.
+  - Two voices, second voice is optional, can be None.
+  - GUI:
+    - Add a second combobox, for the second voice. Add the None option, make it the default (so that the default is to use only one voice).
+    - Slider for mix balance (step: 10%?).
+    - These can fit onto one line in the `raven.avatar.client` GUI (voice names are short).
+
+- Refactor everything, again:
+  - Move the remaining GPU-dependent components of Raven to the server side.
+    - Embeddings. We already have an endpoint, and it does pretty much the same thing as the current local implementation.
+    - NLP. Think about the transport format. Can we JSON spaCy token streams?
+  - Add an instance ID to all Talkinghead web API endpoints, to support multiple clients simultaneously.
+    - `/api/talkinghead/load` should generate a new instance ID and spawn a new instance if none was given. Then, always return the instance ID that was affected by the command.
+      - Instantiate an animator and an encoder.
+      - Network transport is automatically instantiated when a client connects to `/api/talkinghead/result_feed`
+    - Add `/api/talkinghead/unload` to delete an instance.
+      - Delete the corresponding animator and encoder. Make the network transport automatically shut down on the server side (exit the generator if its encoder instance goes missing).
+  - Add blur filter for use with backdrops (send an image and a postprocessor chain, receive postprocessed image?).
+  - Think of naming of the app constellation's various parts.
+    - `raven.server.app` - AGPL-licensed server app, because the server code is based on the old ST-Extras.
+    - `raven.avatar.pose_editor` - AGPL-licensed pose editor app, because adapted from ST-Extras.
+    - `raven.avatar.client` -> `raven.avatar.settings_editor`? - BSD-licensed avatar postproc editor and character tester.
+    - What to do with the current `raven.avatar.common`? BSD-licensed code, needed both by the avatar client as well as by the talkinghead module of the server.
+  - `app` -> `raven.visualizer.app`
+  - `preprocess` -> `raven.visualizer.importer` (rename the console_script to `raven-visualizer-importer-cli` or something)
+    - Change terminology everywhere, this is an importer (BibTeX input, to Raven-visualizer dataset output)
+  - `llmclient` -> `raven.librarian.cli`
+  - `hybridir` -> common? Could be used for advanced search in visualizer.
+  - `chattree` -> `librarian.chattree`
+
+- Fdialog use site boilerplate reduction? We have lots of these dialogs in Raven.
+
+
 ### Documentation
 
 - Update README, document all web API endpoints.
