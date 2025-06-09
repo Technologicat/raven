@@ -46,7 +46,7 @@ Compress(app)  # compress responses
 args = []  # command-line args
 
 api_key = None  # secure mode
-ignore_auth = []  # features that do not need an API key
+ignore_auth = []  # endpoints (Python functions) whose web API we want not to require an API key
 
 # --------------------------------------------------------------------------------
 # Web API and its support functions
