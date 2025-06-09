@@ -69,6 +69,7 @@ api.init_module(avatar_url=client_config.avatar_url,
                 avatar_api_key_file=client_config.avatar_api_key_file,
                 tts_url=client_config.tts_url,
                 tts_api_key_file=client_config.tts_api_key_file,
+                tts_server_type=client_config.tts_server_type,
                 executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
 
 # --------------------------------------------------------------------------------
@@ -533,7 +534,7 @@ class PostprocessorSettingsEditorGUI:
                         print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS server at {client_config.tts_url}.{Style.RESET_ALL}")
                         print(f"{Fore.GREEN}{Style.BRIGHT}Speech synthesis is available.{Style.RESET_ALL}")
                         heading_label = f"Voice [Ctrl+V] [{client_config.tts_url}]"
-                        self.voice_names = api.tts_voices()
+                        self.voice_names = api.tts_list_voices()
                     else:
                         print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS server at {client_config.tts_url}.{Style.RESET_ALL} Is the TTS server running?")
                         print(f"{Fore.YELLOW}{Style.BRIGHT}Speech synthesis is NOT available.{Style.RESET_ALL}")

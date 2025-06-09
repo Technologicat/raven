@@ -49,11 +49,12 @@ from ..vendor.tha3.util import (resize_PIL_image,
                                 extract_pytorch_image_from_PIL_image)
 
 from ..common import config
+from ..common.hfutil import maybe_install_models
 from ..common.postprocessor import Postprocessor
 from ..common.running_average import RunningAverage
 from ..common.upscaler import Upscaler
 
-from .util import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, convert_linear_to_srgb, maybe_install_models
+from .util import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, convert_linear_to_srgb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -294,6 +295,9 @@ def init_module(device: str, model: str) -> None:
     device: "cpu" or "cuda"
     model: one of the folder names inside "vendor/tha3/models/"
 
+           Determines the posing dtype.
+           Postprocessor always runs in float16.
+
     If something goes horribly wrong, raise `RuntimeError`.
     """
     global first_launch_during_session
@@ -335,9 +339,9 @@ def init_module(device: str, model: str) -> None:
         global_encoder_instance.start()
 
     except RuntimeError as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL}")
-        logger.error(exc)
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'avatar'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()
+        logger.error(f"init_module: failed: {type(exc)}: {exc}")
         if global_animator_instance is not None:
             global_animator_instance.exit()
             global_animator_instance = None
@@ -345,7 +349,7 @@ def init_module(device: str, model: str) -> None:
             global_encoder_instance.exit()
             global_encoder_instance = None
 
-def is_available():
+def is_available() -> bool:
     """Return whether this module is up and running."""
     return all(component is not None for component in (global_animator_instance, global_encoder_instance))
 
@@ -767,28 +771,26 @@ class Animator:
         return new_pose
 
     def set_overrides(self, data: Dict[str, float]) -> None:
-        """Set morph overrides.
+        """Set morph overrides. This is useful for lipsyncing.
 
         All previous overrides are replaced by the new ones.
 
         To unset all overrides, use `data = {}`.
         """
-        logger.info(f"set_overrides: got data {data}")
+        logger.debug(f"set_overrides: got data {data}")  # too spammy as info (when lipsyncing)
         # Validate
         for key in data:
             if key not in posedict_key_to_index:
                 logger.error(f"set_overrides: unknown morph key '{key}', rejecting overrides")
                 raise ValueError(f"Unknown morph key '{key}'; see `raven.avatar.util` for available morph keys.")
         # Save
-        logger.info("set_overrides: data is valid, applying.")
+        logger.debug("set_overrides: data is valid, applying.")
         self.morph_overrides = data  # atomic replace
 
     def apply_overrides(self, pose: List[float]) -> List[float]:
-        """Apply any morph overrides sent by the client.
+        """Apply any morph overrides sent by the client. This is useful for lipsyncing.
 
         This is actual the animation driver, called by `render_animation_frame`.
-
-        This is useful for lipsyncing.
         """
         new_pose = list(pose)  # copy
         overrides = self.morph_overrides  # get ref so it doesn't matter if it's replaced while we're rendering

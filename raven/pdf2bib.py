@@ -812,7 +812,7 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
 # Main program
 
 def main():
-    parser = argparse.ArgumentParser(description="""Convert PDF conference abstracts into a BibTeX database. Works via pdftotext and an OpenAI compatible LLM.\nNo API key support as of yet, so please use a self-hosted LLM backend (e.g. AnythingLLM or oobabooga/text-generation-webui).""",
+    parser = argparse.ArgumentParser(description="""Convert PDF conference abstracts into a BibTeX database. Works via pdftotext and an OpenAI compatible LLM.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument(dest="backend_url", nargs="?", default=config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")

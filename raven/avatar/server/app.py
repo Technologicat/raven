@@ -2,7 +2,10 @@
 """Talkinghead server, for rendering an animated avatar for the AI.
 
 Customized from `server.py` in the discontinued SillyTavern-extras.
-Stripped everything except the `talkinghead`, `classify`, and `embeddings` modules.
+Stripped everything except the `classify`, `embeddings`, `talkinghead` and `websearch` modules.
+
+The `tts` module is new, based on Kokoro-82M. All old TTS options are gone.
+This gives us lipsync for the talkinghead.
 """
 
 # TODO: convert prints to use logger where appropriate
@@ -32,6 +35,7 @@ from ..common import postprocessor
 from . import animator
 from . import classify
 from . import embed
+from . import tts
 from . import websearch
 
 # --------------------------------------------------------------------------------
@@ -138,19 +142,22 @@ def get_modules():
     - classify
     - embeddings
     - talkinghead
+    - tts (both a simple OpenAI-compatible speech endpoint, and our own)
     - websearch
 
     If any of these are missing, it means that there has been an error during startup that has prevented the module from loading.
     """
     modules = []
-    if animator.is_available():
-        modules.append("talkinghead")
     if classify.is_available():
         modules.append("classify")
-    if websearch.is_available():
-        modules.append("websearch")
     if embed.is_available():
         modules.append("embeddings")
+    if animator.is_available():
+        modules.append("talkinghead")
+    if tts.is_available():
+        modules.append("tts")
+    if websearch.is_available():
+        modules.append("websearch")
     return jsonify({"modules": modules})
 
 # ----------------------------------------
@@ -177,7 +184,7 @@ def api_classify():
     data = request.get_json()
 
     if "text" not in data or not isinstance(data["text"], str):
-        abort(400, '"text" is required')
+        abort(400, 'api_classify: "text" is required')
 
     print("Classification input:", data["text"], sep="\n")
     classification = classify.classify_text(data["text"])
@@ -236,10 +243,10 @@ def api_embeddings_compute():
         abort(403, "Module 'embeddings' not running")  # this is the only optional module
     data = request.get_json()
     if "text" not in data:
-        abort(400, '"text" is required')
+        abort(400, 'api_embeddings_compute: "text" is required')
     sentences: Union[str, List[str]] = data["text"]
     if not (isinstance(sentences, str) or (isinstance(sentences, list) and all(isinstance(x, str) for x in sentences))):
-        abort(400, '"text" must be string or array of strings')
+        abort(400, 'api_embeddings_compute: "text" must be string or array of strings')
     if isinstance(sentences, str):
         nitems = 1
     else:
@@ -393,7 +400,7 @@ def api_talkinghead_set_emotion():
         abort(403, "Module 'talkinghead' not running")
     data = request.get_json()
     if "emotion_name" not in data or not isinstance(data["emotion_name"], str):
-        abort(400, '"emotion_name" is required')
+        abort(400, 'api_talkinghead_set_emotion: "emotion_name" is required')
     emotion_name = data["emotion_name"]
     return animator.set_emotion(emotion_name)
 
@@ -484,16 +491,169 @@ def api_talkinghead_get_available_filters():
     return jsonify({"filters": postprocessor.Postprocessor.get_filters()})
 
 # ----------------------------------------
+# module: tts
+
+def _list_voices():
+    if not tts.is_available():
+        abort(403, "Module 'tts' not running")
+    return jsonify({"voices": tts.get_voices()})
+
+@app.route("/api/tts/list_voices")
+def api_tts_list_voices():
+    """Text to speech.
+
+    Get list of voice names from the speech synthesizer.
+
+    No inputs.
+
+    Output is JSON::
+
+        {"voices": [voice0, ...]}
+
+    See:
+
+        https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md
+    """
+    return _list_voices()
+
+@app.route("/api/tts/speak", methods=["POST"])
+def api_tts_speak():
+    """Text to speech.
+
+    NOTE: `espeak-ng` must be installed manually because it's a non-Python dependency.
+    The TTS engine Kokoro-82M uses it as a phonemizer fallback for out-of-dictionary words
+    in English, as well as for some non-English languages.
+
+    Input is JSON::
+
+        {"text": "Blah blah blah.",
+         "voice": "af_bella",
+         "speed": 1.0,
+         "format": "mp3",
+         "get_metadata": true,
+         "stream": false}
+
+    Only the "text" field is mandatory.
+
+    For available voices, call the endpoint "/api/tts/list_voices".
+
+    For available formats, see `tts.text_to_speech`.
+
+    The audio file is returned as the response content. Content-Type is "audio/<format>", e.g. "audio/mp3".
+
+    If "get_metadata" is true, an extra header "x-word-timestamps" is returned, with JSON data
+    containing word-level timestamps and phonemes:
+
+        [{"word": "reasonably",
+          "phonemes": "ɹˈizənəbli" (URL-encoded to ASCII with percent-escaped UTF-8),
+          "start_time": 2.15,
+          "end_time": 2.75},
+         ...]
+
+    The start and end times are measured in seconds from start of audio.
+
+    This data is useful for lipsyncing and captioning.
+
+    Note "get_metadata" currently only works in English (we use a local Kokoro with only English installed).
+    """
+    if not tts.is_available():
+        abort(403, "Module 'tts' not running")
+
+    data = request.get_json()
+
+    if "text" not in data or not isinstance(data["text"], str):
+        abort(400, 'api_tts_speak: "text" is required')
+    text = data["text"]
+
+    voice = data.get("voice", "af_bella")  # TODO: sane default
+    speed = float(data.get("speed", 1.0))
+    format = data.get("format", "mp3")
+    get_metadata = data.get("get_metadata", True)  # bool flag
+    stream = data.get("stream", False)  # bool flag
+
+    try:
+        speed = float(speed)
+    except ValueError:
+        abort(400, 'api_tts_speak: "speed", if specified, should be a number')
+
+    try:
+        response = tts.text_to_speech(voice=voice,
+                                      text=text,
+                                      speed=speed,
+                                      format=format,
+                                      get_metadata=get_metadata,
+                                      stream=stream)
+        return response
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_tts_speak: failed, reason: {type(exc)}: {exc}")
+
+@app.route("/v1/audio/voices")
+def api_v1_audio_voices():
+    """OpenAI compatible endpoint, for SillyTavern; does the exact same thing as "/api/tts/list_voices"."""
+    return _list_voices()
+
+@app.route("/v1/audio/speech")
+def api_v1_audio_speech():
+    """OpenAI compatible endpoint, for SillyTavern; does the exact same thing as "/api/tts/speak".
+
+    However, this endpoint does not support "get_metadata", because it's not part of the OAI format.
+    If you need lipsyncing or captioning, use "/api/tts/speak" instead.
+
+    Input is JSON::
+
+        {"input": "Blah blah blah.",
+         "voice": "af_bella",
+         "speed": 1.0,
+         "response_format": "mp3",
+         "stream": false}
+
+    The audio file is returned as the response content. Content-Type is "audio/<format>", e.g. "audio/mp3".
+    """
+    if not tts.is_available():
+        abort(403, "Module 'tts' not running")
+
+    data = request.get_json()
+
+    if "input" not in data or not isinstance(data["input"], str):
+        abort(400, 'api_v1_audio_speech: "input" is required')
+    text = data["input"]
+
+    voice = data.get("voice", "af_bella")  # TODO: sane default
+    speed = float(data.get("speed", 1.0))
+    format = data.get("response_format", "mp3")
+    stream = data.get("stream", False)  # bool flag
+    # Kokoro-FastAPI-like "return_download_link" flag is not supported
+
+    try:
+        speed = float(speed)
+    except ValueError:
+        abort(400, 'api_v1_audio_speech: "speed", if specified, should be a number')
+
+    try:
+        response = tts.text_to_speech(voice=voice,
+                                      text=text,
+                                      speed=speed,
+                                      format=format,
+                                      get_metadata=False,
+                                      stream=stream)
+        return response
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_v1_audio_speech: failed, reason: {type(exc)}: {exc}")
+
+# ----------------------------------------
 # module: websearch
 
 def _websearch_impl():
     data = request.get_json()
+
     if "query" not in data or not isinstance(data["query"], str):
         abort(400, '"query" is required')
-
     query = data["query"]
-    engine = data["engine"] if "engine" in data else "duckduckgo"
-    max_links = data["max_links"] if "max_links" in data else 10
+
+    engine = data.get("engine", "duckduckgo")
+    max_links = data.get("max_links", 10)
 
     if engine not in ("duckduckgo", "google"):
         abort(400, '"engine", if provided, must be one of "duckduckgo", "google"')
@@ -506,7 +666,8 @@ def api_websearch():
     """Perform a web search with the query posted in the request.
 
     This is the SillyTavern compatible legacy endpoint.
-    Prefer to use "/api/websearch2" if you don't need the compatibility.
+    For new clients, prefer to use "/api/websearch2", which gives
+    structured output and has a "max_links" option.
 
     Input is JSON::
 
@@ -629,7 +790,7 @@ def get_device_and_dtype(record: Dict[str, Any]) -> (str, torch.dtype):
     global cuda_info_shown
 
     device_string = record["device_string"]
-    torch_dtype = record["dtype"]
+    torch_dtype = record.get("dtype", None)  # not all modules have a specifiable dtype
 
     if device_string.startswith("cuda"):  # Nvidia
         if not torch.cuda.is_available():
@@ -643,7 +804,7 @@ def get_device_and_dtype(record: Dict[str, Any]) -> (str, torch.dtype):
                 print(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(device_string))}")
                 print(f"    Detected CUDA version {torch.version.cuda}")
 
-    elif device_string.startswith("mps"):  # Mac
+    elif device_string.startswith("mps"):  # Mac, Apple Metal Performance Shaders
         if not torch.backends.mps.is_available():
             print(f"{Fore.YELLOW}{Style.BRIGHT}MPS backend specified in config (device string '{device_string}'), but MPS not available. Using CPU instead.{Style.RESET_ALL}")
             device_string = "cpu"
@@ -662,13 +823,16 @@ def init_server_modules():  # keep global namespace clean
         classify.init_module(config.CLASSIFICATION_MODEL, device_string, torch_dtype)
     if (record := config.SERVER_ENABLED_MODULES.get("embeddings", None)) is not None:
         device_string, torch_dtype = get_device_and_dtype(record)
-        embed.init_module(config.EMBEDDING_MODEL, device_string=device_string)
+        embed.init_module(config.EMBEDDING_MODEL, device_string, torch_dtype)
     if (record := config.SERVER_ENABLED_MODULES.get("talkinghead", None)) is not None:
         device_string, torch_dtype = get_device_and_dtype(record)
         # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
         # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
         tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
         animator.init_module(device_string, tha3_model_variant)
+    if config.SERVER_ENABLED_MODULES.get("tts", None) is not None:
+        device_string, _ = get_device_and_dtype(record)
+        tts.init_module(device_string)
     if config.SERVER_ENABLED_MODULES.get("websearch", None) is not None:  # no device/dtype settings; if a blank record exists, this module is enabled.
         websearch.init_module()
 init_server_modules()

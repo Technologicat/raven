@@ -12,6 +12,7 @@ SERVER_ENABLED_MODULES = {
     "classify": {"device_string": "cuda:0", "dtype": torch.float16},
     "embeddings": {"device_string": "cuda:0", "dtype": torch.float16},
     "talkinghead": {"device_string": "cuda:0", "dtype": torch.float16},
+    "tts": {"device_string": "cuda:0"},
     "websearch": {},  # websearch doesn't use any heavy compute; this is here to provide the option to turn the module off.
 }
 
@@ -39,6 +40,10 @@ CLASSIFICATION_MODEL = "joeddav/distilbert-base-uncased-go-emotions-student"
 # Huggingface model name, auto-downloaded on first use.
 #
 TALKINGHEAD_MODELS = "OktayAlpk/talking-head-anime-3"
+
+# Models for the Kokoro speech synthesizer (text to speech, TTS).
+#
+KOKORO_MODELS = "hexgrad/Kokoro-82M"
 
 # Where to store files. Currently only used for websearch's debug functionality.
 config_base_dir = "~/.config/raven/avatar/"

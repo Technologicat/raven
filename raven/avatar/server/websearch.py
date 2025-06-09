@@ -100,7 +100,7 @@ def init_module():
             driver.quit()
         atexit.register(quit_driver)
 
-def is_available():
+def is_available() -> bool:
     """Return whether this module is up and running."""
     return (driver is not None)
 

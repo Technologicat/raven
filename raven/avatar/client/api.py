@@ -28,7 +28,7 @@ __all__ = ["init_module",
            "talkinghead_start_talking", "talkinghead_stop_talking",
            "talkinghead_set_emotion",
            "talkinghead_result_feed",
-           "tts_voices",
+           "tts_list_voices",
            "tts_speak", "tts_speak_lipsynced",
            "tts_stop"]
 
@@ -48,7 +48,9 @@ import requests
 import time
 import traceback
 from typing import Callable, Dict, Generator, List, Optional, Tuple, Union
+import urllib.parse
 
+from unpythonic import timer
 from unpythonic.env import env as envcls
 
 import numpy as np
@@ -71,6 +73,7 @@ def init_module(avatar_url: str,
                 avatar_api_key_file: Optional[str],
                 tts_url: Optional[str],
                 tts_api_key_file: Optional[str],
+                tts_server_type: Optional[str],
                 executor: Optional = None):
     """Set up URLs and API keys, and initialize the audio mixer.
 
@@ -89,6 +92,10 @@ def init_module(avatar_url: str,
 
     api_config.avatar_url = avatar_url
     api_config.tts_url = tts_url
+    api_config.tts_server_type = tts_server_type
+    if tts_server_type not in ("kokoro", "raven", None):
+        logger.error(f"init_module: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
+        raise ValueError(f"init_module: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
 
     if avatar_api_key_file is not None and os.path.exists(avatar_api_key_file):  # TODO: test this (I have no idea what I'm doing)
         with open(avatar_api_key_file, "r", encoding="utf-8") as f:
@@ -351,9 +358,9 @@ def talkinghead_get_available_filters() -> List[Tuple[str, Dict]]:
     return output_data["filters"]
 
 # --------------------------------------------------------------------------------
-# TTS - AI speech synthesizer client
+# TTS (text to speech, AI speech synthesizer)
 
-def tts_voices() -> List[str]:
+def tts_list_voices() -> List[str]:
     """Return a list of voice names supported by the TTS endpoint (if the endpoint is available).
 
     Return format is::
@@ -361,11 +368,14 @@ def tts_voices() -> List[str]:
         [voice0, ...]
     """
     if not module_initialized:
-        raise RuntimeError("tts_voices: The `raven.avatar.client.api` module must be initialized before using the API.")
+        raise RuntimeError("tts_list_voices: The `raven.avatar.client.api` module must be initialized before using the API.")
     if api_config.tts_url is None:
         return []
     headers = copy.copy(api_config.tts_default_headers)
-    response = requests.get(f"{api_config.tts_url}/v1/audio/voices", headers=headers)
+    if api_config.tts_server_type == "kokoro":
+        response = requests.get(f"{api_config.tts_url}/v1/audio/voices", headers=headers)
+    else:  # api_config.tts_server_type == "raven"
+        response = requests.get(f"{api_config.tts_url}/api/tts/list_voices", headers=headers)
     yell_on_error(response)
     output_data = response.json()
     return output_data["voices"]
@@ -391,15 +401,23 @@ def tts_speak(voice: str,
     def speak(task_env) -> None:
         logger.info("tts_speak.speak: getting audio")
 
-        # Audio format
-        data = {"model": "kokoro",  # https://github.com/remsky/Kokoro-FastAPI
-                "voice": voice,
-                "input": text,
-                "response_format": "mp3",  # flac would be nice (small, fast to encode), but seems currently broken in kokoro (the audio may repeat twice).
-                "speed": speed,
-                "stream": True,
-                "return_download_link": False}
-        stream_response = requests.post(f"{api_config.tts_url}/v1/audio/speech", headers=headers, json=data, stream=True)
+        if api_config.tts_server_type == "kokoro":  # https://github.com/remsky/Kokoro-FastAPI
+            data = {"model": "kokoro",
+                    "voice": voice,
+                    "input": text,
+                    "response_format": "mp3",  # flac would be nice (small, fast to encode), but seems currently broken in kokoro (the audio may repeat twice).
+                    "speed": speed,
+                    "stream": True,
+                    "return_download_link": False}
+            stream_response = requests.post(f"{api_config.tts_url}/v1/audio/speech", headers=headers, json=data, stream=True)
+        else:  # api_config.tts_server_type == "raven"
+            data = {"voice": voice,
+                    "text": text,
+                    "format": "mp3",
+                    "speed": speed,
+                    "stream": True,
+                    "get_metadata": False}
+            stream_response = requests.post(f"{api_config.tts_url}/api/tts/speak", headers=headers, json=data, stream=True)
         yell_on_error(stream_response)
 
         it = stream_response.iter_content(chunk_size=4096)
@@ -472,14 +490,6 @@ def tts_speak_lipsynced(voice: str,
         return
     headers = copy.copy(api_config.tts_default_headers)
     headers["Content-Type"] = "application/json"
-
-    # Phonemize and word-level timestamping treat underscores differently: phonemize treats them as spaces,
-    # whereas word-level timestamping doesn't (no word split at underscore). Better to remove them.
-    #
-    # TODO: See if we could use Misaki directly to phonemize the individual timestamped words returned by Kokoro, bypassing the thorny subtly-different-word-splittings issue.
-    def prefilter(text):
-        return text.replace("_", " ")
-    text = prefilter(text)
 
     # Phoneme characters and individual phoneme comments from Misaki docs (Kokoro uses the Misaki engine for phonemization):
     #   https://github.com/hexgrad/misaki/blob/main/EN_PHONES.md
@@ -566,36 +576,49 @@ def tts_speak_lipsynced(voice: str,
         "o": "mouth_ooo_index",
     }
 
-    def get_phonemes(task_env) -> None:
-        logger.info("tts_speak_lipsynced.get_phonemes: starting")
-        # Language codes:
-        #   https://github.com/hexgrad/kokoro
-        #   🇺🇸 'a' => American English, 🇬🇧 'b' => British English
-        #   🇪🇸 'e' => Spanish es
-        #   🇫🇷 'f' => French fr-fr
-        #   🇮🇳 'h' => Hindi hi
-        #   🇮🇹 'i' => Italian it
-        #   🇯🇵 'j' => Japanese: pip install misaki[ja]
-        #   🇧🇷 'p' => Brazilian Portuguese pt-br
-        #   🇨🇳 'z' => Mandarin Chinese: pip install misaki[zh]
-        data = {"text": text,
-                "language": "a"}
-        response = requests.post(f"{api_config.tts_url}/dev/phonemize", headers=headers, json=data, stream=True)
-        yell_on_error(response)
-        response_json = response.json()
-        phonemes = response_json["phonemes"]
-        for dipthong, ipa_expansion in dipthong_vowel_to_ipa.items():
-            phonemes = phonemes.replace(dipthong, ipa_expansion)
-        # phonemess = phonemes.split()  # -> [word0, word1, ...]
-        # phonemess = re.split(r"\s|,|;|:|\.|!|\?|“|”", phonemes)  # -> [word0, word1, ...], dropping punctuation
-        # Word-level timestamping splits at ":" (even if inside a word), so we should too. But it doesn't split at periods in dotted names, so we shouldn't either.
-        phonemess = re.split(r"\s|:", phonemes)  # -> [word0, word1, ...]
-        phonemess = [p for p in phonemess if p]  # drop empty strings
-        task_env.phonemess = phonemess
-        task_env.done = True
-        logger.info("tts_speak_lipsynced.get_phonemes: done")
-    phonemes_task_env = envcls(done=False)
-    api_config.task_manager.submit(get_phonemes, phonemes_task_env)
+    # TODO: Kokoro-FastAPI doesn't support returning phonemes with word-level timestamps, so we jury-rig this. It often works, but not always (e.g. a year number produces one word, but multiple phoneme sequences).
+    #
+    # The robust solution is to use a local Kokoro (`tts_server_type="raven"`), which allows us to get word-level phonemes with the same word boundaries as in the timestamps.
+    # But that makes Raven harder to install due to Kokoro's `espeak-ng` dependency, so we retain the option to use Kokoro-FastAPI.
+    if api_config.tts_server_type == "kokoro":
+        # Phonemize and word-level timestamping treat underscores differently: phonemize treats them as spaces,
+        # whereas word-level timestamping doesn't (no word split at underscore). Better to remove them.
+        def prefilter(text):
+            return text.replace("_", " ")
+        text = prefilter(text)
+
+        def get_phonemes(task_env) -> None:
+            with timer() as tim:
+                logger.info("tts_speak_lipsynced.get_phonemes: starting")
+                # Language codes:
+                #   https://github.com/hexgrad/kokoro
+                #   🇺🇸 'a' => American English, 🇬🇧 'b' => British English
+                #   🇪🇸 'e' => Spanish es
+                #   🇫🇷 'f' => French fr-fr
+                #   🇮🇳 'h' => Hindi hi
+                #   🇮🇹 'i' => Italian it
+                #   🇯🇵 'j' => Japanese: pip install misaki[ja]
+                #   🇧🇷 'p' => Brazilian Portuguese pt-br
+                #   🇨🇳 'z' => Mandarin Chinese: pip install misaki[zh]
+                data = {"text": text,
+                        "language": "a"}
+                response = requests.post(f"{api_config.tts_url}/dev/phonemize", headers=headers, json=data, stream=True)
+                yell_on_error(response)
+                response_json = response.json()
+                phonemes = response_json["phonemes"]
+                for dipthong, ipa_expansion in dipthong_vowel_to_ipa.items():
+                    phonemes = phonemes.replace(dipthong, ipa_expansion)
+                # phonemess = phonemes.split()  # -> [word0, word1, ...]
+                # phonemess = re.split(r"\s|,|;|:|\.|!|\?|“|”", phonemes)  # -> [word0, word1, ...], dropping punctuation
+                # Word-level timestamping splits at ":" (even if inside a word), so we should too. But it doesn't split at periods in dotted names, so we shouldn't either.
+                phonemess = re.split(r"\s|:", phonemes)  # -> [word0, word1, ...]
+                phonemess = [p for p in phonemess if p]  # drop empty strings
+                task_env.phonemess = phonemess
+                task_env.done = True
+            logger.info(f"tts_speak_lipsynced.get_phonemes: done in {tim.dt:0.6g}s.")
+        phonemes_task_env = envcls(done=False)
+        api_config.task_manager.submit(get_phonemes, phonemes_task_env)
+    # When `api_config.tts_server_type == "raven"`, we'll get the phonemes in the metadata, no need for a separate fetch.
 
     def speak(task_env) -> None:
         logger.info("tts_speak_lipsynced.speak: starting")
@@ -603,7 +626,7 @@ def tts_speak_lipsynced(voice: str,
             return len(s) > 1 or s.isalnum()
 
         def clean_timestamps(timestamps):
-            """Remove consecutive duplicate timestamps (some versions of Kokoro produce those) and any timestamps for punctuation."""
+            """Remove consecutive duplicate timestamps (some versions of Kokoro-FastAPI produce those) and any timestamps for punctuation."""
             out = []
             last_start_time = None
             for record in timestamps:  # format: [{"word": "blah", "start_time": 1.23, "end_time": 1.45}, ...]
@@ -613,63 +636,84 @@ def tts_speak_lipsynced(voice: str,
             return out
 
         # Get audio and word timestamps
-        logger.info("tts_speak_lipsynced.speak: getting audio with word timestamps")
-        data = {"model": "kokoro",
-                "voice": voice,
-                "input": text,
-                "response_format": "mp3",
-                "speed": speed,
-                "stream": True,
-                "return_timestamps": True}
-        stream_response = requests.post(f"{api_config.tts_url}/dev/captioned_speech", headers=headers, json=data, stream=True)
-        yell_on_error(stream_response)
+        with timer() as tim:
+            if api_config.tts_server_type == "kokoro":
+                logger.info("tts_speak_lipsynced.speak: getting audio with word-level timestamps")
+                data = {"model": "kokoro",
+                        "voice": voice,
+                        "input": text,
+                        "response_format": "mp3",
+                        "speed": speed,
+                        "stream": True,
+                        "return_timestamps": True}
+                stream_response = requests.post(f"{api_config.tts_url}/dev/captioned_speech", headers=headers, json=data, stream=True)
+            else:  # api_config.tts_server_type == "raven"
+                logger.info("tts_speak_lipsynced.speak: getting audio with word-level timestamps and phonemes")
+                data = {"voice": voice,
+                        "text": text,
+                        "format": "mp3",
+                        "speed": speed,
+                        "stream": True,
+                        "get_metadata": True}
+                stream_response = requests.post(f"{api_config.tts_url}/api/tts/speak", headers=headers, json=data, stream=True)
+            yell_on_error(stream_response)
 
-        # The API docs are wrong; using a running Kokoro-FastAPI and sending an example
-        # request at http://localhost:8880/docs helped to figure out what to do here.
-        timestamps = json.loads(stream_response.headers["x-word-timestamps"])
-        timestamps = clean_timestamps(timestamps)
-        it = stream_response.iter_content(chunk_size=4096)
-        audio_buffer = io.BytesIO()
-        try:
-            while True:
-                if task_env.cancelled:
-                    return
-                chunk = next(it)
-                audio_buffer.write(chunk)
-        except StopIteration:
-            pass
-        logger.info("tts_speak_lipsynced.speak: getting audio: done")
+            # The API docs are wrong; using a running Kokoro-FastAPI and sending an example
+            # request at http://localhost:8880/docs helped to figure out what to do here.
+            timestamps = json.loads(stream_response.headers["x-word-timestamps"])
+            timestamps = clean_timestamps(timestamps)
+            it = stream_response.iter_content(chunk_size=4096)
+            audio_buffer = io.BytesIO()
+            try:
+                while True:
+                    if task_env.cancelled:
+                        return
+                    chunk = next(it)
+                    audio_buffer.write(chunk)
+            except StopIteration:
+                pass
+        logger.info(f"tts_speak_lipsynced.speak: getting audio: done in {tim.dt:0.6g}s.")
 
         # # DEBUG - dump response to audio file
         # audio_buffer.seek(0)
         # with open("temp.mp3", "wb") as audio_file:
         #     audio_file.write(audio_buffer.getvalue())
 
-        # Wait until phonemization background task completes (usually it completes faster than audio, so likely completed already)
-        while not phonemes_task_env.done:
-            time.sleep(0.01)
+        if api_config.tts_server_type == "kokoro":
+            # Wait until phonemization background task completes (usually it completes faster than audio, so likely completed already)
+            while not phonemes_task_env.done:
+                time.sleep(0.01)
 
-        # for record in timestamps:
-        #     print(record)  # DEBUG, show word-level timestamps
-        # print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
+            # for record in timestamps:
+            #     print(record)  # DEBUG, show word-level timestamps
+            # print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
 
-        # Now we have:
-        #   - `timestamps`: words, with word-level start and end times
-        #   - `phonemes`: phonemes for each word
-        #
-        # Consolidate data for convenience
-        if len(phonemes_task_env.phonemess) != len(timestamps):  # should have exactly one phoneme sequence for each word
-            logger.error(f"Number of phoneme sequences ({len(phonemes_task_env.phonemess)}) does not match number of words ({len(timestamps)}), can't lipsync. Use `tts_speak` instead.")
-            for record in timestamps:
-                print(record)  # DEBUG, show timestamped words
-            print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
-            assert False
+            # Now we have:
+            #   - `timestamps`: words, with word-level start and end times
+            #   - `phonemes`: phonemes for each word
+            #
+            # Consolidate data for convenience
+            if len(phonemes_task_env.phonemess) != len(timestamps):  # should have exactly one phoneme sequence for each word
+                logger.error(f"tts_speak_lipsynced.speak: Number of phoneme sequences ({len(phonemes_task_env.phonemess)}) does not match number of words ({len(timestamps)}), can't lipsync. Use `tts_speak` instead.")
+                for record in timestamps:
+                    print(record)  # DEBUG, show timestamped words
+                print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
+                assert False
 
-        for timestamp, phonemes in zip(timestamps, phonemes_task_env.phonemess):
-            timestamp["phonemes"] = phonemes
+            for timestamp, phonemes in zip(timestamps, phonemes_task_env.phonemess):
+                timestamp["phonemes"] = phonemes
+        else:  # api_config.tts_server_type == "raven"
+            # The timestamp metadata contains the phonemes too.
+            # But they're URL-encoded to ASCII with percent-escaped UTF-8, due to HTTP limitations (can't send Unicode in HTTP headers).
+            # Also the words, just to be safe.
+            for timestamp in timestamps:
+                timestamp["word"] = urllib.parse.unquote(timestamp["word"])
+                timestamp["phonemes"] = urllib.parse.unquote(timestamp["phonemes"])
+        # The rest of the code is identical regardless of TTS server type.
 
-        # for record in timestamps:
-        #     print(record)  # DEBUG once more, with feeling! (show where each phoneme went)
+        logger.info("tts_speak_lipsynced.speak: timestamped phonemes:")
+        for record in timestamps:
+            logger.info(f"    {record}")  # DEBUG once more, with feeling! (show timestamps, with phoneme data)
 
         # Transform data into phoneme stream with interpolated timestamps
         def get_timestamp_for_phoneme(t0, t1, phonemes, idx):
@@ -831,7 +875,8 @@ def selftest():
     init_module(avatar_url=client_config.avatar_url,
                 avatar_api_key_file=client_config.avatar_api_key_file,
                 tts_url=client_config.tts_url,
-                tts_api_key_file=client_config.tts_api_key_file)  # let it create a default executor
+                tts_api_key_file=client_config.tts_api_key_file,
+                tts_server_type=client_config.tts_server_type)  # let it create a default executor
 
     logger.info(f"selftest: check server availability at {client_config.avatar_url}")
     if avatar_available():
@@ -852,6 +897,9 @@ def selftest():
     talkinghead_start()  # start the animator
     gen = talkinghead_result_feed()  # start receiving animation frames (call this *after* you have started the animator)
     talkinghead_start_talking()  # start "talking right now" animation (generic, non-lipsync, random mouth)
+
+    logger.info("selftest: tts: list voices")
+    print(tts_list_voices())
 
     logger.info("selftest: classify")
     text = "What is the airspeed velocity of an unladen swallow?"

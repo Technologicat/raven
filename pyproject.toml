@@ -46,7 +46,8 @@ dependencies = [
     "torchvision>=0.22.0",  # AI avatar server
     "huggingface-hub>=0.31.4",  # AI avatar server (for THA3 models autodownloader)
     "waitress>=3.0.2",  # AI avatar server
-    "kokoro>=0.9.4",  # TTS
+    "kokoro>=0.9.4",  # TTS: AI speech synthesizer; you may also need the `espeak-ng` software; on Linux, `sudo apt install espeak-ng`. For Windows, see https://github.com/hexgrad/kokoro
+    "av>=14.2.0",  # TTS: audio encoder
     "pygame>=2.6.1",  # TTS audio playback
     "qoi>=0.7.2"  # AI avatar client, fast image format for video streaming
 ]

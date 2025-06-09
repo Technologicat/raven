@@ -65,8 +65,9 @@ from ..vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParamete
 from ..vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
 from ..common import config
+from ..common.hfutil import maybe_install_models
 from ..common.running_average import RunningAverage
-from ..server.util import load_emotion_presets, posedict_to_pose, pose_to_posedict, maybe_install_models, convert_linear_to_srgb, convert_float_to_uint8
+from ..server.util import load_emotion_presets, posedict_to_pose, pose_to_posedict, convert_linear_to_srgb, convert_float_to_uint8
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ sys.path.append(str(talkinghead_path))
 
 # Detect image file formats supported by the installed Pillow, and format a list for the file open/save dialogs.
 # TODO: This is not very useful unless we can filter these to get only formats that support an alpha channel.
+# TODO: And there's not much point formatting them for a wxPython file dialog in a DearPyGui app.
 #
 # https://docs.wxpython.org/wx.FileDialog.html
 # https://stackoverflow.com/questions/71112986/retrieve-a-list-of-supported-read-file-extensions-formats
