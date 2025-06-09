@@ -13,6 +13,7 @@ import os
 import pathlib
 import secrets
 import time
+import traceback
 from typing import Any, Dict, List, Union
 
 from colorama import Fore, Style, init as colorama_init
@@ -48,47 +49,65 @@ api_key = None  # secure mode
 ignore_auth = []  # features that do not need an API key
 
 # --------------------------------------------------------------------------------
-# General utilities
+# Web API and its support functions
 
-def is_authorize_ignored(request):
+def is_authorize_ignored(request) -> bool:
+    """Check whether the API endpoint called by `request` is in `ignore_auth`."""
     view_func = app.view_functions.get(request.endpoint)
     if view_func is not None:
         if view_func in ignore_auth:
             return True
     return False
 
-# --------------------------------------------------------------------------------
-# Web API and its support functions
+def is_authorized(request) -> bool:
+    """Check whether `request` is authorized.
+
+    - When not in "--secure" mode, all requests are authorized.
+    - HTTP OPTIONS requests are always authoriszed.
+    - If the API endpoint being called is in the server's `ignore_auth`, the request is authorized.
+
+    Otherwise: the correct API key must be present in the request for the request to be authorized.
+    """
+    if not args.secure:
+        return True
+    if request.method == "OPTIONS":  # The options check is required so CORS doesn't get angry
+        return True
+    if is_authorize_ignored(request):
+        return True
+    # Check if an API key is present and valid, otherwise return unauthorized
+    return (getattr(request.authorization, "token", "") == api_key)
 
 @app.before_request
 def before_request():
-    # Request time measuring
-    request.start_time = time.time()
-
-    # Checks if an API key is present and valid, otherwise return unauthorized
-    # The options check is required so CORS doesn't get angry
+    request.start_time = time.monotonic()
     try:
-        if request.method != 'OPTIONS' and args.secure and not is_authorize_ignored(request) and getattr(request.authorization, 'token', '') != api_key:
-            print(f"{Fore.RED}{Style.NORMAL}WARNING: Unauthorized API key access from {request.remote_addr}{Style.RESET_ALL}")
-            response = jsonify({'error': '401: Invalid API key'})
+        if not is_authorized(request):
+            print(f"{Fore.YELLOW}{Style.NORMAL}WARNING: Unauthorized access (missing or wrong API key) from {request.remote_addr}{Style.RESET_ALL}")
+            response = jsonify({"error": "401: Invalid API key"})
             response.status_code = 401
             return response
     except Exception as e:
-        print(f"API key check error: {e}")
-        return "401 Unauthorized\n{}\n\n".format(e), 401
+        print(f"{Fore.RED}{Style.NORMAL}Internal server error during API key check.{Style.RESET_ALL} Details follow.")
+        traceback.print_exc()
+        return f"500 Internal Server Error\n{e}\n\n", 500
 
 @app.after_request
 def after_request(response):
-    duration = time.time() - request.start_time
-    response.headers["X-Request-Duration"] = str(duration)
+    duration = time.monotonic() - request.start_time
+    response.headers["X-Request-Duration"] = str(duration)  # seconds
     return response
 
 # ----------------------------------------
-# general utilities
+# server metadata endpoints
 
 @app.route("/", methods=["GET"])
 def index():
-    """Return usage documentation, to be rendered in a web browser."""
+    """Return usage documentation.
+
+    No inputs.
+
+    Output is suitable for rendering in a web browser.
+    """
     with open(os.path.join(os.path.dirname(__file__), "..", "README.md"), "r", encoding="utf8") as f:
         content = f.read()
     return render_template_string(markdown.markdown(content, extensions=["tables"]))
@@ -104,6 +123,8 @@ def health():
 @app.route("/api/modules", methods=["GET"])
 def get_modules():
     """Get a list of enabled modules.
+
+    No inputs.
 
     Output format is JSON::
 
@@ -132,13 +153,65 @@ def get_modules():
     return jsonify({"modules": modules})
 
 # ----------------------------------------
-# embeddings
+# module: classify
+
+@app.route("/api/classify", methods=["POST"])
+def api_classify():
+    """Perform sentiment analysis (emotion classification) on the text posted in the request. Return the result.
+
+    Input is JSON::
+
+        {"text": "Blah blah blah."}
+
+    Output is JSON::
+
+        {"classification": [{"label": emotion0, "score": confidence0},
+                            ...]}
+
+    sorted by score, descending, so that the most probable emotion is first.
+    """
+    if not classify.is_available():
+        abort(403, "Module 'classify' not running")
+
+    data = request.get_json()
+
+    if "text" not in data or not isinstance(data["text"], str):
+        abort(400, '"text" is required')
+
+    print("Classification input:", data["text"], sep="\n")
+    classification = classify.classify_text(data["text"])
+    print("Classification output:", classification, sep="\n")
+    gc.collect()
+    return jsonify({"classification": classification})
+
+@app.route("/api/classify/labels", methods=["GET"])
+def api_classify_labels():
+    """Return the available classifier labels for text sentiment (character emotion).
+
+    No inputs.
+
+    Output is JSON::
+
+        {"labels": [emotion0,
+                    ...]}
+
+    The actual labels depend on the classifier model.
+    """
+    if not classify.is_available():
+        abort(403, "Module 'classify' not running")
+
+    classification = classify.classify_text("")
+    labels = [x["label"] for x in classification]
+    return jsonify({"labels": labels})
+
+# ----------------------------------------
+# module: embeddings
 
 @app.route("/api/embeddings/compute", methods=["POST"])
 def api_embeddings_compute():
     """For making vector DB keys. Compute the vector embedding of one or more sentences of text.
 
-    Input format is JSON::
+    Input is JSON::
 
         {"text": "Blah blah blah."}
 
@@ -175,158 +248,29 @@ def api_embeddings_compute():
     return jsonify({"embedding": vectors})
 
 # ----------------------------------------
-# websearch
-
-def _websearch_impl():
-    data = request.get_json()
-    if "query" not in data or not isinstance(data["query"], str):
-        abort(400, '"query" is required')
-
-    query = data["query"]
-    engine = data["engine"] if "engine" in data else "duckduckgo"
-    max_links = data["max_links"] if "max_links" in data else 10
-
-    if engine not in ("duckduckgo", "google"):
-        abort(400, '"engine", if provided, must be one of "duckduckgo", "google"')
-
-    return websearch.search(query, engine=engine, max_links=max_links)
-
-# legacy ST-compatible websearch endpoint
-@app.route("/api/websearch", methods=["POST"])
-def api_websearch():
-    """Perform a web search with the query posted in the request.
-
-    SillyTavern compatible endpoint.
-
-    Input format is JSON::
-
-        {"query": "what is the airspeed velocity of an unladen swallow",
-         "engine": "duckduckgo"}
-
-    In the input, "engine" is optional. Valid values are "duckduckgo" (default)
-    and "google".
-
-    Output is also JSON:
-
-        {"results": preformatted_text,
-         "links": [link0, ...]}
-
-    where the "links" field contains a list of all links to the search results.
-    """
-    if not websearch.is_available():
-        abort(403, "Module 'websearch' not running")
-    preformatted_text, structured_results = _websearch_impl()
-    output = {"results": preformatted_text,
-              "links": [item["link"] for item in structured_results]}
-    return jsonify(output)
-
-# for Raven
-@app.route("/api/websearch2", methods=["POST"])
-def api_websearch2():
-    """Perform a web search with the query posted in the request.
-
-    Input format is JSON::
-
-        {"query": "what is the airspeed velocity of an unladen swallow",
-         "engine": "duckduckgo",
-         "max_links": 10}
-
-    In the input, some fields are optional:
-
-      - "engine": valid values are "duckduckgo" (default) and "google".
-      - "max_links": default 10.
-
-    The "max_links" field is a hint; the search engine may return more
-    results, especially if you set it to a small value (e.g. 3).
-
-    Output is also JSON:
-
-        {"results": preformatted_text,
-         "data": [{"title": ...,
-                   "link": ...,
-                   "text": ...}],
-                  ...}
-
-    In the output, title is optional; not all search engines return it.
-
-    This format preserves the connection between the text of the result
-    and its corresponding link, which is convenient for citation mechanisms.
-    """
-    if not websearch.is_available():
-        abort(403, "Module 'websearch' not running")
-    preformatted_text, structured_results = _websearch_impl()
-    output = {"results": preformatted_text,
-              "data": structured_results}
-    return jsonify(output)
-
-# ----------------------------------------
-# classify
-
-@app.route("/api/classify", methods=["POST"])
-def api_classify():
-    """Perform sentiment analysis (emotion classification) on the text posted in the request. Return the result.
-
-    Output is JSON::
-
-        {"classification": [{"label": emotion0, "score": confidence0},
-                            ...]}
-
-    sorted by score, descending, so that the most probable emotion is first.
-    """
-    if not classify.is_available():
-        abort(403, "Module 'classify' not running")
-
-    data = request.get_json()
-
-    if "text" not in data or not isinstance(data["text"], str):
-        abort(400, '"text" is required')
-
-    print("Classification input:", data["text"], sep="\n")
-    classification = classify.classify_text(data["text"])
-    print("Classification output:", classification, sep="\n")
-    gc.collect()
-    return jsonify({"classification": classification})
-
-@app.route("/api/classify/labels", methods=["GET"])
-def api_classify_labels():
-    """Return the available classifier labels for text sentiment (character emotion).
-
-    Output is JSON::
-
-        {"labels": [emotion0,
-                    ...]}
-
-    The actual labels depend on the classifier model.
-    """
-    if not classify.is_available():
-        abort(403, "Module 'classify' not running")
-
-    classification = classify.classify_text("")
-    labels = [x["label"] for x in classification]
-    return jsonify({"labels": labels})
-
-# ----------------------------------------
-# talkinghead
+# module: talkinghead
 
 @app.route("/api/talkinghead/load", methods=["POST"])
 def api_talkinghead_load():
     """Load the avatar sprite posted as a file in the request.
 
-    The request should be posted as "multipart/form-data", with one file attachment, named "file".
+    Input is POST, Content-Type "multipart/form-data", with one file attachment, named "file".
 
     The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
+
+    No outputs.
     """
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
 
-    file = request.files['file']
+    file = request.files["file"]
     return animator.load_image_from_stream(file.stream)
 
 @app.route("/api/talkinghead/load_emotion_templates", methods=["POST"])
 def api_talkinghead_load_emotion_templates():
     """Load custom emotion templates for talkinghead, or reset to defaults.
 
-    Input format is JSON::
+    Input is JSON::
 
         {"emotion0": {"morph0": value0,
                       ...}
@@ -336,7 +280,7 @@ def api_talkinghead_load_emotion_templates():
 
     To reload server defaults, send a blank JSON.
 
-    This API endpoint becomes available after the talkinghead has been launched.
+    No outputs.
     """
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
@@ -359,8 +303,6 @@ def api_talkinghead_load_animator_settings():
     For details, see `Animator.load_animator_settings` in `animator.py`.
 
     To reload server defaults, send a blank JSON.
-
-    This API endpoint becomes available after the talkinghead has been launched.
     """
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
@@ -375,7 +317,9 @@ def api_talkinghead_load_animator_settings():
 def api_talkinghead_start():
     """Start the avatar animation.
 
-    A character must be loaded first; use '/api/talkinghead/load'.
+    No inputs, no outputs.
+
+    A character must be loaded first; use '/api/talkinghead/load' to do that.
 
     To pause, use '/api/talkinghead/stop'.
     """
@@ -387,6 +331,8 @@ def api_talkinghead_start():
 def api_talkinghead_stop():
     """Pause the avatar animation.
 
+    No inputs, no outputs.
+
     To resume, use '/api/talkinghead/start'.
     """
     if not animator.is_available():
@@ -396,6 +342,8 @@ def api_talkinghead_stop():
 @app.route("/api/talkinghead/start_talking")
 def api_talkinghead_start_talking():
     """Start the mouth animation for talking.
+
+    No inputs, no outputs.
 
     This is the generic, non-lipsync animation that randomizes the mouth.
 
@@ -412,6 +360,8 @@ def api_talkinghead_start_talking():
 def api_talkinghead_stop_talking():
     """Stop the mouth animation for talking.
 
+    No inputs, no outputs.
+
     This is the generic, non-lipsync animation that randomizes the mouth.
 
     This is useful for applications without actual voiced audio, such as
@@ -427,14 +377,16 @@ def api_talkinghead_stop_talking():
 def api_talkinghead_set_emotion():
     """Set talkinghead character emotion to that posted in the request.
 
-    Input format is JSON::
+    Input is JSON::
 
         {"emotion_name": "curiosity"}
 
     where the key "emotion_name" is literal, and the value is the emotion to set.
 
-    There is no getter, because SillyTavern keeps its state in the frontend
-    and the plugins only act as slaves (in the technological sense of the word).
+    No outputs.
+
+    There is no getter, by design. If the emotion state is meaningful to you,
+    keep a copy in your frontend, and sync that to the server.
     """
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
@@ -450,7 +402,7 @@ def api_talkinghead_set_overrides():
 
     Useful for lipsyncing.
 
-    Input format is JSON::
+    Input is JSON::
 
         {"morph0": value0,
          ...}
@@ -460,7 +412,10 @@ def api_talkinghead_set_overrides():
     See `raven.avatar.editor` for available morphs. Value range for most morphs is [0, 1],
     and for morphs taking also negative values, it is [-1, 1].
 
-    This API endpoint becomes available after the talkinghead has been launched.
+    No outputs.
+
+    There is no getter, by design. If the override state is meaningful to you,
+    keep a copy in your frontend, and sync that to the server.
     """
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
@@ -477,7 +432,9 @@ def api_talkinghead_set_overrides():
 def api_talkinghead_result_feed():
     """Video output.
 
-    A "multipart/x-mixed-replace" stream of video frames, each as an image file.
+    No inputs.
+
+    Output is a "multipart/x-mixed-replace" stream of video frames, each as an image file.
     The payload separator is "--frame".
 
     The file format can be set in the animator settings. The frames are always sent
@@ -486,6 +443,7 @@ def api_talkinghead_result_feed():
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
     return animator.result_feed()
+ignore_auth.append(api_talkinghead_result_feed)   # TODO: does this make sense?
 
 @app.route("/api/talkinghead/get_available_filters")
 def api_talkinghead_get_available_filters():
@@ -494,7 +452,9 @@ def api_talkinghead_get_available_filters():
     The intended audience of this endpoint is developers; this is useful for dynamically
     building an editor GUI for the postprocessor chain.
 
-    The output format is JSON::
+    No inputs.
+
+    Output is JSON::
 
       {"filters": [
                     [filter_name, {"defaults": {param0_name: default_value0,
@@ -523,9 +483,99 @@ def api_talkinghead_get_available_filters():
     return jsonify({"filters": postprocessor.Postprocessor.get_filters()})
 
 # ----------------------------------------
-# Parse command-line arguments
+# module: websearch
 
-# NOTE SillyTavern-Extras users: settings for module enable/disable and which device to use for each module have been moved to `raven/avatar/common/config.py`.
+def _websearch_impl():
+    data = request.get_json()
+    if "query" not in data or not isinstance(data["query"], str):
+        abort(400, '"query" is required')
+
+    query = data["query"]
+    engine = data["engine"] if "engine" in data else "duckduckgo"
+    max_links = data["max_links"] if "max_links" in data else 10
+
+    if engine not in ("duckduckgo", "google"):
+        abort(400, '"engine", if provided, must be one of "duckduckgo", "google"')
+
+    return websearch.search(query, engine=engine, max_links=max_links)
+
+# legacy ST-compatible websearch endpoint
+@app.route("/api/websearch", methods=["POST"])
+def api_websearch():
+    """Perform a web search with the query posted in the request.
+
+    This is the SillyTavern compatible legacy endpoint.
+    Prefer to use "/api/websearch2" if you don't need the compatibility.
+
+    Input is JSON::
+
+        {"query": "what is the airspeed velocity of an unladen swallow",
+         "engine": "duckduckgo"}
+
+    In the input, "engine" is optional. Valid values are "duckduckgo" (default)
+    and "google".
+
+    Output is JSON:
+
+        {"results": preformatted_text,
+         "links": [link0, ...]}
+
+    where the "links" field contains a list of all links to the search results.
+    """
+    if not websearch.is_available():
+        abort(403, "Module 'websearch' not running")
+    preformatted_text, structured_results = _websearch_impl()
+    output = {"results": preformatted_text,
+              "links": [item["link"] for item in structured_results]}
+    return jsonify(output)
+
+# for Raven
+@app.route("/api/websearch2", methods=["POST"])
+def api_websearch2():
+    """Perform a web search with the query posted in the request.
+
+    Input is JSON::
+
+        {"query": "what is the airspeed velocity of an unladen swallow",
+         "engine": "duckduckgo",
+         "max_links": 10}
+
+    In the input, some fields are optional:
+
+      - "engine": valid values are "duckduckgo" (default) and "google".
+      - "max_links": default 10.
+
+    The "max_links" field is a hint; the search engine may return more
+    results, especially if you set it to a small value (e.g. 3).
+
+    Output is JSON:
+
+        {"results": preformatted_text,
+         "data": [{"title": ...,
+                   "link": ...,
+                   "text": ...}],
+                  ...}
+
+    In the output, the title field may be missing; not all search engines return it.
+
+    This format preserves the connection between the text of the result
+    and its corresponding link.
+    """
+    if not websearch.is_available():
+        abort(403, "Module 'websearch' not running")
+    preformatted_text, structured_results = _websearch_impl()
+    output = {"results": preformatted_text,
+              "data": structured_results}
+    return jsonify(output)
+
+
+# --------------------------------------------------------------------------------
+# Main program
+
+# NOTE SillyTavern-Extras users: settings for module enable/disable and which compute device to use for each module have been moved to `raven/avatar/common/config.py`.
+
+# ----------------------------------------
+# Parse command-line arguments
 
 parser = argparse.ArgumentParser(
     prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras"
@@ -547,9 +597,23 @@ args = parser.parse_args()
 port = args.port if args.port else config.DEFAULT_PORT
 host = "0.0.0.0" if args.listen else "localhost"
 
-# ----------------------------------------
-# Flask init
+# Read an API key from an already existing file. If that file doesn't exist, create it.
+if args.secure:
+    config_dir = pathlib.Path(config.config_base_dir).expanduser().resolve()
 
+    try:
+        with open(config_dir / "api_key.txt", "r") as txt:
+            api_key = txt.read().replace('\n', '')
+    except Exception:
+        api_key = secrets.token_hex(5)
+        with open(config_dir / "api_key.txt", "w") as txt:
+            txt.write(api_key)
+
+    print(f"{Fore.YELLOW}{Style.BRIGHT}Your API key is {api_key}{Style.RESET_ALL}")
+else:
+    print(f"{Fore.YELLOW}{Style.BRIGHT}No API key, accepting all requests.{Style.RESET_ALL} (use --secure to require an API key)")
+
+# Configure Flask
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024
 max_content_length = args.max_content_length if args.max_content_length else None
 if max_content_length is not None:
@@ -557,7 +621,7 @@ if max_content_length is not None:
     app.config["MAX_CONTENT_LENGTH"] = int(max_content_length) * 1024 * 1024
 
 # ----------------------------------------
-# Modules init
+# Initialize enabled modules
 
 cuda_info_shown = set()
 def get_device_and_dtype(record: Dict[str, Any]) -> (str, torch.dtype):
@@ -609,27 +673,9 @@ def init_server_modules():  # keep global namespace clean
 init_server_modules()
 
 # ----------------------------------------
-# Start app
+# Start serving
 
 print(f"{Fore.GREEN}{Style.BRIGHT}Starting server{Style.RESET_ALL}")
-
-# Read an API key from an already existing file. If that file doesn't exist, create it.
-if args.secure:
-    config_dir = pathlib.Path(config.config_base_dir).expanduser().resolve()
-
-    try:
-        with open(config_dir / "api_key.txt", "r") as txt:
-            api_key = txt.read().replace('\n', '')
-    except Exception:
-        api_key = secrets.token_hex(5)
-        with open(config_dir / "api_key.txt", "w") as txt:
-            txt.write(api_key)
-
-    print(f"{Fore.YELLOW}{Style.BRIGHT}Your API key is {api_key}{Style.RESET_ALL}")
-else:
-    print(f"{Fore.YELLOW}{Style.BRIGHT}No API key, accepting all requests.{Style.RESET_ALL} (use --secure to require an API key)")
-
-ignore_auth.append(api_talkinghead_result_feed)   # TODO: does this make sense?
 
 from waitress import serve
 serve(app, host=host, port=port)
