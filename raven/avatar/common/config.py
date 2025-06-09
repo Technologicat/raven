@@ -3,19 +3,27 @@
 This module is licensed under the 2-clause BSD license.
 """
 
+import torch
+
+# This can be used to enable only those modules you need, to save CPU/GPU/RAM/VRAM resources.
+# To switch a module off, comment out its line here.
+#
+SERVER_ENABLED_MODULES = {
+    "classify": {"device_string": "cuda:0", "dtype": torch.float16},
+    "embeddings": {"device_string": "cuda:0", "dtype": torch.float16},
+    "talkinghead": {"device_string": "cuda:0", "dtype": torch.float16},
+    "websearch": {},  # websearch doesn't use any heavy compute; this is here to provide the option to turn the module off.
+}
+
 # Port the raven-avatar app is hosted on. Can be overridden on the command line.
 #
 DEFAULT_PORT = 5100
 
-# Default GPU for raven-avatar to use with CUDA. Can be overridden on the command line.
-#
-DEFAULT_CUDA_DEVICE = "cuda:0"
-
 # AI model that produces the high-dimensional semantic vectors, for visualization in `raven-visualizer`.
 # Available on HuggingFace. Auto-downloaded on first use.
 #
-DEFAULT_EMBEDDING_MODEL = "Snowflake/snowflake-arctic-embed-l"
-# DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
+EMBEDDING_MODEL = "Snowflake/snowflake-arctic-embed-l"
+# EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 
 # Text classification model for emotion detection.
 #
@@ -23,8 +31,14 @@ DEFAULT_EMBEDDING_MODEL = "Snowflake/snowflake-arctic-embed-l"
 #
 # Huggingface model name, auto-downloaded on first use.
 #
-DEFAULT_CLASSIFICATION_MODEL = "joeddav/distilbert-base-uncased-go-emotions-student"
-# DEFAULT_CLASSIFICATION_MODEL = "nateraw/bert-base-uncased-emotion"
+CLASSIFICATION_MODEL = "joeddav/distilbert-base-uncased-go-emotions-student"
+# CLASSIFICATION_MODEL = "nateraw/bert-base-uncased-emotion"
+
+# THA3 avatar animator models. There are currently no alternative models, this is just for specifying where to download from.
+#
+# Huggingface model name, auto-downloaded on first use.
+#
+TALKINGHEAD_MODELS = "OktayAlpk/talking-head-anime-3"
 
 # Where to store files. Currently only used for websearch's debug functionality.
 config_base_dir = "~/.config/raven/avatar/"

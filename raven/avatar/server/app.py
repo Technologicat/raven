@@ -12,9 +12,8 @@ import gc
 import os
 import pathlib
 import secrets
-import sys
 import time
-from typing import List, Union
+from typing import Any, Dict, List, Union
 
 from colorama import Fore, Style, init as colorama_init
 import markdown
@@ -31,7 +30,6 @@ from ..common import postprocessor
 from . import animator
 from . import classify
 from . import embed
-from . import util
 from . import websearch
 
 # --------------------------------------------------------------------------------
@@ -112,17 +110,15 @@ def get_modules():
         {"modules": ["modulename0",
                      ...]}
 
-    Unlike SillyTavern-extras, `raven.avatar.server` always enables the following modules:
+    Unlike SillyTavern-extras, `raven.avatar.server` always enables all modules.
+    We provide the following:
 
     - classify
+    - embeddings
     - talkinghead
     - websearch
 
     If any of these are missing, it means that there has been an error during startup that has prevented the module from loading.
-
-    Optionally, the following modules can be enabled via a command-line switch when the server is started:
-
-    - embeddings
     """
     modules = []
     if animator.is_available():
@@ -131,7 +127,7 @@ def get_modules():
         modules.append("classify")
     if websearch.is_available():
         modules.append("websearch")
-    if args.embeddings and embed.is_available():  # the only optional module; embeddings API endpoint enabled?
+    if embed.is_available():
         modules.append("embeddings")
     return jsonify({"modules": modules})
 
@@ -527,46 +523,21 @@ def api_talkinghead_get_available_filters():
     return jsonify({"filters": postprocessor.Postprocessor.get_filters()})
 
 # ----------------------------------------
-# Script arguments
+# Parse command-line arguments
+
+# NOTE SillyTavern-Extras users: settings for module enable/disable and which device to use for each module have been moved to `raven/avatar/common/config.py`.
 
 parser = argparse.ArgumentParser(
-    prog="Raven-avatar", description="Talkinghead (THA3) server based on the discontinued SillyTavern-extras"
+    prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras"
 )
 parser.add_argument(
     "--port", type=int, help=f"Specify the port on which the application is hosted (default {config.DEFAULT_PORT})"
 )
 parser.add_argument(
-    "--listen", action="store_true", help="Host the app on the local network"
+    "--listen", action="store_true", help="Host the app on the local network (if not set, the server is visible to localhost only)"
 )
 parser.add_argument(
     "--secure", action="store_true", help="Require an API key (will be auto-created first time, and printed to console each time on server startup)"
-)
-
-parser.add_argument("--cpu", action="store_true", help="Run the classify and embeddings models on the CPU")
-parser.add_argument("--cuda", action="store_false", dest="cpu", help="Run the classify and embeddings models on the GPU (default)")
-parser.add_argument("--cuda-device", help="Specify the CUDA device to use")
-parser.add_argument("--mps", "--apple", "--m1", "--m2", action="store_false", dest="cpu", help="Run the classify and embeddings models on Apple Silicon")
-parser.set_defaults(cpu=False)
-
-parser.add_argument(
-    "--classification-model", help=f"Load a custom text classification model (default '{config.DEFAULT_CLASSIFICATION_MODEL}')"
-)
-
-parser.add_argument("--embeddings", action="store_true", help="Load the text embedder (fast API endpoint for SillyTavern)")
-parser.add_argument("--embedding-model", help=f"Load a custom text embedding model (default '{config.DEFAULT_EMBEDDING_MODEL}')")
-parser.set_defaults(embeddings=False)
-
-parser.add_argument("--talkinghead-cpu", action="store_true", help="Run the avatar animator on the CPU")
-parser.add_argument("--talkinghead-gpu", dest="talkinghead_cpu", action="store_false", help="Run the avatar animator on the GPU (default)")
-parser.add_argument(
-    "--talkinghead-model", type=str, help="The THA3 model to use. 'float' models are fp32, 'half' are fp16. 'auto' (default) picks fp16 for GPU and fp32 for CPU.",
-    required=False, default="auto",
-    choices=["auto", "standard_float", "separable_float", "standard_half", "separable_half"],
-)
-parser.add_argument(
-    "--talkinghead-models", metavar="HFREPO",
-    type=str, help="If THA3 models are not yet installed, use the given HuggingFace repository to install them (default 'OktayAlpk/talking-head-anime-3').",
-    default="OktayAlpk/talking-head-anime-3"
 )
 
 parser.add_argument("--max-content-length", help="Set the max content length for the Flask app config.")
@@ -575,8 +546,6 @@ args = parser.parse_args()
 
 port = args.port if args.port else config.DEFAULT_PORT
 host = "0.0.0.0" if args.listen else "localhost"
-classification_model = args.classification_model if args.classification_model else config.DEFAULT_CLASSIFICATION_MODEL
-embedding_model = args.embedding_model if args.embedding_model else config.DEFAULT_EMBEDDING_MODEL
 
 # ----------------------------------------
 # Flask init
@@ -590,59 +559,54 @@ if max_content_length is not None:
 # ----------------------------------------
 # Modules init
 
-cuda_device = config.DEFAULT_CUDA_DEVICE if not args.cuda_device else args.cuda_device
-device_string = cuda_device if (torch.cuda.is_available() and not args.cpu) else 'mps' if (torch.backends.mps.is_available() and not args.cpu) else 'cpu'
-torch_dtype = torch.float32 if (device_string != cuda_device) else torch.float16  # float32 on CPU, float16 on GPU
+cuda_info_shown = set()
+def get_device_and_dtype(record: Dict[str, Any]) -> (str, torch.dtype):
+    global cuda_info_shown
 
-if not torch.cuda.is_available() and not args.cpu:
-    print(f"{Fore.YELLOW}{Style.BRIGHT}torch-cuda is not supported on this device.{Style.RESET_ALL}")
-    if not torch.backends.mps.is_available() and not args.cpu:
-        print(f"{Fore.YELLOW}{Style.BRIGHT}torch-mps is not supported on this device.{Style.RESET_ALL}")
+    device_string = record["device_string"]
+    torch_dtype = record["dtype"]
 
-if device_string.startswith("cuda") and torch.cuda.is_available():
-    print(f"Device info for GPU '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' ({torch.cuda.get_device_name(device_string)}):")
-    print(f"    {torch.cuda.get_device_properties(device_string)}")
-    print(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(device_string))}")
-    print(f"    Detected CUDA version {torch.version.cuda}")
+    if device_string.startswith("cuda"):  # Nvidia
+        if not torch.cuda.is_available():
+            print(f"{Fore.YELLOW}{Style.BRIGHT}CUDA backend specified in config (device string '{device_string}'), but CUDA not available. Using CPU instead.{Style.RESET_ALL}")
+            device_string = "cpu"
+        else:
+            if device_string not in cuda_info_shown:
+                cuda_info_shown.add(device_string)
+                print(f"Device info for GPU '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' ({torch.cuda.get_device_name(device_string)}):")
+                print(f"    {torch.cuda.get_device_properties(device_string)}")
+                print(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(device_string))}")
+                print(f"    Detected CUDA version {torch.version.cuda}")
 
-# --------------------
-# Websearch
+    elif device_string.startswith("mps"):  # Mac
+        if not torch.backends.mps.is_available():
+            print(f"{Fore.YELLOW}{Style.BRIGHT}MPS backend specified in config (device string '{device_string}'), but MPS not available. Using CPU instead.{Style.RESET_ALL}")
+            device_string = "cpu"
+        # TODO: Torch MPS backend info?
 
-websearch.init_module()
+    if device_string == "cpu":  # no "elif" because also as fallback if CUDA/MPS wasn't available
+        if torch_dtype is torch.float16:
+            print(f"{Fore.YELLOW}{Style.BRIGHT}dtype is set to torch.float16, but device 'cpu' does not support half precision. Using torch.float32 instead.{Style.RESET_ALL}")
+            torch_dtype = torch.float32
 
-# --------------------
-# Embeddings
+    return device_string, torch_dtype
 
-if args.embeddings:
-    embed.init_module(embedding_model, device_string)
-
-# --------------------
-# Classify
-
-classify.init_module(classification_model, device_string, torch_dtype)
-
-# --------------------
-# Talkinghead
-
-talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "vendor")).expanduser().resolve()
-print(f"Talkinghead is installed at '{str(talkinghead_path)}'")
-
-sys.path.append(str(talkinghead_path))  # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
-
-avatar_device = cuda_device if not args.talkinghead_cpu else "cpu"
-model = args.talkinghead_model
-if model == "auto":  # default
-    # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
-    model = "separable_half" if not args.talkinghead_cpu else "separable_float"
-print(f"Initializing {Fore.GREEN}{Style.BRIGHT}avatar{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{avatar_device}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model}{Style.RESET_ALL}'...")
-
-# Install the THA3 models if needed
-tha3_models_path = str(talkinghead_path / "tha3" / "models")
-util.maybe_install_models(hf_reponame=args.talkinghead_models, modelsdir=tha3_models_path)
-
-# avatar_device: choices='The device to use for PyTorch ("cuda" for GPU, "cpu" for CPU).'
-# model: choices=['standard_float', 'separable_float', 'standard_half', 'separable_half'],
-animator.init_module(avatar_device, model)
+def init_server_modules():  # keep global namespace clean
+    if (record := config.SERVER_ENABLED_MODULES.get("classify", None)) is not None:
+        device_string, torch_dtype = get_device_and_dtype(record)
+        classify.init_module(config.CLASSIFICATION_MODEL, device_string, torch_dtype)
+    if (record := config.SERVER_ENABLED_MODULES.get("embeddings", None)) is not None:
+        device_string, torch_dtype = get_device_and_dtype(record)
+        embed.init_module(config.EMBEDDING_MODEL, device_string=device_string)
+    if (record := config.SERVER_ENABLED_MODULES.get("talkinghead", None)) is not None:
+        device_string, torch_dtype = get_device_and_dtype(record)
+        # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
+        # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
+        tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
+        animator.init_module(device_string, tha3_model_variant)
+    if config.SERVER_ENABLED_MODULES.get("websearch", None) is not None:  # no device/dtype settings; if a blank record exists, this module is enabled.
+        websearch.init_module()
+init_server_modules()
 
 # ----------------------------------------
 # Start app

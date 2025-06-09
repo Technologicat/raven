@@ -26,6 +26,7 @@ import pathlib
 import random
 import time
 import numpy as np
+import sys
 import threading
 import traceback
 from typing import Any, Dict, List, Optional
@@ -52,7 +53,7 @@ from ..common.postprocessor import Postprocessor
 from ..common.running_average import RunningAverage
 from ..common.upscaler import Upscaler
 
-from .util import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, convert_linear_to_srgb
+from .util import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, convert_linear_to_srgb, maybe_install_models
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -286,6 +287,7 @@ def load_image_from_stream(stream) -> str:
         global_reload_image = PIL.Image.open(full_path)
     return "OK"
 
+first_launch_during_session = True
 def init_module(device: str, model: str) -> None:
     """Launch the avatar (live mode), served over HTTP.
 
@@ -294,8 +296,21 @@ def init_module(device: str, model: str) -> None:
 
     If something goes horribly wrong, raise `RuntimeError`.
     """
+    global first_launch_during_session
     global global_animator_instance
     global global_encoder_instance
+
+    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}avatar{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model}{Style.RESET_ALL}'...")
+
+    if first_launch_during_session:
+        first_launch_during_session = False
+        talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "vendor")).expanduser().resolve()
+        sys.path.append(str(talkinghead_path))  # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
+        print(f"Talkinghead is installed at '{str(talkinghead_path)}'")
+
+        # Install the THA3 models if needed
+        tha3_models_path = str(talkinghead_path / "tha3" / "models")
+        maybe_install_models(hf_reponame=config.TALKINGHEAD_MODELS, modelsdir=tha3_models_path)
 
     try:
         # If the animator already exists, clean it up first

@@ -64,6 +64,7 @@ from ..vendor.tha3.poser.modes.load_poser import load_poser
 from ..vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from ..vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
+from ..common import config
 from ..common.running_average import RunningAverage
 from ..server.util import load_emotion_presets, posedict_to_pose, pose_to_posedict, maybe_install_models, convert_linear_to_srgb, convert_float_to_uint8
 
@@ -1132,11 +1133,6 @@ parser.add_argument("--model",
                     default="separable_float",
                     choices=["standard_float", "separable_float", "standard_half", "separable_half"],
                     help="The model to use. 'float' means fp32, 'half' means fp16.")
-parser.add_argument("--models",
-                    metavar="HFREPO",
-                    type=str,
-                    help="If THA3 models are not yet installed, use the given HuggingFace repository to install them. Defaults to OktayAlpk/talking-head-anime-3.",
-                    default="OktayAlpk/talking-head-anime-3")
 parser.add_argument("--factory-reset",
                     metavar="EMOTION",
                     type=str,
@@ -1174,7 +1170,7 @@ if args.factory_reset:
 
 # Install the THA3 models if needed
 modelsdir = str(talkinghead_path / "tha3" / "models")
-maybe_install_models(hf_reponame=args.models, modelsdir=modelsdir)
+maybe_install_models(hf_reponame=config.TALKINGHEAD_MODELS, modelsdir=modelsdir)
 
 try:
     device = torch.device(args.device)
