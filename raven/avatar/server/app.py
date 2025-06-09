@@ -22,6 +22,7 @@ import markdown
 from flask import Flask, jsonify, request, abort, render_template_string
 from flask_cors import CORS
 from flask_compress import Compress
+from waitress import serve
 
 import torch
 
@@ -677,7 +678,6 @@ init_server_modules()
 
 print(f"{Fore.GREEN}{Style.BRIGHT}Starting server{Style.RESET_ALL}")
 
-from waitress import serve
 serve(app, host=host, port=port)
 
 def main():  # TODO: we don't really need this; it's just for console_scripts so that we can provide a command-line entrypoint.
