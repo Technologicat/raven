@@ -9,11 +9,9 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
-- To solve the TTS different splittings issue, use a local Misaki installation directly to phonemize the individual timestamped words we get from Kokoro.
-  - Can we send a batch of words at once, to be phonemized separately each?
-- Call Kokoro directly too? We wouldn't then need the FastAPI server, which would likely save on CPU usage (FastAPI tends to spike one core while waiting for requests).
+- To solve the TTS different splittings issue, use a local Kokoro installation directly, it returns the per-token phonemes and timestamps.
+  - Kokoro/Misaki should live on the server side, where we use GPU for compute anyway.
   - Then, provide an OpenAI compatible TTS endpoint (mainly for SillyTavern).
-- Kokoro/Misaki should live on the server side, where we use GPU for compute anyway.
 
 - "Images" -> "Characters", update folder name, texts on all buttons, etc.
 - More backdrops, suitable for the different characters.
