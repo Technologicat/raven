@@ -28,6 +28,7 @@ dependencies = [
     "scipy>=1.14.0",
     "sentence_transformers>=3.4.1",  # vector embeddings for visualization and semantic search
     "spacy>=3.7.5",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",  # spaCy
     "sseclient-py>=1.8.0",
     "torch>=2.4.0",
     "unpythonic>=0.15.3",
