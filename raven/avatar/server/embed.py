@@ -1,8 +1,3 @@
-# The "embeddings" module is only provided for compatibility with the discontinued SillyTavern-extras,
-# to provide a fast (GPU-accelerated, or at least CPU-native) embeddings API endpoint for SillyTavern.
-#
-# Raven loads its embedding module in the main app, not in the `avatar` subapp.
-
 __all__ = ["init_module", "is_available", "embed_sentences"]
 
 import logging

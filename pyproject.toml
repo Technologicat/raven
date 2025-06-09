@@ -26,7 +26,7 @@ dependencies = [
     "psutil>=5.9.0",  # for vendored file_dialog
     "scikit-learn>=1.5.1",
     "scipy>=1.14.0",
-    "sentence_transformers>=3.4.1",
+    "sentence_transformers>=3.4.1",  # vector embeddings for visualization and semantic search
     "spacy>=3.7.5",
     "sseclient-py>=1.8.0",
     "torch>=2.4.0",
@@ -45,7 +45,8 @@ dependencies = [
     "torchvision>=0.22.0",  # AI avatar server
     "huggingface-hub>=0.31.4",  # AI avatar server (for THA3 models autodownloader)
     "waitress>=3.0.2",  # AI avatar server
-    "pygame>=2.6.1",  # AI avatar client, for TTS audio playback
+    "kokoro>=0.9.4",  # TTS
+    "pygame>=2.6.1",  # TTS audio playback
     "qoi>=0.7.2"  # AI avatar client, fast image format for video streaming
 ]
 

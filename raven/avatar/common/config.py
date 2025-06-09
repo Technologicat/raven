@@ -11,6 +11,12 @@ DEFAULT_PORT = 5100
 #
 DEFAULT_CUDA_DEVICE = "cuda:0"
 
+# AI model that produces the high-dimensional semantic vectors, for visualization in `raven-visualizer`.
+# Available on HuggingFace. Auto-downloaded on first use.
+#
+DEFAULT_EMBEDDING_MODEL = "Snowflake/snowflake-arctic-embed-l"
+# DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
+
 # Text classification model for emotion detection.
 #
 # Used for dynamically auto-updating the emotion shown by the AI's avatar.
@@ -19,17 +25,6 @@ DEFAULT_CUDA_DEVICE = "cuda:0"
 #
 DEFAULT_CLASSIFICATION_MODEL = "joeddav/distilbert-base-uncased-go-emotions-student"
 # DEFAULT_CLASSIFICATION_MODEL = "nateraw/bert-base-uncased-emotion"
-
-# Embedding model for vectorization.
-#
-# The "embeddings" module is only provided for compatibility with the discontinued SillyTavern-extras,
-# to provide a fast (GPU-accelerated, or at least CPU-native) embeddings API endpoint for SillyTavern.
-#
-# Raven loads its embedding module in the main app, not in the `avatar` subapp.
-#
-# So this is optional, and not loaded by default.
-#
-DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 
 # Where to store files. Currently only used for websearch's debug functionality.
 config_base_dir = "~/.config/raven/avatar/"

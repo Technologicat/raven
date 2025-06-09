@@ -3,9 +3,6 @@
 
 Customized from `server.py` in the discontinued SillyTavern-extras.
 Stripped everything except the `talkinghead`, `classify`, and `embeddings` modules.
-
-The first two are now always loaded, and `embeddings` can be enabled for use with SillyTavern.
-(Note this is a separate process, and Raven runs its embeddings in its main process.)
 """
 
 # TODO: convert prints to use logger where appropriate
@@ -164,8 +161,6 @@ def api_embeddings_compute():
                        ...]}
 
     respectively.
-
-    This is the Extras backend for computing embeddings in the Vector Storage builtin extension.
     """
     if not embed.is_available():
         abort(403, "Module 'embeddings' not running")  # this is the only optional module
@@ -618,13 +613,6 @@ websearch.init_module()
 # --------------------
 # Embeddings
 
-# The "embeddings" module is only provided for compatibility with the discontinued SillyTavern-extras,
-# to provide a fast (GPU-accelerated, or at least CPU-native) embeddings API endpoint for SillyTavern.
-#
-# Raven loads its embedding module in the main app, not in the `avatar` subapp.
-#
-# So this is optional, and off by default.
-#
 if args.embeddings:
     embed.init_module(embedding_model, device_string)
 
