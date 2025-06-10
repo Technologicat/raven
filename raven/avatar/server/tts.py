@@ -81,54 +81,6 @@ def get_voices() -> List[str]:
                 voices.append(filename[:-3])  # drop the ".pt"
     return list(sorted(voices))
 
-# def chunkify_arrays(arrays: Sequence[np.array], chunk_size: int = 4096) -> [np.array, None, None]:
-#     """Yield fixed-size chunks from a sequence of arrays, papering over array boundaries, and without making a full copy."""
-#
-#     # To simplify the rest of the algorithm, combine small arrays until we have *at least* `chunk_size` elements each.
-#     # This ensures that when filling up to `chunk_size`, we can always get enough data from the next array in the sequence.
-#     newarrays = []
-#     array_idx = 0
-#     while array_idx < len(arrays):
-#         arr = arrays[array_idx]
-#         if len(arr) >= chunk_size:
-#             newarrays.append(arr)
-#             array_idx += 1
-#         else:
-#             tmps = []
-#             total_len = 0
-#             while total_len < chunk_size and array_idx < len(arrays):
-#                 tmps.append(arrays[array_idx])
-#                 total_len += len(arrays[array_idx])
-#                 array_idx += 1
-#             newarrays.append(np.concatenate(tmps))
-#
-#     # Then yield fixed-size chunks.
-#     array_idx = 0
-#     start_offs = 0
-#     while True:
-#         # start of an array
-#         arr = newarrays[array_idx]
-#         while (elems_remaining_in_arr := (len(arr) - start_offs)) >= chunk_size:
-#             yield arr[start_offs:start_offs + chunk_size]
-#             start_offs += chunk_size
-#         assert elems_remaining_in_arr < chunk_size  # strictly less than a full chunk left in this array
-#         assert elems_remaining_in_arr >= 0  # but still a nonnegative amount
-#         last = array_idx == (len(newarrays) - 1)
-#         if not last:  # fill the rest of the chunk from the next array, if available
-#             if elems_remaining_in_arr > 0:  # did not end exactly at a chunk boundary -> need to combine
-#                 next_arr = newarrays[array_idx + 1]
-#                 elems_from_next = chunk_size - elems_remaining_in_arr
-#                 yield np.concatenate((arr[start_offs:], next_arr[:elems_from_next]))
-#                 array_idx += 1
-#                 start_offs = elems_from_next
-#             else:  # ended exactly at a chunk boundary
-#                 array_idx += 1
-#                 start_offs = 0
-#         else:  # it was the last array
-#             if elems_remaining_in_arr > 0:  # did not end exactly at a chunk boundary -> yield the final leftovers as one more chunk
-#                 yield arr[start_offs:]
-#             return  # and we're done
-
 def text_to_speech(voice: str,
                    text: str,
                    speed: float = 1.0,
