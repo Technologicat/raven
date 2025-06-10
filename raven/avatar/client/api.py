@@ -888,7 +888,7 @@ def selftest():
     print(classify_labels())  # get available emotion names from server
 
     logger.info("selftest: initialize talkinghead")
-    talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "assets", "images", "example.png"))  # send an avatar - mandatory
+    talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "example.png"))  # send an avatar - mandatory
     talkinghead_load_animator_settings_from_file(os.path.join(os.path.dirname(__file__), "..", "assets", "settings", "animator.json"))  # send animator config - optional, server defaults used if not sent
     talkinghead_load_emotion_templates_from_file(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json"))  # send the morph parameters for emotions - optional, server defaults used if not sent
     talkinghead_start()  # start the animator

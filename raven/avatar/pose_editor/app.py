@@ -145,7 +145,7 @@ def initialize_filedialogs():  # called at app startup
     global filedialog_open_json
     global filedialog_save_all_emotions
     cwd = os.getcwd()  # might change during filedialog init
-    filedialog_open_image = FileDialog(title="Open input image",
+    filedialog_open_image = FileDialog(title="Open character image",
                                        tag="open_image_dialog",
                                        callback=_open_image_callback,
                                        modal=True,
@@ -153,8 +153,8 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".png",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "images"))
-    filedialog_save_image = FileDialog(title="Save output image as PNG",
+                                       default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "characters"))
+    filedialog_save_image = FileDialog(title="Save posed image",
                                        tag="save_image_dialog",
                                        callback=_save_image_callback,
                                        modal=True,
@@ -164,7 +164,7 @@ def initialize_filedialogs():  # called at app startup
                                        default_file_extension=".png",  # used if the user does not provide a file extension when naming the save-as
                                        allow_drag=False,
                                        default_path=cwd)
-    filedialog_open_json = FileDialog(title="Open emotion JSON file",
+    filedialog_open_json = FileDialog(title="Open emotion temmplates",
                                        tag="open_json_dialog",
                                        callback=_open_json_callback,
                                        modal=True,
@@ -173,7 +173,7 @@ def initialize_filedialogs():  # called at app startup
                                        multi_selection=False,
                                        allow_drag=False,
                                        default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "emotions"))
-    filedialog_save_all_emotions = FileDialog(title="Save all emotions as JSON",
+    filedialog_save_all_emotions = FileDialog(title="Save all emotion templates",
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
                                               modal=True,
@@ -657,10 +657,10 @@ class PoseEditorGUI:
                                                     callback=self.update_output)
 
             with dpg.group():
-                self.load_image_button = dpg.add_button(label="Load image [Ctrl+O]",
+                self.load_image_button = dpg.add_button(label="Load character [Ctrl+O]",
                                                         width=self.image_size - 16,
                                                         callback=show_open_image_dialog)
-                self.load_image_button = dpg.add_button(label="Load JSON [Ctrl+Shift+O]",
+                self.load_image_button = dpg.add_button(label="Load single emotion template [Ctrl+Shift+O]",
                                                         width=self.image_size - 16,
                                                         callback=show_open_json_dialog)
 
@@ -742,10 +742,10 @@ class PoseEditorGUI:
                                                          callback=self.update_output)
 
             with dpg.group():
-                self.save_image_button = dpg.add_button(label="Save image and JSON [Ctrl+S]",
+                self.save_image_button = dpg.add_button(label="Save posed image and emotion [Ctrl+S]",
                                                         width=self.image_size - 16,
                                                         callback=show_save_image_dialog)
-                self.save_image_button = dpg.add_button(label="Batch save image and JSON from all presets [Ctrl+Shift+S]",
+                self.save_image_button = dpg.add_button(label="Batch save image and emotion from all presets [Ctrl+Shift+S]",
                                                         width=self.image_size - 16,
                                                         callback=show_save_all_emotions_dialog)
 
@@ -780,7 +780,7 @@ class PoseEditorGUI:
                 self.source_image_changed = True
                 raise ValueError("Incompatible input image (no alpha channel)")
             else:
-                logger.info(f"Loaded input image: {image_file_name}")
+                logger.info(f"Loaded input image '{image_file_name}'")
                 arr = np.asarray(pil_image.convert("RGBA"))
                 arr = np.array(arr, dtype=np.float32) / 255
                 raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
@@ -788,7 +788,7 @@ class PoseEditorGUI:
                 self.torch_source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device).to(self.dtype)  # for poser
                 self.source_image_changed = True
         except Exception as exc:
-            logger.error(f"Could not load image {image_file_name}, reason: {type(exc)}: {exc}")
+            logger.error(f"Could not load image '{image_file_name}', reason: {type(exc)}: {exc}")
             guiutils.modal_dialog(window_title="Error",
                                   message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}",
                                   buttons=["Close"],
@@ -798,18 +798,21 @@ class PoseEditorGUI:
         self.update_output()
 
     def load_json(self, json_file_name: str) -> None:
-        """Load a custom emotion JSON file."""
+        """Load a custom emotion JSON file.
+
+        Note this is for loading a single emotion only.
+        """
         try:
             # Load the emotion JSON file
             with open(json_file_name, "r") as json_file:
                 emotions_from_json = json.load(json_file)
             # TODO: Here we just take the first emotion from the file.
             if not emotions_from_json:
-                logger.warning("No emotions defined in given JSON file")
+                logger.warning(f"No emotions defined in file '{json_file_name}'")
                 return
             first_emotion_name = list(emotions_from_json.keys())[0]  # first in insertion order, i.e. topmost in file
             if len(emotions_from_json) > 1:
-                logger.warning(f"File {json_file_name} contains multiple emotions, loading the first one '{first_emotion_name}'.")
+                logger.warning(f"File '{json_file_name}' contains multiple emotions, loading the first one '{first_emotion_name}'.")
             posedict = emotions_from_json[first_emotion_name]
             pose = posedict_to_pose(posedict)
 
@@ -819,15 +822,15 @@ class PoseEditorGUI:
             # Auto-select "[custom]"
             dpg.set_value(self.emotion_choice, self.emotion_names[0])
         except Exception as exc:
-            logger.error(f"Could not load JSON {json_file_name}, reason: {type(exc)}: {exc}")
+            logger.error(f"Could not load emotion file '{json_file_name}', reason: {type(exc)}: {exc}")
             guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not load JSON '{json_file_name}', reason {type(exc)}: {exc}",
+                                  message=f"Could not load emotion file '{json_file_name}', reason {type(exc)}: {exc}",
                                   buttons=["Close"],
                                   ok_button="Close",
                                   cancel_button="Close",
                                   centering_reference_window=self.window)
         else:
-            logger.info(f"Loaded JSON {json_file_name}")
+            logger.info(f"Loaded emotion file '{json_file_name}'")
             self.update_output()
 
     def get_current_pose(self) -> List[float]:
@@ -950,9 +953,8 @@ class PoseEditorGUI:
         """
         posedict = pose_to_posedict(self.get_current_pose())
         self.save_numpy_image(self.last_output_numpy_image, posedict, image_file_name)
-        logger.info(f"Saved image {image_file_name}")
 
-        # Since it is possible to save the image and JSON to "raven/avatar/assets/emotions", on a successful save, refresh the emotion presets list.
+        # Since it is possible to save the image and emotion template JSON to "raven/avatar/assets/emotions", refresh the emotion presets list.
 
         current_emotion_name = dpg.get_value(self.emotion_choice)
 
@@ -987,10 +989,8 @@ class PoseEditorGUI:
 
                 image_file_name = os.path.join(dir_name, f"{emotion_name}.png")
                 self.save_numpy_image(arr, posedict, image_file_name)
-
-                logger.info(f"Saved image {image_file_name}")
             except Exception as exc:
-                logger.error(f"Could not save {image_file_name}, reason: {type(exc)}: {exc}")
+                logger.error(f"Could not save '{image_file_name}', reason: {type(exc)}: {exc}")
 
         # Save `_emotions.json`, for use as customized emotion templates.
         #
@@ -1036,9 +1036,14 @@ class PoseEditorGUI:
         """
         numpy_image = convert_float_to_uint8(numpy_image)
 
-        pil_image = PIL.Image.fromarray(numpy_image, mode="RGBA")
-        os.makedirs(os.path.dirname(image_file_name), exist_ok=True)
-        pil_image.save(image_file_name)
+        try:
+            pil_image = PIL.Image.fromarray(numpy_image, mode="RGBA")
+            os.makedirs(os.path.dirname(image_file_name), exist_ok=True)
+            pil_image.save(image_file_name)
+        except Exception as exc:
+            logger.error(f"Could not save '{image_file_name}', reason: {type(exc)}: {exc}")
+        else:
+            logger.info(f"Saved image '{image_file_name}'")
 
         json_file_path = os.path.splitext(image_file_name)[0] + ".json"
 
@@ -1048,10 +1053,10 @@ class PoseEditorGUI:
         try:
             with open(json_file_path, "w") as file:
                 json.dump(data_dict_with_filename, file, indent=4)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error(f"Could not save '{json_file_path}', reason: {type(exc)}: {exc}")
         else:
-            logger.info(f"Saved JSON {json_file_path}")
+            logger.info(f"Saved emotion file '{json_file_path}'")
 
 # Hotkey support
 choice_map = None
@@ -1122,7 +1127,7 @@ with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole 
 # --------------------------------------------------------------------------------
 # Start the app
 
-parser = argparse.ArgumentParser(description="THA 3 Manual Poser. Pose a character image manually. Useful for generating static expression images.")
+parser = argparse.ArgumentParser(description="THA 3 Manual Poser. Pose a character image manually. Useful for generating static expression images and for editing the emotion templates.")
 parser.add_argument("--device",
                     type=str,
                     required=False,

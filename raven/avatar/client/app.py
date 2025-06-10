@@ -145,7 +145,7 @@ def initialize_filedialogs():  # called at app startup
     global filedialog_open_animator_settings
     global filedialog_save_animator_settings
     cwd = os.getcwd()  # might change during filedialog init
-    filedialog_open_input_image = FileDialog(title="Open input image",
+    filedialog_open_input_image = FileDialog(title="Open character image",
                                              tag="open_input_image_dialog",
                                              callback=_open_input_image_callback,
                                              modal=True,
@@ -153,7 +153,7 @@ def initialize_filedialogs():  # called at app startup
                                              file_filter=".png",
                                              multi_selection=False,
                                              allow_drag=False,
-                                             default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "images"))
+                                             default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "characters"))
     filedialog_open_backdrop_image = FileDialog(title="Open backdrop image",
                                                 tag="open_backdrop_image_dialog",
                                                 callback=_open_backdrop_image_callback,
@@ -163,7 +163,7 @@ def initialize_filedialogs():  # called at app startup
                                                 multi_selection=False,
                                                 allow_drag=False,
                                                 default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops"))
-    filedialog_open_json = FileDialog(title="Open emotion JSON file",
+    filedialog_open_json = FileDialog(title="Open emotion templates",
                                        tag="open_json_dialog",
                                        callback=_open_json_callback,
                                        modal=True,
@@ -172,7 +172,7 @@ def initialize_filedialogs():  # called at app startup
                                        multi_selection=False,
                                        allow_drag=False,
                                        default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "emotions"))
-    filedialog_open_animator_settings = FileDialog(title="Open animator settings JSON file",
+    filedialog_open_animator_settings = FileDialog(title="Open animator settings",
                                                    tag="open_animator_settings_dialog",
                                                    callback=_open_animator_settings_callback,
                                                    modal=True,
@@ -181,7 +181,7 @@ def initialize_filedialogs():  # called at app startup
                                                    multi_selection=False,
                                                    allow_drag=False,
                                                    default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "settings"))
-    filedialog_save_animator_settings = FileDialog(title="Save animator settings JSON file",
+    filedialog_save_animator_settings = FileDialog(title="Save animator settings",
                                                    tag="save_animator_settings_dialog",
                                                    callback=_save_animator_settings_callback,
                                                    modal=True,
@@ -444,7 +444,7 @@ class PostprocessorSettingsEditorGUI:
                     dpg.add_button(label="Fullscreen/windowed [F11]", width=self.button_width, callback=toggle_fullscreen, tag="fullscreen_button")
                     dpg.add_spacer(height=8)
 
-                    dpg.add_button(label="Load image [Ctrl+O]", width=self.button_width, callback=show_open_input_image_dialog, tag="open_image_button")
+                    dpg.add_button(label="Load character [Ctrl+O]", width=self.button_width, callback=show_open_input_image_dialog, tag="open_image_button")
                     with dpg.group(horizontal=True):
                         def reset_backdrop():
                             self.load_backdrop_image(None)
@@ -903,7 +903,7 @@ class PostprocessorSettingsEditorGUI:
 
     def load_input_image(self, filename: Union[pathlib.Path, str]) -> None:
         try:
-            logger.info(f"PostprocessorSettingsEditorGUI.load_input_image: loading avatar image '{filename}'")
+            logger.info(f"PostprocessorSettingsEditorGUI.load_input_image: loading image '{filename}'")
             api.talkinghead_load(filename)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_input_image: {type(exc)}: {exc}")
@@ -923,7 +923,7 @@ class PostprocessorSettingsEditorGUI:
             logger.error(f"PostprocessorSettingsEditorGUI.load_json: {type(exc)}: {exc}")
             traceback.print_exc()
             guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not load emotion templates JSON '{filename}', reason {type(exc)}: {exc}",
+                                  message=f"Could not load emotion templates '{filename}', reason {type(exc)}: {exc}",
                                   buttons=["Close"],
                                   ok_button="Close",
                                   cancel_button="Close",
@@ -1032,7 +1032,7 @@ class PostprocessorSettingsEditorGUI:
             logger.error(f"PostprocessorSettingsEditorGUI.load_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
             guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not load animator settings JSON '{str(filename)}', reason {type(exc)}: {exc}",
+                                  message=f"Could not load animator settings '{str(filename)}', reason {type(exc)}: {exc}",
                                   buttons=["Close"],
                                   ok_button="Close",
                                   cancel_button="Close",
@@ -1056,7 +1056,7 @@ class PostprocessorSettingsEditorGUI:
             logger.error(f"PostprocessorSettingsEditorGUI.save_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
             guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not save animator settings JSON '{str(filename)}', reason {type(exc)}: {exc}",
+                                  message=f"Could not save animator settings '{str(filename)}', reason {type(exc)}: {exc}",
                                   buttons=["Close"],
                                   ok_button="Close",
                                   cancel_button="Close",
@@ -1378,7 +1378,7 @@ else:
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
 api.talkinghead_load_emotion_templates({})  # send empty dict -> reset emotion templates to server defaults
-api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "assets", "images", "example.png"))
+api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "example.png"))
 api.talkinghead_start()
 
 def shutdown() -> None:
