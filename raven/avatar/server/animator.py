@@ -295,8 +295,7 @@ def init_module(device: str, model: str) -> None:
     device: "cpu" or "cuda"
     model: one of the folder names inside "vendor/tha3/models/"
 
-           Determines the posing dtype.
-           Postprocessor always runs in float16.
+           Determines the posing and postprocessing dtype.
 
     If something goes horribly wrong, raise `RuntimeError`.
     """
@@ -369,7 +368,7 @@ class Animator:
         self.upscale_preset = None
         self.upscale_quality = None
         self.postprocessor = Postprocessor(device,
-                                           dtype=torch.float16)  # dtype must match `output_image` in `Animator.render_animation_frame`
+                                           dtype=self.poser.dtype)  # dtype must match `output_image` in `Animator.render_animation_frame`
         self.render_duration_statistics = RunningAverage()  # used for FPS compensation in animation routines
         self.animator_thread = None
 
@@ -556,7 +555,7 @@ class Animator:
                 logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, preset {settings['upscale_preset']}, quality {settings['upscale_quality']}; configuring upscaler.")
                 self.target_size = int(settings["upscale"] * self.poser.get_image_size())
                 self.upscaler = Upscaler(device=self.device,
-                                         dtype=torch.float16,
+                                         dtype=self.poser.dtype,
                                          upscaled_width=self.target_size,
                                          upscaled_height=self.target_size,
                                          preset=settings["upscale_preset"],
@@ -1175,7 +1174,7 @@ class Animator:
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
             with timer() as tim_pose:
                 pose = torch.tensor(self.current_pose, device=self.device, dtype=self.poser.get_dtype())
-                output_image = self.poser.pose(self.source_image, pose)[0].half()
+                output_image = self.poser.pose(self.source_image, pose)[0]
                 maybe_sync_cuda()
 
             # [-1, 1] -> [0, 1]
