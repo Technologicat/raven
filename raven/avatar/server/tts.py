@@ -17,6 +17,8 @@ from kokoro import KPipeline
 
 from flask import Response
 
+import numpy as np
+
 from ..common import config
 from ..common.hfutil import maybe_install_models
 from ..vendor.streaming_audio_writer.streaming_audio_writer import StreamingAudioWriter
@@ -137,7 +139,6 @@ def text_to_speech(voice: str,
     audio_encoder = StreamingAudioWriter(format=format,
                                          sample_rate=24000,  # Kokoro uses 24kHz sample rate
                                          channels=1)
-    import numpy as np
     _, tokens = pipeline.g2p(text)
     metadata = []
     audios = []
