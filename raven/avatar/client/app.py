@@ -551,7 +551,7 @@ class PostprocessorSettingsEditorGUI:
                                            tag="speak_speed_slider")
                     dpg.add_spacer(height=4)
                     dpg.add_checkbox(label="Lip sync [adjust video timing below]", default_value=True, tag="speak_lipsync_checkbox")
-                    dpg.add_slider_int(label="x 0.1 s", default_value=-8, min_value=-20, max_value=20, clamped=True, width=self.button_width - 64, tag="speak_video_offset")
+                    dpg.add_slider_int(label="x 0.1 s", default_value=-6, min_value=-20, max_value=20, clamped=True, width=self.button_width - 64, tag="speak_video_offset")
                     dpg.add_spacer(height=4)
                     dpg.add_input_text(default_value="",
                                        hint="[Enter text to speak]",

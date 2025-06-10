@@ -809,13 +809,10 @@ def tts_speak_lipsynced(voice: str,
                 logger.error(f"tts_speak_lipsynced.speak: in start callback: {type(exc)}: {exc}")
                 traceback.print_exc()
         try:
-            playback_start_time = time.time_ns()
-            pygame.mixer.music.play()
-
             latency = api_config.audio_buffer_size / api_config.audio_frequency  # seconds
+            pygame.mixer.music.play()
             while pygame.mixer.music.get_busy():
-                # TODO: Lipsync: account for audio playback latency, how?
-                t = (time.time_ns() - playback_start_time) / 10**9 - latency - video_offset  # seconds from start of audio
+                t = pygame.mixer.music.get_pos() / 1000 - latency - video_offset
                 apply_lipsync_at_audio_time(t)  # lipsync
                 time.sleep(0.01)
         finally:
