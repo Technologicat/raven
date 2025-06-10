@@ -9,23 +9,13 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
-- To solve the TTS different splittings issue, use a local Kokoro installation directly, it returns the per-token phonemes and timestamps.
-  - Kokoro/Misaki should live on the server side, where we use GPU for compute anyway.
-  - Then, provide an OpenAI compatible TTS endpoint (mainly for SillyTavern).
-
-- "Images" -> "Characters", update folder name, texts on all buttons, etc.
-- More backdrops, suitable for the different characters.
-
-- Voice mixing (supported by Kokoro). Allows for greater variation for voices.
-  - Two voices, second voice is optional, can be None.
-  - GUI:
-    - Add a second combobox, for the second voice. Add the None option, make it the default (so that the default is to use only one voice).
-    - Slider for mix balance (step: 10%?).
-    - These can fit onto one line in the `raven.avatar.client` GUI (voice names are short).
+- Consistent naming/terminology - check and correct these:
+  - Module name: "Talkinghead" or "Avatar"?
+  - lip sync, lip-sync, lipsync?
 
 - Refactor everything, again:
   - Move the remaining GPU-dependent components of Raven to the server side.
-    - Embeddings. We already have an endpoint, and it does pretty much the same thing as the current local implementation.
+    - Embeddings. Endpoint exists on server, and Python API in client; now just use it instead of loading `sentence_transformers` locally in `raven.preprocess`.
     - NLP. Think about the transport format. Can we JSON spaCy token streams?
   - Add an instance ID to all Talkinghead web API endpoints, to support multiple clients simultaneously.
     - `/api/talkinghead/load` should generate a new instance ID and spawn a new instance if none was given. Then, always return the instance ID that was affected by the command.
@@ -33,20 +23,31 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
       - Network transport is automatically instantiated when a client connects to `/api/talkinghead/result_feed`
     - Add `/api/talkinghead/unload` to delete an instance.
       - Delete the corresponding animator and encoder. Make the network transport automatically shut down on the server side (exit the generator if its encoder instance goes missing).
-  - Add blur filter for use with backdrops (send an image and a postprocessor chain, receive postprocessed image?).
-  - Think of naming of the app constellation's various parts.
-    - `raven.server.app` - AGPL-licensed server app, because the server code is based on the old ST-Extras.
-    - `raven.avatar.pose_editor` - AGPL-licensed pose editor app, because adapted from ST-Extras.
-    - `raven.avatar.client` -> `raven.avatar.settings_editor`? - BSD-licensed avatar postproc editor and character tester.
-    - What to do with the current `raven.avatar.common`? BSD-licensed code, needed both by the avatar client as well as by the talkinghead module of the server.
-  - `app` -> `raven.visualizer.app`
+  - Final naming scheme for the app constellation's various parts.
+    - Move the "avatar server" to `raven.server.app`, since it's no longer avatar-specific - AGPL-licensed server app, because the server code is based on the old ST-Extras, which is AGPL.
+    - `raven.avatar.pose_editor` - AGPL-licensed pose editor app, because also adapted from ST-Extras (rewritten for DearPyGui, but this was done by porting from the original wxPython version).
+    - `raven.avatar.client` -> `raven.avatar.settings_editor`? - completely new. BSD-licensed avatar postproc editor and character tester.
+    - What to do with the current `raven.avatar.common`? BSD-licensed code, needed both by the avatar client as well as by some server modules. Doesn't really belong in `raven.common` at the top level.
+  - Move the main `app` -> `raven.visualizer.app` to conform with the naming scheme and allow future expansion of the Raven constellation.
   - `preprocess` -> `raven.visualizer.importer` (rename the console_script to `raven-visualizer-importer-cli` or something)
     - Change terminology everywhere, this is an importer (BibTeX input, to Raven-visualizer dataset output)
   - `llmclient` -> `raven.librarian.cli`
-  - `hybridir` -> common? Could be used for advanced search in visualizer.
-  - `chattree` -> `librarian.chattree`
+  - `hybridir` -> `raven.common.hybridir`? Needed by LLMClient, but could also be used for advanced search in visualizer.
+  - `chattree` -> `raven.librarian.chattree`. Needed by LLMClient only.
+
+- More backdrops, suitable for the different characters.
+
+- Voice mixing. Allows for greater variation for voices.
+  - Supported by Kokoro-FastAPI; need to add this functionality to our own server too.
+  - Two voices, second voice is optional, can be None.
+  - GUI:
+    - Add a second combobox, for the second voice. Add the None option, make it the default (so that the default is to use only one voice).
+    - Slider for mix balance (step: 10%?).
+    - These can fit onto one line in the `raven.avatar.client` GUI (voice names are short).
 
 - Fdialog use site boilerplate reduction? We have lots of these dialogs in Raven.
+
+- Check if we can auto-spawn a server from raven-visualizer (and other end-user apps) if it's not already running. Would need open a terminal to show the server's log messages.
 
 
 ### Documentation
@@ -64,8 +65,8 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
   - Add license note:
       All parts where I (@Technologicat) am the only author have been relicensed under 2-clause BSD. This includes the video postprocessor.
       Only the `avatar/server` and `avatar/pose_editor` folders, which each contain a separate app, are licensed under AGPL.
-      The upscaler is licensed under MIT, matching the license of the Anime4K engine it uses.
-      The character "avatar/assets/images/example.png" is the example character from the poser engine THA3, copyright Pramook Khungurn, and is licensed for non-commercial use.
+      The module `avatar.common.upscaler` is licensed under MIT, matching the license of the Anime4K engine it uses.
+      The character "avatar/assets/characters/example.png" is the example character from the poser engine THA3, copyright Pramook Khungurn, and is licensed for non-commercial use.
       All other image assets are original to this software, and are licensed under CC-BY-SA 4.0.
 
 ### Examples
