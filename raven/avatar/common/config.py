@@ -11,6 +11,7 @@ import torch
 SERVER_ENABLED_MODULES = {
     "classify": {"device_string": "cuda:0", "dtype": torch.float16},
     "embeddings": {"device_string": "cuda:0", "dtype": torch.float16},
+    "imagefx": {"device_string": "cuda:0", "dtype": torch.float16},
     "talkinghead": {"device_string": "cuda:0", "dtype": torch.float16},
     "tts": {"device_string": "cuda:0"},
     "websearch": {},  # websearch doesn't use any heavy compute; this is here to provide the option to turn the module off.

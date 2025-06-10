@@ -478,7 +478,7 @@ class Animator:
                     Optional dict of settings. The type and semantics of each value depends on each
                     particular setting.
 
-        For available settings, see `animator_defaults` in `config.py`.
+        For available settings, see `animator_defaults` in `raven/avatar/common/config.py`.
 
         Particularly for the setting `"postprocessor_chain"` (pixel-space glitch artistry),
         see `postprocessor.py`.

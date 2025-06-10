@@ -405,6 +405,7 @@ class PostprocessorSettingsEditorGUI:
         self.backdrop_texture_id_counter = 0
         self.backdrop_image = None  # PIL image
         self.last_backdrop_image = None
+        self.last_backdrop_blur = True
         self.last_window_size = (None, None)
 
         self.talking_animation_running = False  # simple mouth randomizing animation
@@ -449,7 +450,8 @@ class PostprocessorSettingsEditorGUI:
                         def reset_backdrop():
                             self.load_backdrop_image(None)
                         dpg.add_button(label="X", callback=reset_backdrop, tag="backdrop_reset_button")
-                        dpg.add_button(label="Load backdrop [Ctrl+B]", width=self.button_width - 25, callback=show_open_backdrop_image_dialog, tag="open_backdrop_button")
+                        dpg.add_button(label="Load backdrop [Ctrl+B]", width=self.button_width - 92, callback=show_open_backdrop_image_dialog, tag="open_backdrop_button")
+                        dpg.add_checkbox(label="Blur", default_value=True, callback=self._resize_gui, tag="backdrop_blur_checkbox")
                     dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
                     dpg.add_text("[Use raven.avatar.editor to edit templates.]", color=(140, 140, 140))
 
@@ -529,7 +531,7 @@ class PostprocessorSettingsEditorGUI:
                     dpg.add_spacer(height=8)
 
                     # AI speech synthesizer
-                    tts_alive = api.tts_available()
+                    tts_alive = api.tts_server_available()
                     if tts_alive:
                         print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS server at {client_config.tts_url}.{Style.RESET_ALL}")
                         print(f"{Fore.GREEN}{Style.BRIGHT}Speech synthesis is available.{Style.RESET_ALL}")
@@ -768,9 +770,12 @@ class PostprocessorSettingsEditorGUI:
         except SystemError:  # main window or live image widget does not exist
             pass
 
+        new_blur_state = dpg.get_value("backdrop_blur_checkbox")
+
         old_w, old_h = self.last_window_size
+        old_blur_state = self.last_backdrop_blur
         old_texture_id = self.backdrop_texture_id_counter
-        if self.backdrop_image is not None and (self.backdrop_image != self.last_backdrop_image or w != old_w or h != old_h):
+        if self.backdrop_image is not None and (self.backdrop_image != self.last_backdrop_image or w != old_w or h != old_h or new_blur_state != old_blur_state):
             new_texture_id = old_texture_id + 1
 
             image_w, image_h = self.backdrop_image.size
@@ -788,6 +793,16 @@ class PostprocessorSettingsEditorGUI:
 
             image_rgba = pil_image.convert("RGBA")
             image_rgba = np.asarray(image_rgba, dtype=np.float32) / 255
+
+            if new_blur_state:
+                image_rgba = api.imagefx_process_array(image_rgba,
+                                                       filters=[["analog_lowres", {"sigma": 3.0}],  # maximum sigma is 3.0 due to convolution kernel size
+                                                                ["analog_lowres", {"sigma": 3.0}],  # how to blur more: unrolled loop
+                                                                ["analog_lowres", {"sigma": 3.0}],
+                                                                ["analog_lowres", {"sigma": 3.0}],
+                                                                ["analog_lowres", {"sigma": 3.0}]]
+                                                       )
+
             raw_data = image_rgba.ravel()
 
             logger.info(f"_resize_gui: Creating new GUI item backdrop_texture_{new_texture_id}")
@@ -809,6 +824,7 @@ class PostprocessorSettingsEditorGUI:
 
         self.last_backdrop_image = self.backdrop_image
         self.last_window_size = (w, h)
+        self.last_backdrop_blur = new_blur_state
 
     def _iscolor(self, value) -> bool:
         """Return whether `value` is likely an RGB or RGBA color in float or uint8 format."""
@@ -1369,7 +1385,7 @@ def update_live_texture(task_env) -> None:
 # --------------------------------------------------------------------------------
 # Main program
 
-if api.avatar_available():
+if api.avatar_server_available():
     print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {client_config.avatar_url}.{Style.RESET_ALL}")
 else:
     print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {client_config.avatar_url}.{Style.RESET_ALL} Is the avatar server running?")
@@ -1437,7 +1453,7 @@ def update_animations():
     # t0 = time.monotonic()
     # if t0 - last_tts_check_time >= tts_check_interval:
     #     last_tts_check_time = t0
-    #     if tts_available():
+    #     if tts_server_available():
     #         dpg.enable_item(gui_instance.voice_choice)
     #         dpg.enable_item("speak_button")
     #     else:

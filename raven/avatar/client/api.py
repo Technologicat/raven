@@ -2,35 +2,48 @@
 
 This talks with the server so you can just call regular Python functions.
 
-For documentation, see the server side in `raven.avatar.server.app`.
+For documentation of what the functions do, see the server side in `raven.avatar.server.app`.
+The naming convention is as follows:
+
+  - Client API function: `talkinghead_load` (in `raven.avatar.client.api`)
+  - Server-side function: `api_talkinghead_load` (in `raven.avatar.server.app`)
+  - Web API endpoint: "/api/talkinghead/load"
 
 We support all modules served by `raven.avatar.server.app`:
 
-  - classify
-  - embeddings (to enable this module, start the server with the "--embeddings" command-line option)
-  - talkinghead
-  - TTS with and without lip-syncing the talkinghead, via https://github.com/remsky/Kokoro-FastAPI
-  - websearch
+  - classify    - text sentiment analysis
+  - embeddings  - vector embeddings of text, useful for semantic visualization and RAG indexing
+  - imagefx     - apply filter effects to an image (see `raven.avatar.common.postprocessor`)
+  - talkinghead - animated AI avatar as a video stream
+  - tts         - text-to-speech with and without lip-syncing the AI avatar
+  - websearch   - search the web, and parse results for consumption by an LLM
 
-This must be initialized before the API is used; see `init_module`. Suggested default settings
-for the parameters are provided in `raven.avatar.client.config`.
+This module must be initialized before any API function is used; see `init_module`.
+Suggested default settings for the parameters of `init_module` are provided
+in `raven.avatar.client.config`.
 
 This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["init_module",
-           "avatar_available",
-           "tts_available",
+           "avatar_server_available",
+           "tts_server_available",
            "classify_labels", "classify",
-           "talkinghead_load", "talkinghead_stop", "talkinghead_start",
+           "embeddings_compute",
+           "imagefx_process", "imagefx_process_file", "imagefx_process_array",
+           "talkinghead_load",
            "talkinghead_load_emotion_templates", "talkinghead_load_emotion_templates_from_file",
            "talkinghead_load_animator_settings", "talkinghead_load_animator_settings_from_file",
-           "talkinghead_start_talking", "talkinghead_stop_talking",
+           "talkinghead_start", "talkinghead_stop",
+           "talkinghead_start_talking", "talkinghead_stop_talking",  # generic animation for no-audio environments; see also `tts_speak_lipsynced`
            "talkinghead_set_emotion",
-           "talkinghead_result_feed",
+           "talkinghead_set_overrides",
+           "talkinghead_result_feed",  # this reads the AI avatar video stream
+           "talkinghead_get_available_filters",  # shared between "talkinghead" and "imagefx" modules
            "tts_list_voices",
            "tts_speak", "tts_speak_lipsynced",
-           "tts_stop"]
+           "tts_stop",
+           "websearch_search"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -47,11 +60,14 @@ import re
 import requests
 import time
 import traceback
-from typing import Callable, Dict, Generator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 import urllib.parse
 
 from unpythonic import timer
 from unpythonic.env import env as envcls
+
+import PIL.Image
+import qoi
 
 import numpy as np
 
@@ -77,10 +93,16 @@ def init_module(avatar_url: str,
                 executor: Optional = None):
     """Set up URLs and API keys, and initialize the audio mixer.
 
+    Suggested values for the `avatar_*` and `tts_*` arguments are provided
+    in `raven.avatar.client.config`.
+
     `executor`: `concurrent.futures.ThreadPoolExecutor` or something duck-compatible with it.
                 Used for playing TTS audio in the background.
 
                 If not provided, an executor is instantiated automatically.
+
+    The audio mixer is used for playing TTS audio. You can disable it by setting
+    `tts_url=None`.
     """
     global module_initialized
 
@@ -109,11 +131,12 @@ def init_module(avatar_url: str,
         # Format for OpenAI compatible endpoints is "Authorization: Bearer xxxx"; the API key file should contain the "Bearer xxxx" part.
         api_config.tts_default_headers["Authorization"] = tts_api_key.strip()
 
-    # https://www.pygame.org/docs/ref/mixer.html
-    pygame.mixer.init(frequency=api_config.audio_frequency,
-                      size=-16,
-                      channels=2,
-                      buffer=api_config.audio_buffer_size)  # There seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it to know it.
+    if tts_url is not None:
+        # https://www.pygame.org/docs/ref/mixer.html
+        pygame.mixer.init(frequency=api_config.audio_frequency,
+                          size=-16,
+                          channels=2,
+                          buffer=api_config.audio_buffer_size)  # There seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it to know it.
 
     module_initialized = True
 
@@ -126,33 +149,33 @@ def yell_on_error(response: requests.Response) -> None:
 # --------------------------------------------------------------------------------
 # General utilities
 
-def avatar_available() -> bool:
+def avatar_server_available() -> bool:
     """Return whether the avatar server (everything except TTS) is available."""
     if not module_initialized:
-        raise RuntimeError("avatar_available: The `raven.avatar.client.api` module must be initialized before using the API.")
+        raise RuntimeError("avatar_server_available: The `raven.avatar.client.api` module must be initialized before using the API.")
     if api_config.avatar_url is None:
         return False
     headers = copy.copy(api_config.avatar_default_headers)
     try:
         response = requests.get(f"{api_config.avatar_url}/health", headers=headers)
     except requests.exceptions.ConnectionError as exc:
-        logger.error(f"avatar_available: {type(exc)}: {exc}")
+        logger.error(f"avatar_server_available: {type(exc)}: {exc}")
         return False
     if response.status_code != 200:
         return False
     return True
 
-def tts_available() -> bool:
+def tts_server_available() -> bool:
     """Return whether the speech synthesizer is available."""
     if not module_initialized:
-        raise RuntimeError("tts_available: The `raven.avatar.client.api` module must be initialized before using the API.")
+        raise RuntimeError("tts_server_available: The `raven.avatar.client.api` module must be initialized before using the API.")
     if api_config.tts_url is None:
         return False
     headers = copy.copy(api_config.tts_default_headers)
     try:
         response = requests.get(f"{api_config.tts_url}/health", headers=headers)
     except requests.exceptions.ConnectionError as exc:
-        logger.error(f"tts_available: {type(exc)}: {exc}")
+        logger.error(f"tts_server_available: {type(exc)}: {exc}")
         return False
     if response.status_code != 200:
         return False
@@ -222,6 +245,96 @@ def embeddings_compute(text: Union[str, List[str]]) -> np.array:
 
     vectors = output_data["embedding"]
     return np.array(vectors)
+
+# --------------------------------------------------------------------------------
+# Imagefx
+
+def imagefx_process(stream,
+                    output_format: str = "png",
+                    filters: List[Dict[str, Any]] = []) -> bytes:
+    """Process a static image through the postprocessor.
+
+    `stream`: The image to send, as a filelike or a `bytes` object. Filelikes are e.g.:
+                - `with open("example.png", "rb") as stream`, or
+                - a `BytesIO` object.
+              File format is autodetected on the server side.
+              It can be any RGB or RGBA image Pillow can read, with any resolution.
+              Special case is "qoi", which is automatically decoded by a separate
+              fast QOI decoder.
+
+    `output_format`: format to encode output to (e.g. "png", "tga", "qoi").
+
+    `filters`: Formatted as in `raven.avatar.common.config.postprocessor_defaults`.
+               Be sure to populate this - default is a blank list, which does nothing.
+
+    Returns a `bytes` object containing the processed image, encoded in `output_format`.
+    Output resolution is the same as that of the input image.
+    """
+    if not module_initialized:
+        raise RuntimeError("imagefx_process: The `raven.avatar.client.api` module must be initialized before using the API.")
+    # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
+    # We must jump through some hoops to send parameters in the same request - a convenient way is to put those into another (virtual) file.
+    headers = copy.copy(api_config.avatar_default_headers)
+    parameters = {"format": output_format,
+                  "filters": filters}
+    files = {"json": ("parameters.json", json.dumps(parameters, indent=4), "application/json"),
+             "file": ("image.bin", stream, "application/octet-stream")}
+    response = requests.post(f"{api_config.avatar_url}/api/imagefx/process", headers=headers, files=files)
+    yell_on_error(response)
+
+    return response.content  # image file encoded in requested format
+
+def imagefx_process_file(filename: Union[pathlib.Path, str],
+                         output_format: str = "png",
+                         filters: List[Dict[str, Any]] = []) -> bytes:
+    """Exactly like `imagefx_process`, but open `filename` for reading, and set the `stream` argument to the file handle."""
+    if not module_initialized:
+        raise RuntimeError("imagefx_process_file: The `raven.avatar.client.api` module must be initialized before using the API.")
+
+    with open(filename, "rb") as image_file:
+        return imagefx_process(image_file, output_format, filters)
+
+def imagefx_process_array(image_data: np.array,
+                          filters: List[Dict[str, Any]] = []) -> np.array:
+    """Exactly like `imagefx_process`, but take image data from in-memory array, and return a new array.
+
+    Array format is float32 [0, 1], layout [h, w, c], either RGB (3 channels) or RGBA (4 channels).
+    """
+    # QOI
+    image_rgba = np.uint8(255.0 * image_data)
+    encoded_image_bytes = qoi.encode(image_rgba.copy(order="C"))
+    input_buffer = io.BytesIO()
+    input_buffer.write(encoded_image_bytes)
+    input_buffer.seek(0)
+
+    # # PNG via Pillow
+    # image_rgba = np.uint8(255.0 * image_data)
+    # input_pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
+    # if image_rgba.shape[2] == 4:
+    #     alpha_channel = image_rgba[:, :, 3]
+    #     input_pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
+    # input_buffer = io.BytesIO()
+    # input_pil_image.save(input_buffer,
+    #                      format="PNG",
+    #                      compress_level=1)
+    # input_buffer.seek(0)
+
+    output_image_bytes = imagefx_process(input_buffer,
+                                         output_format="QOI",
+                                         filters=filters)
+
+    output_image_rgba = qoi.decode(output_image_bytes)  # -> uint8 array of shape (h, w, c)
+    output_image_rgba = np.array(output_image_rgba, dtype=np.float32) / 255  # uint8 -> float [0, 1]
+
+    # # PNG via Pillow
+    # output_buffer = io.BytesIO()
+    # output_buffer.write(output_image_bytes)
+    # output_buffer.seek(0)
+    # output_pil_image = PIL.Image.open(output_buffer)
+    # output_image_rgba = np.asarray(output_pil_image)
+    # output_image_rgba = np.array(output_image_rgba, dtype=np.float32) / 255  # uint8 -> float [0, 1]
+
+    return output_image_rgba
 
 # --------------------------------------------------------------------------------
 # Talkinghead
@@ -349,6 +462,10 @@ def talkinghead_result_feed(chunk_size: int = 4096, expected_mimetype: Optional[
     return gen
 
 def talkinghead_get_available_filters() -> List[Tuple[str, Dict]]:
+    """Get available postprocessor filters.
+
+    Available whenever at least one of "talkinghead" or "imagefx" is.
+    """
     if not module_initialized:
         raise RuntimeError("talkinghead_get_available_filters: The `raven.avatar.client.api` module must be initialized before using the API.")
     headers = copy.copy(api_config.avatar_default_headers)
@@ -834,6 +951,8 @@ def tts_stop():
     """Stop the speech synthesizer."""
     if not module_initialized:
         raise RuntimeError("tts_stop: The `raven.avatar.client.api` module must be initialized before using the API.")
+    if api_config.tts_url is None:
+        return
     logger.info("tts_stop: stopping audio")
     pygame.mixer.music.stop()
 
@@ -876,7 +995,7 @@ def selftest():
                 tts_server_type=client_config.tts_server_type)  # let it create a default executor
 
     logger.info(f"selftest: check server availability at {client_config.avatar_url}")
-    if avatar_available():
+    if avatar_server_available():
         print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {client_config.avatar_url}.{Style.RESET_ALL}")
         print(f"{Fore.GREEN}{Style.BRIGHT}Proceeding with self-test.{Style.RESET_ALL}")
     else:
@@ -886,6 +1005,18 @@ def selftest():
 
     logger.info("selftest: classify_labels")
     print(classify_labels())  # get available emotion names from server
+
+    logger.info("selftext: imagefx")
+    processed_png_bytes = imagefx_process_file(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops", "study.png"),
+                                               output_format="png",
+                                               filters=[["analog_lowres", {"sigma": 3.0}],  # maximum sigma is 3.0 due to convolution kernel size
+                                                        ["analog_lowres", {"sigma": 3.0}],  # how to blur more: unrolled loop
+                                                        ["analog_lowres", {"sigma": 3.0}],
+                                                        ["analog_lowres", {"sigma": 3.0}],
+                                                        ["analog_lowres", {"sigma": 3.0}]])
+    image = PIL.Image.open(io.BytesIO(processed_png_bytes))
+    print(image.size, image.mode)
+    # image.save("study_blurred.png")  # DEBUG so we can see it (but not useful to run every time the self-test runs)
 
     logger.info("selftest: initialize talkinghead")
     talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "example.png"))  # send an avatar - mandatory

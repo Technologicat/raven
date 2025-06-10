@@ -12,6 +12,8 @@ This gives us lipsync for the talkinghead.
 
 import argparse
 import gc
+import io
+import json
 import os
 import pathlib
 import secrets
@@ -22,7 +24,7 @@ from typing import Any, Dict, List, Union
 from colorama import Fore, Style, init as colorama_init
 import markdown
 
-from flask import Flask, jsonify, request, abort, render_template_string
+from flask import Flask, jsonify, request, abort, render_template_string, Response
 from flask_cors import CORS
 from flask_compress import Compress
 from waitress import serve
@@ -35,6 +37,7 @@ from ..common import postprocessor
 from . import animator
 from . import classify
 from . import embed
+from . import imagefx
 from . import tts
 from . import websearch
 
@@ -254,6 +257,73 @@ def api_embeddings_compute():
     print(f"Computing vector embedding for {nitems} item{'s' if nitems != 1 else ''}")
     vectors = embed.embed_sentences(sentences)
     return jsonify({"embedding": vectors})
+
+# ----------------------------------------
+# module: imagefx
+
+# TODO: add "/api/imagefx/upscale", too?
+
+@app.route("/api/imagefx/process", methods=["POST"])
+def api_imagefx_process():
+    """Run an image through a postprocessor chain.
+
+    This can be used e.g. for blurring a client-side background for the AI avatar,
+    running the blur filter on the server's GPU.
+
+    Input is POST, Content-Type "multipart/form-data", with two file attachments:
+
+        "file": the actual image file (binary, any supported format)
+        "json": the API call parameters, in JSON format.
+
+    The parameters are::
+
+        {"format": "png",
+         "filters": [[filter0, {param0_name: value0, ...}],
+                     ...]}
+
+    Supported image formats (both input and output) are RGB/RGBA formats supported by Pillow,
+    and QOI (Quite OK Image).
+
+    If you need speed, and your client supports it, prefer the QOI format. Especially the
+    encoder is dozens of times faster than PNG's, and compresses almost as tightly.
+
+    To get supported filters, call the endpoint "/api/talkinghead/get_available_filters".
+    Don't mind the name - the endpoint is available whenever at least one of "talkinghead"
+    or "imagefx" is loaded.
+
+    Output is an image with mimetype "image/<format>".
+    """
+    if not imagefx.is_available():
+        abort(403, "Module 'imagefx' not running")
+
+    try:
+        file = request.files["file"]
+
+        # TODO: Do we need to run this through a `BytesIO` to copy the data? Probably not?
+        # The internet says that in some versions of Flask, touching most of the attributes
+        # of a `FileStorage` causes a disk write to a temporary file, but `.stream` can be
+        # safely accessed in-memory.
+        parameters_filestorage = request.files["json"]
+        buffer = io.BytesIO()
+        buffer.write(parameters_filestorage.stream.read())
+        parameters_bytes = buffer.getvalue()
+        parameters_python = json.loads(parameters_bytes)
+
+        # # Simpler way without `BytesIO`:
+        # parameters_filestorage = request.files["json"]
+        # parameters_bytes = parameters_filestorage.read()
+        # parameters_python = json.loads(parameters_bytes)
+
+        postprocessor_chain = parameters_python["filters"]
+        format = parameters_python["format"]
+
+        processed_image = imagefx.process(file.stream,
+                                          output_format=format,
+                                          postprocessor_chain=postprocessor_chain)
+    except Exception as exc:
+        abort(400, f"api_imagefx_process: failed, reason: {type(exc)}: {exc}")
+
+    return Response(processed_image, mimetype=f"image/{format.lower()}")
 
 # ----------------------------------------
 # module: talkinghead
@@ -486,8 +556,8 @@ def api_talkinghead_get_available_filters():
 
     You can detect the type from the default value.
     """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
+    if not (animator.is_available() or imagefx.is_available()):
+        abort(403, "Neither of modules 'imagefx' or 'talkinghead' is running")
     return jsonify({"filters": postprocessor.Postprocessor.get_filters()})
 
 # ----------------------------------------
@@ -824,6 +894,9 @@ def init_server_modules():  # keep global namespace clean
     if (record := config.SERVER_ENABLED_MODULES.get("embeddings", None)) is not None:
         device_string, torch_dtype = get_device_and_dtype(record)
         embed.init_module(config.EMBEDDING_MODEL, device_string, torch_dtype)
+    if (record := config.SERVER_ENABLED_MODULES.get("imagefx", None)) is not None:
+        device_string, torch_dtype = get_device_and_dtype(record)
+        imagefx.init_module(device_string, torch_dtype)
     if (record := config.SERVER_ENABLED_MODULES.get("talkinghead", None)) is not None:
         device_string, torch_dtype = get_device_and_dtype(record)
         # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.

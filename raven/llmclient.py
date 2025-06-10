@@ -1381,7 +1381,7 @@ def main():
     opts = parser.parse_args()
 
     print()
-    if avatar_api.avatar_available():
+    if avatar_api.avatar_server_available():
         print(colorizer.colorize(f"Connected to avatar server at {client_config.avatar_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
         print(colorizer.colorize("The LLM will have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
     else:
