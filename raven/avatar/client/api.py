@@ -336,6 +336,93 @@ def imagefx_process_array(image_data: np.array,
 
     return output_image_rgba
 
+def imagefx_upscale(stream,
+                    output_format: str = "png",
+                    upscaled_width: int = 1920,
+                    upscaled_height: int = 1080,
+                    preset: str = "C",
+                    quality: str = "high") -> bytes:
+    """Upscale a static image with Anime4K.
+
+    `stream`: The image to send, as a filelike or a `bytes` object. Filelikes are e.g.:
+                - `with open("example.png", "rb") as stream`, or
+                - a `BytesIO` object.
+              File format is autodetected on the server side.
+              It can be any RGB or RGBA image Pillow can read, with any resolution.
+              Special case is "qoi", which is automatically decoded by a separate
+              fast QOI decoder.
+
+    `output_format`: format to encode output to (e.g. "png", "tga", "qoi").
+
+    `upscaled_width`, `upscaled_height`: desired output image resolution.
+    `preset`: One of "A", "B" or "C", corresponding to the Anime4K preset with the same letter;
+             for the meanings, see `raven.avatar.common.upscaler`.
+     `quality`: One of "high" or "low".
+
+    Returns a `bytes` object containing the upscaled image, encoded in `output_format`.
+    """
+    if not module_initialized:
+        raise RuntimeError("imagefx_process: The `raven.avatar.client.api` module must be initialized before using the API.")
+    # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
+    # We must jump through some hoops to send parameters in the same request - a convenient way is to put those into another (virtual) file.
+    headers = copy.copy(api_config.avatar_default_headers)
+    parameters = {"format": output_format,
+                  "upscaled_width": upscaled_width,
+                  "upscaled_height": upscaled_height,
+                  "preset": preset,
+                  "quality": quality}
+    files = {"json": ("parameters.json", json.dumps(parameters, indent=4), "application/json"),
+             "file": ("image.bin", stream, "application/octet-stream")}
+    response = requests.post(f"{api_config.avatar_url}/api/imagefx/upscale", headers=headers, files=files)
+    yell_on_error(response)
+
+    return response.content  # image file encoded in requested format
+
+def imagefx_upscale_file(filename: Union[pathlib.Path, str],
+                         output_format: str = "png",
+                         upscaled_width: int = 1920,
+                         upscaled_height: int = 1080,
+                         preset: str = "C",
+                         quality: str = "high") -> bytes:
+    """Exactly like `imagefx_upscale`, but open `filename` for reading, and set the `stream` argument to the file handle."""
+    if not module_initialized:
+        raise RuntimeError("imagefx_upscale_file: The `raven.avatar.client.api` module must be initialized before using the API.")
+
+    with open(filename, "rb") as image_file:
+        return imagefx_upscale(image_file,
+                               output_format=output_format,
+                               upscaled_width=upscaled_width,
+                               upscaled_height=upscaled_height,
+                               preset=preset,
+                               quality=quality)
+
+def imagefx_upscale_array(image_data: np.array,
+                          upscaled_width: int = 1920,
+                          upscaled_height: int = 1080,
+                          preset: str = "C",
+                          quality: str = "high") -> bytes:
+    """Exactly like `imagefx_upscale`, but take image data from in-memory array, and return a new array.
+
+    Array format is float32 [0, 1], layout [h, w, c], either RGB (3 channels) or RGBA (4 channels).
+    """
+    image_rgba = np.uint8(255.0 * image_data)
+    encoded_image_bytes = qoi.encode(image_rgba.copy(order="C"))
+    input_buffer = io.BytesIO()
+    input_buffer.write(encoded_image_bytes)
+    input_buffer.seek(0)
+
+    output_image_bytes = imagefx_upscale(input_buffer,
+                                         output_format="QOI",
+                                         upscaled_width=upscaled_width,
+                                         upscaled_height=upscaled_height,
+                                         preset=preset,
+                                         quality=quality)
+
+    output_image_rgba = qoi.decode(output_image_bytes)  # -> uint8 array of shape (h, w, c)
+    output_image_rgba = np.array(output_image_rgba, dtype=np.float32) / 255  # uint8 -> float [0, 1]
+
+    return output_image_rgba
+
 # --------------------------------------------------------------------------------
 # Talkinghead
 
@@ -982,7 +1069,6 @@ def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10
 def selftest():
     """DEBUG/TEST - exercise each of the API endpoints."""
     from colorama import Fore, Style, init as colorama_init
-    import PIL.Image
     from . import config as client_config
 
     colorama_init()
@@ -1017,6 +1103,16 @@ def selftest():
     image = PIL.Image.open(io.BytesIO(processed_png_bytes))
     print(image.size, image.mode)
     # image.save("study_blurred.png")  # DEBUG so we can see it (but not useful to run every time the self-test runs)
+
+    processed_png_bytes = imagefx_upscale_file(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops", "study.png"),
+                                               output_format="png",
+                                               upscaled_width=3840,
+                                               upscaled_height=2160,
+                                               preset="C",
+                                               quality="high")
+    image = PIL.Image.open(io.BytesIO(processed_png_bytes))
+    print(image.size, image.mode)
+    # image.save("study_upscaled_4k.png")  # DEBUG so we can see it (but not useful to run every time the self-test runs)
 
     logger.info("selftest: initialize talkinghead")
     talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "example.png"))  # send an avatar - mandatory

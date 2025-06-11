@@ -261,8 +261,6 @@ def api_embeddings_compute():
 # ----------------------------------------
 # module: imagefx
 
-# TODO: add "/api/imagefx/upscale", too?
-
 @app.route("/api/imagefx/process", methods=["POST"])
 def api_imagefx_process():
     """Run an image through a postprocessor chain.
@@ -322,6 +320,65 @@ def api_imagefx_process():
                                           postprocessor_chain=postprocessor_chain)
     except Exception as exc:
         abort(400, f"api_imagefx_process: failed, reason: {type(exc)}: {exc}")
+
+    return Response(processed_image, mimetype=f"image/{format.lower()}")
+
+@app.route("/api/imagefx/upscale", methods=["POST"])
+def api_imagefx_upscale():
+    """Upscale an image with Anime4K.
+
+    Input is POST, Content-Type "multipart/form-data", with two file attachments:
+
+        "file": the actual image file (binary, any supported format)
+        "json": the API call parameters, in JSON format.
+
+    The parameters are::
+
+        {"format": "png",
+         "upscaled_width": 1920,
+         "upscaled_height": 1080,
+         "preset": "C",
+         "quality": "high"}
+
+    Supported image formats (both input and output) are RGB/RGBA formats supported by Pillow,
+    and QOI (Quite OK Image).
+
+    Preset is "A", "B" or "C", corresponding to the Anime4K preset with the same letter;
+    for the meanings, see `raven.avatar.common.upscaler`.
+
+    Quality is "high" or "low".
+
+    If you need speed, and your client supports it, prefer the QOI format. Especially the
+    encoder is dozens of times faster than PNG's, and compresses almost as tightly.
+
+    Output is an image with mimetype "image/<format>".
+    """
+    if not imagefx.is_available():
+        abort(403, "Module 'imagefx' not running")
+
+    try:
+        file = request.files["file"]
+
+        parameters_filestorage = request.files["json"]
+        buffer = io.BytesIO()
+        buffer.write(parameters_filestorage.stream.read())
+        parameters_bytes = buffer.getvalue()
+        parameters_python = json.loads(parameters_bytes)
+
+        format = parameters_python["format"]
+        upscaled_width = parameters_python["upscaled_width"]
+        upscaled_height = parameters_python["upscaled_height"]
+        preset = parameters_python["preset"]
+        quality = parameters_python["quality"]
+
+        processed_image = imagefx.upscale(file.stream,
+                                          output_format=format,
+                                          upscaled_width=upscaled_width,
+                                          upscaled_height=upscaled_height,
+                                          preset=preset,
+                                          quality=quality)
+    except Exception as exc:
+        abort(400, f"api_imagefx_upscale: failed, reason: {type(exc)}: {exc}")
 
     return Response(processed_image, mimetype=f"image/{format.lower()}")
 
