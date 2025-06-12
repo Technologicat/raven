@@ -53,6 +53,7 @@ from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/total
 
 from ...common import bgtask
 from ...common.gui import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common.gui import fontsetup
 from ...common.gui import messagebox
 from ...common.gui import utils as guiutils
 from ...common.running_average import RunningAverage
@@ -91,7 +92,7 @@ with dpg.font_registry() as the_font_registry:
     font_size = 20
     with dpg.font(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf"),  # load font from Raven's main assets
                   font_size) as default_font:
-        guiutils.setup_font_ranges()
+        fontsetup.setup_font_ranges()
     dpg.bind_font(default_font)
 
 # Modify global theme

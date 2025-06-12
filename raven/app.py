@@ -67,6 +67,7 @@ with timer() as tim:
     from .common import utils
 
     from .common.gui import animation
+    from .common.gui import fontsetup
     from .common.gui import widgetfinder
     from .common.gui import utils as guiutils
 
@@ -604,7 +605,7 @@ with timer() as tim:
         # https://fonts.google.com/specimen/Open+Sans
         with dpg.font(os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Regular.ttf"),
                       gui_config.font_size) as default_font:
-            guiutils.setup_font_ranges()
+            fontsetup.setup_font_ranges()
         dpg.bind_font(default_font)
 
         # FontAwesome 6 for symbols (toolbar button icons etc.).
@@ -634,7 +635,7 @@ with timer() as tim:
     # After the app has started, it's fine to call it as often as needed.
     #
     dpg_markdown.set_font_registry(the_font_registry)
-    dpg_markdown.set_add_font_function(guiutils.markdown_add_font_callback)
+    dpg_markdown.set_add_font_function(fontsetup.markdown_add_font_callback)
     # Set a font that renders scientific Unicode text acceptably.
     # # https://fonts.google.com/specimen/Inter+Tight
     # dpg_markdown.set_font(font_size=gui_config.font_size,
