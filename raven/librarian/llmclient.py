@@ -81,7 +81,7 @@ if os.path.exists(api_key_file):  # TODO: test this (implemented according to sp
 # Websearch integration (requires `raven.server` to be running)
 
 def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 10) -> str:
-    """Perform a websearch, using the Raven server to handle the interaction with the search engine and the parsing of the results page."""
+    """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the results page."""
     data = api.websearch_search(query, engine, max_links)
     return data["results"]  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
 
@@ -1384,10 +1384,10 @@ def main():
 
     print()
     if api.raven_server_available():
-        print(colorizer.colorize(f"Connected to Raven server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+        print(colorizer.colorize(f"Connected to Raven-server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
         print(colorizer.colorize("The LLM will have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
     else:
-        print(colorizer.colorize(f"WARNING: Cannot connect to Raven server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
+        print(colorizer.colorize(f"WARNING: Cannot connect to Raven-server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
         print(colorizer.colorize("The LLM will NOT have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
 
     # print(websearch_wrapper("what is the airspeed velocity of an unladen swallow"))

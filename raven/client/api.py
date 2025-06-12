@@ -1,4 +1,4 @@
-"""Python client for the Raven server web API.
+"""Python client for the Raven-server web API.
 
 This talks with the server so you can just call regular Python functions.
 
@@ -142,17 +142,17 @@ def init_module(raven_server_url: str,
 
 def yell_on_error(response: requests.Response) -> None:
     if response.status_code != 200:
-        logger.error(f"Raven server returned error: {response.status_code} {response.reason}. Content of error response follows.")
+        logger.error(f"Raven-server returned error: {response.status_code} {response.reason}. Content of error response follows.")
         logger.error(response.text)
-        raise RuntimeError(f"While calling Raven server: HTTP {response.status_code} {response.reason}")
+        raise RuntimeError(f"While calling Raven-server: HTTP {response.status_code} {response.reason}")
 
 # --------------------------------------------------------------------------------
 # General utilities
 
 def raven_server_available() -> bool:
-    """Return whether the Raven server is available.
+    """Return whether Raven-server is available.
 
-    The Raven server handles everything on the server side of Raven,
+    Raven-server handles everything on the server side of Raven,
     except possibly TTS (speech synthesis), if that has been configured
     to use another server in `init_module`.
     """
@@ -173,7 +173,7 @@ def raven_server_available() -> bool:
 def tts_server_available() -> bool:
     """Return whether the speech synthesizer is available.
 
-    TTS may use either the Raven server, or a separate Kokoro-FastAPI server,
+    TTS may use either Raven-server, or a separate Kokoro-FastAPI server,
     depending on how it was configured in `init_module`.
     """
     if not module_initialized:
@@ -241,7 +241,7 @@ def embeddings_compute(text: Union[str, List[str]]) -> np.array:
         - `(ndim,)` if `text` is a single string
         - `(nbatch, ndim)` if `text` is a list of strings.
 
-    Here `ndim` is the dimensionality of the vector embedding model that the Raven server is using.
+    Here `ndim` is the dimensionality of the vector embedding model that Raven-server is using.
     """
     if not module_initialized:
         raise RuntimeError("embeddings_compute: The `raven.client.api` module must be initialized before using the API.")
@@ -1056,7 +1056,7 @@ def tts_stop():
 # Websearch
 
 def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple[str, Dict]:
-    """Perform a websearch, using the Raven server to handle the interaction with the search engine and the parsing of the results page.
+    """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the results page.
 
     Uses the "/api/websearch2" endpoint on the server, which see.
     """
@@ -1091,10 +1091,10 @@ def selftest():
 
     logger.info(f"selftest: check server availability at {client_config.raven_server_url}")
     if raven_server_available():
-        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to Raven server at {client_config.raven_server_url}.{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL}")
         print(f"{Fore.GREEN}{Style.BRIGHT}Proceeding with self-test.{Style.RESET_ALL}")
     else:
-        print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to Raven server at {client_config.raven_server_url}.{Style.RESET_ALL} Is the Raven server running?")
+        print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL} Is Raven-server running?")
         print(f"{Fore.RED}{Style.BRIGHT}Canceling self-test.{Style.RESET_ALL}")
         return
 

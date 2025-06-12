@@ -962,7 +962,7 @@ class PostprocessorSettingsEditorGUI:
         self.on_gui_settings_change(sender, app_data)
 
     def on_gui_settings_change(self, sender, app_data):
-        """Send new animator/upscaler/postprocessor settings to the Raven server whenever a value changes in the GUI.
+        """Send new animator/upscaler/postprocessor settings to Raven-server whenever a value changes in the GUI.
 
         A settings file must have been loaded before calling this.
         """
@@ -997,7 +997,7 @@ class PostprocessorSettingsEditorGUI:
             traceback.print_exc()
 
     def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
-        """Load an animator settings JSON file and send the settings both to the GUI and to the Raven server."""
+        """Load an animator settings JSON file and send the settings both to the GUI and to Raven-server."""
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_animator_settings: loading '{str(filename)}'")
             with open(filename, "r", encoding="utf-8") as json_file:
@@ -1385,9 +1385,9 @@ def update_live_texture(task_env) -> None:
 # Main program
 
 if api.raven_server_available():
-    print(f"{Fore.GREEN}{Style.BRIGHT}Connected to Raven server at {client_config.raven_server_url}.{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{Style.BRIGHT}Connected to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL}")
 else:
-    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to Raven server at {client_config.raven_server_url}.{Style.RESET_ALL} Is the Raven server running?")
+    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL} Is Raven-server running?")
     sys.exit(255)
 
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
