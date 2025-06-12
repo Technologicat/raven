@@ -132,7 +132,7 @@ If you want to edit the emotion templates manually (without using the GUI) for s
 - `posedict_keys` in [`raven/server/util.py`](../server/util.py) lists the morphs available in THA3.
 - [`raven/vendor/tha3/poser/modes/pose_parameters.py`](../vendor/tha3/poser/modes/pose_parameters.py) contains some more detail.
   - *"Arity 2"* means `posedict_keys` has separate left/right morphs.
-- The GUI panel implementations in [`raven/avatar/pose_editor/app.py`](pose_editor/app.py).
+- The GUI panel implementations in [`raven/avatar/pose_editor/app.py`](../avatar/pose_editor/app.py).
 
 Any morph that is not mentioned for a particular emotion defaults to zero. Thus only those morphs that have nonzero values need to be mentioned.
 
@@ -147,7 +147,7 @@ Animator and postprocessor settings lookup order is:
 - Server defaults, from `raven/avatar/assets/settings/animator.json`, if it exists.
   - This file is customizable.
   - **IMPORTANT**: *However, updating SillyTavern-extras from git may overwrite your changes to the server-side animator and postprocessor configuration. Keep a backup if you customize this.*
-- Built-in defaults, hardcoded as `animator_defaults` in [`raven/avatar/common/config.py`](common/config.py).
+- Built-in defaults, hardcoded as `animator_defaults` in [`raven/server/config.py`](../server/config.py).
   - **IMPORTANT**: Never change these!
   - The built-in defaults are used for validation of available settings, so they are guaranteed to be complete.
 
@@ -193,14 +193,14 @@ Particularly, `target_fps` makes the most sense to set globally at the server si
 - `blink_probability`: Applied at each frame at a reference of 25 FPS, with automatic internal FPS-correction to the actual output FPS. This is the probability of initiating a blink in each 1/25 second interval.
 - `blink_confusion_duration`: seconds. Upon entering the `"confusion"` emotion, the character may blink quickly in succession, temporarily disregarding the blink interval settings. This sets how long that state lasts.
 - `talking_fps`: How often to re-randomize the mouth during the talking animation. The default value is based on the fact that early 2000s anime used ~12 FPS as the fastest actual framerate of new cels, not counting camera panning effects and such.
-- `talking_morph`: Which mouth-open morph to use for talking. For available values, see `posedict_keys` in [`raven/avatar/util.py`](raven/avatar/util.py).
-- `sway_morphs`: Which morphs participate in the sway (fidgeting) animation. This setting is mainly useful for disabling some or all of them, e.g. for a robot character. For available values, see `posedict_keys` in [`raven/avatar/util.py`](raven/avatar/util.py).
+- `talking_morph`: Which mouth-open morph to use for talking. For available values, see `posedict_keys` in [`raven/server/util.py`](../server/util.py).
+- `sway_morphs`: Which morphs participate in the sway (fidgeting) animation. This setting is mainly useful for disabling some or all of them, e.g. for a robot character. For available values, see `posedict_keys` in [`raven/server/util.py`](../server/util.py).
 - `sway_interval_min`: seconds. Lower limit for random time interval until randomizing a new target pose for the sway animation.
 - `sway_interval_max`: seconds. Upper limit for random time interval until randomizing a new target pose for the sway animation.
-- `sway_macro_strength`: A value such that `0 < strength <= 1`. In the sway target pose, this sets the maximum absolute deviation from the target pose specified by the current emotion, but also the maximum deviation from the center position. The setting is applied to each sway morph separately. The emotion pose itself may use higher values for the morphs; in such cases, sway will only occur toward the center. For details, see `compute_sway_target_pose` in [`raven/avatar/animator.py`](raven/avatar/animator.py).
+- `sway_macro_strength`: A value such that `0 < strength <= 1`. In the sway target pose, this sets the maximum absolute deviation from the target pose specified by the current emotion, but also the maximum deviation from the center position. The setting is applied to each sway morph separately. The emotion pose itself may use higher values for the morphs; in such cases, sway will only occur toward the center. For details, see `compute_sway_target_pose` in [`raven/server/animator.py`](../server/animator.py).
 - `sway_micro_strength`: A value such that `0 < strength <= 1`. This is the maximum absolute value of random noise added to the sway target pose at each 1/25 second interval. To this, no limiting is applied, other than a clamp of the final randomized value of each sway morph to the valid range [-1, 1]. A small amount of random jitter makes the character look less robotic.
 - `breathing_cycle_duration`: seconds. The duration of a full cycle of the breathing animation.
-- `postprocessor_chain`: Pixel-space glitch artistry settings. The default is empty (no postprocessing); see below for examples of what can be done with this. For details, see [`raven/avatar/postprocessor.py`](raven/avatar/postprocessor.py).
+- `postprocessor_chain`: Pixel-space glitch artistry settings. The default is empty (no postprocessing); see below for examples of what can be done with this. For details, see [`raven/common/video/postprocessor.py`](../common/video/postprocessor.py).
 
 #### Postprocessor configuration
 
@@ -218,7 +218,7 @@ and set the order for the filters based on that. However, this does not mean tha
 
 The chain is allowed have several instances of the same filter. This is useful e.g. for multiple copies of an effect with different parameter values, or for applying the same general-use effect at more than one point in the chain. Note that some dynamic filters require tracking some state. These filters have a `name` parameter. The dynamic state storage is accessed by name, so the different instances should be configured with different names, so that they will not step on each others' toes in tracking their state.
 
-The following postprocessing filters are available. Options for each filter are documented in the docstrings in [`raven/avatar/postprocessor.py`](raven/avatar/postprocessor.py).
+The following postprocessing filters are available. Options for each filter are documented in the docstrings in [`raven/common/video/postprocessor.py`](../common/video/postprocessor.py).
 
 **Light**:
 
