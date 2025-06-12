@@ -10,12 +10,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 ## High priority
 
 - Refactor everything, again:
-  - Group GUI utilities (animation, guiutils) under `raven.common.gui`.
-    - `raven.common.gui.animation`
-    - `raven.common.gui.messagebox`, extract modal dialog from guiutils
-    - `raven.common.gui.utils`, rest of guiutils
-  - Move server modules (animator, classify, embed->embeddings, imagefx (rename!), tts, websearch) to `raven.server.modules`.
-
   - Move the remaining GPU-dependent components of Raven to the server side.
     - NLP. Think about the transport format. Can we JSON spaCy token streams?
 
