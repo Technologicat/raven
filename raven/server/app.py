@@ -1,11 +1,11 @@
 #!/usr/bin/python
-"""Talkinghead server, for rendering an animated avatar for the AI.
+"""WSGI/HTTP server, serving various AI components, mainly to Raven-<app-of-the-day> on localhost.
 
 Customized from `server.py` in the discontinued SillyTavern-extras.
-Stripped everything except the `classify`, `embeddings`, `talkinghead` and `websearch` modules.
 
-The `tts` module is new, based on Kokoro-82M. All old TTS options are gone.
-This gives us lipsync for the talkinghead.
+Contains an animated avatar mechanism for an AI character (continued from Talkinghead in ST-Extras).
+
+The `tts` module is new, based on Kokoro-82M. All old TTS options are gone. This gives us lipsync for the avatar.
 """
 
 # TODO: convert prints to use logger where appropriate
@@ -140,17 +140,254 @@ def get_modules():
                      ...]}
     """
     modules = []
+    if animator.is_available():
+        modules.append("avatar")
     if classify.is_available():
         modules.append("classify")
     if embed.is_available():
         modules.append("embeddings")
-    if animator.is_available():
-        modules.append("talkinghead")
+    if imagefx.is_available():
+        modules.append("imagefx")
     if tts.is_available():
         modules.append("tts")
     if websearch.is_available():
         modules.append("websearch")
     return jsonify({"modules": modules})
+
+# ----------------------------------------
+# module: avatar
+
+@app.route("/api/avatar/load", methods=["POST"])
+def api_avatar_load():
+    """Load the avatar sprite posted as a file in the request.
+
+    Input is POST, Content-Type "multipart/form-data", with one file attachment, named "file".
+
+    The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
+
+    No outputs.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    file = request.files["file"]
+    return animator.load_image_from_stream(file.stream)
+
+@app.route("/api/avatar/load_emotion_templates", methods=["POST"])
+def api_avatar_load_emotion_templates():
+    """Load custom emotion templates for avatar, or reset to defaults.
+
+    Input is JSON::
+
+        {"emotion0": {"morph0": value0,
+                      ...}
+         ...}
+
+    For details, see `Animator.load_emotion_templates` in `animator.py`.
+
+    To reload server defaults, send a blank JSON.
+
+    No outputs.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    data = request.get_json()
+    if not len(data):
+        data = None  # sending `None` to the animator will reset to defaults
+    animator.global_animator_instance.load_emotion_templates(data)
+    return "OK"
+
+@app.route("/api/avatar/load_animator_settings", methods=["POST"])
+def api_avatar_load_animator_settings():
+    """Load custom settings for avatar animator and postprocessor, or reset to defaults.
+
+    Input format is JSON::
+
+        {"name0": value0,
+         ...}
+
+    For details, see `Animator.load_animator_settings` in `animator.py`.
+
+    To reload server defaults, send a blank JSON.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    data = request.get_json()
+    if not len(data):
+        data = None  # sending `None` to the animator will reset to defaults
+    animator.global_animator_instance.load_animator_settings(data)
+    return "OK"
+
+@app.route("/api/avatar/start")
+def api_avatar_start():
+    """Start the avatar animation.
+
+    No inputs, no outputs.
+
+    A character must be loaded first; use '/api/avatar/load' to do that.
+
+    To pause, use '/api/avatar/stop'.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+    return animator.start()
+
+@app.route("/api/avatar/stop")
+def api_avatar_stop():
+    """Pause the avatar animation.
+
+    No inputs, no outputs.
+
+    To resume, use '/api/avatar/start'.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+    return animator.stop()
+
+@app.route("/api/avatar/start_talking")
+def api_avatar_start_talking():
+    """Start the mouth animation for talking.
+
+    No inputs, no outputs.
+
+    This is the generic, non-lipsync animation that randomizes the mouth.
+
+    This is useful for applications without actual voiced audio, such as
+    an LLM when TTS is offline, or a low-budget visual novel.
+
+    For speech with automatic lipsync, see `tts_speak_lipsynced`.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+    return animator.start_talking()
+
+@app.route("/api/avatar/stop_talking")
+def api_avatar_stop_talking():
+    """Stop the mouth animation for talking.
+
+    No inputs, no outputs.
+
+    This is the generic, non-lipsync animation that randomizes the mouth.
+
+    This is useful for applications without actual voiced audio, such as
+    an LLM when TTS is offline, or a low-budget visual novel.
+
+    For speech with automatic lipsync, see `tts_speak_lipsynced`.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+    return animator.stop_talking()
+
+@app.route("/api/avatar/set_emotion", methods=["POST"])
+def api_avatar_set_emotion():
+    """Set avatar emotion to that posted in the request.
+
+    Input is JSON::
+
+        {"emotion_name": "curiosity"}
+
+    where the key "emotion_name" is literal, and the value is the emotion to set.
+
+    No outputs.
+
+    There is no getter, by design. If the emotion state is meaningful to you,
+    keep a copy in your frontend, and sync that to the server.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+    data = request.get_json()
+    if "emotion_name" not in data or not isinstance(data["emotion_name"], str):
+        abort(400, 'api_avatar_set_emotion: "emotion_name" is required')
+    emotion_name = data["emotion_name"]
+    return animator.set_emotion(emotion_name)
+
+@app.route("/api/avatar/set_overrides", methods=["POST"])
+def api_avatar_set_overrides():
+    """Directly control the animator's morphs from the client side.
+
+    Useful for lipsyncing.
+
+    Input is JSON::
+
+        {"morph0": value0,
+         ...}
+
+    To unset overrides, send a blank JSON.
+
+    See `raven.avatar.editor` for available morphs. Value range for most morphs is [0, 1],
+    and for morphs taking also negative values, it is [-1, 1].
+
+    No outputs.
+
+    There is no getter, by design. If the override state is meaningful to you,
+    keep a copy in your frontend, and sync that to the server.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+    data = request.get_json()
+    if not len(data):
+        data = {}
+    try:
+        animator.global_animator_instance.set_overrides(data)
+    except Exception as exc:
+        abort(400, f"api_avatar_set_overrides: failed, reason: {type(exc)}: {exc}")
+    return "OK"
+
+@app.route("/api/avatar/result_feed")
+def api_avatar_result_feed():
+    """Video output.
+
+    No inputs.
+
+    Output is a "multipart/x-mixed-replace" stream of video frames, each as an image file.
+    The payload separator is "--frame".
+
+    The file format can be set in the animator settings. The frames are always sent
+    with the Content-Type and Content-Length headers set.
+    """
+    if not animator.is_available():
+        abort(403, "Module 'avatar' not running")
+    return animator.result_feed()
+ignore_auth.append(api_avatar_result_feed)   # TODO: does this make sense?
+
+@app.route("/api/avatar/get_available_filters")
+def api_avatar_get_available_filters():
+    """Get metadata of all available postprocessor filters and their available parameters.
+
+    The intended audience of this endpoint is developers; this is useful for dynamically
+    building an editor GUI for the postprocessor chain.
+
+    No inputs.
+
+    Output is JSON::
+
+      {"filters": [
+                    [filter_name, {"defaults": {param0_name: default_value0,
+                                                ...},
+                                   "ranges": {param0_name: [min_value0, max_value0],
+                                              ...}}],
+                     ...
+                  ]
+      }
+
+    For any given parameter, the format of the parameter range depends on the parameter type:
+
+      - numeric (int or float): [min_value, max_value]
+      - bool: [true, false]
+      - multiple-choice str: [choice0, choice1, ...]
+      - RGB color: ["!RGB"]
+      - safe to ignore in GUI: ["!ignore"]
+
+    In the case of an RGB color parameter, the default value is of the form [R, G, B],
+    where each component is in the range [0, 1].
+
+    You can detect the type from the default value.
+    """
+    if not (animator.is_available() or imagefx.is_available()):
+        abort(403, "Neither of modules 'avatar' or 'imagefx' is running")
+    return jsonify({"filters": Postprocessor.get_filters()})
 
 # ----------------------------------------
 # module: classify
@@ -274,8 +511,8 @@ def api_imagefx_process():
     If you need speed, and your client supports it, prefer the QOI format. Especially the
     encoder is dozens of times faster than PNG's, and compresses almost as tightly.
 
-    To get supported filters, call the endpoint "/api/talkinghead/get_available_filters".
-    Don't mind the name - the endpoint is available whenever at least one of "talkinghead"
+    To get supported filters, call the endpoint "/api/avatar/get_available_filters".
+    Don't mind the name - the endpoint is available whenever at least one of "avatar"
     or "imagefx" is loaded.
 
     Output is an image with mimetype "image/<format>".
@@ -370,241 +607,6 @@ def api_imagefx_upscale():
         abort(400, f"api_imagefx_upscale: failed, reason: {type(exc)}: {exc}")
 
     return Response(processed_image, mimetype=f"image/{format.lower()}")
-
-# ----------------------------------------
-# module: talkinghead
-
-@app.route("/api/talkinghead/load", methods=["POST"])
-def api_talkinghead_load():
-    """Load the avatar sprite posted as a file in the request.
-
-    Input is POST, Content-Type "multipart/form-data", with one file attachment, named "file".
-
-    The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
-
-    No outputs.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-
-    file = request.files["file"]
-    return animator.load_image_from_stream(file.stream)
-
-@app.route("/api/talkinghead/load_emotion_templates", methods=["POST"])
-def api_talkinghead_load_emotion_templates():
-    """Load custom emotion templates for talkinghead, or reset to defaults.
-
-    Input is JSON::
-
-        {"emotion0": {"morph0": value0,
-                      ...}
-         ...}
-
-    For details, see `Animator.load_emotion_templates` in `animator.py`.
-
-    To reload server defaults, send a blank JSON.
-
-    No outputs.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-
-    data = request.get_json()
-    if not len(data):
-        data = None  # sending `None` to talkinghead will reset to defaults
-    animator.global_animator_instance.load_emotion_templates(data)
-    return "OK"
-
-@app.route("/api/talkinghead/load_animator_settings", methods=["POST"])
-def api_talkinghead_load_animator_settings():
-    """Load custom settings for talkinghead animator and postprocessor, or reset to defaults.
-
-    Input format is JSON::
-
-        {"name0": value0,
-         ...}
-
-    For details, see `Animator.load_animator_settings` in `animator.py`.
-
-    To reload server defaults, send a blank JSON.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-
-    data = request.get_json()
-    if not len(data):
-        data = None  # sending `None` to talkinghead will reset to defaults
-    animator.global_animator_instance.load_animator_settings(data)
-    return "OK"
-
-@app.route("/api/talkinghead/start")
-def api_talkinghead_start():
-    """Start the avatar animation.
-
-    No inputs, no outputs.
-
-    A character must be loaded first; use '/api/talkinghead/load' to do that.
-
-    To pause, use '/api/talkinghead/stop'.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-    return animator.start()
-
-@app.route("/api/talkinghead/stop")
-def api_talkinghead_stop():
-    """Pause the avatar animation.
-
-    No inputs, no outputs.
-
-    To resume, use '/api/talkinghead/start'.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-    return animator.stop()
-
-@app.route("/api/talkinghead/start_talking")
-def api_talkinghead_start_talking():
-    """Start the mouth animation for talking.
-
-    No inputs, no outputs.
-
-    This is the generic, non-lipsync animation that randomizes the mouth.
-
-    This is useful for applications without actual voiced audio, such as
-    an LLM when TTS is offline, or a low-budget visual novel.
-
-    For speech with automatic lipsync, see `tts_speak_lipsynced`.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-    return animator.start_talking()
-
-@app.route("/api/talkinghead/stop_talking")
-def api_talkinghead_stop_talking():
-    """Stop the mouth animation for talking.
-
-    No inputs, no outputs.
-
-    This is the generic, non-lipsync animation that randomizes the mouth.
-
-    This is useful for applications without actual voiced audio, such as
-    an LLM when TTS is offline, or a low-budget visual novel.
-
-    For speech with automatic lipsync, see `tts_speak_lipsynced`.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-    return animator.stop_talking()
-
-@app.route("/api/talkinghead/set_emotion", methods=["POST"])
-def api_talkinghead_set_emotion():
-    """Set talkinghead character emotion to that posted in the request.
-
-    Input is JSON::
-
-        {"emotion_name": "curiosity"}
-
-    where the key "emotion_name" is literal, and the value is the emotion to set.
-
-    No outputs.
-
-    There is no getter, by design. If the emotion state is meaningful to you,
-    keep a copy in your frontend, and sync that to the server.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-    data = request.get_json()
-    if "emotion_name" not in data or not isinstance(data["emotion_name"], str):
-        abort(400, 'api_talkinghead_set_emotion: "emotion_name" is required')
-    emotion_name = data["emotion_name"]
-    return animator.set_emotion(emotion_name)
-
-@app.route("/api/talkinghead/set_overrides", methods=["POST"])
-def api_talkinghead_set_overrides():
-    """Directly control the animator's morphs from the client side.
-
-    Useful for lipsyncing.
-
-    Input is JSON::
-
-        {"morph0": value0,
-         ...}
-
-    To unset overrides, send a blank JSON.
-
-    See `raven.avatar.editor` for available morphs. Value range for most morphs is [0, 1],
-    and for morphs taking also negative values, it is [-1, 1].
-
-    No outputs.
-
-    There is no getter, by design. If the override state is meaningful to you,
-    keep a copy in your frontend, and sync that to the server.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-    data = request.get_json()
-    if not len(data):
-        data = {}
-    try:
-        animator.global_animator_instance.set_overrides(data)
-    except Exception as exc:
-        abort(400, f"api_talkinghead_set_overrides: failed, reason: {type(exc)}: {exc}")
-    return "OK"
-
-@app.route("/api/talkinghead/result_feed")
-def api_talkinghead_result_feed():
-    """Video output.
-
-    No inputs.
-
-    Output is a "multipart/x-mixed-replace" stream of video frames, each as an image file.
-    The payload separator is "--frame".
-
-    The file format can be set in the animator settings. The frames are always sent
-    with the Content-Type and Content-Length headers set.
-    """
-    if not animator.is_available():
-        abort(403, "Module 'talkinghead' not running")
-    return animator.result_feed()
-ignore_auth.append(api_talkinghead_result_feed)   # TODO: does this make sense?
-
-@app.route("/api/talkinghead/get_available_filters")
-def api_talkinghead_get_available_filters():
-    """Get metadata of all available postprocessor filters and their available parameters.
-
-    The intended audience of this endpoint is developers; this is useful for dynamically
-    building an editor GUI for the postprocessor chain.
-
-    No inputs.
-
-    Output is JSON::
-
-      {"filters": [
-                    [filter_name, {"defaults": {param0_name: default_value0,
-                                                ...},
-                                   "ranges": {param0_name: [min_value0, max_value0],
-                                              ...}}],
-                     ...
-                  ]
-      }
-
-    For any given parameter, the format of the parameter range depends on the parameter type:
-
-      - numeric (int or float): [min_value, max_value]
-      - bool: [true, false]
-      - multiple-choice str: [choice0, choice1, ...]
-      - RGB color: ["!RGB"]
-      - safe to ignore in GUI: ["!ignore"]
-
-    In the case of an RGB color parameter, the default value is of the form [R, G, B],
-    where each component is in the range [0, 1].
-
-    You can detect the type from the default value.
-    """
-    if not (animator.is_available() or imagefx.is_available()):
-        abort(403, "Neither of modules 'imagefx' or 'talkinghead' is running")
-    return jsonify({"filters": Postprocessor.get_filters()})
 
 # ----------------------------------------
 # module: tts
@@ -934,6 +936,12 @@ def get_device_and_dtype(record: Dict[str, Any]) -> (str, torch.dtype):
     return device_string, torch_dtype
 
 def init_server_modules():  # keep global namespace clean
+    if (record := config.SERVER_ENABLED_MODULES.get("avatar", None)) is not None:
+        device_string, torch_dtype = get_device_and_dtype(record)
+        # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
+        # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
+        tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
+        animator.init_module(device_string, tha3_model_variant)
     if (record := config.SERVER_ENABLED_MODULES.get("classify", None)) is not None:
         device_string, torch_dtype = get_device_and_dtype(record)
         classify.init_module(config.CLASSIFICATION_MODEL, device_string, torch_dtype)
@@ -943,12 +951,6 @@ def init_server_modules():  # keep global namespace clean
     if (record := config.SERVER_ENABLED_MODULES.get("imagefx", None)) is not None:
         device_string, torch_dtype = get_device_and_dtype(record)
         imagefx.init_module(device_string, torch_dtype)
-    if (record := config.SERVER_ENABLED_MODULES.get("talkinghead", None)) is not None:
-        device_string, torch_dtype = get_device_and_dtype(record)
-        # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
-        # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
-        tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
-        animator.init_module(device_string, tha3_model_variant)
     if config.SERVER_ENABLED_MODULES.get("tts", None) is not None:
         device_string, _ = get_device_and_dtype(record)
         tts.init_module(device_string)

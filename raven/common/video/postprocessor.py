@@ -505,7 +505,7 @@ class Postprocessor:
         Can also be used as just a camera exposure adjustment by setting `threshold=1.0` to disable the glow.
 
         Makes bright parts of the image bleed light into their surroundings, enhancing perceived contrast.
-        Only makes sense when the talkinghead is rendered on a dark-ish background.
+        Only makes sense when the avatar is rendered on a dark-ish background.
 
         `threshold`: How bright is bright. 0.0 is full black (all pixels glow), 1.0 is full white (bloom disabled).
                      Technically, this is true relative luminance, not luma, since we work in linear RGB space.

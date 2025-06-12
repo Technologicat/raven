@@ -414,10 +414,10 @@ class PostprocessorSettingsEditorGUI:
         self.animator_running = True
         self.animator_settings = None  # not loaded yet
 
-        dpg.add_texture_registry(tag="talkinghead_example_textures")  # the DPG live texture and the window backdrop texture will be stored here
+        dpg.add_texture_registry(tag="avatar_settings_editor_textures")  # the DPG live texture and the window backdrop texture will be stored here
         dpg.set_viewport_title(f"Raven-avatar settings editor [{client_config.raven_server_url}]")
 
-        with dpg.window(tag="talkinghead_main_window",
+        with dpg.window(tag="avatar_settings_editor_main_window",
                         label="Raven-avatar settings editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 # We can use a borderless child window as a fixed-size canvas that crops anything outside it (instead of automatically showing a scrollbar).
@@ -570,7 +570,7 @@ class PostprocessorSettingsEditorGUI:
                 # in the actual source code of the filters. This API endpoint dynamically gets the metadata
                 # from the server.
                 #
-                self.all_postprocessor_filters = dict(api.talkinghead_get_available_filters())
+                self.all_postprocessor_filters = dict(api.avatar_get_available_filters())
 
                 def build_postprocessor_gui():
                     def make_reset_filter_callback(filter_name):  # freeze by closure
@@ -715,7 +715,7 @@ class PostprocessorSettingsEditorGUI:
                                                     default_value=default_image,
                                                     format=dpg.mvFormat_Float_rgba,
                                                     tag=f"live_texture_{new_texture_id}",
-                                                    parent="talkinghead_example_textures")
+                                                    parent="avatar_settings_editor_textures")
             self.live_texture_id_counter += 1  # now the new texture exists so it's safe to write to (in the background thread)
             self.image_size = new_image_size
 
@@ -812,7 +812,7 @@ class PostprocessorSettingsEditorGUI:
                                                         default_value=raw_data,
                                                         format=dpg.mvFormat_Float_rgba,
                                                         tag=f"backdrop_texture_{new_texture_id}",
-                                                        parent="talkinghead_example_textures")
+                                                        parent="avatar_settings_editor_textures")
             self.backdrop_texture_id_counter += 1
             dpg.delete_item("backdrop_drawlist", children_only=True)  # delete old draw items
             dpg.configure_item("backdrop_drawlist", width=1024, height=h)
@@ -916,12 +916,12 @@ class PostprocessorSettingsEditorGUI:
         logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
         self.current_emotion = dpg.get_value(self.emotion_choice)
         logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sending emotion '{self.current_emotion}'")
-        api.talkinghead_set_emotion(self.current_emotion)
+        api.avatar_set_emotion(self.current_emotion)
 
     def load_input_image(self, filename: Union[pathlib.Path, str]) -> None:
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_input_image: loading image '{filename}'")
-            api.talkinghead_load(filename)
+            api.avatar_load(filename)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_input_image: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -935,7 +935,7 @@ class PostprocessorSettingsEditorGUI:
     def load_json(self, filename: Union[pathlib.Path, str]) -> None:
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_json: loading emotion templates '{filename}'")
-            api.talkinghead_load_emotion_templates_from_file(filename)
+            api.avatar_load_emotion_templates_from_file(filename)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_json: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -993,7 +993,7 @@ class PostprocessorSettingsEditorGUI:
             self.animator_settings.update(custom_animator_settings)
 
             # Send to server
-            api.talkinghead_load_animator_settings(self.animator_settings)
+            api.avatar_load_animator_settings(self.animator_settings)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.on_gui_settings_change: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -1041,7 +1041,7 @@ class PostprocessorSettingsEditorGUI:
             animator_settings.update(custom_animator_settings)
 
             # Send to server
-            api.talkinghead_load_animator_settings(animator_settings)
+            api.avatar_load_animator_settings(animator_settings)
 
             # ...and only if that is successful, remember the settings.
             self.animator_settings = animator_settings
@@ -1080,25 +1080,25 @@ class PostprocessorSettingsEditorGUI:
                                   centering_reference_window=self.window)
 
     def toggle_talking(self) -> None:
-        """Toggle the talkinghead's talking state (simple randomized mouth animation)."""
+        """Toggle the avatar's talking state (simple randomized mouth animation)."""
         if not self.talking_animation_running:
-            api.talkinghead_start_talking()
+            api.avatar_start_talking()
             dpg.set_item_label("start_stop_talking_button", "Stop [Ctrl+T]")
         else:
-            api.talkinghead_stop_talking()
+            api.avatar_stop_talking()
             dpg.set_item_label("start_stop_talking_button", "Start [Ctrl+T]")
         self.talking_animation_running = not self.talking_animation_running
 
     def toggle_animator_paused(self) -> None:
-        """Pause or resume the animation. Pausing when the talkinghead won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
+        """Pause or resume the animation. Pausing when the avatar won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
         if self.animator_running:
-            api.talkinghead_stop()
+            api.avatar_stop()
             dpg.set_value("please_standby_text", "[Animator is paused]")
             dpg.show_item("please_standby_text")
             dpg.hide_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")
         else:
-            api.talkinghead_start()
+            api.avatar_start()
             dpg.hide_item("please_standby_text")
             dpg.show_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")
@@ -1136,9 +1136,9 @@ class PostprocessorSettingsEditorGUI:
                                     stop_callback=stop_lipsync_speaking)
         else:
             def start_nonlipsync_speaking():
-                api.talkinghead_start_talking()
+                api.avatar_start_talking()
             def stop_nonlipsync_speaking():
-                api.talkinghead_stop_talking()
+                api.avatar_stop_talking()
                 self.on_stop_speaking(None, None)  # stop the TTS and update the GUI
             api.tts_speak(voice=selected_voice,
                           text=text,
@@ -1169,7 +1169,7 @@ dpg.set_viewport_resize_callback(_resize_gui)
 
 # Hotkey support
 choice_map = None
-def talkinghead_example_hotkeys_callback(sender, app_data):
+def avatar_settings_editor_hotkeys_callback(sender, app_data):
     if gui_instance is None:
         return
     # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
@@ -1241,8 +1241,8 @@ def talkinghead_example_hotkeys_callback(sender, app_data):
             focused_item = dpg.get_focused_item()
             if focused_item in choice_map.keys():
                 browse(focused_item, choice_map[focused_item])
-with dpg.handler_registry(tag="talkinghead_example_handler_registry"):  # global (whole viewport)
-    dpg.add_key_press_handler(tag="talkinghead_example_hotkeys_handler", callback=talkinghead_example_hotkeys_callback)
+with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # global (whole viewport)
+    dpg.add_key_press_handler(tag="avatar_settings_editor_hotkeys_handler", callback=avatar_settings_editor_hotkeys_callback)
 
 # --------------------------------------------------------------------------------
 # Animation client task
@@ -1252,7 +1252,7 @@ class ResultFeedReader:
         self.gen = None
 
     def start(self) -> None:
-        self.gen = api.talkinghead_result_feed()
+        self.gen = api.avatar_result_feed()
 
     def is_running(self) -> bool:
         return self.gen is not None
@@ -1394,9 +1394,9 @@ else:
 
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
 
-api.talkinghead_load_emotion_templates({})  # send empty dict -> reset emotion templates to server defaults
-api.talkinghead_load(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "example.png"))
-api.talkinghead_start()
+api.avatar_load_emotion_templates({})  # send empty dict -> reset emotion templates to server defaults
+api.avatar_load(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "example.png"))
+api.avatar_start()
 
 def shutdown() -> None:
     api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.

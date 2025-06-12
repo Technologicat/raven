@@ -592,11 +592,11 @@ class SmoothScrolling(Animation):
                 self.finish_callback()
             type(self).instances.pop(self.target_child_window)
 
-# The math for the scroll animation comes from SillyTavern-extras, `talkinghead.tha3.app`, function `interpolate_pose`.
+# The math for the scroll animation comes from the AI avatar code, see `raven.server.animator.interpolate_pose`.
 # This depends only on the current and target positions, and has a reference *rate*, no reference duration.
 # This allows us to change the target position while the animation is running, and it'll adapt.
 #
-# Pasting this comment as-is. Here in Raven, the equivalent of "pose" is the scroll position.
+# Pasting this comment as-is. In a smooth scrolling animation, the equivalent of "pose" is the scroll position.
 #
 # ---8<---8<---8<---
 #

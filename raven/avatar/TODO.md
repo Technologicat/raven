@@ -1,4 +1,4 @@
-# Talkinghead TODO
+# Raven-avatar TODO
 
 ## Status
 
@@ -8,9 +8,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 
 ## High priority
-
-- Consistent naming/terminology - check and correct these:
-  - Module name: "Talkinghead" or "Avatar"?
 
 - Refactor everything, again:
   - Move the remaining GPU-dependent components of Raven to the server side.
@@ -31,11 +28,11 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
     - Slider for mix balance (step: 10%?).
     - These can fit onto one line in the `raven.avatar.settings_editor` GUI (voice names are short).
 
-- Add an instance ID to all Talkinghead web API endpoints, to support multiple clients simultaneously.
-  - `/api/talkinghead/load` should generate a new instance ID and spawn a new instance if none was given. Then, always return the instance ID that was affected by the command.
+- Add an instance ID to all Avatar web API endpoints, to support multiple clients simultaneously.
+  - `/api/avatar/load` should generate a new instance ID and spawn a new instance if none was given. Then, always return the instance ID that was affected by the command.
     - Instantiate an animator and an encoder.
-    - Network transport is automatically instantiated when a client connects to `/api/talkinghead/result_feed`
-  - Add `/api/talkinghead/unload` to delete an instance.
+    - Network transport is automatically instantiated when a client connects to `/api/avatar/result_feed`
+  - Add `/api/avatar/unload` to delete an instance.
     - Delete the corresponding animator and encoder. Make the network transport automatically shut down on the server side (exit the generator if its encoder instance goes missing).
 
 - Fdialog use site boilerplate reduction? We have lots of these dialogs in Raven.
@@ -79,16 +76,14 @@ Not scheduled for now.
 
 - Option to apply postprocessor before/after upscale? Currently always applied after upscale.
 
-- Split into a separate repo and think about branding.
-  - This is essentially a drop-in replacement for *SillyTavern-extras*, with modules `talkinghead`, `classify` (which Talkinghead needs), `websearch` (which Raven needs), and `embeddings` (fast endpoint for SillyTavern).
-  - But as development continues, we will likely take things into a new direction, so this is effectively no longer ST-extras.
-  - Also, ST has already removed Talkinghead support, so we'd need to provide a new client extension anyway.
+- ST has removed Talkinghead support, so we need to provide a new client extension if we want that.
 
-- Add inspection capabilities for all Talkinghead settings similar to those the postprocessor already has. Would make it easier to build GUIs, always getting the right defaults and ranges for parameters.
+- Add inspection capabilities for all Avatar settings similar to those the postprocessor already has. Would make it easier to build GUIs, always getting the right defaults and ranges for parameters.
 
 - Web API pose control
   - Low-level direct control: body rotation, head rotation, iris position
-    - Can already use `/api/talkinghead/set_overrides` for this
+    - Can already use `/api/avatar/set_overrides` for this
+    - Useful also for disabling some animated parts, e.g. eye animations for a nerdy character with opaque glasses
   - High-level hints: look at camera, look away (on which side), stand straight, randomize new sway pose
 
 
@@ -96,13 +91,13 @@ Not scheduled for now.
 
 Definitely not scheduled. Ideas for future enhancements.
 
-- Several talkingheads running simultaneously.
+- Several avatars running simultaneously.
   - Animator is already a class, and so is Encoder, but there is currently just one global instance of each.
-  - Needs some kind of ID system.
+  - Needs some kind of ID system for the requests.
   - Need to delete the corresponding instances when the result_feed is closed by client?
 
 - Low compute mode: static poses + postprocessor.
-  - Poses would be generated from `talkinghead.png` using THA3, as usual, but only once per session. Each pose would be cached.
+  - Poses would be generated from a character image using THA3, as usual, but only once per session. Each pose would be cached.
   - To prevent postproc hiccups (in dynamic effects such as CRT TV simulation) during static pose generation in CPU mode, there are at least two possible approaches.
     - Generate all poses when the plugin starts. At 2 FPS and 28 poses, this would lead to a 14-second delay. Not good.
     - Run the postprocessor in a yet different thread, and postproc the most recent poser output available.
@@ -110,7 +105,7 @@ Definitely not scheduled. Ideas for future enhancements.
         and the postprocessor (which is invoked by `Animator`, but implemented in a separate class).
   - This *might* make it feasible to use CPU mode for static poses with postprocessing.
     - But I'll need to benchmark the postproc code first, whether it's fast enough to run on CPU in realtime.
-  - Alpha-blending between the static poses would need to be implemented in the `talkinghead` module, similarly to how the frontend switches between static expression sprites.
+  - Alpha-blending between the static poses would need to be implemented in the `avatar` module, similarly to how the frontend switches between static expression sprites.
     - Maybe a clean way would be to provide different posing strategies (alternative poser classes): realtime posing, or static posing with alpha-blending.
 
 - Small performance optimization: see if we could use more in-place updates in the postprocessor, to reduce allocation of temporary tensors.

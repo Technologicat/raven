@@ -1,9 +1,9 @@
-## raven-avatar (fork of Talkinghead)
+## Raven-avatar (fork of Talkinghead)
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 
-- [raven-avatar (fork of Talkinghead)](#raven-avatar-fork-of-talkinghead)
+- [Raven-avatar (fork of Talkinghead)](#raven-avatar-fork-of-talkinghead)
     - [Introduction](#introduction)
     - [Live mode with `raven-llmclient`](#live-mode-with-raven-llmclient)
     - [Live mode with SillyTavern](#live-mode-with-sillytavern)
@@ -52,7 +52,9 @@ As of May 2025, the GUI for `raven-llmclient` is under construction. It will sup
 
 ### Live mode with SillyTavern
 
-The live mode server is a web-based technology that replaces the discontinued *SillyTavern-extras*. In fact, it is essentially a stripped-down ST-extras. We always enable the `talkinghead` and `classify` modules. We also support `embeddings` (although it's out of scope for an AI avatar software) because it's fast; compared to *ST-extras*, everything else has been removed.
+**As of June 2025, SillyTavern no longer supports Talkinghead and will need a new custom extension. This section is out of date.**
+
+The live mode server is a web-based technology that replaces the discontinued *SillyTavern-extras*.
 
 To activate the live mode:
 
@@ -63,20 +65,9 @@ To activate the live mode:
   - However, `talkinghead` **cannot be used with local classification**. If you have local classification enabled, the option to enable `talkinghead` is disabled **and hidden**.
   - Therefore, to show the option to enable `talkinghead`, **uncheck** the checkbox *Character Expressions ⊳ Local server classification*.
 
-CUDA (*raven-avatar* option `--talkinghead-gpu`) is very highly recommended. As of late 2023, a recent GPU is also recommended. For example, on a laptop with an RTX 3070 Ti mobile GPU, and the `separable_half` THA3 poser model (fastest and smallest; default when running on GPU), you can expect ≈40-50 FPS render performance. VRAM usage in this case is about 520 MB. CPU mode exists, but is very slow, about ≈2 FPS on an i7-12700H.
+CUDA is very highly recommended. As of late 2023, a recent GPU is also recommended. For example, on a laptop with an RTX 3070 Ti mobile GPU, and the `separable_half` THA3 poser model (fastest and smallest; default when running on GPU), you can expect ≈40-50 FPS render performance. VRAM usage in this case is about 520 MB. CPU mode exists, but is very slow, about ≈2 FPS on an i7-12700H.
 
-Here is an example of how to start *raven-avatar* with the `talkinghead` model on GPU, and `classify` on CPU:
-
-```bash
-$(pdm venv activate)
-python -m raven.server --cpu --talkinghead-gpu
-```
-
-Run the server with the `--help` option for a description of its command-line options.
-
-To customize which model variant of the THA3 poser to use, and where to install the models from, see the `--talkinghead-model=...` and `--talkinghead-models=...` options, respectively. If the directory `raven/vendor/tha3/models/` does not exist, the model files are automatically downloaded from HuggingFace and installed there.
-
-To customize which classification model to use, see the `--classification-model=...` option.
+See `raven.server.config` for enabling/disabling server modules and for specifying HuggingFace model repos to download models from.
 
 #### Testing your installation
 
@@ -204,11 +195,13 @@ Particularly, `target_fps` makes the most sense to set globally at the server si
 
 #### Postprocessor configuration
 
+**As of the Raven-avatar move, we now have a GUI postprocessor settings editor. See `raven.avatar.settings_editor.app`.**
+
 *The available settings keys and examples are kept up-to-date on a best-effort basis, but there is a risk of this documentation being out of date. When in doubt, refer to the actual source code, which comes with extensive docstrings and comments. The final authoritative source is the implementation itself.*
 
 The postprocessor configuration is stored as part of the animator configuration, stored under the key `"postprocessor_chain"`.
 
-Postprocessing requires some additional compute, depending on the filters used and their settings. When `talkinghead` runs on the GPU, also the postprocessing filters run on the GPU. In gaming technology terms, they are essentially fragment shaders, implemented in PyTorch.
+Postprocessing requires some additional compute, depending on the filters used and their settings. When `avatar` runs on the GPU, also the postprocessing filters run on the GPU. In gaming technology terms, they are essentially fragment shaders, implemented in PyTorch.
 
 The filters in the postprocessor chain are applied to the image in the order in which they appear in the list. That is, the filters themselves support rendering in any order. However, for best results, it is useful to keep in mind the process a real physical signal would travel through:
 
@@ -222,7 +215,7 @@ The following postprocessing filters are available. Options for each filter are 
 
 **Light**:
 
-- `bloom`: Bloom effect (fake HDR). Popular in early 2000s anime. Makes bright parts of the image bleed light into their surroundings, enhancing perceived contrast. Only makes sense when the talkinghead is rendered on a relatively dark background (such as the cyberpunk bedroom in the ST default backgrounds).
+- `bloom`: Bloom effect (fake HDR). Popular in early 2000s anime. Makes bright parts of the image bleed light into their surroundings, enhancing perceived contrast. Only makes sense when the avatar is rendered on a relatively dark background (such as the cyberpunk bedroom in the ST default backgrounds).
 
 **Camera**:
 
@@ -349,7 +342,7 @@ This part goes **at the client end** as `SillyTavern/public/characters/yourchara
 }
 ```
 
-To refresh a running avatar after updating any of its settings files, make `talkinghead` reload your character. (Pausing and resuming the animation isn't enough.) Upon loading a character, the settings are re-read from disk both at client at server ends.
+To refresh a running avatar after updating any of its settings files, make `avatar` reload your character. (Pausing and resuming the animation isn't enough.) Upon loading a character, the settings are re-read from disk both at client at server ends.
 
 
 ### THA3 Pose Editor
@@ -390,15 +383,13 @@ GPU mode gives the best response, but CPU mode (~2 FPS) is useful at least for b
 
 The THA3 poser is a deep-learning model. Each animation frame requires an inference pass. This requires lots of compute.
 
-Thus, if you have a CUDA-capable GPU, enable GPU support by using the `--talkinghead-gpu` setting of `raven.server`.
+Thus, if you have a CUDA-capable GPU, enable GPU support in `raven.server.config`.
 
 CPU mode is very slow, and without a redesign of the AI model (or distillation, like in the newer [THA4 paper](https://arxiv.org/abs/2311.17409)), there is not much that can be done. It is already running as fast as PyTorch can go, and the performance impact of everything except the posing engine is almost negligible.
 
 #### Low VRAM - what to do?
 
-Observe that the `--talkinghead-gpu` setting is independent of the CUDA device setting of the `classify` (and `embeddings`) endpoints of `raven.server`.
-
-So in a low-VRAM environment such as a gaming laptop, you can run just `talkinghead` on the GPU (VRAM usage about 520 MB) to get acceptable animation performance, while running all other extras modules on the CPU. The `classify` or `embeddings` AI modules do not require realtime performance, whereas `talkinghead` does.
+You can run just `avatar` on the GPU (VRAM usage about 520 MB) to get acceptable animation performance, while running all other extras modules on the CPU. The `classify` or `embeddings` AI modules do not require realtime performance, whereas `avatar` does.
 
 #### Missing THA3 model at startup
 
@@ -423,7 +414,7 @@ During development, known bugs are collected into [TODO](TODO.md).
 
 ### Creating a character
 
-To create an AI avatar that `talkinghead` understands:
+To create an AI avatar that `avatar` understands:
 
 - The image must be of size 512x512, in PNG format.
 - **The image must have an alpha channel**.
@@ -452,7 +443,7 @@ To create an AI avatar that `talkinghead` understands:
 
 **Time needed**: about 1.5h. Most of that time will be spent rendering lots of gens to get a suitable one, but you should set aside 20-30 minutes to cut your final character cleanly from the background, using image editing software such as GIMP or Photoshop.
 
-It is possible to create a `talkinghead` character render with Stable Diffusion. We assume that you already have a local installation of the [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui-rembg) webui.
+It is possible to create an `avatar` character render with Stable Diffusion. We assume that you already have a local installation of the [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui-rembg) webui.
 
 - Don't initially worry about the alpha channel. You can add the alpha channel after you have generated the image.
 - Try the various **VTuber checkpoints** floating around the Internet.
@@ -509,6 +500,10 @@ Finally, you may want to upscale, to have enough pixels available to align and c
 
 This software incorporates the [THA3](https://github.com/pkhungurn/talking-head-anime-3-demo) AI-based anime posing engine developed by Pramook Khungurn. The THA3 code is used under the MIT license, and the THA3 AI models are used under the Creative Commons Attribution 4.0 International license. The THA3 example character is used under the Creative Commons Attribution-NonCommercial 4.0 International license. The trained models are currently mirrored [on HuggingFace](https://huggingface.co/OktayAlpk/talking-head-anime-3).
 
-In this software, the pose editor app has been rewritten, and the live mode (the animation driver) is original to `talkinghead` (although initially inspired by the IFacialMocap demo).
+The pose editor app has been rewritten twice: first updated into a working app and expanded for *SillyTavern-extras*, then ported to DearPyGui for *Raven-avatar*. The live mode (the animation driver) is original to *SillyTavern-extras*, although initially inspired by THA3's *IFacialMocap* VTuber tech demo. The avatar settings editor (GUI for postprocessor settings) is original to *Raven-avatar*.
 
-Like *SillyTavern-extras*, where the Talkinghead module was originally published, the *raven-avatar* software is licensed under the *GNU Affero General Public License v3*.
+The components of *Raven-avatar* that derive from *SillyTavern-extras* (`raven.server`, `raven.avatar.pose_editor`) are licensed under the same license as *SillyTavern-Extras*, namely *GNU Affero General Public License v3*.
+
+New components, or any components where I (@Technologicat) am the only author (particularly `raven.avatar.settings_editor` and `raven.common.video.postprocessor`) are licensed under the 2-clause BSD license, like the rest of *Raven*.
+
+As an exception, the `raven.common.video.upscaler` module is licensed under the MIT license, to match the license of the Anime4K engine it uses (so that they can be easily taken together anywhere).

@@ -22,7 +22,8 @@ This fork was originally maintained by the SillyTavern-extras project.
 
 At this point, the pose editor app was improved and documented by Juha Jeronen (@Technologicat).
 
-After SillyTavern-extras was discontinued, talkinghead was moved to the Raven project by Juha Jeronen (@Technologicat).
+After SillyTavern-extras was discontinued, the Talkinghead code was moved to the Raven project by Juha Jeronen (@Technologicat),
+and it is now known as Raven-avatar (part of a constellation of AI-related software).
 
 
 This module was part of the old Talkinghead, and is licensed under the GNU AGPL, see `LICENSE`.
@@ -75,7 +76,7 @@ logger = logging.getLogger(__name__)
 
 # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
 talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "vendor")).expanduser().resolve()  # THA3 install location containing the "tha3" folder
-print(f"Talkinghead is installed at '{str(talkinghead_path)}'")
+print(f"THA3 is installed at '{str(talkinghead_path)}'")
 sys.path.append(str(talkinghead_path))
 
 
@@ -1187,7 +1188,7 @@ except RuntimeError as e:
     logger.error(e)
     sys.exit(255)
 
-# Create the "talkinghead/output" directory if it doesn't exist. This is our default save location.
+# Create the "output" directory under the CWD, if it doesn't exist. This is our default save location.  # TODO: Maybe needs a better default save location.
 p = pathlib.Path("output").expanduser().resolve()
 pathlib.Path.mkdir(p, parents=True, exist_ok=True)
 

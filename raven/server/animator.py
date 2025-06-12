@@ -310,7 +310,7 @@ def init_module(device: str, model: str) -> None:
     if first_launch_during_session:
         first_launch_during_session = False
         sys.path.append(str(talkinghead_path))  # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
-        print(f"Talkinghead is installed at '{str(talkinghead_path)}'")
+        print(f"THA3 is installed at '{str(talkinghead_path)}'")
 
         # Install the THA3 models if needed
         tha3_models_path = str(talkinghead_path / "tha3" / "models")
@@ -652,7 +652,7 @@ class Animator:
         avg_render_sec = self.render_duration_statistics.average()
         if avg_render_sec > 0:
             avg_render_fps = 1 / avg_render_sec
-            # Even if render completes faster, the `talkinghead` output is rate-limited to `target_fps` at most.
+            # Even if render completes faster, the avatar output is rate-limited to `target_fps` at most.
             avg_render_fps = min(avg_render_fps, target_fps)
         else:  # No statistics available yet; let's assume we're running at `target_fps`.
             avg_render_fps = target_fps
@@ -1080,7 +1080,7 @@ class Animator:
             avg_render_sec = self.render_duration_statistics.average()
             if avg_render_sec > 0:
                 avg_render_fps = 1 / avg_render_sec
-                # Even if render completes faster, the `talkinghead` output is rate-limited to `target_fps` at most.
+                # Even if render completes faster, the avatar output is rate-limited to `target_fps` at most.
                 avg_render_fps = min(avg_render_fps, target_fps)
             else:  # No statistics available yet; let's assume we're running at `target_fps`.
                 avg_render_fps = target_fps
