@@ -174,11 +174,13 @@ def tts_speak_lipsynced(voice: str,
         "Q": "əʊ",  # Capital letter representing the British "oh" vowel sound. Expands to əʊ in IPA.
     }
     # TODO: Lipsync: improve the phoneme to morph conversion table.
-    #   - For more fine-grained control, we could use the value channel too, not just always set the morph to 1.0. Could also combine morphs (use a list).
+    #   - For more fine-grained control, we could use the morph value channel too, not just always set the morph to 1.0. OTOH the pose animation smooths this out.
+    #   - Could also combine morphs for a single phoneme if needed (use a list).
     #
     # value: animator morph name, or one of the special commands:
     #   "!close_mouth" - as it says on the tin
     #   "!keep" - keep previous mouth position
+    #   "!maybe_close_mouth" - close mouth only if the pause is at least half a second, else act like "!keep".
     phoneme_to_morph = {
         # IPA Consonants
         "b": "!close_mouth",
@@ -246,7 +248,7 @@ def tts_speak_lipsynced(voice: str,
 
     # TODO: Kokoro-FastAPI doesn't support returning phonemes with word-level timestamps, so we jury-rig this. It often works, but not always (e.g. a year number produces one word, but multiple phoneme sequences).
     #
-    # The robust solution is to use a local Kokoro (`tts_server_type="raven"`), which allows us to get word-level phonemes with the same word boundaries as in the timestamps.
+    # The robust solution is to use a local Kokoro installation (`tts_server_type="raven"`), which allows us to get word-level phonemes with the same word boundaries as in the timestamps.
     # But that makes Raven harder to install due to Kokoro's `espeak-ng` dependency, so we retain the option to use Kokoro-FastAPI.
     if util.api_config.tts_server_type == "kokoro":
         # Phonemize and word-level timestamping treat underscores differently: phonemize treats them as spaces,
