@@ -66,12 +66,12 @@ bg = concurrent.futures.ThreadPoolExecutor()
 task_manager = bgtask.TaskManager(name="avatar_settings_editor",
                                   mode="concurrent",
                                   executor=bg)
-api.init_module(raven_server_url=client_config.raven_server_url,
-                raven_api_key_file=client_config.raven_api_key_file,
-                tts_url=client_config.tts_url,
-                tts_api_key_file=client_config.tts_api_key_file,
-                tts_server_type=client_config.tts_server_type,
-                executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
+api.initialize(raven_server_url=client_config.raven_server_url,
+               raven_api_key_file=client_config.raven_api_key_file,
+               tts_url=client_config.tts_url,
+               tts_api_key_file=client_config.tts_api_key_file,
+               tts_server_type=client_config.tts_server_type,
+               executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
 
 # --------------------------------------------------------------------------------
 # Utilities

@@ -53,11 +53,11 @@ from ..client import config as client_config
 
 config_dir = pathlib.Path(visualizer_config.llm_save_dir).expanduser().resolve()
 
-api.init_module(raven_server_url=client_config.raven_server_url,
-                raven_api_key_file=client_config.raven_api_key_file,
-                tts_url=client_config.tts_url,
-                tts_api_key_file=client_config.tts_api_key_file,
-                tts_server_type=client_config.tts_server_type)  # let it create a default executor
+api.initialize(raven_server_url=client_config.raven_server_url,
+               raven_api_key_file=client_config.raven_api_key_file,
+               tts_url=client_config.tts_url,
+               tts_api_key_file=client_config.tts_api_key_file,
+               tts_server_type=client_config.tts_server_type)  # let it create a default executor
 
 # ----------------------------------------
 # LLM communication setup
