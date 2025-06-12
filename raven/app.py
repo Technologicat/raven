@@ -67,6 +67,7 @@ with timer() as tim:
     from .common import utils
 
     from .common.gui import animation
+    from .common.gui import widgetfinder
     from .common.gui import utils as guiutils
 
     from . import config
@@ -2588,15 +2589,15 @@ def info_panel_find_next_or_prev_item(widgets, *, _next=True, kluge=True, extra_
     else:
         kluge = 0
     def is_completely_below_top_of_content_area(widget):
-        if guiutils.is_completely_below_target_y(widget, target_y=y0_content + kluge + extra_y_offset) is not None:
+        if widgetfinder.is_completely_below_target_y(widget, target_y=y0_content + kluge + extra_y_offset) is not None:
             return widget
         return None
     # logger.debug(f"info_panel_find_next_or_prev_item: frame {dpg.get_frame_count()}: searching (_next = {_next}, kluge = {kluge}, extra_y_offset = {extra_y_offset}).")
-    return guiutils.binary_search_widget(widgets=widgets,
-                                         accept=is_completely_below_top_of_content_area,
-                                         consider=None,
-                                         skip=None,
-                                         direction=("right" if _next else "left"))
+    return widgetfinder.binary_search_widget(widgets=widgets,
+                                             accept=is_completely_below_top_of_content_area,
+                                             consider=None,
+                                             skip=None,
+                                             direction=("right" if _next else "left"))
 
 def scroll_info_panel_to_position(target_y_scroll):
     """Scroll the info panel to given position.
@@ -2782,7 +2783,7 @@ def _copy_entry_to_clipboard(item):
         data_idx = info_panel_widget_to_data_idx[item]
         entry = dataset.sorted_entries[data_idx]
 
-        button = guiutils.find_widget_depth_first(item, accept=is_copy_entry_to_clipboard_button)
+        button = widgetfinder.find_widget_depth_first(item, accept=is_copy_entry_to_clipboard_button)
         user_data = get_user_data(button)
         kind_, data = user_data
         tooltip, tooltip_text = data
@@ -3256,12 +3257,12 @@ def _update_info_panel(*, task_env=None, env=None):
             else:
                 logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Selection not changed; can anchor on any info panel item.")
                 possible_anchors_only = list(info_panel_entry_title_widgets.values())
-            is_partially_below_top_of_viewport = functools.partial(guiutils.is_partially_below_target_y, target_y=0)
-            item = guiutils.binary_search_widget(widgets=possible_anchors_only,
-                                                 accept=is_partially_below_top_of_viewport,
-                                                 consider=None,
-                                                 skip=None,
-                                                 direction="right")
+            is_partially_below_top_of_viewport = functools.partial(widgetfinder.is_partially_below_target_y, target_y=0)
+            item = widgetfinder.binary_search_widget(widgets=possible_anchors_only,
+                                                     accept=is_partially_below_top_of_viewport,
+                                                     consider=None,
+                                                     skip=None,
+                                                     direction="right")
 
             # Multi-anchor: anchor using any item visible in viewport.
             #
@@ -3272,7 +3273,7 @@ def _update_info_panel(*, task_env=None, env=None):
                 # There are only a few due to screen estate being limited (even at 4k resolution), so we can linearly scan them.
                 start_display_idx = info_panel_widget_to_display_idx[item]  # how-manyth item in the info panel
                 _, info_panel_h = get_info_panel_content_area_size()
-                is_partially_above_bottom_of_viewport = functools.partial(guiutils.is_partially_above_target_y, target_y=info_panel_h)
+                is_partially_above_bottom_of_viewport = functools.partial(widgetfinder.is_partially_above_target_y, target_y=info_panel_h)
                 visible_items = []
                 for item_ in islice(info_panel_entry_title_widgets.values())[start_display_idx:]:
                     if not is_partially_above_bottom_of_viewport(item_):
