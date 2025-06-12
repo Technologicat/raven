@@ -19,9 +19,9 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
   - Move the remaining GPU-dependent components of Raven to the server side.
     - NLP. Think about the transport format. Can we JSON spaCy token streams?
 
-    - Embeddings. Endpoint exists on server, and Python API in client; now just use it instead of loading `sentence_transformers` locally in `raven.preprocess`.
+    - Embeddings. Web API endpoint exists in `raven.server.app`, and a client-side Python API in `raven.client.api`; now just use it instead of loading `sentence_transformers` locally in `raven.preprocess`.
 
-    - Have an option to use local embeddings/NLP in the client, for an all-in-one solution? The point of having a server is being able to distribute.
+    - Have an option to use local embeddings/NLP in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
 
   - The server should be able to serve several clients.
     - Most of the endpoints are stateless. For those, this is trivial.
