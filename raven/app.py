@@ -1268,7 +1268,7 @@ class PlotterPulsatingGlow(animation.Animation):  # this animation is set up by 
         # and then edit the theme's colors per-frame (just before render).
         #
         # Convert animation cycle position to animation control channel value.
-        # Approach taken from SillyTavern-extras, `talkinghead.tha3.app.animate_breathing`.
+        # Same approach as in the AI avatar code, see `raven.server.animator.animate_breathing`.
         animation_pos = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         alpha_search = self._compute_alpha(animation_pos,
                                            len(unbox(search_result_data_idxs_box)),
