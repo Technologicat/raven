@@ -1,3 +1,5 @@
+"""HuggingFace AI model install helper, abstracting a common pattern of conditional install using `huggingface_hub.snapshot_download`."""
+
 __all__ = ["maybe_install_models"]
 
 import logging
