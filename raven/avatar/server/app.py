@@ -31,8 +31,9 @@ from waitress import serve
 
 import torch
 
+from ...common.video.postprocessor import Postprocessor  # available image filters
+
 from ..common import config  # default models
-from ..common import postprocessor
 
 from . import animator
 from . import classify
@@ -615,7 +616,7 @@ def api_talkinghead_get_available_filters():
     """
     if not (animator.is_available() or imagefx.is_available()):
         abort(403, "Neither of modules 'imagefx' or 'talkinghead' is running")
-    return jsonify({"filters": postprocessor.Postprocessor.get_filters()})
+    return jsonify({"filters": Postprocessor.get_filters()})
 
 # ----------------------------------------
 # module: tts

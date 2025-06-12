@@ -8,7 +8,7 @@ __all__ = ["Upscaler"]
 import torch
 import torch.nn.functional
 
-from ..vendor.anime4k import anime4k
+from ...vendor.anime4k import anime4k
 
 class Upscaler:
     def __init__(self,
