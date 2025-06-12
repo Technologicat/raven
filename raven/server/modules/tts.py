@@ -24,11 +24,11 @@ from flask import Response
 
 import numpy as np
 
-from ..common.hfutil import maybe_install_models
+from ...common.hfutil import maybe_install_models
 
-from ..vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
+from ...vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 
-from . import config  # hf repo name for downloading Kokoro models if needed
+from .. import config  # hf repo name for downloading Kokoro models if needed
 
 modelsdir = None
 pipeline = None

@@ -1,4 +1,4 @@
-"""Utilities shared between `raven.server` and `raven.avatar.pose_editor`, mainly related to THA3."""
+"""Utilities shared between `raven.server` and `raven.avatar.pose_editor`, related to the AI avatar system."""
 
 __all__ = ["posedict_keys", "posedict_key_to_index",
            "load_emotion_presets",
@@ -19,8 +19,8 @@ import numpy as np
 
 import torch
 
-# from ..vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
-from ..vendor.tha3.util import torch_linear_to_srgb
+# from ...vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
+from ...vendor.tha3.util import torch_linear_to_srgb
 
 
 # The keys for a pose in the emotion JSON files.
@@ -69,7 +69,7 @@ def load_emotion_presets(directory: str) -> Tuple[Dict[str, Dict[str, float]], L
     that can be used to map a linear index (e.g. the choice index in a GUI dropdown)
     to the corresponding key of `emotions`.
 
-    The directory "raven/avatar/assets/emotions" must also contain a "_defaults.json" file,
+    The directory "raven/avatar/assets/emotions/" must also contain a "_defaults.json" file,
     containing factory defaults (as a fallback) for the 28 standard emotions
     (as recognized by distilbert), as well as a hidden "zero" preset that represents
     a neutral pose. (This is separate from the "neutral" emotion, which is allowed
@@ -104,8 +104,8 @@ def load_emotion_presets(directory: str) -> Tuple[Dict[str, Dict[str, float]], L
         return posedict
 
     # Dict keeps its keys in insertion order, so define some special states before inserting the actual emotions.
-    emotions = {"[custom]": {},  # custom = the user has changed at least one value manually after last loading a preset
-                "[reset]": load_emotion_with_fallback("zero")}  # reset = a preset with all sliders in their default positions. Found in "_defaults.json".
+    emotions = {"[custom]": {},  # custom = in `raven.avatar.pose_editor.app`, the user has changed at least one value manually after last loading a preset
+                "[reset]": load_emotion_with_fallback("zero")}  # reset = a preset with all pose sliders in their default positions. Found in "_defaults.json".
     for emotion_name in emotion_names:
         emotions[emotion_name] = load_emotion_with_fallback(emotion_name)
 

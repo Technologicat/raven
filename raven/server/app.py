@@ -33,13 +33,14 @@ import torch
 
 from ..common.video.postprocessor import Postprocessor  # available image filters
 
-from . import animator
-from . import classify
 from . import config  # default models etc.
-from . import embed
-from . import imagefx
-from . import tts
-from . import websearch
+
+from .modules import avatar
+from .modules import classify
+from .modules import embeddings
+from .modules import imagefx
+from .modules import tts
+from .modules import websearch
 
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further
@@ -140,11 +141,11 @@ def get_modules():
                      ...]}
     """
     modules = []
-    if animator.is_available():
+    if avatar.is_available():
         modules.append("avatar")
     if classify.is_available():
         modules.append("classify")
-    if embed.is_available():
+    if embeddings.is_available():
         modules.append("embeddings")
     if imagefx.is_available():
         modules.append("imagefx")
@@ -167,11 +168,11 @@ def api_avatar_load():
 
     No outputs.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
 
     file = request.files["file"]
-    return animator.load_image_from_stream(file.stream)
+    return avatar.load_image_from_stream(file.stream)
 
 @app.route("/api/avatar/load_emotion_templates", methods=["POST"])
 def api_avatar_load_emotion_templates():
@@ -189,13 +190,13 @@ def api_avatar_load_emotion_templates():
 
     No outputs.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
 
     data = request.get_json()
     if not len(data):
         data = None  # sending `None` to the animator will reset to defaults
-    animator.global_animator_instance.load_emotion_templates(data)
+    avatar.global_animator_instance.load_emotion_templates(data)
     return "OK"
 
 @app.route("/api/avatar/load_animator_settings", methods=["POST"])
@@ -211,13 +212,13 @@ def api_avatar_load_animator_settings():
 
     To reload server defaults, send a blank JSON.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
 
     data = request.get_json()
     if not len(data):
         data = None  # sending `None` to the animator will reset to defaults
-    animator.global_animator_instance.load_animator_settings(data)
+    avatar.global_animator_instance.load_animator_settings(data)
     return "OK"
 
 @app.route("/api/avatar/start")
@@ -230,9 +231,9 @@ def api_avatar_start():
 
     To pause, use '/api/avatar/stop'.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return animator.start()
+    return avatar.start()
 
 @app.route("/api/avatar/stop")
 def api_avatar_stop():
@@ -242,9 +243,9 @@ def api_avatar_stop():
 
     To resume, use '/api/avatar/start'.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return animator.stop()
+    return avatar.stop()
 
 @app.route("/api/avatar/start_talking")
 def api_avatar_start_talking():
@@ -259,9 +260,9 @@ def api_avatar_start_talking():
 
     For speech with automatic lipsync, see `tts_speak_lipsynced`.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return animator.start_talking()
+    return avatar.start_talking()
 
 @app.route("/api/avatar/stop_talking")
 def api_avatar_stop_talking():
@@ -276,9 +277,9 @@ def api_avatar_stop_talking():
 
     For speech with automatic lipsync, see `tts_speak_lipsynced`.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return animator.stop_talking()
+    return avatar.stop_talking()
 
 @app.route("/api/avatar/set_emotion", methods=["POST"])
 def api_avatar_set_emotion():
@@ -295,13 +296,13 @@ def api_avatar_set_emotion():
     There is no getter, by design. If the emotion state is meaningful to you,
     keep a copy in your frontend, and sync that to the server.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
     data = request.get_json()
     if "emotion_name" not in data or not isinstance(data["emotion_name"], str):
         abort(400, 'api_avatar_set_emotion: "emotion_name" is required')
     emotion_name = data["emotion_name"]
-    return animator.set_emotion(emotion_name)
+    return avatar.set_emotion(emotion_name)
 
 @app.route("/api/avatar/set_overrides", methods=["POST"])
 def api_avatar_set_overrides():
@@ -324,13 +325,13 @@ def api_avatar_set_overrides():
     There is no getter, by design. If the override state is meaningful to you,
     keep a copy in your frontend, and sync that to the server.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
     data = request.get_json()
     if not len(data):
         data = {}
     try:
-        animator.global_animator_instance.set_overrides(data)
+        avatar.global_animator_instance.set_overrides(data)
     except Exception as exc:
         abort(400, f"api_avatar_set_overrides: failed, reason: {type(exc)}: {exc}")
     return "OK"
@@ -347,9 +348,9 @@ def api_avatar_result_feed():
     The file format can be set in the animator settings. The frames are always sent
     with the Content-Type and Content-Length headers set.
     """
-    if not animator.is_available():
+    if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return animator.result_feed()
+    return avatar.result_feed()
 ignore_auth.append(api_avatar_result_feed)   # TODO: does this make sense?
 
 @app.route("/api/avatar/get_available_filters")
@@ -385,7 +386,7 @@ def api_avatar_get_available_filters():
 
     You can detect the type from the default value.
     """
-    if not (animator.is_available() or imagefx.is_available()):
+    if not (avatar.is_available() or imagefx.is_available()):
         abort(403, "Neither of modules 'avatar' or 'imagefx' is running")
     return jsonify({"filters": Postprocessor.get_filters()})
 
@@ -468,7 +469,7 @@ def api_embeddings_compute():
 
     respectively.
     """
-    if not embed.is_available():
+    if not embeddings.is_available():
         abort(403, "Module 'embeddings' not running")  # this is the only optional module
     data = request.get_json()
     if "text" not in data:
@@ -481,7 +482,7 @@ def api_embeddings_compute():
     else:
         nitems = len(sentences)
     print(f"Computing vector embedding for {nitems} item{'s' if nitems != 1 else ''}")
-    vectors = embed.embed_sentences(sentences)
+    vectors = embeddings.embed_sentences(sentences)
     return jsonify({"embedding": vectors})
 
 # ----------------------------------------
@@ -941,13 +942,13 @@ def init_server_modules():  # keep global namespace clean
         # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
         # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
         tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
-        animator.init_module(device_string, tha3_model_variant)
+        avatar.init_module(device_string, tha3_model_variant)
     if (record := config.SERVER_ENABLED_MODULES.get("classify", None)) is not None:
         device_string, torch_dtype = get_device_and_dtype(record)
         classify.init_module(config.CLASSIFICATION_MODEL, device_string, torch_dtype)
     if (record := config.SERVER_ENABLED_MODULES.get("embeddings", None)) is not None:
         device_string, torch_dtype = get_device_and_dtype(record)
-        embed.init_module(config.EMBEDDING_MODEL, device_string, torch_dtype)
+        embeddings.init_module(config.EMBEDDING_MODEL, device_string, torch_dtype)
     if (record := config.SERVER_ENABLED_MODULES.get("imagefx", None)) is not None:
         device_string, torch_dtype = get_device_and_dtype(record)
         imagefx.init_module(device_string, torch_dtype)

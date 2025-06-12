@@ -11,6 +11,8 @@ for your AI character from one static input image, for use with distilbert class
 Stable Diffusion, enables agile experimentation on the look of your character, since you only need to produce
 one new image to change the look. The resulting quality is not perfect, but often acceptable.
 
+This module uses THA3 directly, as does `raven.server.modules.avatar`.
+
 
 **Who**:
 
@@ -71,7 +73,7 @@ from ...common.hfutil import maybe_install_models
 from ...common.running_average import RunningAverage
 
 from ...server import config  # hf repo name for downloading THA3 models if needed
-from ...server.util import load_emotion_presets, posedict_to_pose, pose_to_posedict, convert_linear_to_srgb, convert_float_to_uint8
+from ...server.modules.avatarutil import load_emotion_presets, posedict_to_pose, pose_to_posedict, convert_linear_to_srgb, convert_float_to_uint8
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -870,7 +872,7 @@ class PoseEditorGUI:
         # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
         # dpg.set_value(self.result_image_texture, raw_data)
 
-        # This is faster (from `animator.py`), since we do all possible operations on the GPU (when using GPU).
+        # This is faster (from `raven.server.modules.avatar`), since we do all possible operations on the GPU (when using GPU).
         posetensor = torch.tensor(pose, device=self.device, dtype=self.dtype)
         with torch.no_grad():
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")

@@ -592,7 +592,7 @@ class SmoothScrolling(Animation):
                 self.finish_callback()
             type(self).instances.pop(self.target_child_window)
 
-# The math for the scroll animation comes from the AI avatar code, see `raven.server.animator.interpolate_pose`.
+# The math for the scroll animation comes from the AI avatar code, see `raven.server.modules.avatar.interpolate_pose`.
 # This depends only on the current and target positions, and has a reference *rate*, no reference duration.
 # This allows us to change the target position while the animation is running, and it'll adapt.
 #

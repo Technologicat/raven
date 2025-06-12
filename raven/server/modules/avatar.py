@@ -1,13 +1,13 @@
-"""Avatar animator.
+"""AI avatar animator.
 
 This is the animation engine, running on top of the THA3 posing engine.
 
 This module implements the live animation backend, and its server-side API.
-For how to use that API, see `app.py`.
+For how to use that API, see `raven.server.app`.
 
-If you want to edit THA3 expressions in a standalone app, see `raven/avatar/pose_editor/app.py`.
+If you want to edit THA3 expressions in a standalone GUI app, see `raven.avatar.pose_editor.app`.
 
-If you want to test an AI character, see `raven/avatar/settings_editor/app.py`.
+If you want to test your AI character and edit postprocessor settings in a GUI app, see `raven.avatar.settings_editor.app`.
 """
 
 __all__ = ["init_module", "is_available",
@@ -43,20 +43,21 @@ import torch
 
 from flask import Response
 
-from ..common.hfutil import maybe_install_models
-from ..common.running_average import RunningAverage
+from ...common.hfutil import maybe_install_models
+from ...common.running_average import RunningAverage
 
-from ..common.video.postprocessor import Postprocessor
-from ..common.video.upscaler import Upscaler
+from ...common.video.postprocessor import Postprocessor
+from ...common.video.upscaler import Upscaler
 
-from ..vendor.tha3.poser.modes.load_poser import load_poser
-from ..vendor.tha3.poser.poser import Poser
-from ..vendor.tha3.util import (resize_PIL_image,
-                                extract_PIL_image_from_filelike,
-                                extract_pytorch_image_from_PIL_image)
+from ...vendor.tha3.poser.modes.load_poser import load_poser
+from ...vendor.tha3.poser.poser import Poser
+from ...vendor.tha3.util import (resize_PIL_image,
+                                 extract_PIL_image_from_filelike,
+                                 extract_pytorch_image_from_PIL_image)
 
-from . import config  # hf repo name for downloading THA3 models if needed
-from .util import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, convert_linear_to_srgb
+from .. import config  # hf repo name for downloading THA3 models if needed
+
+from .avatarutil import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, convert_linear_to_srgb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -64,7 +65,10 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------------
 # Global variables
 
-talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "vendor")).expanduser().resolve()  # THA3 install location containing the "tha3" folder
+talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "vendor")).expanduser().resolve()  # THA3 install location containing the "tha3" folder
+emotions_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "emotions")).expanduser().resolve()  # location containing the emotion template JSON files
+animator_settings_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings")).expanduser().resolve()  # location containing the default "animator.json"
+
 
 global_animator_instance = None
 _animator_output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
@@ -457,8 +461,7 @@ class Animator:
                     If still in doubt, see the GUI panel implementations in `editor.py`.
         """
         # Load defaults as a base
-        emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "emotions")).expanduser().resolve()
-        self.emotions, self.emotion_names = load_emotion_presets(emotions_dir)
+        self.emotions, self.emotion_names = load_emotion_presets(emotions_path)
 
         # Then override defaults, and add any new custom emotions
         if emotions is not None:
@@ -494,8 +497,7 @@ class Animator:
 
         # Load server-side settings
         try:
-            animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "settings", "animator.json")).expanduser().resolve()
-            with open(animator_json_path, "r") as json_file:
+            with open(animator_settings_path / "animator.json", "r") as json_file:
                 server_settings = json.load(json_file)
         except Exception as exc:
             logger.info(f"load_animator_settings: skipping server settings, reason: {exc}")
@@ -1248,6 +1250,7 @@ class Animator:
             logger.info(f"render {msec:.1f}ms [{fps} FPS available]")
             self.last_report_time = time_now
 
+# --------------------------------------------------------------------------------
 
 class Encoder:
     """Network transport encoder.
