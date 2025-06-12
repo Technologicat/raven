@@ -53,6 +53,7 @@ from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/total
 
 from ...common import bgtask
 from ...common.gui import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common.gui import messagebox
 from ...common.gui import utils as guiutils
 from ...common.running_average import RunningAverage
 
@@ -926,12 +927,12 @@ class PostprocessorSettingsEditorGUI:
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_input_image: {type(exc)}: {exc}")
             traceback.print_exc()
-            guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
-                                  buttons=["Close"],
-                                  ok_button="Close",
-                                  cancel_button="Close",
-                                  centering_reference_window=self.window)
+            messagebox.modal_dialog(window_title="Error",
+                                    message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
+                                    buttons=["Close"],
+                                    ok_button="Close",
+                                    cancel_button="Close",
+                                    centering_reference_window=self.window)
 
     def load_json(self, filename: Union[pathlib.Path, str]) -> None:
         try:
@@ -940,12 +941,12 @@ class PostprocessorSettingsEditorGUI:
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_json: {type(exc)}: {exc}")
             traceback.print_exc()
-            guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not load emotion templates '{filename}', reason {type(exc)}: {exc}",
-                                  buttons=["Close"],
-                                  ok_button="Close",
-                                  cancel_button="Close",
-                                  centering_reference_window=self.window)
+            messagebox.modal_dialog(window_title="Error",
+                                    message=f"Could not load emotion templates '{filename}', reason {type(exc)}: {exc}",
+                                    buttons=["Close"],
+                                    ok_button="Close",
+                                    cancel_button="Close",
+                                    centering_reference_window=self.window)
 
     def on_toggle_postprocessor(self, sender, app_data):
         self.postprocessor_enabled = not self.postprocessor_enabled
@@ -1049,12 +1050,12 @@ class PostprocessorSettingsEditorGUI:
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
-            guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not load animator settings '{str(filename)}', reason {type(exc)}: {exc}",
-                                  buttons=["Close"],
-                                  ok_button="Close",
-                                  cancel_button="Close",
-                                  centering_reference_window=self.window)
+            messagebox.modal_dialog(window_title="Error",
+                                    message=f"Could not load animator settings '{str(filename)}', reason {type(exc)}: {exc}",
+                                    buttons=["Close"],
+                                    ok_button="Close",
+                                    cancel_button="Close",
+                                    centering_reference_window=self.window)
 
     def save_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
         """Save the current settings from the GUI into an animator settings JSON file."""
@@ -1073,12 +1074,12 @@ class PostprocessorSettingsEditorGUI:
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.save_animator_settings: {type(exc)}: {exc}")
             traceback.print_exc()
-            guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not save animator settings '{str(filename)}', reason {type(exc)}: {exc}",
-                                  buttons=["Close"],
-                                  ok_button="Close",
-                                  cancel_button="Close",
-                                  centering_reference_window=self.window)
+            messagebox.modal_dialog(window_title="Error",
+                                    message=f"Could not save animator settings '{str(filename)}', reason {type(exc)}: {exc}",
+                                    buttons=["Close"],
+                                    ok_button="Close",
+                                    cancel_button="Close",
+                                    centering_reference_window=self.window)
 
     def toggle_talking(self) -> None:
         """Toggle the avatar's talking state (simple randomized mouth animation)."""

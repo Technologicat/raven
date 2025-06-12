@@ -64,6 +64,7 @@ from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParamet
 from ...vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
 from ...common.gui import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common.gui import messagebox
 from ...common.gui import utils as guiutils
 from ...common.hfutil import maybe_install_models
 from ...common.running_average import RunningAverage
@@ -791,12 +792,12 @@ class PoseEditorGUI:
                 self.source_image_changed = True
         except Exception as exc:
             logger.error(f"Could not load image '{image_file_name}', reason: {type(exc)}: {exc}")
-            guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}",
-                                  buttons=["Close"],
-                                  ok_button="Close",
-                                  cancel_button="Close",
-                                  centering_reference_window=self.window)
+            messagebox.modal_dialog(window_title="Error",
+                                    message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}",
+                                    buttons=["Close"],
+                                    ok_button="Close",
+                                    cancel_button="Close",
+                                    centering_reference_window=self.window)
         self.update_output()
 
     def load_json(self, json_file_name: str) -> None:
@@ -825,12 +826,12 @@ class PoseEditorGUI:
             dpg.set_value(self.emotion_choice, self.emotion_names[0])
         except Exception as exc:
             logger.error(f"Could not load emotion file '{json_file_name}', reason: {type(exc)}: {exc}")
-            guiutils.modal_dialog(window_title="Error",
-                                  message=f"Could not load emotion file '{json_file_name}', reason {type(exc)}: {exc}",
-                                  buttons=["Close"],
-                                  ok_button="Close",
-                                  cancel_button="Close",
-                                  centering_reference_window=self.window)
+            messagebox.modal_dialog(window_title="Error",
+                                    message=f"Could not load emotion file '{json_file_name}', reason {type(exc)}: {exc}",
+                                    buttons=["Close"],
+                                    ok_button="Close",
+                                    cancel_button="Close",
+                                    centering_reference_window=self.window)
         else:
             logger.info(f"Loaded emotion file '{json_file_name}'")
             self.update_output()
@@ -932,12 +933,12 @@ class PoseEditorGUI:
                 dpg.set_value(self.result_image_texture, self.blank_texture)
                 dpg.show_item("result_no_image_loaded_text")
                 logger.error(f"Could not render, reason: {type(exc)}: {exc}")
-                guiutils.modal_dialog(window_title="Error",
-                                      message=f"Could not render, reason {type(exc)}: {exc}",
-                                      buttons=["Close"],
-                                      ok_button="Close",
-                                      cancel_button="Close",
-                                      centering_reference_window=self.window)
+                messagebox.modal_dialog(window_title="Error",
+                                        message=f"Could not render, reason {type(exc)}: {exc}",
+                                        buttons=["Close"],
+                                        ok_button="Close",
+                                        cancel_button="Close",
+                                        centering_reference_window=self.window)
                 return
             else:
                 # Update FPS counter, measuring the render speed only.
