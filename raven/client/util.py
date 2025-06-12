@@ -1,7 +1,12 @@
 """Utilities for the Python bindings of Raven's web API."""
 
-__all__ = ["api_initialized",  # flag
-           "api_config",  # configuration namespace
+# Technically, the `api_initialized` flag is part of this public API of this module,
+# but since it's a bare boolean (not boxed), from-importing it doesn't make sense,
+# so we don't include it in `__all__`.
+#
+# The correct way is to look it up on this module (`raven.client.util.api_initialized`)
+# when its current value is needed.
+__all__ = ["api_config",  # configuration namespace
            "initialize",
            "yell_on_error"]
 
