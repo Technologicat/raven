@@ -17,6 +17,8 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
   - Move `preprocess` -> `raven.visualizer.importer` (rename the console_script to `raven-visualizer-importer-cli` or something)
     - Change terminology everywhere, this is an importer (BibTeX input, to Raven-visualizer dataset output) rather than a "preprocessor".
       The main difficulty is to explain the two-stage import process in the docs (any format to BibTeX, then BibTeX to Raven-visualizer). Maybe "convert" and "import"?
+  - Group GUI utilities (animation, guiutils) under `raven.common.gui`.
+  - Move server modules (animator, classify, embed->embeddings, imagefx (rename!), tts, websearch) to `raven.server.modules`.
 
 - More backdrops, suitable for the different characters.
 
