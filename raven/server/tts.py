@@ -1,6 +1,6 @@
 """This module handles the TTS (text to speech, speech synthesizer) audio.
 
-For lipsync for the AI avatar, see `raven.avatar.client.api`.
+For lipsync for the AI avatar, see `raven.client.api`.
 """
 
 __all__ = ["init_module", "is_available", "text_to_speech"]

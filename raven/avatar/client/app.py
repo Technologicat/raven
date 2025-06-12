@@ -1,4 +1,4 @@
-"""Avatar client.
+"""Raven-avatar client (standalone talkinghead).
 
 !!! Start `raven.server.app` first before running this app! !!!
 
@@ -53,10 +53,9 @@ from ...common import bgtask
 from ...common import guiutils
 from ...common.running_average import RunningAverage
 
+from ...client import api  # convenient Python functions that abstract away the web API
+from ...client import config as client_config
 from ...server import config as server_config
-
-from . import config as client_config
-from . import api  # convenient Python functions that abstract away the web API
 
 # ----------------------------------------
 # Module bootup
@@ -1119,7 +1118,7 @@ class PostprocessorSettingsEditorGUI:
         if text == "":
             # text = "Testing the AI speech synthesizer."
             # text = '"Wait", I said, but the cat said "meow".'  # includes quotes
-            # text = "INFO:raven.avatar.client.api:tts_speak_lipsynced.speak: starting"  # log message
+            # text = "INFO:raven.client.api:tts_speak_lipsynced.speak: starting"  # log message
             # text = 'close mouth only if the pause is at least half a second, else act like "!keep".'  # code comment
             # text = "Sharon Apple is a computer-generated virtual idol and a central character in the Macross Plus franchise, created by Shoji Kawamori."
             # text = "Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts."

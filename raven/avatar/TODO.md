@@ -18,8 +18,8 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
     - Embeddings. Endpoint exists on server, and Python API in client; now just use it instead of loading `sentence_transformers` locally in `raven.preprocess`.
     - NLP. Think about the transport format. Can we JSON spaCy token streams?
   - Final naming scheme for the app constellation's various parts.
-    - Move `raven.avatar.client.api` to `raven.common.clientapi`
     - `raven.avatar.server` is now `raven.server`, since it's no longer avatar-specific - AGPL-licensed server app, because the server code is based on the old ST-Extras, which is AGPL.
+    - `raven.avatar.client.api` is now `raven.client.api` (Python bindings for `raven.server` web API endpoints)
     - `raven.avatar.pose_editor` - AGPL-licensed pose editor app, because also adapted from ST-Extras (rewritten for DearPyGui, but this was done by porting from the original wxPython version).
     - `raven.avatar.client` -> `raven.avatar.settings_editor`? - completely new. BSD-licensed avatar postproc editor and character tester.
   - Move `raven.app` -> `raven.visualizer.app` to conform with the naming scheme and allow future expansion of the Raven constellation.

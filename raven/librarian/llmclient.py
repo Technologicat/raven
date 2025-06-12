@@ -45,19 +45,19 @@ from ..common import hybridir
 
 from . import chattree
 
-from ..avatar.client import api as avatar_api  # raven-avatar client communication setup is in `raven.avatar.client.config`, used automatically.
-from ..avatar.client import config as client_config
+from ..client import api
+from ..client import config as client_config
 
 # --------------------------------------------------------------------------------
 # Module bootup
 
 config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
 
-avatar_api.init_module(raven_server_url=client_config.raven_server_url,
-                       raven_api_key_file=client_config.raven_api_key_file,
-                       tts_url=client_config.tts_url,
-                       tts_api_key_file=client_config.tts_api_key_file,
-                       tts_server_type=client_config.tts_server_type)  # let it create a default executor
+api.init_module(raven_server_url=client_config.raven_server_url,
+                raven_api_key_file=client_config.raven_api_key_file,
+                tts_url=client_config.tts_url,
+                tts_api_key_file=client_config.tts_api_key_file,
+                tts_server_type=client_config.tts_server_type)  # let it create a default executor
 
 # ----------------------------------------
 # LLM communication setup
@@ -82,7 +82,7 @@ if os.path.exists(api_key_file):  # TODO: test this (implemented according to sp
 
 def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 10) -> str:
     """Perform a websearch, using the Raven server to handle the interaction with the search engine and the parsing of the results page."""
-    data = avatar_api.websearch_search(query, engine, max_links)
+    data = api.websearch_search(query, engine, max_links)
     return data["results"]  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
 
 # --------------------------------------------------------------------------------
@@ -1383,7 +1383,7 @@ def main():
     opts = parser.parse_args()
 
     print()
-    if avatar_api.raven_server_available():
+    if api.raven_server_available():
         print(colorizer.colorize(f"Connected to Raven server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
         print(colorizer.colorize("The LLM will have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
     else:

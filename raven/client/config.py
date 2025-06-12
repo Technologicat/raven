@@ -2,7 +2,7 @@
 
 import pathlib
 
-from ...server import config as server_config
+from ..server import config as server_config
 
 # TODO: Assumption: The `config_dir` is local anyway so we can just as well use the server app's.
 # If you run on a different machine, set it here for the client side.
