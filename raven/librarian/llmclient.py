@@ -39,7 +39,7 @@ from mcpyrate import colorizer
 from unpythonic import sym, timer, Values
 from unpythonic.env import env
 
-from .. import config
+from .. import visualizer_config
 
 from ..common import hybridir
 
@@ -51,7 +51,7 @@ from ..client import config as client_config
 # --------------------------------------------------------------------------------
 # Module bootup
 
-config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
+config_dir = pathlib.Path(visualizer_config.llm_save_dir).expanduser().resolve()
 
 api.init_module(raven_server_url=client_config.raven_server_url,
                 raven_api_key_file=client_config.raven_api_key_file,
@@ -90,7 +90,7 @@ def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 1
 
 def list_models(backend_url):
     """List all models available at `backend_url`."""
-    response = requests.get(f"{config.llm_backend_url}/v1/internal/model/list",
+    response = requests.get(f"{visualizer_config.llm_backend_url}/v1/internal/model/list",
                             headers=headers,
                             verify=False)
     payload = response.json()
@@ -201,7 +201,7 @@ def setup(backend_url: str) -> env:
     ]
     tool_entrypoints = {"websearch": websearch_wrapper}
 
-    if config.llm_send_toolcall_instructions:
+    if visualizer_config.llm_send_toolcall_instructions:
         tools_json = "\n".join(json.dumps(tool) for tool in tools)
 
         # This comes from the template built into QwQ-32B.
@@ -745,8 +745,8 @@ def minimal_chat_client(backend_url):
     datastore_file = config_dir / "data.json"  # chat node datastore
     state_file = config_dir / "state.json"     # important node IDs for the chat client state
 
-    docs_dir = pathlib.Path(config.llm_docs_dir).expanduser().resolve()  # RAG documents (put your documents in this directory)
-    db_dir = pathlib.Path(config.llm_database_dir).expanduser().resolve()  # RAG search indices datastore
+    docs_dir = pathlib.Path(visualizer_config.llm_docs_dir).expanduser().resolve()  # RAG documents (put your documents in this directory)
+    db_dir = pathlib.Path(visualizer_config.llm_database_dir).expanduser().resolve()  # RAG search indices datastore
 
     datastore = None  # initialized later, during app startup
     def load_app_state(settings: env) -> Dict:
@@ -845,19 +845,19 @@ def minimal_chat_client(backend_url):
 
         # Load RAG database (it will auto-persist at app exit).
         retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
-                                                    recursive=config.llm_docs_dir_recursive,
+                                                    recursive=visualizer_config.llm_docs_dir_recursive,
                                                     db_dir=db_dir,
-                                                    embedding_model_name=config.qa_embedding_model)
+                                                    embedding_model_name=visualizer_config.qa_embedding_model)
         docs_enabled_str = "ON" if state["docs_enabled"] else "OFF"
         colorful_rag_status = colorizer.colorize(f"RAG (retrieval-augmented generation) autosearch is currently {docs_enabled_str}.",
                                                  colorizer.Style.BRIGHT)
         print(f"{colorful_rag_status} Toggle with the `!docs` command.")
-        print(f"    Document store is at '{config.llm_docs_dir}'.")
+        print(f"    Document store is at '{visualizer_config.llm_docs_dir}'.")
         # The retriever's `documents` attribute must be locked before accessing.
         with retriever.datastore_lock:
             plural_s = "s" if len(retriever.documents) != 1 else ""
             print(f"        {len(retriever.documents)} document{plural_s} loaded.")
-        print(f"    Search indices are saved in '{config.llm_database_dir}'.")
+        print(f"    Search indices are saved in '{visualizer_config.llm_database_dir}'.")
         print()
 
         import readline  # noqa: F401, side effect: enable GNU readline in builtin input()
@@ -907,7 +907,7 @@ def minimal_chat_client(backend_url):
             print()
             print("    Special commands (tab-completion available):")
             print("        !clear                  - Start new chat")
-            print(f"        !docs [True|False]      - RAG autosearch on/off/toggle (currently {state['docs_enabled']}; document store at '{config.llm_docs_dir}')")
+            print(f"        !docs [True|False]      - RAG autosearch on/off/toggle (currently {state['docs_enabled']}; document store at '{visualizer_config.llm_docs_dir}')")
             print(f"        !speculate [True|False] - LLM speculate on/off/toggle (currently {state['speculate_enabled']}); used only if docs is True.")
             print("                                  If speculate is False, try to use only RAG results to answer.")
             print("                                  If speculate is True, let the LLM respond however it wants.")
@@ -1299,7 +1299,7 @@ def minimal_chat_client(backend_url):
                     chars += len(chunk_text)
                     if "\n" in chunk_text:  # one token at a time; should have either one linefeed or no linefeed
                         chars = 0  # good enough?
-                    elif chars >= config.llm_line_wrap_width:
+                    elif chars >= visualizer_config.llm_line_wrap_width:
                         print()
                         chars = 0
                     print(chunk_text, end="")
@@ -1379,7 +1379,7 @@ def main():
     parser = argparse.ArgumentParser(description="""Minimal LLM chat client, for testing/debugging. You can use this for testing that Raven can connect to your LLM.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument(dest="backend_url", nargs="?", default=config.llm_backend_url, type=str, metavar="url", help=f"where to access the LLM API (default, currently '{config.llm_backend_url}', is set in `raven/config.py`)")
+    parser.add_argument(dest="backend_url", nargs="?", default=visualizer_config.llm_backend_url, type=str, metavar="url", help=f"where to access the LLM API (default, currently '{visualizer_config.llm_backend_url}', is set in `raven/config.py`)")
     opts = parser.parse_args()
 
     print()
