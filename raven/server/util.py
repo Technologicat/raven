@@ -1,4 +1,4 @@
-"""Utilities for `raven.avatar.server` and `raven.avatar.pose_editor`."""
+"""Utilities shared between `raven.server` and `raven.avatar.pose_editor`, mainly related to THA3."""
 
 __all__ = ["posedict_keys", "posedict_key_to_index",
            "load_emotion_presets",
@@ -19,8 +19,8 @@ import numpy as np
 
 import torch
 
-# from ...vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
-from ...vendor.tha3.util import torch_linear_to_srgb
+# from ..vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
+from ..vendor.tha3.util import torch_linear_to_srgb
 
 
 # The keys for a pose in the emotion JSON files.
@@ -69,7 +69,7 @@ def load_emotion_presets(directory: str) -> Tuple[Dict[str, Dict[str, float]], L
     that can be used to map a linear index (e.g. the choice index in a GUI dropdown)
     to the corresponding key of `emotions`.
 
-    The directory "avatar/assets/emotions" must also contain a "_defaults.json" file,
+    The directory "raven/avatar/assets/emotions" must also contain a "_defaults.json" file,
     containing factory defaults (as a fallback) for the 28 standard emotions
     (as recognized by distilbert), as well as a hidden "zero" preset that represents
     a neutral pose. (This is separate from the "neutral" emotion, which is allowed
@@ -145,7 +145,7 @@ def convert_float_to_uint8(image: np.array) -> np.array:
     return uint8_image
 
 # # I have no idea what half of these modes are doing. Fortunately this function is no longer needed.
-# # See also `vendor.tha3.util.convert_output_image_from_torch_to_numpy`, which this is based on, fortunately also unused.
+# # See also `raven.vendor.tha3.util.convert_output_image_from_torch_to_numpy`, which this is based on, fortunately also unused.
 # def torch_image_to_numpy(image: torch.tensor) -> np.array:
 #     if image.shape[2] == 2:
 #         h, w, c = image.shape

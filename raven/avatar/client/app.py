@@ -1,6 +1,6 @@
 """Avatar client.
 
-!!! Start `raven.avatar.server.app` first before running this app! !!!
+!!! Start `raven.server.app` first before running this app! !!!
 
 This GUI app is an editor for the avatar's postprocessor settings, and a live test environment for your characters.
 To edit the emotion templates, see the separate app `raven.avatar.pose_editor.app`.
@@ -53,7 +53,7 @@ from ...common import bgtask
 from ...common import guiutils
 from ...common.running_average import RunningAverage
 
-from ..common import config as common_config
+from ...server import config as server_config
 
 from . import config as client_config
 from . import api  # convenient Python functions that abstract away the web API
@@ -65,8 +65,8 @@ bg = concurrent.futures.ThreadPoolExecutor()
 task_manager = bgtask.TaskManager(name="avatar_client",
                                   mode="concurrent",
                                   executor=bg)
-api.init_module(avatar_url=client_config.avatar_url,
-                avatar_api_key_file=client_config.avatar_api_key_file,
+api.init_module(raven_server_url=client_config.raven_server_url,
+                raven_api_key_file=client_config.raven_api_key_file,
                 tts_url=client_config.tts_url,
                 tts_api_key_file=client_config.tts_api_key_file,
                 tts_server_type=client_config.tts_server_type,
@@ -414,7 +414,7 @@ class PostprocessorSettingsEditorGUI:
         self.animator_settings = None  # not loaded yet
 
         dpg.add_texture_registry(tag="talkinghead_example_textures")  # the DPG live texture and the window backdrop texture will be stored here
-        dpg.set_viewport_title(f"Raven-avatar [{client_config.avatar_url}]")
+        dpg.set_viewport_title(f"Raven-avatar [{client_config.raven_server_url}]")
 
         with dpg.window(tag="talkinghead_main_window",
                         label="Raven-avatar main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
@@ -963,7 +963,7 @@ class PostprocessorSettingsEditorGUI:
         self.on_gui_settings_change(sender, app_data)
 
     def on_gui_settings_change(self, sender, app_data):
-        """Send new animator/upscaler/postprocessor settings to the avatar server whenever a value changes in the GUI.
+        """Send new animator/upscaler/postprocessor settings to the Raven server whenever a value changes in the GUI.
 
         A settings file must have been loaded before calling this.
         """
@@ -998,7 +998,7 @@ class PostprocessorSettingsEditorGUI:
             traceback.print_exc()
 
     def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
-        """Load an animator settings JSON file and send the settings both to the GUI and to the avatar server."""
+        """Load an animator settings JSON file and send the settings both to the GUI and to the Raven server."""
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_animator_settings: loading '{str(filename)}'")
             with open(filename, "r", encoding="utf-8") as json_file:
@@ -1385,10 +1385,10 @@ def update_live_texture(task_env) -> None:
 # --------------------------------------------------------------------------------
 # Main program
 
-if api.avatar_server_available():
-    print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {client_config.avatar_url}.{Style.RESET_ALL}")
+if api.raven_server_available():
+    print(f"{Fore.GREEN}{Style.BRIGHT}Connected to Raven server at {client_config.raven_server_url}.{Style.RESET_ALL}")
 else:
-    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {client_config.avatar_url}.{Style.RESET_ALL} Is the avatar server running?")
+    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to Raven server at {client_config.raven_server_url}.{Style.RESET_ALL} Is the Raven server running?")
     sys.exit(255)
 
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
@@ -1423,7 +1423,7 @@ def _load_initial_animator_settings():
     if not os.path.exists(animator_json_path):
         logger.info(f"_load_initial_animator_settings: Default animator settings file '{str(animator_json_path)}' missing, writing a default config.")
         try:
-            animator_settings = copy.copy(common_config.animator_defaults)
+            animator_settings = copy.copy(server_config.animator_defaults)
             custom_animator_settings = {"format": gui_instance.comm_format,
                                         "target_fps": gui_instance.target_fps,
                                         "upscale": gui_instance.upscale,

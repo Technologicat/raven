@@ -36,7 +36,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from unpythonic import memoize
 
-from ..common import config
+from . import config  # `config_base_dir`, for saving debug dumps
 
 # --------------------------------------------------------------------------------
 # Bootup

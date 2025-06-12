@@ -1,4 +1,4 @@
-"""THA3 pose editor.
+"""THA3 pose editor GUI app.
 
 Pose an anime character, based on a suitable 512×512 static input image and THA3, an AI poser model.
 
@@ -9,7 +9,7 @@ Beside being the pose editor, this app also allows the automatic generation of t
 for your AI character from one static input image, for use with distilbert classification in SillyTavern
 (Character Expressions extension). This is much faster than inpainting all 28 expressions manually in
 Stable Diffusion, enables agile experimentation on the look of your character, since you only need to produce
-one new image to change the look.
+one new image to change the look. The resulting quality is not perfect, but often acceptable.
 
 
 **Who**:
@@ -25,13 +25,13 @@ At this point, the pose editor app was improved and documented by Juha Jeronen (
 After SillyTavern-extras was discontinued, talkinghead was moved to the Raven project by Juha Jeronen (@Technologicat).
 
 
-This module was part of the old Talkinghead, and is licensed under the GNU AGPL, see `server/LICENSE`.
+This module was part of the old Talkinghead, and is licensed under the GNU AGPL, see `LICENSE`.
 """
 
 # Note that the AGPL license means that any BSD-licensed module must not import anything from this module. The other way is allowed,
 # i.e. this module may import names from BSD-licensed modules; it's then using those modules under the BSD license.
 #
-# The parts of GUI code that look common to this and the postproc editor are actually originally adapted from Raven-visualizer,
+# The parts of GUI code that look common to this and `raven.avatar.client.app` are actually originally adapted from Raven-visualizer,
 # which is BSD-licensed.
 
 import logging
@@ -57,17 +57,18 @@ import torch
 import dearpygui.dearpygui as dpg
 
 from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
-from ...common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from ...common import guiutils
-from ...common.hfutil import maybe_install_models
-from ...common.running_average import RunningAverage
 
 from ...vendor.tha3.poser.modes.load_poser import load_poser
 from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from ...vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
-from ..common import config
-from ..server.util import load_emotion_presets, posedict_to_pose, pose_to_posedict, convert_linear_to_srgb, convert_float_to_uint8
+from ...common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common import guiutils
+from ...common.hfutil import maybe_install_models
+from ...common.running_average import RunningAverage
+
+from ...server import config  # hf repo name for downloading THA3 models if needed
+from ...server.util import load_emotion_presets, posedict_to_pose, pose_to_posedict, convert_linear_to_srgb, convert_float_to_uint8
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

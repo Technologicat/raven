@@ -69,7 +69,7 @@ Here is an example of how to start *raven-avatar* with the `talkinghead` model o
 
 ```bash
 $(pdm venv activate)
-python -m raven.avatar.server --cpu --talkinghead-gpu
+python -m raven.server --cpu --talkinghead-gpu
 ```
 
 Run the server with the `--help` option for a description of its command-line options.
@@ -129,7 +129,7 @@ Any emotion that is missing from a particular level in the lookup order falls th
 
 If you want to edit the emotion templates manually (without using the GUI) for some reason, the following may be useful sources of information:
 
-- `posedict_keys` in [`raven/avatar/server/util.py`](server/util.py) lists the morphs available in THA3.
+- `posedict_keys` in [`raven/server/util.py`](../server/util.py) lists the morphs available in THA3.
 - [`raven/vendor/tha3/poser/modes/pose_parameters.py`](../vendor/tha3/poser/modes/pose_parameters.py) contains some more detail.
   - *"Arity 2"* means `posedict_keys` has separate left/right morphs.
 - The GUI panel implementations in [`raven/avatar/pose_editor/app.py`](pose_editor/app.py).
@@ -377,7 +377,7 @@ $(pdm venv activate)
 python -m raven.avatar.editor
 ```
 
-Run the editor with the `--help` option for a description of its command-line options. The command-line options of the pose editor are **completely independent** from the options of `raven.avatar.server` itself.
+Run the editor with the `--help` option for a description of its command-line options. The command-line options of the pose editor are **completely independent** from the options of `raven.server` itself.
 
 Currently, you can choose the device to run on (GPU or CPU), and which THA3 model to use. By default, the pose editor uses GPU and the `separable_float` model.
 
@@ -390,13 +390,13 @@ GPU mode gives the best response, but CPU mode (~2 FPS) is useful at least for b
 
 The THA3 poser is a deep-learning model. Each animation frame requires an inference pass. This requires lots of compute.
 
-Thus, if you have a CUDA-capable GPU, enable GPU support by using the `--talkinghead-gpu` setting of `raven.avatar.server`.
+Thus, if you have a CUDA-capable GPU, enable GPU support by using the `--talkinghead-gpu` setting of `raven.server`.
 
 CPU mode is very slow, and without a redesign of the AI model (or distillation, like in the newer [THA4 paper](https://arxiv.org/abs/2311.17409)), there is not much that can be done. It is already running as fast as PyTorch can go, and the performance impact of everything except the posing engine is almost negligible.
 
 #### Low VRAM - what to do?
 
-Observe that the `--talkinghead-gpu` setting is independent of the CUDA device setting of the `classify` (and `embeddings`) endpoints of `raven.avatar.server`.
+Observe that the `--talkinghead-gpu` setting is independent of the CUDA device setting of the `classify` (and `embeddings`) endpoints of `raven.server`.
 
 So in a low-VRAM environment such as a gaming laptop, you can run just `talkinghead` on the GPU (VRAM usage about 520 MB) to get acceptable animation performance, while running all other extras modules on the CPU. The `classify` or `embeddings` AI modules do not require realtime performance, whereas `talkinghead` does.
 
@@ -408,7 +408,7 @@ If you get an error message like:
 FileNotFoundError: Model file /home/xxx/raven-downloadedgitrepo/raven/vendor/tha3/models/separable_float/eyebrow_decomposer.pt not found, please check the path.
 ```
 
-the solution is to remove (or rename) your `raven/vendor/tha3/models/` directory, and restart `raven.avatar.server`. If the model directory does not exist, *raven-avatar* will download the models at the first run.
+the solution is to remove (or rename) your `raven/vendor/tha3/models/` directory, and restart `raven.server`. If the model directory does not exist, *raven-avatar* will download the models at the first run.
 
 The models are actually shared between the live mode and the pose editor, so it doesn't matter which one you run first.
 

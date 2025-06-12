@@ -26,8 +26,8 @@ import numpy as np
 
 import torch
 
-from ...common.video.postprocessor import Postprocessor
-from ...common.video.upscaler import Upscaler
+from ..common.video.postprocessor import Postprocessor
+from ..common.video.upscaler import Upscaler
 
 postprocessor = None
 postprocessor_lock = threading.Lock()

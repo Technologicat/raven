@@ -1,3 +1,8 @@
+"""This module handles the TTS (text to speech, speech synthesizer) audio.
+
+For lipsync for the AI avatar, see `raven.avatar.client.api`.
+"""
+
 __all__ = ["init_module", "is_available", "text_to_speech"]
 
 import logging
@@ -19,10 +24,11 @@ from flask import Response
 
 import numpy as np
 
-from ...common.hfutil import maybe_install_models
+from ..common.hfutil import maybe_install_models
 
-from ..common import config
-from ...vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
+from ..vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
+
+from . import config  # hf repo name for downloading Kokoro models if needed
 
 modelsdir = None
 pipeline = None
@@ -89,10 +95,10 @@ def text_to_speech(voice: str,
                    speed: float = 1.0,
                    format: str = "mp3",
                    get_metadata: bool = True,
-                   stream: bool = False) -> None:
+                   stream: bool = False) -> Response:
     """Convert `text` to speech with the speech synthesizer.
 
-    The audio file is sent as the response content.
+    The audio file is returned as the response content.
 
     `voice`: See https://github.com/hexgrad/kokoro and https://github.com/remsky/Kokoro-FastAPI
 

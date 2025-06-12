@@ -53,8 +53,8 @@ from ..avatar.client import config as client_config
 
 config_dir = pathlib.Path(config.llm_save_dir).expanduser().resolve()
 
-avatar_api.init_module(avatar_url=client_config.avatar_url,
-                       avatar_api_key_file=client_config.avatar_api_key_file,
+avatar_api.init_module(raven_server_url=client_config.raven_server_url,
+                       raven_api_key_file=client_config.raven_api_key_file,
                        tts_url=client_config.tts_url,
                        tts_api_key_file=client_config.tts_api_key_file,
                        tts_server_type=client_config.tts_server_type)  # let it create a default executor
@@ -78,10 +78,10 @@ if os.path.exists(api_key_file):  # TODO: test this (implemented according to sp
     headers["Authorization"] = api_key.strip()
 
 # --------------------------------------------------------------------------------
-# Websearch integration (requires `raven.avatar.server`)
+# Websearch integration (requires `raven.server` to be running)
 
 def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 10) -> str:
-    """Perform a websearch, using the Avatar server to handle the interaction with the search engine and the parsing of the results page."""
+    """Perform a websearch, using the Raven server to handle the interaction with the search engine and the parsing of the results page."""
     data = avatar_api.websearch_search(query, engine, max_links)
     return data["results"]  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
 
@@ -1383,11 +1383,11 @@ def main():
     opts = parser.parse_args()
 
     print()
-    if avatar_api.avatar_server_available():
-        print(colorizer.colorize(f"Connected to avatar server at {client_config.avatar_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+    if avatar_api.raven_server_available():
+        print(colorizer.colorize(f"Connected to Raven server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
         print(colorizer.colorize("The LLM will have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
     else:
-        print(colorizer.colorize(f"WARNING: Cannot connect to avatar server at {client_config.avatar_url}", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
+        print(colorizer.colorize(f"WARNING: Cannot connect to Raven server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
         print(colorizer.colorize("The LLM will NOT have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
 
     # print(websearch_wrapper("what is the airspeed velocity of an unladen swallow"))

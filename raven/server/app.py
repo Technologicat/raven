@@ -31,12 +31,11 @@ from waitress import serve
 
 import torch
 
-from ...common.video.postprocessor import Postprocessor  # available image filters
-
-from ..common import config  # default models
+from ..common.video.postprocessor import Postprocessor  # available image filters
 
 from . import animator
 from . import classify
+from . import config  # default models etc.
 from . import embed
 from . import imagefx
 from . import tts
@@ -139,17 +138,6 @@ def get_modules():
 
         {"modules": ["modulename0",
                      ...]}
-
-    Unlike SillyTavern-extras, `raven.avatar.server` always enables all modules.
-    We provide the following:
-
-    - classify
-    - embeddings
-    - talkinghead
-    - tts (both a simple OpenAI-compatible speech endpoint, and our own)
-    - websearch
-
-    If any of these are missing, it means that there has been an error during startup that has prevented the module from loading.
     """
     modules = []
     if classify.is_available():

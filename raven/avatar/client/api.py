@@ -1,15 +1,15 @@
-"""Python bindings for raven-avatar web API.
+"""Python client for the Raven server web API.
 
 This talks with the server so you can just call regular Python functions.
 
-For documentation of what the functions do, see the server side in `raven.avatar.server.app`.
+For documentation of what the functions do, see the server side in `raven.server.app`.
 The naming convention is as follows:
 
   - Client API function: `talkinghead_load` (in `raven.avatar.client.api`)
-  - Server-side function: `api_talkinghead_load` (in `raven.avatar.server.app`)
+  - Server-side function: `api_talkinghead_load` (in `raven.server.app`)
   - Web API endpoint: "/api/talkinghead/load"
 
-We support all modules served by `raven.avatar.server.app`:
+We support all modules served by `raven.server.app`:
 
   - classify    - text sentiment analysis
   - embeddings  - vector embeddings of text, useful for semantic visualization and RAG indexing
@@ -26,7 +26,7 @@ This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["init_module",
-           "avatar_server_available",
+           "raven_server_available",
            "tts_server_available",
            "classify_labels", "classify",
            "embeddings_compute",
@@ -81,12 +81,12 @@ from ...common import netutil
 # Module bootup
 
 module_initialized = False
-api_config = envcls(avatar_default_headers={},
+api_config = envcls(raven_default_headers={},
                     tts_default_headers={},
                     audio_frequency=44100,
                     audio_buffer_size=512)
-def init_module(avatar_url: str,
-                avatar_api_key_file: Optional[str],
+def init_module(raven_server_url: str,
+                raven_api_key_file: Optional[str],
                 tts_url: Optional[str],
                 tts_api_key_file: Optional[str],
                 tts_server_type: Optional[str],
@@ -108,22 +108,22 @@ def init_module(avatar_url: str,
 
     if executor is None:
         executor = concurrent.futures.ThreadPoolExecutor()
-    api_config.task_manager = bgtask.TaskManager(name="talkinghead_client_api",
+    api_config.task_manager = bgtask.TaskManager(name="raven_client_api",
                                                  mode="concurrent",
                                                  executor=executor)
 
-    api_config.avatar_url = avatar_url
+    api_config.raven_server_url = raven_server_url
     api_config.tts_url = tts_url
     api_config.tts_server_type = tts_server_type
     if tts_server_type not in ("kokoro", "raven", None):
         logger.error(f"init_module: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
         raise ValueError(f"init_module: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
 
-    if avatar_api_key_file is not None and os.path.exists(avatar_api_key_file):  # TODO: test this (I have no idea what I'm doing)
-        with open(avatar_api_key_file, "r", encoding="utf-8") as f:
-            avatar_api_key = f.read()
-        # See `raven.avatar.server.app`.
-        api_config.avatar_default_headers["Authorization"] = avatar_api_key.strip()
+    if raven_api_key_file is not None and os.path.exists(raven_api_key_file):  # TODO: test this (I have no idea what I'm doing)
+        with open(raven_api_key_file, "r", encoding="utf-8") as f:
+            raven_api_key = f.read()
+        # See `raven.server.app`.
+        api_config.raven_default_headers["Authorization"] = raven_api_key.strip()
 
     if tts_api_key_file is not None and os.path.exists(tts_api_key_file):  # TODO: test this
         with open(tts_api_key_file, "r", encoding="utf-8") as f:
@@ -142,31 +142,40 @@ def init_module(avatar_url: str,
 
 def yell_on_error(response: requests.Response) -> None:
     if response.status_code != 200:
-        logger.error(f"Avatar server returned error: {response.status_code} {response.reason}. Content of error response follows.")
+        logger.error(f"Raven server returned error: {response.status_code} {response.reason}. Content of error response follows.")
         logger.error(response.text)
-        raise RuntimeError(f"While calling avatar server: HTTP {response.status_code} {response.reason}")
+        raise RuntimeError(f"While calling Raven server: HTTP {response.status_code} {response.reason}")
 
 # --------------------------------------------------------------------------------
 # General utilities
 
-def avatar_server_available() -> bool:
-    """Return whether the avatar server (everything except TTS) is available."""
+def raven_server_available() -> bool:
+    """Return whether the Raven server is available.
+
+    The Raven server handles everything on the server side of Raven,
+    except possibly TTS (speech synthesis), if that has been configured
+    to use another server in `init_module`.
+    """
     if not module_initialized:
-        raise RuntimeError("avatar_server_available: The `raven.avatar.client.api` module must be initialized before using the API.")
-    if api_config.avatar_url is None:
+        raise RuntimeError("raven_server_available: The `raven.avatar.client.api` module must be initialized before using the API.")
+    if api_config.raven_server_url is None:
         return False
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     try:
-        response = requests.get(f"{api_config.avatar_url}/health", headers=headers)
+        response = requests.get(f"{api_config.raven_server_url}/health", headers=headers)
     except requests.exceptions.ConnectionError as exc:
-        logger.error(f"avatar_server_available: {type(exc)}: {exc}")
+        logger.error(f"raven_server_available: {type(exc)}: {exc}")
         return False
     if response.status_code != 200:
         return False
     return True
 
 def tts_server_available() -> bool:
-    """Return whether the speech synthesizer is available."""
+    """Return whether the speech synthesizer is available.
+
+    TTS may use either the Raven server, or a separate Kokoro-FastAPI server,
+    depending on how it was configured in `init_module`.
+    """
     if not module_initialized:
         raise RuntimeError("tts_server_available: The `raven.avatar.client.api` module must be initialized before using the API.")
     if api_config.tts_url is None:
@@ -193,8 +202,8 @@ def classify_labels() -> List[str]:
     """
     if not module_initialized:
         raise RuntimeError("classify_labels: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
-    response = requests.get(f"{api_config.avatar_url}/api/classify/labels", headers=headers)
+    headers = copy.copy(api_config.raven_default_headers)
+    response = requests.get(f"{api_config.raven_server_url}/api/classify/labels", headers=headers)
     yell_on_error(response)
     output_data = response.json()  # -> {"labels": [emotion0, ...]}
     return list(sorted(output_data["labels"]))
@@ -209,10 +218,10 @@ def classify(text: str) -> Dict[str, float]:
     """
     if not module_initialized:
         raise RuntimeError("classify: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     input_data = {"text": text}
-    response = requests.post(f"{api_config.avatar_url}/api/classify", headers=headers, json=input_data)
+    response = requests.post(f"{api_config.raven_server_url}/api/classify", headers=headers, json=input_data)
     yell_on_error(response)
     output_data = response.json()  # -> ["classification": [{"label": "curiosity", "score": 0.5329479575157166}, ...]]
 
@@ -232,14 +241,14 @@ def embeddings_compute(text: Union[str, List[str]]) -> np.array:
         - `(ndim,)` if `text` is a single string
         - `(nbatch, ndim)` if `text` is a list of strings.
 
-    Here `ndim` is the dimensionality of the vector embedding model that the avatar server is using.
+    Here `ndim` is the dimensionality of the vector embedding model that the Raven server is using.
     """
     if not module_initialized:
         raise RuntimeError("embeddings_compute: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     input_data = {"text": text}
-    response = requests.post(f"{api_config.avatar_url}/api/embeddings/compute", json=input_data, headers=headers)
+    response = requests.post(f"{api_config.raven_server_url}/api/embeddings/compute", json=input_data, headers=headers)
     yell_on_error(response)
     output_data = response.json()
 
@@ -274,12 +283,12 @@ def imagefx_process(stream,
         raise RuntimeError("imagefx_process: The `raven.avatar.client.api` module must be initialized before using the API.")
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
     # We must jump through some hoops to send parameters in the same request - a convenient way is to put those into another (virtual) file.
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     parameters = {"format": output_format,
                   "filters": filters}
     files = {"json": ("parameters.json", json.dumps(parameters, indent=4), "application/json"),
              "file": ("image.bin", stream, "application/octet-stream")}
-    response = requests.post(f"{api_config.avatar_url}/api/imagefx/process", headers=headers, files=files)
+    response = requests.post(f"{api_config.raven_server_url}/api/imagefx/process", headers=headers, files=files)
     yell_on_error(response)
 
     return response.content  # image file encoded in requested format
@@ -365,7 +374,7 @@ def imagefx_upscale(stream,
         raise RuntimeError("imagefx_process: The `raven.avatar.client.api` module must be initialized before using the API.")
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
     # We must jump through some hoops to send parameters in the same request - a convenient way is to put those into another (virtual) file.
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     parameters = {"format": output_format,
                   "upscaled_width": upscaled_width,
                   "upscaled_height": upscaled_height,
@@ -373,7 +382,7 @@ def imagefx_upscale(stream,
                   "quality": quality}
     files = {"json": ("parameters.json", json.dumps(parameters, indent=4), "application/json"),
              "file": ("image.bin", stream, "application/octet-stream")}
-    response = requests.post(f"{api_config.avatar_url}/api/imagefx/upscale", headers=headers, files=files)
+    response = requests.post(f"{api_config.raven_server_url}/api/imagefx/upscale", headers=headers, files=files)
     yell_on_error(response)
 
     return response.content  # image file encoded in requested format
@@ -433,19 +442,19 @@ def talkinghead_load(filename: Union[pathlib.Path, str]) -> None:
     """
     if not module_initialized:
         raise RuntimeError("talkinghead_load: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
     with open(filename, "rb") as image_file:
         files = {"file": image_file}
-        response = requests.post(f"{api_config.avatar_url}/api/talkinghead/load", headers=headers, files=files)
+        response = requests.post(f"{api_config.raven_server_url}/api/talkinghead/load", headers=headers, files=files)
     yell_on_error(response)
 
 def talkinghead_load_emotion_templates(emotions: Dict) -> None:
     if not module_initialized:
         raise RuntimeError("talkinghead_load_emotion_templates: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
-    response = requests.post(f"{api_config.avatar_url}/api/talkinghead/load_emotion_templates", json=emotions, headers=headers)
+    response = requests.post(f"{api_config.raven_server_url}/api/talkinghead/load_emotion_templates", json=emotions, headers=headers)
     yell_on_error(response)
 
 def talkinghead_load_emotion_templates_from_file(filename: Union[pathlib.Path, str]) -> None:
@@ -458,9 +467,9 @@ def talkinghead_load_emotion_templates_from_file(filename: Union[pathlib.Path, s
 def talkinghead_load_animator_settings(animator_settings: Dict) -> None:
     if not module_initialized:
         raise RuntimeError("talkinghead_load_animator_settings: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
-    response = requests.post(f"{api_config.avatar_url}/api/talkinghead/load_animator_settings", json=animator_settings, headers=headers)
+    response = requests.post(f"{api_config.raven_server_url}/api/talkinghead/load_animator_settings", json=animator_settings, headers=headers)
     yell_on_error(response)
 
 def talkinghead_load_animator_settings_from_file(filename: Union[pathlib.Path, str]) -> None:
@@ -474,47 +483,47 @@ def talkinghead_start() -> None:
     """Start or resume the animator."""
     if not module_initialized:
         raise RuntimeError("talkinghead_start: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
-    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/start", headers=headers)
+    headers = copy.copy(api_config.raven_default_headers)
+    response = requests.get(f"{api_config.raven_server_url}/api/talkinghead/start", headers=headers)
     yell_on_error(response)
 
 def talkinghead_stop() -> None:
     """Pause the animator."""
     if not module_initialized:
         raise RuntimeError("talkinghead_stop: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
-    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/stop", headers=headers)
+    headers = copy.copy(api_config.raven_default_headers)
+    response = requests.get(f"{api_config.raven_server_url}/api/talkinghead/stop", headers=headers)
     yell_on_error(response)
 
 def talkinghead_start_talking() -> None:
     if not module_initialized:
         raise RuntimeError("talkinghead_start_talking: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
-    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/start_talking", headers=headers)
+    headers = copy.copy(api_config.raven_default_headers)
+    response = requests.get(f"{api_config.raven_server_url}/api/talkinghead/start_talking", headers=headers)
     yell_on_error(response)
 
 def talkinghead_stop_talking() -> None:
     if not module_initialized:
         raise RuntimeError("talkinghead_stop_talking: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
-    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/stop_talking", headers=headers)
+    headers = copy.copy(api_config.raven_default_headers)
+    response = requests.get(f"{api_config.raven_server_url}/api/talkinghead/stop_talking", headers=headers)
     yell_on_error(response)
 
 def talkinghead_set_emotion(emotion_name: str) -> None:
     if not module_initialized:
         raise RuntimeError("talkinghead_set_emotion: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     data = {"emotion_name": emotion_name}
-    response = requests.post(f"{api_config.avatar_url}/api/talkinghead/set_emotion", headers=headers, json=data)
+    response = requests.post(f"{api_config.raven_server_url}/api/talkinghead/set_emotion", headers=headers, json=data)
     yell_on_error(response)
 
 def talkinghead_set_overrides(data: Dict[str, float]) -> None:
     if not module_initialized:
         raise RuntimeError("talkinghead_set_overrides: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
-    response = requests.post(f"{api_config.avatar_url}/api/talkinghead/set_overrides", json=data, headers=headers)
+    response = requests.post(f"{api_config.raven_server_url}/api/talkinghead/set_overrides", json=data, headers=headers)
     yell_on_error(response)
 
 def talkinghead_result_feed(chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], bytes], None, None]:
@@ -535,9 +544,9 @@ def talkinghead_result_feed(chunk_size: int = 4096, expected_mimetype: Optional[
     """
     if not module_initialized:
         raise RuntimeError("talkinghead_result_feed: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     headers["Accept"] = "multipart/x-mixed-replace"
-    stream_response = requests.get(f"{api_config.avatar_url}/api/talkinghead/result_feed", headers=headers, stream=True)
+    stream_response = requests.get(f"{api_config.raven_server_url}/api/talkinghead/result_feed", headers=headers, stream=True)
     yell_on_error(stream_response)
 
     stream_iterator = stream_response.iter_content(chunk_size=chunk_size)
@@ -555,8 +564,8 @@ def talkinghead_get_available_filters() -> List[Tuple[str, Dict]]:
     """
     if not module_initialized:
         raise RuntimeError("talkinghead_get_available_filters: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
-    response = requests.get(f"{api_config.avatar_url}/api/talkinghead/get_available_filters", headers=headers)
+    headers = copy.copy(api_config.raven_default_headers)
+    response = requests.get(f"{api_config.raven_server_url}/api/talkinghead/get_available_filters", headers=headers)
     yell_on_error(response)
     output_data = response.json()
     return output_data["filters"]
@@ -1047,18 +1056,18 @@ def tts_stop():
 # Websearch
 
 def websearch_search(query: str, engine: str = "duckduckgo", max_links: int = 10) -> Tuple[str, Dict]:
-    """Perform a websearch, using the Avatar server to handle the interaction with the search engine and the parsing of the results page.
+    """Perform a websearch, using the Raven server to handle the interaction with the search engine and the parsing of the results page.
 
     Uses the "/api/websearch2" endpoint on the server, which see.
     """
     if not module_initialized:
         raise RuntimeError("websearch_search: The `raven.avatar.client.api` module must be initialized before using the API.")
-    headers = copy.copy(api_config.avatar_default_headers)
+    headers = copy.copy(api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
     input_data = {"query": query,
                   "engine": engine,
                   "max_links": max_links}
-    response = requests.post(f"{api_config.avatar_url}/api/websearch2", headers=headers, json=input_data)
+    response = requests.post(f"{api_config.raven_server_url}/api/websearch2", headers=headers, json=input_data)
     yell_on_error(response)
 
     output_data = response.json()
@@ -1074,18 +1083,18 @@ def selftest():
     colorama_init()
 
     logger.info("selftest: initialize module")
-    init_module(avatar_url=client_config.avatar_url,
-                avatar_api_key_file=client_config.avatar_api_key_file,
+    init_module(raven_server_url=client_config.raven_server_url,
+                raven_api_key_file=client_config.raven_api_key_file,
                 tts_url=client_config.tts_url,
                 tts_api_key_file=client_config.tts_api_key_file,
                 tts_server_type=client_config.tts_server_type)  # let it create a default executor
 
-    logger.info(f"selftest: check server availability at {client_config.avatar_url}")
-    if avatar_server_available():
-        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to avatar server at {client_config.avatar_url}.{Style.RESET_ALL}")
+    logger.info(f"selftest: check server availability at {client_config.raven_server_url}")
+    if raven_server_available():
+        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to Raven server at {client_config.raven_server_url}.{Style.RESET_ALL}")
         print(f"{Fore.GREEN}{Style.BRIGHT}Proceeding with self-test.{Style.RESET_ALL}")
     else:
-        print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to avatar server at {client_config.avatar_url}.{Style.RESET_ALL} Is the avatar server running?")
+        print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to Raven server at {client_config.raven_server_url}.{Style.RESET_ALL} Is the Raven server running?")
         print(f"{Fore.RED}{Style.BRIGHT}Canceling self-test.{Style.RESET_ALL}")
         return
 
@@ -1143,11 +1152,8 @@ def selftest():
     # # There's also out["results"] with preformatted text only.
 
     logger.info("selftest: embeddings")
-    try:
-        print(embeddings_compute(text).shape)  # needs `raven.avatar.server.app` to be running with the "--embeddings" command-line option
-        print(embeddings_compute([text, "Testing, 1, 2, 3."]).shape)
-    except RuntimeError as exc:
-        logger.error(f"selftest: Failed to call `raven.avatar.server`'s `embeddings` module. If the error is a 403, the module likely isn't running. {type(exc)}: {exc}")
+    print(embeddings_compute(text).shape)
+    print(embeddings_compute([text, "Testing, 1, 2, 3."]).shape)
 
     logger.info("selftest: get metadata of available postprocessor filters")
     print(talkinghead_get_available_filters())

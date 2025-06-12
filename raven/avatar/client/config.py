@@ -2,13 +2,15 @@
 
 import pathlib
 
-from ..common import config as common_config
+from ...server import config as server_config
 
-config_dir = pathlib.Path(common_config.config_base_dir).expanduser().resolve()
+# TODO: Assumption: The `config_dir` is local anyway so we can just as well use the server app's.
+# If you run on a different machine, set it here for the client side.
+config_dir = pathlib.Path(server_config.config_base_dir).expanduser().resolve()
 
-# Raven-avatar server
-avatar_url = "http://localhost:5100"
-avatar_api_key_file = config_dir / "api_key.txt"
+# Raven server
+raven_server_url = "http://localhost:5100"
+raven_api_key_file = config_dir / "api_key.txt"
 
 # AI speech synthesizer server
 #
@@ -17,9 +19,9 @@ avatar_api_key_file = config_dir / "api_key.txt"
 # tts_server_type = "kokoro"
 # tts_api_key_file = config_dir / "tts_api_key.txt"
 
-# The Raven-avatar server also provides a speech endpoint using a local Kokoro-82M.
+# The Raven server also provides a speech endpoint using a local Kokoro-82M.
 # This has the advantage of more robust lip syncing for the AI avatar, as well as
 # slightly lower CPU usage while the TTS is idle.
 tts_url = "http://localhost:5100"
 tts_server_type = "raven"
-tts_api_key_file = avatar_api_key_file
+tts_api_key_file = raven_api_key_file
