@@ -75,8 +75,7 @@ import numpy as np
 import pygame  # for audio (text to speech) support
 
 from ...common import bgtask
-
-from ..common import netutil
+from ...common import netutil
 
 # ----------------------------------------
 # Module bootup

@@ -19,8 +19,9 @@ from flask import Response
 
 import numpy as np
 
+from ...common.hfutil import maybe_install_models
+
 from ..common import config
-from ..common.hfutil import maybe_install_models
 from ..vendor.streaming_audio_writer.streaming_audio_writer import StreamingAudioWriter
 
 modelsdir = None

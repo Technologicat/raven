@@ -59,14 +59,14 @@ import dearpygui.dearpygui as dpg
 from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 from ...common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
 from ...common import guiutils
+from ...common.hfutil import maybe_install_models
+from ...common.running_average import RunningAverage
 
 from ..vendor.tha3.poser.modes.load_poser import load_poser
 from ..vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from ..vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
 from ..common import config
-from ..common.hfutil import maybe_install_models
-from ..common.running_average import RunningAverage
 from ..server.util import load_emotion_presets, posedict_to_pose, pose_to_posedict, convert_linear_to_srgb, convert_float_to_uint8
 
 logging.basicConfig(level=logging.INFO)

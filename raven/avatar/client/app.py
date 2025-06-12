@@ -51,9 +51,9 @@ from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/total
 from ...common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
 from ...common import bgtask
 from ...common import guiutils
+from ...common.running_average import RunningAverage
 
 from ..common import config as common_config
-from ..common.running_average import RunningAverage
 
 from . import config as client_config
 from . import api  # convenient Python functions that abstract away the web API
