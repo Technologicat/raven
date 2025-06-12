@@ -97,7 +97,6 @@ Repository = "https://github.com/Technologicat/raven"
 [project.scripts]
 raven-arxiv2id = "raven.arxiv2id:main"
 raven-check-cuda = "raven.check_cuda:main"
-raven-llmclient = "raven.llmclient:main"
 raven-pdf2bib = "raven.pdf2bib:main"
 raven-preprocess = "raven.preprocess:main"
 raven-wos2bib = "raven.wos2bib:main"
@@ -105,6 +104,7 @@ raven-visualizer = "raven.app:main"
 raven-avatar-pose-editor = "raven.avatar.pose_editor.app:main"
 raven-avatar-server = "raven.avatar.server.app:main"
 raven-avatar-client = "raven.avatar.client.app:main"  # postprocessor config editor / character tester
+raven-llmclient = "raven.librarian.llmclient:main"
 
 [build-system]
 requires = ["pdm-backend"]

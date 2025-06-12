@@ -42,9 +42,11 @@ from unpythonic import timer, ETAEstimator, uniqify
 from unpythonic.env import env
 
 from . import config
-from . import chattree
-from . import llmclient
+
 from .common import utils
+
+from .librarian import chattree
+from .librarian import llmclient
 
 # --------------------------------------------------------------------------------
 # Bootup

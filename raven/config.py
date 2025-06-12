@@ -31,7 +31,7 @@ llm_line_wrap_width = 160  # `llmclient`; for text wrapping in live update
 
 # RAG / IR
 
-# AI model for semantic search (RAG backend `raven.hybridir`), encoding both questions and answers into a joint semantic space.
+# AI model for semantic search (RAG backend `raven.common.hybridir`), encoding both questions and answers into a joint semantic space.
 # Available on HuggingFace. Auto-downloaded on first use.
 qa_embedding_model = "sentence-transformers/multi-qa-mpnet-base-cos-v1"
 

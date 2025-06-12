@@ -2,7 +2,7 @@
 
 - Stopword set management.
 - Backend loading.
-  - Model caching (load only one copy of each model in the same process).
+  - spaCy and embeddings model caching (load only one copy of each model in the same process).
   - Device management (which device to load on), with automatic CPU fallback if loading on GPU fails.
 - Frequency analysis tools.
 """
@@ -26,7 +26,7 @@ from typing import Container, Dict, List, Optional, Union
 from sentence_transformers import SentenceTransformer
 import spacy
 
-from . import config
+from .. import config
 
 # --------------------------------------------------------------------------------
 

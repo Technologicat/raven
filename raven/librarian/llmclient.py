@@ -39,12 +39,14 @@ from mcpyrate import colorizer
 from unpythonic import sym, timer, Values
 from unpythonic.env import env
 
-from . import chattree
-from . import config
-from . import hybridir
+from .. import config
 
-from .avatar.client import api as avatar_api  # raven-avatar client communication setup is in `raven.avatar.client.config`, used automatically.
-from .avatar.client import config as client_config
+from ..common import hybridir
+
+from . import chattree
+
+from ..avatar.client import api as avatar_api  # raven-avatar client communication setup is in `raven.avatar.client.config`, used automatically.
+from ..avatar.client import config as client_config
 
 # --------------------------------------------------------------------------------
 # Module bootup

@@ -44,11 +44,11 @@ from unpythonic.env import env as envcls
 import bm25s  # keyword
 import chromadb  # semantic (vector)
 
-from .common import bgtask
-from .common import utils
-
-from . import config
+from . import bgtask
 from . import nlptools
+from . import utils
+
+from .. import config
 
 # --------------------------------------------------------------------------------
 

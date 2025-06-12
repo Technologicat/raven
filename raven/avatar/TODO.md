@@ -31,9 +31,6 @@ Talkinghead has become `raven.avatar`, in preparation for Raven's upcoming LLM f
   - Move the main `app` -> `raven.visualizer.app` to conform with the naming scheme and allow future expansion of the Raven constellation.
   - `preprocess` -> `raven.visualizer.importer` (rename the console_script to `raven-visualizer-importer-cli` or something)
     - Change terminology everywhere, this is an importer (BibTeX input, to Raven-visualizer dataset output)
-  - `llmclient` -> `raven.librarian.cli`
-  - `hybridir` -> `raven.common.hybridir`? Needed by LLMClient, but could also be used for advanced search in visualizer.
-  - `chattree` -> `raven.librarian.chattree`. Needed by LLMClient only.
 
 - More backdrops, suitable for the different characters.
 

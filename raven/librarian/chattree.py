@@ -20,7 +20,7 @@ from typing import Any, Callable, List, Optional, Union
 
 from unpythonic import gensym, partition
 
-from .common import utils
+from ..common import utils
 
 class Forest:
     def __init__(self):
