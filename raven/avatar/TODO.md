@@ -2,23 +2,43 @@
 
 ## Status
 
-As of May 2025.
+As of June 2025.
 
-Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM frontend, which will support an AI-animated avatar for the AI.
+Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM frontend *Raven-librarian*, which will support an AI-animated avatar for the AI.
 
 
 ## High priority
 
 - Refactor everything, again:
-  - Move the remaining GPU-dependent components of Raven to the server side.
-    - Embeddings. Endpoint exists on server, and Python API in client; now just use it instead of loading `sentence_transformers` locally in `raven.preprocess`.
-    - NLP. Think about the transport format. Can we JSON spaCy token streams?
-  - Move `raven.app` -> `raven.visualizer.app` to conform with the naming scheme and allow future expansion of the Raven constellation.
-  - Move `preprocess` -> `raven.visualizer.importer` (rename the console_script to `raven-visualizer-importer-cli` or something)
-    - Change terminology everywhere, this is an importer (BibTeX input, to Raven-visualizer dataset output) rather than a "preprocessor".
-      The main difficulty is to explain the two-stage import process in the docs (any format to BibTeX, then BibTeX to Raven-visualizer). Maybe "convert" and "import"?
   - Group GUI utilities (animation, guiutils) under `raven.common.gui`.
+    - `raven.common.gui.animation`
+    - `raven.common.gui.messagebox`, extract modal dialog from guiutils
+    - `raven.common.gui.utils`, rest of guiutils
   - Move server modules (animator, classify, embed->embeddings, imagefx (rename!), tts, websearch) to `raven.server.modules`.
+
+  - Move the remaining GPU-dependent components of Raven to the server side.
+    - NLP. Think about the transport format. Can we JSON spaCy token streams?
+
+    - Embeddings. Endpoint exists on server, and Python API in client; now just use it instead of loading `sentence_transformers` locally in `raven.preprocess`.
+
+    - Have an option to use local embeddings/NLP in the client, for an all-in-one solution? The point of having a server is being able to distribute.
+
+  - The server should be able to serve several clients.
+    - Most of the endpoints are stateless. For those, this is trivial.
+    - The exception is the avatar.
+      - Add an instance ID to all `/api/avatar/*` endpoints, to support multiple clients simultaneously.
+      - `/api/avatar/load` should generate a new instance ID and spawn a new instance. Then, return the instance ID (as a JSON response?).
+        - All other `/api/avatar/*` endpoints should take this instance ID as a parameter.
+        - Upon load, instantiate an animator and an encoder.
+          - Network transport is automatically instantiated when a client connects to `/api/avatar/result_feed`, so the load step doesn't need to do that.
+      - Add a new endpoint `/api/avatar/unload` to delete an instance.
+        - Delete the corresponding animator and encoder. Make the network transport automatically shut down on the server side (exit the generator if its encoder instance goes missing).
+
+  - Finish the refactor for *Raven-visualizer*:
+    - Move `raven.app` -> `raven.visualizer.app` to conform with the naming scheme and allow future expansion of the Raven constellation.
+    - Move `preprocess` -> `raven.visualizer.importer` (rename the console_script to `raven-visualizer-importer-cli` or something)
+      - Change terminology everywhere, this is an importer (BibTeX input, to Raven-visualizer dataset output) rather than a "preprocessor".
+        The main difficulty is to explain the two-stage import process in the docs (any format to BibTeX, then BibTeX to Raven-visualizer). Maybe "convert" and "import"?
 
 - More backdrops, suitable for the different characters.
 
@@ -29,13 +49,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
     - Add a second combobox, for the second voice. Add the None option, make it the default (so that the default is to use only one voice).
     - Slider for mix balance (step: 10%?).
     - These can fit onto one line in the `raven.avatar.settings_editor` GUI (voice names are short).
-
-- Add an instance ID to all Avatar web API endpoints, to support multiple clients simultaneously.
-  - `/api/avatar/load` should generate a new instance ID and spawn a new instance if none was given. Then, always return the instance ID that was affected by the command.
-    - Instantiate an animator and an encoder.
-    - Network transport is automatically instantiated when a client connects to `/api/avatar/result_feed`
-  - Add `/api/avatar/unload` to delete an instance.
-    - Delete the corresponding animator and encoder. Make the network transport automatically shut down on the server side (exit the generator if its encoder instance goes missing).
 
 - Fdialog use site boilerplate reduction? We have lots of these dialogs in Raven.
 
