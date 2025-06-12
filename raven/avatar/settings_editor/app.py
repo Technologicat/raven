@@ -553,7 +553,7 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_slider_int(label="x 0.1x", default_value=10, min_value=5, max_value=20, clamped=True, width=self.button_width - 122,
                                            tag="speak_speed_slider")
                     dpg.add_spacer(height=4)
-                    dpg.add_checkbox(label="Lip sync [adjust video timing below]", default_value=True, tag="speak_lipsync_checkbox")
+                    dpg.add_checkbox(label="Lipsync [adjust video timing below]", default_value=True, tag="speak_lipsync_checkbox")
                     dpg.add_slider_int(label="x 0.1 s", default_value=-6, min_value=-20, max_value=20, clamped=True, width=self.button_width - 64, tag="speak_video_offset")
                     dpg.add_spacer(height=4)
                     dpg.add_input_text(default_value="",

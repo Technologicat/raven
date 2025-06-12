@@ -116,7 +116,7 @@ def text_to_speech(voice: str,
 
     `get_metadata`: If `True`, get word-level timestamps and phonemes.
 
-                    This is useful for e.g. captioning and lip syncing.
+                    This is useful for e.g. captioning and lipsyncing.
 
                     These are returned as JSON in a header, "x-word-timestamps". The format is:
 
@@ -167,7 +167,7 @@ def text_to_speech(voice: str,
         audios.append(audio_numpy)
 
     # Our output format is otherwise exactly like that of Kokoro-FastAPI's "/dev/captioned_speech" endpoint (June 2025),
-    # but we include the phonemes too, for lip syncing.
+    # but we include the phonemes too, for lipsyncing.
     output_headers = {"Content-Type": f"audio/{format}"}
     if get_metadata:
         output_headers["x-word-timestamps"] = json.dumps(metadata)

@@ -143,7 +143,7 @@ def tts_speak_lipsynced(voice: str,
                         video_offset: float = 0.0,
                         start_callback: Optional[Callable] = None,
                         stop_callback: Optional[Callable] = None) -> None:
-    """Like `tts_speak`, but with lip sync for the talkinghead.
+    """Like `tts_speak`, but with lipsync for the talkinghead.
 
     Requires the Kokoro-FastAPI TTS backend so that we can get the phoneme data
     and timestamps.

@@ -11,7 +11,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 - Consistent naming/terminology - check and correct these:
   - Module name: "Talkinghead" or "Avatar"?
-  - lip sync, lip-sync, lipsync?
 
 - Refactor everything, again:
   - Move the remaining GPU-dependent components of Raven to the server side.

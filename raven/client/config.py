@@ -20,7 +20,7 @@ raven_api_key_file = config_dir / "api_key.txt"
 # tts_api_key_file = config_dir / "tts_api_key.txt"
 
 # Raven-server also provides a speech endpoint using a local Kokoro-82M.
-# This has the advantage of more robust lip syncing for the AI avatar, as well as
+# This has the advantage of more robust lipsyncing for the AI avatar, as well as
 # slightly lower CPU usage while the TTS is idle.
 tts_url = "http://localhost:5100"
 tts_server_type = "raven"

@@ -15,7 +15,7 @@ We support all modules served by `raven.server.app`:
   - embeddings  - vector embeddings of text, useful for semantic visualization and RAG indexing
   - imagefx     - apply filter effects to an image (see `raven.avatar.common.postprocessor`)
   - talkinghead - animated AI avatar as a video stream
-  - tts         - text-to-speech with and without lip-syncing the AI avatar
+  - tts         - text-to-speech with and without lipsyncing the AI avatar
   - websearch   - search the web, and parse results for consumption by an LLM
 
 This module must be initialized before any API function is used; see `init_module`.

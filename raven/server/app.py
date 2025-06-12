@@ -474,7 +474,7 @@ def api_talkinghead_start_talking():
     This is useful for applications without actual voiced audio, such as
     an LLM when TTS is offline, or a low-budget visual novel.
 
-    For speech with automatic lip sync, see `tts_speak_lipsynced`.
+    For speech with automatic lipsync, see `tts_speak_lipsynced`.
     """
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
@@ -491,7 +491,7 @@ def api_talkinghead_stop_talking():
     This is useful for applications without actual voiced audio, such as
     an LLM when TTS is offline, or a low-budget visual novel.
 
-    For speech with automatic lip sync, see `tts_speak_lipsynced`.
+    For speech with automatic lipsync, see `tts_speak_lipsynced`.
     """
     if not animator.is_available():
         abort(403, "Module 'talkinghead' not running")
