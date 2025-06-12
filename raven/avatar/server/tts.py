@@ -22,7 +22,7 @@ import numpy as np
 from ...common.hfutil import maybe_install_models
 
 from ..common import config
-from ..vendor.streaming_audio_writer.streaming_audio_writer import StreamingAudioWriter
+from ...vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 
 modelsdir = None
 pipeline = None
@@ -53,7 +53,7 @@ def init_module(device_string: str, lang_code="a") -> None:
     # Install Kokoro's AI models if not installed yet.
     #
     # We need to install the full repo to get a list of available voice names programmatically (like Kokoro-FastAPI does, see `Kokoro-FastAPI/api/src/core/paths.py`).
-    # We can't download the model to "raven/avatar/vendor/", though, because Kokoro itself won't look for the files there - they must go into HF's default cache location.
+    # We can't download the model to "raven/vendor/", though, because Kokoro itself won't look for the files there - they must go into HF's default cache location.
     try:
         modelsdir = maybe_install_models(config.KOKORO_MODELS)
         pipeline = KPipeline(lang_code=lang_code, device=device_string, repo_id=config.KOKORO_MODELS)

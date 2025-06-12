@@ -19,8 +19,8 @@ import numpy as np
 
 import torch
 
-# from .vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
-from ..vendor.tha3.util import torch_linear_to_srgb
+# from ...vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
+from ...vendor.tha3.util import torch_linear_to_srgb
 
 
 # The keys for a pose in the emotion JSON files.

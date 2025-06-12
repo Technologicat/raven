@@ -62,9 +62,9 @@ from ...common import guiutils
 from ...common.hfutil import maybe_install_models
 from ...common.running_average import RunningAverage
 
-from ..vendor.tha3.poser.modes.load_poser import load_poser
-from ..vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
-from ..vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
+from ...vendor.tha3.poser.modes.load_poser import load_poser
+from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
+from ...vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
 from ..common import config
 from ..server.util import load_emotion_presets, posedict_to_pose, pose_to_posedict, convert_linear_to_srgb, convert_float_to_uint8
@@ -73,7 +73,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
-talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "vendor")).expanduser().resolve()
+talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "vendor")).expanduser().resolve()  # THA3 install location containing the "tha3" folder
 print(f"Talkinghead is installed at '{str(talkinghead_path)}'")
 sys.path.append(str(talkinghead_path))
 

@@ -48,11 +48,11 @@ from ...common.running_average import RunningAverage
 from ...common.video.postprocessor import Postprocessor
 from ...common.video.upscaler import Upscaler
 
-from ..vendor.tha3.poser.modes.load_poser import load_poser
-from ..vendor.tha3.poser.poser import Poser
-from ..vendor.tha3.util import (resize_PIL_image,
-                                extract_PIL_image_from_filelike,
-                                extract_pytorch_image_from_PIL_image)
+from ...vendor.tha3.poser.modes.load_poser import load_poser
+from ...vendor.tha3.poser.poser import Poser
+from ...vendor.tha3.util import (resize_PIL_image,
+                                 extract_PIL_image_from_filelike,
+                                 extract_pytorch_image_from_PIL_image)
 
 from ..common import config
 
@@ -64,7 +64,7 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------------
 # Global variables
 
-vendor_basedir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "vendor")).expanduser().resolve()
+talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "vendor")).expanduser().resolve()  # THA3 install location containing the "tha3" folder
 
 global_animator_instance = None
 _animator_output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
@@ -286,7 +286,7 @@ def load_image_from_stream(stream) -> str:
         global_reload_image = PIL.Image.open(io.BytesIO(img_data.getvalue()))
     except PIL.Image.UnidentifiedImageError:
         logger.warning("Could not load input image from stream, loading blank")
-        full_path = str(vendor_basedir / "tha3" / "images" / "inital.png")
+        full_path = str(talkinghead_path / "tha3" / "images" / "inital.png")
         global_reload_image = PIL.Image.open(full_path)
     return "OK"
 
@@ -295,7 +295,7 @@ def init_module(device: str, model: str) -> None:
     """Launch the avatar (live mode), served over HTTP.
 
     device: "cpu" or "cuda"
-    model: one of the folder names inside "vendor/tha3/models/"
+    model: one of the folder names inside "raven/vendor/tha3/models/"
 
            Determines the posing and postprocessing dtype.
 
@@ -309,7 +309,6 @@ def init_module(device: str, model: str) -> None:
 
     if first_launch_during_session:
         first_launch_during_session = False
-        talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "vendor")).expanduser().resolve()
         sys.path.append(str(talkinghead_path))  # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
         print(f"Talkinghead is installed at '{str(talkinghead_path)}'")
 
@@ -327,13 +326,13 @@ def init_module(device: str, model: str) -> None:
             global_encoder_instance = None
 
         logger.info("init_module: loading the Talking Head Anime 3 (THA3) posing engine")
-        modelsdir = str(vendor_basedir / "tha3" / "models")
+        modelsdir = str(talkinghead_path / "tha3" / "models")
         poser = load_poser(model, device, modelsdir=modelsdir)
         global_animator_instance = Animator(poser, device)
         global_encoder_instance = Encoder()
 
         # Load initial blank character image
-        full_path = str(vendor_basedir / "tha3" / "images" / "inital.png")
+        full_path = str(talkinghead_path / "tha3" / "images" / "inital.png")
         global_animator_instance.load_image(full_path)
 
         global_animator_instance.start()
@@ -448,11 +447,11 @@ class Animator:
                       - In each emotion that IS supplied, each morph that is NOT mentioned
                         is implicitly set to zero (due to how `apply_emotion_to_pose` works).
 
-                    For an example JSON file containing a suitable dictionary, see `avatar/assets/emotions/_defaults.json`.
+                    For an example JSON file containing a suitable dictionary, see `raven/avatar/assets/emotions/_defaults.json`.
 
                     For available morph names, see `posedict_keys` in `util.py`.
 
-                    For some more detail, see `avatar/vendor/tha3/poser/modes/pose_parameters.py`.
+                    For some more detail, see `raven/vendor/tha3/poser/modes/pose_parameters.py`.
                     "Arity 2" means `posedict_keys` has separate left/right morphs.
 
                     If still in doubt, see the GUI panel implementations in `editor.py`.

@@ -74,13 +74,13 @@ python -m raven.avatar.server --cpu --talkinghead-gpu
 
 Run the server with the `--help` option for a description of its command-line options.
 
-To customize which model variant of the THA3 poser to use, and where to install the models from, see the `--talkinghead-model=...` and `--talkinghead-models=...` options, respectively. If the directory `raven/avatar/vendor/tha3/models/` does not exist, the model files are automatically downloaded from HuggingFace and installed there.
+To customize which model variant of the THA3 poser to use, and where to install the models from, see the `--talkinghead-model=...` and `--talkinghead-models=...` options, respectively. If the directory `raven/vendor/tha3/models/` does not exist, the model files are automatically downloaded from HuggingFace and installed there.
 
 To customize which classification model to use, see the `--classification-model=...` option.
 
 #### Testing your installation
 
-To check that `raven-avatar` works, you can use the example character. Just copy `raven/avatar/vendor/tha3/images/example.png` to `SillyTavern/public/characters/yourcharacternamehere/talkinghead.png`.
+To check that `raven-avatar` works, you can use the example character. Just copy `raven/vendor/tha3/images/example.png` to `SillyTavern/public/characters/yourcharacternamehere/talkinghead.png`.
 
 To check that changing the character's expression works, use `/emote xxx` in SillyTavern, where `xxx` is name of one of the 28 emotions. See e.g. the filenames of the emotion templates in `raven/avatar/emotions/`.
 
@@ -130,7 +130,7 @@ Any emotion that is missing from a particular level in the lookup order falls th
 If you want to edit the emotion templates manually (without using the GUI) for some reason, the following may be useful sources of information:
 
 - `posedict_keys` in [`raven/avatar/server/util.py`](server/util.py) lists the morphs available in THA3.
-- [`raven/avatar/vendor/tha3/poser/modes/pose_parameters.py`](vendor/tha3/poser/modes/pose_parameters.py) contains some more detail.
+- [`raven/vendor/tha3/poser/modes/pose_parameters.py`](../vendor/tha3/poser/modes/pose_parameters.py) contains some more detail.
   - *"Arity 2"* means `posedict_keys` has separate left/right morphs.
 - The GUI panel implementations in [`raven/avatar/pose_editor/app.py`](pose_editor/app.py).
 
@@ -356,7 +356,7 @@ To refresh a running avatar after updating any of its settings files, make `talk
 
 This is a standalone graphical app that you can run locally on the machine where you installed `raven-avatar`. It is based on the original manual poser app in the THA3 tech demo, but this version has some important new convenience features and usability improvements. The GUI toolkit has also changed from wxPython to [DearPyGui](https://github.com/hoffstadt/DearPyGui/), so that this integrates better with my other stuff.
 
-The pose editor uses the same THA3 poser models as the live mode. If the directory `raven/avatar/vendor/tha3/models/` does not exist, the model files are automatically downloaded from HuggingFace and installed there.
+The pose editor uses the same THA3 poser models as the live mode. If the directory `raven/vendor/tha3/models/` does not exist, the model files are automatically downloaded from HuggingFace and installed there.
 
 With this app, you can:
 
@@ -405,10 +405,10 @@ So in a low-VRAM environment such as a gaming laptop, you can run just `talkingh
 If you get an error message like:
 
 ```
-FileNotFoundError: Model file /home/xxx/raven-downloadedgitrepo/raven/avatar/vendor/tha3/models/separable_float/eyebrow_decomposer.pt not found, please check the path.
+FileNotFoundError: Model file /home/xxx/raven-downloadedgitrepo/raven/vendor/tha3/models/separable_float/eyebrow_decomposer.pt not found, please check the path.
 ```
 
-the solution is to remove (or rename) your `raven/avatar/tha3/models/` directory, and restart `raven.avatar.server`. If the model directory does not exist, *raven-avatar* will download the models at the first run.
+the solution is to remove (or rename) your `raven/vendor/tha3/models/` directory, and restart `raven.avatar.server`. If the model directory does not exist, *raven-avatar* will download the models at the first run.
 
 The models are actually shared between the live mode and the pose editor, so it doesn't matter which one you run first.
 
@@ -433,7 +433,7 @@ To create an AI avatar that `talkinghead` understands:
   - In practice, you can create an image of the character in the correct pose first, and align it as a separate step.
   - If you use Stable Diffusion, see separate section below.
   - **IMPORTANT**: *The character's eyes and mouth must be open*, so that the model sees what they look like when open.
-    - See [the THA3 example character](vendor/tha3/images/example.png).
+    - See [the THA3 example character](../vendor/tha3/images/example.png).
     - If that's easier to produce, an open-mouth smile also works.
 - To add an alpha channel to an image that has the character otherwise fine, but on a background:
   - In Stable Diffusion, you can try the [rembg](https://github.com/AUTOMATIC1111/stable-diffusion-webui-rembg) extension for Automatic1111 to get a rough first approximation.
@@ -442,7 +442,7 @@ To create an AI avatar that `talkinghead` understands:
     - If you rendered the character on a light background, use a dark background layer when editing the edges, and vice versa.
     - This makes it much easier to see which pixels have background bleed and need to be erased.
 - Finally, align the character on the canvas to conform to the placement the THA3 posing engine expects.
-  - We recommend using [the THA3 example character](vendor/tha3/images/example.png) as an alignment template.
+  - We recommend using [the THA3 example character](../vendor/tha3/images/example.png) as an alignment template.
   - **IMPORTANT**: Export the final edited image, *without any background layer*, as a PNG with an alpha channel.
 - Load up the result into *SillyTavern* as a `talkinghead.png`, and see how well it performs.
 
