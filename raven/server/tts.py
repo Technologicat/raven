@@ -1,9 +1,9 @@
 """This module handles the TTS (text to speech, speech synthesizer) audio.
 
-For lipsync for the AI avatar, see `raven.client.api`.
+Lipsync for the AI avatar is coordinated by `raven.client.api`, using the `get_metadata` mode of `text_to_speech`.
 """
 
-__all__ = ["init_module", "is_available", "text_to_speech"]
+__all__ = ["init_module", "is_available", "get_voices", "text_to_speech"]
 
 import logging
 logging.basicConfig(level=logging.INFO)

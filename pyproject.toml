@@ -102,8 +102,8 @@ raven-preprocess = "raven.preprocess:main"
 raven-wos2bib = "raven.wos2bib:main"
 raven-visualizer = "raven.app:main"
 raven-server = "raven.server.app:main"
-raven-avatar-pose-editor = "raven.avatar.pose_editor.app:main"
-raven-avatar-client = "raven.avatar.client.app:main"  # postprocessor config editor / character tester
+raven-avatar-pose-editor = "raven.avatar.pose_editor.app:main"  # AI avatar pose editor
+raven-avatar-settings-editor = "raven.avatar.settings_editor.app:main"  # AI avatar postprocessor config editor / character tester
 raven-llmclient = "raven.librarian.llmclient:main"
 
 [build-system]

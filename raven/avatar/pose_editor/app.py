@@ -1,9 +1,9 @@
-"""THA3 pose editor GUI app.
+"""Raven-avatar pose editor, based on the original THA3 pose editor GUI app.
 
 Pose an anime character, based on a suitable 512×512 static input image and THA3, an AI poser model.
 
 This GUI app is an editor for the emotion templates. To edit postprocessor settings in a GUI and to
-test your characters, see the separate app `raven.avatar.client.app`.
+test your characters, see the separate app `raven.avatar.settings_editor.app`.
 
 Beside being the pose editor, this app also allows the automatic generation of the 28 emotional expression sprites
 for your AI character from one static input image, for use with distilbert classification in SillyTavern
@@ -31,7 +31,7 @@ This module was part of the old Talkinghead, and is licensed under the GNU AGPL,
 # Note that the AGPL license means that any BSD-licensed module must not import anything from this module. The other way is allowed,
 # i.e. this module may import names from BSD-licensed modules; it's then using those modules under the BSD license.
 #
-# The parts of GUI code that look common to this and `raven.avatar.client.app` are actually originally adapted from Raven-visualizer,
+# The parts of GUI code that look common to this and `raven.avatar.settings_editor.app` are actually originally adapted from Raven-visualizer,
 # which is BSD-licensed.
 
 import logging

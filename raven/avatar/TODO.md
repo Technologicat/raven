@@ -35,7 +35,7 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
   - GUI:
     - Add a second combobox, for the second voice. Add the None option, make it the default (so that the default is to use only one voice).
     - Slider for mix balance (step: 10%?).
-    - These can fit onto one line in the `raven.avatar.client` GUI (voice names are short).
+    - These can fit onto one line in the `raven.avatar.settings_editor` GUI (voice names are short).
 
 - Add an instance ID to all Talkinghead web API endpoints, to support multiple clients simultaneously.
   - `/api/talkinghead/load` should generate a new instance ID and spawn a new instance if none was given. Then, always return the instance ID that was affected by the command.
@@ -59,7 +59,7 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
     - Examples of generated poses, highlighting both success and failure cases. How the live talking head looks. Link the original THA tech reports.
     - Examples of postprocessor filter results.
     - How each postprocessor example config looks when rendering the example character.
-  - Document the postproc chain editor (`raven.avatar.client.app`).
+  - Document the postproc chain editor (`raven.avatar.settings_editor.app`).
   - Update the character-making instructions for SD Forge with Wai v14.0, RemBG extension with isnet-general-use/isnet-anime.
   - Add license note:
       All parts where I (@Technologicat) am the only author have been relicensed under 2-clause BSD. This includes the video postprocessor.

@@ -1,8 +1,10 @@
-"""Raven-avatar client (standalone talkinghead).
+"""Raven-avatar settings editor.
 
 !!! Start `raven.server.app` first before running this app! !!!
 
-This GUI app is an editor for the avatar's postprocessor settings, and a live test environment for your characters.
+This GUI app provides a standalone renderer for the AI avatar character, where you can edit
+the avatar's postprocessor settings, and test your characters.
+
 To edit the emotion templates, see the separate app `raven.avatar.pose_editor.app`.
 
 This module is licensed under the 2-clause BSD license.
@@ -61,7 +63,7 @@ from ...server import config as server_config
 # Module bootup
 
 bg = concurrent.futures.ThreadPoolExecutor()
-task_manager = bgtask.TaskManager(name="avatar_client",
+task_manager = bgtask.TaskManager(name="avatar_settings_editor",
                                   mode="concurrent",
                                   executor=bg)
 api.init_module(raven_server_url=client_config.raven_server_url,
@@ -120,7 +122,7 @@ with dpg.theme(tag="disablable_button_theme"):
 
 viewport_width = 1900
 viewport_height = 980
-dpg.create_viewport(title="Raven-avatar",
+dpg.create_viewport(title="Raven-avatar settings editor",
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()
@@ -413,10 +415,10 @@ class PostprocessorSettingsEditorGUI:
         self.animator_settings = None  # not loaded yet
 
         dpg.add_texture_registry(tag="talkinghead_example_textures")  # the DPG live texture and the window backdrop texture will be stored here
-        dpg.set_viewport_title(f"Raven-avatar [{client_config.raven_server_url}]")
+        dpg.set_viewport_title(f"Raven-avatar settings editor [{client_config.raven_server_url}]")
 
         with dpg.window(tag="talkinghead_main_window",
-                        label="Raven-avatar main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
+                        label="Raven-avatar settings editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 # We can use a borderless child window as a fixed-size canvas that crops anything outside it (instead of automatically showing a scrollbar).
                 # DPG adds its theme's margins, which in our case is 8 pixels of padding per side, hence the -16 to exactly cover the viewport's actually available height.

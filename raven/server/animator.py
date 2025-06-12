@@ -2,11 +2,12 @@
 
 This is the animation engine, running on top of the THA3 posing engine.
 
-This module implements the live animation backend, and its server-side API. For usage, see `server.py`.
+This module implements the live animation backend, and its server-side API.
+For how to use that API, see `app.py`.
 
-If you want to play around with THA3 expressions in a standalone app, see `editor.py`.
+If you want to edit THA3 expressions in a standalone app, see `raven/avatar/pose_editor/app.py`.
 
-See also the example client app, `example.py`.
+If you want to test an AI character, see `raven/avatar/settings_editor/app.py`.
 """
 
 __all__ = ["init_module", "is_available",
