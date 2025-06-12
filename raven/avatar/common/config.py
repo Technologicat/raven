@@ -44,6 +44,8 @@ TALKINGHEAD_MODELS = "OktayAlpk/talking-head-anime-3"
 
 # Models for the Kokoro speech synthesizer (text to speech, TTS).
 #
+# Huggingface model name, auto-downloaded on first use.
+#
 KOKORO_MODELS = "hexgrad/Kokoro-82M"
 
 # Where to store files. Currently only used for websearch's debug functionality.
