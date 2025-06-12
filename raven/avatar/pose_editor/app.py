@@ -63,8 +63,8 @@ from ...vendor.tha3.poser.modes.load_poser import load_poser
 from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from ...vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
-from ...common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from ...common import guiutils
+from ...common.gui import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common.gui import utils as guiutils
 from ...common.hfutil import maybe_install_models
 from ...common.running_average import RunningAverage
 

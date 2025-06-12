@@ -24,7 +24,7 @@ from typing import Callable, List, Optional, Union
 
 import dearpygui.dearpygui as dpg
 
-from . import numutils
+from .. import numutils
 
 # --------------------------------------------------------------------------------
 # Simple modal dialog for OK/cancel

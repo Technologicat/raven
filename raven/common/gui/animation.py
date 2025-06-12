@@ -19,7 +19,7 @@ from unpythonic import sym
 
 import dearpygui.dearpygui as dpg
 
-from . import numutils
+from .. import numutils
 
 # --------------------------------------------------------------------------------
 # Animation mechanism

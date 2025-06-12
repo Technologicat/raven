@@ -50,9 +50,10 @@ if platform.system().upper() == "LINUX":
 import dearpygui.dearpygui as dpg
 
 from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
-from ...common import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+
 from ...common import bgtask
-from ...common import guiutils
+from ...common.gui import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common.gui import utils as guiutils
 from ...common.running_average import RunningAverage
 
 from ...client import api  # convenient Python functions that abstract away the web API

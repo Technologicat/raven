@@ -62,11 +62,12 @@ with timer() as tim:
     from .vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     from .vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
-    from .common import animation
     from .common import bgtask
-    from .common import guiutils
     from .common import numutils
     from .common import utils
+
+    from .common.gui import animation
+    from .common.gui import utils as guiutils
 
     from . import config
     from . import preprocess

@@ -16,7 +16,7 @@ import time
 
 import dearpygui.dearpygui as dpg
 
-from ...common import animation
+from ...common.gui import animation
 
 
 # Hotkey support
