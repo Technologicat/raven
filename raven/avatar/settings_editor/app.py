@@ -52,7 +52,7 @@ import dearpygui.dearpygui as dpg
 from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
 from ...common import bgtask
-from ...common.gui import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
 from ...common.gui import fontsetup
 from ...common.gui import messagebox
 from ...common.gui import utils as guiutils
@@ -1404,7 +1404,7 @@ api.avatar_start()
 def shutdown() -> None:
     api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     task_manager.clear(wait=True)
-    animation.animator.clear()
+    gui_animation.animator.clear()
     global gui_instance
     gui_instance = None
 dpg.set_exit_callback(shutdown)
@@ -1450,7 +1450,7 @@ dpg.set_frame_callback(2, _load_initial_animator_settings)
 # last_tts_check_time = 0
 # tts_check_interval = 5.0  # seconds
 def update_animations():
-    animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
+    gui_animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
 
     # # Enable/disable speech synthesizer controls depending on whether the TTS server is available
     # global last_tts_check_time

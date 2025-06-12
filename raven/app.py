@@ -66,7 +66,7 @@ with timer() as tim:
     from .common import numutils
     from .common import utils
 
-    from .common.gui import animation
+    from .common.gui import animation as gui_animation
     from .common.gui import fontsetup
     from .common.gui import widgetfinder
     from .common.gui import utils as guiutils
@@ -488,12 +488,12 @@ def _update_word_cloud(*, task_env):
                 dpg.set_item_label("word_cloud_window", "Word cloud [updating]")  # tag
                 dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD_BOLT)
                 dpg.set_value("word_cloud_button_tooltip_text", "Generating word cloud, just for you. Please wait. [F10]")
-                animation.animator.add(animation.ButtonFlash(message=None,
-                                                             target_button="word_cloud_button",
-                                                             target_tooltip=None,  # we handle the tooltip manually
-                                                             target_text=None,
-                                                             original_theme=global_theme,
-                                                             duration=gui_config.acknowledgment_duration))
+                gui_animation.animator.add(gui_animation.ButtonFlash(message=None,
+                                                                     target_button="word_cloud_button",
+                                                                     target_tooltip=None,  # we handle the tooltip manually
+                                                                     target_text=None,
+                                                                     original_theme=global_theme,
+                                                                     duration=gui_config.acknowledgment_duration))
 
                 # Combine keyword counts of the specified items
                 logger.debug(f"_update_word_cloud: {task_env.task_name}: Collecting keywords for selected data points.")
@@ -566,12 +566,12 @@ def write_word_cloud(filename):
     logger.debug(f"write_word_cloud: Dispatching a save to '{filename}', and acknowledging in GUI.")
 
     # The animation can run while we're saving.
-    animation.animator.add(animation.ButtonFlash(message=f"Saved to '{filename}'!",
-                                                 target_button="word_cloud_save_button",
-                                                 target_tooltip="word_cloud_save_tooltip",
-                                                 target_text="word_cloud_save_tooltip_text",
-                                                 original_theme=global_theme,
-                                                 duration=gui_config.acknowledgment_duration))
+    gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Saved to '{filename}'!",
+                                                         target_button="word_cloud_save_button",
+                                                         target_tooltip="word_cloud_save_tooltip",
+                                                         target_text="word_cloud_save_tooltip_text",
+                                                         original_theme=global_theme,
+                                                         duration=gui_config.acknowledgment_duration))
 
     def write_task():
         logger.debug(f"write_word_cloud.write_task: Saving word cloud image to '{filename}'.")
@@ -799,15 +799,15 @@ def reset_app_state(_update_gui=True):
     # Stop old background tasks
     clear_background_tasks()
 
-    # Stop animations
-    animation.animator.clear()
+    # Stop GUI animations
+    gui_animation.animator.clear()
 
     # Only update the GUI elements if not exiting, because when exiting, the GUI is already being deleted.
     if _update_gui:
         # Re-add the background animations that should always be present in the animator.
         # These monitor the app state and live-update at every frame.
-        animation.animator.add(PlotterPulsatingGlow(cycle_duration=gui_config.glow_cycle_duration))
-        animation.animator.add(CurrentItemControlsGlow(cycle_duration=gui_config.glow_cycle_duration))
+        gui_animation.animator.add(PlotterPulsatingGlow(cycle_duration=gui_config.glow_cycle_duration))
+        gui_animation.animator.add(CurrentItemControlsGlow(cycle_duration=gui_config.glow_cycle_duration))
 
         # Clear undo history and selection
         reset_undo_history()
@@ -1155,13 +1155,13 @@ def start_or_stop_preprocessor():
 # --------------------------------------------------------------------------------
 # Animations, live updates
 
-info_panel_scroll_end_flasher = animation.ScrollEndFlasher(target="item_information_panel",
-                                                           tag="scroll_end_flasher",
-                                                           duration=gui_config.scroll_ends_here_duration,
-                                                           custom_finish_pred=lambda self: is_any_modal_window_visible(),  # end animation (and hide the flasher) immediately if any modal window becomes visible
-                                                           font=icon_font_solid,
-                                                           text_top=fa.ICON_ARROWS_UP_TO_LINE,
-                                                           text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
+info_panel_scroll_end_flasher = gui_animation.ScrollEndFlasher(target="item_information_panel",
+                                                               tag="scroll_end_flasher",
+                                                               duration=gui_config.scroll_ends_here_duration,
+                                                               custom_finish_pred=lambda self: is_any_modal_window_visible(),  # end animation (and hide the flasher) immediately if any modal window becomes visible
+                                                               font=icon_font_solid,
+                                                               text_top=fa.ICON_ARROWS_UP_TO_LINE,
+                                                               text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
 
 search_string_box = box("")
 search_result_data_idxs_box = box(utils.make_blank_index_array())
@@ -1220,7 +1220,7 @@ def update_search(wait=True):
     update_mouse_hover(force=True, wait=wait)
 
 
-class PlotterPulsatingGlow(animation.Animation):  # this animation is set up by `reset_app_state`
+class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is set up by `reset_app_state`
     def __init__(self, cycle_duration):
         """Cyclic animation to pulsate the glow highlight for search result datapoints and selected datapoints."""
         super().__init__()
@@ -1271,7 +1271,7 @@ class PlotterPulsatingGlow(animation.Animation):  # this animation is set up by 
         # and then edit the theme's colors per-frame (just before render).
         #
         # Convert animation cycle position to animation control channel value.
-        # Same approach as in the AI avatar code, see `raven.server.animator.animate_breathing`.
+        # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
         animation_pos = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         alpha_search = self._compute_alpha(animation_pos,
                                            len(unbox(search_result_data_idxs_box)),
@@ -1282,10 +1282,10 @@ class PlotterPulsatingGlow(animation.Animation):  # this animation is set up by 
         dpg.set_value(search_results_highlight_color, (255, 96, 96, alpha_search))  # red
         dpg.set_value(selection_highlight_color, (96, 255, 255, alpha_selection))  # cyan
 
-        return animation.action_continue
+        return gui_animation.action_continue
 
 
-class CurrentItemControlsGlow(animation.Animation):  # this animation is set up by `reset_app_state`
+class CurrentItemControlsGlow(gui_animation.Animation):  # this animation is set up by `reset_app_state`
     def __init__(self, cycle_duration):
         """Cyclic animation to pulsate the current item controls.
 
@@ -1306,7 +1306,7 @@ class CurrentItemControlsGlow(animation.Animation):  # this animation is set up 
         """
         if not current_item_info_lock.acquire(blocking=False):
             # If we didn't get the lock, it means `current_item` is being updated. Never mind, we can try again next frame.
-            return animation.action_continue
+            return gui_animation.action_continue
         try:  # ok, got the lock
             have_current_item = False
             if current_item_info.item is not None:
@@ -1350,7 +1350,7 @@ class CurrentItemControlsGlow(animation.Animation):  # this animation is set up 
         else:
             dpg.delete_item("viewport_drawlist", children_only=True)  # tag  # delete old draw items
 
-        return animation.action_continue
+        return gui_animation.action_continue
 
 
 info_panel_dimmer_overlay = None
@@ -1358,9 +1358,9 @@ def create_info_panel_dimmer_overlay():
     """Create a dimmer for the info panel. Used for indicating that the info panel is updating."""
     global info_panel_dimmer_overlay
     if info_panel_dimmer_overlay is None:
-        info_panel_dimmer_overlay = animation.Dimmer(target="item_information_panel",
-                                                     tag="dimmer_overlay_window",
-                                                     color=(37, 37, 38, 255))   # TODO: This is the info panel content area background color in the default theme. Figure out how to get colors from a theme.
+        info_panel_dimmer_overlay = gui_animation.Dimmer(target="item_information_panel",
+                                                         tag="dimmer_overlay_window",
+                                                         color=(37, 37, 38, 255))   # TODO: This is the info panel content area background color in the default theme. Figure out how to get colors from a theme.
         info_panel_dimmer_overlay.build()
 def show_info_panel_dimmer_overlay():
     """Dim the info panel."""
@@ -1436,7 +1436,7 @@ def update_animations():
     # ----------------------------------------
     # Render all currently running animations
 
-    animation.animator.render_frame()
+    gui_animation.animator.render_frame()
 
 
 current_item_info = env(item=None, x0=None, y0=None, w=None, h=None)  # `item`: GUI widget DPG tag or ID; `x0`, `y0`: screen space coordinates, in pixels; `w`, `h`: in pixels
@@ -2636,14 +2636,14 @@ def scroll_info_panel_to_position(target_y_scroll):
     # it is just updated instead of creating a new one.
     global scroll_animation
     with scroll_animation_lock:
-        with animation.SmoothScrolling.class_lock:
-            animation.animator.add(animation.SmoothScrolling(target_child_window="item_information_panel",
-                                                             target_y_scroll=target_y_scroll,
-                                                             smooth=gui_config.smooth_scrolling,
-                                                             smooth_step=gui_config.smooth_scrolling_step_parameter,
-                                                             flasher=info_panel_scroll_end_flasher,
-                                                             finish_callback=clear_global_scroll_animation_reference))
-            scroll_animation = animation.SmoothScrolling.instances["item_information_panel"]  # get the reified instance
+        with gui_animation.SmoothScrolling.class_lock:
+            gui_animation.animator.add(gui_animation.SmoothScrolling(target_child_window="item_information_panel",
+                                                                     target_y_scroll=target_y_scroll,
+                                                                     smooth=gui_config.smooth_scrolling,
+                                                                     smooth_step=gui_config.smooth_scrolling_step_parameter,
+                                                                     flasher=info_panel_scroll_end_flasher,
+                                                                     finish_callback=clear_global_scroll_animation_reference))
+            scroll_animation = gui_animation.SmoothScrolling.instances["item_information_panel"]  # get the reified instance
 
     return target_y_scroll
 
@@ -2749,12 +2749,12 @@ def _copy_report_to_clipboard(*, report_format):
     dpg.set_clipboard_text(report_text)
 
     # Acknowledge the action in the GUI.
-    animation.animator.add(animation.ButtonFlash(message=f"Copied to clipboard! ({'plain text' if report_format == 'txt' else 'Markdown'})",
-                                                 target_button=copy_report_button,
-                                                 target_tooltip=copy_report_tooltip,
-                                                 target_text=copy_report_tooltip_text,
-                                                 original_theme=global_theme,
-                                                 duration=gui_config.acknowledgment_duration))
+    gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Copied to clipboard! ({'plain text' if report_format == 'txt' else 'Markdown'})",
+                                                         target_button=copy_report_button,
+                                                         target_tooltip=copy_report_tooltip,
+                                                         target_text=copy_report_tooltip_text,
+                                                         original_theme=global_theme,
+                                                         duration=gui_config.acknowledgment_duration))
 
 def copy_current_entry_to_clipboard():
     """Copy the authors, year and title of the current item to the clipboard.
@@ -2792,12 +2792,12 @@ def _copy_entry_to_clipboard(item):
     dpg.set_clipboard_text(f"{entry.author} ({entry.year}): {entry.title}")
 
     # Acknowledge the action in the GUI.
-    animation.animator.add(animation.ButtonFlash(message="Copied to clipboard!",
-                                                 target_button=button,
-                                                 target_tooltip=tooltip,
-                                                 target_text=tooltip_text,
-                                                 original_theme=global_theme,
-                                                 duration=gui_config.acknowledgment_duration))
+    gui_animation.animator.add(gui_animation.ButtonFlash(message="Copied to clipboard!",
+                                                         target_button=button,
+                                                         target_tooltip=tooltip,
+                                                         target_text=tooltip_text,
+                                                         original_theme=global_theme,
+                                                         duration=gui_config.acknowledgment_duration))
 
 def search_or_select_current_entry():
     """Search for the current item in the plotter, or change the selection.

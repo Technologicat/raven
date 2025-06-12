@@ -65,7 +65,7 @@ from ...vendor.tha3.poser.modes.load_poser import load_poser
 from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from ...vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
 
-from ...common.gui import animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
 from ...common.gui import fontsetup
 from ...common.gui import messagebox
 from ...common.gui import utils as guiutils
@@ -1199,7 +1199,7 @@ pathlib.Path.mkdir(p, parents=True, exist_ok=True)
 gui_instance = PoseEditorGUI(poser, device, args.model)
 
 def shutdown():
-    animation.animator.clear()
+    gui_animation.animator.clear()
 dpg.set_exit_callback(shutdown)
 
 dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
@@ -1216,7 +1216,7 @@ def tune_viewport():
 dpg.set_frame_callback(10, tune_viewport)
 
 def update_animations():
-    animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
+    gui_animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
 
 # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
 while dpg.is_dearpygui_running():

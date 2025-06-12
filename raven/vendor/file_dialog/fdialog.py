@@ -16,7 +16,7 @@ import time
 
 import dearpygui.dearpygui as dpg
 
-from ...common.gui import animation
+from ...common.gui import animation as gui_animation
 
 
 # Hotkey support
@@ -945,23 +945,23 @@ class FileDialog:
         logger.debug(f"refresh: instance '{self.tag}' ({self.instance_tag}), refreshing at cwd = '{cwd}'")
         self.reset_dir(default_path=cwd)
         # Raven: Acknowledge the action in the GUI.
-        animation.animator.add(animation.ButtonFlash(message="",
-                                                     target_button=self.button_refresh,
-                                                     target_tooltip=None,
-                                                     target_text=None,
-                                                     original_theme=dpg.get_item_theme(self.button_refresh),
-                                                     duration=1.0))
+        gui_animation.animator.add(gui_animation.ButtonFlash(message="",
+                                                             target_button=self.button_refresh,
+                                                             target_tooltip=None,
+                                                             target_text=None,
+                                                             original_theme=dpg.get_item_theme(self.button_refresh),
+                                                             duration=1.0))
 
     def back_to_default_path(self):
         logger.debug(f"back_to_default_path: instance '{self.tag}' ({self.instance_tag}), going back to '{self.default_path}'")
         self.chdir(self.default_path)
         # Raven: Acknowledge the action in the GUI.
-        animation.animator.add(animation.ButtonFlash(message="",
-                                                     target_button=self.button_back_to_default_path,
-                                                     target_tooltip=None,
-                                                     target_text=None,
-                                                     original_theme=dpg.get_item_theme(self.button_back_to_default_path),
-                                                     duration=1.0))
+        gui_animation.animator.add(gui_animation.ButtonFlash(message="",
+                                                             target_button=self.button_back_to_default_path,
+                                                             target_tooltip=None,
+                                                             target_text=None,
+                                                             original_theme=dpg.get_item_theme(self.button_back_to_default_path),
+                                                             duration=1.0))
 
     def _update_search(self):
         res = dpg.get_value(f"ex_search_{self.instance_tag}")
@@ -980,14 +980,14 @@ class FileDialog:
                 save_as_file_name = dpg.get_value(f"ex_search_{self.instance_tag}")
                 if not save_as_file_name:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), search field is empty, cannot save with empty filename; rejecting the ok.")
-                    animation.animator.add(animation.ButtonFlash(message="Please enter a filename",
-                                                                 target_button=self.btn_ok,
-                                                                 target_tooltip=None,
-                                                                 target_text=self.text_notification,
-                                                                 original_theme=dpg.get_item_theme(self.btn_ok),
-                                                                 flash_color=(255, 32, 32),  # orange for warning
-                                                                 text_color=(255, 255, 255),
-                                                                 duration=1.0))
+                    gui_animation.animator.add(gui_animation.ButtonFlash(message="Please enter a filename",
+                                                                         target_button=self.btn_ok,
+                                                                         target_tooltip=None,
+                                                                         target_text=self.text_notification,
+                                                                         original_theme=dpg.get_item_theme(self.btn_ok),
+                                                                         flash_color=(255, 32, 32),  # orange for warning
+                                                                         text_color=(255, 255, 255),
+                                                                         duration=1.0))
                     return
                 full_path = os.path.join(os.getcwd(), save_as_file_name)
                 self.selected_files.append(full_path)
@@ -1002,14 +1002,14 @@ class FileDialog:
                         self.selected_files.extend(self.shown_items)
                     else:
                         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), multiple items are shown, multi_selection is disabled; rejecting the ok.")
-                        animation.animator.add(animation.ButtonFlash(message="Please select an item",
-                                                                     target_button=self.btn_ok,
-                                                                     target_tooltip=None,
-                                                                     target_text=self.text_notification,
-                                                                     original_theme=dpg.get_item_theme(self.btn_ok),
-                                                                     flash_color=(255, 32, 32),  # orange for warning
-                                                                     text_color=(255, 255, 255),
-                                                                     duration=1.0))
+                        gui_animation.animator.add(gui_animation.ButtonFlash(message="Please select an item",
+                                                                             target_button=self.btn_ok,
+                                                                             target_tooltip=None,
+                                                                             target_text=self.text_notification,
+                                                                             original_theme=dpg.get_item_theme(self.btn_ok),
+                                                                             flash_color=(255, 32, 32),  # orange for warning
+                                                                             text_color=(255, 255, 255),
+                                                                             duration=1.0))
                         return
                 else:
                     logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), no items shown (maybe nothing matches the search?); rejecting the ok.")
@@ -1017,14 +1017,14 @@ class FileDialog:
                         msg = "Please select at least one item"
                     else:
                         msg = "Please select an item"
-                    animation.animator.add(animation.ButtonFlash(message=msg,
-                                                                 target_button=self.btn_ok,
-                                                                 target_tooltip=None,
-                                                                 target_text=self.text_notification,
-                                                                 original_theme=dpg.get_item_theme(self.btn_ok),
-                                                                 flash_color=(255, 32, 32),  # orange for warning
-                                                                 text_color=(255, 255, 255),
-                                                                 duration=1.0))
+                    gui_animation.animator.add(gui_animation.ButtonFlash(message=msg,
+                                                                         target_button=self.btn_ok,
+                                                                         target_tooltip=None,
+                                                                         target_text=self.text_notification,
+                                                                         original_theme=dpg.get_item_theme(self.btn_ok),
+                                                                         flash_color=(255, 32, 32),  # orange for warning
+                                                                         text_color=(255, 255, 255),
+                                                                         duration=1.0))
                     return
         assert len(self.selected_files)  # at least one file selected if we get here
 
@@ -1048,14 +1048,14 @@ class FileDialog:
         self.last_ok_time = current_time
         if self.save_mode and os.path.exists(self.selected_files[0]) and not double_okd:
             # Raven: Acknowledge the action in the GUI.
-            animation.animator.add(animation.ButtonFlash(message="Press again to overwrite file",
-                                                         target_button=self.btn_ok,
-                                                         target_tooltip=None,
-                                                         target_text=self.text_notification,
-                                                         original_theme=dpg.get_item_theme(self.btn_ok),
-                                                         flash_color=(255, 32, 32),  # orange for warning
-                                                         text_color=(255, 255, 255),
-                                                         duration=confirm_duration))
+            gui_animation.animator.add(gui_animation.ButtonFlash(message="Press again to overwrite file",
+                                                                 target_button=self.btn_ok,
+                                                                 target_tooltip=None,
+                                                                 target_text=self.text_notification,
+                                                                 original_theme=dpg.get_item_theme(self.btn_ok),
+                                                                 flash_color=(255, 32, 32),  # orange for warning
+                                                                 text_color=(255, 255, 255),
+                                                                 duration=confirm_duration))
             return
 
         logger.debug(f"ok: instance '{self.tag}' ({self.instance_tag}), hiding dialog and returning {self.selected_files}.")
