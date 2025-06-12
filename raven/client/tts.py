@@ -1,6 +1,6 @@
 """TTS (text-to-speech, speech synthesizer) Python bindings of Raven's web API.
 
-This module coordinates lipsync between the TTS and the avatar.
+This module coordinates lipsync between the TTS and the avatar, and implements the actual client-side audio output.
 """
 
 __all__ = ["tts_list_voices",
