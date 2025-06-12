@@ -266,7 +266,7 @@ def result_feed() -> Response:
 
 # TODO: the input is a flask.request.file.stream; what's the type of that?
 def load_image_from_stream(stream) -> str:
-    """Load image from stream and start animation.
+    """Load image from stream and start avatar animation.
 
     The input is a `flask.request.file.stream`.
     """
