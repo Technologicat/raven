@@ -27,6 +27,7 @@ import json
 import os
 import pathlib
 import platform
+import requests
 import sys
 import threading
 import time
@@ -1432,7 +1433,10 @@ def app_shutdown() -> None:
     Currently, we release server-side resources here.
     """
     if avatar_instance_id is not None:
-        api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
+        try:
+            api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
+        except requests.exceptions.ConnectionError:  # server has gone bye-bye
+            pass
 atexit.register(app_shutdown)
 
 task_manager.submit(update_live_texture, envcls())
