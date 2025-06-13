@@ -76,8 +76,9 @@ api.initialize(raven_server_url=client_config.raven_server_url,
                tts_server_type=client_config.tts_server_type,
                executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
 
-# --------------------------------------------------------------------------------
-# Utilities
+# These are initialized later, when the app starts
+gui_instance = None
+avatar_instance_id = None
 
 # --------------------------------------------------------------------------------
 # DPG init
@@ -132,8 +133,6 @@ dpg.setup_dearpygui()
 
 # --------------------------------------------------------------------------------
 # File dialog init
-
-gui_instance = None  # initialized later, when the app starts
 
 filedialog_open_input_image = None
 filedialog_open_backdrop_image = None
@@ -919,12 +918,12 @@ class PostprocessorSettingsEditorGUI:
         logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sender = {sender}, app_data = {app_data}")
         self.current_emotion = dpg.get_value(self.emotion_choice)
         logger.info(f"PostprocessorSettingsEditorGUI.on_send_emotion: sending emotion '{self.current_emotion}'")
-        api.avatar_set_emotion(self.current_emotion)
+        api.avatar_set_emotion(avatar_instance_id, self.current_emotion)
 
     def load_input_image(self, filename: Union[pathlib.Path, str]) -> None:
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_input_image: loading image '{filename}'")
-            api.avatar_load(filename)
+            api.avatar_reload(avatar_instance_id, filename)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_input_image: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -938,7 +937,7 @@ class PostprocessorSettingsEditorGUI:
     def load_json(self, filename: Union[pathlib.Path, str]) -> None:
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_json: loading emotion templates '{filename}'")
-            api.avatar_load_emotion_templates_from_file(filename)
+            api.avatar_load_emotion_templates_from_file(avatar_instance_id, filename)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_json: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -996,7 +995,7 @@ class PostprocessorSettingsEditorGUI:
             self.animator_settings.update(custom_animator_settings)
 
             # Send to server
-            api.avatar_load_animator_settings(self.animator_settings)
+            api.avatar_load_animator_settings(avatar_instance_id, self.animator_settings)
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.on_gui_settings_change: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -1044,7 +1043,7 @@ class PostprocessorSettingsEditorGUI:
             animator_settings.update(custom_animator_settings)
 
             # Send to server
-            api.avatar_load_animator_settings(animator_settings)
+            api.avatar_load_animator_settings(avatar_instance_id, animator_settings)
 
             # ...and only if that is successful, remember the settings.
             self.animator_settings = animator_settings
@@ -1085,23 +1084,23 @@ class PostprocessorSettingsEditorGUI:
     def toggle_talking(self) -> None:
         """Toggle the avatar's talking state (simple randomized mouth animation)."""
         if not self.talking_animation_running:
-            api.avatar_start_talking()
+            api.avatar_start_talking(avatar_instance_id)
             dpg.set_item_label("start_stop_talking_button", "Stop [Ctrl+T]")
         else:
-            api.avatar_stop_talking()
+            api.avatar_stop_talking(avatar_instance_id)
             dpg.set_item_label("start_stop_talking_button", "Start [Ctrl+T]")
         self.talking_animation_running = not self.talking_animation_running
 
     def toggle_animator_paused(self) -> None:
         """Pause or resume the animation. Pausing when the avatar won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
         if self.animator_running:
-            api.avatar_stop()
+            api.avatar_stop(avatar_instance_id)
             dpg.set_value("please_standby_text", "[Animator is paused]")
             dpg.show_item("please_standby_text")
             dpg.hide_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")
         else:
-            api.avatar_start()
+            api.avatar_start(avatar_instance_id)
             dpg.hide_item("please_standby_text")
             dpg.show_item(f"live_image_{self.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")
@@ -1131,7 +1130,8 @@ class PostprocessorSettingsEditorGUI:
         if dpg.get_value("speak_lipsync_checkbox"):
             def stop_lipsync_speaking():
                 self.on_stop_speaking(None, None)  # stop the TTS and update the GUI
-            api.tts_speak_lipsynced(voice=selected_voice,
+            api.tts_speak_lipsynced(instance_id=avatar_instance_id,
+                                    voice=selected_voice,
                                     text=text,
                                     speed=dpg.get_value("speak_speed_slider") / 10,
                                     video_offset=dpg.get_value("speak_video_offset") / 10,
@@ -1139,9 +1139,9 @@ class PostprocessorSettingsEditorGUI:
                                     stop_callback=stop_lipsync_speaking)
         else:
             def start_nonlipsync_speaking():
-                api.avatar_start_talking()
+                api.avatar_start_talking(avatar_instance_id)
             def stop_nonlipsync_speaking():
-                api.avatar_stop_talking()
+                api.avatar_stop_talking(avatar_instance_id)
                 self.on_stop_speaking(None, None)  # stop the TTS and update the GUI
             api.tts_speak(voice=selected_voice,
                           text=text,
@@ -1255,7 +1255,7 @@ class ResultFeedReader:
         self.gen = None
 
     def start(self) -> None:
-        self.gen = api.avatar_result_feed()
+        self.gen = api.avatar_result_feed(avatar_instance_id)
 
     def is_running(self) -> bool:
         return self.gen is not None
@@ -1374,7 +1374,10 @@ def update_live_texture(task_env) -> None:
                 dpg.set_value("fps_text", describe_performance(gui_instance, mimetype, h, w))
             except SystemError:  # does not exist (can happen at app shutdown)
                 pass
+    except EOFError:  # `result_feed` has shut down (normal at app exit, after we call `api.avatar_unload`)
+        pass
     except Exception as exc:
+        traceback.print_exc()
         logger.error(f"PostprocessorSettingsEditorGUI.update_live_texture: {type(exc)}: {exc}")
 
         # TODO: recovery if the server comes back online
@@ -1395,14 +1398,16 @@ else:
     print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL} Is Raven-server running?")
     sys.exit(255)
 
-gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings
-
-api.avatar_load_emotion_templates({})  # send empty dict -> reset emotion templates to server defaults
-api.avatar_load(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "example.png"))
-api.avatar_start()
+# IMPORTANT: `avatar_load` first before we start the GUI, to create the avatar instance.
+avatar_instance_id = api.avatar_load(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "example.png"))
+api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
+gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings into the GUI, as well as send them to the avatar instance.
+api.avatar_start(avatar_instance_id)
 
 def shutdown() -> None:
     api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
+    if avatar_instance_id is not None:
+        api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
     task_manager.clear(wait=True)
     gui_animation.animator.clear()
     global gui_instance
