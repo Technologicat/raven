@@ -61,12 +61,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
     - How each postprocessor example config looks when rendering the example character.
   - Document the postproc chain editor (`raven.avatar.settings_editor.app`).
   - Update the character-making instructions for SD Forge with Wai v14.0, RemBG extension with isnet-general-use/isnet-anime.
-  - Add license note:
-      All parts where I (@Technologicat) am the only author have been relicensed under 2-clause BSD. This includes the video postprocessor.
-      Only `raven.server` and `raven.avatar.pose_editor`, which are separate apps, are licensed under AGPL.
-      The module `raven.common.video.upscaler` is licensed under MIT, matching the license of the Anime4K engine it uses.
-      The character "raven/avatar/assets/characters/example.png" is the example character from the poser engine THA3, copyright Pramook Khungurn, and is licensed for non-commercial use.
-      All other image assets are original to this software, and are licensed under CC-BY-SA 4.0.
 
 ### Examples
 
