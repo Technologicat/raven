@@ -68,7 +68,8 @@ from ..common import netutil
 from .tts import tts_list_voices, tts_speak, tts_speak_lipsynced, tts_stop  # noqa: F401: re-export
 from . import util  # for the `api_initialized` flag (must be looked up on the `util` module each time it is used, because the flag is not boxed)  # TODO: box it, or wrap it in a property?
 
-from .util import api_config, initialize, yell_on_error  # noqa: F401: re-export
+from .util import api_config, yell_on_error  # noqa: F401: re-export
+from .util import initialize_api as initialize  # noqa: F401: re-export
 
 # --------------------------------------------------------------------------------
 # General utilities

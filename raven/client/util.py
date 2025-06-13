@@ -7,7 +7,7 @@
 # The correct way is to look it up on this module (`raven.client.util.api_initialized`)
 # when its current value is needed.
 __all__ = ["api_config",  # configuration namespace
-           "initialize",
+           "initialize_api",
            "yell_on_error"]
 
 import logging
@@ -30,13 +30,15 @@ api_config = envcls(raven_default_headers={},
                     tts_default_headers={},
                     audio_frequency=44100,
                     audio_buffer_size=512)
-def initialize(raven_server_url: str,
-               raven_api_key_file: Optional[str],
-               tts_url: Optional[str],
-               tts_api_key_file: Optional[str],
-               tts_server_type: Optional[str],
-               executor: Optional = None):
+def initialize_api(raven_server_url: str,
+                   raven_api_key_file: Optional[str],
+                   tts_url: Optional[str],
+                   tts_api_key_file: Optional[str],
+                   tts_server_type: Optional[str],
+                   executor: Optional = None):
     """Set up URLs and API keys, and initialize the audio mixer.
+
+    Call this before calling any of the actual API functions in `raven.client.api`.
 
     Suggested values for the `avatar_*` and `tts_*` arguments are provided
     in `raven.client.config`.
