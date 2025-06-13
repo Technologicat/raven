@@ -17,17 +17,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
     - Have an option to use local embeddings/NLP in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
 
-  - The server should be able to serve several clients.
-    - Most of the endpoints are stateless. For those, this is trivial.
-    - The exception is the avatar.
-      - Add an instance ID to all `/api/avatar/*` endpoints, to support multiple clients simultaneously.
-      - `/api/avatar/load` should generate a new instance ID and spawn a new instance. Then, return the instance ID (as a JSON response?).
-        - All other `/api/avatar/*` endpoints should take this instance ID as a parameter.
-        - Upon load, instantiate an animator and an encoder.
-          - Network transport is automatically instantiated when a client connects to `/api/avatar/result_feed`, so the load step doesn't need to do that.
-      - Add a new endpoint `/api/avatar/unload` to delete an instance.
-        - Delete the corresponding animator and encoder. Make the network transport automatically shut down on the server side (exit the generator if its encoder instance goes missing).
-
   - Finish the refactor for *Raven-visualizer*:
     - Move `raven.app` -> `raven.visualizer.app` to conform with the naming scheme and allow future expansion of the Raven constellation.
     - Move `preprocess` -> `raven.visualizer.importer` (rename the console_script to `raven-visualizer-importer-cli` or something)
@@ -35,6 +24,9 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
         The main difficulty is to explain the two-stage import process in the docs (any format to BibTeX, then BibTeX to Raven-visualizer). Maybe "convert" and "import"?
 
 - Add "Refresh current character" button (or even automate that?) to facilitate live-testing during creation of new character images.
+
+- Allow different simultaneous avatar instances to run on different GPUs.
+  - Make the device specification a parameter of `avatar_load`. Instantiate one poser per unique GPU.
 
 
 ### Documentation
@@ -106,11 +98,6 @@ Not scheduled for now.
 ## Far future
 
 Definitely not scheduled. Ideas for future enhancements.
-
-- Several avatars running simultaneously.
-  - Animator is already a class, and so is Encoder, but there is currently just one global instance of each.
-  - Needs some kind of ID system for the requests.
-  - Need to delete the corresponding instances when the result_feed is closed by client?
 
 - Low compute mode: static poses + postprocessor.
   - Poses would be generated from a character image using THA3, as usual, but only once per session. Each pose would be cached.
