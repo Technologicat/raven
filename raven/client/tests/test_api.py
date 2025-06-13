@@ -61,14 +61,6 @@ def test():
     print(image.size, image.mode)
     # image.save("study_upscaled_4k.png")  # DEBUG so we can see it (but not useful to run every time the self-test runs)
 
-    logger.info("test: initialize avatar")
-    api.avatar_load(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "characters", "example.png"))  # send an avatar - mandatory
-    api.avatar_load_animator_settings_from_file(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings", "animator.json"))  # send animator config - optional, server defaults used if not sent
-    api.avatar_load_emotion_templates_from_file(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "emotions", "_defaults.json"))  # send the morph parameters for emotions - optional, server defaults used if not sent
-    api.avatar_start()  # start the animator
-    gen = api.avatar_result_feed()  # start receiving animation frames (call this *after* you have started the animator)
-    api.avatar_start_talking()  # start "talking right now" animation (generic, non-lipsync, random mouth)
-
     logger.info("test: tts: list voices")
     print(api.tts_list_voices())
 
@@ -96,17 +88,29 @@ def test():
     logger.info("test: get metadata of available postprocessor filters")
     print(api.avatar_get_available_filters())
 
-    logger.info("test: more avatar tests")
-    api.avatar_set_emotion("surprise")  # manually update emotion
-    for _ in range(5):  # get a few frames
-        image_format, image_data = next(gen)  # next-gen lol
-        print(image_format, len(image_data))
-        image_file = io.BytesIO(image_data)
-        image = PIL.Image.open(image_file)  # noqa: F841, we're only interested in testing whether the transport works.
-    api.avatar_stop_talking()  # stop "talking right now" animation
-    api.avatar_stop()  # pause animating the avatar
-    api.avatar_start()  # resume animating the avatar
-    gen.close()  # close the connection
+    logger.info("test: initialize avatar")
+    avatar_instance_id = api.avatar_load(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "characters", "example.png"))  # send an avatar - mandatory
+    try:
+        api.avatar_load_animator_settings_from_file(avatar_instance_id,
+                                                    os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings", "animator.json"))  # send animator config - optional, server defaults used if not sent
+        api.avatar_load_emotion_templates_from_file(avatar_instance_id,
+                                                    os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "emotions", "_defaults.json"))  # send the morph parameters for emotions - optional, server defaults used if not sent
+        api.avatar_start(avatar_instance_id)  # start the animator
+        gen = api.avatar_result_feed(avatar_instance_id)  # start receiving animation frames (call this *after* you have started the animator)
+        api.avatar_start_talking(avatar_instance_id)  # start "talking right now" animation (generic, non-lipsync, random mouth)
+
+        logger.info("test: more avatar tests")
+        api.avatar_set_emotion(avatar_instance_id, "surprise")  # manually update emotion
+        for _ in range(5):  # get a few frames
+            image_format, image_data = next(gen)  # next-gen lol
+            print(image_format, len(image_data))
+            image_file = io.BytesIO(image_data)
+            image = PIL.Image.open(image_file)  # noqa: F841, we're only interested in testing whether the transport works.
+        api.avatar_stop_talking(avatar_instance_id)  # stop "talking right now" animation
+        api.avatar_stop(avatar_instance_id)  # pause animating the avatar
+        api.avatar_start(avatar_instance_id)  # resume animating the avatar
+    finally:
+        api.avatar_unload(avatar_instance_id)  # this closes the connection too
 
     logger.info("test: all done")
 

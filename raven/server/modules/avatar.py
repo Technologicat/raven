@@ -11,11 +11,14 @@ If you want to test your AI character and edit postprocessor settings in a GUI a
 """
 
 __all__ = ["init_module", "is_available",
-           "set_emotion",
+           "load", "reload", "unload",
+           "load_emotion_templates",
+           "load_animator_settings",
            "start", "stop",
            "start_talking", "stop_talking",
-           "result_feed",
-           "load_image_from_stream"]
+           "set_emotion",
+           "set_overrides",
+           "result_feed"]
 
 import atexit
 import io
@@ -31,6 +34,7 @@ import sys
 import threading
 import traceback
 from typing import Any, Dict, List, Optional
+import uuid
 
 from colorama import Fore, Style
 
@@ -69,84 +73,328 @@ talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", ".
 emotions_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "emotions")).expanduser().resolve()  # location containing the emotion template JSON files
 animator_settings_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings")).expanduser().resolve()  # location containing the default "animator.json"
 
+module_initialized = False  # call `init_module` to initialize
 
-global_animator_instance = None
-_animator_output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
-global_encoder_instance = None
-global_latest_frame_sent = None
+# These will be set up in `init_module`
+_device = None
+_model = None
+_poser = None  # THA3 engine instance (as returned by `load_poser`)
 
-# These need to be written to by the API functions.
-#
-# Since the plugin might not have been started yet at that time (so the animator instance might not exist),
-# it's better to keep this state in module-level globals rather than in attributes of the animator.
-animation_running = False  # used in initial bootup state, and while loading a new image
-current_emotion = "neutral"
-is_talking = False
-global_reload_image = None
+_avatar_instances = {}  # {instance_id0: {"animator": <Animator object>, "encoder": <Encoder object>}, ...}
 
-# values overridden by `load_animator_settings` at animator startup
-target_fps = 25
-encoder_output_format = "PNG"
+# --------------------------------------------------------------------------------
+# Module startup and status check
+
+def init_module(device: str, model: str) -> None:
+    """Launch the avatar (live mode), served over HTTP.
+
+    device: "cpu" or "cuda"
+    model: one of the folder names inside "raven/vendor/tha3/models/"
+
+           Determines the posing and postprocessing dtype.
+
+    If something goes horribly wrong, raise `RuntimeError`.
+    """
+    global module_initialized
+    global _device
+    global _model
+    global _poser
+
+    if module_initialized:
+        logger.warning("init_module: already initialized. Ignoring.")
+        return
+
+    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}avatar{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model}{Style.RESET_ALL}'...")
+
+    sys.path.append(str(talkinghead_path))  # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
+    print(f"THA3 is installed at '{str(talkinghead_path)}'")
+
+    # Install the THA3 models if needed
+    tha3_models_path = str(talkinghead_path / "tha3" / "models")
+    maybe_install_models(hf_reponame=config.TALKINGHEAD_MODELS, modelsdir=tha3_models_path)
+
+    try:
+        logger.info("init_module: loading the Talking Head Anime 3 (THA3) posing engine")
+        modelsdir = str(talkinghead_path / "tha3" / "models")
+        _poser = load_poser(model, device, modelsdir=modelsdir)
+        _device = device
+        _model = model
+        module_initialized = True
+
+    except RuntimeError as exc:
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'avatar'.{Style.RESET_ALL} Details follow.")
+        traceback.print_exc()
+        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+
+        _poser = None
+        _device = None
+        _model = None
+
+def is_available() -> bool:
+    """Return whether this module is up and running."""
+    return _poser is not None
 
 # --------------------------------------------------------------------------------
 # Implementations for API endpoints served by `server.py`
 
-def set_emotion(emotion: str) -> str:
+# TODO: the input is a flask.request.file.stream; what's the type of that?
+def load(stream) -> str:
+    """Create a new avatar instance, loading a character image (512x512 RGBA PNG) from `stream`.
+
+    The input is a `flask.request.file.stream`.
+
+    Returns the instance ID (important; needed by all other API functions to operate on that specific instance).
+    """
+    if not module_initialized:
+        raise RuntimeError("load: Module not initialized. Please call `init_module` before using the API.")
+
+    try:
+        instance_id = str(uuid.uuid4())
+        while instance_id in _avatar_instances:  # guarantee no conflict even if UUID generation fails (very low chance)
+            instance_id = str(uuid.uuid4())
+        assert instance_id is not None
+    except Exception as exc:
+        traceback.print_exc()
+        logger.error(f"load: failed: {type(exc)}: {exc}")
+        raise
+
+    encoder = None
+    animator = None
+    try:
+        encoder = Encoder(instance_id)  # create encoder first; its output format will be set by `Animator.load_animator_settings`, which is called by `Animator.__init__`
+        _avatar_instances[instance_id] = {"encoder": encoder}  # ugh, half-created
+        animator = Animator(instance_id, _poser, _device)
+        _avatar_instances[instance_id]["animator"] = animator  # ...there, much better.
+
+        animator.start()
+        encoder.start()
+
+        reload(instance_id, stream)  # delegate; actually load the image
+    except Exception as exc:
+        traceback.print_exc()
+        logger.error(f"load: failed: {type(exc)}: {exc}")
+
+        if encoder:
+            encoder.exit()
+        if animator:
+            animator.exit()
+
+        try:
+            _avatar_instances.pop(instance_id)
+        except KeyError:
+            pass
+
+        raise
+
+    plural_s = "s" if len(_avatar_instances) != 1 else ""
+    logger.info(f"load: created avatar instance '{instance_id}' (now have {len(_avatar_instances)} instance{plural_s})")
+
+    return instance_id
+
+def reload(instance_id: str, stream) -> None:
+    """Send a new input image to an existing instance.
+
+    The input is a `flask.request.file.stream`.
+    """
+    if not module_initialized:
+        raise RuntimeError("reload: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"reload: no such avatar instance '{instance_id}'")
+        raise ValueError(f"reload: no such avatar instance '{instance_id}'")
+
+    # Just in case, make a seekable in-memory copy of `stream`.
+    logger.info("load_image_from_stream: loading new input image from stream")
+    buffer = io.BytesIO()
+    buffer.write(stream.read())
+    buffer.seek(0)
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.load_image(buffer)
+
+def unload(instance_id: str) -> None:
+    """Unload the given instance.
+
+    This will delete the corresponding animator and encoder instances, and cause the result feed (if any is running) to shut down.
+    """
+    if not module_initialized:
+        raise RuntimeError("unload: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"unload: no such avatar instance '{instance_id}'")
+        raise ValueError(f"unload: no such avatar instance '{instance_id}'")
+
+    animator = _avatar_instances[instance_id]["animator"]
+    encoder = _avatar_instances[instance_id]["encoder"]
+    encoder.exit()
+    animator.exit()
+    _avatar_instances.pop(instance_id)
+
+    plural_s = "s" if len(_avatar_instances) != 1 else ""
+    logger.info(f"unload: deleted avatar instance '{instance_id}' (now have {len(_avatar_instances)} instance{plural_s})")
+
+def load_emotion_templates(instance_id: str, emotions: Optional[Dict[str, Dict[str, float]]] = None) -> None:
+    """Load emotion templates. This is the API function that dispatches to the specified animator instance.
+
+    `emotions`: `{emotion0: {morph0: value0, ...}, ...}`
+                Optional dict of custom emotion templates.
+
+                If not given, this loads the templates from the emotion JSON files
+                in `raven/avatar/assets/emotions/`.
+
+                If given:
+                  - Each emotion NOT supplied is populated from the defaults.
+                  - In each emotion that IS supplied, each morph that is NOT mentioned
+                    is implicitly set to zero (due to how `apply_emotion_to_pose` works).
+
+                For an example JSON file containing a suitable dictionary, see `raven/avatar/assets/emotions/_defaults.json`.
+
+                For available morph names, see `posedict_keys` in `util.py`.
+
+                For some more detail, see `raven/vendor/tha3/poser/modes/pose_parameters.py`.
+                "Arity 2" means `posedict_keys` has separate left/right morphs.
+
+                If still in doubt, see the GUI panel implementations in `editor.py`.
+    """
+    if not module_initialized:
+        raise RuntimeError("set_overrides: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"set_overrides: no such avatar instance '{instance_id}'")
+        raise ValueError(f"set_overrides: no such avatar instance '{instance_id}'")
+
+    if not emotions:
+        emotions = {}  # sending a blank dictionary will load server defaults
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.load_emotion_templates(emotions)
+
+def load_animator_settings(instance_id: str, settings: Optional[Dict[str, Any]] = None) -> None:
+    """Load animator settings. This is the API function that dispatches to the specified animator instance.
+
+    `settings`: `{setting0: value0, ...}`
+                Optional dict of settings. The type and semantics of each value depends on each
+                particular setting.
+
+    For available settings, see `animator_defaults` in `raven/avatar/common/config.py`.
+
+    Particularly for the setting `"postprocessor_chain"` (pixel-space glitch artistry),
+    see `postprocessor.py`.
+    """
+    if not module_initialized:
+        raise RuntimeError("set_overrides: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"set_overrides: no such avatar instance '{instance_id}'")
+        raise ValueError(f"set_overrides: no such avatar instance '{instance_id}'")
+
+    if not settings:
+        settings = {}  # sending a blank dictionary will load server defaults
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.load_animator_settings(settings)
+
+def start(instance_id: str) -> str:
+    """Start/resume animation."""
+    if not module_initialized:
+        raise RuntimeError("start: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"start: no such avatar instance '{instance_id}'")
+        raise ValueError(f"start: no such avatar instance '{instance_id}'")
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.animation_running = True
+
+    logger.info("reload: animation resumed")
+
+def stop(instance_id: str) -> str:
+    """Stop animation, but keep the avatar loaded for resuming later (to do that, use `start`)."""
+    if not module_initialized:
+        raise RuntimeError("stop: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"stop: such avatar instance '{instance_id}'")
+        raise ValueError(f"stop: no such avatar instance '{instance_id}'")
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.animation_running = False
+
+    logger.info("unload: animation paused")
+
+def start_talking(instance_id: str) -> str:
+    """Start talking animation (generic, non-lipsync).
+
+    Return a status message for passing over HTTP.
+    """
+    if not module_initialized:
+        raise RuntimeError("start_talking: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"start_talking: no such avatar instance '{instance_id}'")
+        raise ValueError(f"start_talking: no such avatar instance '{instance_id}'")
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.is_talking = True
+
+    logger.debug("start_talking called")
+
+def stop_talking(instance_id: str) -> str:
+    """Stop talking animation (generic, non-lipsync).
+
+    Return a status message for passing over HTTP.
+    """
+    if not module_initialized:
+        raise RuntimeError("stop_talking: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"stop_talking: no such avatar instance '{instance_id}'")
+        raise ValueError(f"stop_talking: no such avatar instance '{instance_id}'")
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.is_talking = False
+
+    logger.debug("stop_talking called")
+
+def set_emotion(instance_id: str, emotion: str) -> str:
     """Set the current emotion of the character.
 
     Return a status message for passing over HTTP.
     """
-    global current_emotion
+    if not module_initialized:
+        raise RuntimeError("set_emotion: Module not initialized. Please call `init_module` before using the API.")
 
-    if emotion not in global_animator_instance.emotions:
-        logger.warning(f"set_emotion: specified emotion '{emotion}' does not exist, selecting 'neutral'")
-        emotion = "neutral"
+    if instance_id not in _avatar_instances:
+        logger.error(f"set_emotion: no such avatar instance '{instance_id}'")
+        raise ValueError(f"set_emotion: no such avatar instance '{instance_id}'")
+
+    animator = _avatar_instances[instance_id]["animator"]
+
+    if emotion not in animator.emotions:  # should exist on the animator it's being applied to
+        logger.error(f"set_emotion: specified emotion '{emotion}' does not exist")
+        raise ValueError(f"set_emotion: specified emotion '{emotion}' does not exist")
 
     logger.info(f"set_emotion: applying emotion {emotion}")
-    current_emotion = emotion
-    return f"emotion set to {emotion}"
+    animator.emotion = emotion
 
-def start() -> str:
-    """Start/resume animation.
+def set_overrides(instance_id: str, overrides: Dict[str, Any]) -> str:
+    """Set morph overrides. This is useful for lipsyncing.
 
-    Return a status message for passing over HTTP.
-    """
-    global animation_running
-    animation_running = True
-    logger.info("reload: animation resumed")
-    return "animation resumed"
+    All previous overrides are replaced by the new ones.
 
-def stop() -> str:
-    """Stop animation.
-
-    The animator remains paused, nothing is actually unloaded.
+    To unset all overrides, use `data = {}`.
 
     Return a status message for passing over HTTP.
     """
-    global animation_running
-    animation_running = False
-    logger.info("unload: animation paused")
-    return "animation paused"
+    if not module_initialized:
+        raise RuntimeError("set_overrides: Module not initialized. Please call `init_module` before using the API.")
 
-def start_talking() -> str:
-    """Start talking animation.
+    if instance_id not in _avatar_instances:
+        logger.error(f"set_overrides: no such avatar instance '{instance_id}'")
+        raise ValueError(f"set_overrides: no such avatar instance '{instance_id}'")
 
-    Return a status message for passing over HTTP.
-    """
-    global is_talking
-    is_talking = True
-    logger.debug("start_talking called")
-    return "talking started"
-
-def stop_talking() -> str:
-    """Stop talking animation.
-
-    Return a status message for passing over HTTP.
-    """
-    global is_talking
-    is_talking = False
-    logger.debug("stop_talking called")
-    return "talking stopped"
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.set_overrides(overrides)
 
 # There are three tasks we must do each frame:
 #
@@ -184,7 +432,7 @@ def stop_talking() -> str:
 #       - This communication is handled through the flag `animator.new_frame_available`.
 #     - The network thread does its own thing on a regular schedule, based on the desired target FPS.
 #       - However, the network thread publishes metadata on which frame is the latest that has been sent over the network at least once.
-#         This is stored as an `id` (i.e. memory address) in `global_latest_frame_sent`.
+#         This is stored as an `id` (i.e. memory address) in `encoder.latest_frame_sent` on the avatar instance's encoder.
 #       - If the target FPS is too high for the animator and/or encoder to keep up with, the network thread re-sends
 #         the latest frame published by the encoder as many times as necessary, to keep the network output at the target FPS
 #         regardless of render/encode speed. This handles the case of hardware slower than the target FPS.
@@ -195,27 +443,36 @@ def stop_talking() -> str:
 #     - When the animator and encoder are fast enough to keep up with the target FPS, generally when frame N is being sent,
 #       frame N+1 is being encoded (or is already encoded, and waiting for frame N to be sent), and frame N+2 is being rendered.
 #
-def result_feed() -> Response:
+def result_feed(instance_id: str) -> Response:
     """Return a Flask `Response` that repeatedly yields the current image as an image file in the configured format."""
-    def generate():
-        global global_latest_frame_sent
-        global target_fps  # to document intent only; we don't write to it
+    if not module_initialized:
+        raise RuntimeError("result_feed: Module not initialized. Please call `init_module` before using the API.")
 
+    if instance_id not in _avatar_instances:
+        logger.error(f"result_feed: no such avatar instance '{instance_id}'")
+        raise ValueError(f"result_feed: no such avatar instance '{instance_id}'")
+
+    def generate():
         last_frame_send_complete_time = None
         last_report_time = None
         send_duration_sec = 0.0
         send_duration_statistics = RunningAverage()
 
         while True:
+            if instance_id not in _avatar_instances:
+                return  # Instance has been deleted (by a call to `unload`), so we're done. Shut down the stream.
+            animator = _avatar_instances[instance_id]["animator"]
+            encoder = _avatar_instances[instance_id]["encoder"]
+
             # Send the latest available animation frame.
             # Important: grab reference to `current_frame` only once, since it will be atomically updated without a lock.
-            current_frame = global_encoder_instance.current_frame
+            current_frame = encoder.current_frame
             if current_frame is not None:
                 # How often should we send?
                 #  - Excessive spamming can DoS the SillyTavern GUI, so there needs to be a rate limit.
                 #  - OTOH, we must constantly send something, or the GUI will lock up waiting.
                 # Therefore, send at a target FPS that yields a nice-looking animation.
-                frame_duration_target_sec = 1 / target_fps
+                frame_duration_target_sec = 1 / animator.target_fps
                 if last_frame_send_complete_time is not None:
                     time_now = time.time_ns()
                     this_frame_elapsed_sec = (time_now - last_frame_send_complete_time) / 10**9
@@ -240,7 +497,7 @@ def result_feed() -> Response:
                            b"\r\n" +  # A second successive CRLF sequence signals the end of the headers for this frame.
                            image_data +
                            b"\r\n")
-                    global_latest_frame_sent = id(current_frame)  # atomic update, no need for lock
+                    encoder.latest_frame_sent = id(current_frame)  # atomic update, no need for lock
                     send_duration_sec = (time.time_ns() - time_now) / 10**9  # about 0.12 ms on localhost (compress_level=1 or 6, doesn't matter)
                     # print(f"send {send_duration_sec:0.6g}s")  # DEBUG
 
@@ -255,12 +512,12 @@ def result_feed() -> Response:
 
                 # Log the FPS counter in 5-second intervals.
                 time_now = time.time_ns()
-                if animation_running and (last_report_time is None or time_now - last_report_time > 5e9):
+                if animator.animation_running and (last_report_time is None or time_now - last_report_time > 5e9):
                     avg_send_sec = send_duration_statistics.average()
                     msec = round(1000 * avg_send_sec, 1)
                     target_msec = round(1000 * frame_duration_target_sec, 1)
                     fps = round(1 / avg_send_sec, 1) if avg_send_sec > 0.0 else 0.0
-                    logger.info(f"output: {msec:.1f}ms [{fps:.1f} FPS]; target {target_msec:.1f}ms [{target_fps:.1f} FPS]")
+                    logger.info(f"output: {msec:.1f}ms [{fps:.1f} FPS]; target {target_msec:.1f}ms [{animator.target_fps:.1f} FPS]")
                     last_report_time = time_now
 
             else:  # first frame not yet available
@@ -268,102 +525,14 @@ def result_feed() -> Response:
 
     return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-# TODO: the input is a flask.request.file.stream; what's the type of that?
-def load_image_from_stream(stream) -> str:
-    """Load image from stream and start avatar animation.
-
-    The input is a `flask.request.file.stream`.
-    """
-    global global_reload_image
-    global animation_running
-    logger.info("load_image_from_stream: loading new input image from stream")
-
-    try:
-        # Load the image using Pillow
-        pil_image = PIL.Image.open(stream)
-
-        # Create a copy of the image data in memory
-        img_data = io.BytesIO()
-        pil_image.save(img_data, format="PNG")
-
-        # Set the global_reload_image to the in-memory copy
-        global_reload_image = PIL.Image.open(io.BytesIO(img_data.getvalue()))
-    except PIL.Image.UnidentifiedImageError:
-        logger.warning("Could not load input image from stream, loading blank")
-        full_path = str(talkinghead_path / "tha3" / "images" / "inital.png")
-        global_reload_image = PIL.Image.open(full_path)
-    return "OK"
-
-first_launch_during_session = True
-def init_module(device: str, model: str) -> None:
-    """Launch the avatar (live mode), served over HTTP.
-
-    device: "cpu" or "cuda"
-    model: one of the folder names inside "raven/vendor/tha3/models/"
-
-           Determines the posing and postprocessing dtype.
-
-    If something goes horribly wrong, raise `RuntimeError`.
-    """
-    global first_launch_during_session
-    global global_animator_instance
-    global global_encoder_instance
-
-    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}avatar{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model}{Style.RESET_ALL}'...")
-
-    if first_launch_during_session:
-        first_launch_during_session = False
-        sys.path.append(str(talkinghead_path))  # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
-        print(f"THA3 is installed at '{str(talkinghead_path)}'")
-
-        # Install the THA3 models if needed
-        tha3_models_path = str(talkinghead_path / "tha3" / "models")
-        maybe_install_models(hf_reponame=config.TALKINGHEAD_MODELS, modelsdir=tha3_models_path)
-
-    try:
-        # If the animator already exists, clean it up first
-        if global_animator_instance is not None:
-            logger.info(f"init_module: relaunching on device {device} with model {model}")
-            global_animator_instance.exit()
-            global_animator_instance = None
-            global_encoder_instance.exit()
-            global_encoder_instance = None
-
-        logger.info("init_module: loading the Talking Head Anime 3 (THA3) posing engine")
-        modelsdir = str(talkinghead_path / "tha3" / "models")
-        poser = load_poser(model, device, modelsdir=modelsdir)
-        global_animator_instance = Animator(poser, device)
-        global_encoder_instance = Encoder()
-
-        # Load initial blank character image
-        full_path = str(talkinghead_path / "tha3" / "images" / "inital.png")
-        global_animator_instance.load_image(full_path)
-
-        global_animator_instance.start()
-        global_encoder_instance.start()
-
-    except RuntimeError as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'avatar'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
-        if global_animator_instance is not None:
-            global_animator_instance.exit()
-            global_animator_instance = None
-        if global_encoder_instance is not None:
-            global_encoder_instance.exit()
-            global_encoder_instance = None
-
-def is_available() -> bool:
-    """Return whether this module is up and running."""
-    return all(component is not None for component in (global_animator_instance, global_encoder_instance))
-
 # --------------------------------------------------------------------------------
 # Internal stuff
 
 class Animator:
     """uWu Waifu"""
 
-    def __init__(self, poser: Poser, device: torch.device):
+    def __init__(self, instance_id: str, poser: Poser, device: torch.device):
+        self.instance_id = instance_id
         self.poser = poser
         self.device = device
 
@@ -381,6 +550,11 @@ class Animator:
         self.result_image: Optional[np.array] = None
         self.new_frame_available = False
         self.last_report_time = None
+        self.output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
+
+        self.animation_running = False  # used in initial bootup state, while loading a new image, and while explicitly paused
+        self.is_talking = False  # generic non-lipsync talking animation (random mouth)
+        self.emotion = "neutral"
 
         self.reset_animation_state()
         self.load_emotion_templates()
@@ -411,7 +585,8 @@ class Animator:
         Called automatically when the process exits.
         """
         self._terminated = True
-        self.animator_thread.join()
+        if self.animator_thread is not None:
+            self.animator_thread.join()
         self.animator_thread = None
 
     def reset_animation_state(self):
@@ -487,9 +662,6 @@ class Animator:
         Particularly for the setting `"postprocessor_chain"` (pixel-space glitch artistry),
         see `postprocessor.py`.
         """
-        global target_fps
-        global encoder_output_format
-
         if settings is None:
             settings = {}
 
@@ -541,10 +713,11 @@ class Animator:
 
         # Some settings must be applied explicitly.
         logger.debug(f"load_animator_settings: Setting new target FPS = {settings['target_fps']}")
-        target_fps = settings.pop("target_fps")  # global variable, controls the network send rate.
+        self.target_fps = settings.pop("target_fps")  # controls the network send rate.
 
         logger.debug(f"load_animator_settings: Setting output format = {settings['format']}")
-        encoder_output_format = settings.pop("format")
+        encoder = _avatar_instances[self.instance_id]["encoder"]
+        encoder.output_format = settings.pop("format")
 
         logger.debug("load_animator_settings: Sending new effect chain to postprocessor")
         self.postprocessor.chain = settings.pop("postprocessor_chain")  # ...and that's where the postprocessor reads its filter settings from.
@@ -577,34 +750,27 @@ class Animator:
         # The rest of the settings we can just store in an attribute, and let the animation drivers read them from there.
         self._settings = settings
 
-    def load_image(self, file_path=None) -> None:
-        """Load the image file at `file_path`, and replace the current character with it.
+    def load_image(self, filelike) -> None:
+        """Load the image file `filelike`, and replace the current character with it.
 
-        Except, if `global_reload_image is not None`, use the global reload image data instead.
-        In that case `file_path` is not used.
-
-        When done, this always sets `global_reload_image` to `None`.
+        `filelike`: str or pathlib.Path to read a file; or a binary stream such as BytesIO to read that.
         """
-        global global_reload_image
+        try:
+            pil_image = extract_PIL_image_from_filelike(filelike)
+        except PIL.Image.UnidentifiedImageError:
+            logger.warning(f"Animator.load_image: Could not load input image `{filelike}` (image format not recognized by Pillow), loading blank")
+            blank_image_path = str(talkinghead_path / "tha3" / "images" / "inital.png")
+            pil_image = extract_PIL_image_from_filelike(blank_image_path)
 
         try:
-            if global_reload_image is not None:
-                pil_image = global_reload_image
-            else:
-                pil_image = resize_PIL_image(
-                    extract_PIL_image_from_filelike(file_path),
-                    (self.poser.get_image_size(), self.poser.get_image_size()))
-
+            # TODO: WTF? No need to resize twice. Fix this.
+            pil_image = resize_PIL_image(pil_image,
+                                         (self.poser.get_image_size(), self.poser.get_image_size()))
+            pil_image = to_talkinghead_image(pil_image)
             w, h = pil_image.size
 
-            if pil_image.size != (512, 512):
-                logger.info("Resizing Char Card to work")
-                pil_image = to_talkinghead_image(pil_image)
-
-            w, h = pil_image.size
-
-            if pil_image.mode != "RGBA":
-                logger.error("load_image: image must have alpha channel")
+            if pil_image.mode != "RGBA":  # final sanity check
+                logger.error("Animator.load_image: image must have alpha channel")
                 self.source_image = None
             else:
                 self.source_image = extract_pytorch_image_from_PIL_image(pil_image) \
@@ -612,10 +778,8 @@ class Animator:
 
         except Exception as exc:
             print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (details below)")
-            logger.error(f"load_image: {exc}")
-
-        finally:
-            global_reload_image = None
+            traceback.print_exc()
+            logger.error(f"load_image: {type(exc)}: {exc}")
 
     # --------------------------------------------------------------------------------
     # Animation drivers
@@ -646,18 +810,16 @@ class Animator:
 
         Return the modified pose.
         """
-        global target_fps  # to document intent only; we don't write to it
-
         # Compute FPS-corrected blink probability
         CALIBRATION_FPS = 25
         p_orig = self._settings["blink_probability"]  # blink probability per frame at CALIBRATION_FPS
         avg_render_sec = self.render_duration_statistics.average()
         if avg_render_sec > 0:
             avg_render_fps = 1 / avg_render_sec
-            # Even if render completes faster, the avatar output is rate-limited to `target_fps` at most.
-            avg_render_fps = min(avg_render_fps, target_fps)
-        else:  # No statistics available yet; let's assume we're running at `target_fps`.
-            avg_render_fps = target_fps
+            # Even if render completes faster, the avatar output is rate-limited to `self.target_fps` at most.
+            avg_render_fps = min(avg_render_fps, self.target_fps)
+        else:  # No statistics available yet; let's assume we're running at `self.target_fps`.
+            avg_render_fps = self.target_fps
         # We give an independent trial for each of `n` "normalized frames" elapsed at `CALIBRATION_FPS` during one actual frame at `avg_render_fps`.
         # Note direction: rendering faster (higher FPS) means less likely to blink per frame, to obtain the same blink density per unit of wall time.
         n = CALIBRATION_FPS / avg_render_fps
@@ -674,7 +836,7 @@ class Animator:
         if self.blink_interval is not None:
             # ...except when the "confusion" emotion has been entered recently.
             seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
-            if current_emotion == "confusion" and seconds_since_last_emotion_change < self._settings["blink_confusion_duration"]:
+            if self.emotion == "confusion" and seconds_since_last_emotion_change < self._settings["blink_confusion_duration"]:
                 pass
             else:
                 seconds_since_last_blink = (time_now - self.last_blink_timestamp) / 10**9
@@ -720,7 +882,7 @@ class Animator:
         MOUTH_OPEN_MORPHS = ["mouth_aaa_index", "mouth_iii_index", "mouth_uuu_index", "mouth_eee_index", "mouth_ooo_index", "mouth_delta"]
         talking_morph = self._settings["talking_morph"]
 
-        if not is_talking:
+        if not self.is_talking:
             try:
                 if self.was_talking:  # when talking ends, snap mouth to target immediately
                     new_pose = list(pose)  # copy
@@ -733,7 +895,7 @@ class Animator:
                 self.last_talking_target_value = None
                 self.last_talking_timestamp = None
                 self.was_talking = False
-        assert is_talking
+        assert self.is_talking
 
         # With 25 FPS (or faster) output, randomizing the mouth every frame looks too fast.
         # Determine whether enough wall time has passed to randomize a new mouth position.
@@ -772,22 +934,22 @@ class Animator:
         self.was_talking = True
         return new_pose
 
-    def set_overrides(self, data: Dict[str, float]) -> None:
+    def set_overrides(self, overrides: Dict[str, float]) -> None:
         """Set morph overrides. This is useful for lipsyncing.
 
         All previous overrides are replaced by the new ones.
 
         To unset all overrides, use `data = {}`.
         """
-        logger.debug(f"set_overrides: got data {data}")  # too spammy as info (when lipsyncing)
+        logger.debug(f"set_overrides: got data {overrides}")  # too spammy as info (when lipsyncing)
         # Validate
-        for key in data:
+        for key in overrides:
             if key not in posedict_key_to_index:
                 logger.error(f"set_overrides: unknown morph key '{key}', rejecting overrides")
-                raise ValueError(f"Unknown morph key '{key}'; see `raven.avatar.util` for available morph keys.")
+                raise ValueError(f"Unknown morph key '{key}'; see `raven.server.modules.avatarutil` for available morph keys.")
         # Save
         logger.debug("set_overrides: data is valid, applying.")
-        self.morph_overrides = data  # atomic replace
+        self.morph_overrides = overrides  # atomic replace
 
     def apply_overrides(self, pose: List[float]) -> List[float]:
         """Apply any morph overrides sent by the client. This is useful for lipsyncing.
@@ -841,7 +1003,7 @@ class Animator:
         def macrosway() -> List[float]:  # this handles caching and everything
             time_now = time.time_ns()
             should_pick_new_sway_target = True
-            if current_emotion == self.last_emotion:
+            if self.emotion == self.last_emotion:
                 if self.sway_interval is not None:  # have we created a swayed pose at least once?
                     seconds_since_last_sway_target = (time_now - self.last_sway_target_timestamp) / 10**9
                     if seconds_since_last_sway_target < self.sway_interval:
@@ -1073,7 +1235,6 @@ class Animator:
         #
         # which, given desired `n`, gives us the `α` that makes the interpolator cover the fraction `xrel` of the original distance in `n` steps.
         #
-        global target_fps  # to document intent only; we don't write to it
         CALIBRATION_FPS = 25  # FPS for which the default value `step` was calibrated
         xrel = 0.5  # just some convenient value
         step = self._settings["pose_interpolator_step"]
@@ -1082,10 +1243,10 @@ class Animator:
             avg_render_sec = self.render_duration_statistics.average()
             if avg_render_sec > 0:
                 avg_render_fps = 1 / avg_render_sec
-                # Even if render completes faster, the avatar output is rate-limited to `target_fps` at most.
-                avg_render_fps = min(avg_render_fps, target_fps)
+                # Even if render completes faster, the avatar output is rate-limited to `self.target_fps` at most.
+                avg_render_fps = min(avg_render_fps, self.target_fps)
             else:  # No statistics available yet; let's assume we're running at `target_fps`.
-                avg_render_fps = target_fps
+                avg_render_fps = self.target_fps
 
             # For a constant target pose and original `α`, compute the number of animation frames to cover `xrel` of distance from initial pose to final pose.
             n_orig = math.log(1.0 - xrel) / math.log(alpha_orig)
@@ -1130,16 +1291,11 @@ class Animator:
 
         If the previous rendered frame has not been retrieved yet, do nothing.
         """
-        if not animation_running:
+        if self.source_image is None:  # if no input image, do nothing.
             return
-
-        # If no one has retrieved the latest rendered frame yet, do not render a new one.
-        if self.new_frame_available:
+        if not self.animation_running:  # if paused, do nothing.
             return
-
-        if global_reload_image is not None:
-            self.load_image()
-        if self.source_image is None:
+        if self.new_frame_available:  # if no one has retrieved the latest rendered frame yet, do nothing.
             return
 
         do_crop = any(self._settings[key] != 0 for key in ("crop_left", "crop_right", "crop_top", "crop_bottom"))
@@ -1153,10 +1309,10 @@ class Animator:
         time_render_start = time.time_ns()
 
         if self.current_pose is None:  # initialize character pose at plugin startup
-            self.current_pose = posedict_to_pose(self.emotions[current_emotion])
+            self.current_pose = posedict_to_pose(self.emotions[self.emotion])
 
-        emotion_posedict = self.emotions[current_emotion]
-        if current_emotion != self.last_emotion:  # some animation drivers need to know when the emotion last changed
+        emotion_posedict = self.emotions[self.emotion]
+        if self.emotion != self.last_emotion:  # some animation drivers need to know when the emotion last changed
             self.last_emotion_change_timestamp = time_render_start
 
         target_pose = self.apply_emotion_to_pose(emotion_posedict, self.current_pose)
@@ -1169,7 +1325,7 @@ class Animator:
         self.current_pose = self.animate_breathing(self.current_pose)
 
         # Update this last so that animation drivers have access to the old emotion, too.
-        self.last_emotion = current_emotion
+        self.last_emotion = self.emotion
 
         with torch.no_grad():
             # Detailed performance measurement protocol: sync CUDA (i.e. finish pending async CUDA operations), start timer, do desired CUDA operation(s), sync CUDA again, stop timer.
@@ -1238,12 +1394,12 @@ class Animator:
             logger.info(f"total {1000 * render_elapsed_sec:0.1f} ms; pose {1000 * tim_pose.dt:0.1f} ms, norm {1000 * tim_normalize.dt:0.1f} ms, upscale {1000 * tim_upscale.dt:0.1f} ms, crop {1000 * tim_crop.dt:0.1f} ms, post {1000 * tim_postproc.dt:0.1f} ms, gamma {1000 * tim_gamma.dt:0.1f} ms, chw->hwc {1000 * tim_dataformat.dt:0.1f} ms, to CPU {1000 * tim_sendtocpu.dt:0.1f} ms")
 
         # Set the new rendered frame as the output image, and mark the frame as ready for consumption.
-        with _animator_output_lock:
+        with self.output_lock:
             self.result_image = output_image_numpy  # atomic replace
             self.new_frame_available = True
 
-        # Log the FPS counter in 5-second intervals.
-        if animation_running and (self.last_report_time is None or time_now - self.last_report_time > 5e9):
+        # Log the FPS counter in 5-second intervals. Note we only reach this when running (not paused).
+        if self.last_report_time is None or time_now - self.last_report_time > 5e9:
             avg_render_sec = self.render_duration_statistics.average()
             msec = round(1000 * avg_render_sec, 1)
             fps = round(1 / avg_render_sec, 1) if avg_render_sec > 0.0 else 0.0
@@ -1260,9 +1416,12 @@ class Encoder:
     (you always get the latest available frame at the time you access `current_frame`).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, instance_id: str) -> None:
         self.current_frame = None
         self.encoder_thread = None
+        self.output_format = config.animator_defaults["format"]  # default until animator settings are loaded
+        self.instance_id = instance_id
+        self.latest_frame_sent = None  # for co-operation with `result_feed` (NOTE: only one feed allowed per instance!) (TODO: relax this assumption? A bit difficult to do.)
 
     def start(self) -> None:
         """Start the output encoder thread."""
@@ -1273,32 +1432,24 @@ class Encoder:
             wait_duration_statistics = RunningAverage()
 
             while not self._terminated:
-                # Retrieve a new frame from the animator if available.
-                have_new_frame = False
                 time_encode_start = time.time_ns()
-                with _animator_output_lock:
-                    if global_animator_instance.new_frame_available:
-                        image_rgba = global_animator_instance.result_image
-                        global_animator_instance.new_frame_available = False  # animation frame consumed; start rendering the next one
+
+                # Retrieve a new frame from the animator if available.
+                animator = _avatar_instances[self.instance_id]["animator"]
+                have_new_frame = False
+                with animator.output_lock:
+                    if animator.new_frame_available:
+                        image_rgba = animator.result_image  # atomic get
+                        animator.new_frame_available = False  # animation frame consumed; start rendering the next one
                         have_new_frame = True  # This flag is needed so we can release the animator lock as early as possible.
 
                 # If a new frame arrived, pack it for sending (only once for each new frame).
                 if have_new_frame:
                     try:
-                        # Save as PNG with RGBA mode. Use the fastest compression level available.
-                        #
-                        # On an i7-12700H @ 2.3 GHz (laptop optimized for low fan noise), 512x512 resolution:
-                        #  - PNG:
-                        #    - `compress_level=1` (fastest), about 20 ms
-                        #    - `compress_level=6` (default), about 40 ms (!) - too slow!
-                        #    - `compress_level=9` (smallest size), about 120 ms
-                        #  - IM:
-                        #    - uncompressed, about 5 ms
-                        #
                         # time_now = time.time_ns()
-                        if encoder_output_format == "QOI":  # Quite OK Image format - like PNG, but fast
+                        if self.output_format == "QOI":  # Quite OK Image format - like PNG, but fast
                             # Ugh, we must copy because the data isn't C-contiguous... but this is still faster than the other formats.
-                            current_frame = (encoder_output_format, qoi.encode(image_rgba.copy(order="C")))  # input: uint8 array of shape (h, w, c)
+                            current_frame = (self.output_format.upper(), qoi.encode(image_rgba.copy(order="C")))  # input: uint8 array of shape (h, w, c)
                         else:  # use PIL
                             pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
                             if image_rgba.shape[2] == 4:
@@ -1306,17 +1457,17 @@ class Encoder:
                                 pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
 
                             buffer = io.BytesIO()
-                            if encoder_output_format == "PNG":
+                            if self.output_format == "PNG":
                                 kwargs = {"compress_level": 1}
-                            elif encoder_output_format == "TGA":
+                            elif self.output_format == "TGA":
                                 kwargs = {"compression": "tga_rle"}
                             else:
                                 kwargs = {}
                             pil_image.save(buffer,
-                                           format=encoder_output_format,
+                                           format=self.output_format.upper(),
                                            **kwargs)
-                            current_frame = (encoder_output_format, buffer.getvalue())
-                        # pack_duration_sec = (time.time_ns() - time_now) / 10**9
+                            current_frame = (self.output_format, buffer.getvalue())
+                        # pack_duration_sec = (time.time_ns() - time_now) / 10**9  # DEBUG / benchmarking
 
                         # We now have a new encoded frame; but first, sync with network send.
                         # This prevents from rendering/encoding more frames than are actually sent.
@@ -1324,7 +1475,7 @@ class Encoder:
                         if previous_frame is not None:
                             time_wait_start = time.time_ns()
                             # Wait in 1ms increments until the previous encoded frame has been sent
-                            while global_latest_frame_sent != id(previous_frame) and not self._terminated:
+                            while self.latest_frame_sent != id(previous_frame) and not self._terminated:
                                 time.sleep(0.001)
                             time_now = time.time_ns()
                             wait_elapsed_sec = (time_now - time_wait_start) / 10**9
@@ -1335,7 +1486,7 @@ class Encoder:
                     except Exception as exc:
                         logger.error(exc)
                         traceback.print_exc()
-                        raise  # let the encoder stop so we won't spam the log
+                        raise  # let the encoder shut down so we won't spam the log
 
                     # Update FPS counter.
                     time_now = time.time_ns()
@@ -1346,7 +1497,7 @@ class Encoder:
 
                 # Log the FPS counter in 5-second intervals.
                 time_now = time.time_ns()
-                if animation_running and (last_report_time is None or time_now - last_report_time > 5e9):
+                if animator.animation_running and (last_report_time is None or time_now - last_report_time > 5e9):
                     avg_encode_sec = encode_duration_statistics.average()
                     msec = round(1000 * avg_encode_sec, 1)
                     avg_wait_sec = wait_duration_statistics.average()
@@ -1366,5 +1517,6 @@ class Encoder:
         Called automatically when the process exits.
         """
         self._terminated = True
-        self.encoder_thread.join()
+        if self.encoder_thread is not None:
+            self.encoder_thread.join()
         self.encoder_thread = None

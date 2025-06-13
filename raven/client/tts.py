@@ -137,13 +137,17 @@ def tts_speak(voice: str,
             logger.info("tts_speak.speak: no stop callback, all done.")
     util.api_config.task_manager.submit(speak, envcls())
 
-def tts_speak_lipsynced(voice: str,
+def tts_speak_lipsynced(instance_id: str,
+                        voice: str,
                         text: str,
                         speed: float = 1.0,
                         video_offset: float = 0.0,
                         start_callback: Optional[Callable] = None,
                         stop_callback: Optional[Callable] = None) -> None:
     """Like `tts_speak`, but with lipsync for the avatar.
+
+    `instance_id`: The avatar instance ID you got from `raven.client.api.avatar_load`.
+                   Which avatar instance to lipsync.
 
     `video_offset`: seconds, for adjusting lipsync animation.
         - Positive values: Use if the video is early. Shifts video later with respect to the audio.
@@ -448,7 +452,7 @@ def tts_speak_lipsynced(voice: str,
 
             # Close the mouth if the last phoneme has ended (but the audio stream is still running, likely with silence at the end).
             if t > phoneme_end_times[-1]:
-                api.avatar_set_overrides(overrides)
+                api.avatar_set_overrides(instance_id, overrides)
                 return
 
             # Find position in phoneme stream
@@ -460,16 +464,16 @@ def tts_speak_lipsynced(voice: str,
 
             # Set mouth position
             if morph == "!close_mouth":
-                api.avatar_set_overrides(overrides)  # set all mouth morphs to zero -> close mouth
+                api.avatar_set_overrides(instance_id, overrides)  # set all mouth morphs to zero -> close mouth
             elif morph == "!keep":
                 pass  # keep previous mouth position
             elif morph == "!maybe_close_mouth":  # close mouth only if the pause is at least half a second, else act like "!keep".
                 phoneme_length = phoneme_end_times[idx] - phoneme_start_times[idx]
                 if phoneme_length >= 0.5:
-                    api.avatar_set_overrides(overrides)
+                    api.avatar_set_overrides(instance_id, overrides)
             else:  # activate one mouth morph, set others to zero
                 overrides[morph] = 1.0
-                api.avatar_set_overrides(overrides)
+                api.avatar_set_overrides(instance_id, overrides)
 
         logger.info("tts_speak_lipsynced.speak: starting playback")
         if start_callback is not None:
@@ -496,7 +500,7 @@ def tts_speak_lipsynced(voice: str,
                     traceback.print_exc()
 
             # TTS is exiting, so stop lipsyncing.
-            api.avatar_set_overrides({})
+            api.avatar_set_overrides(instance_id, {})
 
     util.api_config.task_manager.submit(speak, envcls())
 

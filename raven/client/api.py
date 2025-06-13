@@ -32,7 +32,7 @@ __all__ = ["initialize",
            "embeddings_compute",
            "imagefx_process", "imagefx_process_file", "imagefx_process_array",
            "imagefx_upscale", "imagefx_upscale_file", "imagefx_upscale_array",
-           "avatar_load",
+           "avatar_load", "avatar_reload", "avatar_unload",
            "avatar_load_emotion_templates", "avatar_load_emotion_templates_from_file",
            "avatar_load_animator_settings", "avatar_load_animator_settings_from_file",
            "avatar_start", "avatar_stop",
@@ -70,6 +70,24 @@ from . import util  # for the `api_initialized` flag (must be looked up on the `
 
 from .util import api_config, yell_on_error  # noqa: F401: re-export
 from .util import initialize_api as initialize  # noqa: F401: re-export
+
+# --------------------------------------------------------------------------------
+# Internal utilities
+
+def pack_parameters_into_json_file_attachment(parameters: Dict[str, Any]) -> str:
+    """Pack API call parameters from a `dict`, for sending in the request as a JSON file attachment.
+
+    The return value can be used as a value in the `files` argument of a `requests.post` call::
+
+        files={"my_param_file": pack_parameters_into_json_file_attachment(...),
+               "my_data_file": ...}
+
+    This is meant for endpoints that on the server side receive "multipart/form-data" because
+    they need a file input, but also simultenously need a JSON input to pass some API call parameters.
+
+    The counterpart is `raven.server.app.unpack_parameters_from_json_file_attachment`.
+    """
+    return ("parameters.json", json.dumps(parameters, indent=4), "application/json")
 
 # --------------------------------------------------------------------------------
 # General utilities
@@ -118,98 +136,145 @@ def tts_server_available() -> bool:
 # --------------------------------------------------------------------------------
 # Avatar
 
-def avatar_load(filename: Union[pathlib.Path, str]) -> None:
-    """Send a character (512x512 RGBA PNG image) to the animator.
+def avatar_load(filename: Union[pathlib.Path, str]) -> str:
+    """Create a new avatar instance, loading a character image (512x512 RGBA PNG) from `filename`.
 
     Then, to start the animator, call `avatar_start`.
+
+    Returns the instance ID (important; needed by all other `avatar` API functions to operate on that specific instance).
+
+    Be sure to delete the avatar instance when you no longer need it, using `avatar_unload`. The same server instance
+    may run for a long time, and may run out of resources if too many simultaneous instances are created.
     """
     if not util.api_initialized:
         raise RuntimeError("avatar_load: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
     with open(filename, "rb") as image_file:
-        files = {"file": image_file}
+        files = {"file": (filename, image_file, "application/octet-stream")}
         response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load", headers=headers, files=files)
     util.yell_on_error(response)
 
-def avatar_load_emotion_templates(emotions: Dict) -> None:
+    output = response.json()
+    return output["instance_id"]
+
+def avatar_reload(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
+    """Send a new character image to an existing avatar instance."""
+    if not util.api_initialized:
+        raise RuntimeError("avatar_reload: The `raven.client.api` module must be initialized before using the API.")
+    # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
+    # We must jump through some hoops to send parameters in the same request - a convenient way is to put those into another (virtual) file.
+    headers = copy.copy(util.api_config.raven_default_headers)
+    parameters = {"instance_id": instance_id}
+    with open(filename, "rb") as image_file:
+        files = {"json": pack_parameters_into_json_file_attachment(parameters),
+                 "file": (str(filename), image_file, "application/octet-stream")}
+        response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/reload", headers=headers, files=files)
+    util.yell_on_error(response)
+
+def avatar_unload(instance_id: str) -> None:
+    """Unload (delete) the given avatar instance."""
+    if not util.api_initialized:
+        raise RuntimeError("avatar_unload: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/unload", json=data, headers=headers)
+    util.yell_on_error(response)
+
+def avatar_load_emotion_templates(instance_id: str, emotions: Dict) -> None:
     if not util.api_initialized:
         raise RuntimeError("avatar_load_emotion_templates: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_emotion_templates", json=emotions, headers=headers)
+    data = {"instance_id": instance_id,
+            "emotions": emotions}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_emotion_templates", json=data, headers=headers)
     util.yell_on_error(response)
 
-def avatar_load_emotion_templates_from_file(filename: Union[pathlib.Path, str]) -> None:
+def avatar_load_emotion_templates_from_file(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
     if not util.api_initialized:
         raise RuntimeError("avatar_load_emotion_templates_from_file: The `raven.client.api` module must be initialized before using the API.")
     with open(filename, "r", encoding="utf-8") as json_file:
         emotions = json.load(json_file)
-    avatar_load_emotion_templates(emotions)
+    avatar_load_emotion_templates(instance_id, emotions)
 
-def avatar_load_animator_settings(animator_settings: Dict) -> None:
+def avatar_load_animator_settings(instance_id: str, animator_settings: Dict) -> None:
     if not util.api_initialized:
         raise RuntimeError("avatar_load_animator_settings: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_animator_settings", json=animator_settings, headers=headers)
+    data = {"instance_id": instance_id,
+            "animator_settings": animator_settings}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load_animator_settings", json=data, headers=headers)
     util.yell_on_error(response)
 
-def avatar_load_animator_settings_from_file(filename: Union[pathlib.Path, str]) -> None:
+def avatar_load_animator_settings_from_file(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
     if not util.api_initialized:
         raise RuntimeError("avatar_load_animator_settings_from_file: The `raven.client.api` module must be initialized before using the API.")
     with open(filename, "r", encoding="utf-8") as json_file:
         animator_settings = json.load(json_file)
-    avatar_load_animator_settings(animator_settings)
+    avatar_load_animator_settings(instance_id, animator_settings)
 
-def avatar_start() -> None:
+def avatar_start(instance_id: str) -> None:
     """Start or resume the animator."""
     if not util.api_initialized:
         raise RuntimeError("avatar_start: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/start", headers=headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/start", json=data, headers=headers)
     util.yell_on_error(response)
 
-def avatar_stop() -> None:
+def avatar_stop(instance_id: str) -> None:
     """Pause the animator."""
     if not util.api_initialized:
         raise RuntimeError("avatar_stop: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/stop", headers=headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop", json=data, headers=headers)
     util.yell_on_error(response)
 
-def avatar_start_talking() -> None:
+def avatar_start_talking(instance_id: str) -> None:
     if not util.api_initialized:
         raise RuntimeError("avatar_start_talking: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/start_talking", headers=headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/start_talking", json=data, headers=headers)
     util.yell_on_error(response)
 
-def avatar_stop_talking() -> None:
+def avatar_stop_talking(instance_id: str) -> None:
     if not util.api_initialized:
         raise RuntimeError("avatar_stop_talking: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
-    response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/stop_talking", headers=headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop_talking", json=data, headers=headers)
     util.yell_on_error(response)
 
-def avatar_set_emotion(emotion_name: str) -> None:
+def avatar_set_emotion(instance_id: str, emotion_name: str) -> None:
     if not util.api_initialized:
         raise RuntimeError("avatar_set_emotion: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
-    data = {"emotion_name": emotion_name}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_emotion", headers=headers, json=data)
+    data = {"instance_id": instance_id,
+            "emotion_name": emotion_name}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_emotion", json=data, headers=headers)
     util.yell_on_error(response)
 
-def avatar_set_overrides(data: Dict[str, float]) -> None:
+def avatar_set_overrides(instance_id: str, overrides: Dict[str, float]) -> None:
     if not util.api_initialized:
         raise RuntimeError("avatar_set_overrides: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id,
+            "overrides": overrides}
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_overrides", json=data, headers=headers)
     util.yell_on_error(response)
 
-def avatar_result_feed(chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], bytes], None, None]:
+def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], bytes], None, None]:
     """Return a generator that yields video frames, in the image file format received from the server.
 
     The yielded value is the tuple `(received_mimetype, payload)`, where `received_mimetype` is set to whatever the server
@@ -229,7 +294,7 @@ def avatar_result_feed(chunk_size: int = 4096, expected_mimetype: Optional[str] 
         raise RuntimeError("avatar_result_feed: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Accept"] = "multipart/x-mixed-replace"
-    stream_response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/result_feed", headers=headers, stream=True)
+    stream_response = requests.get(f"{util.api_config.raven_server_url}/api/avatar/result_feed?instance_id={instance_id}", headers=headers, stream=True)
     util.yell_on_error(stream_response)
 
     stream_iterator = stream_response.iter_content(chunk_size=chunk_size)
@@ -349,7 +414,7 @@ def imagefx_process(stream,
     headers = copy.copy(util.api_config.raven_default_headers)
     parameters = {"format": output_format,
                   "filters": filters}
-    files = {"json": ("parameters.json", json.dumps(parameters, indent=4), "application/json"),
+    files = {"json": pack_parameters_into_json_file_attachment(parameters),
              "file": ("image.bin", stream, "application/octet-stream")}
     response = requests.post(f"{util.api_config.raven_server_url}/api/imagefx/process", headers=headers, files=files)
     util.yell_on_error(response)
@@ -443,7 +508,7 @@ def imagefx_upscale(stream,
                   "upscaled_height": upscaled_height,
                   "preset": preset,
                   "quality": quality}
-    files = {"json": ("parameters.json", json.dumps(parameters, indent=4), "application/json"),
+    files = {"json": pack_parameters_into_json_file_attachment(parameters),
              "file": ("image.bin", stream, "application/octet-stream")}
     response = requests.post(f"{util.api_config.raven_server_url}/api/imagefx/upscale", headers=headers, files=files)
     util.yell_on_error(response)

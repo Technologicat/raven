@@ -106,6 +106,34 @@ def after_request(response):
     response.headers["X-Request-Duration"] = str(duration)  # seconds
     return response
 
+def unpack_parameters_from_json_file_attachment(stream) -> Dict[str, Any]:
+    """Return API call parameters as `dict`, that came in the request as a JSON file.
+
+    `stream`: the `request.files["my_tag"].stream`.
+
+    Returns a dictionary `{param_name0: value0, ...}`.
+
+    This is meant for endpoints that receive "multipart/form-data" because they need a file input,
+    but also simultenously need a JSON input to pass some API call parameters.
+
+    The counterpart is `raven.client.api.pack_parameters_into_json_file_attachment`.
+    """
+    # TODO: Do we need to run this through a `BytesIO` to copy the data? Probably not?
+    # The internet says that in some versions of Flask, touching most of the attributes
+    # of a `FileStorage` causes a disk write to a temporary file, but `.stream` can be
+    # safely accessed in-memory.
+    buffer = io.BytesIO()
+    buffer.write(stream.read())
+    parameters_bytes = buffer.getvalue()
+    parameters_python = json.loads(parameters_bytes)
+
+    # # Simpler way without `BytesIO`:
+    # parameters_filestorage = request.files["json"]
+    # parameters_bytes = parameters_filestorage.read()
+    # parameters_python = json.loads(parameters_bytes)
+
+    return parameters_python
+
 # ----------------------------------------
 # server metadata endpoints
 
@@ -160,11 +188,43 @@ def get_modules():
 
 @app.route("/api/avatar/load", methods=["POST"])
 def api_avatar_load():
-    """Load the avatar sprite posted as a file in the request.
+    """Start a new avatar instance, and load the avatar sprite posted as a file in the request.
 
     Input is POST, Content-Type "multipart/form-data", with one file attachment, named "file".
 
     The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
+
+    Output is JSON::
+
+        {"instance_id": "some_important_string"}
+
+    Here the important string is the instance ID the new avatar instance. Use this instance ID in the
+    other avatar API endpoints to target the operations to this instance.
+    """
+    if not avatar.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    try:
+        file = request.files["file"]
+        instance_id = avatar.load(file.stream)
+    except Exception as exc:
+        abort(400, f"api_avatar_load: failed, reason: {type(exc)}: {exc}")
+
+    return jsonify({"instance_id": instance_id})
+
+@app.route("/api/avatar/reload", methods=["POST"])
+def api_avatar_reload():
+    """For an existing avatar instance, load the avatar sprite posted as a file in the request, replacing the current sprite.
+
+    Input is POST, Content-Type "multipart/form-data", with two file attachments, named "file" and "json".
+
+    The "file" attachment should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
+
+    The "json" attachment should contain the API call parameters as JSON:
+
+        {"instance_id": "some_important_string"}
+
+    Here the important string is the instance ID you got from `api_avatar_load`.
 
     No outputs.
     """
@@ -172,21 +232,26 @@ def api_avatar_load():
         abort(403, "Module 'avatar' not running")
 
     file = request.files["file"]
-    return avatar.load_image_from_stream(file.stream)
 
-@app.route("/api/avatar/load_emotion_templates", methods=["POST"])
-def api_avatar_load_emotion_templates():
-    """Load custom emotion templates for avatar, or reset to defaults.
+    parameters = unpack_parameters_from_json_file_attachment(request.files["json"].stream)
+    if "instance_id" not in parameters or not isinstance(parameters["instance_id"], str):
+        abort(400, 'api_avatar_reload: "instance_id" is required')
+
+    avatar.reload(instance_id=parameters["instance_id"],
+                  stream=file.stream)
+    return "OK"
+
+@app.route("/api/avatar/unload", methods=["POST"])
+def api_avatar_unload():
+    """Unload (delete) the given avatar instance.
+
+    This automatically causes the `result_feed` for that instance to shut down.
 
     Input is JSON::
 
-        {"emotion0": {"morph0": value0,
-                      ...}
-         ...}
+        {"instance_id": "some_important_string"}
 
-    For details, see `Animator.load_emotion_templates` in `animator.py`.
-
-    To reload server defaults, send a blank JSON.
+    Here the important string is the instance ID you got from `api_avatar_load`.
 
     No outputs.
     """
@@ -194,38 +259,86 @@ def api_avatar_load_emotion_templates():
         abort(403, "Module 'avatar' not running")
 
     data = request.get_json()
-    if not len(data):
-        data = None  # sending `None` to the animator will reset to defaults
-    avatar.global_animator_instance.load_emotion_templates(data)
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_unload: "instance_id" is required')
+
+    avatar.unload(data["instance_id"])
+    return "OK"
+
+@app.route("/api/avatar/load_emotion_templates", methods=["POST"])
+def api_avatar_load_emotion_templates():
+    """Load custom emotion templates for avatar, or reset to defaults.
+
+    Input is JSON::
+
+        {"instance_id": "some_important_string",
+         "emotions": {"emotion0": {"morph0": value0,
+                                   ...}
+                      ...}
+        }
+
+    For details, see `Animator.load_emotion_templates` in `animator.py`.
+
+    To reload server defaults, send `"emotions": {}` or omit it.
+
+    Here the important string is the instance ID you got from `api_avatar_load`.
+
+    No outputs.
+    """
+    if not avatar.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_load_emotion_templates: "instance_id" is required')
+
+    instance_id = data["instance_id"]
+    emotions = data.get("emotions", {})
+    avatar.load_emotion_templates(instance_id, emotions)
     return "OK"
 
 @app.route("/api/avatar/load_animator_settings", methods=["POST"])
 def api_avatar_load_animator_settings():
     """Load custom settings for avatar animator and postprocessor, or reset to defaults.
 
-    Input format is JSON::
+    Input is JSON::
 
-        {"name0": value0,
-         ...}
+        {"instance_id": "some_important_string",
+         "animator_settings": {"name0": value0,
+                               ...}
+        }
 
     For details, see `Animator.load_animator_settings` in `animator.py`.
 
-    To reload server defaults, send a blank JSON.
+    To reload server defaults, send `"animator_settings": {}` or omit it.
+
+    Here the important string is the instance ID you got from `api_avatar_load`.
+
+    No outputs.
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
 
     data = request.get_json()
-    if not len(data):
-        data = None  # sending `None` to the animator will reset to defaults
-    avatar.global_animator_instance.load_animator_settings(data)
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_load_animator_settings: "instance_id" is required')
+
+    instance_id = data["instance_id"]
+    animator_settings = data.get("animator_settings", {})
+    avatar.load_animator_settings(instance_id, animator_settings)
     return "OK"
 
-@app.route("/api/avatar/start")
+@app.route("/api/avatar/start", methods=["POST"])
 def api_avatar_start():
     """Start the avatar animation.
 
-    No inputs, no outputs.
+    Input is JSON::
+
+        {"instance_id": "some_important_string"}
+
+    Here the important string is the instance ID you got from `api_avatar_load`.
+
+    No outputs.
 
     A character must be loaded first; use '/api/avatar/load' to do that.
 
@@ -233,25 +346,49 @@ def api_avatar_start():
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return avatar.start()
 
-@app.route("/api/avatar/stop")
+    data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_start: "instance_id" is required')
+
+    avatar.start(data["instance_id"])
+    return "OK"
+
+@app.route("/api/avatar/stop", methods=["POST"])
 def api_avatar_stop():
     """Pause the avatar animation.
 
-    No inputs, no outputs.
+    Input is JSON::
+
+        {"instance_id": "some_important_string"}
+
+    Here the important string is the instance ID you got from `api_avatar_load`.
+
+    No outputs.
 
     To resume, use '/api/avatar/start'.
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return avatar.stop()
 
-@app.route("/api/avatar/start_talking")
+    data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_stop: "instance_id" is required')
+
+    avatar.stop(data["instance_id"])
+    return "OK"
+
+@app.route("/api/avatar/start_talking", methods=["POST"])
 def api_avatar_start_talking():
     """Start the mouth animation for talking.
 
-    No inputs, no outputs.
+    Input is JSON::
+
+        {"instance_id": "some_important_string"}
+
+    Here the important string is the instance ID you got from `api_avatar_load`.
+
+    No outputs.
 
     This is the generic, non-lipsync animation that randomizes the mouth.
 
@@ -262,13 +399,25 @@ def api_avatar_start_talking():
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return avatar.start_talking()
 
-@app.route("/api/avatar/stop_talking")
+    data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_start_talking: "instance_id" is required')
+
+    avatar.start_talking(data["instance_id"])
+    return "OK"
+
+@app.route("/api/avatar/stop_talking", methods=["POST"])
 def api_avatar_stop_talking():
     """Stop the mouth animation for talking.
 
-    No inputs, no outputs.
+    Input is JSON::
+
+        {"instance_id": "some_important_string"}
+
+    Here the important string is the instance ID you got from `api_avatar_load`.
+
+    No outputs.
 
     This is the generic, non-lipsync animation that randomizes the mouth.
 
@@ -279,7 +428,13 @@ def api_avatar_stop_talking():
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return avatar.stop_talking()
+
+    data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_stop_talking: "instance_id" is required')
+
+    avatar.stop_talking(data["instance_id"])
+    return "OK"
 
 @app.route("/api/avatar/set_emotion", methods=["POST"])
 def api_avatar_set_emotion():
@@ -287,9 +442,12 @@ def api_avatar_set_emotion():
 
     Input is JSON::
 
-        {"emotion_name": "curiosity"}
+        {"instance_id": "some_important_string",
+         "emotion_name": "curiosity"}
 
     where the key "emotion_name" is literal, and the value is the emotion to set.
+
+    Here the important string is the instance ID you got from `api_avatar_load`.
 
     No outputs.
 
@@ -299,10 +457,15 @@ def api_avatar_set_emotion():
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
     data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_set_emotion: "instance_id" is required')
     if "emotion_name" not in data or not isinstance(data["emotion_name"], str):
         abort(400, 'api_avatar_set_emotion: "emotion_name" is required')
+
+    instance_id = data["instance_id"]
     emotion_name = data["emotion_name"]
-    return avatar.set_emotion(emotion_name)
+    avatar.set_emotion(instance_id, emotion_name)
+    return "OK"
 
 @app.route("/api/avatar/set_overrides", methods=["POST"])
 def api_avatar_set_overrides():
@@ -312,10 +475,13 @@ def api_avatar_set_overrides():
 
     Input is JSON::
 
-        {"morph0": value0,
-         ...}
 
-    To unset overrides, send a blank JSON.
+        {"instance_id": "some_important_string",
+         "overrides": {"morph0": value0,
+                       ...}
+        }
+
+    To unset overrides, set `"overrides": {}` or omit it.
 
     See `raven.avatar.editor` for available morphs. Value range for most morphs is [0, 1],
     and for morphs taking also negative values, it is [-1, 1].
@@ -327,20 +493,29 @@ def api_avatar_set_overrides():
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
+
     data = request.get_json()
-    if not len(data):
-        data = {}
-    try:
-        avatar.global_animator_instance.set_overrides(data)
-    except Exception as exc:
-        abort(400, f"api_avatar_set_overrides: failed, reason: {type(exc)}: {exc}")
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_set_overrides: "instance_id" is required')
+
+    instance_id = data["instance_id"]
+    overrides = data.get("overrides", {})
+    avatar.set_overrides(instance_id, overrides)
     return "OK"
 
 @app.route("/api/avatar/result_feed")
 def api_avatar_result_feed():
     """Video output.
 
-    No inputs.
+    Example:
+
+      GET /api/avatar/result_feed?instance_id=some_important_string
+
+    where `some_important_string` is what "/api/avatar/load" gave you.
+
+    The instance ID is an URL parameter to make it trivially easy to display the video stream
+    in a web browser. (You still have to get the ID from "/api/avatar/load"; it's an UUID,
+    so unfortunately it's not very human-friendly.)
 
     Output is a "multipart/x-mixed-replace" stream of video frames, each as an image file.
     The payload separator is "--frame".
@@ -350,7 +525,7 @@ def api_avatar_result_feed():
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
-    return avatar.result_feed()
+    return avatar.result_feed(instance_id=request.args.get("instance_id"))  # this will yell if the instance doesn't exist so we don't have to
 ignore_auth.append(api_avatar_result_feed)   # TODO: does this make sense?
 
 @app.route("/api/avatar/get_available_filters")
@@ -523,24 +698,9 @@ def api_imagefx_process():
 
     try:
         file = request.files["file"]
-
-        # TODO: Do we need to run this through a `BytesIO` to copy the data? Probably not?
-        # The internet says that in some versions of Flask, touching most of the attributes
-        # of a `FileStorage` causes a disk write to a temporary file, but `.stream` can be
-        # safely accessed in-memory.
-        parameters_filestorage = request.files["json"]
-        buffer = io.BytesIO()
-        buffer.write(parameters_filestorage.stream.read())
-        parameters_bytes = buffer.getvalue()
-        parameters_python = json.loads(parameters_bytes)
-
-        # # Simpler way without `BytesIO`:
-        # parameters_filestorage = request.files["json"]
-        # parameters_bytes = parameters_filestorage.read()
-        # parameters_python = json.loads(parameters_bytes)
-
-        postprocessor_chain = parameters_python["filters"]
-        format = parameters_python["format"]
+        parameters = unpack_parameters_from_json_file_attachment(request.files["json"].stream)
+        postprocessor_chain = parameters["filters"]
+        format = parameters["format"]
 
         processed_image = imagefx.process(file.stream,
                                           output_format=format,
@@ -585,18 +745,13 @@ def api_imagefx_upscale():
 
     try:
         file = request.files["file"]
+        parameters = unpack_parameters_from_json_file_attachment(request.files["json"].stream)
 
-        parameters_filestorage = request.files["json"]
-        buffer = io.BytesIO()
-        buffer.write(parameters_filestorage.stream.read())
-        parameters_bytes = buffer.getvalue()
-        parameters_python = json.loads(parameters_bytes)
-
-        format = parameters_python["format"]
-        upscaled_width = parameters_python["upscaled_width"]
-        upscaled_height = parameters_python["upscaled_height"]
-        preset = parameters_python["preset"]
-        quality = parameters_python["quality"]
+        format = parameters["format"]
+        upscaled_width = parameters["upscaled_width"]
+        upscaled_height = parameters["upscaled_height"]
+        preset = parameters["preset"]
+        quality = parameters["quality"]
 
         processed_image = imagefx.upscale(file.stream,
                                           output_format=format,
