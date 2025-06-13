@@ -474,7 +474,7 @@ def result_feed(instance_id: str) -> Response:
 
         while True:
             if instance_id not in _avatar_instances:
-                logger.info(f"result_feed.generate: Avatar instance '{instance_id}' has been deleted, shutting down the result feed.")
+                logger.info(f"result_feed.generate (avatar instance '{instance_id}'): Instance has been deleted, shutting down the result feed.")
                 return  # Instance has been deleted (by a call to `unload`), so we're done. Shut down the stream.
             animator = _avatar_instances[instance_id]["animator"]
             encoder = _avatar_instances[instance_id]["encoder"]
