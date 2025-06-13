@@ -731,6 +731,7 @@ class PostprocessorSettingsEditorGUI:
             if first_time:  # first frame; window size not initialized yet, so we can't rely on `self._resize_gui`
                 dpg.set_item_pos(self.live_image_widget, (512 - self.image_size // 2, viewport_height - self.image_size))
             else:
+                dpg.split_frame()  # For some reason, waiting for a frame before resizing the GUI eliminates flicker when the texture object is replaced.
                 self._resize_gui()
 
             try:
