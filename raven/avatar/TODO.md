@@ -34,19 +34,7 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
       - Change terminology everywhere, this is an importer (BibTeX input, to Raven-visualizer dataset output) rather than a "preprocessor".
         The main difficulty is to explain the two-stage import process in the docs (any format to BibTeX, then BibTeX to Raven-visualizer). Maybe "convert" and "import"?
 
-- More backdrops, suitable for the different characters.
-
-- Voice mixing. Allows for greater variation for voices.
-  - Supported by Kokoro-FastAPI; need to add this functionality to our own server too.
-  - Two voices, second voice is optional, can be None.
-  - GUI:
-    - Add a second combobox, for the second voice. Add the None option, make it the default (so that the default is to use only one voice).
-    - Slider for mix balance (step: 10%?).
-    - These can fit onto one line in the `raven.avatar.settings_editor` GUI (voice names are short).
-
-- Fdialog use site boilerplate reduction? We have lots of these dialogs in Raven.
-
-- Check if we can auto-spawn a server from raven-visualizer (and other end-user apps) if it's not already running. Would need open a terminal to show the server's log messages.
+- Add "Refresh current character" button (or even automate that?) to facilitate live-testing during creation of new character images.
 
 
 ### Documentation
@@ -67,6 +55,31 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 - Add some example characters created in Stable Diffusion.
   - Original characters.
   - Science legends: Curie, Newton, Lovelace, Archimedes.
+
+
+## Medium priority
+
+If time is left over.
+
+- More backdrops, suitable for the different characters.
+
+- Server-side backdrop image renderer as a postprocessor effect.
+  - This would allow embedding the character into a scene so that the scene can get the same postprocessing applied to it as the character does.
+  - In anime terms, the client-side backdrop (in `raven.avatar.settings_editor.app`) is essentially a separate backdrop cel, placed behind the CG animated character cel.
+
+- Voice mixing. Allows for greater variation for voices.
+  - Supported by Kokoro-FastAPI; need to add this functionality to our own server too.
+  - Two voices, second voice is optional, can be None.
+  - GUI:
+    - Add a second combobox, for the second voice. Add the None option, make it the default (so that the default is to use only one voice).
+    - Slider for mix balance (step: 10%?).
+    - These can fit onto one line in the `raven.avatar.settings_editor.app` GUI (voice names are short).
+
+- Fdialog use site boilerplate reduction? We have lots of these dialogs in Raven.
+
+- Check if we can auto-spawn a server from raven-visualizer (and other end-user apps) if it's not already running.
+  - Would need open a terminal to show the server's log messages.
+  - OTOH, maybe no need if we can support a local (one process) mode instead.
 
 
 ## Low priority
