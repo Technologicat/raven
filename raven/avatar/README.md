@@ -25,10 +25,9 @@ Where to find the relevant files:
 - The server side implementation: `raven.server.modules.avatar`
 - The server side web API endpoints: `raven.server.app` (**start here** when developing your own **JavaScript** apps)
 - Python bindings for the web API: `raven.client.api` (**start here** when developing your own **Python** apps)
-- The client apps: `raven.avatar.*`
+- The GUI apps: `raven.avatar.pose_editor.app`, `raven.avatar.settings_editor.app`
+  - The pose editor is standalone, while the settings editor is a client app that needs *Raven-server* to be running.
 - Assets: `raven.avatar.assets`
-
-The client apps include the pose editor, and the video postprocessor settings editor.
 
 Assets include character images (512x512 PNG RGBA), backdrop images (any resolution and format), emotion templates (JSON), and animator settings (JSON).
 
