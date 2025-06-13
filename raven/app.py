@@ -781,11 +781,11 @@ def _create_highlight_scatter_series():
     dpg.add_scatter_series([], [], tag=series_tag, parent="axis1")
     dpg.bind_item_theme(series_tag, "my_search_results_theme")  # tag
 
-def clear_background_tasks():
+def clear_background_tasks(wait: bool):
     """Stop (cancel) and delete all background tasks."""
-    info_panel_task_manager.clear(wait=True)
-    annotation_task_manager.clear(wait=True)
-    word_cloud_task_manager.clear(wait=True)
+    info_panel_task_manager.clear(wait=wait)
+    annotation_task_manager.clear(wait=wait)
+    word_cloud_task_manager.clear(wait=wait)
 
 def reset_app_state(_update_gui=True):
     """Reset everything, to prepare for loading new data to the GUI.
@@ -796,8 +796,8 @@ def reset_app_state(_update_gui=True):
     reason = "for loading new data to the GUI" if _update_gui else "(app exiting)"
     logger.info(f"Resetting app state {reason}.")
 
-    # Stop old background tasks
-    clear_background_tasks()
+    # Stop old background tasks (and wait until they actually exit)
+    clear_background_tasks(wait=True)
 
     # Stop GUI animations
     gui_animation.animator.clear()
@@ -4504,11 +4504,14 @@ dpg.set_frame_callback(10, create_info_panel_dimmer_overlay)
 
 logger.info("App render loop starting.")
 
-# We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
-while dpg.is_dearpygui_running():
-    update_animations()
-    dpg.render_dearpygui_frame()
-# dpg.start_dearpygui()  # automatic render loop
+try:
+    # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
+    while dpg.is_dearpygui_running():
+        update_animations()
+        dpg.render_dearpygui_frame()
+    # dpg.start_dearpygui()  # automatic render loop
+except KeyboardInterrupt:
+    clear_background_tasks(wait=False)  # signal background tasks to exit
 
 logger.info("App render loop exited.")
 
