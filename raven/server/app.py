@@ -963,6 +963,8 @@ init_server_modules()
 # Start serving
 
 print(f"{Fore.GREEN}{Style.BRIGHT}Starting server{Style.RESET_ALL}")
+where = "all IPv4 addresses" if args.listen else "localhost"
+print(f"{Fore.GREEN}{Style.BRIGHT}Listening for connections from {where}{Style.RESET_ALL}")
 
 serve(app, host=host, port=port)
 
