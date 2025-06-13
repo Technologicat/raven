@@ -19,6 +19,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import atexit
 import concurrent.futures
 import copy
 import io
@@ -1306,30 +1307,37 @@ def update_live_texture(task_env) -> None:
         while not task_env.cancelled:
             frame_start_time = time.time_ns()
 
-            if gui_instance:
-                if not gui_instance.animator_running and reader.is_running():
+            # Important: grab reference to the global `gui_instance` just once per loop; during app shutdown, it may disappear at any time.
+            gui = gui_instance
+
+            if gui:  # sync `ResultFeedReader` state from GUI `animator_running` state
+                if not gui.animator_running and reader.is_running():
                     reader.stop()
                     try:
                         dpg.set_value("fps_text", describe_performance(None, None, None, None))
                     except SystemError:  # does not exist (can happen at app shutdown)
                         pass
-                elif gui_instance.animator_running and not reader.is_running():
+                elif gui.animator_running and not reader.is_running():
                     reader.start()
 
             if reader.is_running():
                 mimetype, image_data = reader.get_frame()
-                gui_instance.frame_size_statistics.add_datapoint(len(image_data))
-            if gui_instance is None or not reader.is_running():
+                gui.frame_size_statistics.add_datapoint(len(image_data))
+
+            # Here:
+            #   - `gui` can be `None` during app startup
+            #   - If the `ResultFeedReader` isn't running, there's nothing to do at the moment.
+            if gui is None or not reader.is_running():
                 time.sleep(0.04)   # 1/25 s
                 continue
 
             try:  # EAFP to avoid TOCTTOU
                 # Before blitting, make sure the texture is of the expected size. When an upscale change is underway, it will be temporarily of the wrong size.
-                tex = gui_instance.live_texture  # Get the reference only once, since it could change at any time if the user changes the upscaler settings.
+                tex = gui.live_texture  # Get the reference only once, since it could change at any time if the user changes the upscaler settings.
                 config = dpg.get_item_configuration(tex)
                 expected_w = config["width"]
                 expected_h = config["height"]
-            except SystemError:  # does not exist
+            except SystemError:  # does not exist (can happen at least during app shutdown, or during a texture object swap)
                 time.sleep(0.04)   # 1/25 s
                 continue  # can't do anything without a texture to blit to, so discard this frame
 
@@ -1356,7 +1364,7 @@ def update_live_texture(task_env) -> None:
                     pil_image = pil_image.resize((expected_w, expected_h),
                                                  resample=PIL.Image.LANCZOS)
                 image_rgba = np.asarray(pil_image.convert("RGBA"))
-            gui_instance.last_image_rgba = image_rgba  # for reducing flicker when upscaler settings change
+            gui.last_image_rgba = image_rgba  # for reducing flicker when upscaler settings change
             image_rgba = np.array(image_rgba, dtype=np.float32) / 255
             raw_data = image_rgba.ravel()  # shape [h, w, c] -> linearly indexed
             try:  # EAFP to avoid TOCTTOU
@@ -1369,11 +1377,13 @@ def update_live_texture(task_env) -> None:
             #       If the machine could render faster, this just means less than 100% CPU/GPU usage.
             elapsed_time = time.time_ns() - frame_start_time
             fps = 1.0 / (elapsed_time / 10**9)
-            gui_instance.fps_statistics.add_datapoint(fps)
+            gui.fps_statistics.add_datapoint(fps)
 
             try:
-                dpg.set_value("fps_text", describe_performance(gui_instance, mimetype, h, w))
-            except SystemError:  # does not exist (can happen at app shutdown)
+                dpg.set_value("fps_text", describe_performance(gui, mimetype, h, w))
+            except SystemError:  # DPG widget does not exist (can happen at app shutdown)
+                pass
+            except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
                 pass
     except EOFError:  # `result_feed` has shut down (normal at app exit, after we call `api.avatar_unload`)
         pass
@@ -1405,15 +1415,26 @@ api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> 
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings into the GUI, as well as send them to the avatar instance.
 api.avatar_start(avatar_instance_id)
 
-def shutdown() -> None:
+def gui_shutdown() -> None:
+    """App exit: gracefully shut down parts that access DPG."""
     api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
-    if avatar_instance_id is not None:
-        api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
-    task_manager.clear(wait=True)
+    task_manager.clear(wait=True)  # wait until background tasks actually exit
     gui_animation.animator.clear()
     global gui_instance
     gui_instance = None
-dpg.set_exit_callback(shutdown)
+dpg.set_exit_callback(gui_shutdown)
+
+def app_shutdown() -> None:
+    """App exit: gracefully shut down parts that don't need DPG.
+
+    This is guaranteed to run even if DPG shutdown never completes gracefully.
+
+    Currently, we release server-side resources here.
+    """
+    if avatar_instance_id is not None:
+        api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
+atexit.register(app_shutdown)
+
 task_manager.submit(update_live_texture, envcls())
 
 dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
@@ -1470,11 +1491,14 @@ def update_animations():
     #         dpg.disable_item(gui_instance.voice_choice)
     #         dpg.disable_item("speak_button")
 
-# We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
-while dpg.is_dearpygui_running():
-    update_animations()
-    dpg.render_dearpygui_frame()
-# dpg.start_dearpygui()  # automatic render loop
+try:
+    # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
+    while dpg.is_dearpygui_running():
+        update_animations()
+        dpg.render_dearpygui_frame()
+    # dpg.start_dearpygui()  # automatic render loop
+except KeyboardInterrupt:
+    task_manager.clear(wait=False)  # signal background tasks to exit
 
 dpg.destroy_context()
 

@@ -174,11 +174,17 @@ def load(stream) -> str:
         traceback.print_exc()
         logger.error(f"load: failed: {type(exc)}: {exc}")
 
+        # Tear down anything that started before the error occurred.
         if encoder:
-            encoder.exit()
+            try:
+                encoder.exit()
+            except Exception:
+                pass
         if animator:
-            animator.exit()
-
+            try:
+                animator.exit()
+            except Exception:
+                pass
         try:
             _avatar_instances.pop(instance_id)
         except KeyError:
@@ -204,7 +210,7 @@ def reload(instance_id: str, stream) -> None:
         raise ValueError(f"reload: no such avatar instance '{instance_id}'")
 
     # Just in case, make a seekable in-memory copy of `stream`.
-    logger.info("load_image_from_stream: loading new input image from stream")
+    logger.info("reload: loading new input image from stream")
     buffer = io.BytesIO()
     buffer.write(stream.read())
     buffer.seek(0)
@@ -224,10 +230,17 @@ def unload(instance_id: str) -> None:
         logger.error(f"unload: no such avatar instance '{instance_id}'")
         raise ValueError(f"unload: no such avatar instance '{instance_id}'")
 
-    animator = _avatar_instances[instance_id]["animator"]
-    encoder = _avatar_instances[instance_id]["encoder"]
-    encoder.exit()
-    animator.exit()
+    try:
+        encoder = _avatar_instances[instance_id]["encoder"]
+        encoder.exit()
+    except Exception:
+        pass
+    try:
+        animator = _avatar_instances[instance_id]["animator"]
+        animator.exit()
+    except Exception:
+        pass
+
     _avatar_instances.pop(instance_id)
 
     plural_s = "s" if len(_avatar_instances) != 1 else ""
@@ -306,7 +319,7 @@ def start(instance_id: str) -> str:
     animator = _avatar_instances[instance_id]["animator"]
     animator.animation_running = True
 
-    logger.info("reload: animation resumed")
+    logger.info("start: done")
 
 def stop(instance_id: str) -> str:
     """Stop animation, but keep the avatar loaded for resuming later (to do that, use `start`)."""
@@ -320,7 +333,7 @@ def stop(instance_id: str) -> str:
     animator = _avatar_instances[instance_id]["animator"]
     animator.animation_running = False
 
-    logger.info("unload: animation paused")
+    logger.info("stop: done")
 
 def start_talking(instance_id: str) -> str:
     """Start talking animation (generic, non-lipsync).
@@ -337,7 +350,7 @@ def start_talking(instance_id: str) -> str:
     animator = _avatar_instances[instance_id]["animator"]
     animator.is_talking = True
 
-    logger.debug("start_talking called")
+    logger.debug("start_talking: done")
 
 def stop_talking(instance_id: str) -> str:
     """Stop talking animation (generic, non-lipsync).
@@ -354,7 +367,7 @@ def stop_talking(instance_id: str) -> str:
     animator = _avatar_instances[instance_id]["animator"]
     animator.is_talking = False
 
-    logger.debug("stop_talking called")
+    logger.debug("stop_talking: done")
 
 def set_emotion(instance_id: str, emotion: str) -> str:
     """Set the current emotion of the character.
@@ -393,6 +406,7 @@ def set_overrides(instance_id: str, overrides: Dict[str, Any]) -> str:
         logger.error(f"set_overrides: no such avatar instance '{instance_id}'")
         raise ValueError(f"set_overrides: no such avatar instance '{instance_id}'")
 
+    logger.debug("set_overrides: applying overrides")  # too spammy as info (when lipsyncing)
     animator = _avatar_instances[instance_id]["animator"]
     animator.set_overrides(overrides)
 
@@ -460,6 +474,7 @@ def result_feed(instance_id: str) -> Response:
 
         while True:
             if instance_id not in _avatar_instances:
+                logger.info(f"result_feed.generate: Avatar instance '{instance_id}' has been deleted, shutting down the result feed.")
                 return  # Instance has been deleted (by a call to `unload`), so we're done. Shut down the stream.
             animator = _avatar_instances[instance_id]["animator"]
             encoder = _avatar_instances[instance_id]["encoder"]
@@ -565,6 +580,7 @@ class Animator:
 
     def start(self) -> None:
         """Start the animation thread."""
+        logger.info(f"Animator.start (avatar instance '{self.instance_id}'): Animator is starting.")
         self._terminated = False
         def animator_update():
             while not self._terminated:
@@ -578,16 +594,19 @@ class Animator:
         self.animator_thread = threading.Thread(target=animator_update, daemon=True)
         self.animator_thread.start()
         atexit.register(self.exit)
+        logger.info(f"Animator.start (avatar instance '{self.instance_id}'): Animator startup complete.")
 
     def exit(self) -> None:
         """Terminate the animation thread.
 
         Called automatically when the process exits.
         """
+        logger.info(f"Animator.exit (avatar instance '{self.instance_id}'): Animator is shutting down.")
         self._terminated = True
         if self.animator_thread is not None:
             self.animator_thread.join()
         self.animator_thread = None
+        logger.info(f"Animator.exit (avatar instance '{self.instance_id}'): Animator shutdown complete.")
 
     def reset_animation_state(self):
         """Reset character state trackers for all animation drivers."""
@@ -1419,12 +1438,13 @@ class Encoder:
     def __init__(self, instance_id: str) -> None:
         self.current_frame = None
         self.encoder_thread = None
-        self.output_format = config.animator_defaults["format"]  # default until animator settings are loaded
+        self.output_format = config.animator_defaults["format"]  # default until animator settings are loaded; note `output_format` is writable from other threads!
         self.instance_id = instance_id
         self.latest_frame_sent = None  # for co-operation with `result_feed` (NOTE: only one feed allowed per instance!) (TODO: relax this assumption? A bit difficult to do.)
 
     def start(self) -> None:
         """Start the output encoder thread."""
+        logger.info(f"Encoder.start (avatar instance '{self.instance_id}'): Encoder is starting.")
         self._terminated = False
         def encoder_update():
             last_report_time = None
@@ -1446,10 +1466,13 @@ class Encoder:
                 # If a new frame arrived, pack it for sending (only once for each new frame).
                 if have_new_frame:
                     try:
+                        # Important: grab reference to `output_format` just once per frame; may be changed (atomic replace) by another thread while we're encoding.
+                        output_format = self.output_format
+
                         # time_now = time.time_ns()
-                        if self.output_format == "QOI":  # Quite OK Image format - like PNG, but fast
+                        if output_format.upper() == "QOI":  # Quite OK Image format - like PNG, but fast
                             # Ugh, we must copy because the data isn't C-contiguous... but this is still faster than the other formats.
-                            current_frame = (self.output_format.upper(), qoi.encode(image_rgba.copy(order="C")))  # input: uint8 array of shape (h, w, c)
+                            current_frame = (output_format.upper(), qoi.encode(image_rgba.copy(order="C")))  # input: uint8 array of shape (h, w, c)
                         else:  # use PIL
                             pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
                             if image_rgba.shape[2] == 4:
@@ -1457,16 +1480,16 @@ class Encoder:
                                 pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
 
                             buffer = io.BytesIO()
-                            if self.output_format == "PNG":
+                            if output_format == "PNG":
                                 kwargs = {"compress_level": 1}
-                            elif self.output_format == "TGA":
+                            elif output_format == "TGA":
                                 kwargs = {"compression": "tga_rle"}
                             else:
                                 kwargs = {}
                             pil_image.save(buffer,
-                                           format=self.output_format.upper(),
+                                           format=output_format.upper(),
                                            **kwargs)
-                            current_frame = (self.output_format, buffer.getvalue())
+                            current_frame = (output_format, buffer.getvalue())
                         # pack_duration_sec = (time.time_ns() - time_now) / 10**9  # DEBUG / benchmarking
 
                         # We now have a new encoded frame; but first, sync with network send.
@@ -1510,13 +1533,17 @@ class Encoder:
         self.encoder_thread = threading.Thread(target=encoder_update, daemon=True)
         self.encoder_thread.start()
         atexit.register(self.exit)
+        logger.info(f"Encoder.start (avatar instance '{self.instance_id}'): Encoder startup complete.")
 
     def exit(self) -> None:
         """Terminate the output encoder thread.
 
         Called automatically when the process exits.
         """
+        logger.info(f"Encoder.exit (avatar instance '{self.instance_id}'): Encoder is shutting down.")
         self._terminated = True
         if self.encoder_thread is not None:
             self.encoder_thread.join()
         self.encoder_thread = None
+        self.current_frame = None
+        logger.info(f"Encoder.exit (avatar instance '{self.instance_id}'): Encoder shutdown complete.")

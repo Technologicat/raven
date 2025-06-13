@@ -18,6 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import argparse
+import atexit
 import collections
 import itertools
 import math
@@ -859,6 +860,9 @@ def init(executor):
         task_manager = bgtask.TaskManager(name="bibtex_importer",
                                           mode="concurrent",
                                           executor=bg)
+        def clear_background_tasks():
+            task_manager.clear(wait=False)  # signal background tasks to exit
+        atexit.register(clear_background_tasks)
     except Exception:
         bg = None
         task_manager = None

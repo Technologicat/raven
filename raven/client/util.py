@@ -14,6 +14,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import atexit
 import concurrent.futures
 import os
 import requests
@@ -58,6 +59,9 @@ def initialize_api(raven_server_url: str,
     api_config.task_manager = bgtask.TaskManager(name="raven_client_api",
                                                  mode="concurrent",
                                                  executor=executor)
+    def clear_background_tasks():
+        api_config.task_manager.clear(wait=False)  # signal background tasks to exit
+    atexit.register(clear_background_tasks)
 
     api_config.raven_server_url = raven_server_url
     api_config.tts_url = tts_url

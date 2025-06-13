@@ -500,7 +500,14 @@ def tts_speak_lipsynced(instance_id: str,
                     traceback.print_exc()
 
             # TTS is exiting, so stop lipsyncing.
-            api.avatar_set_overrides(instance_id, {})
+            #
+            # NOTE: During app shutdown, we also get here if the avatar instance was deleted
+            # (so an `api.avatar_set_overrides` call raised, because the avatar instance was not found).
+            # So at this point, we shouldn't trust that it's still there.
+            try:
+                api.avatar_set_overrides(instance_id, {})
+            except Exception:
+                pass
 
     util.api_config.task_manager.submit(speak, envcls())
 

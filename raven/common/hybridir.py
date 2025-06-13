@@ -879,6 +879,10 @@ def init(executor):
         task_managers["commit"] = bgtask.TaskManager(name="hybridir_commit",
                                                      mode="sequential",  # for the auto-cancel mechanism
                                                      executor=bg)
+        def clear_background_tasks():
+            for task_manager in task_managers:
+                task_manager.clear(wait=False)  # signal background tasks to exit
+        atexit.register(clear_background_tasks)
     except Exception:
         bg = None
         task_managers.clear()
