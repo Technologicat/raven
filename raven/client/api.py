@@ -14,7 +14,7 @@ We support all modules served by `raven.server.app`:
   - avatar      - animated AI avatar as a video stream
   - classify    - text sentiment analysis
   - embeddings  - vector embeddings of text, useful for semantic visualization and RAG indexing
-  - imagefx     - apply filter effects to an image (see `raven.avatar.common.postprocessor`)
+  - imagefx     - apply filter effects to an image (see `raven.common.video.postprocessor`)
   - tts         - text-to-speech with and without lipsyncing the AI avatar
   - websearch   - search the web, and parse results for consumption by an LLM
 
@@ -401,7 +401,7 @@ def imagefx_process(stream,
 
     `output_format`: format to encode output to (e.g. "png", "tga", "qoi").
 
-    `filters`: Formatted as in `raven.avatar.common.config.postprocessor_defaults`.
+    `filters`: Formatted as in `raven.server.config.postprocessor_defaults`.
                Be sure to populate this - default is a blank list, which does nothing.
 
     Returns a `bytes` object containing the processed image, encoded in `output_format`.
@@ -493,7 +493,7 @@ def imagefx_upscale(stream,
 
     `upscaled_width`, `upscaled_height`: desired output image resolution.
     `preset`: One of "A", "B" or "C", corresponding to the Anime4K preset with the same letter;
-             for the meanings, see `raven.avatar.common.upscaler`.
+             for the meanings, see `raven.common.video.upscaler`.
      `quality`: One of "high" or "low".
 
     Returns a `bytes` object containing the upscaled image, encoded in `output_format`.

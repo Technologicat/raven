@@ -123,7 +123,7 @@ def process(input_stream,
 
     `input_stream`: a `flask.request.file.stream` containing an image file
     `output_format`: format to encode output to (e.g. "png")
-    `postprocessor_chain`: formatted as in `raven.avatar.common.config.postprocessor_defaults`
+    `postprocessor_chain`: formatted as in `raven.server.config.postprocessor_defaults`
 
     Returns a `bytes` object containing the processed image, encoded in `output_format`.
     """
@@ -169,7 +169,7 @@ def upscale(input_stream,
     `output_format`: format to encode output to (e.g. "png")
     `upscaled_width`, `upscaled_height`: desired output image resolution.
 
-    For `preset` and `quality`, see `raven.avatar.common.upscaler`.
+    For `preset` and `quality`, see `raven.common.video.upscaler`.
 
     Returns a `bytes` object containing the upscaled image, encoded in `output_format`.
     """

@@ -734,7 +734,7 @@ def api_imagefx_upscale():
     and QOI (Quite OK Image).
 
     Preset is "A", "B" or "C", corresponding to the Anime4K preset with the same letter;
-    for the meanings, see `raven.avatar.common.upscaler`.
+    for the meanings, see `raven.common.video.upscaler`.
 
     Quality is "high" or "low".
 
@@ -1011,7 +1011,7 @@ def api_websearch2():
 # --------------------------------------------------------------------------------
 # Main program
 
-# NOTE SillyTavern-Extras users: settings for module enable/disable and which compute device to use for each module have been moved to `raven/avatar/common/config.py`.
+# NOTE SillyTavern-Extras users: settings for module enable/disable and which compute device to use for each module have been moved to `raven/server/config.py`.
 
 # ----------------------------------------
 # Parse command-line arguments
@@ -1086,7 +1086,7 @@ def init_server_modules():  # keep global namespace clean
         device_string = record["device_string"]  # no configurable dtype
         tts.init_module(device_string)
 
-    if server_config.SERVER_ENABLED_MODULES.get("websearch", None) is not None:  # no device/dtype settings; if a blank record exists, this module is enabled.
+    if server_config.SERVER_ENABLED_MODULES.get("websearch", None) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
         websearch.init_module()
 init_server_modules()
 
