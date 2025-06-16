@@ -44,8 +44,8 @@ from unpythonic.env import env as envcls
 import bm25s  # keyword
 import chromadb  # semantic (vector)
 
-from ..common import deviceinfo
 from ..common import bgtask
+from ..common import deviceinfo
 from ..common import nlptools
 from ..common import utils
 

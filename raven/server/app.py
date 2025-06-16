@@ -31,9 +31,8 @@ from waitress import serve
 
 import torch
 
-from ..common.video.postprocessor import Postprocessor  # available image filters
-
 from ..common import deviceinfo
+from ..common.video.postprocessor import Postprocessor  # available image filters
 
 from . import config as server_config  # default models etc.
 
