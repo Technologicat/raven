@@ -9,8 +9,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
-- Check for remaining `config_dir`, `config_base_dir`
-- Check for remaining `import config` or `from config`
 - Check the use sites of every setting one more time, to be sure
 
 - Refactor everything, again:
