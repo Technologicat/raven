@@ -16,7 +16,7 @@ userdata_dir = global_config.toplevel_userdata_dir / "server"
 #
 # NOTE: This configures the server-side devices.
 #
-SERVER_ENABLED_MODULES = {
+enabled_modules = {
     "avatar": {"device_string": "cuda:0",
                "dtype": torch.float16},
     "classify": {"device_string": "cuda:0",
@@ -31,34 +31,37 @@ SERVER_ENABLED_MODULES = {
 
 # The port Raven-server listens to. Can be overridden on the command line.
 #
-DEFAULT_PORT = 5100
+default_port = 5100
 
-# AI model that produces the high-dimensional semantic vectors, for visualization in `raven-visualizer`.
-# Available on HuggingFace. Auto-downloaded on first use.
-#
-EMBEDDING_MODEL = "Snowflake/snowflake-arctic-embed-l"
-# EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
+# --------------------------------------------------------------------------------
+# Miscellaneous AI model config
+
+# Each is a Huggingface model name, auto-downloaded on first use.
 
 # Text classification model for emotion detection.
 #
 # Used for dynamically auto-updating the emotion shown by the AI's avatar.
 #
-# Huggingface model name, auto-downloaded on first use.
-#
-CLASSIFICATION_MODEL = "joeddav/distilbert-base-uncased-go-emotions-student"
-# CLASSIFICATION_MODEL = "nateraw/bert-base-uncased-emotion"
+classification_model = "joeddav/distilbert-base-uncased-go-emotions-student"
+# classification_model = "nateraw/bert-base-uncased-emotion"
 
-# THA3 avatar animator models. There are currently no alternative models, this is just for specifying where to download from.
+# AI model that produces the high-dimensional semantic vectors, for visualization in `raven-visualizer`.
 #
-# Huggingface model name, auto-downloaded on first use.
-#
-TALKINGHEAD_MODELS = "OktayAlpk/talking-head-anime-3"
+embedding_model = "Snowflake/snowflake-arctic-embed-l"
+# embedding_model = "sentence-transformers/all-mpnet-base-v2"
 
 # Models for the Kokoro speech synthesizer (text to speech, TTS).
 #
+kokoro_models = "hexgrad/Kokoro-82M"
+
+# --------------------------------------------------------------------------------
+# AI avatar
+
+# THA3 animator models. There are currently no alternative models, this is just for specifying where to download from.
+#
 # Huggingface model name, auto-downloaded on first use.
 #
-KOKORO_MODELS = "hexgrad/Kokoro-82M"
+talkinghead_models = "OktayAlpk/talking-head-anime-3"
 
 # Default configuration for the pixel-space postprocessor, to make the AI's avatar
 # look more cyberpunk via pixel-space glitch artistry.
@@ -95,6 +98,8 @@ postprocessor_defaults = [
 # Default configuration for the animator, loaded when raven-avatar is launched.
 #
 # This doubles as the authoritative documentation of the animator settings, beside the animation driver docstrings and the actual source code.
+#
+# MUST have ALL settings defined. Whenever animator settings are loaded, this is used for validating which settings exist and what their default values are.
 #
 # For details, see `animator.py`.
 #

@@ -61,8 +61,8 @@ def init_module(device_string: str, lang_code="a") -> None:
     # We need to install the full repo to get a list of available voice names programmatically (like Kokoro-FastAPI does, see `Kokoro-FastAPI/api/src/core/paths.py`).
     # We can't download the model to "raven/vendor/", though, because Kokoro itself won't look for the files there - they must go into HF's default cache location.
     try:
-        modelsdir = maybe_install_models(server_config.KOKORO_MODELS)
-        pipeline = KPipeline(lang_code=lang_code, device=device_string, repo_id=server_config.KOKORO_MODELS)
+        modelsdir = maybe_install_models(server_config.kokoro_models)
+        pipeline = KPipeline(lang_code=lang_code, device=device_string, repo_id=server_config.kokoro_models)
         lang = lang_code
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'tts'.{Style.RESET_ALL} Details follow.")

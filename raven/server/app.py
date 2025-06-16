@@ -48,7 +48,7 @@ from .modules import websearch
 
 colorama_init()
 
-deviceinfo.validate(server_config.SERVER_ENABLED_MODULES)  # modifies in-place if CPU fallback needed
+deviceinfo.validate(server_config.enabled_modules)  # modifies in-place if CPU fallback needed
 
 app = Flask(__name__)
 CORS(app)  # allow cross-domain requests
@@ -1020,7 +1020,7 @@ parser = argparse.ArgumentParser(
     prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras"
 )
 parser.add_argument(
-    "--port", type=int, help=f"Specify the port on which the application is hosted (default {server_config.DEFAULT_PORT})"
+    "--port", type=int, help=f"Specify the port on which the application is hosted (default {server_config.default_port})"
 )
 parser.add_argument(
     "--listen", action="store_true", help="Host the app on the local network (if not set, the server is visible to localhost only)"
@@ -1033,7 +1033,7 @@ parser.add_argument("--max-content-length", help="Set the max content length for
 
 args = parser.parse_args()
 
-port = args.port if args.port else server_config.DEFAULT_PORT
+port = args.port if args.port else server_config.default_port
 host = "0.0.0.0" if args.listen else "localhost"
 
 # Read an API key from an already existing file. If that file doesn't exist, create it.
@@ -1063,30 +1063,30 @@ if max_content_length is not None:
 # Initialize enabled modules
 
 def init_server_modules():  # keep global namespace clean
-    if (record := server_config.SERVER_ENABLED_MODULES.get("avatar", None)) is not None:
+    if (record := server_config.enabled_modules.get("avatar", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
         # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
         # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
         tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
         avatar.init_module(device_string, tha3_model_variant)
 
-    if (record := server_config.SERVER_ENABLED_MODULES.get("classify", None)) is not None:
+    if (record := server_config.enabled_modules.get("classify", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
-        classify.init_module(server_config.CLASSIFICATION_MODEL, device_string, torch_dtype)
+        classify.init_module(server_config.classification_model, device_string, torch_dtype)
 
-    if (record := server_config.SERVER_ENABLED_MODULES.get("embeddings", None)) is not None:
+    if (record := server_config.enabled_modules.get("embeddings", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
-        embeddings.init_module(server_config.EMBEDDING_MODEL, device_string, torch_dtype)
+        embeddings.init_module(server_config.embedding_model, device_string, torch_dtype)
 
-    if (record := server_config.SERVER_ENABLED_MODULES.get("imagefx", None)) is not None:
+    if (record := server_config.enabled_modules.get("imagefx", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
         imagefx.init_module(device_string, torch_dtype)
 
-    if server_config.SERVER_ENABLED_MODULES.get("tts", None) is not None:
+    if server_config.enabled_modules.get("tts", None) is not None:
         device_string = record["device_string"]  # no configurable dtype
         tts.init_module(device_string)
 
-    if server_config.SERVER_ENABLED_MODULES.get("websearch", None) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
+    if server_config.enabled_modules.get("websearch", None) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
         websearch.init_module()
 init_server_modules()
 

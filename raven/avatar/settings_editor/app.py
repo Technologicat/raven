@@ -73,9 +73,9 @@ task_manager = bgtask.TaskManager(name="avatar_settings_editor",
                                   executor=bg)
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
+               tts_server_type=client_config.tts_server_type,
                tts_url=client_config.tts_url,
                tts_api_key_file=client_config.tts_api_key_file,
-               tts_server_type=client_config.tts_server_type,
                executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
 
 # These are initialized later, when the app starts

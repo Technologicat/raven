@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 import atexit
 import concurrent.futures
 import os
+import pathlib
 import requests
-from typing import Optional
+from typing import Optional, Union
 
 import pygame  # for audio (text to speech) support
 
@@ -32,10 +33,10 @@ api_config = envcls(raven_default_headers={},
                     audio_frequency=44100,
                     audio_buffer_size=512)
 def initialize_api(raven_server_url: str,
-                   raven_api_key_file: Optional[str],
-                   tts_url: Optional[str],
-                   tts_api_key_file: Optional[str],
+                   raven_api_key_file: Optional[Union[pathlib.Path, str]],
                    tts_server_type: Optional[str],
+                   tts_url: Optional[str],
+                   tts_api_key_file: Optional[Union[pathlib.Path, str]],
                    executor: Optional = None):
     """Set up URLs and API keys, and initialize the audio mixer.
 
@@ -49,8 +50,8 @@ def initialize_api(raven_server_url: str,
 
                 If not provided, an executor is instantiated automatically.
 
-    The audio mixer is used for playing TTS audio. You can disable it by setting
-    `tts_url=None`.
+    The audio mixer is used for playing TTS audio. You can disable TTS by setting
+    `tts_server_type=None`.
     """
     global api_initialized
 
@@ -70,22 +71,23 @@ def initialize_api(raven_server_url: str,
         logger.error(f"init_module: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
         raise ValueError(f"init_module: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
 
-    if raven_api_key_file is not None and os.path.exists(raven_api_key_file):  # TODO: test this (I have no idea what I'm doing)
-        with open(raven_api_key_file, "r", encoding="utf-8") as f:
-            raven_api_key = f.read()
-        # See `raven.server.app`.
-        api_config.raven_default_headers["Authorization"] = raven_api_key.strip()
+    if tts_server_type is not None:
+        if raven_api_key_file is not None and os.path.exists(raven_api_key_file):  # TODO: test this (I have no idea what I'm doing)
+            with open(raven_api_key_file, "r", encoding="utf-8") as f:
+                raven_api_key = f.read()
+            # See `raven.server.app`.
+            api_config.raven_default_headers["Authorization"] = raven_api_key.strip()
 
-    if tts_api_key_file is not None and os.path.exists(tts_api_key_file):  # TODO: test this
-        with open(tts_api_key_file, "r", encoding="utf-8") as f:
-            tts_api_key = f.read()
-        # Format for OpenAI compatible endpoints is "Authorization: Bearer xxxx"; the API key file should contain the "Bearer xxxx" part.
-        api_config.tts_default_headers["Authorization"] = tts_api_key.strip()
+        if tts_api_key_file is not None and os.path.exists(tts_api_key_file):  # TODO: test this
+            with open(tts_api_key_file, "r", encoding="utf-8") as f:
+                tts_api_key = f.read()
+            # Format for OpenAI compatible endpoints is "Authorization: Bearer xxxx"; the API key file should contain the "Bearer xxxx" part.
+            api_config.tts_default_headers["Authorization"] = tts_api_key.strip()
 
-    if tts_url is not None:
+        # Initialize audio mixer for playing back TTS audio
         # https://www.pygame.org/docs/ref/mixer.html
         pygame.mixer.init(frequency=api_config.audio_frequency,
-                          size=-16,
+                          size=-16,  # minus: signed values will be used
                           channels=2,
                           buffer=api_config.audio_buffer_size)  # There seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it to know it.
 

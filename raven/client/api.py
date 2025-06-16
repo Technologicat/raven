@@ -121,7 +121,7 @@ def tts_server_available() -> bool:
     """
     if not util.api_initialized:
         raise RuntimeError("tts_server_available: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_url is None:
+    if util.api_config.tts_server_type is None:
         return False
     headers = copy.copy(util.api_config.tts_default_headers)
     try:

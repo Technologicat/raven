@@ -40,7 +40,7 @@ def tts_list_voices() -> List[str]:
     """
     if not util.api_initialized:
         raise RuntimeError("tts_list_voices: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_url is None:
+    if util.api_config.tts_server_type is None:
         return []
     headers = copy.copy(util.api_config.tts_default_headers)
     if util.api_config.tts_server_type == "kokoro":
@@ -63,7 +63,7 @@ def tts_speak(voice: str,
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_url is None:
+    if util.api_config.tts_server_type is None:
         return
     headers = copy.copy(util.api_config.tts_default_headers)
     headers["Content-Type"] = "application/json"
@@ -158,7 +158,7 @@ def tts_speak_lipsynced(instance_id: str,
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak_lipsynced: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_url is None:
+    if util.api_config.tts_server_type is None:
         return
     headers = copy.copy(util.api_config.tts_default_headers)
     headers["Content-Type"] = "application/json"
@@ -515,7 +515,7 @@ def tts_stop():
     """Stop the speech synthesizer."""
     if not util.api_initialized:
         raise RuntimeError("tts_stop: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_url is None:
+    if util.api_config.tts_server_type is None:
         return
     logger.info("tts_stop: stopping audio")
     pygame.mixer.music.stop()

@@ -1183,7 +1183,7 @@ if args.factory_reset:
 
 # Install the THA3 models if needed
 modelsdir = str(talkinghead_path / "tha3" / "models")
-maybe_install_models(hf_reponame=server_config.TALKINGHEAD_MODELS, modelsdir=modelsdir)
+maybe_install_models(hf_reponame=server_config.talkinghead_models, modelsdir=modelsdir)
 
 try:
     device = torch.device(args.device)

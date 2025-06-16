@@ -234,6 +234,7 @@ misc_stopwords = ["center", "constructed", "containing",
                   "various"]
 
 # The final set just combines all of the above.
+# This is the stopword set used by `raven.visualizer.preprocess` during keyword detection.
 custom_stopwords = set(filler_stopwords + scilang_stopwords +
                        metadata_stopwords + copyright_stopwords +
                        publisher_stopwords + misc_stopwords)

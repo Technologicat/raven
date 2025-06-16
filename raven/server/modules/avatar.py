@@ -111,7 +111,7 @@ def init_module(device: str, model: str) -> None:
 
     # Install the THA3 models if needed
     tha3_models_path = str(talkinghead_path / "tha3" / "models")
-    maybe_install_models(hf_reponame=server_config.TALKINGHEAD_MODELS, modelsdir=tha3_models_path)
+    maybe_install_models(hf_reponame=server_config.talkinghead_models, modelsdir=tha3_models_path)
 
     try:
         logger.info("init_module: loading the Talking Head Anime 3 (THA3) posing engine")
