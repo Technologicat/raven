@@ -1069,18 +1069,23 @@ def init_server_modules():  # keep global namespace clean
         # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
         tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
         avatar.init_module(device_string, tha3_model_variant)
+
     if (record := server_config.SERVER_ENABLED_MODULES.get("classify", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
         classify.init_module(server_config.CLASSIFICATION_MODEL, device_string, torch_dtype)
+
     if (record := server_config.SERVER_ENABLED_MODULES.get("embeddings", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
         embeddings.init_module(server_config.EMBEDDING_MODEL, device_string, torch_dtype)
+
     if (record := server_config.SERVER_ENABLED_MODULES.get("imagefx", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
         imagefx.init_module(device_string, torch_dtype)
+
     if server_config.SERVER_ENABLED_MODULES.get("tts", None) is not None:
         device_string = record["device_string"]  # no configurable dtype
         tts.init_module(device_string)
+
     if server_config.SERVER_ENABLED_MODULES.get("websearch", None) is not None:  # no device/dtype settings; if a blank record exists, this module is enabled.
         websearch.init_module()
 init_server_modules()
