@@ -3,7 +3,7 @@
 !!! Start `raven.server.app` first before running these tests! !!!
 """
 
-# TODO: convert this to a proper test module, checking outputs and everything. Could use `unpythonic.test.fixtures` as the framework.
+# TODO: Now this is a demo. Convert this to a proper test module, checking outputs and everything. Could use `unpythonic.test.fixtures` as the framework.
 # TODO: test *all* endpoints.
 
 import logging

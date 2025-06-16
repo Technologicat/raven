@@ -7,7 +7,7 @@ import torch
 
 from .. import config as global_config
 
-llmclient_userdata_dir = global_config.userdata_dir / "llmclient"
+llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 
 # URL used to connect to the LLM API.
 #
@@ -53,7 +53,7 @@ llm_docs_dir_recursive = False
 llm_database_dir = llmclient_userdata_dir / "rag_index"
 
 # Where to store the search indices for the `HybridIR` API usage example / demo
-hybridir_demo_save_dir = global_config.userdata_dir / "hybridir_demo"
+hybridir_demo_save_dir = global_config.toplevel_userdata_dir / "hybridir_demo"
 
 # Tool-calling
 

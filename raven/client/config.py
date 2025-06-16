@@ -4,7 +4,7 @@ import pathlib
 
 from ..server import config as server_config
 
-# TODO: Assumption: The `userdata_dir` is local anyway so we can just as well use the server app's.
+# TODO: Assumption: The `userdata_dir` of the client/server pair is local anyway, so we can just as well use the server app's.
 # If you run on a different machine, set it here for the client side.
 # The client currently only uses `userdata_dir` to load web API keys from.
 userdata_dir = server_config.userdata_dir
