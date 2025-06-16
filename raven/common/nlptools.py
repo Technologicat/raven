@@ -26,7 +26,7 @@ from typing import Container, Dict, List, Optional, Union
 from sentence_transformers import SentenceTransformer
 import spacy
 
-from .. import config
+from ..visualizer import config
 
 # --------------------------------------------------------------------------------
 

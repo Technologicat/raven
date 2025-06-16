@@ -47,9 +47,9 @@ import transformers
 
 from sklearn.cluster import HDBSCAN
 
-from .common import bgtask
-from .common import nlptools
-from .common import utils
+from ..common import bgtask
+from ..common import nlptools
+from ..common import utils
 
 from . import config
 

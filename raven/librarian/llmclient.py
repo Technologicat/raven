@@ -39,7 +39,7 @@ from mcpyrate import colorizer
 from unpythonic import sym, timer, Values
 from unpythonic.env import env
 
-from .. import visualizer_config
+from ..visualizer import config as visualizer_config
 
 from ..common import hybridir
 

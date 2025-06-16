@@ -41,12 +41,12 @@ from typing import List
 from unpythonic import timer, ETAEstimator, uniqify
 from unpythonic.env import env
 
-from . import config
+from ..common import utils
 
-from .common import utils
+from ..librarian import chattree
+from ..librarian import llmclient
 
-from .librarian import chattree
-from .librarian import llmclient
+from ..visualizer import config
 
 # --------------------------------------------------------------------------------
 # Bootup

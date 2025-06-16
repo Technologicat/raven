@@ -48,7 +48,7 @@ from . import bgtask
 from . import nlptools
 from . import utils
 
-from .. import config
+from ..visualizer import config
 
 # --------------------------------------------------------------------------------
 
