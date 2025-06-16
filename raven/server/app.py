@@ -33,7 +33,9 @@ import torch
 
 from ..common.video.postprocessor import Postprocessor  # available image filters
 
-from . import config  # default models etc.
+from ..common import deviceconfig
+
+from . import config as server_config  # default models etc.
 
 from .modules import avatar
 from .modules import classify
@@ -46,6 +48,8 @@ from .modules import websearch
 # Inits that must run before we proceed any further
 
 colorama_init()
+
+deviceconfig.validate(server_config.SERVER_ENABLED_MODULES)  # modifies in-place if CPU fallback needed
 
 app = Flask(__name__)
 CORS(app)  # allow cross-domain requests
@@ -557,7 +561,7 @@ def api_avatar_get_available_filters():
       - safe to ignore in GUI: ["!ignore"]
 
     In the case of an RGB color parameter, the default value is of the form [R, G, B],
-    where each component is in the range [0, 1].
+    where each component is a float in the range [0, 1].
 
     You can detect the type from the default value.
     """
@@ -1017,7 +1021,7 @@ parser = argparse.ArgumentParser(
     prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras"
 )
 parser.add_argument(
-    "--port", type=int, help=f"Specify the port on which the application is hosted (default {config.DEFAULT_PORT})"
+    "--port", type=int, help=f"Specify the port on which the application is hosted (default {server_config.DEFAULT_PORT})"
 )
 parser.add_argument(
     "--listen", action="store_true", help="Host the app on the local network (if not set, the server is visible to localhost only)"
@@ -1030,19 +1034,19 @@ parser.add_argument("--max-content-length", help="Set the max content length for
 
 args = parser.parse_args()
 
-port = args.port if args.port else config.DEFAULT_PORT
+port = args.port if args.port else server_config.DEFAULT_PORT
 host = "0.0.0.0" if args.listen else "localhost"
 
 # Read an API key from an already existing file. If that file doesn't exist, create it.
 if args.secure:
-    config_dir = pathlib.Path(config.config_base_dir).expanduser().resolve()
+    userdata_dir = pathlib.Path(server_config.userdata_dir).expanduser().resolve()
 
     try:
-        with open(config_dir / "api_key.txt", "r") as txt:
+        with open(userdata_dir / "api_key.txt", "r") as txt:
             api_key = txt.read().replace('\n', '')
     except Exception:
         api_key = secrets.token_hex(5)
-        with open(config_dir / "api_key.txt", "w") as txt:
+        with open(userdata_dir / "api_key.txt", "w") as txt:
             txt.write(api_key)
 
     print(f"{Fore.YELLOW}{Style.BRIGHT}Your API key is {api_key}{Style.RESET_ALL}")
@@ -1059,58 +1063,26 @@ if max_content_length is not None:
 # ----------------------------------------
 # Initialize enabled modules
 
-cuda_info_shown = set()
-def get_device_and_dtype(record: Dict[str, Any]) -> (str, torch.dtype):
-    global cuda_info_shown
-
-    device_string = record["device_string"]
-    torch_dtype = record.get("dtype", None)  # not all modules have a specifiable dtype
-
-    if device_string.startswith("cuda"):  # Nvidia
-        if not torch.cuda.is_available():
-            print(f"{Fore.YELLOW}{Style.BRIGHT}CUDA backend specified in config (device string '{device_string}'), but CUDA not available. Using CPU instead.{Style.RESET_ALL}")
-            device_string = "cpu"
-        else:
-            if device_string not in cuda_info_shown:
-                cuda_info_shown.add(device_string)
-                print(f"Device info for GPU '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' ({torch.cuda.get_device_name(device_string)}):")
-                print(f"    {torch.cuda.get_device_properties(device_string)}")
-                print(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(device_string))}")
-                print(f"    Detected CUDA version {torch.version.cuda}")
-
-    elif device_string.startswith("mps"):  # Mac, Apple Metal Performance Shaders
-        if not torch.backends.mps.is_available():
-            print(f"{Fore.YELLOW}{Style.BRIGHT}MPS backend specified in config (device string '{device_string}'), but MPS not available. Using CPU instead.{Style.RESET_ALL}")
-            device_string = "cpu"
-        # TODO: Torch MPS backend info?
-
-    if device_string == "cpu":  # no "elif" because also as fallback if CUDA/MPS wasn't available
-        if torch_dtype is torch.float16:
-            print(f"{Fore.YELLOW}{Style.BRIGHT}dtype is set to torch.float16, but device 'cpu' does not support half precision. Using torch.float32 instead.{Style.RESET_ALL}")
-            torch_dtype = torch.float32
-
-    return device_string, torch_dtype
-
 def init_server_modules():  # keep global namespace clean
-    if (record := config.SERVER_ENABLED_MODULES.get("avatar", None)) is not None:
-        device_string, torch_dtype = get_device_and_dtype(record)
+    if (record := server_config.SERVER_ENABLED_MODULES.get("avatar", None)) is not None:
+        device_string, torch_dtype = record["device_string"], record["dtype"]
         # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
         # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
         tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
         avatar.init_module(device_string, tha3_model_variant)
-    if (record := config.SERVER_ENABLED_MODULES.get("classify", None)) is not None:
-        device_string, torch_dtype = get_device_and_dtype(record)
-        classify.init_module(config.CLASSIFICATION_MODEL, device_string, torch_dtype)
-    if (record := config.SERVER_ENABLED_MODULES.get("embeddings", None)) is not None:
-        device_string, torch_dtype = get_device_and_dtype(record)
-        embeddings.init_module(config.EMBEDDING_MODEL, device_string, torch_dtype)
-    if (record := config.SERVER_ENABLED_MODULES.get("imagefx", None)) is not None:
-        device_string, torch_dtype = get_device_and_dtype(record)
+    if (record := server_config.SERVER_ENABLED_MODULES.get("classify", None)) is not None:
+        device_string, torch_dtype = record["device_string"], record["dtype"]
+        classify.init_module(server_config.CLASSIFICATION_MODEL, device_string, torch_dtype)
+    if (record := server_config.SERVER_ENABLED_MODULES.get("embeddings", None)) is not None:
+        device_string, torch_dtype = record["device_string"], record["dtype"]
+        embeddings.init_module(server_config.EMBEDDING_MODEL, device_string, torch_dtype)
+    if (record := server_config.SERVER_ENABLED_MODULES.get("imagefx", None)) is not None:
+        device_string, torch_dtype = record["device_string"], record["dtype"]
         imagefx.init_module(device_string, torch_dtype)
-    if config.SERVER_ENABLED_MODULES.get("tts", None) is not None:
-        device_string, _ = get_device_and_dtype(record)
+    if server_config.SERVER_ENABLED_MODULES.get("tts", None) is not None:
+        device_string = record["device_string"]  # no configurable dtype
         tts.init_module(device_string)
-    if config.SERVER_ENABLED_MODULES.get("websearch", None) is not None:  # no device/dtype settings; if a blank record exists, this module is enabled.
+    if server_config.SERVER_ENABLED_MODULES.get("websearch", None) is not None:  # no device/dtype settings; if a blank record exists, this module is enabled.
         websearch.init_module()
 init_server_modules()
 

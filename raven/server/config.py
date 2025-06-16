@@ -1,23 +1,35 @@
-"""Avatar configuration.
+"""Raven-server configuration.
 
 This module is licensed under the 2-clause BSD license.
 """
 
 import torch
 
+from .. import config as global_config
+
+# Where to store files. Currently only used for websearch's debug functionality.
+userdata_dir = global_config.userdata_dir / "server"
+
 # This can be used to enable only those modules you need, to save CPU/GPU/RAM/VRAM resources.
+#
 # To switch a module off, comment out its line here.
 #
+# NOTE: This configures the server-side devices.
+#
 SERVER_ENABLED_MODULES = {
-    "avatar": {"device_string": "cuda:0", "dtype": torch.float16},
-    "classify": {"device_string": "cuda:0", "dtype": torch.float16},
-    "embeddings": {"device_string": "cuda:0", "dtype": torch.float16},
-    "imagefx": {"device_string": "cuda:0", "dtype": torch.float16},
+    "avatar": {"device_string": "cuda:0",
+               "dtype": torch.float16},
+    "classify": {"device_string": "cuda:0",
+                 "dtype": torch.float16},
+    "embeddings": {"device_string": "cuda:0",
+                   "dtype": torch.float16},
+    "imagefx": {"device_string": "cuda:0",
+                "dtype": torch.float16},
     "tts": {"device_string": "cuda:0"},
-    "websearch": {},  # websearch doesn't use any heavy compute; this is here to provide the option to turn the module off.
+    "websearch": {},  # websearch doesn't use any heavy compute; this is here only to provide the option to turn the module off.
 }
 
-# Port the raven-avatar app is hosted on. Can be overridden on the command line.
+# The port Raven-server listens to. Can be overridden on the command line.
 #
 DEFAULT_PORT = 5100
 
@@ -47,9 +59,6 @@ TALKINGHEAD_MODELS = "OktayAlpk/talking-head-anime-3"
 # Huggingface model name, auto-downloaded on first use.
 #
 KOKORO_MODELS = "hexgrad/Kokoro-82M"
-
-# Where to store files. Currently only used for websearch's debug functionality.
-config_base_dir = "~/.config/raven/avatar/"
 
 # Default configuration for the pixel-space postprocessor, to make the AI's avatar
 # look more cyberpunk via pixel-space glitch artistry.

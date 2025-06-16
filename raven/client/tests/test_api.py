@@ -1,4 +1,7 @@
-"""Exercise the API endpoints."""
+"""Exercise the API endpoints.
+
+!!! Start `raven.server.app` first before running these tests! !!!
+"""
 
 # TODO: convert this to a proper test module, checking outputs and everything. Could use `unpythonic.test.fixtures` as the framework.
 # TODO: test *all* endpoints.
@@ -89,7 +92,7 @@ def test():
     print(api.avatar_get_available_filters())
 
     logger.info("test: initialize avatar")
-    avatar_instance_id = api.avatar_load(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "characters", "example.png"))  # send an avatar - mandatory
+    avatar_instance_id = api.avatar_load(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "characters", "other", "example.png"))  # send an avatar - mandatory
     try:
         api.avatar_load_animator_settings_from_file(avatar_instance_id,
                                                     os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings", "animator.json"))  # send animator config - optional, server defaults used if not sent

@@ -71,19 +71,23 @@ with timer() as tim:
     from ..common.gui import widgetfinder
     from ..common.gui import utils as guiutils
 
-    from . import config
+    from . import config as visualizer_config
     from . import preprocess
 
-    gui_config = config.gui_config  # shorthand, this is used a lot
+    gui_config = visualizer_config.gui_config  # shorthand, this is used a lot
 
-    # Emit further log messages only from a few select modules
+    # Emit further log messages only from a few select modules (our own plus some vendored)
     for handler in logging.root.handlers:
         handler.addFilter(utils.UnionFilter(logging.Filter(__name__),
-                                            logging.Filter("raven.animation"),
-                                            logging.Filter("raven.bgtask"),
-                                            logging.Filter("raven.llmclient"),
-                                            logging.Filter("raven.preprocess"),
-                                            logging.Filter("raven.utils"),
+                                            logging.Filter("raven.common.bgtask"),
+                                            logging.Filter("raven.common.deviceconfig"),
+                                            logging.Filter("raven.common.gui.animation"),
+                                            logging.Filter("raven.common.gui.fontsetup"),
+                                            logging.Filter("raven.common.gui.utils"),
+                                            logging.Filter("raven.common.gui.widgetfinder"),
+                                            logging.Filter("raven.common.utils"),
+                                            logging.Filter("raven.librarian.llmclient"),
+                                            logging.Filter("raven.visualizer.preprocess"),
                                             logging.Filter("raven.vendor.file_dialog.fdialog")))
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 

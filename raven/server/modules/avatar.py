@@ -59,7 +59,7 @@ from ...vendor.tha3.util import (resize_PIL_image,
                                  extract_PIL_image_from_filelike,
                                  extract_pytorch_image_from_PIL_image)
 
-from .. import config  # hf repo name for downloading THA3 models if needed
+from .. import config as server_config  # hf repo name for downloading THA3 models if needed
 
 from .avatarutil import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, convert_linear_to_srgb
 
@@ -111,7 +111,7 @@ def init_module(device: str, model: str) -> None:
 
     # Install the THA3 models if needed
     tha3_models_path = str(talkinghead_path / "tha3" / "models")
-    maybe_install_models(hf_reponame=config.TALKINGHEAD_MODELS, modelsdir=tha3_models_path)
+    maybe_install_models(hf_reponame=server_config.TALKINGHEAD_MODELS, modelsdir=tha3_models_path)
 
     try:
         logger.info("init_module: loading the Talking Head Anime 3 (THA3) posing engine")
@@ -696,15 +696,15 @@ class Animator:
 
         # Let's define some helpers:
         def drop_unrecognized(settings: Dict[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
-            unknown_fields = [field for field in settings if field not in config.animator_defaults]
+            unknown_fields = [field for field in settings if field not in server_config.animator_defaults]
             if unknown_fields:
                 logger.warning(f"load_animator_settings: in {context}: this server did not recognize the following settings, ignoring them: {unknown_fields}")
             for field in unknown_fields:
                 settings.pop(field)
-            assert all(field in config.animator_defaults for field in settings)  # contract: only known settings remaining
+            assert all(field in server_config.animator_defaults for field in settings)  # contract: only known settings remaining
 
         def typecheck(settings: Dict[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
-            for field, default_value in config.animator_defaults.items():
+            for field, default_value in server_config.animator_defaults.items():
                 type_match = (int, float) if isinstance(default_value, (int, float)) else type(default_value)
                 if field in settings and not isinstance(settings[field], type_match):
                     logger.warning(f"load_animator_settings: in {context}: incorrect type for '{field}': got {type(settings[field])} with value '{settings[field]}', expected {type_match}")
@@ -726,7 +726,7 @@ class Animator:
             typecheck(server_settings, context="server settings")
         # both `settings` and `server_settings` are fully valid at this point
         aggregate(settings, fallback_settings=server_settings, fallback_context="server settings")  # first fill in from server-side settings
-        aggregate(settings, fallback_settings=config.animator_defaults, fallback_context="built-in defaults")  # then fill in from hardcoded defaults
+        aggregate(settings, fallback_settings=server_config.animator_defaults, fallback_context="built-in defaults")  # then fill in from hardcoded defaults
 
         logger.info(f"load_animator_settings: final settings (filled in as necessary): {settings}")
 
@@ -1438,7 +1438,7 @@ class Encoder:
     def __init__(self, instance_id: str) -> None:
         self.current_frame = None
         self.encoder_thread = None
-        self.output_format = config.animator_defaults["format"]  # default until animator settings are loaded; note `output_format` is writable from other threads!
+        self.output_format = server_config.animator_defaults["format"]  # default until animator settings are loaded; note `output_format` is writable from other threads!
         self.instance_id = instance_id
         self.latest_frame_sent = None  # for co-operation with `result_feed` (NOTE: only one feed allowed per instance!) (TODO: relax this assumption? A bit difficult to do.)
 

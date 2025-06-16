@@ -4,10 +4,10 @@
 - Backend loading.
   - spaCy and embeddings model caching (load only one copy of each model in the same process).
   - Device management (which device to load on), with automatic CPU fallback if loading on GPU fails.
-- Frequency analysis tools.
+- Word frequency analysis tools, useful for keyword detection.
 """
 
-__all__ = {"default_stopwords", "extended_stopwords",
+__all__ = {"default_stopwords",
            "load_pipeline",
            "load_embedding_model",
            "count_frequencies", "detect_named_entities",
@@ -18,15 +18,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import collections
-import copy
 import math
 import operator
 from typing import Container, Dict, List, Optional, Union
 
 from sentence_transformers import SentenceTransformer
 import spacy
-
-from ..visualizer import config
 
 # --------------------------------------------------------------------------------
 
@@ -40,14 +37,10 @@ def _load_stopwords() -> List[str]:
 # We apply stopwords case-insensitively, so lowercase them now.
 default_stopwords = set(x.lower() for x in _load_stopwords())
 
-# The extended stopword set (with custom additional stopwords tuned for English-language scientific text) is used by Raven's BibTeX importer (`preprocess.py`).
-extended_stopwords = copy.copy(default_stopwords)
-extended_stopwords.update(x.lower() for x in config.custom_stopwords)
-
 # --------------------------------------------------------------------------------
 
 _pipelines = {}
-def load_pipeline(model_name: str):
+def load_pipeline(model_name: str, device_string: str):
     """Load and return the spaCy NLP pipeline.
 
     If the specified model is already loaded, return the already-loaded instance.
@@ -57,7 +50,6 @@ def load_pipeline(model_name: str):
         return _pipelines[model_name]
     logger.info(f"load_pipeline: Loading '{model_name}'.")
 
-    device_string = config.devices["nlp"]["device_string"]
     if device_string.startswith("cuda"):
         if ":" in device_string:
             _, gpu_id = device_string.split(":")
@@ -91,7 +83,7 @@ def load_pipeline(model_name: str):
 
 # Cache the embedding models (to load only one copy of each model)
 _embedding_models = {}
-def load_embedding_model(model_name: str):
+def load_embedding_model(model_name: str, device_string: str):
     """Load and return the embedding model (for vector storage).
 
     If the specified model is already loaded, return the already-loaded instance.
@@ -102,7 +94,6 @@ def load_embedding_model(model_name: str):
     logger.info(f"load_embedding_model: Loading '{model_name}'.")
 
     try:
-        device_string = config.devices["embeddings"]["device_string"]
         embedding_model = SentenceTransformer(model_name, device=device_string)
     except RuntimeError as exc:
         logger.warning(f"load_embedding_model: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
@@ -145,8 +136,9 @@ def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
                  "Elsevier" lemmatizes into "Elsevi", because the name looks like the comparative
                  form of an adjective. Similarly "Springer" lemmatizes into "Spring".
 
-    `stopwords`: See `default_stopwords` and `extended_stopwords`.
-                 The stopwords must be in lowercase.
+    `stopwords`: See `default_stopwords`.
+
+                 You can also provide your own. The stopwords must be in lowercase.
 
                  If you don't want to stopword anything, use `stopwords=set()`.
 
@@ -166,7 +158,7 @@ def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
                      "foo bar baz",
                      ...]
 
-        nlp = load_pipeline("en_core_web_sm")
+        nlp = load_pipeline("en_core_web_sm", "cuda:0")
         tokenss = list(nlp.pipe(documents))
 
         all_frequencies = count_frequencies(tokenss)  # across all documents

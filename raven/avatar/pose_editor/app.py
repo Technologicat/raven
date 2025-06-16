@@ -72,7 +72,7 @@ from ...common.gui import utils as guiutils
 from ...common.hfutil import maybe_install_models
 from ...common.running_average import RunningAverage
 
-from ...server import config  # hf repo name for downloading THA3 models if needed
+from ...server import config as server_config  # hf repo name for downloading THA3 models if needed
 from ...server.modules.avatarutil import load_emotion_presets, posedict_to_pose, pose_to_posedict, convert_linear_to_srgb, convert_float_to_uint8
 
 logging.basicConfig(level=logging.INFO)
@@ -1183,7 +1183,7 @@ if args.factory_reset:
 
 # Install the THA3 models if needed
 modelsdir = str(talkinghead_path / "tha3" / "models")
-maybe_install_models(hf_reponame=config.TALKINGHEAD_MODELS, modelsdir=modelsdir)
+maybe_install_models(hf_reponame=server_config.TALKINGHEAD_MODELS, modelsdir=modelsdir)
 
 try:
     device = torch.device(args.device)

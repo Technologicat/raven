@@ -44,11 +44,19 @@ from unpythonic.env import env as envcls
 import bm25s  # keyword
 import chromadb  # semantic (vector)
 
+from ..common import deviceconfig
+
+# TODO: `raven.librarian.config` should be local to Raven-librarian. Does this mean `hybridir` belongs in librarian, or some of the config belongs somewhere else?
+from ..librarian import config as librarian_config
+
 from . import bgtask
 from . import nlptools
 from . import utils
 
-from ..visualizer import config
+# --------------------------------------------------------------------------------
+# Inits that must run before we proceed any further
+
+deviceconfig.validate(librarian_config.devices)  # modifies in-place if CPU fallback needed
 
 # --------------------------------------------------------------------------------
 
@@ -329,8 +337,10 @@ class HybridIR:
             self.embedding_model_name = embedding_model_name
             self.documents = {}
 
-        self._semantic_model = nlptools.load_embedding_model(self.embedding_model_name)  # we compute vector embeddings manually (on Raven's side)
-        self._nlp_pipeline = nlptools.load_pipeline(config.spacy_model)
+        self._semantic_model = nlptools.load_embedding_model(self.embedding_model_name,
+                                                             librarian_config.devices["embeddings"]["device_string"])  # we compute vector embeddings manually (on Raven's side)
+        self._nlp_pipeline = nlptools.load_pipeline(librarian_config.spacy_model,
+                                                    librarian_config.devices["nlp"]["device_string"])
         self._stopwords = nlptools.default_stopwords
 
         # Semantic search: ChromaDB vector storage
@@ -880,7 +890,7 @@ def init(executor):
                                                      mode="sequential",  # for the auto-cancel mechanism
                                                      executor=bg)
         def clear_background_tasks():
-            for task_manager in task_managers:
+            for task_manager in task_managers.values():
                 task_manager.clear(wait=False)  # signal background tasks to exit
         atexit.register(clear_background_tasks)
     except Exception:
@@ -1184,9 +1194,9 @@ def demo():
     from mcpyrate import colorizer
 
     # Create the retriever.
-    config_dir = pathlib.Path(config.hybridir_demo_save_dir).expanduser().resolve()
-    retriever = HybridIR(datastore_base_dir=config_dir,
-                         embedding_model_name=config.qa_embedding_model)
+    userdata_dir = pathlib.Path(librarian_config.hybridir_demo_save_dir).expanduser().resolve()
+    retriever = HybridIR(datastore_base_dir=userdata_dir,
+                         embedding_model_name=librarian_config.qa_embedding_model)
 
     # Documents, plain text. Replace this with your data loading.
     #
@@ -1302,7 +1312,7 @@ def demo():
     #
     # NOTE: The datastore is persistent, so you only need to do this when you add new documents.
     #
-    # If you need to delete the index, open `config_dir` in a file manager, and delete the appropriate subdirectories:
+    # If you need to delete the index, open `userdata_dir` in a file manager, and delete the appropriate subdirectories:
     #   - "fulldocs" is the main datastore.
     #     - This is the master copy of the text data stored in the IR system, preprocessed into a format that can be indexed quickly
     #       (i.e. already chunkified, tokenized, and embedded).

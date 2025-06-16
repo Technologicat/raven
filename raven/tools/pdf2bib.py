@@ -44,9 +44,8 @@ from unpythonic.env import env
 from ..common import utils
 
 from ..librarian import chattree
+from ..librarian import config as librarian_config
 from ..librarian import llmclient
-
-from ..visualizer import config
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -817,7 +816,7 @@ def main():
     parser = argparse.ArgumentParser(description="""Convert PDF conference abstracts into a BibTeX database. Works via pdftotext and an OpenAI compatible LLM.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument(dest="backend_url", nargs="?", default=config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
+    parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
     parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="output_dir", help="directory to move done files into (optional; allows easily continuing later)")
     parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing PDF file(s) to import (will be scanned recursively)")
     opts = parser.parse_args()

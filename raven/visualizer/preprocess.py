@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 import argparse
 import atexit
 import collections
+import copy
 import itertools
 import math
 import os
@@ -48,10 +49,20 @@ import transformers
 from sklearn.cluster import HDBSCAN
 
 from ..common import bgtask
+from ..common import deviceconfig
 from ..common import nlptools
 from ..common import utils
 
-from . import config
+from . import config as visualizer_config
+
+# --------------------------------------------------------------------------------
+# Inits that must run before we proceed any further
+
+deviceconfig.validate(visualizer_config.devices)  # modifies in-place if CPU fallback needed
+
+# The extended stopword set (with custom additional stopwords tuned for English-language scientific text).
+extended_stopwords = copy.copy(nlptools.default_stopwords)
+extended_stopwords.update(x.lower() for x in visualizer_config.custom_stopwords)
 
 # --------------------------------------------------------------------------------
 # Common helpers
@@ -71,12 +82,12 @@ def update_status_and_log(msg, *, log_indent=0):
 # --------------------------------------------------------------------------------
 # TL;DR: AI-based summarization
 
-if config.summarize:
-    summarization_device = config.devices["summarization"]
+if visualizer_config.summarize:
+    summarization_device = visualizer_config.devices["summarization"]
     summarization_pipeline = transformers.pipeline("summarization",
-                                                   model=config.summarization_model,
+                                                   model=visualizer_config.summarization_model,
                                                    device=summarization_device["device_string"],
-                                                   torch_dtype=summarization_device["torch_dtype"])
+                                                   torch_dtype=summarization_device["dtype"])
 else:
     summarization_device = None
     summarization_pipeline = None
@@ -87,7 +98,7 @@ def tldr(text: str) -> str:
     The input must fit into the model's context window.
     """
     # Produce raw summary
-    summary = utils.unicodize_basic_markup(summarization_pipeline(f"{config.summarization_prefix}{text}",
+    summary = utils.unicodize_basic_markup(summarization_pipeline(f"{visualizer_config.summarization_prefix}{text}",
                                                                   min_length=50,  # tokens
                                                                   max_length=100)[0]["summary_text"])
 
@@ -238,7 +249,7 @@ def get_highdim_semantic_vectors(input_data):
                     embeddings_cached_data = np.load(embeddings_cache_filename)
                 logger.info(f"            Done in {tim.dt:0.6g}s.")
                 embedding_model_for_this_cache = embeddings_cached_data["embedding_model"]
-                if embedding_model_for_this_cache == config.embedding_model:
+                if embedding_model_for_this_cache == visualizer_config.embedding_model:
                     cache_state = "ok"
                 else:
                     cache_state = "cache file has different embedding model"
@@ -253,7 +264,8 @@ def get_highdim_semantic_vectors(input_data):
             logger.info(f"        No cached embeddings '{embeddings_cache_filename}', reason: {cache_state}")
             logger.info("        Computing embeddings...")
             if sentence_embedder is None:  # delayed init - load only if needed, on first use
-                sentence_embedder = nlptools.load_embedding_model(config.embedding_model)
+                sentence_embedder = nlptools.load_embedding_model(visualizer_config.embedding_model,
+                                                                  visualizer_config.devices["embeddings"]["device_string"])
             logger.info("        Encoding...")
             with timer() as tim:
                 all_inputs = [entry.title for entry in entries]  # with mpnet, this works best (and we don't always necessarily have an abstract)
@@ -265,16 +277,16 @@ def get_highdim_semantic_vectors(input_data):
                                                        normalize_embeddings=True)
                 # Round-trip to force truncation, if needed.
                 # This matters to make the "cluster centers" coincide with the original datapoints when clustering is disabled.
-                embeddings_device = config.devices["embeddings"]
+                embeddings_device = visualizer_config.devices["embeddings"]
                 all_vectors = torch.tensor(all_vectors,
                                            device=embeddings_device["device_string"],
-                                           dtype=embeddings_device["torch_dtype"])
+                                           dtype=embeddings_device["dtype"])
                 all_vectors = all_vectors.detach().cpu().numpy()
             logger.info(f"            Done in {tim.dt:0.6g}s [avg {len(all_inputs) / tim.dt:0.6g} entries/s].")
 
             logger.info(f"        Caching embeddings for this dataset to '{embeddings_cache_filename}'...")
             with timer() as tim:
-                np.savez_compressed(embeddings_cache_filename, all_vectors=all_vectors, embedding_model=config.embedding_model)
+                np.savez_compressed(embeddings_cache_filename, all_vectors=all_vectors, embedding_model=visualizer_config.embedding_model)
             logger.info(f"            Done in {tim.dt:0.6g}s.")
         all_vectors_by_filename[filename] = all_vectors
         progress.tick()
@@ -374,10 +386,10 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
     The dimension reducer runs in a single thread on CPU and may take a long time (minutes).
     """
     logger.info("Dimension reduction for visualization...")
-    update_status_and_log(f"Loading dimension reduction library for '{config.vis_method}'...", log_indent=1)
+    update_status_and_log(f"Loading dimension reduction library for '{visualizer_config.vis_method}'...", log_indent=1)
     progress.set_micro_count(3)  # load library, train mapping, apply mapping
     with timer() as tim:
-        if config.vis_method == "tsne":
+        if visualizer_config.vis_method == "tsne":
             # t-distributed Stochastic Neighbor Embedding
             #
             # We use the empirical settings by Gove et al. (2022) that generally (across 691 different datasets)
@@ -412,7 +424,7 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
                                   # initialization="pca",
                                   # initialization="spectral",
                                   random_state=42)
-        elif config.vis_method == "umap":
+        elif visualizer_config.vis_method == "umap":
             # UMAP (Uniform Manifold Approximation and Projection) assumes that the data is uniformly distributed
             # on a Riemannian manifold; the Riemannian metric is locally constant (at least approximately);
             # and that the manifold is locally connected. It attempts to preserve the topological structure
@@ -436,7 +448,7 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
                               random_state=42,
                               low_memory=False)
         else:
-            raise ValueError(f"Unknown `config.vis_method` '{config.vis_method}'; valid: 'tsne', 'umap'; please check your `raven/config.py` and restart the app.")
+            raise ValueError(f"Unknown `config.vis_method` '{visualizer_config.vis_method}'; valid: 'tsne', 'umap'; please check your `raven/visualizer/config.py` and restart the app.")
     progress.tick()
     logger.info(f"        Done in {tim.dt:0.6g}s.")
 
@@ -566,7 +578,8 @@ def extract_keywords(input_data, max_vis_kw=6):
             logger.info("        Extracting keywords...")
             if nlp_pipeline is None:
                 update_status_and_log("Loading NLP pipeline for keyword analysis...", log_indent=2)
-                nlp_pipeline = nlptools.load_pipeline(config.spacy_model)
+                nlp_pipeline = nlptools.load_pipeline(visualizer_config.spacy_model,
+                                                      visualizer_config.devices["nlp"]["device_string"])
                 update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
                 # analysis = nlp_pipeline.analyze_pipes(pretty=True)  # print pipeline overview
                 # nlp_pipeline.disable_pipe("parser")
@@ -1069,7 +1082,7 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
         # --------------------------------------------------------------------------------
         # Find representative keywords via NLP analysis over the whole dataset
 
-        if config.extract_keywords:
+        if visualizer_config.extract_keywords:
             all_keywords = extract_keywords(input_data)
         else:
             logger.info("Keyword extraction disabled, skipping NLP analysis.")
@@ -1081,7 +1094,7 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
         # --------------------------------------------------------------------------------
         # Find a set of keywords for each cluster
 
-        if config.extract_keywords:
+        if visualizer_config.extract_keywords:
             vis_keywords_by_cluster = collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords)
         else:
             vis_keywords_by_cluster = []
@@ -1092,7 +1105,7 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
         # --------------------------------------------------------------------------------
         # Write AI summary for each item (EXPERIMENTAL / EXPENSIVE)
 
-        if config.summarize:
+        if visualizer_config.summarize:
             summarize(input_data)  # mutates its input
         else:
             logger.info("AI summarization disabled, skipping.")
@@ -1113,14 +1126,14 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
                            "all_input_filenames_raw": input_data.resolved_filenames,  # actual paths
                            "all_input_filenames_list": all_input_filenames_list,  # just the filenames (no path)
                            "all_input_filenames_str": all_input_filenames_str,  # concatenated, "file1_file2_..._fileN", for naming output figures for this combination of input files
-                           "embedding_model": config.embedding_model,
-                           "vis_method": config.vis_method,  # dimension reduction method
+                           "embedding_model": visualizer_config.embedding_model,
+                           "vis_method": visualizer_config.vis_method,  # dimension reduction method
                            "n_vis_clusters": n_vis_clusters,  # number of clusters detected
                            "n_vis_outliers": n_vis_outliers,  # number of outlier points, not belonging to any cluster
                            "labels": labels,
                            "vis_data": vis_data,  # list, concatenated entries from all input files
                            "lowdim_data": lowdim_data,  # rank-2 `np.array` of shape `[N, 2]`, 2D points from the semantic mapping, after dimension reduction
-                           "keywords_available": config.extract_keywords,
+                           "keywords_available": visualizer_config.extract_keywords,
                            "all_keywords": all_keywords,
                            "vis_keywords_by_cluster": vis_keywords_by_cluster}
             with open(output_filename, "wb") as output_file:
@@ -1134,12 +1147,12 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
 
 def main() -> None:
     logger.info("Settings:")
-    logger.info(f"    Embedding model: {config.embedding_model}")
-    logger.info(f"        Dimension reduction method: {config.vis_method}")
-    logger.info(f"    Extract keywords: {config.extract_keywords}")
-    logger.info(f"        NLP model (spaCy): {config.spacy_model}")
-    logger.info(f"    Summarize via AI: {config.summarize}")
-    logger.info(f"        AI summarization model: {config.summarization_model}")
+    logger.info(f"    Embedding model: {visualizer_config.embedding_model}")
+    logger.info(f"        Dimension reduction method: {visualizer_config.vis_method}")
+    logger.info(f"    Extract keywords: {visualizer_config.extract_keywords}")
+    logger.info(f"        NLP model (spaCy): {visualizer_config.spacy_model}")
+    logger.info(f"    Summarize via AI: {visualizer_config.summarize}")
+    logger.info(f"        AI summarization model: {visualizer_config.summarization_model}")
 
     parser = argparse.ArgumentParser(description="""Convert BibTeX file(s) into a Raven visualization dataset file.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1148,7 +1161,7 @@ def main() -> None:
     opts = parser.parse_args()
 
     if opts.output_filename.endswith(".bib"):
-        print(f"Output filename '{opts.output_filename}' looks like an input filename. Cancelling. Please check usage summary by running this prorgram with the '-h' option.")
+        print(f"Output filename '{opts.output_filename}' looks like an input filename. Cancelling. Please check usage summary by running this prorgram with the '-h' (or '--help') option.")
         sys.exit(1)
 
     try:

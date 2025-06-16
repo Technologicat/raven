@@ -1,3 +1,5 @@
+"""Miscellaneous general utilities."""
+
 __all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
            "make_blank_index_array",
            "UnionFilter",

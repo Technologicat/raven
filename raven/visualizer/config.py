@@ -9,91 +9,20 @@ import torch
 from unpythonic.env import env
 
 # --------------------------------------------------------------------------------
-
-config_base_dir = "~/.config/raven/"
-
-# --------------------------------------------------------------------------------
-# LLM integration
-#
-# Used by the `pdf2bib` and `llmclient` modules.
-
-llm_save_dir = config_base_dir + "llmclient"
-
-# URL used to connect to the LLM API.
-#
-# This has been tested with local LLMs only, but theoretically cloud LLMs should work, too.
-# To set your API key, see the setting `llm_save_dir` above, and create a file "api_key.txt" in that directory.
-# Its contents will be automatically set as the Authorization field of the HTTP headers when `llmclient` starts.
-#
-llm_backend_url = "http://127.0.0.1:5000"
-
-llm_line_wrap_width = 160  # `llmclient`; for text wrapping in live update
-
-# RAG / IR
-
-# AI model for semantic search (RAG backend `raven.common.hybridir`), encoding both questions and answers into a joint semantic space.
-# Available on HuggingFace. Auto-downloaded on first use.
-qa_embedding_model = "sentence-transformers/multi-qa-mpnet-base-cos-v1"
-
-# Magic directory: put your RAG documents here (plain text for now).
-# Add/modify/delete a file in this directory to trigger a RAG index auto-update in the LLM client.
-llm_docs_dir = config_base_dir + "llmclient/documents"
-
-# Whether to scan also subdirectories of `llm_docs_dir` (TODO: doesn't yet work properly, need to mod doc IDs)
-llm_docs_dir_recursive = False
-
-# Where to store the search indices for the RAG database (machine-readable).
-llm_database_dir = config_base_dir + "llmclient/rag_index"
-
-# Where to store the search indices for the `HybridIR` API usage example / demo
-hybridir_demo_save_dir = config_base_dir + "hybridir_demo"
-
-# Tool-calling
-
-# Tool-calling requires instructions for the model. Typically the instructions state that
-# tools are available, and include a dynamically generated list of available functions
-# and their call signatures.
-#
-# Newer models, e.g. QwQ-32B, include a templates for these instructions in their built-in
-# prompt template. In this case, the LLM backend builds the instructions automatically,
-# based on data sent by the LLM client (see `tools` in `llmclient.setup`).
-#
-# However, there exist LLMs that are capable of tool-calling, but have no instruction template
-# for that. E.g. the DeepSeek-R1-Distill-Qwen-7B model is like this.
-#
-# Hence this setting:
-#   - If `True`, our system prompt builder generates the tool-calling instructions. (For older models.)
-#   - If `False`, we just send the data, and let the LLM backend build the instructions. (For newer models.)
-#
-# llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
-llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
-
-# --------------------------------------------------------------------------------
 # Torch config
+
+# NOTE: This configures the client-side devices.
+# See also `raven.server.config` for server-side devices.
 
 # Which GPU to use in the preprocessor (BibTeX import), if available. If not available, CPU fallback is used automatically.
 # See also `run-on-internal-gpu.sh` for another way to select the GPU when starting the app, without modifying any files.
-devices = {"embeddings": {"device_string": "cuda:0"},
-           "nlp": {"device_string": "cuda:0"},
-           "summarization": {"device_string": "cuda:0"}}
-
-def _check_devices():
-    unique_gpus = set()
-    for task, record in devices.items():
-        record["device_string"] = record["device_string"] if torch.cuda.is_available() else "cpu"
-        record["device_name"] = torch.cuda.get_device_name(record["device_string"]) if torch.cuda.is_available() else "cpu"
-        record["torch_dtype"] = torch.float16 if record["device_string"].startswith("cuda") else torch.float32
-        if record["device_string"].startswith("cuda"):
-            unique_gpus.add(record["device_string"])
-        logger.info(f"Compute device for {task} is {record['device_string']}, dtype {record['torch_dtype']}")
-
-    if torch.cuda.is_available():
-        for device in sorted(unique_gpus):
-            logger.info(f"Device info for GPU {record['device_string']} ({record['device_name']}):")
-            logger.info(f"    {torch.cuda.get_device_properties(record['device_string'])}")
-            logger.info(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(record['device_string']))}")
-            logger.info(f"    Detected CUDA version {torch.version.cuda}")
-_check_devices()
+devices = {
+    "embeddings": {"device_string": "cuda:0",
+                   "dtype": torch.float16},
+    "nlp": {"device_string": "cuda:0"},  # no configurable dtype
+    "summarization": {"device_string": "cuda:0",
+                      "dtype": torch.float16}
+}
 
 # --------------------------------------------------------------------------------
 # BiBTeX import config
@@ -119,6 +48,10 @@ extract_keywords = True
 # extract_keywords = False
 
 # NLP model for spaCy, used in keyword extraction.
+#
+# NOTE: Raven uses spaCy models in two places, and they don't have to be the same.
+#  - Raven-visualizer: keyword extraction (this setting)
+#  - Raven-librarian: tokenization for keyword search
 #
 # Auto-downloaded on first use. Uses's spaCy's own auto-download mechanism. See https://spacy.io/models
 #
