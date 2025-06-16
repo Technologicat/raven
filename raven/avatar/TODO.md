@@ -17,11 +17,8 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
     - Have an option to use local embeddings/NLP in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
 
-  - Finish the refactor for *Raven-visualizer*:
-    - Move `raven.app` -> `raven.visualizer.app` to conform with the naming scheme and allow future expansion of the Raven constellation.
-    - Move `preprocess` -> `raven.visualizer.importer` (rename the console_script to `raven-visualizer-importer-cli` or something)
-      - Change terminology everywhere, this is an importer (BibTeX input, to Raven-visualizer dataset output) rather than a "preprocessor".
-        The main difficulty is to explain the two-stage import process in the docs (any format to BibTeX, then BibTeX to Raven-visualizer). Maybe "convert" and "import"?
+  - Change terminology everywhere, `raven.visualizer.preprocess` is an importer (BibTeX input, to Raven-visualizer dataset output) rather than a "preprocessor".
+    The main difficulty is to explain the two-stage import process in the docs (any format to BibTeX, then BibTeX to Raven-visualizer). Maybe "convert" and "import"?
 
 - Add "Refresh current character" button (or even automate that?) to facilitate live-testing during creation of new character images.
 
