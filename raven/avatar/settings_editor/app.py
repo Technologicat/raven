@@ -13,7 +13,7 @@ This module is licensed under the 2-clause BSD license.
 # nice to have (maybe later):
 #
 # TODO: robustness: don't crash if the server suddenly goes down
-# TODO: support non-square avatar video stream (after server-side crop filter); should get image width/height from video stream
+# TODO: support non-square avatar video stream (after server-side crop filter); should get image width/height per-frame from video stream and monitor for changes
 
 import logging
 logging.basicConfig(level=logging.INFO)
