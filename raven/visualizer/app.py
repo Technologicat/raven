@@ -80,7 +80,7 @@ with timer() as tim:
     for handler in logging.root.handlers:
         handler.addFilter(utils.UnionFilter(logging.Filter(__name__),
                                             logging.Filter("raven.common.bgtask"),
-                                            logging.Filter("raven.common.deviceconfig"),
+                                            logging.Filter("raven.common.deviceinfo"),
                                             logging.Filter("raven.common.gui.animation"),
                                             logging.Filter("raven.common.gui.fontsetup"),
                                             logging.Filter("raven.common.gui.utils"),

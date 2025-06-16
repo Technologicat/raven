@@ -44,7 +44,7 @@ from unpythonic.env import env as envcls
 import bm25s  # keyword
 import chromadb  # semantic (vector)
 
-from ..common import deviceconfig
+from ..common import deviceinfo
 from ..common import bgtask
 from ..common import nlptools
 from ..common import utils
@@ -54,7 +54,7 @@ from . import config as librarian_config
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further
 
-deviceconfig.validate(librarian_config.devices)  # modifies in-place if CPU fallback needed
+deviceinfo.validate(librarian_config.devices)  # modifies in-place if CPU fallback needed
 
 # --------------------------------------------------------------------------------
 

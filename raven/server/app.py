@@ -33,7 +33,7 @@ import torch
 
 from ..common.video.postprocessor import Postprocessor  # available image filters
 
-from ..common import deviceconfig
+from ..common import deviceinfo
 
 from . import config as server_config  # default models etc.
 
@@ -49,7 +49,7 @@ from .modules import websearch
 
 colorama_init()
 
-deviceconfig.validate(server_config.SERVER_ENABLED_MODULES)  # modifies in-place if CPU fallback needed
+deviceinfo.validate(server_config.SERVER_ENABLED_MODULES)  # modifies in-place if CPU fallback needed
 
 app = Flask(__name__)
 CORS(app)  # allow cross-domain requests

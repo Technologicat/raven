@@ -49,7 +49,7 @@ import transformers
 from sklearn.cluster import HDBSCAN
 
 from ..common import bgtask
-from ..common import deviceconfig
+from ..common import deviceinfo
 from ..common import nlptools
 from ..common import utils
 
@@ -58,7 +58,7 @@ from . import config as visualizer_config
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further
 
-deviceconfig.validate(visualizer_config.devices)  # modifies in-place if CPU fallback needed
+deviceinfo.validate(visualizer_config.devices)  # modifies in-place if CPU fallback needed
 
 # The extended stopword set (with custom additional stopwords tuned for English-language scientific text).
 extended_stopwords = copy.copy(nlptools.default_stopwords)
