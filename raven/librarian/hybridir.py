@@ -45,13 +45,11 @@ import bm25s  # keyword
 import chromadb  # semantic (vector)
 
 from ..common import deviceconfig
+from ..common import bgtask
+from ..common import nlptools
+from ..common import utils
 
-# TODO: `raven.librarian.config` should be local to Raven-librarian. Does this mean `hybridir` belongs in librarian, or some of the config belongs somewhere else?
-from ..librarian import config as librarian_config
-
-from . import bgtask
-from . import nlptools
-from . import utils
+from . import config as librarian_config
 
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further

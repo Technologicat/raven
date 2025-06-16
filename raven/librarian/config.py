@@ -27,7 +27,7 @@ devices = {
     "nlp": {"device_string": "cuda:0"},  # no configurable dtype
 }
 
-# NLP model for spaCy, used for tokenization in keyword search (RAG backend `raven.common.hybridir`).
+# NLP model for spaCy, used for tokenization in keyword search (RAG backend `raven.librarian.hybridir`).
 #
 # NOTE: Raven uses spaCy models in two places, and they don't have to be the same.
 #  - Raven-visualizer: keyword extraction
@@ -38,7 +38,7 @@ devices = {
 spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but can also benefit from GPU acceleration.
 # spacy_model = "en_core_web_trf"  # Transformer-based pipeline; more accurate, slower, requires GPU, takes lots of VRAM.
 
-# AI model for semantic search (RAG backend `raven.common.hybridir`), encoding both questions and answers into a joint semantic space.
+# AI model for semantic search (RAG backend `raven.librarian.hybridir`), encoding both questions and answers into a joint semantic space.
 # Available on HuggingFace. Auto-downloaded on first use.
 qa_embedding_model = "sentence-transformers/multi-qa-mpnet-base-cos-v1"
 
