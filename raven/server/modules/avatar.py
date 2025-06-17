@@ -83,7 +83,7 @@ _poser = None  # THA3 engine instance (as returned by `load_poser`)
 _avatar_instances = {}  # {instance_id0: {"animator": <Animator object>, "encoder": <Encoder object>}, ...}
 
 # --------------------------------------------------------------------------------
-# Module startup and status check
+# Module startup, status check, and auto-cleanup for server shutdown time.
 
 def init_module(device: str, model: str) -> None:
     """Launch the avatar (live mode), served over HTTP.
@@ -133,6 +133,12 @@ def init_module(device: str, model: str) -> None:
 def is_available() -> bool:
     """Return whether this module is up and running."""
     return _poser is not None
+
+def shutdown() -> None:
+    remaining_instances = list(_avatar_instances.keys())
+    for instance in remaining_instances:
+        unload(instance)
+atexit.register(shutdown)
 
 # --------------------------------------------------------------------------------
 # Implementations for API endpoints served by `server.py`
@@ -593,7 +599,6 @@ class Animator:
                 time.sleep(0.01)  # rate-limit the renderer to 100 FPS maximum (this could be adjusted later)
         self.animator_thread = threading.Thread(target=animator_update, daemon=True)
         self.animator_thread.start()
-        atexit.register(self.exit)
         logger.info(f"Animator.start (avatar instance '{self.instance_id}'): Animator startup complete.")
 
     def exit(self) -> None:
@@ -1532,7 +1537,6 @@ class Encoder:
                 time.sleep(0.01)  # rate-limit the encoder to 100 FPS maximum (this could be adjusted later)
         self.encoder_thread = threading.Thread(target=encoder_update, daemon=True)
         self.encoder_thread.start()
-        atexit.register(self.exit)
         logger.info(f"Encoder.start (avatar instance '{self.instance_id}'): Encoder startup complete.")
 
     def exit(self) -> None:
