@@ -108,10 +108,10 @@ class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?  TODO:
 
             for handler in logging.root.handlers:
                 handler.addFilter(UnionFilter(logging.Filter(__name__),
-                                              logging.Filter("raven.animation"),
-                                              logging.Filter("raven.bgtask"),
-                                              logging.Filter("raven.preprocess"),
-                                              logging.Filter("raven.utils"),
+                                              logging.Filter("raven.common.gui.animation"),
+                                              logging.Filter("raven.common.bgtask"),
+                                              logging.Filter("raven.common.utils"),
+                                              logging.Filter("raven.visualizer.importer"),
                                               logging.Filter("raven.vendor.file_dialog.fdialog")))
         """
         self.filters = filters

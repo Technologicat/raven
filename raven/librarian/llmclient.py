@@ -39,12 +39,14 @@ from mcpyrate import colorizer
 from unpythonic import sym, timer, Values
 from unpythonic.env import env
 
-from . import chattree
-from . import config as librarian_config
-from . import hybridir
+from .. import __version__
 
 from ..client import api
 from ..client import config as client_config
+
+from . import chattree
+from . import config as librarian_config
+from . import hybridir
 
 # --------------------------------------------------------------------------------
 # Module bootup
@@ -1375,6 +1377,7 @@ def main():
     parser = argparse.ArgumentParser(description="""Minimal LLM chat client, for testing/debugging. You can use this for testing that Raven can connect to your LLM.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help=f"where to access the LLM API (default, currently '{librarian_config.llm_backend_url}', is set in `raven/config.py`)")
     opts = parser.parse_args()
 

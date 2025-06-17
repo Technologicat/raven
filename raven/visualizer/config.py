@@ -14,7 +14,7 @@ from unpythonic.env import env
 # NOTE: This configures the client-side devices.
 # See also `raven.server.config` for server-side devices.
 
-# Which GPU to use in the preprocessor (BibTeX import), if available. If not available, CPU fallback is used automatically.
+# Which GPU to use in the BibTeX importer, if available. If not available, CPU fallback is used automatically.
 # See also `run-on-internal-gpu.sh` for another way to select the GPU when starting the app, without modifying any files.
 devices = {
     "embeddings": {"device_string": "cuda:0",
@@ -234,7 +234,7 @@ misc_stopwords = ["center", "constructed", "containing",
                   "various"]
 
 # The final set just combines all of the above.
-# This is the stopword set used by `raven.visualizer.preprocess` during keyword detection.
+# This is the stopword set used by `raven.visualizer.importer` during keyword detection.
 custom_stopwords = set(filler_stopwords + scilang_stopwords +
                        metadata_stopwords + copyright_stopwords +
                        publisher_stopwords + misc_stopwords)
@@ -248,7 +248,6 @@ gui_config = env(  # ----------------------------------------
                  main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
                  help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
                  word_cloud_w=768, word_cloud_h=768,
-                 preprocessor_w=600,
                  info_panel_w=600,
                  info_panel_header_h=40,  # The title section and the navigation controls section both have this height.
                  title_wrap_w=500,  # Note there will be two columns of buttons to the left of each item title.

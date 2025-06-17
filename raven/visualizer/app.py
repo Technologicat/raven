@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-"""Visualize BibTeX data. This can put an entire field of science into one picture.
-
-This GUI app performs visualization only. See `extract.py` to analyze your data and to generate the visualization dataset.
-"""
+"""Visualize BibTeX data. This can put an entire field of science into one picture."""
 
 # As any GUI app, this visualizer has lots of state. The clearest presentation here is as a script interleaving function definitions
 # and GUI creation, with the state stored in module-level globals.
@@ -14,13 +11,13 @@ This GUI app performs visualization only. See `extract.py` to analyze your data 
 # Any line with at least one string-literal reference to any DPG GUI widget tag is commented with "tag" (no quotes), to facilitate searching.
 # To find all, search for both "# tag" (the comment) and "tag=" (widget definitions).
 
-__version__ = "0.1.1"
-
 import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-logger.info(f"Raven version {__version__} starting.")
+from .. import __version__
+
+logger.info(f"Raven-visualizer version {__version__} starting.")
 
 logger.info("Loading libraries...")
 from unpythonic import timer
@@ -72,7 +69,7 @@ with timer() as tim:
     from ..common.gui import utils as guiutils
 
     from . import config as visualizer_config
-    from . import preprocess
+    from . import importer  # BibTeX importer
 
     gui_config = visualizer_config.gui_config  # shorthand, this is used a lot
 
@@ -87,7 +84,7 @@ with timer() as tim:
                                             logging.Filter("raven.common.gui.widgetfinder"),
                                             logging.Filter("raven.common.utils"),
                                             logging.Filter("raven.librarian.llmclient"),
-                                            logging.Filter("raven.visualizer.preprocess"),
+                                            logging.Filter("raven.visualizer.importer"),
                                             logging.Filter("raven.vendor.file_dialog.fdialog")))
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
@@ -731,7 +728,7 @@ def parse_dataset_file(filename):
     dataset.filename = filename
     dataset.absolute_filename = absolute_filename
 
-    logger.info(f"Reading visualization dataset '{filename}' (resolved to '{absolute_filename}')...")
+    logger.info(f"Reading Raven-visualizer dataset '{filename}' (resolved to '{absolute_filename}')...")
     with timer() as tim:
         dataset.file_content = _read_dataset_file(absolute_filename)
     logger.info(f"    Done in {tim.dt:0.6g}s.")
@@ -844,7 +841,7 @@ def load_data_into_plotter(dataset):
 
     IMPORTANT: call `reset_app_state()` just before calling this.
     """
-    logger.info(f"Plotting visualization dataset '{dataset.absolute_filename}'...")
+    logger.info(f"Plotting Raven-visualizer dataset '{dataset.absolute_filename}'...")
     with timer() as tim:
         # Group data points by label
         datas = []
@@ -1007,21 +1004,21 @@ def is_open_file_dialog_visible():
     return dpg.is_item_visible("open_file_dialog")  # tag
 
 # --------------------------------------------------------------------------------
-# Preprocessor integration (BibTeX import)
+# BibTeX importer integration
 
-preprocessor_input_files_box = box([])
-preprocessor_output_file_box = box("")
+importer_input_files_box = box([])
+importer_output_file_box = box("")
 
-preprocessor_action_start = sym("start")
-preprocessor_action_stop = sym("stop")
+importer_action_start = sym("start")
+importer_action_stop = sym("stop")
 
-def toggle_preprocessor_window():
-    """Show/hide the preprocessor (BibTeX import) window."""
-    if dpg.is_item_visible("preprocessor_window"):
-        dpg.hide_item("preprocessor_window")
+def toggle_importer_window():
+    """Show/hide the BibTeX importer window."""
+    if dpg.is_item_visible("importer_window"):
+        dpg.hide_item("importer_window")
     else:
-        dpg.show_item("preprocessor_window")
-        guiutils.recenter_window("preprocessor_window", reference_window=main_window)
+        dpg.show_item("importer_window")
+        guiutils.recenter_window("importer_window", reference_window=main_window)
 
 def show_open_import_dialog():
     """Button callback. Show the open import file dialog, for the user to pick which BibTeX files to import."""
@@ -1036,7 +1033,7 @@ def _open_import_callback(selected_files):
     exit_modal_mode()
     if selected_files:
         logger.debug(f"_open_import_callback: User selected the file(s) {selected_files}.")
-        preprocessor_input_files_box << deepcopy(selected_files)  # Make a copy of the filename list, so that the GUI dialog can clear its own list without affecting ours.
+        importer_input_files_box << deepcopy(selected_files)  # Make a copy of the filename list, so that the GUI dialog can clear its own list without affecting ours.
         update_open_import_gui_table()
     else:  # empty selection -> cancelled
         logger.debug("_open_import_callback: Cancelled.")
@@ -1066,7 +1063,7 @@ def _save_import_callback(selected_files):
     if selected_files:
         selected_file = selected_files[0]
         logger.debug(f"_save_import_callback: User selected the file '{selected_file}'.")
-        preprocessor_output_file_box << selected_file
+        importer_output_file_box << selected_file
         update_save_import_gui_table()
     else:  # empty selection -> cancelled
         logger.debug("_save_import_callback: Cancelled.")
@@ -1080,87 +1077,87 @@ def is_save_import_dialog_visible():
         return False
     return dpg.is_item_visible("save_import_dialog")  # tag
 
-def update_preprocessor_status():
-    """Update the preprocessor (BibTeX import) status in the GUI.
+def update_importer_status():
+    """Update the BibTeX importer status in the GUI.
 
-    This is called automatically every frame while the preprocessor task is running.
+    This is called automatically every frame while the importer task is running.
 
-    This is also called one more time when the preprocessor task exits, via the `done_callback` mechanism.
+    This is also called one more time when the importer task exits, via the `done_callback` mechanism.
     """
-    # The preprocessor generates the GUI messages. We only need to get them from there.
-    dpg.set_value("preprocessor_status_text", unbox(preprocess.status_box))
+    # The importer generates the GUI messages. We only need to get them from there.
+    dpg.set_value("importer_status_text", unbox(importer.status_box))
 
-    # Update the preprocessor progress bar.
-    if preprocess.progress is not None:
-        progress_value = preprocess.progress.value
+    # Update the importer progress bar.
+    if importer.progress is not None:
+        progress_value = importer.progress.value
     else:
         progress_value = 0.0
     percentage = int(100 * progress_value)
-    dpg.set_value("preprocessor_progress_bar", progress_value)
-    dpg.configure_item("preprocessor_progress_bar", overlay=f"{percentage}%")
-    # dpg.set_item_label("preprocessor_window", f"BibTeX import [running, {percentage}%]")  # TODO: would be nice to see status while minimized, but prevents dragging the window for some reason.
+    dpg.set_value("importer_progress_bar", progress_value)
+    dpg.configure_item("importer_progress_bar", overlay=f"{percentage}%")
+    # dpg.set_item_label("importer_window", f"BibTeX import [running, {percentage}%]")  # TODO: would be nice to see status while minimized, but prevents dragging the window for some reason.
 
-def preprocessor_started_callback(task_env):
-    """Callback that fires when the preprocessor task (BibTeX import) actually starts.
+def importer_started_callback(task_env):
+    """Callback that fires when the BibTeX importer task actually starts.
 
     We use this to update the GUI state.
     """
-    dpg.set_item_label("preprocessor_startstop_button", fa.ICON_STOP)
-    dpg.set_value("preprocessor_startstop_tooltip_text", "Cancel BibTeX import [Ctrl+Enter]")
-    dpg.enable_item("preprocessor_startstop_button")
+    dpg.set_item_label("importer_startstop_button", fa.ICON_STOP)
+    dpg.set_value("importer_startstop_tooltip_text", "Cancel BibTeX import [Ctrl+Enter]")
+    dpg.enable_item("importer_startstop_button")
 
-def preprocessor_done_callback(task_env):
-    """Callback that fires when the preprocessor (BibTeX import) task actually exits, via the `done_callback` mechanism.
+def importer_done_callback(task_env):
+    """Callback that fires when the BibTeX importer task actually exits, via the `done_callback` mechanism.
 
     The callback fires regardless of whether the task completed successfully, errored out, or was cancelled.
     See `start_task` for details how to use the `task_env.cancelled`, `task_env.result_code` and `task_env.exc` attributes.
 
     We use this to update the GUI state.
     """
-    update_preprocessor_status()
-    dpg.configure_item("preprocessor_progress_bar", overlay="")
-    dpg.hide_item("preprocessor_progress_bar")
-    dpg.set_item_label("preprocessor_startstop_button", fa.ICON_PLAY)
-    dpg.set_value("preprocessor_startstop_tooltip_text", "Start BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
-    dpg.enable_item("preprocessor_startstop_button")
-    # dpg.set_item_label("preprocessor_window", "BibTeX import")  # TODO: DRY duplicate definitions for labels
+    update_importer_status()
+    dpg.configure_item("importer_progress_bar", overlay="")
+    dpg.hide_item("importer_progress_bar")
+    dpg.set_item_label("importer_startstop_button", fa.ICON_PLAY)
+    dpg.set_value("importer_startstop_tooltip_text", "Start BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
+    dpg.enable_item("importer_startstop_button")
+    # dpg.set_item_label("importer_window", "BibTeX import")  # TODO: DRY duplicate definitions for labels
 
-def start_preprocessor(output_file, *input_files):
-    """Start the preprocessor (BibTeX import) to import `input_files` (.bib) into `output_file` (visualization dataset format, currently .pickle)."""
-    if preprocess.has_task():
+def start_importer(output_file, *input_files):
+    """Start the BibTeX importer to import `input_files` (.bib) into `output_file` (Raven-visualizer dataset format, currently .pickle)."""
+    if importer.has_task():
         return
-    dpg.show_item("preprocessor_progress_bar")
-    dpg.disable_item("preprocessor_startstop_button")  # Prevent multiple clicks: wait until the task actually starts before allowing the user to tell it to stop. The button will be re-enabled by the `started_callback`.
-    preprocess.start_task(preprocessor_started_callback, preprocessor_done_callback, output_file, *input_files)
+    dpg.show_item("importer_progress_bar")
+    dpg.disable_item("importer_startstop_button")  # Prevent multiple clicks: wait until the task actually starts before allowing the user to tell it to stop. The button will be re-enabled by the `started_callback`.
+    importer.start_task(importer_started_callback, importer_done_callback, output_file, *input_files)
 
-def stop_preprocessor():
-    """Stop (cancel) the preprocessor task (BibTeX import), if any is running."""
-    if not preprocess.has_task():
+def stop_importer():
+    """Stop (cancel) the BibTeX importer task, if any is running."""
+    if not importer.has_task():
         return
-    dpg.disable_item("preprocessor_startstop_button")  # We must wait until the previous task actually exits before we can start a new one. The button will be re-enabled by the `done_callback`.
-    preprocess.cancel_task()
+    dpg.disable_item("importer_startstop_button")  # We must wait until the previous task actually exits before we can start a new one. The button will be re-enabled by the `done_callback`.
+    importer.cancel_task()
 
-def start_or_stop_preprocessor():
-    """The actual GUI button callback. Start or stop the preprocessor task (BibTeX import), using the input/output filenames currently selected in the GUI."""
-    logger.info("start_or_stop_preprocessor: called.")
-    if preprocess.has_task():
-        logger.info("start_or_stop_preprocessor: preprocessor task is running, so we will stop it.")
-        action = preprocessor_action_stop
+def start_or_stop_importer():
+    """The actual GUI button callback. Start or stop the BibTeX importer task, using the input/output filenames currently selected in the GUI."""
+    logger.info("start_or_stop_importer: called.")
+    if importer.has_task():
+        logger.info("start_or_stop_importer: importer task is running, so we will stop it.")
+        action = importer_action_stop
     else:
-        logger.info("start_or_stop_preprocessor: no preprocessor task running, so we will start one.")
-        action = preprocessor_action_start
+        logger.info("start_or_stop_importer: no importer task running, so we will start one.")
+        action = importer_action_start
 
-    if action is preprocessor_action_start:
-        output_file = unbox(preprocessor_output_file_box)
-        input_files = unbox(preprocessor_input_files_box)
-        logger.info(f"start_or_stop_preprocessor: output file is '{output_file}', input files are '{input_files}'.")
+    if action is importer_action_start:
+        output_file = unbox(importer_output_file_box)
+        input_files = unbox(importer_input_files_box)
+        logger.info(f"start_or_stop_importer: output file is '{output_file}', input files are '{input_files}'.")
         if output_file and input_files:  # filenames specified?
-            logger.info("start_or_stop_preprocessor: filenames have been specified. Invoking preprocessor.")
-            start_preprocessor(output_file, *input_files)
+            logger.info("start_or_stop_importer: filenames have been specified. Invoking importer.")
+            start_importer(output_file, *input_files)
         else:
-            logger.info("start_or_stop_preprocessor: input, output or both filenames missing. Cannot start preprocessor.")
+            logger.info("start_or_stop_importer: input, output or both filenames missing. Cannot start importer.")
     else:
-        stop_preprocessor()
+        stop_importer()
 
 # --------------------------------------------------------------------------------
 # Animations, live updates
@@ -1440,8 +1437,8 @@ def update_animations():
 
     update_info_panel_navigation_controls()  # Info panel top/bottom/pageup/pagedown buttons
 
-    if preprocess.has_task():
-        update_preprocessor_status()
+    if importer.has_task():
+        update_importer_status()
 
     # ----------------------------------------
     # Render all currently running animations
@@ -1711,13 +1708,13 @@ with timer() as tim:
                     dpg.add_text("Open dataset [Ctrl+O]", tag="open_file_tooltip_text")
 
                 dpg.add_button(label=fa.ICON_DOWNLOAD,
-                               tag="open_preprocessor_window_button",
-                               callback=toggle_preprocessor_window,
+                               tag="open_importer_window_button",
+                               callback=toggle_importer_window,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("open_preprocessor_window_button", icon_font_solid)  # tag
-                with dpg.tooltip("open_preprocessor_window_button", tag="open_preprocessor_window_tooltip"):  # tag
-                    dpg.add_text("Import BibTeX files [Ctrl+I]", tag="open_preprocessor_window_tooltip_text")
+                dpg.bind_item_font("open_importer_window_button", icon_font_solid)  # tag
+                with dpg.tooltip("open_importer_window_button", tag="open_importer_window_tooltip"):  # tag
+                    dpg.add_text("Import BibTeX files [Ctrl+I]", tag="open_importer_window_tooltip_text")
 
                 toolbar_separator()
 
@@ -1945,7 +1942,7 @@ with timer() as tim:
     # # TODO: separate hotkey mode while `chat_field` is focused
     # with dpg.window(show=True, modal=False, no_title_bar=False, tag="summarizer_window",
     #                 label="AI Summarizer",
-    #                 no_scrollbar=True, autosize=True) as preprocessor_window:
+    #                 no_scrollbar=True, autosize=True) as importer_window:
     #     with dpg.child_window(tag="chat_ai_warning",
     #                           height=42,
     #                           no_scrollbar=True,
@@ -2151,96 +2148,96 @@ with timer() as tim:
     #             with dpg.tooltip("chat_send_button"):  # tag
     #                 dpg.add_text("Send to AI")
 
-    # Preprocessor (BibTeX import) integration. This allows invoking the BibTeX importer from the GUI.
-    with dpg.window(show=False, modal=False, no_title_bar=False, tag="preprocessor_window",
+    # BibTeX importer integration. This allows invoking the BibTeX importer from the Raven-visualizer GUI.
+    with dpg.window(show=False, modal=False, no_title_bar=False, tag="importer_window",
                     label="BibTeX import",
-                    no_scrollbar=True, autosize=True) as preprocessor_window:
+                    no_scrollbar=True, autosize=True) as importer_window:
         with dpg.group(horizontal=False):
-            def preprocessor_separator():
-                """Add a horizontal line with a good-looking amount of vertical space around it. Used in the preprocessor (BibTeX import) window."""
-                dpg.add_spacer(width=gui_config.preprocessor_w, height=2)  # leave some vertical space
-                with dpg.drawlist(width=gui_config.preprocessor_w, height=1):
-                    dpg.draw_line((0, 0), (gui_config.preprocessor_w - 1, 0), color=(140, 140, 140, 255), thickness=1)
-                dpg.add_spacer(width=gui_config.preprocessor_w, height=1)  # leave some vertical space
+            def importer_separator():
+                """Add a horizontal line with a good-looking amount of vertical space around it. Used in the BibTeX importer window."""
+                dpg.add_spacer(width=gui_config.importer_w, height=2)  # leave some vertical space
+                with dpg.drawlist(width=gui_config.importer_w, height=1):
+                    dpg.draw_line((0, 0), (gui_config.importer_w - 1, 0), color=(140, 140, 140, 255), thickness=1)
+                dpg.add_spacer(width=gui_config.importer_w, height=1)  # leave some vertical space
 
             # dpg.add_text("[To start, select files, and then click the play button.]", color=(140, 140, 140, 255))
-            dpg.add_spacer(width=gui_config.preprocessor_w)  # ensure window width
+            dpg.add_spacer(width=gui_config.importer_w)  # ensure window width
 
             def update_save_import_gui_table():
-                """In the preprocessor (BibTeX import) window, update the output filename in the GUI.
+                """In the BibTeX importer window, update the output filename in the GUI.
 
                 Called by `_save_import_callback` when the save import file dialog closes.
                 """
                 for child in dpg.get_item_children("save_import_table", slot=1):  # This won't affect table columns, because they live in a different slot.
                     dpg.delete_item(child)
 
-                preprocessor_output_file = unbox(preprocessor_output_file_box)
+                importer_output_file = unbox(importer_output_file_box)
                 with dpg.table_row(parent="save_import_table"):
-                    if preprocessor_output_file:
-                        dpg.add_text(os.path.basename(preprocessor_output_file), color=(140, 140, 140, 255))
+                    if importer_output_file:
+                        dpg.add_text(os.path.basename(importer_output_file), color=(140, 140, 140, 255))
                     else:
                         dpg.add_text("[not selected]", color=(140, 140, 140, 255))
 
             def update_open_import_gui_table():
-                """In the preprocessor (BibTeX import) window, update the input filenames in the GUI.
+                """In the BibTeX importer window, update the input filenames in the GUI.
 
                 Called by `_open_import_callback` when the open import file dialog closes.
                 """
                 for child in dpg.get_item_children("open_import_table", slot=1):  # This won't affect table columns, because they live in a different slot.
                     dpg.delete_item(child)
 
-                preprocessor_input_files = unbox(preprocessor_input_files_box)
-                if preprocessor_input_files:
-                    for preprocessor_input_file in preprocessor_input_files:
+                importer_input_files = unbox(importer_input_files_box)
+                if importer_input_files:
+                    for importer_input_file in importer_input_files:
                         with dpg.table_row(parent="open_import_table"):
-                            dpg.add_text(os.path.basename(preprocessor_input_file), color=(140, 140, 140, 255))
+                            dpg.add_text(os.path.basename(importer_input_file), color=(140, 140, 140, 255))
                 else:
                     with dpg.table_row(parent="open_import_table"):
                         dpg.add_text("[not selected]", color=(140, 140, 140, 255))
 
             with dpg.group(horizontal=True):
                 dpg.add_button(label=fa.ICON_HARD_DRIVE,
-                               tag="preprocessor_save_button",
+                               tag="importer_save_button",
                                width=gui_config.toolbutton_w,
                                callback=show_save_import_dialog)
-                dpg.bind_item_font("preprocessor_save_button", icon_font_solid)  # tag
-                with dpg.tooltip("preprocessor_save_button", tag="preprocessor_save_tooltip"):  # tag
-                    dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="preprocessor_save_tooltip_text")
+                dpg.bind_item_font("importer_save_button", icon_font_solid)  # tag
+                with dpg.tooltip("importer_save_button", tag="importer_save_tooltip"):  # tag
+                    dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="importer_save_tooltip_text")
 
-                with dpg.table(header_row=True, sortable=False, width=gui_config.preprocessor_w - gui_config.toolbutton_w - 11, tag="save_import_table"):
+                with dpg.table(header_row=True, sortable=False, width=gui_config.importer_w - gui_config.toolbutton_w - 11, tag="save_import_table"):
                     dpg.add_table_column(label="Output dataset file")
                 update_save_import_gui_table()
 
             with dpg.group(horizontal=True):
                 dpg.add_button(label=fa.ICON_FOLDER,
-                               tag="preprocessor_select_input_files_button",
+                               tag="importer_select_input_files_button",
                                width=gui_config.toolbutton_w,
                                callback=show_open_import_dialog)
-                dpg.bind_item_font("preprocessor_select_input_files_button", icon_font_solid)  # tag
-                with dpg.tooltip("preprocessor_select_input_files_button", tag="preprocessor_select_input_files_tooltip"):  # tag
-                    dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="preprocessor_select_input_files_tooltip_text")
+                dpg.bind_item_font("importer_select_input_files_button", icon_font_solid)  # tag
+                with dpg.tooltip("importer_select_input_files_button", tag="importer_select_input_files_tooltip"):  # tag
+                    dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="importer_select_input_files_tooltip_text")
 
-                with dpg.table(header_row=True, sortable=False, width=gui_config.preprocessor_w - gui_config.toolbutton_w - 11, tag="open_import_table"):
+                with dpg.table(header_row=True, sortable=False, width=gui_config.importer_w - gui_config.toolbutton_w - 11, tag="open_import_table"):
                     dpg.add_table_column(label="Input BibTeX files")
                 update_open_import_gui_table()
 
-            dpg.add_spacer(width=gui_config.preprocessor_w, height=2)  # leave some vertical space
+            dpg.add_spacer(width=gui_config.importer_w, height=2)  # leave some vertical space
 
             with dpg.group(horizontal=True):
                 dpg.add_button(label=fa.ICON_PLAY,
-                               tag="preprocessor_startstop_button",
+                               tag="importer_startstop_button",
                                width=gui_config.toolbutton_w,
-                               callback=start_or_stop_preprocessor,
+                               callback=start_or_stop_importer,
                                enabled=True)
-                dpg.bind_item_font("preprocessor_startstop_button", icon_font_solid)  # tag
-                dpg.bind_item_theme("preprocessor_startstop_button", "disablable_button_theme")  # tag
-                with dpg.tooltip("preprocessor_startstop_button", tag="preprocessor_startstop_tooltip"):  # tag
-                    dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="preprocessor_startstop_tooltip_text")  # TODO: DRY duplicate definitions for labels
+                dpg.bind_item_font("importer_startstop_button", icon_font_solid)  # tag
+                dpg.bind_item_theme("importer_startstop_button", "disablable_button_theme")  # tag
+                with dpg.tooltip("importer_startstop_button", tag="importer_startstop_tooltip"):  # tag
+                    dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="importer_startstop_tooltip_text")  # TODO: DRY duplicate definitions for labels
 
-            preprocessor_separator()
+            importer_separator()
 
-            dpg.add_progress_bar(default_value=0, width=-1, show=False, tag="preprocessor_progress_bar")
-            dpg.add_text("[To start, select files, and then click the play button.]", wrap=gui_config.preprocessor_w, color=(140, 140, 140, 255), tag="preprocessor_status_text")
+            dpg.add_progress_bar(default_value=0, width=-1, show=False, tag="importer_progress_bar")
+            dpg.add_text("[To start, select files, and then click the play button.]", wrap=gui_config.importer_w, color=(140, 140, 140, 255), tag="importer_status_text")
 
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
@@ -4550,8 +4547,8 @@ def hotkeys_callback(sender, app_data):
             show_save_word_cloud_dialog()
             return
 
-    # Hotkeys while the "import bibTeX files" window is shown
-    elif dpg.is_item_visible("preprocessor_window"):  # tag
+    # Hotkeys while the BibTeX importer window is shown
+    elif dpg.is_item_visible("importer_window"):  # tag
         if ctrl_pressed:
             if key == dpg.mvKey_O:
                 show_open_import_dialog()
@@ -4560,7 +4557,7 @@ def hotkeys_callback(sender, app_data):
                 show_save_import_dialog()
                 return
             elif key == dpg.mvKey_Return:
-                start_or_stop_preprocessor()
+                start_or_stop_importer()
                 return
 
     # Hotkeys for main window, while no modal window is shown
@@ -4604,7 +4601,7 @@ def hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_O:
             show_open_file_dialog()
         elif key == dpg.mvKey_I:
-            toggle_preprocessor_window()
+            toggle_importer_window()
         elif key == dpg.mvKey_Home:
             reset_plotter_zoom()
         elif key == dpg.mvKey_N:
@@ -4701,7 +4698,7 @@ info_panel_task_manager = bgtask.TaskManager(name="info_panel_update",
 word_cloud_task_manager = bgtask.TaskManager(name="word_cloud_update",
                                              mode="sequential",
                                              executor=bg)
-preprocess.init(executor=bg)
+importer.init(executor=bg)  # BibTeX importer
 
 # import sys
 # print(dir(sys.modules["__main__"]))  # DEBUG: Check this occasionally to make sure we don't accidentally store any temporary variables in the module-level namespace.

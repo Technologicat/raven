@@ -31,6 +31,8 @@ from waitress import serve
 
 import torch
 
+from .. import __version__
+
 from ..common import deviceinfo
 from ..common.video.postprocessor import Postprocessor  # available image filters
 
@@ -1019,19 +1021,11 @@ def api_websearch2():
 # ----------------------------------------
 # Parse command-line arguments
 
-parser = argparse.ArgumentParser(
-    prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras"
-)
-parser.add_argument(
-    "--port", type=int, help=f"Specify the port on which the application is hosted (default {server_config.default_port})"
-)
-parser.add_argument(
-    "--listen", action="store_true", help="Host the app on the local network (if not set, the server is visible to localhost only)"
-)
-parser.add_argument(
-    "--secure", action="store_true", help="Require an API key (will be auto-created first time, and printed to console each time on server startup)"
-)
-
+parser = argparse.ArgumentParser(prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras")
+parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
+parser.add_argument("--port", type=int, help=f"Specify the port on which the application is hosted (default {server_config.default_port})")
+parser.add_argument("--listen", action="store_true", help="Host the app on the local network (if not set, the server is visible to localhost only)")
+parser.add_argument("--secure", action="store_true", help="Require an API key (will be auto-created first time, and printed to console each time on server startup)")
 parser.add_argument("--max-content-length", help="Set the max content length for the Flask app config.")
 
 args = parser.parse_args()

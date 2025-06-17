@@ -30,6 +30,7 @@ import re
 import sys
 import threading
 import traceback
+from typing import Optional
 
 import bibtexparser
 
@@ -47,6 +48,8 @@ import torch
 import transformers
 
 from sklearn.cluster import HDBSCAN
+
+from .. import __version__
 
 from ..common import bgtask
 from ..common import deviceinfo
@@ -437,7 +440,7 @@ def reduce_dimension(unique_vs, n_clusters, all_vectors):
             # See McInnes et al. (2020, revised v3 of paper originally published in 2018):
             #   https://arxiv.org/abs/1802.03426
             #
-            # NOTE: UMAP needs to load TensorFlow, whereas the rest of the preprocessor uses PyTorch.
+            # NOTE: UMAP needs to load TensorFlow, whereas the rest of the importer uses PyTorch.
             import umap
             trans = umap.UMAP(n_components=2,
                               # n_neighbors=max(1, len(unique_vs) // 2),
@@ -821,11 +824,12 @@ result_cancelled = sym("cancelled")
 result_errored = sym("errored")
 
 class Progress:
-    def __init__(self):
-        """Progress counter for currently running import task."""
+    def __init__(self) -> None:
+        """Progress counter for currently running importer task."""
         self.reset()
 
-    def reset(self):
+    def reset(self) -> None:
+        """Reset the progress counter."""
         self._macrosteps_done = 0
         self._macrosteps_count = 8  # parse, hiD vectors, hiD cluster, reduce, 2D cluster, entry keywords, cluster keywords, summarize.
 
@@ -833,20 +837,25 @@ class Progress:
         self._microsteps_done = 0
         self._microsteps_count = 1
 
-    def tick(self):
+    def tick(self) -> None:
+        """Increment progress counter by one microstep within the current macrostep."""
         self._microsteps_done += 1
 
-    def tock(self):
+    def tock(self) -> None:
+        """Increment progress counter to the start of the next macrostep."""
         self._macrosteps_done += 1
         self._microsteps_done = 0
         self._microsteps_count = 1
 
-    def set_micro_count(self, newcount):
+    def set_micro_count(self, newcount: int) -> None:
+        """Set the number of microsteps in the current macrostep."""
         self._microsteps_count = newcount
 
-    def _get(self):
+    def _get(self) -> Optional[float]:
         if has_task():
-            # We partition the progress bar so that each macrostep gets the same amount of space; the microsteps within the current macrostep then contribute a fractional part.
+            # We partition the progress bar so that each macrostep gets the same amount of space.
+            # The microsteps within the current macrostep then contribute a fractional part
+            # that can be used to provide smoother motion (when progress information inside a given macrostep is available).
             return (self._macrosteps_done + (self._microsteps_done / self._microsteps_count)) / self._macrosteps_count
         return None
     value = property(_get, doc="Progress of currently running import task as a float in [0, 1], or `None` when no task is running.")
@@ -882,7 +891,7 @@ def init(executor):
         raise
 
 def start_task(started_callback, done_callback, output_filename, *input_filenames) -> bool:
-    """Spawn a background task to convert BibTeX files into a visualization dataset file.
+    """Spawn a background task to convert BibTeX files into a Raven-visualizer dataset file.
 
     `started_callback`: callable or `None`.
 
@@ -915,47 +924,47 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
 
                      The return value of `done_callback` is ignored.
 
-    `output_filename`: The name of the visualization dataset file to write.
+    `output_filename`: The name of the Raven-visualizer dataset file to write.
 
     `input_filenames`: The name(s) of the input BibTeX file(s)
-                       from which to create the visualization dataset.
+                       from which to create the Raven-visualizer dataset.
 
     Return value is `True` if the task was successfully submitted, and `False` otherwise.
-    Task submission may fail if the module has not been initialized, or if a preprocessor
+    Task submission may fail if the module has not been initialized, or if an importer
     task is already running.
 
     The task proceeds asynchronously. To check if it is still running, call `has_task`.
     """
     logger.info("start_task: entered.")
     if task_manager is None:
-        logger.warning("start_task: no `task_manager`, canceling. Maybe `preprocess.init()` has not been called?")
+        logger.warning("start_task: no `task_manager`, canceling. Maybe `importer.init()` has not been called?")
         return False
-    if has_task():  # Only allow one preprocessor task to be spawned simultaneously, because it takes a lot of GPU/CPU resources.
-        logger.info("start_task: a preprocessor task is already running, canceling.")
+    if has_task():  # Only allow one importer task to be spawned simultaneously, because it takes a lot of GPU/CPU resources.
+        logger.info("start_task: an importer task is already running, canceling.")
         return False
 
     def update_status(new_msg):
         with status_lock:
             status_box << new_msg
 
-    def preprocessor_task(task_env):
-        logger.info(f"preprocessor_task: {task_env.task_name}: entered.")
+    def importer_task(task_env):
+        logger.info(f"importer_task: {task_env.task_name}: entered.")
         if task_env.cancelled:  # if cancelled while waiting in queue -> we're done.
-            logger.info(f"preprocessor_task: {task_env.task_name}: cancelled (from task queue)")
+            logger.info(f"importer_task: {task_env.task_name}: cancelled (from task queue)")
             return
         try:
             if started_callback is not None:
-                logger.info(f"preprocessor_task: {task_env.task_name}: `started_callback` exists, calling it now.")
+                logger.info(f"importer_task: {task_env.task_name}: `started_callback` exists, calling it now.")
                 started_callback(task_env)
             with dyn.let(task_env=task_env):
-                logger.info(f"preprocessor_task: {task_env.task_name}: entering `preprocess` function.")
-                preprocess(update_status, output_filename, *input_filenames)  # get args from closure, no need to have them in `task_env`
-                logger.info(f"preprocessor_task: {task_env.task_name}: done.")
+                logger.info(f"importer_task: {task_env.task_name}: entering `import_bibtex` function.")
+                import_bibtex(update_status, output_filename, *input_filenames)  # get args from closure, no need to have them in `task_env`
+                logger.info(f"importer_task: {task_env.task_name}: done.")
         # Used to be VERY IMPORTANT, to not silently swallow uncaught exceptions from background task.
         # But now `TaskManager._done_callback` does this. However, we need to update the GUI with the
         # error message.
         except Exception as exc:
-            logger.warning(f"preprocessor_task: {task_env.task_name}: exited with exception {type(exc)}: {exc}")
+            logger.warning(f"importer_task: {task_env.task_name}: exited with exception {type(exc)}: {exc}")
             # traceback.print_exc()  # DEBUG; `TaskManager._done_callback` now does this.
             exc_msg = exc.args[0] if (hasattr(exc, "args") and exc.args and exc.args[0]) else f"{type(exc)} (see log for details)"  # show exception message if available, else the type
             update_status(f"Error during import: {exc_msg}")
@@ -973,9 +982,9 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
         finally:
             progress.reset()
 
-    update_status("Preprocessor task queued, waiting to start.")
-    task_manager.submit(preprocessor_task, env(done_callback=done_callback))  # `task_manager` needs the `done_callback` to be in the `task_env`.
-    logger.info("start_task: preprocessor task submitted.")
+    update_status("Importer task queued, waiting to start.")
+    task_manager.submit(importer_task, env(done_callback=done_callback))  # `task_manager` needs the `done_callback` to be in the `task_env`.
+    logger.info("start_task: importer task submitted.")
     return True
 
 def _is_cancelled():
@@ -985,10 +994,10 @@ def _is_cancelled():
     return False
 
 def has_task():
-    """Return whether a preprocessor task currently exists.
+    """Return whether an importer task currently exists.
 
-    This is useful for e.g. enabling/disabling the GUI button to start the preprocessor.
-    We only allow one preprocessor task to be spawned simultaneously, because it takes
+    This is useful for e.g. enabling/disabling the GUI button to start the importer.
+    We only allow one importer task to be spawned simultaneously, because it takes
     a lot of GPU/CPU resources.
     """
     if task_manager is None:
@@ -996,35 +1005,38 @@ def has_task():
     return task_manager.has_tasks()
 
 def cancel_task():
-    """Cancel the running preprocessor task, if any."""
+    """Cancel the running importer task, if any."""
     if task_manager is None:
         return
     task_manager.clear(wait=True)  # we must wait for the task to exit so that its `done_callback` gets triggered
 
 # --------------------------------------------------------------------------------
-# The actual preprocessing function (data importer that creates the visualization dataset)
+# The actual BibTeX importer function (BibTeX to Raven-visualizer dataset)
 
-def preprocess(status_update_callback, output_filename, *input_filenames) -> None:
-    """Preprocess input files into a visualization dataset.
+def import_bibtex(status_update_callback, output_filename, *input_filenames) -> None:
+    """Import BibTeX file(s) into a Raven-visualizer dataset.
 
-    This is the synchronous, foreground function that actually performs the task.
-    To process in the background, use `start_task` instead.
+    This is the synchronous, foreground function that actually performs the task,
+    which is mainly useful in a CLI tool that doesn't mind blocking the main thread
+    until the import is done.
+
+    To run the import in the background (e.g. in a GUI app), use `start_task` instead.
 
     `status_update_callback`: callable or `None`.
 
                               If provided, must take a single `str` argument.
                               Used for sending human-readable status messages
-                              while the preprocessor runs.
+                              while the importer runs.
 
-                              When the preprocessor finishes, it will send a
+                              When the importer finishes, it will send a
                               blank string as the final status update.
 
                               Return value is ignored.
 
-    `output_filename`: The name of the visualization dataset file to write.
+    `output_filename`: The name of the Raven-visualizer dataset file to write.
 
     `input_filenames`: The name(s) of the input BibTeX file(s)
-                       from which to create the visualization dataset.
+                       from which to create the Raven-visualizer dataset.
 
     No return value.
 
@@ -1114,7 +1126,7 @@ def preprocess(status_update_callback, output_filename, *input_filenames) -> Non
         # Do not need to allow cancellation after this point, because all that is left is to save the results.
 
         # --------------------------------------------------------------------------------
-        # Save the resulting visualization dataset file
+        # Save the resulting Raven-visualizer dataset file
 
         logger.info(f"Saving visualization datafile {output_filename}...")
 
@@ -1154,9 +1166,10 @@ def main() -> None:
     logger.info(f"    Summarize via AI: {visualizer_config.summarize}")
     logger.info(f"        AI summarization model: {visualizer_config.summarization_model}")
 
-    parser = argparse.ArgumentParser(description="""Convert BibTeX file(s) into a Raven visualization dataset file.""",
+    parser = argparse.ArgumentParser(description="""Convert BibTeX file(s) into a Raven-visualizer dataset file.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(dest="output_filename", type=str, metavar="out", help="Output, visualization dataset file")
+    parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
+    parser.add_argument(dest="output_filename", type=str, metavar="out", help="Output, Raven-visualizer dataset file")
     parser.add_argument(dest="input_filenames", nargs="+", default=None, type=str, metavar="bib", help="Input, BibTeX file(s) to parse")
     opts = parser.parse_args()
 
@@ -1166,7 +1179,7 @@ def main() -> None:
 
     try:
         with timer() as tim:
-            preprocess(None, opts.output_filename, *opts.input_filenames)
+            import_bibtex(None, opts.output_filename, *opts.input_filenames)
     except Exception:
         logger.warning(f"Error after {tim.dt:0.6g}s total:")
         traceback.print_exc()

@@ -7,7 +7,7 @@
 
 - Improve codebase maintainability:
   - Vendor our fixed wosfile library?
-  - `vis_data` should really be called `entries` everywhere in this app constellation, also in importers and in the preprocessor.
+  - `vis_data` should really be called `entries` everywhere in this app constellation, also in importers. Something to BiBTeX importers in `raven.tools`, and the BibTeX to Raven importer in `raven.visualizer.importer`.
 
 - Word boundary mark (\b) for search.
 
@@ -24,6 +24,11 @@
 - Import BibTeX: use multiple columns for input file table in the GUI if we have very many input files.
 
 - Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven/config.py`.
+
+- Move the remaining GPU-dependent components of Raven to the server side.
+  - NLP. Think about the transport format. Can we JSON spaCy token streams?
+  - Embeddings. Web API endpoint exists in `raven.server.app`, and a client-side Python API in `raven.client.api`; now just use it instead of loading `sentence_transformers` locally in `raven.visualizer.importer`.
+  - Have an option to use local embeddings/NLP in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
 
 - Improve MacOSX support
   - Raven already runs on MacOSX, but some things could be improved.

@@ -103,7 +103,7 @@ raven-llmclient = "raven.librarian.llmclient:main"
 raven-server = "raven.server.app:main"
 raven-avatar-pose-editor = "raven.avatar.pose_editor.app:main"  # AI avatar pose editor
 raven-avatar-settings-editor = "raven.avatar.settings_editor.app:main"  # AI avatar postprocessor config editor / character tester
-raven-preprocess = "raven.visualizer.preprocess:main"
+raven-importer = "raven.visualizer.importer:main"
 raven-visualizer = "raven.visualizer.app:main"  # the main app!
 
 [build-system]

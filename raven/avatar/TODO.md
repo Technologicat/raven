@@ -15,13 +15,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
   - Change terminology everywhere, `raven.visualizer.preprocess` is an importer (BibTeX input, to Raven-visualizer dataset output) rather than a "preprocessor".
     The main difficulty is to explain the two-stage import process in the docs (any format to BibTeX, then BibTeX to Raven-visualizer). Maybe "convert" and "import"?
 
-  - Move the remaining GPU-dependent components of Raven to the server side.
-    - NLP. Think about the transport format. Can we JSON spaCy token streams?
-
-    - Embeddings. Web API endpoint exists in `raven.server.app`, and a client-side Python API in `raven.client.api`; now just use it instead of loading `sentence_transformers` locally in `raven.preprocess`.
-
-    - Have an option to use local embeddings/NLP in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
-
 - Add "Refresh current character" button (or even automate that?) to facilitate live-testing during creation of new character images.
 
 - Allow different simultaneous avatar instances to run on different GPUs.

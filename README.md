@@ -211,7 +211,7 @@ The BibTeX preprocessor caches its intermediate data per input file, so you can 
 
 Currently, the dimension reduction that produces the 2D semantic map is trained using up to 10k data items, picked at random if the input data contains more.
 
-Currently, it is not possible to add new data into an existing visualization dataset (to overlay new data on an existing, already trained dimension reduction). This is currently a major usability drawback, particularly for the use case of following ongoing research trends, so this will likely change in the future.
+Currently, it is not possible to add new data into an existing Raven-visualizer dataset (to overlay new data on an existing, already trained dimension reduction). This is currently a major usability drawback, particularly for the use case of following ongoing research trends, so this will likely change in the future.
 
 
 ## Other formats
