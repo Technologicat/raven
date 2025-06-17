@@ -1038,11 +1038,11 @@ if args.secure:
     server_userdata_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve()
 
     try:
-        with open(server_userdata_dir / "api_key.txt", "r") as txt:
+        with open(server_config.server_api_key_file, "r") as txt:
             api_key = txt.read().replace('\n', '')
     except Exception:
         api_key = secrets.token_hex(5)
-        with open(server_userdata_dir / "api_key.txt", "w") as txt:
+        with open(server_config.server_api_key_file, "w") as txt:
             txt.write(api_key)
 
     print(f"{Fore.YELLOW}{Style.BRIGHT}Your API key is {api_key}{Style.RESET_ALL}")

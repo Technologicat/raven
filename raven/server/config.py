@@ -10,6 +10,12 @@ from .. import config as global_config
 # Where to store files. Currently only used for websearch's debug functionality.
 server_userdata_dir = global_config.toplevel_userdata_dir / "server"
 
+# When `raven.server` is running in "--secure" mode:
+#   - Require the client to provide the API key that is in this file.
+#   - When the server starts, if the API key file doesn't exist, create it.
+#   - When the server starts, print the API key to the server's console.
+server_api_key_file = server_userdata_dir / "api_key.txt"
+
 # This can be used to enable only those modules you need, to save CPU/GPU/RAM/VRAM resources.
 #
 # To switch a module off, comment out its line here.

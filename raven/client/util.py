@@ -74,13 +74,13 @@ def initialize_api(raven_server_url: str,
     if tts_server_type is not None:
         if raven_api_key_file is not None and os.path.exists(raven_api_key_file):  # TODO: test this (I have no idea what I'm doing)
             with open(raven_api_key_file, "r", encoding="utf-8") as f:
-                raven_api_key = f.read()
+                raven_api_key = f.read().replace('\n', '')
             # See `raven.server.app`.
             api_config.raven_default_headers["Authorization"] = raven_api_key.strip()
 
         if tts_api_key_file is not None and os.path.exists(tts_api_key_file):  # TODO: test this
             with open(tts_api_key_file, "r", encoding="utf-8") as f:
-                tts_api_key = f.read()
+                tts_api_key = f.read().replace('\n', '')
             # Format for OpenAI compatible endpoints is "Authorization: Bearer xxxx"; the API key file should contain the "Bearer xxxx" part.
             api_config.tts_default_headers["Authorization"] = tts_api_key.strip()
 
