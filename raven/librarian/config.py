@@ -16,6 +16,7 @@ llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 # Its contents will be automatically set as the Authorization field of the HTTP headers when `llmclient` starts.
 #
 llm_backend_url = "http://127.0.0.1:5000"
+llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
 
 llm_line_wrap_width = 160  # `llmclient`; for text wrapping in live update
 

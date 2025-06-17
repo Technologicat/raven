@@ -9,9 +9,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
-- Split `raven.librarian.llmclient` into a library function module and a CLI chat client module
-
-
 ### Documentation
 
 - Update README, document all web API endpoints.
