@@ -946,6 +946,9 @@ def api_websearch():
     For new clients, prefer to use "/api/websearch2", which gives
     structured output and has a "max_links" option.
 
+    (Technically, this endpoint can also accept "max_links",
+     but SillyTavern doesn't send it.)
+
     Input is JSON::
 
         {"query": "what is the airspeed velocity of an unladen swallow",
