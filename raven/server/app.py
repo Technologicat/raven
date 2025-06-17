@@ -1041,14 +1041,14 @@ host = "0.0.0.0" if args.listen else "localhost"
 
 # Read an API key from an already existing file. If that file doesn't exist, create it.
 if args.secure:
-    userdata_dir = pathlib.Path(server_config.userdata_dir).expanduser().resolve()
+    server_userdata_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve()
 
     try:
-        with open(userdata_dir / "api_key.txt", "r") as txt:
+        with open(server_userdata_dir / "api_key.txt", "r") as txt:
             api_key = txt.read().replace('\n', '')
     except Exception:
         api_key = secrets.token_hex(5)
-        with open(userdata_dir / "api_key.txt", "w") as txt:
+        with open(server_userdata_dir / "api_key.txt", "w") as txt:
             txt.write(api_key)
 
     print(f"{Fore.YELLOW}{Style.BRIGHT}Your API key is {api_key}{Style.RESET_ALL}")

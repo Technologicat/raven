@@ -8,7 +8,7 @@ import torch
 from .. import config as global_config
 
 # Where to store files. Currently only used for websearch's debug functionality.
-userdata_dir = global_config.toplevel_userdata_dir / "server"
+server_userdata_dir = global_config.toplevel_userdata_dir / "server"
 
 # This can be used to enable only those modules you need, to save CPU/GPU/RAM/VRAM resources.
 #

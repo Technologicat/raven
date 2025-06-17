@@ -1,22 +1,21 @@
 """Client-side-specific config for Raven-avatar."""
 
-import pathlib
-
 from ..server import config as server_config
 
 # TODO: Assumption: The `userdata_dir` of the client/server pair is local anyway, so we can just as well use the server app's.
+#
 # If you run on a different machine, set it here for the client side.
+#
+# NOTE: If you change this, this must be a `pathlib.Path`. It is recommended to `.expanduser().resolve()` it, too, to make an absolute path.
+#
 # The client currently only uses `userdata_dir` to load web API keys from.
-userdata_dir = server_config.userdata_dir
-
-# Convert to an absolute path, just once here.
-userdata_dir = pathlib.Path(userdata_dir).expanduser().resolve()
+client_userdata_dir = server_config.server_userdata_dir
 
 # --------------------------------------------------------------------------------
 
 # Where to reach Raven-server
 raven_server_url = "http://localhost:5100"
-raven_api_key_file = userdata_dir / "api_key.txt"
+raven_api_key_file = client_userdata_dir / "api_key.txt"
 
 # Where to reach the AI speech synthesizer server
 
@@ -32,7 +31,7 @@ tts_api_key_file = raven_api_key_file
 # # https://github.com/remsky/Kokoro-FastAPI
 # tts_server_type = "kokoro"
 # tts_url = "http://localhost:8880"
-# tts_api_key_file = userdata_dir / "tts_api_key.txt"
+# tts_api_key_file = client_userdata_dir / "tts_api_key.txt"
 
 # # Use these settings if you want to disable TTS
 # tts_server_type = None

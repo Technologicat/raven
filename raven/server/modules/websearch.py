@@ -36,7 +36,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from unpythonic import memoize
 
-from .. import config as server_config  # `userdata_dir`, for saving debug dumps
+from .. import config as server_config  # `server_userdata_dir`, for saving debug dumps
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -44,7 +44,7 @@ from .. import config as server_config  # `userdata_dir`, for saving debug dumps
 # See `navigator.userAgent` in a web browser's JavaScript console (to access it, try pressing F12 or Ctrl+Shift+C)
 user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-dump_dir = pathlib.Path(server_config.userdata_dir).expanduser().resolve() / "websearch"
+dump_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve() / "websearch"
 
 def create_directory(path: Union[str, pathlib.Path]) -> None:
     p = pathlib.Path(path).expanduser().resolve()

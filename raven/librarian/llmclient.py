@@ -49,8 +49,6 @@ from ..client import config as client_config
 # --------------------------------------------------------------------------------
 # Module bootup
 
-userdata_dir = pathlib.Path(librarian_config.llmclient_userdata_dir).expanduser().resolve()
-
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
                tts_server_type=client_config.tts_server_type,
@@ -60,7 +58,7 @@ api.initialize(raven_server_url=client_config.raven_server_url,
 # ----------------------------------------
 # LLM communication setup
 
-api_key_file = userdata_dir / "api_key.txt"
+api_key_file = librarian_config.llmclient_userdata_dir / "api_key.txt"
 
 # HTTP headers for LLM requests
 headers = {
@@ -739,9 +737,9 @@ def perform_tool_calls(settings: env, message: Dict) -> List[Dict]:
 def minimal_chat_client(backend_url):
     """Minimal LLM chat client, for testing/debugging."""
 
-    history_file = userdata_dir / "history"      # user input history (readline)
-    datastore_file = userdata_dir / "data.json"  # chat node datastore
-    state_file = userdata_dir / "state.json"     # important node IDs for the chat client state
+    history_file = librarian_config.llmclient_userdata_dir / "history"      # user input history (readline)
+    datastore_file = librarian_config.llmclient_userdata_dir / "data.json"  # chat node datastore
+    state_file = librarian_config.llmclient_userdata_dir / "state.json"     # important node IDs for the chat client state
 
     docs_dir = pathlib.Path(librarian_config.llm_docs_dir).expanduser().resolve()  # RAG documents (put your documents in this directory)
     db_dir = pathlib.Path(librarian_config.llm_database_dir).expanduser().resolve()  # RAG search indices datastore
@@ -870,7 +868,7 @@ def minimal_chat_client(backend_url):
 
         # Set up autosave at exit.
         def persist():
-            userdata_dir.mkdir(parents=True, exist_ok=True)
+            librarian_config.llmclient_userdata_dir.mkdir(parents=True, exist_ok=True)
 
             # Save readline history
             readline.set_history_length(1000)

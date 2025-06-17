@@ -12,8 +12,8 @@ from .. import hybridir
 
 def test():
     # Create the retriever.
-    userdata_dir = pathlib.Path(librarian_config.hybridir_demo_save_dir).expanduser().resolve()
-    retriever = hybridir.HybridIR(datastore_base_dir=userdata_dir,
+    hybridir_demo_userdata_dir = pathlib.Path(librarian_config.hybridir_demo_save_dir).expanduser().resolve()
+    retriever = hybridir.HybridIR(datastore_base_dir=hybridir_demo_userdata_dir,
                                   embedding_model_name=librarian_config.qa_embedding_model)
 
     # Documents, plain text. Replace this with your data loading.
@@ -130,7 +130,7 @@ def test():
     #
     # NOTE: The datastore is persistent, so you only need to do this when you add new documents.
     #
-    # If you need to delete the index, open `userdata_dir` in a file manager, and delete the appropriate subdirectories:
+    # If you need to delete the index, open `hybridir_demo_userdata_dir` in a file manager, and delete the appropriate subdirectories:
     #   - "fulldocs" is the main datastore.
     #     - This is the master copy of the text data stored in the IR system, preprocessed into a format that can be indexed quickly
     #       (i.e. already chunkified, tokenized, and embedded).
