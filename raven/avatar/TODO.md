@@ -9,14 +9,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
-- Refactor everything, again:
-  - Rename `raven.visualizer.preprocess` to `raven.visualizer.importer`.
-
-  - Change terminology everywhere, `raven.visualizer.preprocess` is an importer (BibTeX input, to Raven-visualizer dataset output) rather than a "preprocessor".
-    The main difficulty is to explain the two-stage import process in the docs (any format to BibTeX, then BibTeX to Raven-visualizer). Maybe "convert" and "import"?
-
-- Add "Refresh current character" button (or even automate that?) to facilitate live-testing during creation of new character images.
-
 - Allow different simultaneous avatar instances to run on different GPUs.
   - Make the device specification a parameter of `avatar_load`. Instantiate one poser per unique GPU.
 
@@ -85,6 +77,11 @@ Not scheduled for now.
     - Can already use `/api/avatar/set_overrides` for this
     - Useful also for disabling some animated parts, e.g. eye animations for a nerdy character with opaque glasses
   - High-level hints: look at camera, look away (on which side), stand straight, randomize new sway pose
+
+- Support things like cheeks blush by supporting multiple source images per character, and interpolation between them.
+  - We could keep all image variants loaded onto the GPU, so switching between them would be realtime.
+  - "/api/avatar/load" needs to be able to receive multiple files.
+  - Need new "morphs" that actually interpolate between source images.
 
 
 ## Far future
