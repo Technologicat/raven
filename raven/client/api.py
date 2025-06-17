@@ -151,7 +151,7 @@ def avatar_load(filename: Union[pathlib.Path, str]) -> str:
     headers = copy.copy(util.api_config.raven_default_headers)
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
     with open(filename, "rb") as image_file:
-        files = {"file": (filename, image_file, "application/octet-stream")}
+        files = {"file": (str(filename), image_file, "application/octet-stream")}
         response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load", headers=headers, files=files)
     util.yell_on_error(response)
 
