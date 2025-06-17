@@ -114,7 +114,7 @@ with dpg.font_registry() as the_font_registry:
     # Change the default font to something that looks clean and has good on-screen readability.
     # https://fonts.google.com/specimen/Open+Sans
     font_size = 20
-    with dpg.font(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf"),  # load font from Raven's main assets
+    with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),  # load font from Raven's main assets
                   font_size) as default_font:
         fontsetup.setup_font_ranges()
     dpg.bind_font(default_font)
@@ -159,7 +159,7 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".png",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "characters"))
+                                       default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters")).expanduser().resolve())
     filedialog_save_image = FileDialog(title="Save posed image",
                                        tag="save_image_dialog",
                                        callback=_save_image_callback,
@@ -178,7 +178,7 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".json",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "emotions"))
+                                       default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
     filedialog_save_all_emotions = FileDialog(title="Save all emotion templates",
                                               tag="save_all_emotions_dialog",
                                               callback=_save_all_emotions_callback,
@@ -1159,24 +1159,24 @@ args = parser.parse_args()
 # Blunder recovery options
 if args.factory_reset_all:
     print("Factory-resetting all emotion templates...")
-    with open(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json"), "r") as json_file:
+    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json")).expanduser().resolve(), "r") as json_file:
         factory_default_emotions = json.load(json_file)
     factory_default_emotions.pop("zero")  # not an actual emotion
     for key in factory_default_emotions:
-        with open(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json"), "w") as file:
+        with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json")).expanduser().resolve(), "w") as file:
             json.dump({key: factory_default_emotions[key]}, file, indent=4)
     print("Done.")
     sys.exit(0)
 if args.factory_reset:
     key = args.factory_reset
     print(f"Factory-resetting emotion template '{key}'...")
-    with open(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json"), "r") as json_file:
+    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json")).expanduser().resolve(), "r") as json_file:
         factory_default_emotions = json.load(json_file)
     factory_default_emotions.pop("zero")  # not an actual emotion
     if key not in factory_default_emotions:
         print(f"No such factory-defined emotion: '{key}'. Valid values: {sorted(list(factory_default_emotions.keys()))}")
         sys.exit(1)
-    with open(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json"), "w") as file:
+    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json")).expanduser().resolve(), "w") as file:
         json.dump({key: factory_default_emotions[key]}, file, indent=4)
     print("Done.")
     sys.exit(0)

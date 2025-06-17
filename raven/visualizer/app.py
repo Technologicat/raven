@@ -33,6 +33,7 @@ with timer() as tim:
     import itertools
     import math
     import os
+    import pathlib
     import pickle
     import re
     import threading
@@ -604,17 +605,17 @@ with timer() as tim:
     with dpg.font_registry() as the_font_registry:
         # Change the default font to something that looks clean and has good on-screen readability.
         # https://fonts.google.com/specimen/Open+Sans
-        with dpg.font(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf"),
+        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),
                       gui_config.font_size) as default_font:
             fontsetup.setup_font_ranges()
         dpg.bind_font(default_font)
 
         # FontAwesome 6 for symbols (toolbar button icons etc.).
         # We bind this font to individual GUI widgets as needed.
-        with dpg.font(os.path.join(os.path.dirname(__file__), "..", "fonts", fa.FONT_ICON_FILE_NAME_FAR),
+        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", fa.FONT_ICON_FILE_NAME_FAR)).expanduser().resolve(),
                       gui_config.font_size) as icon_font_regular:
             dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
-        with dpg.font(os.path.join(os.path.dirname(__file__), "..", "fonts", fa.FONT_ICON_FILE_NAME_FAS),
+        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", fa.FONT_ICON_FILE_NAME_FAS)).expanduser().resolve(),
                       gui_config.font_size) as icon_font_solid:
             dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
 
@@ -640,16 +641,16 @@ with timer() as tim:
     # Set a font that renders scientific Unicode text acceptably.
     # # https://fonts.google.com/specimen/Inter+Tight
     # dpg_markdown.set_font(font_size=gui_config.font_size,
-    #                       default=os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Regular.ttf"),
-    #                       bold=os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Bold.ttf"),
-    #                       italic=os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Italic.ttf"),
-    #                       italic_bold=os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-BoldItalic.ttf"))
+    #                       default=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Regular.ttf")).expanduser().resolve(),
+    #                       bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Bold.ttf")).expanduser().resolve(),
+    #                       italic=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Italic.ttf")).expanduser().resolve(),
+    #                       italic_bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-BoldItalic.ttf")).expanduser().resolve())
     # https://fonts.google.com/specimen/Open+Sans
     dpg_markdown.set_font(font_size=gui_config.font_size,
-                          default=os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf"),
-                          bold=os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Bold.ttf"),
-                          italic=os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Italic.ttf"),
-                          italic_bold=os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-BoldItalic.ttf"))
+                          default=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),
+                          bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Bold.ttf")).expanduser().resolve(),
+                          italic=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Italic.ttf")).expanduser().resolve(),
+                          italic_bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-BoldItalic.ttf")).expanduser().resolve())
 
     # Modify global theme
     with dpg.theme() as global_theme:
@@ -692,10 +693,10 @@ with timer() as tim:
                                                  format=dpg.mvFormat_Float_rgba,
                                                  tag="word_cloud_texture")
 
-        # w, h, c, data = dpg.load_image(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png"))
+        # w, h, c, data = dpg.load_image(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve())
         # icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture")
         #
-        # w, h, c, data = dpg.load_image(os.path.join(os.path.dirname(__file__), "..", "icons", "user.png"))
+        # w, h, c, data = dpg.load_image(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "user.png")).expanduser().resolve())
         # icon_user_texture = dpg.add_static_texture(w, h, data, tag="icon_user_texture")
 
     dpg.create_viewport(title=f"Raven-visualizer {__version__}",

@@ -150,7 +150,7 @@ def index():
 
     Output is suitable for rendering in a web browser.
     """
-    with open(os.path.join(os.path.dirname(__file__), "..", "README.md"), "r", encoding="utf8") as f:
+    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "README.md")).expanduser().resolve(), "r", encoding="utf8") as f:
         content = f.read()
     return render_template_string(markdown.markdown(content, extensions=["tables"]))
 

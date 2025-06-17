@@ -93,7 +93,7 @@ with dpg.font_registry() as the_font_registry:
     # Change the default font to something that looks clean and has good on-screen readability.
     # https://fonts.google.com/specimen/Open+Sans
     font_size = 20
-    with dpg.font(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf"),  # load font from Raven's main assets
+    with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),  # load font from Raven's main assets
                   font_size) as default_font:
         fontsetup.setup_font_ranges()
     dpg.bind_font(default_font)
@@ -158,7 +158,7 @@ def initialize_filedialogs():  # called at app startup
                                              file_filter=".png",
                                              multi_selection=False,
                                              allow_drag=False,
-                                             default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "characters"))
+                                             default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters")).expanduser().resolve())
     filedialog_open_backdrop_image = FileDialog(title="Open backdrop image",
                                                 tag="open_backdrop_image_dialog",
                                                 callback=_open_backdrop_image_callback,
@@ -167,7 +167,7 @@ def initialize_filedialogs():  # called at app startup
                                                 file_filter=".png",
                                                 multi_selection=False,
                                                 allow_drag=False,
-                                                default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops"))
+                                                default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops")).expanduser().resolve())
     filedialog_open_json = FileDialog(title="Open emotion templates",
                                        tag="open_json_dialog",
                                        callback=_open_json_callback,
@@ -176,7 +176,7 @@ def initialize_filedialogs():  # called at app startup
                                        file_filter=".json",
                                        multi_selection=False,
                                        allow_drag=False,
-                                       default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "emotions"))
+                                       default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve())
     filedialog_open_animator_settings = FileDialog(title="Open animator settings",
                                                    tag="open_animator_settings_dialog",
                                                    callback=_open_animator_settings_callback,
@@ -185,7 +185,7 @@ def initialize_filedialogs():  # called at app startup
                                                    file_filter=".json",
                                                    multi_selection=False,
                                                    allow_drag=False,
-                                                   default_path=os.path.join(os.path.dirname(__file__), "..", "assets", "settings"))
+                                                   default_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "settings")).expanduser().resolve())
     filedialog_save_animator_settings = FileDialog(title="Save animator settings",
                                                    tag="save_animator_settings_dialog",
                                                    callback=_save_animator_settings_callback,
@@ -401,6 +401,7 @@ class PostprocessorSettingsEditorGUI:
         self.button_width = 300
 
         self.upscale_change_lock = threading.Lock()
+        self.current_input_image_path = None  # for the Refresh (reload current character) feature
         self.live_texture = None  # The raw texture object
         self.live_texture_id_counter = 0  # For creating unique DPG IDs when the size changes on the fly, since the delete might not take immediately.
         self.live_image_widget = None  # GUI widget the texture renders to
@@ -450,7 +451,9 @@ class PostprocessorSettingsEditorGUI:
                     dpg.add_button(label="Fullscreen/windowed [F11]", width=self.button_width, callback=toggle_fullscreen, tag="fullscreen_button")
                     dpg.add_spacer(height=8)
 
-                    dpg.add_button(label="Load character [Ctrl+O]", width=self.button_width, callback=show_open_input_image_dialog, tag="open_image_button")
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="Load character [Ctrl+O]", width=self.button_width - 67, callback=show_open_input_image_dialog, tag="open_image_button")
+                        dpg.add_button(label="Refresh [Ctrl+R]", width=59, callback=self.on_reload_input_image, tag="reload_image_button")
                     with dpg.group(horizontal=True):
                         def reset_backdrop():
                             self.load_backdrop_image(None)
@@ -927,6 +930,7 @@ class PostprocessorSettingsEditorGUI:
         try:
             logger.info(f"PostprocessorSettingsEditorGUI.load_input_image: loading image '{filename}'")
             api.avatar_reload(avatar_instance_id, filename)
+            self.current_input_image_path = filename
         except Exception as exc:
             logger.error(f"PostprocessorSettingsEditorGUI.load_input_image: {type(exc)}: {exc}")
             traceback.print_exc()
@@ -936,6 +940,13 @@ class PostprocessorSettingsEditorGUI:
                                     ok_button="Close",
                                     cancel_button="Close",
                                     centering_reference_window=self.window)
+
+    def on_reload_input_image(self, sender, app_data):
+        if self.current_input_image_path is not None:
+            logger.info("PostprocessorSettingsEditorGUI.on_reload_input_image: Refreshing current character from disk")
+            self.load_input_image(self.current_input_image_path)
+        else:
+            logger.info("PostprocessorSettingsEditorGUI.on_reload_input_image: `self.current_input_image_path` not set, nothing to reload.")
 
     def load_json(self, filename: Union[pathlib.Path, str]) -> None:
         try:
@@ -1199,7 +1210,9 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
     elif ctrl_pressed:
         if key == dpg.mvKey_O:
             show_open_input_image_dialog()
-        if key == dpg.mvKey_B:
+        elif key == dpg.mvKey_R:
+            gui_instance.on_reload_input_image(sender, app_data)
+        elif key == dpg.mvKey_B:
             show_open_backdrop_image_dialog()
         elif key == dpg.mvKey_T:
             gui_instance.toggle_talking()
@@ -1411,9 +1424,11 @@ else:
     sys.exit(255)
 
 # IMPORTANT: `avatar_load` first before we start the GUI, to create the avatar instance.
-avatar_instance_id = api.avatar_load(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "other", "example.png"))
+_startup_input_image_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "other", "example.png")).expanduser().resolve()
+avatar_instance_id = api.avatar_load(_startup_input_image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings into the GUI, as well as send them to the avatar instance.
+gui_instance.current_input_image_path = _startup_input_image_path  # so that the Refresh button works
 api.avatar_start(avatar_instance_id)
 
 def gui_shutdown() -> None:
@@ -1474,7 +1489,7 @@ def _load_initial_animator_settings():
 
     gui_instance.load_animator_settings(animator_json_path)
 
-    # gui_instance.load_backdrop_image(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops", "anime-plains.png"))  # DEBUG
+    # gui_instance.load_backdrop_image(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops", "anime-plains.png")).expanduser().resolve())  # DEBUG
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
 

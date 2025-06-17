@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 import io
 import os
+import pathlib
 import PIL.Image
 
 from colorama import Fore, Style, init as colorama_init
@@ -43,7 +44,7 @@ def test():
     print(api.classify_labels())  # get available emotion names from server
 
     logger.info("selftext: imagefx")
-    processed_png_bytes = api.imagefx_process_file(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "backdrops", "study.png"),
+    processed_png_bytes = api.imagefx_process_file(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve(),
                                                    output_format="png",
                                                    filters=[["analog_lowres", {"sigma": 3.0}],  # maximum sigma is 3.0 due to convolution kernel size
                                                             ["analog_lowres", {"sigma": 3.0}],  # how to blur more: unrolled loop
@@ -54,7 +55,7 @@ def test():
     print(image.size, image.mode)
     # image.save("study_blurred.png")  # DEBUG so we can see it (but not useful to run every time the self-test runs)
 
-    processed_png_bytes = api.imagefx_upscale_file(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "backdrops", "study.png"),
+    processed_png_bytes = api.imagefx_upscale_file(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve(),
                                                    output_format="png",
                                                    upscaled_width=3840,
                                                    upscaled_height=2160,
@@ -92,12 +93,15 @@ def test():
     print(api.avatar_get_available_filters())
 
     logger.info("test: initialize avatar")
-    avatar_instance_id = api.avatar_load(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "characters", "other", "example.png"))  # send an avatar - mandatory
+    # send an avatar - mandatory
+    avatar_instance_id = api.avatar_load(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "characters", "other", "example.png")).expanduser().resolve())
     try:
+        # send animator config - optional, server defaults used if not sent
         api.avatar_load_animator_settings_from_file(avatar_instance_id,
-                                                    os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings", "animator.json"))  # send animator config - optional, server defaults used if not sent
+                                                    pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings", "animator.json")).expanduser().resolve())
+        # send the morph parameters for emotions - optional, server defaults used if not sent
         api.avatar_load_emotion_templates_from_file(avatar_instance_id,
-                                                    os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "emotions", "_defaults.json"))  # send the morph parameters for emotions - optional, server defaults used if not sent
+                                                    pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "emotions", "_defaults.json")).expanduser().resolve())
         api.avatar_start(avatar_instance_id)  # start the animator
         gen = api.avatar_result_feed(avatar_instance_id)  # start receiving animation frames (call this *after* you have started the animator)
         api.avatar_start_talking(avatar_instance_id)  # start "talking right now" animation (generic, non-lipsync, random mouth)
