@@ -92,7 +92,7 @@ class Animator:
                 elif action is action_cancel:
                     pass  # when cancelled, do nothing, just remove the animation
                 else:
-                    raise ValueError(f"Animator.render_frame: unknown action {action}, expected one of the `animation_action_X` constants (where X is 'continue', 'finish', or 'cancel').")
+                    raise ValueError(f"Animator.render_frame: animation {animation} returned unknown action {action}, expected one of the `raven.common.gui.animation.action_X` constants (where X is 'continue', 'finish', or 'cancel').")
             self.animations.clear()
             self.animations.extend(running_animations)
 
