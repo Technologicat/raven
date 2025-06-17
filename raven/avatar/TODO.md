@@ -9,8 +9,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
-- Check the use sites of every setting one more time, to be sure
-
 - Refactor everything, again:
   - Rename `raven.visualizer.preprocess` to `raven.visualizer.importer`.
 
