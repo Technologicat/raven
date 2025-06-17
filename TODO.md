@@ -9,7 +9,9 @@
   - Vendor our fixed wosfile library?
   - `vis_data` should really be called `entries` everywhere in this app constellation, also in importers. Something to BiBTeX importers in `raven.tools`, and the BibTeX to Raven importer in `raven.visualizer.importer`.
 
-- Word boundary mark (\b) for search.
+- Fdialog use site boilerplate reduction? We have lots of these dialogs in Raven.
+
+- Word boundary mark (\b) for search. What's a good UX here? Use what character as a word boundary?
 
 - App icon. `small_icon` and `large_icon` parameters of `create_viewport` (png or ico format).
    https://github.com/hoffstadt/DearPyGui/discussions/1688
@@ -17,13 +19,11 @@
 
 - Flash the search field (both in main window and in file dialogs) when focused by hotkey. Need to generalize `ButtonFlash` for GUI elements other than buttons.
 
-- Split `raven.utils` into smaller modules to optimize clarity and loading time - e.g. some utilities are DPG-related, whereas others are not.
-
 - fdialog: least surprise: if the user has picked a unique file extension in the file extension filter combo, use that as the default file extension when in save mode. If the current choice in that combo has several file extensions, and/or has one or more wildcards, then use the API-provided default file extension.
 
 - Import BibTeX: use multiple columns for input file table in the GUI if we have very many input files.
 
-- Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven/config.py`.
+- Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven.visualizer.config`.
 
 - Move the remaining GPU-dependent components of Raven to the server side.
   - NLP. Think about the transport format. Can we JSON spaCy token streams?
@@ -78,6 +78,10 @@
   - This becomes especially important with the LLM client, as the selection will affect which documents are enabled for RAG, so chat histories will be selection-specific.
     So it will feel silly if there is no way to save/load selections without attaching an AI chat to them.
   - The GUI needs some thinking. What is a good UX here?
+
+- Check if we can auto-spawn a server from raven-visualizer (and other end-user apps) if it's not already running.
+  - Would need open a terminal to show the server's log messages.
+  - OTOH, maybe no need if we can support a local (one process) mode instead.
 
 - LLMClient, to prepare for interactive AI summarization:
   - Expand tool-calling functionality.
@@ -195,9 +199,9 @@
 - **Extend existing dataset**.
   - Two separate new features:
      - 1) Update an existing semantic map, adding new datapoints to it (easy to implement).
-          - Add an option to the preprocessor to add more data on the same topic to an existing dataset, using the already trained dimension reduction from that dataset.
+          - Add an option to the BibTeX importer to add more data on the same topic to an existing dataset, using the already trained dimension reduction from that dataset.
           - Before adding each new item, check that it's not already in the dataset. Add only new items (and report them as such, in log messages).
-            This allows re-scanning a BibTeX database for any new entries added since the last time it was preprocessed. (What to do with changed entries? Removed entries?)
+            This allows re-scanning a BibTeX database for any new entries added since the last time it was imported. (What to do with changed entries? Removed entries?)
           - Produce a new dataset file (to avoid destroying the original).
           - Need to save the dimension reduction weights in the dataset file. See what OpenTSNE recommends for its serialization.
           - How to cluster the new datapoints? Re-run the 2D clustering step? Or snap to closest existing cluster (compare keyword frequencies from each new datapoint to each existing cluster)? Maybe an option to do either?
@@ -207,7 +211,7 @@
           - E.g. see how the set of studies from one's own research group locates itself in the wider field of science.
           - This requires using two or more different color schemes in the plotter simultaneously. Also, which dataset should go on top (more visible)?
 
-- **More flexible preprocessing**.
+- **More flexible BibTeX import**.
   - Rethink what our native input format should be. BibTeX is nice for research literature, but the Raven core could be applicable to so much more: patent databases, Wikipedia, news articles, arbitrary text files, Linux system logs, ...
   - User-defined Python function: input record -> object to be embedded (allowing customization of which fields to use)
     - E.g. for scientific papers, could be useful to use also the abstracts, and author-supplied keywords, not only the titles. But depends on the quality of the embedding model; so far, the best clustering has been obtained using titles only.
@@ -243,7 +247,7 @@
   - InterTight renders subscript numbers as superscript numbers, which breaks the rendering of chemistry formulas.
   - OpenSans is missing the subscript-x glyph, which also breaks the rendering of chemistry formulas (e.g. "NOₓ").
 
-- Importer/preprocessor:
+- BibTeX importer:
   - Make it configurable which fields to use for the semantic embedding.
   - Make the stopword list configurable (text file).
   - Investigate more advanced NLP methods to improve the quality of the automatically extracted keyword list.
@@ -254,7 +258,7 @@
   - Embed the input text, dimension-reduce it, highlight the resulting virtual datapoint in the plotter.
   - Later: add support for doing this for a user-given BibTeX entry or PDF file.
 
-- We can now import items that have no abstract. Think of how to generalize this to arbitrary missing fields, when we eventually allow the user to choose which fields to embed in the preprocessing step.
+- We can now import items that have no abstract. Think of how to generalize this to arbitrary missing fields, when we eventually allow the user to choose which fields to embed in the BibTeX import step.
 
 - The importer should detect duplicates (if reasonably possible), emit a warning, and ignore (or merge?) the duplicate entry.
 
@@ -262,19 +266,19 @@
   - Hotkey: add Ctrl to the current hotkeys: Ctrl+F8 for plain text (whole selection), Ctrl+Shift+F8 for Markdown (whole selection)?
   - Need to separate the report generator from the info panel renderer (`_update_info_panel`) so that we can easily get data in the same format for the full selection.
 
-- BibTeX report/export to clipboard. Needs the BibTeX records, currently not saved by the preprocessor. Could save them as-is into the dataset.
+- BibTeX report/export to clipboard. Needs the entire original BibTeX records, currently not saved by the BibTeX importer. Could save them as-is into the dataset.
 
-- Record also the DOI (if present) in the preprocessor. Useful for opening the webpage, and for external tools.
+- Record also the DOI (if present) in the BibTeX importer. Useful for opening the webpage, and for external tools.
 
 - Info panel: may need a full row of buttons per item. This would also act as a visual separator.
   - Add per-item button to use the DOI to open the official webpage of the paper in the default browser: "https://dx.doi.org/...".
-  - Add per-item button to search for other items by the same author(s). Should rank (or filter) by number of shared authors, descending. Needs the full list of authors. The preprocessor doesn't currently save that.
+  - Add per-item button to search for other items by the same author(s). Should rank (or filter) by number of shared authors, descending. Needs the full list of authors. The BibTeX importer currently saves it, but Raven-visualizer doesn't use it yet.
 
 - Timeline granularity: not only publication year, but also month/day, useful e.g. for news analysis. Analysis of system logs needs a full timestamp, because milliseconds may matter.
 
 - Add a GUI filter to search hotkeys in the help window? Fragment search, by key or action.
 
-- Add pre-filtering of data at preprocess time, e.g. by year.
+- Add pre-filtering of data at BibTeX import time, e.g. by year.
 
 - Deployability: place user-configurable parts in `~/.config/raven.conf` (or something), not inside the source tree. Check also where it should go on OSs other than Linux (Windows, OS X).
 

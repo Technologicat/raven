@@ -9,8 +9,7 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
-- Allow different simultaneous avatar instances to run on different GPUs.
-  - Make the device specification a parameter of `avatar_load`. Instantiate one poser per unique GPU.
+- Split `raven.librarian.llmclient` into a library function module and a CLI chat client module
 
 
 ### Documentation
@@ -35,27 +34,21 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 ## Medium priority
 
-If time is left over.
+Maybe later.
 
 - More backdrops, suitable for the different characters.
 
 - Server-side backdrop image renderer as a postprocessor effect.
-  - This would allow embedding the character into a scene so that the scene can get the same postprocessing applied to it as the character does.
+  - This would allow embedding the character into a scene so that the scene gets the same postprocessing applied to it as the character does.
   - In anime terms, the client-side backdrop (in `raven.avatar.settings_editor.app`) is essentially a separate backdrop cel, placed behind the CG animated character cel.
 
-- Voice mixing. Allows for greater variation for voices.
+- Voice mixing. Would allow for greater variation for voices.
   - Supported by Kokoro-FastAPI; need to add this functionality to our own server too.
   - Two voices, second voice is optional, can be None.
   - GUI:
     - Add a second combobox, for the second voice. Add the None option, make it the default (so that the default is to use only one voice).
     - Slider for mix balance (step: 10%?).
     - These can fit onto one line in the `raven.avatar.settings_editor.app` GUI (voice names are short).
-
-- Fdialog use site boilerplate reduction? We have lots of these dialogs in Raven.
-
-- Check if we can auto-spawn a server from raven-visualizer (and other end-user apps) if it's not already running.
-  - Would need open a terminal to show the server's log messages.
-  - OTOH, maybe no need if we can support a local (one process) mode instead.
 
 
 ## Low priority
@@ -82,6 +75,10 @@ Not scheduled for now.
   - We could keep all image variants loaded onto the GPU, so switching between them would be realtime.
   - "/api/avatar/load" needs to be able to receive multiple files.
   - Need new "morphs" that actually interpolate between source images.
+
+- Allow different simultaneous avatar instances to run on different GPUs.
+  - Make the device specification a parameter of `avatar_load`. Instantiate one poser per unique GPU.
+    OTOH, this requires the client to know about the server's GPU setup, which is not necessarily a good thing.
 
 
 ## Far future
