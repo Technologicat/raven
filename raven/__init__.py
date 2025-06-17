@@ -1,3 +1,3 @@
-"""Raven: Semantic visualizer and analyzer."""
+"""Raven: A constellation of AI apps for scientific literature analysis."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
