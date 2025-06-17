@@ -1,7 +1,7 @@
 # Raven-visualizer TODO
 
 
-## v0.1.x (August 2025?)
+## v0.2.x (August 2025?)
 
 *Preliminary plan, not final. Details may change.*
 
@@ -138,7 +138,7 @@
     - Message editing?
 
 
-## v0.2 and later
+## v0.3 and later
 
 ### Large new features
 
