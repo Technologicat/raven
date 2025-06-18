@@ -615,7 +615,7 @@ def extract_keywords(input_data, max_vis_kw=6):
             logger.info(f"            Frequency analysis across all documents from NLP pipeline results for data from {filename}...")
             with timer() as tim:
                 all_keywords_for_this_file = nlptools.count_frequencies(all_docs_for_this_file,
-                                                                        stopwords=nlptools.extended_stopwords)
+                                                                        stopwords=extended_stopwords)
                 all_keywords_for_this_file = dict(sorted(all_keywords_for_this_file.items(), key=lambda kv: -kv[1]))  # sort by number of occurrences, descending
                 # all_keywords_for_this_file = " ".join(sorted(all_keywords_for_this_file.keys()))
                 # logger.info(f"keywords collected from {filename}: {all_keywords_for_this_file}")  # DEBUG
@@ -648,14 +648,14 @@ def extract_keywords(input_data, max_vis_kw=6):
                     # Frequency analysis.
                     with timer() as tim2:
                         kws = nlptools.count_frequencies(doc,
-                                                         stopwords=nlptools.extended_stopwords)
+                                                         stopwords=extended_stopwords)
                     fa_times.append(tim2.dt)
 
                     # Named entity recognition (NER).
                     # TODO: Update named entities to the cluster keywords, too. The thing is, we don't have frequency information for named entities, so we can't decide which are the most relevant ones. TODO: Now we do. Fix this.
                     with timer() as tim2:
                         ents = set(nlptools.detect_named_entities(doc,
-                                                                  stopwords=nlptools.extended_stopwords).keys())
+                                                                  stopwords=extended_stopwords).keys())
                     ner_times.append(tim2.dt)
 
                     # for cache saving (and unified handling)
