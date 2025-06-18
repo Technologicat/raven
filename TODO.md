@@ -73,7 +73,14 @@
   - BibTeX import:
     - handle umlauts Å, Ä, Ö, Ü, å, ä, ö, ü: e.g. {\"o} -> ö
     - drop BibTeX's "verbatim" braces: {GPU} clusters -> GPU clusters
+
   - Misc items: assign to closest cluster in 2D view?
+  - Show full authors in abstract field in info panel?
+  - spaCy NLP for arbitrary input language? (Especially Finnish?)
+  - Make stopword list configurable.
+  - Show the most common keywords in the import panel when the import finishes.
+  - Smaller/scalable word cloud view?
+
 
 - Save/load selection, for reproducible reports. (Needs some care to make it work for a dynamic dataset.)
   - This becomes especially important with the LLM client, as the selection will affect which documents are enabled for RAG, so chat histories will be selection-specific.
