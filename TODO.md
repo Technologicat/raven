@@ -73,6 +73,7 @@
   - BibTeX import:
     - handle umlauts Å, Ä, Ö, Ü, å, ä, ö, ü: e.g. {\"o} -> ö
     - drop BibTeX's "verbatim" braces: {GPU} clusters -> GPU clusters
+  - Misc items: assign to closest cluster in 2D view?
 
 - Save/load selection, for reproducible reports. (Needs some care to make it work for a dynamic dataset.)
   - This becomes especially important with the LLM client, as the selection will affect which documents are enabled for RAG, so chat histories will be selection-specific.
