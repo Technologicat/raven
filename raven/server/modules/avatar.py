@@ -270,6 +270,7 @@ def load_emotion_templates(instance_id: str, emotions: Optional[Dict[str, Dict[s
                 For an example JSON file containing a suitable dictionary, see `raven/avatar/assets/emotions/_defaults.json`.
 
                 For available morph names, see `posedict_keys` in `raven.server.modules.avatarutil`.
+                For available cel names, see `supported_cels` in the same module.
 
                 For some more detail, see `raven/vendor/tha3/poser/modes/pose_parameters.py`.
                 "Arity 2" means `posedict_keys` has separate left/right morphs.
@@ -655,6 +656,7 @@ class Animator:
                     For an example JSON file containing a suitable dictionary, see `raven/avatar/assets/emotions/_defaults.json`.
 
                     For available morph names, see `posedict_keys` in `raven.server.modules.avatarutil`.
+                    For available cel names, see `supported_cels` in the same module.
 
                     For some more detail, see `raven/vendor/tha3/poser/modes/pose_parameters.py`.
                     "Arity 2" means `posedict_keys` has separate left/right morphs.
