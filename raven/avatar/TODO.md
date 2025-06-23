@@ -9,6 +9,10 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 ## High priority
 
+- Last touches for cel-blending support:
+  - Emotion templates: update the templates to actually use the cel-blending feature where appropriate.
+  - Animator: Eye-wavering animation (anime-style "intense emotion" effect).
+
 ### Documentation
 
 - Update README, document all web API endpoints.
@@ -19,6 +23,7 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
     - Examples of generated poses, highlighting both success and failure cases. How the live talking head looks. Link the original THA tech reports.
     - Examples of postprocessor filter results.
     - How each postprocessor example config looks when rendering the example character.
+  - Document how to make the add-on cels for the characters.
   - Document the postproc chain editor (`raven.avatar.settings_editor.app`).
   - Update the character-making instructions for SD Forge with Wai v14.0, RemBG extension with isnet-general-use/isnet-anime.
 
