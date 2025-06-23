@@ -42,6 +42,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 import argparse
+import functools
 import json
 import logging
 import os
@@ -49,7 +50,8 @@ import pathlib
 import sys
 import threading
 import time
-from typing import Dict, List
+import traceback
+from typing import Dict, List, Tuple, Optional, Union
 
 import PIL.Image
 
@@ -63,7 +65,7 @@ from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/total
 
 from ...vendor.tha3.poser.modes.load_poser import load_poser
 from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
-from ...vendor.tha3.util import resize_PIL_image, extract_PIL_image_from_filelike, extract_pytorch_image_from_PIL_image
+from ...vendor.tha3.util import torch_linear_to_srgb
 
 from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
 from ...common.gui import fontsetup
@@ -73,7 +75,7 @@ from ...common.hfutil import maybe_install_models
 from ...common.running_average import RunningAverage
 
 from ...server import config as server_config  # hf repo name for downloading THA3 models if needed
-from ...server.modules.avatarutil import load_emotion_presets, posedict_to_pose, pose_to_posedict, convert_linear_to_srgb, convert_float_to_uint8
+from ...server.modules import avatarutil
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -83,6 +85,20 @@ talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", ".
 print(f"THA3 is installed at '{str(talkinghead_path)}'")
 sys.path.append(str(talkinghead_path))
 
+# See also `supported_cels` in `raven.server.modules.avatarutil`.
+gui_cel_blending_layout = ["blush1",
+                           "blush2",
+                           "blush3",
+                           None,  # GUI spacer
+                           "sweat1",
+                           "sweat2",
+                           "sweat3",
+                           None,
+                           "tears1",
+                           "tears2",
+                           "tears3",
+                           None,
+                           "waver1"]  # marker; the actual animator will cycle between waver1/waver2
 
 # Detect image file formats supported by the installed Pillow, and format a list for the file open/save dialogs.
 # TODO: This is not very useful unless we can filter these to get only formats that support an alpha channel.
@@ -236,7 +252,7 @@ def show_save_image_dialog():
     """
     if gui_instance is None:
         return
-    if gui_instance.torch_source_image is None:  # anything to save?
+    if gui_instance.torch_base_image is None:  # character not loaded?
         return
     logger.debug("show_save_image_dialog: Showing save file dialog.")
     filedialog_save_image.show_file_dialog()
@@ -299,7 +315,7 @@ def is_open_json_dialog_visible():
     return dpg.is_item_visible("open_json_dialog")  # tag
 
 # --------------------------------------------------------------------------------
-# "Save image" dialog
+# "Save all emotions" dialog
 
 def show_save_all_emotions_dialog():
     """Button callback. Show the save file dialog, for the user to pick a filename to save as.
@@ -308,7 +324,7 @@ def show_save_all_emotions_dialog():
     """
     if gui_instance is None:
         return
-    if gui_instance.torch_source_image is None:  # character not loaded?
+    if gui_instance.torch_base_image is None:  # character not loaded?
         return
     logger.debug("show_save_all_emotions_dialog: Showing save file dialog.")
     filedialog_save_all_emotions.show_file_dialog()
@@ -363,6 +379,62 @@ def relpos_to_slider_value(slider, relpos):
     min_value, max_value = get_slider_range(slider)
     value = int(min_value + relpos * (max_value - min_value))
     return value
+
+
+class CelBlendControlPanel:
+    """A very simple control panel for controlling cel blending (i.e. source image edits by blending in other RGBA images).
+
+    Cel blending is useful for blushing, the "intense emotion" eye-wavering effect, and similar.
+    The actual blending is done elsewhere; this is just the GUI slider to allow the user to control the value.
+
+    The `label` is shown in the GUI. It tells the user which cel this control applies to.
+
+    The value range is always [0, 1]. The value 0 means "don't blend in this image at all" and 1 means "blend at full strength".
+
+    `parent` is the DPG ID or tag of the parent GUI widget. If not given, DPG's stack state is used (i.e. placed in whatever GUI
+    section you're building when you instantiate this object).
+    """
+
+    def __init__(self,
+                 label: str,
+                 parent: Optional[Union[str, int]] = None):
+        self.label = label
+        self.slider = dpg.add_slider_int(label=label, default_value=0, min_value=0, max_value=1000, parent=parent)
+
+    def _get_idx_in(self, celstack: List[Tuple[str, float]]):  # Just the first one, really. But that's enough for our purposes.
+        labels = [celname for celname, strength in celstack]
+        try:
+            idx = labels.index(self.label)
+            return idx
+        except ValueError:
+            return None
+
+    def write_to_celstack(self, celstack: List[Tuple[str, float]]) -> None:
+        """Update a cel stack in-place by the current value set in this control panel.
+
+        If `self.label` is missing from `celstack` (it doesn't have the cel this panel is controlling),
+        then do nothing.
+        """
+        idx = self._get_idx_in(celstack)
+        if idx is not None:
+            celstack[idx] = (self.label, slider_value_to_relpos(self.slider))
+        # else:
+        #     logger.warning(f"This control panel's label '{self.label}' not in celstack, ignoring.")  # DEBUG (spammy)
+
+    def read_from_celstack(self, celstack: List[Tuple[str, float]]) -> None:
+        """Overwrite the current value in this control panel by that taken from `celstack`.
+
+        If `self.label` is missing from `celstack` (it doesn't have the cel this panel is controlling),
+        then set this control panel to the value 0.
+        """
+        idx = self._get_idx_in(celstack)
+        if idx is not None:
+            _, strength = celstack[idx]
+        else:
+            strength = 0.0
+            # logger.warning(f"This control panel's label '{self.label}' not in celstack, setting control panel to default value.")  # DEBUG (spammy)
+        dpg.set_value(self.slider, relpos_to_slider_value(self.slider, strength))
+
 
 class SimpleParamGroupsControlPanel:
     """A simple control panel for groups of arity-1 continuous parameters (i.e. float value, and no separate left/right controls).
@@ -596,7 +668,7 @@ class PoseEditorGUI:
         self.dtype = self.poser.get_dtype()
         self.device = device
         self.image_size = self.poser.get_image_size()
-        self.gui_extra_height = 350
+        self.gui_extra_height = 510
 
         with dpg.texture_registry(tag="pose_editor_textures"):
             self.blank_texture = np.zeros([self.image_size,  # height
@@ -624,21 +696,26 @@ class PoseEditorGUI:
                         label="Raven-avatar poser editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
             with dpg.group(horizontal=True):
                 self.init_left_panel()
-                self.init_control_panel()
+                self.init_morphs_control_panel()
+                self.init_pose_and_cels_control_panel()
                 self.init_right_panel()
 
-            self.fps_statistics = RunningAverage()
+        self.fps_statistics = RunningAverage()
 
-            self.last_pose = None
-            self.last_emotion_name = None
-            self.last_output_index = dpg.get_value(self.output_index_choice)
-            self.last_output_numpy_image = None
-            self.source_image_changed = True
-            self.torch_source_image = None
+        self.last_pose = None
+        self.last_base_image = None
+        self.last_celstack = None
+        self.last_emotion_name = None
+        self.last_output_index = dpg.get_value(self.output_index_choice)
+        self.last_output_numpy_image = None
+        self.render_needed = True
+        self.torch_base_image = None  # The loaded character (base image).
+        self.torch_cels = {}  # Additional cels that are available for cel blending. {name0: torch_tensor0, ...}
+        self.celstack = []  # In order, from bottommost to topmost. Empty stack = use only base image. [(name0, strength0), ...] where strength is in [0, 1].
         self.lock = threading.RLock()
 
     def init_left_panel(self) -> None:
-        """Initialize the input image and emotion preset panel."""
+        """Initialize the input image and emotion preset GUI panel."""
         with dpg.child_window(tag="left_panel",
                               width=self.image_size,
                               height=self.image_size + self.gui_extra_height,
@@ -653,7 +730,7 @@ class PoseEditorGUI:
 
             # Emotion picker.
             emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve()
-            self.emotions, self.emotion_names = load_emotion_presets(emotions_dir)
+            self.emotions, self.emotion_names = avatarutil.load_emotion_presets(emotions_dir)
 
             with dpg.group():
                 dpg.add_text("Emotion preset [Ctrl+P]")
@@ -670,15 +747,15 @@ class PoseEditorGUI:
                                                         width=self.image_size - 16,
                                                         callback=show_open_json_dialog)
 
-    def init_control_panel(self) -> None:
-        """Initialize the pose editor panel."""
-        with dpg.child_window(tag="control_panel",
-                              width=self.image_size,
+    def init_morphs_control_panel(self) -> None:
+        """Initialize the morphs editor GUI panel."""
+        with dpg.child_window(tag="morphs_control_panel",
+                              width=0.8 * self.image_size,
                               height=self.image_size + self.gui_extra_height,
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
-            dpg.add_text("Pose controls [Ctrl+click to set a numeric value]")
-            dpg.add_spacer(height=8)
+            dpg.add_text("Morphs [Ctrl+click to set a numeric value]")
+            dpg.add_spacer(height=4)
 
             morph_categories = [PoseParameterCategory.EYEBROW,
                                 PoseParameterCategory.EYE,
@@ -706,6 +783,17 @@ class PoseEditorGUI:
                 self.morph_control_panels[category] = control_panel
                 dpg.add_spacer(height=4)
 
+    def init_pose_and_cels_control_panel(self):
+        """Initialize the pose editor and cel blending GUI panel."""
+        # New to Raven-avatar: cel blending (for things like blush or "intense emotion" eye-wavering effect)
+        with dpg.child_window(tag="pose_and_cels_control_panel",
+                              width=0.8 * self.image_size,
+                              height=self.image_size + self.gui_extra_height,
+                              no_scrollbar=True,
+                              no_scroll_with_mouse=True):
+            dpg.add_text("Pose [Ctrl+click to set a numeric value]")
+            dpg.add_spacer(height=4)
+
             self.non_morph_control_panels = {}
             non_morph_categories = [PoseParameterCategory.IRIS_ROTATION,
                                     PoseParameterCategory.FACE_ROTATION,
@@ -723,11 +811,24 @@ class PoseEditorGUI:
                     dpg.set_item_callback(slider, self.on_pose_edited)
                 self.non_morph_control_panels[category] = control_panel
                 dpg.add_spacer(height=4)
+            dpg.add_spacer(height=8)
 
-            self.fps_text = dpg.add_text("FPS counter will appear here", color=(0, 255, 0))
+            dpg.add_text("Cels [Ctrl+click to set a numeric value]")
+            dpg.add_spacer(height=4)
+
+            with dpg.group(tag="cel_blending_controls_group"):
+                self.cel_control_panels = {}
+                for label in gui_cel_blending_layout:
+                    if label is None:
+                        dpg.add_spacer(height=4)
+                        continue
+                    control_panel = CelBlendControlPanel(label=label, parent="cel_blending_controls_group")
+                    dpg.set_item_callback(control_panel.slider, self.on_pose_edited)
+                    self.cel_control_panels[label] = control_panel
+                dpg.add_spacer(height=4)
 
     def init_right_panel(self) -> None:
-        """Initialize the output image and output controls panel."""
+        """Initialize the output image and output controls GUI panel."""
         with dpg.child_window(tag="right_panel",
                               width=self.image_size,
                               height=self.image_size + self.gui_extra_height,
@@ -751,9 +852,11 @@ class PoseEditorGUI:
                 self.save_image_button = dpg.add_button(label="Save posed image and emotion [Ctrl+S]",
                                                         width=self.image_size - 16,
                                                         callback=show_save_image_dialog)
-                self.save_image_button = dpg.add_button(label="Batch save image and emotion from all presets [Ctrl+Shift+S]",
-                                                        width=self.image_size - 16,
-                                                        callback=show_save_all_emotions_dialog)
+                self.save_all_emotions_button = dpg.add_button(label="Batch save image and emotion from all presets [Ctrl+Shift+S]",
+                                                               width=self.image_size - 16,
+                                                               callback=show_save_all_emotions_dialog)
+
+            self.fps_text = dpg.add_text("FPS counter will appear here", color=(0, 255, 0))
 
     def focus_presets(self) -> None:
         dpg.focus_item(self.emotion_choice)
@@ -776,25 +879,47 @@ class PoseEditorGUI:
         self.update_output()
 
     def load_image(self, image_file_name: str) -> None:
-        """Load an input image."""
+        """Load an input image and its associated add-on cels, if any.
+
+        The cels should have the same basename, followed by an underscore and then the cel name.
+        E.g. "example.png" may have a cel "example_blush.png".
+
+        We keep all cels in memory as linear RGB, with alpha channel, in Torch layout, on GPU.
+
+        The texture (float32 CPU, ravel) and poser (range [-1, 1]) conversions are done as the last step.
+        """
+        _load = functools.partial(avatarutil.torch_load_rgba_image,
+                                  target_w=self.image_size,
+                                  target_h=self.image_size,
+                                  device=self.device,
+                                  dtype=self.dtype)  # load to GPU in linear RGB
         try:
-            pil_image = resize_PIL_image(extract_PIL_image_from_filelike(image_file_name),
-                                         (self.poser.get_image_size(), self.poser.get_image_size()))
-            w, h = pil_image.size
-            if pil_image.mode != "RGBA":  # input image must have an alpha channel
-                self.torch_source_image = None
-                self.source_image_changed = True
-                raise ValueError("Incompatible input image (no alpha channel)")
-            else:
-                logger.info(f"Loaded input image '{image_file_name}'")
-                arr = np.asarray(pil_image.convert("RGBA"))
-                arr = np.array(arr, dtype=np.float32) / 255
-                raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-                dpg.set_value(self.source_image_texture, raw_data)  # to GUI
-                self.torch_source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device).to(self.dtype)  # for poser
-                self.source_image_changed = True
+            logger.info(f"PoseEditorGUI.load_image: Loading '{image_file_name}'.")
+            self.torch_base_image = _load(image_file_name)
+
+            # Send the original unmodified base image (before any cel blending) to the GUI source image panel
+            numpy_source_image = avatarutil.torch_image_to_numpy(self.torch_base_image)
+            raw_data = numpy_source_image.ravel()  # [h, w, c] -> linearly indexed
+            dpg.set_value(self.source_image_texture, raw_data)  # send the cel-bldended final source image to the GUI
+
+            # Scan for and load add-on cels for cel blending.
+            # This sets up which cels are available for this character.
+            cels_filenames = avatarutil.scan_addon_cels(image_file_name)
+            self.torch_cels = {celname: _load(filename) for celname, filename in cels_filenames.items()}
+            self.celstack.clear()
+            for celname in gui_cel_blending_layout:  # load all supported cels into the stack, but set the blend strengths to zero
+                if celname is None:  # ignore GUI spacers
+                    continue
+                self.celstack.append((celname, 0.0))
+
+            self.render_needed = True
+
+            logger.info(f"PoseEditorGUI.load_image: Loaded image '{image_file_name}'.")
         except Exception as exc:
-            logger.error(f"Could not load image '{image_file_name}', reason: {type(exc)}: {exc}")
+            traceback.print_exc()
+            logger.error(f"PoseEditorGUI.load_image: Could not load image '{image_file_name}', reason: {type(exc)}: {exc}")
+            self.torch_base_image = None
+            self.render_needed = True
             messagebox.modal_dialog(window_title="Error",
                                     message=f"Could not load image '{image_file_name}', reason {type(exc)}: {exc}",
                                     buttons=["Close"],
@@ -804,31 +929,35 @@ class PoseEditorGUI:
         self.update_output()
 
     def load_json(self, json_file_name: str) -> None:
-        """Load a custom emotion JSON file.
+        """Load (apply) a custom emotion JSON file.
 
-        Note this is for loading a single emotion only.
+        Note this is for loading and applying a single emotion only.
         """
         try:
             # Load the emotion JSON file
+            logger.info(f"PoseEditorGUI.load_json: Loading '{json_file_name}'.")
             with open(json_file_name, "r") as json_file:
                 emotions_from_json = json.load(json_file)
             # TODO: Here we just take the first emotion from the file.
             if not emotions_from_json:
-                logger.warning(f"No emotions defined in file '{json_file_name}'")
+                logger.warning(f"PoseEditorGUI.load_json: No emotions defined in file '{json_file_name}'.")
                 return
             first_emotion_name = list(emotions_from_json.keys())[0]  # first in insertion order, i.e. topmost in file
             if len(emotions_from_json) > 1:
-                logger.warning(f"File '{json_file_name}' contains multiple emotions, loading the first one '{first_emotion_name}'.")
-            posedict = emotions_from_json[first_emotion_name]
-            pose = posedict_to_pose(posedict)
-
-            # Apply loaded emotion
-            self.set_current_pose(pose)
+                logger.warning(f"PoseEditorGUI.load_json: File '{json_file_name}' contains multiple emotions, loading the first one '{first_emotion_name}'.")
+            emotion = emotions_from_json[first_emotion_name]
+            posedict = emotion["pose"]
+            pose = avatarutil.posedict_to_pose(posedict)
+            celstack = list(emotion["cels"].items())
 
             # Auto-select "[custom]"
             dpg.set_value(self.emotion_choice, self.emotion_names[0])
+
+            # Apply the loaded emotion
+            self.set_current_pose(pose, celstack)
         except Exception as exc:
-            logger.error(f"Could not load emotion file '{json_file_name}', reason: {type(exc)}: {exc}")
+            traceback.print_exc()
+            logger.error(f"PoseEditorGUI.load_json: Could not load emotion file '{json_file_name}', reason: {type(exc)}: {exc}")
             messagebox.modal_dialog(window_title="Error",
                                     message=f"Could not load emotion file '{json_file_name}', reason {type(exc)}: {exc}",
                                     buttons=["Close"],
@@ -836,23 +965,28 @@ class PoseEditorGUI:
                                     cancel_button="Close",
                                     centering_reference_window=self.window)
         else:
-            logger.info(f"Loaded emotion file '{json_file_name}'")
+            logger.info(f"PoseEditorGUI.load_json: Loaded emotion file '{json_file_name}'.")
             self.update_output()
 
-    def get_current_pose(self) -> List[float]:
+    def get_current_pose(self) -> (List[float], List[Tuple[str, float]]):
         """Get the current pose of the character as a list of morph values (in the order the models expect them).
+
+        Also get current cel blend values.
 
         We do this by reading the values from the UI elements in the control panel.
         """
         current_pose = [0.0 for i in range(self.poser.get_num_parameters())]
-        for morph_control_panel in self.morph_control_panels.values():
-            morph_control_panel.write_to_pose(current_pose)
-        for rotation_control_panel in self.non_morph_control_panels.values():
-            rotation_control_panel.write_to_pose(current_pose)
-        return current_pose
+        for panel in self.morph_control_panels.values():
+            panel.write_to_pose(current_pose)
+        for panel in self.non_morph_control_panels.values():
+            panel.write_to_pose(current_pose)
+        current_celstack = [(celname, 0.0) for celname in self.torch_cels.keys()]
+        for cel_control_panel in self.cel_control_panels.values():
+            cel_control_panel.write_to_celstack(current_celstack)
+        return current_pose, current_celstack
 
-    def set_current_pose(self, pose: List[float]) -> None:
-        """Write `pose` to the UI controls in the editor panel."""
+    def set_current_pose(self, pose: List[float], celstack: List[Tuple[str, float]]) -> None:
+        """Write `pose` and `celstack` to the UI controls in the editor panel."""
         # `update_output` calls us; but if it is not already running (i.e. if we are called by something else),
         # we should not let it run until the pose update is complete.
         with self.lock:
@@ -860,28 +994,34 @@ class PoseEditorGUI:
                 panel.read_from_pose(pose)
             for panel in self.non_morph_control_panels.values():
                 panel.read_from_pose(pose)
+            for panel in self.cel_control_panels.values():
+                panel.read_from_celstack(celstack)
 
-    def _render(self, pose: List[float], output_index: int):
-        """Render `pose` on active device. Return the image data as a float NumPy array of shape [h, w, c], on CPU."""
-        # pose = torch.tensor(current_pose, device=self.device, dtype=self.dtype)
-        # with torch.no_grad():
-        #     output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].detach().cpu()
-        # numpy_image = torch_image_to_numpy(output_image)
-        # self.last_output_numpy_image = numpy_image
-        # arr = np.array(numpy_image, dtype=np.float32) / 255
-        # raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-        # dpg.set_value(self.result_image_texture, raw_data)
+    def _render(self, celstack: Dict[str, float], pose: List[float], output_index: int):
+        """Render `celstack` and `pose` on active device. Return the image data as a float NumPy array of shape [h, w, c], on CPU."""
+        assert self.torch_base_image is not None
 
-        # This is faster (from `raven.server.modules.avatar`), since we do all possible operations on the GPU (when using GPU).
         posetensor = torch.tensor(pose, device=self.device, dtype=self.dtype)
         with torch.no_grad():
+            # Cel blending: apply cels to base image.
+            torch_source_image = avatarutil.render_celstack(self.torch_base_image, celstack, self.torch_cels)
+
+            # # DEBUG
+            # numpy_source_image = avatarutil.torch_image_to_numpy(torch_source_image)  # display-ready copy to CPU, shape [h, w, c], range [0, 1], SRGB, 4 channels (RGBA), for GUI
+            # raw_data = numpy_source_image.ravel()  # [h, w, c] -> linearly indexed
+            # dpg.set_value(self.source_image_texture, raw_data)  # send the cel-blended final source image to the GUI
+
+            # data range [0, 1] -> [-1, 1], for poser
+            torch_source_image.mul_(2.0)
+            torch_source_image.sub_(1.0)
+
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
-            output_image = self.poser.pose(self.torch_source_image, posetensor, output_index)[0].float()
+            output_image = self.poser.pose(torch_source_image, posetensor, output_index)[0].float()
 
             # [-1, 1] -> [0, 1]
             output_image.add_(1.0)
             output_image.mul_(0.5)
-            output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
+            output_image[:3, :, :] = torch_linear_to_srgb(output_image[:3, :, :])  # apply gamma correction
 
             # reshape [c, h, w] -> [h, w, c]
             c, h, w = output_image.shape
@@ -893,30 +1033,36 @@ class PoseEditorGUI:
     def update_output(self) -> None:
         """Render the output image, and update the "no image loaded" widget status."""
         with self.lock:
+            if self.torch_base_image is None:  # no character loaded -> nothing to do
+                return
+
             # Apply the currently selected emotion, unless "[custom]" is selected, in which case skip this.
             # Note this may modify the current pose, hence we do this first.
             current_emotion_name = dpg.get_value(self.emotion_choice)
             if current_emotion_name != self.emotion_names[0] and current_emotion_name != self.last_emotion_name:  # changed, and not "[custom]"
                 self.last_emotion_name = current_emotion_name
                 logger.info(f"Loading emotion preset {current_emotion_name}")
-                posedict = self.emotions[current_emotion_name]
-                pose = posedict_to_pose(posedict)
-                self.set_current_pose(pose)
-                current_pose = pose
+                emotion = self.emotions[current_emotion_name]
+                celstack = emotion["cels"]
+                posedict = emotion["pose"]
+                print(celstack, posedict)
+                pose = avatarutil.posedict_to_pose(posedict)
+                self.set_current_pose(pose, celstack)
+                current_pose, current_celstack = pose, celstack
             else:
-                current_pose = self.get_current_pose()
+                current_pose, current_celstack = self.get_current_pose()
 
             output_index = int(dpg.get_value(self.output_index_choice))
-            if not self.source_image_changed:
+            if not self.render_needed:  # render can always be forced by setting `render_needed` (e.g. when loading a character)
                 if (self.last_pose is not None and
                         self.last_pose == current_pose and
-                        self.last_output_index == output_index):
+                        self.last_output_index == output_index and
+                        self.last_celstack is not None and
+                        self.last_celstack == current_celstack and
+                        self.last_base_image is self.torch_base_image):
                     return
-            self.source_image_changed = False
-            self.last_pose = current_pose
-            self.last_output_index = output_index
             try:
-                if self.torch_source_image is None:  # anything to render?
+                if self.torch_base_image is None:  # anything to render?
                     dpg.set_value(self.source_image_texture, self.blank_texture)
                     dpg.set_value(self.result_image_texture, self.blank_texture)
                     dpg.show_item("source_no_image_loaded_text")
@@ -927,12 +1073,14 @@ class PoseEditorGUI:
 
                 render_start_time = time.time_ns()
 
-                arr = self._render(current_pose, output_index)
+                # Cel-blend and apply the poser.
+                numpy_output_image = self._render(current_celstack, current_pose, output_index)  # apply the poser
+                raw_data = numpy_output_image.ravel()  # shape [h, w, c] -> linearly indexed
+                dpg.set_value(self.result_image_texture, raw_data)  # send the final posed image to the GUI
 
-                raw_data = arr.ravel()  # shape [h, w, c] -> linearly indexed
-                dpg.set_value(self.result_image_texture, raw_data)  # to GUI
-                self.last_output_numpy_image = arr  # for file saving
+                self.last_output_numpy_image = numpy_output_image  # for file saving
             except Exception as exc:
+                traceback.print_exc()
                 dpg.set_value(self.result_image_texture, self.blank_texture)
                 dpg.show_item("result_no_image_loaded_text")
                 logger.error(f"Could not render, reason: {type(exc)}: {exc}")
@@ -947,9 +1095,15 @@ class PoseEditorGUI:
                 # Update FPS counter, measuring the render speed only.
                 elapsed_time = time.time_ns() - render_start_time
                 fps = 1.0 / (elapsed_time / 10**9)
-                if self.torch_source_image is not None:
+                if self.torch_base_image is not None:
                     self.fps_statistics.add_datapoint(fps)
                 dpg.set_value(self.fps_text, f"Render (avg): {self.fps_statistics.average():0.2f} FPS")
+            finally:
+                self.render_needed = False
+                self.last_pose = current_pose
+                self.last_output_index = output_index
+                self.last_celstack = current_celstack
+                self.last_base_image = self.torch_base_image
 
     def save_image(self, image_file_name: str) -> None:
         """Save the output image.
@@ -957,15 +1111,22 @@ class PoseEditorGUI:
         The pose is automatically saved into the same directory as the output image, with
         file name determined from the image file name (e.g. "my_emotion.png" -> "my_emotion.json").
         """
-        posedict = pose_to_posedict(self.get_current_pose())
-        self.save_numpy_image(self.last_output_numpy_image, posedict, image_file_name)
+        if self.torch_base_image is None:  # no character loaded -> do nothing
+            return
+
+        current_pose, current_celstack = self.get_current_pose()
+        current_posedict = avatarutil.pose_to_posedict(current_pose)
+        self.save_numpy_image(self.last_output_numpy_image,
+                              current_celstack,
+                              current_posedict,
+                              image_file_name)
 
         # Since it is possible to save the image and emotion template JSON to "raven/avatar/assets/emotions", refresh the emotion presets list.
 
         current_emotion_name = dpg.get_value(self.emotion_choice)
 
         emotions_dir = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions")).expanduser().resolve()
-        self.emotions, self.emotion_names = load_emotion_presets(emotions_dir)
+        self.emotions, self.emotion_names = avatarutil.load_emotion_presets(emotions_dir)
 
         dpg.configure_item(self.emotion_choice, items=self.emotion_names)
         if current_emotion_name in self.emotion_names:  # still exists after update?
@@ -978,23 +1139,30 @@ class PoseEditorGUI:
 
         Does not affect the output image displayed in the GUI.
         """
+        if self.torch_base_image is None:  # no character loaded -> do nothing
+            return
+
         logger.info(f"Batch saving output based on all emotion presets to directory {dir_name}...")
 
         if not os.path.exists(dir_name):
             p = pathlib.Path(dir_name).expanduser().resolve()
             pathlib.Path.mkdir(p, parents=True, exist_ok=True)
 
-        for emotion_name, posedict in self.emotions.items():
+        for emotion_name, emotion in self.emotions.items():
             if emotion_name.startswith("[") and emotion_name.endswith("]"):
                 continue  # skip "[custom]" and "[reset]"
+            image_file_name = os.path.join(dir_name, f"{emotion_name}.png")
             try:
-                pose = posedict_to_pose(posedict)
+                celstack = emotion["cels"]
+                posedict = emotion["pose"]
+                pose = avatarutil.posedict_to_pose(posedict)
                 output_index = int(dpg.get_value(self.output_index_choice))
+                arr = self._render(celstack, pose, output_index)
 
-                arr = self._render(pose, output_index)
-
-                image_file_name = os.path.join(dir_name, f"{emotion_name}.png")
-                self.save_numpy_image(arr, posedict, image_file_name)
+                self.save_numpy_image(arr,
+                                      celstack,
+                                      posedict,
+                                      image_file_name)
             except Exception as exc:
                 logger.error(f"Could not save '{image_file_name}', reason: {type(exc)}: {exc}")
 
@@ -1028,11 +1196,16 @@ class PoseEditorGUI:
 
         logger.info("Batch save finished.")
 
-    def save_numpy_image(self, numpy_image: np.array, posedict: Dict[str, float], image_file_name: str) -> None:
+    def save_numpy_image(self,
+                         numpy_image: np.array,
+                         celstack: List[Tuple[str, float]],
+                         posedict: Dict[str, float],
+                         image_file_name: str) -> None:
         """Save the output image.
 
         `numpy_image` is an RGBA float array with range [0, 1].
-        `posedict` is the pose dictionary that corresponds to the `numpy_image`, for saving the emotion JSON.
+        `celstack` is the stack of cels that corresponds to the `numpy_image`, for saving "cels" to the emotion JSON.
+        `posedict` is the pose dictionary that corresponds to the `numpy_image`, for saving "pose" to the emotion JSON.
 
         Output format is determined by file extension (which must be supported by the installed `Pillow`).
         Automatically save also the corresponding settings as JSON.
@@ -1040,7 +1213,7 @@ class PoseEditorGUI:
         The settings are saved into the same directory as the output image, with file name determined
         from the image file name (e.g. "my_emotion.png" -> "my_emotion.json").
         """
-        numpy_image = convert_float_to_uint8(numpy_image)
+        numpy_image = np.uint8(255.0 * numpy_image)
 
         try:
             pil_image = PIL.Image.fromarray(numpy_image, mode="RGBA")
@@ -1054,7 +1227,9 @@ class PoseEditorGUI:
         json_file_path = os.path.splitext(image_file_name)[0] + ".json"
 
         filename_without_extension = os.path.splitext(os.path.basename(image_file_name))[0]
-        data_dict_with_filename = {filename_without_extension: posedict}  # JSON structure: {emotion_name0: posedict0, ...}
+        # JSON structure: {emotion_name0: {"pose": posedict0, "cels": celdict0}, ...}
+        celdict = dict(celstack)
+        data_dict_with_filename = {filename_without_extension: {"pose": posedict, "cels": celdict}}
 
         try:
             with open(json_file_path, "w") as file:
@@ -1209,7 +1384,7 @@ dpg.show_viewport()
 initialize_filedialogs()
 
 def tune_viewport():
-    dpg.set_viewport_width(3 * gui_instance.image_size + 32)
+    dpg.set_viewport_width(3.6 * gui_instance.image_size + 40)
     dpg.set_viewport_height(gui_instance.image_size + gui_instance.gui_extra_height + 16)
     dpg.split_frame()
     dpg.set_viewport_resizable(False)

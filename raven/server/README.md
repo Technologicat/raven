@@ -120,7 +120,7 @@ Any emotion that is missing from a particular level in the lookup order falls th
 
 If you want to edit the emotion templates manually (without using the GUI) for some reason, the following may be useful sources of information:
 
-- `posedict_keys` in [`raven/server/util.py`](../server/util.py) lists the morphs available in THA3.
+- `posedict_keys` in [`raven/server/modules/avatarutil.py`](../server/modules/avatarutil.py) lists the morphs available in THA3.
 - [`raven/vendor/tha3/poser/modes/pose_parameters.py`](../vendor/tha3/poser/modes/pose_parameters.py) contains some more detail.
   - *"Arity 2"* means `posedict_keys` has separate left/right morphs.
 - The GUI panel implementations in [`raven/avatar/pose_editor/app.py`](../avatar/pose_editor/app.py).
@@ -184,8 +184,8 @@ Particularly, `target_fps` makes the most sense to set globally at the server si
 - `blink_probability`: Applied at each frame at a reference of 25 FPS, with automatic internal FPS-correction to the actual output FPS. This is the probability of initiating a blink in each 1/25 second interval.
 - `blink_confusion_duration`: seconds. Upon entering the `"confusion"` emotion, the character may blink quickly in succession, temporarily disregarding the blink interval settings. This sets how long that state lasts.
 - `talking_fps`: How often to re-randomize the mouth during the talking animation. The default value is based on the fact that early 2000s anime used ~12 FPS as the fastest actual framerate of new cels, not counting camera panning effects and such.
-- `talking_morph`: Which mouth-open morph to use for talking. For available values, see `posedict_keys` in [`raven/server/util.py`](../server/util.py).
-- `sway_morphs`: Which morphs participate in the sway (fidgeting) animation. This setting is mainly useful for disabling some or all of them, e.g. for a robot character. For available values, see `posedict_keys` in [`raven/server/util.py`](../server/util.py).
+- `talking_morph`: Which mouth-open morph to use for talking. For available values, see `posedict_keys` in [`raven/server/modules/avatarutil.py`](../server/modules/avatarutil.py).
+- `sway_morphs`: Which morphs participate in the sway (fidgeting) animation. This setting is mainly useful for disabling some or all of them, e.g. for a robot character. For available values, see `posedict_keys` in [`raven/server/modules/avatarutil.py`](../server/modules/avatarutil.py).
 - `sway_interval_min`: seconds. Lower limit for random time interval until randomizing a new target pose for the sway animation.
 - `sway_interval_max`: seconds. Upper limit for random time interval until randomizing a new target pose for the sway animation.
 - `sway_macro_strength`: A value such that `0 < strength <= 1`. In the sway target pose, this sets the maximum absolute deviation from the target pose specified by the current emotion, but also the maximum deviation from the center position. The setting is applied to each sway morph separately. The emotion pose itself may use higher values for the morphs; in such cases, sway will only occur toward the center. For details, see `compute_sway_target_pose` in [`raven/server/modules/avatar.py`](../server/modules/avatar.py).

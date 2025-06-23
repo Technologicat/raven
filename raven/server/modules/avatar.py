@@ -57,11 +57,12 @@ from ...vendor.tha3.poser.modes.load_poser import load_poser
 from ...vendor.tha3.poser.poser import Poser
 from ...vendor.tha3.util import (resize_PIL_image,
                                  extract_PIL_image_from_filelike,
-                                 extract_pytorch_image_from_PIL_image)
+                                 extract_pytorch_image_from_PIL_image,
+                                 torch_linear_to_srgb)
 
 from .. import config as server_config  # hf repo name for downloading THA3 models if needed
 
-from .avatarutil import posedict_keys, posedict_key_to_index, load_emotion_presets, posedict_to_pose, to_talkinghead_image, convert_linear_to_srgb
+from . import avatarutil
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -252,10 +253,10 @@ def unload(instance_id: str) -> None:
     plural_s = "s" if len(_avatar_instances) != 1 else ""
     logger.info(f"unload: deleted avatar instance '{instance_id}' (now have {len(_avatar_instances)} instance{plural_s})")
 
-def load_emotion_templates(instance_id: str, emotions: Optional[Dict[str, Dict[str, float]]] = None) -> None:
+def load_emotion_templates(instance_id: str, emotions: Optional[Dict[str, Dict[str, Dict[str, float]]]] = None) -> None:
     """Load emotion templates. This is the API function that dispatches to the specified animator instance.
 
-    `emotions`: `{emotion0: {morph0: value0, ...}, ...}`
+    `emotions`: `{emotion0: {"pose": {morph0: value0, ...}, "cels": {cel0: value0, ...}}, ...}`
                 Optional dict of custom emotion templates.
 
                 If not given, this loads the templates from the emotion JSON files
@@ -268,12 +269,12 @@ def load_emotion_templates(instance_id: str, emotions: Optional[Dict[str, Dict[s
 
                 For an example JSON file containing a suitable dictionary, see `raven/avatar/assets/emotions/_defaults.json`.
 
-                For available morph names, see `posedict_keys` in `util.py`.
+                For available morph names, see `posedict_keys` in `raven.server.modules.avatarutil`.
 
                 For some more detail, see `raven/vendor/tha3/poser/modes/pose_parameters.py`.
                 "Arity 2" means `posedict_keys` has separate left/right morphs.
 
-                If still in doubt, see the GUI panel implementations in `editor.py`.
+                If still in doubt, see the GUI panel implementations in `raven.avatar.pose_editor.app`.
     """
     if not module_initialized:
         raise RuntimeError("set_overrides: Module not initialized. Please call `init_module` before using the API.")
@@ -569,6 +570,7 @@ class Animator:
 
         self.source_image: Optional[torch.tensor] = None
         self.result_image: Optional[np.array] = None
+        self.torch_cels: Dict[str, torch.tensor] = {}  # TODO: actually load the cels (needs changes in server, client API, and this module)
         self.new_frame_available = False
         self.last_report_time = None
         self.output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
@@ -636,10 +638,10 @@ class Animator:
 
         self.breathing_epoch = time.time_ns()
 
-    def load_emotion_templates(self, emotions: Optional[Dict[str, Dict[str, float]]] = None) -> None:
+    def load_emotion_templates(self, emotions: Optional[Dict[str, Dict[str, Dict[str, float]]]] = None) -> None:
         """Load emotion templates.
 
-        `emotions`: `{emotion0: {morph0: value0, ...}, ...}`
+        `emotions`: `{emotion0: {"pose": {morph0: value0, ...}, "cels": {cel0: value0, ...}}, ...}`
                     Optional dict of custom emotion templates.
 
                     If not given, this loads the templates from the emotion JSON files
@@ -652,7 +654,7 @@ class Animator:
 
                     For an example JSON file containing a suitable dictionary, see `raven/avatar/assets/emotions/_defaults.json`.
 
-                    For available morph names, see `posedict_keys` in `util.py`.
+                    For available morph names, see `posedict_keys` in `raven.server.modules.avatarutil`.
 
                     For some more detail, see `raven/vendor/tha3/poser/modes/pose_parameters.py`.
                     "Arity 2" means `posedict_keys` has separate left/right morphs.
@@ -660,7 +662,7 @@ class Animator:
                     If still in doubt, see the GUI panel implementations in `editor.py`.
         """
         # Load defaults as a base
-        self.emotions, self.emotion_names = load_emotion_presets(emotions_path)
+        self.emotions, self.emotion_names = avatarutil.load_emotion_presets(emotions_path)
 
         # Then override defaults, and add any new custom emotions
         if emotions is not None:
@@ -787,18 +789,12 @@ class Animator:
             pil_image = extract_PIL_image_from_filelike(blank_image_path)
 
         try:
-            # TODO: WTF? No need to resize twice. Fix this.
             pil_image = resize_PIL_image(pil_image,
                                          (self.poser.get_image_size(), self.poser.get_image_size()))
-            pil_image = to_talkinghead_image(pil_image)
+            pil_image = pil_image.convert("RGBA")
             w, h = pil_image.size
 
-            if pil_image.mode != "RGBA":  # final sanity check
-                logger.error("Animator.load_image: image must have alpha channel")
-                self.source_image = None
-            else:
-                self.source_image = extract_pytorch_image_from_PIL_image(pil_image) \
-                    .to(self.device).to(self.poser.get_dtype())
+            self.source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device).to(self.poser.get_dtype())
 
         except Exception as exc:
             print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (details below)")
@@ -816,7 +812,7 @@ class Animator:
         Return the modified pose.
         """
         new_pose = list(pose)  # copy
-        for idx, key in enumerate(posedict_keys):
+        for idx, key in enumerate(avatarutil.posedict_keys):
             if key in emotion_posedict and key != "breathing_index":
                 new_pose[idx] = emotion_posedict[key]
         return new_pose
@@ -873,7 +869,7 @@ class Animator:
         # If there should be a blink, set the wink morphs to 1.
         new_pose = list(pose)  # copy
         for morph_name in ["eye_wink_left_index", "eye_wink_right_index"]:
-            idx = posedict_key_to_index[morph_name]
+            idx = avatarutil.posedict_key_to_index[morph_name]
             new_pose[idx] = 1.0
 
         # Typical for humans is 12...20 times per minute, i.e. 5...3 seconds interval.
@@ -911,7 +907,7 @@ class Animator:
                 if self.was_talking:  # when talking ends, snap mouth to target immediately
                     new_pose = list(pose)  # copy
                     for key in MOUTH_OPEN_MORPHS:
-                        idx = posedict_key_to_index[key]
+                        idx = avatarutil.posedict_key_to_index[key]
                         new_pose[idx] = target_pose[idx]
                     return new_pose
                 return pose  # most common case: do nothing (not talking, and wasn't talking during previous frame)
@@ -935,7 +931,7 @@ class Animator:
 
         # Apply the mouth open morph
         new_pose = list(pose)  # copy
-        idx = posedict_key_to_index[talking_morph]
+        idx = avatarutil.posedict_key_to_index[talking_morph]
         if self.last_talking_target_value is None or update_mouth:
             # Randomize new mouth position
             x = pose[idx]
@@ -952,7 +948,7 @@ class Animator:
         for key in MOUTH_OPEN_MORPHS:
             if key == talking_morph:
                 continue
-            idx = posedict_key_to_index[key]
+            idx = avatarutil.posedict_key_to_index[key]
             new_pose[idx] = 0.0
 
         self.was_talking = True
@@ -968,7 +964,7 @@ class Animator:
         logger.debug(f"set_overrides: got data {overrides}")  # too spammy as info (when lipsyncing)
         # Validate
         for key in overrides:
-            if key not in posedict_key_to_index:
+            if key not in avatarutil.posedict_key_to_index:
                 logger.error(f"set_overrides: unknown morph key '{key}', rejecting overrides")
                 raise ValueError(f"Unknown morph key '{key}'; see `raven.server.modules.avatarutil` for available morph keys.")
         # Save
@@ -983,7 +979,7 @@ class Animator:
         new_pose = list(pose)  # copy
         overrides = self.morph_overrides  # get ref so it doesn't matter if it's replaced while we're rendering
         for key, value in overrides.items():
-            idx = posedict_key_to_index[key]
+            idx = avatarutil.posedict_key_to_index[key]
             new_pose[idx] = value
         return new_pose
 
@@ -1042,7 +1038,7 @@ class Animator:
 
             new_target_pose = list(original_target_pose)  # copy
             for key in SWAYPARTS:
-                idx = posedict_key_to_index[key]
+                idx = avatarutil.posedict_key_to_index[key]
                 target_value = original_target_pose[idx]
 
                 # Determine the random range so that the swayed target always stays within `[-random_max, random_max]`, regardless of `target_value`.
@@ -1072,7 +1068,7 @@ class Animator:
 
             if should_microsway:
                 for key in SWAYPARTS:
-                    idx = posedict_key_to_index[key]
+                    idx = avatarutil.posedict_key_to_index[key]
                     x = new_target_pose[idx] + random.uniform(-noise_max, noise_max)
                     x = max(-1.0, min(x, 1.0))
                     new_target_pose[idx] = x
@@ -1101,7 +1097,7 @@ class Animator:
         cycle_pos = cycle_pos - float(int(cycle_pos))  # fractional part
 
         new_pose = list(pose)  # copy
-        idx = posedict_key_to_index["breathing_index"]
+        idx = avatarutil.posedict_key_to_index["breathing_index"]
         new_pose[idx] = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         return new_pose
 
@@ -1289,7 +1285,7 @@ class Animator:
         # The other animation drivers then modify our result.
         EPSILON = 1e-8
         new_pose = list(pose)  # copy
-        for idx, key in enumerate(posedict_keys):
+        for idx, key in enumerate(avatarutil.posedict_keys):
             # # We now animate blinking *after* interpolating the pose, so when blinking, the eyes close instantly.
             # # This modification would make the blink also end instantly.
             # if key in ["eye_wink_left_index", "eye_wink_right_index"]:
@@ -1332,32 +1328,39 @@ class Animator:
         maybe_sync_cuda()
         time_render_start = time.time_ns()
 
+        emotion = self.emotions[self.emotion]
         if self.current_pose is None:  # initialize character pose at plugin startup
-            self.current_pose = posedict_to_pose(self.emotions[self.emotion])
+            self.current_pose = avatarutil.posedict_to_pose(emotion["pose"])
+            self.current_celstack = emotion["cels"]
 
-        emotion_posedict = self.emotions[self.emotion]
         if self.emotion != self.last_emotion:  # some animation drivers need to know when the emotion last changed
             self.last_emotion_change_timestamp = time_render_start
 
-        target_pose = self.apply_emotion_to_pose(emotion_posedict, self.current_pose)
+        # Compute target pose (which we interpolate toward)
+        target_pose = self.apply_emotion_to_pose(emotion["pose"], self.current_pose)
         target_pose = self.compute_sway_target_pose(target_pose)
-        target_pose = self.apply_overrides(target_pose)  # this makes the lipsync overrides take effect smoothly (looks good at pose interpolator step = 0.3)
+        target_pose = self.apply_overrides(target_pose)  # applying to *target* pose (not directly to current pose) makes the lipsync overrides take effect smoothly (looks good at pose interpolator step = 0.3)
 
+        # Compute current pose
         self.current_pose = self.interpolate_pose(self.current_pose, target_pose)
         self.current_pose = self.animate_blinking(self.current_pose)
         self.current_pose = self.animate_talking(self.current_pose, target_pose)
         self.current_pose = self.animate_breathing(self.current_pose)
 
-        # Update this last so that animation drivers have access to the old emotion, too.
+        # Update the last-emotion state last, so that animation drivers have access to the old emotion, too.
         self.last_emotion = self.emotion
 
         with torch.no_grad():
             # Detailed performance measurement protocol: sync CUDA (i.e. finish pending async CUDA operations), start timer, do desired CUDA operation(s), sync CUDA again, stop timer.
+            with timer() as tim_celblend:
+                source_image = avatarutil.render_celstack(self.source_image, self.current_celstack, self.torch_cels)
+                maybe_sync_cuda()
+
             # - [0]: model's output index for the full result image
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
             with timer() as tim_pose:
                 pose = torch.tensor(self.current_pose, device=self.device, dtype=self.poser.get_dtype())
-                output_image = self.poser.pose(self.source_image, pose)[0]
+                output_image = self.poser.pose(source_image, pose)[0]
                 maybe_sync_cuda()
 
             # [-1, 1] -> [0, 1]
@@ -1389,7 +1392,7 @@ class Animator:
                 maybe_sync_cuda()
 
             with timer() as tim_gamma:
-                output_image = convert_linear_to_srgb(output_image)  # apply gamma correction
+                output_image[:3, :, :] = torch_linear_to_srgb(output_image[:3, :, :])  # apply gamma correction
                 maybe_sync_cuda()
 
             # convert [c, h, w] float -> [h, w, c] uint8
@@ -1415,7 +1418,7 @@ class Animator:
             self.render_duration_statistics.add_datapoint(render_elapsed_sec)
 
         if metrics_enabled:
-            logger.info(f"total {1000 * render_elapsed_sec:0.1f} ms; pose {1000 * tim_pose.dt:0.1f} ms, norm {1000 * tim_normalize.dt:0.1f} ms, upscale {1000 * tim_upscale.dt:0.1f} ms, crop {1000 * tim_crop.dt:0.1f} ms, post {1000 * tim_postproc.dt:0.1f} ms, gamma {1000 * tim_gamma.dt:0.1f} ms, chw->hwc {1000 * tim_dataformat.dt:0.1f} ms, to CPU {1000 * tim_sendtocpu.dt:0.1f} ms")
+            logger.info(f"total {1000 * render_elapsed_sec:0.1f} ms; cel blending {1000 * tim_celblend.dt:0.1f} ms, pose {1000 * tim_pose.dt:0.1f} ms, norm {1000 * tim_normalize.dt:0.1f} ms, upscale {1000 * tim_upscale.dt:0.1f} ms, crop {1000 * tim_crop.dt:0.1f} ms, post {1000 * tim_postproc.dt:0.1f} ms, gamma {1000 * tim_gamma.dt:0.1f} ms, chw->hwc {1000 * tim_dataformat.dt:0.1f} ms, to CPU {1000 * tim_sendtocpu.dt:0.1f} ms")
 
         # Set the new rendered frame as the output image, and mark the frame as ready for consumption.
         with self.output_lock:

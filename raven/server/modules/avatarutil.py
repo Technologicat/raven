@@ -3,7 +3,8 @@
 __all__ = ["posedict_keys", "posedict_key_to_index",
            "load_emotion_presets",
            "posedict_to_pose", "pose_to_posedict",
-           "convert_linear_to_srgb", "convert_float_to_uint8", "to_talkinghead_image"]
+           "torch_load_rgba_image", "torch_image_to_numpy",
+           "supported_cels", "scan_addon_cels", "render_celstack"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -13,14 +14,11 @@ import json
 import os
 from typing import Dict, List, Tuple
 
-import PIL
-
 import numpy as np
 
 import torch
 
-# from ...vendor.tha3.util import rgba_to_numpy_image, rgb_to_numpy_image, grid_change_to_numpy_image, torch_linear_to_srgb
-from ...vendor.tha3.util import torch_linear_to_srgb
+from ...vendor.tha3.util import torch_linear_to_srgb, numpy_srgb_to_linear, resize_PIL_image, extract_PIL_image_from_filelike
 
 
 # The keys for a pose in the emotion JSON files.
@@ -62,12 +60,15 @@ def load_emotion_presets(directory: str) -> Tuple[Dict[str, Dict[str, float]], L
 
     Returns the tuple `(emotions, emotion_names)`, where::
 
-        emotions = {emotion0_name: posedict0, ...}
+        emotions = {emotion0_name: {"pose": posedict0, "cels": celstack0}, ...}
         emotion_names = [emotion0_name, emotion1_name, ...]
 
-    The dict contains the actual pose data. The list is a sorted list of emotion names
+    The posedict contains the actual pose data. The list is a sorted list of emotion names
     that can be used to map a linear index (e.g. the choice index in a GUI dropdown)
     to the corresponding key of `emotions`.
+
+    The celstack format is [(celname0, strength0), ...]. It controls the cel blending step
+    that happens before posing.
 
     The directory "raven/avatar/assets/emotions/" must also contain a "_defaults.json" file,
     containing factory defaults (as a fallback) for the 28 standard emotions
@@ -97,14 +98,16 @@ def load_emotion_presets(directory: str) -> Tuple[Dict[str, Dict[str, float]], L
         try:
             with open(os.path.join(directory, f"{emotion_name}.json"), "r") as json_file:
                 emotions_from_json = json.load(json_file)  # A single json file may contain presets for multiple emotions.
-            posedict = emotions_from_json[emotion_name]
+            emotion = emotions_from_json[emotion_name]
         except (FileNotFoundError, KeyError):  # If no separate json exists for the specified emotion, load the factory default (all 28 emotions have a default).
-            posedict = factory_default_emotions[emotion_name]
-        # If still not found, it's an error, so fail-fast: let the app exit with an informative exception message.
-        return posedict
+            emotion = factory_default_emotions[emotion_name]
+            # If still not found, it's an error, so fail-fast: let the exception propagate.
+        posedict = emotion["pose"]
+        celstack = list(emotion["cels"].items())
+        return {"pose": posedict, "cels": celstack}
 
     # Dict keeps its keys in insertion order, so define some special states before inserting the actual emotions.
-    emotions = {"[custom]": {},  # custom = in `raven.avatar.pose_editor.app`, the user has changed at least one value manually after last loading a preset
+    emotions = {"[custom]": {"pose": {}, "cels": []},  # custom = in `raven.avatar.pose_editor.app`, the user has changed at least one value manually after last loading a preset
                 "[reset]": load_emotion_with_fallback("zero")}  # reset = a preset with all pose sliders in their default positions. Found in "_defaults.json".
     for emotion_name in emotion_names:
         emotions[emotion_name] = load_emotion_with_fallback(emotion_name)
@@ -133,51 +136,175 @@ def pose_to_posedict(pose: List[float]) -> Dict[str, float]:
 
 # --------------------------------------------------------------------------------
 
-def convert_linear_to_srgb(image: torch.Tensor) -> torch.Tensor:
-    """RGBA (linear) -> RGBA (SRGB), preserving the alpha channel."""
-    rgb_image = torch_linear_to_srgb(image[0:3, :, :])
-    return torch.cat([rgb_image, image[3:4, :, :]], dim=0)
+def _preprocess_poser_image(image: np.array) -> np.array:
+    """Do some things THA3 needs:
 
-def convert_float_to_uint8(image: np.array) -> np.array:
-    """Convert the given `image` (a float array of shape [h, w, c]) into uint8, for file saving."""
-    uint8_image = image * 255.0
-    uint8_image = np.array(uint8_image, dtype=np.uint8)
-    return uint8_image
+      - Take all pixels that have zero alpha (and any color), and replace them with [0, 0, 0, 0],
+        so that they won't affect the color when we run the image through the poser.
 
-# # I have no idea what half of these modes are doing. Fortunately this function is no longer needed.
-# # See also `raven.vendor.tha3.util.convert_output_image_from_torch_to_numpy`, which this is based on, fortunately also unused.
-# def torch_image_to_numpy(image: torch.tensor) -> np.array:
-#     if image.shape[2] == 2:
-#         h, w, c = image.shape
-#         numpy_image = torch.transpose(image.reshape(h * w, c), 0, 1).reshape(c, h, w)
-#     elif image.shape[0] == 4:
-#         numpy_image = rgba_to_numpy_image(image)
-#     elif image.shape[0] == 3:
-#         numpy_image = rgb_to_numpy_image(image)
-#     elif image.shape[0] == 1:
-#         c, h, w = image.shape
-#         alpha_image = torch.cat([image.repeat(3, 1, 1) * 2.0 - 1.0, torch.ones(1, h, w)], dim=0)
-#         numpy_image = rgba_to_numpy_image(alpha_image)
-#     elif image.shape[0] == 2:
-#         numpy_image = grid_change_to_numpy_image(image, num_channels=4)
-#     else:
-#         msg = f"torch_image_to_numpy: unsupported # image channels: {image.shape[0]}"
-#         logger.error(msg)
-#         raise RuntimeError(msg)
-#     numpy_image = np.uint8(np.rint(numpy_image * 255.0))
-#     return numpy_image
+      - In the RGB channels, convert SRGB to linear.
 
-def to_talkinghead_image(image: PIL.Image, new_size: Tuple[int] = (512, 512)) -> PIL.Image:
-    """Resize image to `new_size`, add alpha channel, and center.
+      - Convert to the Torch layout [c, h, w].
 
-    With default `new_size`:
+    Input is shape [h, w, c], float32, range [0, 1] (SRGB, i.e. with gamma correction applied).
 
-      - Step 1: Resize (Lanczos) the image to maintain the aspect ratio with the larger dimension being 512 pixels.
-      - Step 2: Create a new image of size 512x512 with transparency.
-      - Step 3: Paste the resized image into the new image, centered.
+    Output is [c, h, w], float32, range [0, 1] (linear RGB, i.e. no gamma).
+
+    This is needed only upon image loading. We do this on the CPU.
     """
-    image.thumbnail(new_size, PIL.Image.LANCZOS)
-    new_image = PIL.Image.new("RGBA", new_size)
-    new_image.paste(image, ((new_size[0] - image.size[0]) // 2,
-                            (new_size[1] - image.size[1]) // 2))
-    return new_image
+    h, w, c = image.shape
+    if c == 4:  # alpha channel present?
+        # search for transparent pixels(alpha==0) and change them to [0 0 0 0] to avoid the color influence to the model
+        mask = np.where(image[:, :, 3] == 0, 0, 1)
+        mask = np.expand_dims(mask, 2)  # unsqueeze
+        image = image * mask
+    else:
+        image = image.copy()
+    image[:, :, 0:3] = numpy_srgb_to_linear(image[:, :, 0:3])
+    image = image.reshape(h * w, c).transpose().reshape(c, h, w)
+    return image
+
+def torch_load_rgba_image(filename: str, target_w: int, target_h: int, device: str, dtype: torch.dtype) -> torch.tensor:
+    """Load an RGBA image from disk, Lanczos-rescale it to `(target_w, target_h)`, load that into a Torch tensor, and send to `device` with the given float `dtype`.
+
+    If the aspect ratio of the image file does not match the target's, fit a box with the target's aspect ratio onto the image area, and crop the excess.
+    Rescale the part inside the box to the target size. See `raven.vendor.tha3.util.resize_PIL_image` for details.
+
+    The image file is assumed to be SRGB encoded (i.e. with gamma correction applied).
+    It may have either 3 channels (RGB) or 4 channels (RGBA).
+
+    Return value is a Torch tensor, shape [c, h, w], specified float `dtype`, range [0, 1], linear RGB (i.e. no gamma correction), loaded onto `device`.
+
+    Raises `ValueError` if the input file has no alpha channel.
+    """
+    pil_image = resize_PIL_image(extract_PIL_image_from_filelike(filename),
+                                 (target_w, target_h))
+    w, h = pil_image.size
+    if pil_image.mode != "RGBA":  # input image must have an alpha channel
+        raise ValueError("Incompatible input image (no alpha channel)")
+    arr = np.asarray(pil_image.convert("RGBA"))  # [h, w, c], uint8, SRGB (gamma-corrected)
+    arr = np.array(arr, dtype=np.float32) / 255  # uint8 -> [0, 1]
+    numpy_image = _preprocess_poser_image(arr)  # -> [c, h, w], SRGB to linear, zero out transparent pixels
+    torch_image = torch.from_numpy(numpy_image).to(device).to(dtype)
+    return torch_image
+
+def torch_image_to_numpy(image: torch.tensor) -> np.array:
+    """Convert Torch image tensor (on any device) to NumPy image array (on CPU).
+
+    Input is a Torch tensor on any device, of shape [c, h, w], any float dtype, range [0, 1], linear RGB.
+    The input may have either 3 channels (RGB) or 4 channels (RGBA).
+
+    Output is a NumPy array on CPU, of shape [h, w, c], dtype float32, range [0, 1], SRGB (display-ready).
+    You can `.ravel()` this for sending into a DPG texture.
+    """
+    with torch.no_grad():
+        image = torch.clone(image.detach())
+        image[:3, :, :] = torch_linear_to_srgb(image[:3, :, :])
+        c, h, w = image.shape
+        image = torch.transpose(image.reshape(c, h * w), 0, 1).reshape(h, w, c)  # -> [h, w, c]
+        numpy_image = image.float().detach().cpu().numpy()
+    return numpy_image
+
+# --------------------------------------------------------------------------------
+# Cel blending
+
+# List of cels understood by the character loaders (in `pose_editor` and `animator`).
+# This also defines the canonical render order for the cels (bottommost first).
+#
+# This is a fixed list for two reasons:
+#  - Having a fixed set of possible cels makes emotion JSON files compatible between different characters.
+#  - If a particular character does not have some of the cels, simply skipping those blend keys
+#    degrades the look gracefully (instead of completely breaking how the character looks).
+supported_cels = ["blush1", "blush2", "blush3",
+                  "sweat1", "sweat2", "sweat3",
+                  "tears1", "tears2", "tears3",
+                  "waver1", "waver2"]  # These two are special, for the "intense emotion" eye-wavering effect.
+
+def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
+    """Given `image_file_name`, scan for its associated add-on cels on disk.
+
+    The cels should have the same basename, followed by an underscore and then the cel name.
+    E.g. "example.png" may have a cel "example_blush.png".
+
+    Returns a dict `{celname0: absolute_filename0, ...}`.
+
+    The result may be empty if there are no add-on cels for `image_file_name`.
+    """
+    logger.info(f"scan_addon_cels: Scanning cels for '{image_file_name}'.")
+    basename = os.path.basename(image_file_name)  # e.g. "/foo/bar/example.png" -> "example.png"
+    stem, ext = os.path.splitext(basename)  # -> "example", ".png"
+    cels_filenames = {}
+    for root, dirs, files in os.walk(os.path.dirname(image_file_name), topdown=True):
+        dirs.clear()  # don't recurse
+        for filename in files:
+            if filename.startswith(f"{stem}_") and filename.endswith(ext):
+                base, _ = os.path.splitext(filename)  # "example_blush.png" -> "example_blush"
+                _, celname = base.split("_", maxsplit=1)  # # "example_blush" -> "blush"
+                if celname in supported_cels:
+                    cels_filenames[celname] = os.path.join(root, filename)
+                else:
+                    logger.warning(f"scan_addon_cels: Ignoring unsupported cel '{celname}' for '{image_file_name}'. Supported cels are: {supported_cels}")
+
+    # Sort the results.
+    def index_in_supported_cels(item):
+        celname, filename = item
+        return supported_cels.index(celname)
+    cels_filenames = dict(sorted(cels_filenames.items(), key=index_in_supported_cels))
+
+    if cels_filenames:
+        logger.info(f"scan_addon_cels: Found add-on-cels for '{image_file_name}': {list(cels_filenames.keys())}.")
+    else:
+        logger.info(f"scan_addon_cels: No add-on cels found for '{image_file_name}'.")
+
+    return cels_filenames
+
+def render_celstack(base_image: torch.tensor, celstack: List[Tuple[str, float]], torch_cels: Dict[str, torch.tensor]) -> torch.tensor:
+    """Given a base RGBA image and a stack of RGBA cel images, blend the final image.
+
+    `base_image`: shape [c, h, w], range [0, 1], linear RGB. 4 channels (RGBA).
+
+    `cels`: The add-on cels to blend in, `[(name0, strength0), ...]`. Each strength is in [0, 1],
+            where 0 means completely off (you could omit that entry), and 1 means full strength.
+
+            The cells should be listed in a bottom-to-top order (as if they were actual physical cels
+            stacked on top of a base cel).
+
+            Cels with zero strength are automatically skipped.
+
+    `torch_cels`: The actual cel data `{name0: tensor0, ...}`. Each tensor in same format as `base_image`.
+
+    The return value is a tensor of shape [c, h, w], containing the final blended image.
+    """
+    if not celstack:
+        logger.debug("compose_cels: Celstack is empty, returning base image as-is.")
+        return base_image.clone()  # always cloned, because the caller may directly modify the result.
+
+    logger.debug(f"compose_cels: Composing {celstack}.")
+
+    def over(a: torch.tensor, b: torch.tensor) -> torch.tensor:
+        """Alpha-blending operator. "a over b", i.e. "a" sits on top of "b".
+
+        https://en.wikipedia.org/wiki/Alpha_compositing
+        """
+        RGBa = a[:3, :, :]
+        RGBb = b[:3, :, :]
+        alpa = a[3, :, :].unsqueeze(0)  # [1, h, w]
+        alpb = b[3, :, :].unsqueeze(0)
+        alpo = (alpa + alpb * (1 - alpa))
+        RGBo = (RGBa * alpa + RGBb * alpb * (1 - alpa)) / (alpo + 1e-5)
+        return torch.cat([RGBo, alpo], dim=0)
+
+    out = base_image.clone()
+    for celname, strength in celstack:
+        if celname not in torch_cels:  # Ignore any cels that are not loaded (e.g. the character didn't have them).
+            continue
+        if strength == 0.0:
+            continue
+        elif strength == 1.0:
+            cel = torch_cels[celname]
+        else:
+            cel = torch_cels[celname].clone()
+            cel[3, :, :].mul_(strength)
+        out = over(cel, out)
+
+    return out
