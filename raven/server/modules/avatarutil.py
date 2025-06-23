@@ -266,15 +266,19 @@ def render_celstack(base_image: torch.tensor, celstack: List[Tuple[str, float]],
 
     `base_image`: shape [c, h, w], range [0, 1], linear RGB. 4 channels (RGBA).
 
-    `cels`: The add-on cels to blend in, `[(name0, strength0), ...]`. Each strength is in [0, 1],
-            where 0 means completely off (you could omit that entry), and 1 means full strength.
+    `celstack`: The add-on cels to blend in, `[(name0, strength0), ...]`. Each strength is in [0, 1],
+                where 0 means completely off, and 1 means full strength.
 
-            The cells should be listed in a bottom-to-top order (as if they were actual physical cels
-            stacked on top of a base cel).
+                The cells should be listed in a bottom-to-top order (as if they were actual physical cels
+                stacked on top of the base image).
 
-            Cels with zero strength are automatically skipped.
+                Cels with zero strength are automatically skipped.
 
-    `torch_cels`: The actual cel data `{name0: tensor0, ...}`. Each tensor in same format as `base_image`.
+                Cels not present in `torch_cels` (see below) are automatically skipped. This is a
+                convenience feature, as the add-on cels are optional and need to be made separately
+                for each character.
+
+    `torch_cels`: The actual image data for the cels, `{name0: tensor0, ...}`. Each tensor in same format as `base_image`.
 
     The return value is a tensor of shape [c, h, w], containing the final blended image.
     """
