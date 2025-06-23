@@ -1,4 +1,7 @@
-"""Utilities shared between `raven.server` and `raven.avatar.pose_editor`, related to the AI avatar system."""
+"""Utilities related to the AI avatar system, shared between `raven.server`, `raven.avatar.pose_editor`, and `raven.client.api`.
+
+This module is licensed under the 2-clause BSD license.
+"""
 
 __all__ = ["posedict_keys", "posedict_key_to_index",
            "load_emotion_presets",

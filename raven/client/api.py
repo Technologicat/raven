@@ -64,6 +64,7 @@ import qoi
 import numpy as np
 
 from ..common import netutil
+from ..server.modules import avatarutil
 
 from .tts import tts_list_voices, tts_speak, tts_speak_lipsynced, tts_stop  # noqa: F401: re-export
 from . import util  # for the `api_initialized` flag (must be looked up on the `util` module each time it is used, because the flag is not boxed)  # TODO: box it, or wrap it in a property?
@@ -136,6 +137,10 @@ def tts_server_available() -> bool:
 # --------------------------------------------------------------------------------
 # Avatar
 
+def _load_file(filename):
+    with open(filename, "rb") as file:
+        return file.read()
+
 def avatar_load(filename: Union[pathlib.Path, str]) -> str:
     """Create a new avatar instance, loading a character image (512x512 RGBA PNG) from `filename`.
 
@@ -148,11 +153,17 @@ def avatar_load(filename: Union[pathlib.Path, str]) -> str:
     """
     if not util.api_initialized:
         raise RuntimeError("avatar_load: The `raven.client.api` module must be initialized before using the API.")
-    headers = copy.copy(util.api_config.raven_default_headers)
+
+    # Base image file
+    files = {"file": (str(filename), _load_file(filename), "application/octet-stream")}
+
+    # Any supported cels, if present in the same folder
+    for celname, cel_filename in avatarutil.scan_addon_cels(filename).items():
+        files[celname] = (str(cel_filename), _load_file(cel_filename), "application/octet-stream")
+
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
-    with open(filename, "rb") as image_file:
-        files = {"file": (str(filename), image_file, "application/octet-stream")}
-        response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load", headers=headers, files=files)
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/load", headers=headers, files=files)
     util.yell_on_error(response)
 
     output = response.json()
@@ -162,14 +173,20 @@ def avatar_reload(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
     """Send a new character image to an existing avatar instance."""
     if not util.api_initialized:
         raise RuntimeError("avatar_reload: The `raven.client.api` module must be initialized before using the API.")
-    # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
-    # We must jump through some hoops to send parameters in the same request - a convenient way is to put those into another (virtual) file.
-    headers = copy.copy(util.api_config.raven_default_headers)
+
+    # Web API call parameters and the base image file.
+    # We must jump through some hoops to send parameters in the same request. A convenient way is to put the parameters into another (virtual) file.
     parameters = {"instance_id": instance_id}
-    with open(filename, "rb") as image_file:
-        files = {"json": pack_parameters_into_json_file_attachment(parameters),
-                 "file": (str(filename), image_file, "application/octet-stream")}
-        response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/reload", headers=headers, files=files)
+    files = {"json": pack_parameters_into_json_file_attachment(parameters),
+             "file": (str(filename), _load_file(filename), "application/octet-stream")}
+
+    # Any supported cels, if present in the same folder
+    for celname, cel_filename in avatarutil.scan_addon_cels(filename).items():
+        files[celname] = (str(cel_filename), _load_file(cel_filename), "application/octet-stream")
+
+    # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/reload", headers=headers, files=files)
     util.yell_on_error(response)
 
 def avatar_unload(instance_id: str) -> None:

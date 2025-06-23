@@ -39,6 +39,7 @@ from ..common.video.postprocessor import Postprocessor  # available image filter
 from . import config as server_config  # default models etc.
 
 from .modules import avatar
+from .modules import avatarutil
 from .modules import classify
 from .modules import embeddings
 from .modules import imagefx
@@ -199,6 +200,9 @@ def api_avatar_load():
 
     The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
 
+    Optionally, there may be more file attachments, one for each add-on cel. The attachment name
+    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`.
+
     Output is JSON::
 
         {"instance_id": "some_important_string"}
@@ -210,8 +214,12 @@ def api_avatar_load():
         abort(403, "Module 'avatar' not running")
 
     try:
-        file = request.files["file"]
-        instance_id = avatar.load(file.stream)
+        stream = request.files["file"].stream  # the base image
+        cel_streams = {celname: request.files[celname].stream
+                       for celname in avatarutil.supported_cels
+                       if celname in request.files}  # add-on cels the client also sent, if any
+        instance_id = avatar.load(stream=stream,
+                                  cel_streams=cel_streams)
     except Exception as exc:
         abort(400, f"api_avatar_load: failed, reason: {type(exc)}: {exc}")
 
@@ -225,6 +233,9 @@ def api_avatar_reload():
 
     The "file" attachment should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
 
+    Optionally, there may be more file attachments, one for each add-on cel. The attachment name
+    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`.
+
     The "json" attachment should contain the API call parameters as JSON:
 
         {"instance_id": "some_important_string"}
@@ -236,14 +247,21 @@ def api_avatar_reload():
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
 
-    file = request.files["file"]
+    try:
+        parameters = unpack_parameters_from_json_file_attachment(request.files["json"].stream)
+        if "instance_id" not in parameters or not isinstance(parameters["instance_id"], str):
+            abort(400, 'api_avatar_reload: "instance_id" is required')
 
-    parameters = unpack_parameters_from_json_file_attachment(request.files["json"].stream)
-    if "instance_id" not in parameters or not isinstance(parameters["instance_id"], str):
-        abort(400, 'api_avatar_reload: "instance_id" is required')
+        stream = request.files["file"].stream  # the base image
+        cel_streams = {celname: request.files[celname].stream
+                       for celname in avatarutil.supported_cels
+                       if celname in request.files}  # add-on cels the client also sent, if any
 
-    avatar.reload(instance_id=parameters["instance_id"],
-                  stream=file.stream)
+        avatar.reload(instance_id=parameters["instance_id"],
+                      stream=stream,
+                      cel_streams=cel_streams)
+    except Exception as exc:
+        abort(400, f"api_avatar_reload: failed, reason: {type(exc)}: {exc}")
     return "OK"
 
 @app.route("/api/avatar/unload", methods=["POST"])

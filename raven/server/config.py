@@ -140,7 +140,7 @@ animator_defaults = {
     "crop_top": 0.0,  # cut how much inward from top edge, in units where the image height is 2.0
     "crop_bottom": 0.0,  # cut how much inward from bottom edge, in units where the image height is 2.0
 
-    "pose_interpolator_step": 0.3,  # 0 < this <= 1; at each frame at a reference of 25 FPS; FPS-corrected automatically; see `interpolate_pose`.
+    "pose_interpolator_step": 0.3,  # 0 < this <= 1; at each frame at a reference of 25 FPS; FPS-corrected automatically; see `interpolate` in `raven.server.modules.avatar`.
 
     "blink_interval_min": 2.0,  # seconds, lower limit for random minimum time until next blink is allowed.
     "blink_interval_max": 5.0,  # seconds, upper limit for random minimum time until next blink is allowed.

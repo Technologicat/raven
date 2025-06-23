@@ -142,11 +142,14 @@ atexit.register(shutdown)
 # --------------------------------------------------------------------------------
 # Implementations for API endpoints served by `server.py`
 
-# TODO: the input is a flask.request.file.stream; what's the type of that?
-def load(stream) -> str:
+# TODO: the `stream` is a flask.request.file.stream; what's the type of that?
+def load(stream, cel_streams: Dict) -> str:
     """Create a new avatar instance, loading a character image (512x512 RGBA PNG) from `stream`.
 
-    The input is a `flask.request.file.stream`.
+    The `stream` is a `flask.request.file.stream` containing the character's base image.
+
+    `cel_streams` is a dict `{celname: flask.request.file.stream, ...}` containing the add-on cels, if any.
+    If there are no add-on cels, you can pass an empty dict.
 
     Returns the instance ID (important; needed by all other API functions to operate on that specific instance).
     """
@@ -174,7 +177,7 @@ def load(stream) -> str:
         animator.start()
         encoder.start()
 
-        reload(instance_id, stream)  # delegate; actually load the image
+        reload(instance_id, stream, cel_streams)  # delegate; actually load the image(s)
     except Exception as exc:
         traceback.print_exc()
         logger.error(f"load: failed: {type(exc)}: {exc}")
@@ -202,10 +205,13 @@ def load(stream) -> str:
 
     return instance_id
 
-def reload(instance_id: str, stream) -> None:
+def reload(instance_id: str, stream, cel_streams: Dict) -> None:
     """Send a new input image to an existing instance.
 
-    The input is a `flask.request.file.stream`.
+    The `stream` is a `flask.request.file.stream` containing the character's base image.
+
+    `cel_streams` is a dict `{celname: flask.request.file.stream, ...}` containing the add-on cels, if any.
+    If there are no add-on cels, you can pass an empty dict.
     """
     if not module_initialized:
         raise RuntimeError("reload: Module not initialized. Please call `init_module` before using the API.")
@@ -214,14 +220,19 @@ def reload(instance_id: str, stream) -> None:
         logger.error(f"reload: no such avatar instance '{instance_id}'")
         raise ValueError(f"reload: no such avatar instance '{instance_id}'")
 
-    # Just in case, make a seekable in-memory copy of `stream`.
+    # Just in case, make a seekable in-memory copy of each `stream`.
+    def _stream_to_buffer(stream):
+        buffer = io.BytesIO()
+        buffer.write(stream.read())
+        buffer.seek(0)
+        return buffer
+
     logger.info("reload: loading new input image from stream")
-    buffer = io.BytesIO()
-    buffer.write(stream.read())
-    buffer.seek(0)
+    source_image_buffer = _stream_to_buffer(stream)  # base image
+    cel_buffers = {celname: _stream_to_buffer(cel_stream) for celname, cel_stream in cel_streams.items()}  # add-on cels, if any
 
     animator = _avatar_instances[instance_id]["animator"]
-    animator.load_image(buffer)
+    animator.load_image(source_image_buffer, cel_buffers)
 
 def unload(instance_id: str) -> None:
     """Unload the given instance.
@@ -569,7 +580,7 @@ class Animator:
 
         self.source_image: Optional[torch.tensor] = None
         self.result_image: Optional[np.array] = None
-        self.torch_cels: Dict[str, torch.tensor] = {}  # TODO: actually load the cels (needs changes in server, client API, and this module)
+        self.torch_cels: Dict[str, torch.tensor] = {}  # loaded in `load_image`
         self.new_frame_available = False
         self.last_report_time = None
         self.output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
@@ -776,7 +787,7 @@ class Animator:
         # The rest of the settings we can just store in an attribute, and let the animation drivers read them from there.
         self._settings = settings
 
-    def load_image(self, filelike) -> None:
+    def load_image(self, filelike, cel_filelikes: Dict) -> None:
         """Load the image file `filelike`, and replace the current character with it.
 
         `filelike`: str or pathlib.Path to read a file; or a binary stream such as BytesIO to read that.
@@ -786,12 +797,22 @@ class Animator:
                                   target_h=self.poser.get_image_size(),
                                   device=self.device,
                                   dtype=self.poser.dtype)  # load to GPU in linear RGB
+        old_animation_running = self.animation_running  # TODO: ugh, would be better to use a lock or something. But one animator instance should only be used from one thread anyway.
+        self.animation_running = False
         try:
-            self.source_image = _load(filelike)
+            plural_s = "s" if len(cel_filelikes) != 1 else ""
+            cels_str = f" Received cels: {list(cel_filelikes.keys())}." if len(cel_filelikes) else ""
+            logger.info(f"load_image: Loading character image with {len(cel_filelikes)} add-on cel{plural_s}.{cels_str}")
+            self.source_image = _load(filelike)  # base image
+            self.torch_cels = {celname: _load(cel_filelike) for celname, cel_filelike in cel_filelikes.items()}  # add-on cels, if any
         except Exception as exc:
+            self.source_image = None
+            self.torch_cels = {}
             print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (details below)")
             traceback.print_exc()
             logger.error(f"load_image: {type(exc)}: {exc}")
+        finally:
+            self.animation_running = old_animation_running
 
     # --------------------------------------------------------------------------------
     # Animation drivers
@@ -1000,7 +1021,7 @@ class Animator:
 
         Return the modified pose.
         """
-        # We just modify the target pose, and let the ODE integrator (`interpolate_pose`) do the actual animation.
+        # We just modify the target pose, and let the ODE integrator (`interpolate`) do the actual animation.
         # - This way we don't need to track start state, progress, etc.
         # - This also makes the animation nonlinear automatically: a saturating exponential trajectory toward the target.
         #   - If we want a smooth start toward a target pose/morph, we can e.g. save the timestamp when the animation began, and then ramp the rate of change,
@@ -1093,21 +1114,21 @@ class Animator:
         new_pose[idx] = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         return new_pose
 
-    def interpolate_pose(self, pose: List[float], target_pose: List[float]) -> List[float]:
-        """Interpolate from current `pose` toward `target_pose`.
+    def interpolate(self, current: List[float], target: List[float]) -> List[float]:
+        """Interpolate a list of floats from `current` toward `target`.
 
         Relevant `self._settings` keys:
 
-        `"pose_interpolator_step"`: [0, 1]; how far toward `target_pose` to interpolate in one frame,
+        `"pose_interpolator_step"`: [0, 1]; how far toward `target` to interpolate in one frame,
                                             assuming a reference of 25 FPS. This is FPS-corrected automatically.
-                                            0 is fully `pose`, 1 is fully `target_pose`.
+                                            0 means just keep `current`, 1 means immediately replace with `target`.
 
-        This is a kind of history-free rate-based formulation, which needs only the current and target poses, and
-        the step size; there is no need to keep track of e.g. the initial pose or the progress along the trajectory.
+        This is a history-free rate-based formulation, which needs only the current and target vectors, and
+        the step size; there is no need to keep track of e.g. the initial values or the progress along the trajectory.
 
-        Note that looping back the output as `pose`, while keeping `target_pose` constant, causes the current pose
-        to approach `target_pose` on a saturating trajectory. This is because `step` is the fraction of the *current*
-        difference between `pose` and `target_pose`, which obviously becomes smaller after each repeat.
+        Note that looping back the output as `current`, while keeping `target` constant, causes the vector
+        to approach `target` on a saturating trajectory. This is because `step` is the fraction of the *current*
+        difference between `current` and `target`, which obviously becomes smaller after each repeat.
 
         This is a feature, not a bug!
         """
@@ -1115,12 +1136,13 @@ class Animator:
         # into account the actual FPS.
         #
         # How to do this requires some explanation. Numericist hat on. Let's do a quick back-of-the-envelope calculation.
-        # This pose interpolator is essentially a solver for the first-order ODE:
+        # This interpolator is essentially a solver for the first-order ODE:
         #
         #   u' = f(u, t)
         #
-        # Consider the most common case, where the target pose remains constant over several animation frames.
-        # Furthermore, consider just one morph (they all behave similarly). Then our ODE is Newton's law of cooling:
+        # Consider the most common case, where the target remains constant over several animation frames.
+        # Furthermore, consider just one element of the vector (they all behave similarly and independently).
+        # Then our ODE is Newton's law of cooling:
         #
         #   u' = -β [u - u∞]
         #
@@ -1136,13 +1158,13 @@ class Animator:
         #  whether to use `uold` (forward Euler) or `unew` (backward Euler) as `u` on the right-hand side. Then compare
         #  to our update formula. But those details don't matter here.)
         #
-        # To match the notation in the rest of this code, let us denote the temperature (actually pose morph value) as `x`
+        # To match the notation in the rest of this code, let us denote the temperature (actually current value) as `x`
         # (instead of `u`). And to keep notation shorter, let `β := step` (although it's not exactly the `β` of the
         # continuous-in-time case above).
         #
         # To scale the animation speed linearly with regard to FPS, we must invert the relation between simulation step
         # number `n` and the solution value `x`. For an initial value `x0`, a constant target value `x∞`, and constant
-        # step `β ∈ (0, 1]`, the pose interpolator produces the sequence:
+        # step `β ∈ (0, 1]`, the current interpolator produces the sequence:
         #
         #   x1 = x0 + β [x∞ - x0] = [1 - β] x0 + β x∞
         #   x2 = x1 + β [x∞ - x1] = [1 - β] x1 + β x∞
@@ -1260,7 +1282,7 @@ class Animator:
             else:  # No statistics available yet; let's assume we're running at `target_fps`.
                 avg_render_fps = self.target_fps
 
-            # For a constant target pose and original `α`, compute the number of animation frames to cover `xrel` of distance from initial pose to final pose.
+            # For a constant target and original `α`, compute the number of animation frames to cover `xrel` of distance from current value to target.
             n_orig = math.log(1.0 - xrel) / math.log(alpha_orig)
             # Compute the scaled `n`. Note the direction: we need a smaller `n` (fewer animation frames) if the render runs slower than the calibration FPS.
             n_scaled = (avg_render_fps / CALIBRATION_FPS) * n_orig
@@ -1271,29 +1293,22 @@ class Animator:
         step_scaled = 1.0 - alpha_scaled
 
         debug_fps = round(avg_render_fps, 1)
-        logger.debug(f"interpolate_pose: step @ {CALIBRATION_FPS} FPS = {step}, scaled step @ {debug_fps:.1f} FPS = {step_scaled:0.6g}")
+        logger.debug(f"interpolate: step @ {CALIBRATION_FPS} FPS = {step}, scaled step @ {debug_fps:.1f} FPS = {step_scaled:0.6g}")
 
-        # NOTE: This overwrites blinking, talking, and breathing, but that doesn't matter, because we apply this first.
-        # The other animation drivers then modify our result.
+        # NOTE: When interpolation is applied to a pose, this overwrites blinking, talking, and breathing, but that doesn't matter,
+        # because we apply this interpolator first. The other animation drivers may then partially overwrite our result.
         EPSILON = 1e-8
-        new_pose = list(pose)  # copy
-        for idx, key in enumerate(avatarutil.posedict_keys):
-            # # We now animate blinking *after* interpolating the pose, so when blinking, the eyes close instantly.
-            # # This modification would make the blink also end instantly.
-            # if key in ["eye_wink_left_index", "eye_wink_right_index"]:
-            #     new_pose[idx] = target_pose[idx]
-            # else:
-            #     ...
-
-            delta = target_pose[idx] - pose[idx]
-            new_pose[idx] = pose[idx] + step_scaled * delta
+        new = list(current)  # copy
+        for idx in range(len(current)):
+            delta = target[idx] - current[idx]
+            new[idx] = current[idx] + step_scaled * delta
 
             # Prevent denormal floats (which are really slow); important when running on CPU and approaching zero.
             # Our ϵ is really big compared to denormals; but there's no point in continuing to compute ever smaller
             # differences in the animated value when it has already almost (and visually, completely) reached the target.
-            if abs(new_pose[idx] - target_pose[idx]) < EPSILON:
-                new_pose[idx] = target_pose[idx]
-        return new_pose
+            if abs(new[idx] - target[idx]) < EPSILON:
+                new[idx] = target[idx]
+        return new
 
     # --------------------------------------------------------------------------------
     # Animation logic
@@ -1321,7 +1336,7 @@ class Animator:
         time_render_start = time.time_ns()
 
         emotion = self.emotions[self.emotion]
-        if self.current_pose is None:  # initialize character pose at plugin startup
+        if self.current_pose is None:  # initialize character pose at startup
             self.current_pose = avatarutil.posedict_to_pose(emotion["pose"])
             self.current_celstack = emotion["cels"]
 
@@ -1334,10 +1349,17 @@ class Animator:
         target_pose = self.apply_overrides(target_pose)  # applying to *target* pose (not directly to current pose) makes the lipsync overrides take effect smoothly (looks good at pose interpolator step = 0.3)
 
         # Compute current pose
-        self.current_pose = self.interpolate_pose(self.current_pose, target_pose)
+        self.current_pose = self.interpolate(self.current_pose, target_pose)
         self.current_pose = self.animate_blinking(self.current_pose)
         self.current_pose = self.animate_talking(self.current_pose, target_pose)
         self.current_pose = self.animate_breathing(self.current_pose)
+
+        # Compute target and current cel blends
+        # TODO: implement eye-waver effect (new cel-animation driver: cycle between "waver1" and "waver2", at the strength the emotion's celstack requests for "waver1")
+        target_cel_strengths = [v for k, v in emotion["cels"]]
+        current_cel_strengths = [v for k, v in self.current_celstack]  # TODO: fix unnecessary data conversion back and forth
+        current_cel_strengths = self.interpolate(current_cel_strengths, target_cel_strengths)
+        self.current_celstack = [(k, v) for (k, _), v in zip(self.current_celstack, current_cel_strengths)]
 
         # Update the last-emotion state last, so that animation drivers have access to the old emotion, too.
         self.last_emotion = self.emotion
@@ -1345,7 +1367,6 @@ class Animator:
         with torch.no_grad():
             # Detailed performance measurement protocol: sync CUDA (i.e. finish pending async CUDA operations), start timer, do desired CUDA operation(s), sync CUDA again, stop timer.
             with timer() as tim_celblend:
-                # TODO: implement eye-waver effect (new cel-animation driver: cycle between "waver1" and "waver2", at the strength the celstack requests for "waver1")
                 blended_source_image = avatarutil.render_celstack(self.source_image, self.current_celstack, self.torch_cels)
                 # data range [0, 1] -> [-1, 1], for poser
                 blended_source_image.mul_(2.0)
