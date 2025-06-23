@@ -56,10 +56,7 @@ from ...common.video.upscaler import Upscaler
 
 from ...vendor.tha3.poser.modes.load_poser import load_poser
 from ...vendor.tha3.poser.poser import Poser
-from ...vendor.tha3.util import (resize_PIL_image,
-                                 extract_PIL_image_from_filelike,
-                                 extract_pytorch_image_from_PIL_image,
-                                 torch_linear_to_srgb)
+from ...vendor.tha3.util import torch_linear_to_srgb
 
 from .. import config as server_config  # hf repo name for downloading THA3 models if needed
 
