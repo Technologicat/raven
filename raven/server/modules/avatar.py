@@ -21,6 +21,7 @@ __all__ = ["init_module", "is_available",
            "result_feed"]
 
 import atexit
+import functools
 import io
 import json
 import logging
@@ -783,21 +784,13 @@ class Animator:
 
         `filelike`: str or pathlib.Path to read a file; or a binary stream such as BytesIO to read that.
         """
+        _load = functools.partial(avatarutil.torch_load_rgba_image,
+                                  target_w=self.poser.get_image_size(),
+                                  target_h=self.poser.get_image_size(),
+                                  device=self.device,
+                                  dtype=self.poser.dtype)  # load to GPU in linear RGB
         try:
-            pil_image = extract_PIL_image_from_filelike(filelike)
-        except PIL.Image.UnidentifiedImageError:
-            logger.warning(f"Animator.load_image: Could not load input image `{filelike}` (image format not recognized by Pillow), loading blank")
-            blank_image_path = str(talkinghead_path / "tha3" / "images" / "inital.png")
-            pil_image = extract_PIL_image_from_filelike(blank_image_path)
-
-        try:
-            pil_image = resize_PIL_image(pil_image,
-                                         (self.poser.get_image_size(), self.poser.get_image_size()))
-            pil_image = pil_image.convert("RGBA")
-            w, h = pil_image.size
-
-            self.source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device).to(self.poser.get_dtype())
-
+            self.source_image = _load(filelike)
         except Exception as exc:
             print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (details below)")
             traceback.print_exc()
@@ -1355,14 +1348,18 @@ class Animator:
         with torch.no_grad():
             # Detailed performance measurement protocol: sync CUDA (i.e. finish pending async CUDA operations), start timer, do desired CUDA operation(s), sync CUDA again, stop timer.
             with timer() as tim_celblend:
-                source_image = avatarutil.render_celstack(self.source_image, self.current_celstack, self.torch_cels)
+                # TODO: implement eye-waver effect (new cel-animation driver: cycle between "waver1" and "waver2", at the strength the celstack requests for "waver1")
+                blended_source_image = avatarutil.render_celstack(self.source_image, self.current_celstack, self.torch_cels)
+                # data range [0, 1] -> [-1, 1], for poser
+                blended_source_image.mul_(2.0)
+                blended_source_image.sub_(1.0)
                 maybe_sync_cuda()
 
             # - [0]: model's output index for the full result image
             # - model's data range is [-1, +1], linear intensity ("gamma encoded")
             with timer() as tim_pose:
                 pose = torch.tensor(self.current_pose, device=self.device, dtype=self.poser.get_dtype())
-                output_image = self.poser.pose(source_image, pose)[0]
+                output_image = self.poser.pose(blended_source_image, pose)[0]
                 maybe_sync_cuda()
 
             # [-1, 1] -> [0, 1]
