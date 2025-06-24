@@ -217,7 +217,8 @@ def torch_image_to_numpy(image: torch.tensor) -> np.array:
 # This is a fixed list for two reasons:
 #  - Having a fixed set of supported cels makes emotion JSON files compatible between different characters.
 #  - If a particular character does not have some of the cels, simply skipping those blend keys
-#    degrades the look gracefully (instead of completely breaking how the character looks).
+#    degrades the look gracefully (instead of completely breaking how the character looks,
+#    e.g. if their hair or clothing was a custom cel).
 supported_cels = ["blush1", "blush2", "blush3",
                   "sweat1", "sweat2", "sweat3",
                   "tears1", "tears2", "tears3",
