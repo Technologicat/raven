@@ -7,7 +7,7 @@ __all__ = ["posedict_keys", "posedict_key_to_index",
            "load_emotion_presets",
            "posedict_to_pose", "pose_to_posedict",
            "torch_load_rgba_image", "torch_image_to_numpy",
-           "supported_cels", "scan_addon_cels", "render_celstack"]
+           "supported_cels", "scan_addon_cels", "render_celstack", "get_cel_index_in_stack"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -315,3 +315,10 @@ def render_celstack(base_image: torch.tensor, celstack: List[Tuple[str, float]],
         out = over(cel, out)
 
     return out
+
+def get_cel_index_in_stack(celname: str, celstack: List[Tuple[str, float]]) -> int:
+    """Given `celname`, return its position in `celstack`, or -1 if not found."""
+    for idx, (name, strength) in enumerate(celstack):
+        if name == celname:
+            return idx
+    return -1

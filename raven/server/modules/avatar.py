@@ -21,6 +21,7 @@ __all__ = ["init_module", "is_available",
            "result_feed"]
 
 import atexit
+import copy
 import functools
 import io
 import json
@@ -34,7 +35,7 @@ import numpy as np
 import sys
 import threading
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import uuid
 
 from colorama import Fore, Style
@@ -353,10 +354,7 @@ def stop(instance_id: str) -> str:
     logger.info("stop: done")
 
 def start_talking(instance_id: str) -> str:
-    """Start talking animation (generic, non-lipsync).
-
-    Return a status message for passing over HTTP.
-    """
+    """Start talking animation (generic, non-lipsync)."""
     if not module_initialized:
         raise RuntimeError("start_talking: Module not initialized. Please call `init_module` before using the API.")
 
@@ -370,10 +368,7 @@ def start_talking(instance_id: str) -> str:
     logger.debug("start_talking: done")
 
 def stop_talking(instance_id: str) -> str:
-    """Stop talking animation (generic, non-lipsync).
-
-    Return a status message for passing over HTTP.
-    """
+    """Stop talking animation (generic, non-lipsync)."""
     if not module_initialized:
         raise RuntimeError("stop_talking: Module not initialized. Please call `init_module` before using the API.")
 
@@ -387,10 +382,7 @@ def stop_talking(instance_id: str) -> str:
     logger.debug("stop_talking: done")
 
 def set_emotion(instance_id: str, emotion: str) -> str:
-    """Set the current emotion of the character.
-
-    Return a status message for passing over HTTP.
-    """
+    """Set the current emotion of the character."""
     if not module_initialized:
         raise RuntimeError("set_emotion: Module not initialized. Please call `init_module` before using the API.")
 
@@ -408,13 +400,21 @@ def set_emotion(instance_id: str, emotion: str) -> str:
     animator.emotion = emotion
 
 def set_overrides(instance_id: str, overrides: Dict[str, Any]) -> str:
-    """Set morph overrides. This is useful for lipsyncing.
+    """Set manual overrides for morphs and/or cel blends.
 
     All previous overrides are replaced by the new ones.
 
-    To unset all overrides, use `data = {}`.
+    For a full list of animation keys you can override here, see `posedict_key_to_index`
+    and `supported_cels`, both in `raven.server.modules.avatarutil`.
 
-    Return a status message for passing over HTTP.
+    The overrides remain in effect until replaced by new overrides.
+
+    To unset all overrides, use `overrides = {}`.
+
+    Overrides, as the name suggests, override morph and/or cel blend values
+    that were computed by the animator. This is particularly useful for lipsyncing,
+    but can also be used to disable certain animation features (e.g. eye wink morphs
+    for characters with opaque glasses).
     """
     if not module_initialized:
         raise RuntimeError("set_overrides: Module not initialized. Please call `init_module` before using the API.")
@@ -586,12 +586,38 @@ class Animator:
         self.output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
 
         self.animation_running = False  # used in initial bootup state, while loading a new image, and while explicitly paused
-        self.is_talking = False  # generic non-lipsync talking animation (random mouth)
-        self.emotion = "neutral"
 
         self.reset_animation_state()
         self.load_emotion_templates()
         self.load_animator_settings()
+
+    def reset_animation_state(self):
+        """Reset character state trackers for all animation drivers."""
+        self.current_pose = None
+        self.current_celstack = None
+
+        self.emotion = "neutral"
+        self.last_emotion = None
+        self.last_emotion_change_timestamp = None
+
+        self.last_sway_target_timestamp = None
+        self.last_sway_target_pose = None
+        self.last_microsway_timestamp = None
+        self.sway_interval = None
+
+        self.last_blink_timestamp = None
+        self.blink_interval = None
+
+        self.is_talking = False  # generic non-lipsync talking animation (random mouth)
+        self.was_talking = False  # state at previous frame
+        self.last_talking_timestamp = None
+        self.last_talking_target_value = None
+
+        t0 = time.time_ns()
+        self.breathing_epoch = t0
+        self.waver_epoch = t0
+
+        self.morph_and_cel_overrides = {}
 
     # --------------------------------------------------------------------------------
     # Management
@@ -624,29 +650,6 @@ class Animator:
             self.animator_thread.join()
         self.animator_thread = None
         logger.info(f"Animator.exit (avatar instance '{self.instance_id}'): Animator shutdown complete.")
-
-    def reset_animation_state(self):
-        """Reset character state trackers for all animation drivers."""
-        self.current_pose = None
-
-        self.last_emotion = None
-        self.last_emotion_change_timestamp = None
-
-        self.last_sway_target_timestamp = None
-        self.last_sway_target_pose = None
-        self.last_microsway_timestamp = None
-        self.sway_interval = None
-
-        self.last_blink_timestamp = None
-        self.blink_interval = None
-
-        self.last_talking_timestamp = None
-        self.last_talking_target_value = None
-        self.was_talking = False
-
-        self.morph_overrides = {}
-
-        self.breathing_epoch = time.time_ns()
 
     def load_emotion_templates(self, emotions: Optional[Dict[str, Dict[str, Dict[str, float]]]] = None) -> None:
         """Load emotion templates.
@@ -968,33 +971,50 @@ class Animator:
         return new_pose
 
     def set_overrides(self, overrides: Dict[str, float]) -> None:
-        """Set morph overrides. This is useful for lipsyncing.
+        """Set manual overrides for morphs and/or cel blends.
 
         All previous overrides are replaced by the new ones.
 
+        For a full list of animation keys you can override here, see `posedict_key_to_index`
+        and `supported_cels`, both in `raven.server.modules.avatarutil`.
+
+        The overrides remain in effect until replaced by new overrides.
+
         To unset all overrides, use `data = {}`.
+
+        Overrides, as the name suggests, override morph and/or cel blend values
+        that were computed by the animator. This is particularly useful for lipsyncing,
+        but can also be used to disable certain animation features (e.g. eye wink morphs
+        for characters with opaque glasses).
         """
         logger.debug(f"set_overrides: got data {overrides}")  # too spammy as info (when lipsyncing)
         # Validate
         for key in overrides:
-            if key not in avatarutil.posedict_key_to_index:
-                logger.error(f"set_overrides: unknown morph key '{key}', rejecting overrides")
-                raise ValueError(f"Unknown morph key '{key}'; see `raven.server.modules.avatarutil` for available morph keys.")
+            if key not in avatarutil.posedict_key_to_index and key not in avatarutil.supported_cels:
+                logger.error(f"set_overrides: unknown animation key '{key}', rejecting overrides")
+                raise ValueError(f"Unknown animation key '{key}'; see `raven.server.modules.avatarutil` for available morph and cel blend keys.")
         # Save
         logger.debug("set_overrides: data is valid, applying.")
-        self.morph_overrides = overrides  # atomic replace
+        self.morph_and_cel_overrides = overrides  # atomic replace
 
-    def apply_overrides(self, pose: List[float]) -> List[float]:
-        """Apply any morph overrides sent by the client. This is useful for lipsyncing.
+    def apply_overrides(self, pose: List[float], celstack: List[Tuple[str, float]]) -> (List[float], List[Tuple[str, float]]):
+        """Apply any manual overrides currently in effect.
 
         This is actual the animation driver, called by `render_animation_frame`.
+
+        Returns `(new_pose, new_celstack)`, without modifying the originals.
         """
         new_pose = list(pose)  # copy
-        overrides = self.morph_overrides  # get ref so it doesn't matter if it's replaced while we're rendering
+        new_celstack = copy.copy(celstack)
+        overrides = self.morph_and_cel_overrides  # get ref so it doesn't matter if it's replaced while we're rendering
         for key, value in overrides.items():
-            idx = avatarutil.posedict_key_to_index[key]
-            new_pose[idx] = value
-        return new_pose
+            if key in avatarutil.posedict_key_to_index:
+                idx = avatarutil.posedict_key_to_index[key]
+                new_pose[idx] = value
+            else:  # key in avatarutil.supported_cels:
+                idx = avatarutil.get_cel_index_in_stack(key, new_celstack)
+                new_celstack[idx] = (key, value)
+        return new_pose, new_celstack
 
     def compute_sway_target_pose(self, original_target_pose: List[float]) -> List[float]:
         """History-free sway animation driver.
@@ -1098,7 +1118,7 @@ class Animator:
 
         `"breathing_cycle_duration"`: seconds. Duration of one full breathing cycle.
 
-        Return the modified pose.
+        Returns the modified pose.
         """
         breathing_cycle_duration = self._settings["breathing_cycle_duration"]  # seconds
 
@@ -1113,6 +1133,41 @@ class Animator:
         idx = avatarutil.posedict_key_to_index["breathing_index"]
         new_pose[idx] = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         return new_pose
+
+    def animate_eye_waver(self, strength: float, celstack: List[Tuple[str, float]]) -> Tuple[str, float]:
+        """Eye-waver (anime style "intense emotion") animation driver.
+
+        Returns the modified celstack.
+        """
+        WAVER_FPS = 6  # as seen in every anime ever
+        waver_cycle_duration = 1 / WAVER_FPS
+
+        time_now = time.time_ns()
+        t = (time_now - self.waver_epoch) / 10**9
+        cycle_pos = t / waver_cycle_duration
+        if cycle_pos > 1.0:
+            self.waver_epoch = time_now
+        cycle_pos = cycle_pos - float(int(cycle_pos))
+
+        if cycle_pos < 0.5:
+            active_morph = "waver1"
+            inactive_morph = "waver2"
+        else:
+            active_morph = "waver2"
+            inactive_morph = "waver1"
+
+        active_idx = avatarutil.get_cel_index_in_stack(active_morph, celstack)
+        inactive_idx = avatarutil.get_cel_index_in_stack(inactive_morph, celstack)
+
+        new_celstack = copy.copy(celstack)
+        if active_idx != -1:  # found?
+            new_celstack[active_idx] = (active_morph, strength)
+        if inactive_idx != -1:
+            new_celstack[inactive_idx] = (inactive_morph, 0.0)
+
+        # print(active_morph, strength, active_idx, inactive_idx)  # DEBUG
+
+        return new_celstack
 
     def interpolate(self, current: List[float], target: List[float]) -> List[float]:
         """Interpolate a list of floats from `current` toward `target`.
@@ -1337,29 +1392,40 @@ class Animator:
 
         emotion = self.emotions[self.emotion]
         if self.current_pose is None:  # initialize character pose at startup
+            # `current_pose` and `current_celstack` hold the character's instantaneous state.
             self.current_pose = avatarutil.posedict_to_pose(emotion["pose"])
             self.current_celstack = emotion["cels"]
 
         if self.emotion != self.last_emotion:  # some animation drivers need to know when the emotion last changed
             self.last_emotion_change_timestamp = time_render_start
 
-        # Compute target pose (which we interpolate toward)
-        target_pose = self.apply_emotion_to_pose(emotion["pose"], self.current_pose)
+        # Compute target pose and celstack (which we interpolate toward)
+        target_posedict = emotion["pose"]
+        target_celstack = emotion["cels"]
+        target_pose = self.apply_emotion_to_pose(target_posedict, self.current_pose)
         target_pose = self.compute_sway_target_pose(target_pose)
-        target_pose = self.apply_overrides(target_pose)  # applying to *target* pose (not directly to current pose) makes the lipsync overrides take effect smoothly (looks good at pose interpolator step = 0.3)
 
-        # Compute current pose
+        # Apply manual overrides. Doing this to *target* pose (not directly to current pose) makes the lipsync overrides take effect smoothly.
+        # This looks especially good at pose interpolator step = 0.3.
+        target_pose, target_celstack = self.apply_overrides(target_pose, target_celstack)
+
+        # Animate pose
         self.current_pose = self.interpolate(self.current_pose, target_pose)
         self.current_pose = self.animate_blinking(self.current_pose)
         self.current_pose = self.animate_talking(self.current_pose, target_pose)
         self.current_pose = self.animate_breathing(self.current_pose)
 
-        # Compute target and current cel blends
-        # TODO: implement eye-waver effect (new cel-animation driver: cycle between "waver1" and "waver2", at the strength the emotion's celstack requests for "waver1")
-        target_cel_strengths = [v for k, v in emotion["cels"]]
+        # Animate celstack
+        target_cel_strengths = [v for k, v in target_celstack]
         current_cel_strengths = [v for k, v in self.current_celstack]  # TODO: fix unnecessary data conversion back and forth
         current_cel_strengths = self.interpolate(current_cel_strengths, target_cel_strengths)
+
         self.current_celstack = [(k, v) for (k, _), v in zip(self.current_celstack, current_cel_strengths)]
+
+        waver1_idx = avatarutil.get_cel_index_in_stack("waver1", target_celstack)  # "waver1" in the emotion controls the eye-waver effect strength
+        if waver1_idx != -1:  # found?
+            _, strength = target_celstack[waver1_idx]
+            self.current_celstack = self.animate_eye_waver(strength, self.current_celstack)
 
         # Update the last-emotion state last, so that animation drivers have access to the old emotion, too.
         self.last_emotion = self.emotion
