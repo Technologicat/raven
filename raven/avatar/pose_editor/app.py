@@ -98,7 +98,7 @@ gui_cel_blending_layout = ["blush1",
                            "tears2",
                            "tears3",
                            None,
-                           "waver1"]  # marker; the actual animator will cycle between waver1/waver2
+                           "waver1"]  # Animation strength control; the live animator auto-cycles cels between waver1/waver2.
 
 # Detect image file formats supported by the installed Pillow, and format a list for the file open/save dialogs.
 # TODO: This is not very useful unless we can filter these to get only formats that support an alpha channel.
@@ -903,13 +903,17 @@ class PoseEditorGUI:
             dpg.set_value(self.source_image_texture, raw_data)  # send the cel-bldended final source image to the GUI
 
             # Scan for and load add-on cels for cel blending.
-            # This sets up which cels are available for this character.
+            # This sets up which cels are actually available for this character.
+            # The compositor skips any effects for which the current character has no cel, so we don't need to worry about that.
             cels_filenames = avatarutil.scan_addon_cels(image_file_name)
             self.torch_cels = {celname: _load(filename) for celname, filename in cels_filenames.items()}
+
+            # Load all supported cels into the stack, but set the blend strengths to zero.
+            # The live animator needs all cels to be present in the emotion template, even "waver2",
+            # which isn't directly settable in the GUI. It is used as part of the eye-waver animation,
+            # with the animation strength controlled by the "waver1" slider in the GUI.
             self.celstack.clear()
-            for celname in gui_cel_blending_layout:  # load all supported cels into the stack, but set the blend strengths to zero
-                if celname is None:  # ignore GUI spacers
-                    continue
+            for celname in avatarutil.supported_cels:
                 self.celstack.append((celname, 0.0))
 
             self.render_needed = True
