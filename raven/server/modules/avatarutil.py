@@ -273,7 +273,8 @@ def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
     cels_filenames = dict(sorted(cels_filenames.items(), key=index_in_supported_cels))
 
     if cels_filenames:
-        logger.info(f"scan_addon_cels: Found add-on-cels for '{image_file_name}': {list(cels_filenames.keys())}.")
+        plural_s = "s" if len(cels_filenames) != 1 else ""
+        logger.info(f"scan_addon_cels: Found {len(cels_filenames)} add-on-cel{plural_s} for '{image_file_name}': {list(cels_filenames.keys())}.")
     else:
         logger.info(f"scan_addon_cels: No add-on cels found for '{image_file_name}'.")
 
