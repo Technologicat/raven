@@ -51,14 +51,14 @@
             "blush1": 0.0,
             "blush2": 0.0,
             "blush3": 0.0,
-            "shadow1": 0.0,
+            "shadow1": 1.0,
             "sweat1": 0.0,
             "sweat2": 0.0,
             "sweat3": 0.0,
             "tears1": 0.0,
             "tears2": 0.0,
             "tears3": 0.0,
-            "waver1": 0.0,
+            "waver1": 0.735,
             "waver2": 0.0
         }
     }
