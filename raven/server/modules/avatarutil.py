@@ -215,7 +215,7 @@ def torch_image_to_numpy(image: torch.tensor) -> np.array:
 # This also defines the canonical render order for the cels (bottommost first).
 #
 # This is a fixed list for two reasons:
-#  - Having a fixed set of possible cels makes emotion JSON files compatible between different characters.
+#  - Having a fixed set of supported cels makes emotion JSON files compatible between different characters.
 #  - If a particular character does not have some of the cels, simply skipping those blend keys
 #    degrades the look gracefully (instead of completely breaking how the character looks).
 supported_cels = ["blush1", "blush2", "blush3",
