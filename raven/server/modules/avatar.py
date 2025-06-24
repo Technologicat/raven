@@ -397,7 +397,7 @@ def set_emotion(instance_id: str, emotion: str) -> str:
         raise ValueError(f"set_emotion: specified emotion '{emotion}' does not exist")
 
     logger.info(f"set_emotion: applying emotion {emotion}")
-    animator.emotion = emotion
+    animator.pending_emotion = emotion  # takes effect at next frame
 
 def set_overrides(instance_id: str, overrides: Dict[str, Any]) -> str:
     """Set manual overrides for morphs and/or cel blends.
@@ -596,7 +596,8 @@ class Animator:
         self.current_pose = None
         self.current_celstack = None
 
-        self.emotion = "neutral"
+        self.pending_emotion = "neutral"  # used for sending in a new emotion, takes effect at next frame
+        self.emotion = "neutral"  # currently active emotion, so that animation drivers can access it
         self.last_emotion = None
         self.last_emotion_change_timestamp = None
 
@@ -617,7 +618,12 @@ class Animator:
         self.breathing_epoch = t0
         self.waver_epoch = t0
 
-        self.morph_and_cel_overrides = {}
+        # anime effects
+        self.angervein_epoch = t0
+        self.blackcloud_epoch = t0
+
+        # manual overrides, used for lipsync
+        self.animation_key_overrides = {}  # {morph_or_cel_name0: value0, ...}
 
     # --------------------------------------------------------------------------------
     # Management
@@ -995,7 +1001,7 @@ class Animator:
                 raise ValueError(f"Unknown animation key '{key}'; see `raven.server.modules.avatarutil` for available morph and cel blend keys.")
         # Save
         logger.debug("set_overrides: data is valid, applying.")
-        self.morph_and_cel_overrides = overrides  # atomic replace
+        self.animation_key_overrides = overrides  # atomic replace
 
     def apply_overrides(self, pose: List[float], celstack: List[Tuple[str, float]]) -> (List[float], List[Tuple[str, float]]):
         """Apply any manual overrides currently in effect.
@@ -1006,7 +1012,7 @@ class Animator:
         """
         new_pose = list(pose)  # copy
         new_celstack = copy.copy(celstack)
-        overrides = self.morph_and_cel_overrides  # get ref so it doesn't matter if it's replaced while we're rendering
+        overrides = self.animation_key_overrides  # get ref so it doesn't matter if it's replaced while we're rendering
         for key, value in overrides.items():
             if key in avatarutil.posedict_key_to_index:
                 idx = avatarutil.posedict_key_to_index[key]
@@ -1056,7 +1062,7 @@ class Animator:
         def macrosway() -> List[float]:  # this handles caching and everything
             time_now = time.time_ns()
             should_pick_new_sway_target = True
-            if self.emotion == self.last_emotion:
+            if self.emotion == self.last_emotion:  # same emotion as previous frame?
                 if self.sway_interval is not None:  # have we created a swayed pose at least once?
                     seconds_since_last_sway_target = (time_now - self.last_sway_target_timestamp) / 10**9
                     if seconds_since_last_sway_target < self.sway_interval:
@@ -1134,44 +1140,268 @@ class Animator:
         new_pose[idx] = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         return new_pose
 
-    def animate_eye_waver(self, strength: float, celstack: List[Tuple[str, float]]) -> Tuple[str, float]:
-        """Eye-waver (anime style "intense emotion") animation driver.
+    def _animate_cel_cycle(self, cycle_duration: float, epoch: float, strength: float, cels: List[str], celstack: List[Tuple[str, float]]) -> Tuple[float, List[Tuple[str, float]]]:
+        """Generic cel animation driver for an effect that cycles through a sequence of cels (e.g. "intense emotion" eye-waver effect).
+
+        `cycle_duration` (seconds) is the duration of one cycle through `cels`.
+
+        `epoch` anchors the cycle start time (as given by `time.time_ns()`). This is parameterized to keep this function stateless.
+
+        `strength` is the cel opacity, range [0, 1].
+
+        `cels` is the list of cel names to cycle through.
+
+        Returns `new_epoch, new_celstack`.
+
+        Be sure to update your stored epoch; the epoch resets after each full cycle to avoid rounding issues during a long session.
+        """
+        time_now = time.time_ns()
+        t = (time_now - epoch) / 10**9
+        cycle_pos = t / cycle_duration
+        if cycle_pos > 1.0:
+            epoch = time_now  # note `epoch` will be returned to caller
+        cycle_pos = cycle_pos - float(int(cycle_pos))
+
+        # NOTE: For the best look, this animation needs all of the `cels` to be present in `celstack`.
+        # Hence, they all need to be present in the emotion templates, because we populate our cel stack
+        # from those templates.
+        #
+        # During any missing cels, the animation will not show any cel.
+
+        new_celstack = copy.copy(celstack)
+        active_cel_number = int(len(cels) * cycle_pos)
+        active_celname = cels[active_cel_number]
+
+        # Set all inactive cels to zero strength
+        for celname in cels:
+            if celname != active_celname:
+                inactive_idx = avatarutil.get_cel_index_in_stack(celname, new_celstack)
+                if inactive_idx != -1:  # found?
+                    new_celstack[inactive_idx] = (celname, 0.0)
+
+        active_idx = avatarutil.get_cel_index_in_stack(active_celname, new_celstack)
+        if active_idx != -1:  # found?
+            new_celstack[active_idx] = (active_celname, strength)
+
+        return epoch, new_celstack
+
+    def _animate_cel_quick_flash(self, t0: float, duration: float, strength: float, cels: List[str], celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """Generic cel animation driver for a "quick flash" type cel effect (e.g. an exclamation mark when the character realizes something).
+
+        `t0` is the effect start time (as given by `time.time_ns()`). This is parameterized to keep this function stateless.
+
+        `duration` (seconds) is divided evenly to the cels.
+
+        `strength` is the cel opacity, range [0, 1].
+
+        `cels` is the list of cel names to cycle through.
 
         Returns the modified celstack.
         """
-        WAVER_FPS = 6  # as seen in every anime ever
-        waver_cycle_duration = 1 / WAVER_FPS
-
         time_now = time.time_ns()
-        t = (time_now - self.waver_epoch) / 10**9
-        cycle_pos = t / waver_cycle_duration
-        if cycle_pos > 1.0:
-            self.waver_epoch = time_now
-        cycle_pos = cycle_pos - float(int(cycle_pos))
-
-        # NOTE: For the best look, this animation needs both "waver1" and "waver2" to be present in `celstack`.
-        # Hence, both need to be present in the emotion templates, because we populate our cel stack from them.
-        #
-        # If one cel is missing, the remaining one blinks on and off. If both cels are missing, nothing happens.
-        if cycle_pos < 0.5:
-            active_morph = "waver1"
-            inactive_morph = "waver2"
-        else:
-            active_morph = "waver2"
-            inactive_morph = "waver1"
-
-        active_idx = avatarutil.get_cel_index_in_stack(active_morph, celstack)
-        inactive_idx = avatarutil.get_cel_index_in_stack(inactive_morph, celstack)
+        t = (time_now - t0) / 10**9
+        animation_pos = t / duration
 
         new_celstack = copy.copy(celstack)
-        if active_idx != -1:  # found?
-            new_celstack[active_idx] = (active_morph, strength)
-        if inactive_idx != -1:
-            new_celstack[inactive_idx] = (inactive_morph, 0.0)
+        if animation_pos >= 1.0:  # effect ended?
+            return new_celstack
 
-        # print(active_morph, strength, active_idx, inactive_idx)  # DEBUG
+        cel_number = int(len(cels) * animation_pos)
+        celname = cels[cel_number]
+        idx = avatarutil.get_cel_index_in_stack(celname, new_celstack)
+        if idx != -1:  # found?
+            new_celstack[idx] = (celname, strength)
+        return new_celstack
+
+    def _animate_cel_fadeout(self, t0: float, duration: float, cels: List[str], celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """Generic cel animation driver for a fadeout cel effect (e.g. a huge sweatdrop that turns translucent and vanishes).
+
+        `t0` is the effect start time (as given by `time.time_ns()`). This is parameterized to keep this function stateless.
+
+        `duration` (seconds) is the fadeout duration.
+
+        `cels` is the list of cel names affected by the fadeout. Their strength will fade from its current value toward zero.
+        """
+        time_now = time.time_ns()
+        t = (time_now - t0) / 10**9
+        animation_pos = t / duration
+
+        new_celstack = copy.copy(celstack)
+        if animation_pos >= 1.0:  # effect ended?
+            return new_celstack
+
+        r = 1.0 - animation_pos  # linear fade; could modify this for other profiles
+
+        for celname in cels:
+            idx = avatarutil.get_cel_index_in_stack(celname, new_celstack)
+            if idx != -1:  # found?
+                _, strength = new_celstack[idx]
+                new_celstack[idx] = (celname, r * strength)
 
         return new_celstack
+
+    def animate_eye_waver(self, strength: float, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """Eye-waver (anime style "intense emotion") cel animation driver.
+
+        `strength` is the cel opacity, range [0, 1].
+
+        Returns the modified celstack.
+        """
+        EYE_WAVER_FPS = 6  # as seen in every anime ever
+        self.waver_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(1 / EYE_WAVER_FPS),
+                                                                 epoch=self.waver_epoch,
+                                                                 strength=strength,
+                                                                 cels=["waver1", "waver2"],
+                                                                 celstack=celstack)
+        return new_celstack
+
+    def animate_angervein(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """'Anger vein' anime effect cel animation driver."""
+        ANGERVEIN_EMOTION = "anger"  # trigger emotion
+        ANGERVEIN_DURATION = 2.0  # seconds, for full animation
+        ANGERVEIN_FPS = 6  # frames per second, cel cycle speed
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion == ANGERVEIN_EMOTION and seconds_since_last_emotion_change < ANGERVEIN_DURATION:
+            # Compute base strengths for the anger veins
+            self.angervein_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(1 / ANGERVEIN_FPS),
+                                                                         epoch=self.angervein_epoch,
+                                                                         strength=1.0,
+                                                                         cels=["fx_angervein1", "fx_angervein2"],
+                                                                         celstack=celstack)
+            # Make the anger veins fade out
+            new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
+                                                     duration=ANGERVEIN_DURATION,
+                                                     cels=["fx_angervein1", "fx_angervein2"],
+                                                     celstack=new_celstack)
+            return new_celstack
+        return celstack
+
+    def animate_sweatdrop(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """'Huge sweatdrop' anime effect cel animation driver."""
+        SWEATDROP_EMOTION = "embarrassment"
+        SWEATDROP_DURATION = 2.0
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion == SWEATDROP_EMOTION and seconds_since_last_emotion_change < SWEATDROP_DURATION:
+            idx = avatarutil.get_cel_index_in_stack("fx_sweatdrop1", celstack)
+            if idx != -1:  # found?
+                new_celstack = copy.copy(celstack)
+                new_celstack[idx] = ("fx_sweatdrop1", 1.0)  # base strength (before applying fadeout) = full strength
+                new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
+                                                         duration=SWEATDROP_DURATION,
+                                                         cels=["fx_sweatdrop1"],
+                                                         celstack=new_celstack)
+            return new_celstack
+        return celstack
+
+    def animate_blackcloud(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """'Black cloud' anime effect cel animation driver."""
+        BLACKCLOUD_EMOTION = "???"  # TODO: which emotion(s) should invoke this effect?
+        BLACKCLOUD_DURATION = 2.0
+        BLACKCLOUD_FPS = 6
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion == BLACKCLOUD_EMOTION and seconds_since_last_emotion_change < BLACKCLOUD_DURATION:
+            # Compute base strengths for the black cloud cels
+            self.blackcloud_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(1 / BLACKCLOUD_FPS),
+                                                                          epoch=self.blackcloud_epoch,
+                                                                          strength=1.0,
+                                                                          cels=["fx_blackcloud1", "fx_blackcloud2"],
+                                                                          celstack=celstack)
+            # Make the black cloud cels fade out
+            new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
+                                                     duration=BLACKCLOUD_DURATION,
+                                                     cels=["fx_blackcloud1", "fx_blackcloud2"],
+                                                     celstack=new_celstack)
+            return new_celstack
+        return celstack
+
+    def animate_shock(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """'Shock lines' anime effect cel animation driver."""
+        SHOCK_EMOTION = "fear"
+        SHOCK_DURATION = 2.0
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion == SHOCK_EMOTION and seconds_since_last_emotion_change < SHOCK_DURATION:
+            idx = avatarutil.get_cel_index_in_stack("fx_shock1", celstack)
+            if idx != -1:  # found?
+                new_celstack = copy.copy(celstack)
+                new_celstack[idx] = ("fx_shock1", 1.0)  # base strength (before applying fadeout) = full strength
+                new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
+                                                         duration=SHOCK_DURATION,
+                                                         cels=["fx_sweatdrop1"],
+                                                         celstack=new_celstack)
+            return new_celstack
+        return celstack
+
+    def animate_notice(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """'Notice lines' anime effect cel animation driver."""
+        NOTICE_EMOTION = "realization"
+        NOTICE_DURATION = 0.5
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion == NOTICE_EMOTION and seconds_since_last_emotion_change < NOTICE_DURATION:
+            new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
+                                                         duration=NOTICE_DURATION,
+                                                         strength=1.0,
+                                                         cels=["fx_notice1", "fx_notice2"],
+                                                         celstack=celstack)
+            return new_celstack
+        return celstack
+
+    def animate_beaming(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:  # TODO: is "joy" the best emotion to attach this effect to?
+        """'Beaming joy lines' anime effect cel animation driver."""
+        BEAMING_EMOTION = "joy"
+        BEAMING_DURATION = 0.5
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion == BEAMING_EMOTION and seconds_since_last_emotion_change < BEAMING_DURATION:
+            new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
+                                                         duration=BEAMING_DURATION,
+                                                         strength=1.0,
+                                                         cels=["fx_beaming1", "fx_beaming2"],
+                                                         celstack=celstack)
+            return new_celstack
+        return celstack
+
+    def animate_question(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """'Question mark' anime effect cel animation driver."""
+        QUESTION_EMOTION = "confusion"
+        QUESTION_DURATION = 0.5
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion == QUESTION_EMOTION and seconds_since_last_emotion_change < QUESTION_DURATION:
+            new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
+                                                         duration=QUESTION_DURATION,
+                                                         strength=1.0,
+                                                         cels=["fx_question1", "fx_question2"],
+                                                         celstack=celstack)
+            return new_celstack
+        return celstack
+
+    def animate_exclaim(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """'Exclamation mark' anime effect cel animation driver."""
+        EXCLAIM_EMOTION = "realization"
+        EXCLAIM_DURATION = 0.5
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion == EXCLAIM_EMOTION and seconds_since_last_emotion_change < EXCLAIM_DURATION:
+            new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
+                                                         duration=EXCLAIM_DURATION,
+                                                         strength=1.0,
+                                                         cels=["fx_exclaim1", "fx_exclaim2"],
+                                                         celstack=celstack)
+            return new_celstack
+        return celstack
 
     def interpolate(self, current: List[float], target: List[float]) -> List[float]:
         """Interpolate a list of floats from `current` toward `target`.
@@ -1394,18 +1624,21 @@ class Animator:
         maybe_sync_cuda()
         time_render_start = time.time_ns()
 
-        emotion = self.emotions[self.emotion]
+        self.emotion = self.pending_emotion  # update from pending emotion at start of frame (this avoids a race condition between `set_emotion` and `render_animation_frame`)
+
+        current_emotion_template = self.emotions[self.emotion]
         if self.current_pose is None:  # initialize character pose at startup
             # `current_pose` and `current_celstack` hold the character's instantaneous state.
-            self.current_pose = avatarutil.posedict_to_pose(emotion["pose"])
-            self.current_celstack = emotion["cels"]
+            self.current_pose = avatarutil.posedict_to_pose(current_emotion_template["pose"])
+            self.current_celstack = current_emotion_template["cels"]
 
-        if self.emotion != self.last_emotion:  # some animation drivers need to know when the emotion last changed
+        # Some animation drivers need to know when the emotion last changed.
+        if self.emotion != self.last_emotion:  # emotion different from previous frame?
             self.last_emotion_change_timestamp = time_render_start
 
         # Compute target pose and celstack (which we interpolate toward)
-        target_posedict = emotion["pose"]
-        target_celstack = emotion["cels"]
+        target_posedict = current_emotion_template["pose"]
+        target_celstack = current_emotion_template["cels"]
         target_pose = self.apply_emotion_to_pose(target_posedict, self.current_pose)
         target_pose = self.compute_sway_target_pose(target_pose)
 
@@ -1431,9 +1664,6 @@ class Animator:
             _, strength = target_celstack[waver1_idx]
             self.current_celstack = self.animate_eye_waver(strength, self.current_celstack)
 
-        # Update the last-emotion state last, so that animation drivers have access to the old emotion, too.
-        self.last_emotion = self.emotion
-
         with torch.no_grad():
             # Detailed performance measurement protocol: sync CUDA (i.e. finish pending async CUDA operations), start timer, do desired CUDA operation(s), sync CUDA again, stop timer.
             with timer() as tim_celblend:
@@ -1450,11 +1680,26 @@ class Animator:
                 output_image = self.poser.pose(blended_source_image, pose)[0]
                 maybe_sync_cuda()
 
-            # [-1, 1] -> [0, 1]
-            # output_image = (output_image + 1.0) / 2.0
+            # data range [-1, 1] -> [0, 1], for the rest of processing
             with timer() as tim_normalize:
                 output_image.add_(1.0)
                 output_image.mul_(0.5)
+                maybe_sync_cuda()
+
+            # Cel-based anime effects that go *around* the character.
+            # Note we build an independent celstack (and separately at each frame) for these.
+            # Apply these after posing, but before upscaling or postprocessing.
+            with timer() as tim_animefx:
+                fx_celstack = [(celname, 0.0) for celname in avatarutil.supported_cels]  # TODO: do this efficiently
+                fx_celstack = self.animate_angervein(fx_celstack)
+                fx_celstack = self.animate_sweatdrop(fx_celstack)
+                fx_celstack = self.animate_blackcloud(fx_celstack)
+                fx_celstack = self.animate_shock(fx_celstack)
+                fx_celstack = self.animate_notice(fx_celstack)
+                fx_celstack = self.animate_beaming(fx_celstack)
+                fx_celstack = self.animate_question(fx_celstack)
+                fx_celstack = self.animate_exclaim(fx_celstack)
+                output_image = avatarutil.render_celstack(output_image, fx_celstack, self.torch_cels)
                 maybe_sync_cuda()
 
             with timer() as tim_upscale:
@@ -1493,6 +1738,9 @@ class Animator:
                 output_image_numpy = output_image.detach().cpu().numpy()
                 maybe_sync_cuda()
 
+        # Update the last-emotion state last, so that all animation drivers have access to the old emotion, too.
+        self.last_emotion = self.emotion
+
         # Update FPS counter, measuring the complete render process.
         #
         # This is used for FPS compensation by the animation routines, and works regardless of whether metrics are enabled.
@@ -1505,7 +1753,7 @@ class Animator:
             self.render_duration_statistics.add_datapoint(render_elapsed_sec)
 
         if metrics_enabled:
-            logger.info(f"total {1000 * render_elapsed_sec:0.1f} ms; cel blending {1000 * tim_celblend.dt:0.1f} ms, pose {1000 * tim_pose.dt:0.1f} ms, norm {1000 * tim_normalize.dt:0.1f} ms, upscale {1000 * tim_upscale.dt:0.1f} ms, crop {1000 * tim_crop.dt:0.1f} ms, post {1000 * tim_postproc.dt:0.1f} ms, gamma {1000 * tim_gamma.dt:0.1f} ms, chw->hwc {1000 * tim_dataformat.dt:0.1f} ms, to CPU {1000 * tim_sendtocpu.dt:0.1f} ms")
+            logger.info(f"total {1000 * render_elapsed_sec:0.1f} ms; cel blending {1000 * tim_celblend.dt:0.1f} ms, pose {1000 * tim_pose.dt:0.1f} ms, norm {1000 * tim_normalize.dt:0.1f} ms, animefx {1000 * tim_animefx.dt:0.1f} ms, upscale {1000 * tim_upscale.dt:0.1f} ms, crop {1000 * tim_crop.dt:0.1f} ms, post {1000 * tim_postproc.dt:0.1f} ms, gamma {1000 * tim_gamma.dt:0.1f} ms, chw->hwc {1000 * tim_dataformat.dt:0.1f} ms, to CPU {1000 * tim_sendtocpu.dt:0.1f} ms")
 
         # Set the new rendered frame as the output image, and mark the frame as ready for consumption.
         with self.output_lock:

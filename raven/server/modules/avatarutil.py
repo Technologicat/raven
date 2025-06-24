@@ -219,10 +219,26 @@ def torch_image_to_numpy(image: torch.tensor) -> np.array:
 #  - If a particular character does not have some of the cels, simply skipping those blend keys
 #    degrades the look gracefully (instead of completely breaking how the character looks,
 #    e.g. if their hair or clothing was a custom cel).
-supported_cels = ["blush1", "blush2", "blush3",
-                  "sweat1", "sweat2", "sweat3",
-                  "tears1", "tears2", "tears3",
-                  "waver1", "waver2"]  # These two are special, for the "intense emotion" eye-wavering effect.
+supported_cels = [
+    # Effects that go on the character itself.
+    # These can be set up in the pose editor as part of an emotion.
+    # Applied before posing.
+    "blush1", "blush2", "blush3",
+    "sweat1", "sweat2", "sweat3",
+    "tears1", "tears2", "tears3",
+    "waver1", "waver2",  # These two are special, for the "intense emotion" eye-wavering effect.
+    # Anime-style effects that go *around* the character.
+    # These are automatically applied by the live animator when the relevant emotion state is entered.
+    # Applied after posing.
+    "fx_angervein1", "fx_angervein2",  # the standalone vein, often red, anger (cycle, then fade out)
+    "fx_sweatdrop1",  # huge sweatdrop (fade out)
+    "fx_blackcloud1", "fx_blackcloud2",  # frustration (cycle, then fade out)
+    "fx_shock1",  # shock lines, fear (fade out)
+    "fx_notice1", "fx_notice2",  # notice lines, realization (quick flash cel1, cel2, then off)
+    "fx_beaming1", "fx_beaming2",  # happy lines, joy (quick flash cel1, cel2, then off)
+    "fx_question1", "fx_question2", "fx_question3",  # question mark(s), confusion (quick flash cel1, cel2, cel3, then off)
+    "fx_exclaim1", "fx_exclaim2", "fx_exclaim3",  # exclamation mark(s), realization (quick flash cel1, cel2, cel3, then off)
+]
 
 def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
     """Given `image_file_name`, scan for its associated add-on cels on disk.
