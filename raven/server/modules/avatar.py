@@ -1364,14 +1364,14 @@ class Animator:
                 new_celstack[idx] = ("fx_shock1", 1.0)  # base strength (before applying fadeout) = full strength
                 new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
                                                          duration=SHOCK_DURATION,
-                                                         cels=["fx_sweatdrop1"],
+                                                         cels=["fx_shock1"],
                                                          celstack=new_celstack)
             return new_celstack
         return celstack
 
     def animate_notice(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
-        """'Notice lines' anime effect cel animation driver."""
-        NOTICE_EMOTIONS = ["realization"]
+        """'Notice lines' (or 'surprise lines') anime effect cel animation driver."""
+        NOTICE_EMOTIONS = ["surprise"]
         NOTICE_DURATION = 0.5
 
         time_now = time.time_ns()
@@ -1412,14 +1412,14 @@ class Animator:
             new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
                                                          duration=QUESTION_DURATION,
                                                          strength=1.0,
-                                                         cels=["fx_question1", "fx_question2"],
+                                                         cels=["fx_question1", "fx_question2", "fx_question3"],
                                                          celstack=celstack)
             return new_celstack
         return celstack
 
     def animate_exclaim(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """'Exclamation mark' anime effect cel animation driver."""
-        EXCLAIM_EMOTIONS = ["surprise"]
+        EXCLAIM_EMOTIONS = ["realization"]
         EXCLAIM_DURATION = 0.5
 
         time_now = time.time_ns()
@@ -1428,7 +1428,7 @@ class Animator:
             new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
                                                          duration=EXCLAIM_DURATION,
                                                          strength=1.0,
-                                                         cels=["fx_exclaim1", "fx_exclaim2"],
+                                                         cels=["fx_exclaim1", "fx_exclaim2", "fx_exclaim3"],
                                                          celstack=celstack)
             return new_celstack
         return celstack

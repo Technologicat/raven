@@ -90,6 +90,8 @@ gui_cel_blending_layout = ["blush1",
                            "blush2",
                            "blush3",
                            None,  # GUI spacer
+                           "shadow1",
+                           None,
                            "sweat1",
                            "sweat2",
                            "sweat3",

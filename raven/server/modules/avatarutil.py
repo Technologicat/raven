@@ -224,6 +224,7 @@ supported_cels = [
     # These can be set up in the pose editor as part of an emotion.
     # Applied before posing.
     "blush1", "blush2", "blush3",
+    "shadow1",
     "sweat1", "sweat2", "sweat3",
     "tears1", "tears2", "tears3",
     "waver1", "waver2",  # These two are special, for the "intense emotion" eye-wavering effect.
