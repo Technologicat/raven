@@ -1149,6 +1149,10 @@ class Animator:
             self.waver_epoch = time_now
         cycle_pos = cycle_pos - float(int(cycle_pos))
 
+        # NOTE: For the best look, this animation needs both "waver1" and "waver2" to be present in `celstack`.
+        # Hence, both need to be present in the emotion templates, because we populate our cel stack from them.
+        #
+        # If one cel is missing, the remaining one blinks on and off. If both cels are missing, nothing happens.
         if cycle_pos < 0.5:
             active_morph = "waver1"
             inactive_morph = "waver2"
