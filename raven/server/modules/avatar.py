@@ -1419,9 +1419,9 @@ class Animator:
         target_cel_strengths = [v for k, v in target_celstack]
         current_cel_strengths = [v for k, v in self.current_celstack]  # TODO: fix unnecessary data conversion back and forth
         current_cel_strengths = self.interpolate(current_cel_strengths, target_cel_strengths)
-
         self.current_celstack = [(k, v) for (k, _), v in zip(self.current_celstack, current_cel_strengths)]
 
+        # Apply eye-waver effect (anime-style "intense emotion")
         waver1_idx = avatarutil.get_cel_index_in_stack("waver1", target_celstack)  # "waver1" in the emotion controls the eye-waver effect strength
         if waver1_idx != -1:  # found?
             _, strength = target_celstack[waver1_idx]
