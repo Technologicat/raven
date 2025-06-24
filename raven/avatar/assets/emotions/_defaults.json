@@ -56,7 +56,8 @@
                      "tears1": 0.0,
                      "tears2": 0.0,
                      "tears3": 0.0,
-                     "waver1": 0.0
+                     "waver1": 0.0,
+                     "waver2": 0.0
                    }
                   },
     "amusement": {"pose": {
@@ -116,7 +117,8 @@
                     "tears1": 0.0,
                     "tears2": 0.0,
                     "tears3": 0.0,
-                    "waver1": 0.0
+                    "waver1": 0.0,
+                    "waver2": 0.0
                   }
                  },
     "anger": {"pose": {
@@ -176,7 +178,8 @@
                 "tears1": 0.0,
                 "tears2": 0.0,
                 "tears3": 0.0,
-                "waver1": 0.0
+                "waver1": 0.0,
+                "waver2": 0.0
               }
              },
     "annoyance": {"pose": {
@@ -236,7 +239,8 @@
                     "tears1": 0.0,
                     "tears2": 0.0,
                     "tears3": 0.0,
-                    "waver1": 0.0
+                    "waver1": 0.0,
+                    "waver2": 0.0
                   }
                  },
     "approval": {"pose": {
@@ -296,7 +300,8 @@
                    "tears1": 0.0,
                    "tears2": 0.0,
                    "tears3": 0.0,
-                   "waver1": 0.0
+                   "waver1": 0.0,
+                   "waver2": 0.0
                  }
                 },
     "caring": {"pose": {
@@ -356,7 +361,8 @@
                  "tears1": 0.0,
                  "tears2": 0.0,
                  "tears3": 0.0,
-                 "waver1": 0.0
+                 "waver1": 0.0,
+                 "waver2": 0.0
                }
               },
     "confusion": {"pose": {
@@ -416,7 +422,8 @@
                     "tears1": 0.0,
                     "tears2": 0.0,
                     "tears3": 0.0,
-                    "waver1": 0.0
+                    "waver1": 0.0,
+                    "waver2": 0.0
                   }
                  },
     "curiosity": {"pose": {
@@ -476,7 +483,8 @@
                     "tears1": 0.0,
                     "tears2": 0.0,
                     "tears3": 0.0,
-                    "waver1": 0.0
+                    "waver1": 0.0,
+                    "waver2": 0.0
                   }
                  },
     "desire": {"pose": {
@@ -536,7 +544,8 @@
                  "tears1": 0.0,
                  "tears2": 0.0,
                  "tears3": 0.0,
-                 "waver1": 0.0
+                 "waver1": 0.0,
+                 "waver2": 0.0
                }
               },
     "disappointment": {"pose": {
@@ -596,7 +605,8 @@
                          "tears1": 0.0,
                          "tears2": 0.0,
                          "tears3": 0.0,
-                         "waver1": 0.0
+                         "waver1": 0.0,
+                         "waver2": 0.0
                        }
                       },
     "disapproval": {"pose": {
@@ -656,7 +666,8 @@
                       "tears1": 0.0,
                       "tears2": 0.0,
                       "tears3": 0.0,
-                      "waver1": 0.0
+                      "waver1": 0.0,
+                      "waver2": 0.0
                     }
                    },
     "disgust": {"pose": {
@@ -716,12 +727,13 @@
                   "tears1": 0.0,
                   "tears2": 0.0,
                   "tears3": 0.0,
-                  "waver1": 0.0
+                  "waver1": 0.0,
+                  "waver2": 0.0
                 }
                },
     "embarrassment": {"pose": {
-                        "eyebrow_troubled_left_index": 1.0,
-                        "eyebrow_troubled_right_index": 1.0,
+                        "eyebrow_troubled_left_index": 0.0,
+                        "eyebrow_troubled_right_index": 0.0,
                         "eyebrow_angry_left_index": 0.0,
                         "eyebrow_angry_right_index": 0.0,
                         "eyebrow_lowered_left_index": 0.0,
@@ -744,10 +756,10 @@
                         "eye_unimpressed_right_index": 0.0,
                         "eye_raised_lower_eyelid_left_index": 0.0,
                         "eye_raised_lower_eyelid_right_index": 0.0,
-                        "iris_small_left_index": 0.5475,
-                        "iris_small_right_index": 0.521,
+                        "iris_small_left_index": 0.205,
+                        "iris_small_right_index": 0.193,
                         "mouth_aaa_index": 0.0,
-                        "mouth_iii_index": 0.0,
+                        "mouth_iii_index": 1.0,
                         "mouth_uuu_index": 0.0,
                         "mouth_eee_index": 0.0,
                         "mouth_ooo_index": 0.0,
@@ -757,26 +769,27 @@
                         "mouth_raised_corner_left_index": 0.0,
                         "mouth_raised_corner_right_index": 0.0,
                         "mouth_smirk": 0.0,
-                        "iris_rotation_x_index": -0.726,
-                        "iris_rotation_y_index": -1.0,
+                        "iris_rotation_x_index": -0.06799999999999995,
+                        "iris_rotation_y_index": 0.0,
                         "head_x_index": -1.0,
-                        "head_y_index": 0.07400000000000007,
+                        "head_y_index": 0.0,
                         "neck_z_index": 0.0,
-                        "body_y_index": -0.01100000000000001,
+                        "body_y_index": 0.0,
                         "body_z_index": 0.0,
                         "breathing_index": 0.0
                       },
                       "cels": {
-                        "blush1": 0.631,
-                        "blush2": 0.771,
-                        "blush3": 0.0,
-                        "sweat1": 0.0,
-                        "sweat2": 0.0,
-                        "sweat3": 0.0,
+                        "blush1": 0.691,
+                        "blush2": 0.996,
+                        "blush3": 0.687,
+                        "sweat1": 1.0,
+                        "sweat2": 1.0,
+                        "sweat3": 1.0,
                         "tears1": 0.0,
                         "tears2": 0.0,
-                        "tears3": 0.0,
-                        "waver1": 0.0
+                        "tears3": 1.0,
+                        "waver1": 0.735,
+                        "waver2": 0.0
                       }
                      },
     "excitement": {"pose": {
@@ -836,7 +849,8 @@
                      "tears1": 0.0,
                      "tears2": 0.0,
                      "tears3": 0.0,
-                     "waver1": 0.0
+                     "waver1": 0.0,
+                     "waver2": 0.0
                    }
                   },
     "fear": {"pose": {
@@ -896,7 +910,8 @@
                "tears1": 0.0,
                "tears2": 0.0,
                "tears3": 0.0,
-               "waver1": 0.0
+               "waver1": 0.0,
+               "waver2": 0.0
              }
             },
     "gratitude": {"pose": {
@@ -956,7 +971,8 @@
                     "tears1": 0.0,
                     "tears2": 0.0,
                     "tears3": 0.0,
-                    "waver1": 0.0
+                    "waver1": 0.0,
+                    "waver2": 0.0
                   }
                  },
     "grief": {"pose": {
@@ -1016,7 +1032,8 @@
                 "tears1": 0.0,
                 "tears2": 0.0,
                 "tears3": 0.0,
-                "waver1": 0.0
+                "waver1": 0.0,
+                "waver2": 0.0
               }
              },
     "joy": {"pose": {
@@ -1076,7 +1093,8 @@
               "tears1": 0.0,
               "tears2": 0.0,
               "tears3": 0.0,
-              "waver1": 0.0
+              "waver1": 0.0,
+              "waver2": 0.0
             }
            },
     "love": {"pose": {
@@ -1136,7 +1154,8 @@
                "tears1": 0.0,
                "tears2": 0.0,
                "tears3": 0.0,
-               "waver1": 0.0
+               "waver1": 0.0,
+               "waver2": 0.0
              }
             },
     "nervousness": {"pose": {
@@ -1196,7 +1215,8 @@
                       "tears1": 0.0,
                       "tears2": 0.0,
                       "tears3": 0.0,
-                      "waver1": 0.0
+                      "waver1": 0.0,
+                      "waver2": 0.0
                     }
                    },
     "neutral": {"pose": {
@@ -1256,7 +1276,8 @@
                   "tears1": 0.0,
                   "tears2": 0.0,
                   "tears3": 0.0,
-                  "waver1": 0.0
+                  "waver1": 0.0,
+                  "waver2": 0.0
                 }
                },
     "optimism": {"pose": {
@@ -1316,7 +1337,8 @@
                    "tears1": 0.0,
                    "tears2": 0.0,
                    "tears3": 0.0,
-                   "waver1": 0.0
+                   "waver1": 0.0,
+                   "waver2": 0.0
                  }
                 },
     "pride": {"pose": {
@@ -1376,7 +1398,8 @@
                 "tears1": 0.0,
                 "tears2": 0.0,
                 "tears3": 0.0,
-                "waver1": 0.0
+                "waver1": 0.0,
+                "waver2": 0.0
               }
              },
     "realization": {"pose": {
@@ -1436,7 +1459,8 @@
                       "tears1": 0.0,
                       "tears2": 0.0,
                       "tears3": 0.0,
-                      "waver1": 0.0
+                      "waver1": 0.0,
+                      "waver2": 0.0
                     }
                    },
     "relief": {"pose": {
@@ -1496,7 +1520,8 @@
                  "tears1": 0.0,
                  "tears2": 0.0,
                  "tears3": 0.0,
-                 "waver1": 0.0
+                 "waver1": 0.0,
+                 "waver2": 0.0
                }
               },
     "remorse": {"pose": {
@@ -1556,7 +1581,8 @@
                   "tears1": 0.0,
                   "tears2": 0.0,
                   "tears3": 0.0,
-                  "waver1": 0.0
+                  "waver1": 0.0,
+                  "waver2": 0.0
                 }
                },
     "sadness": {"pose": {
@@ -1616,7 +1642,8 @@
                   "tears1": 0.0,
                   "tears2": 0.0,
                   "tears3": 0.0,
-                  "waver1": 0.0
+                  "waver1": 0.0,
+                  "waver2": 0.0
                 }
                },
     "surprise": {"pose": {
@@ -1676,7 +1703,8 @@
                    "tears1": 0.0,
                    "tears2": 0.0,
                    "tears3": 0.0,
-                   "waver1": 0.0
+                   "waver1": 0.0,
+                   "waver2": 0.0
                  }
                 },
     "zero": {"pose": {
@@ -1736,7 +1764,8 @@
                "tears1": 0.0,
                "tears2": 0.0,
                "tears3": 0.0,
-               "waver1": 0.0
+               "waver1": 0.0,
+               "waver2": 0.0
              }
             }
 }
