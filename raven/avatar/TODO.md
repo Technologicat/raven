@@ -11,7 +11,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 - Last touches for cel-blending support:
   - Emotion templates: update the templates to actually use the cel-blending feature where appropriate.
-  - Animator: Eye-wavering animation (anime-style "intense emotion" effect).
 
 ### Documentation
 
