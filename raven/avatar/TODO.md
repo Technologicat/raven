@@ -10,11 +10,12 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 ## High priority
 
 - Last touches for cel-blending support:
-  - Emotion templates: update the templates to actually use the cel-blending feature where appropriate.
-  - Make the anime effects configurable in the animator settings
-    - on/off, global and individually
+  - Make the anime effects configurable in the animator settings (at least in the `animator.json` config file for now; look into adding them to the `raven-avatar-settings-editor` GUI later)
+    - note we don't need an on/off switch, because the assets are per-character, so if a character doesn't have them, that character won't use animefx.
     - effect duration for each effect
     - which emotion(s) to attach each effect to
+  - Emotion templates: update the templates to use the cel blends where appropriate.
+  - Polish the animefx assets a bit (especially the "beaming" lines)
 
 ### Documentation
 
@@ -61,6 +62,9 @@ Maybe later.
 Not scheduled for now.
 
 ### Backend
+
+- The animefx effects depend on the *current* emotion remaining the emotion that triggered the effect, so multiple emotions can't trigger quickly in succession (it will cut the previous animation).
+  Fixing this needs a proper animation-queuing system.
 
 - Is it possible to discard the server's output stream (flushing away the remaining frames waiting for send) when the animator is paused, to prevent a hurried-looking hiccup when the animator is later resumed?
 
