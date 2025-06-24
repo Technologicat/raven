@@ -1255,6 +1255,36 @@ class Animator:
                                                                  celstack=celstack)
         return new_celstack
 
+    # Full list of the 28 distilbert emotions, for reference:
+    #   admiration
+    #   amusement
+    #   anger
+    #   annoyance
+    #   approval
+    #   caring
+    #   confusion
+    #   curiosity
+    #   desire
+    #   disappointment
+    #   disapproval
+    #   disgust
+    #   embarrassment
+    #   excitement
+    #   fear
+    #   gratitude
+    #   grief
+    #   joy
+    #   love
+    #   nervousness
+    #   neutral
+    #   optimism
+    #   pride
+    #   realization
+    #   relief
+    #   remorse
+    #   sadness
+    #   surprise
+
     def animate_angervein(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """'Anger vein' anime effect cel animation driver."""
         ANGERVEIN_EMOTION = "anger"  # trigger emotion
