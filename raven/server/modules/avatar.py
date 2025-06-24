@@ -1288,7 +1288,7 @@ class Animator:
     def animate_angervein(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """'Anger vein' anime effect cel animation driver."""
         ANGERVEIN_EMOTIONS = ["anger"]  # trigger emotion(s); each triggers the effect anew.
-        ANGERVEIN_DURATION = 2.0  # seconds, for full animation
+        ANGERVEIN_DURATION = 1.0  # seconds, for full animation
         ANGERVEIN_FPS = 6  # frames per second, cel cycle speed
 
         time_now = time.time_ns()
@@ -1311,7 +1311,7 @@ class Animator:
     def animate_sweatdrop(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """'Huge sweatdrop' anime effect cel animation driver."""
         SWEATDROP_EMOTIONS = ["embarrassment"]
-        SWEATDROP_DURATION = 2.0
+        SWEATDROP_DURATION = 1.0
 
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
@@ -1330,7 +1330,7 @@ class Animator:
     def animate_blackcloud(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """'Black cloud' anime effect cel animation driver."""
         BLACKCLOUD_EMOTIONS = ["annoyance", "disapproval"]
-        BLACKCLOUD_DURATION = 2.0
+        BLACKCLOUD_DURATION = 1.0
         BLACKCLOUD_FPS = 6
 
         time_now = time.time_ns()
@@ -1372,7 +1372,7 @@ class Animator:
     def animate_notice(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """'Notice lines' (or 'surprise lines') anime effect cel animation driver."""
         NOTICE_EMOTIONS = ["surprise"]
-        NOTICE_DURATION = 0.5
+        NOTICE_DURATION = 0.25
 
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
@@ -1380,7 +1380,7 @@ class Animator:
             new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
                                                          duration=NOTICE_DURATION,
                                                          strength=1.0,
-                                                         cels=["fx_notice1", "fx_notice2"],
+                                                         cels=["fx_notice1", "fx_notice2"] * 2,  # cycle twice
                                                          celstack=celstack)
             return new_celstack
         return celstack
@@ -1388,7 +1388,7 @@ class Animator:
     def animate_beaming(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:  # TODO: is "joy" the best emotion to attach this effect to?
         """'Beaming lines' anime effect cel animation driver."""
         BEAMING_EMOTIONS = ["admiration", "amusement", "excitement", "joy"]  # approval, gratitude, pride?
-        BEAMING_DURATION = 0.5
+        BEAMING_DURATION = 0.25
 
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
@@ -1404,7 +1404,7 @@ class Animator:
     def animate_question(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """'Question mark' anime effect cel animation driver."""
         QUESTION_EMOTIONS = ["confusion"]
-        QUESTION_DURATION = 0.5
+        QUESTION_DURATION = 0.25
 
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
@@ -1420,7 +1420,7 @@ class Animator:
     def animate_exclaim(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """'Exclamation mark' anime effect cel animation driver."""
         EXCLAIM_EMOTIONS = ["realization"]
-        EXCLAIM_DURATION = 0.5
+        EXCLAIM_DURATION = 0.25
 
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
