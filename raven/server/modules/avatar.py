@@ -1142,7 +1142,7 @@ class Animator:
         return new_pose
 
     def _animate_cel_cycle(self, cycle_duration: float, epoch: float, strength: float, cels: List[str], celstack: List[Tuple[str, float]]) -> Tuple[float, List[Tuple[str, float]]]:
-        """Generic cel animation driver for an effect that cycles through a sequence of cels (e.g. "intense emotion" eye-waver effect).
+        """Generic cel animation driver for an effect that loops through a sequence of cels (e.g. "intense emotion" eye-waver effect).
 
         `cycle_duration` (seconds) is the duration of one cycle through `cels`.
 
@@ -1157,7 +1157,7 @@ class Animator:
         Be sure to update your stored epoch; the epoch resets after each full cycle to avoid rounding issues during a long session.
         """
         new_celstack = copy.copy(celstack)
-        if cycle_duration == 0.0:  # convenience feature: zero cycle duration = effect disabled
+        if cycle_duration == 0.0 or not cels:  # convenience feature: zero cycle duration or no cels = effect disabled
             return new_celstack
 
         time_now = time.time_ns()
@@ -1189,8 +1189,8 @@ class Animator:
 
         return epoch, new_celstack
 
-    def _animate_cel_quick_flash(self, t0: float, duration: float, strength: float, cels: List[str], celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
-        """Generic cel animation driver for a "quick flash" type cel effect (e.g. an exclamation mark when the character realizes something).
+    def _animate_cel_sequence(self, t0: float, duration: float, strength: float, cels: List[str], celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """Generic cel animation driver for a cel sequence that plays once and ends (e.g. an exclamation mark when the character realizes something).
 
         `t0` is the effect start time (as given by `time.time_ns()`). This is parameterized to keep this function stateless.
 
@@ -1198,12 +1198,12 @@ class Animator:
 
         `strength` is the cel opacity, range [0, 1].
 
-        `cels` is the list of cel names to cycle through.
+        `cels` is the list of cel names to show in sequence.
 
         Returns the modified celstack.
         """
         new_celstack = copy.copy(celstack)
-        if duration == 0.0:  # convenience feature: zero duration = effect disabled
+        if duration == 0.0 or not cels:  # convenience feature: zero duration or no cels = effect disabled
             return new_celstack
 
         time_now = time.time_ns()
@@ -1229,7 +1229,7 @@ class Animator:
         `cels` is the list of cel names affected by the fadeout. Their strength will fade from its current value toward zero.
         """
         new_celstack = copy.copy(celstack)
-        if duration == 0.0:  # convenience feature: zero duration = effect disabled
+        if duration == 0.0 or not cels:  # convenience feature: zero duration or no cels = effect disabled
             return new_celstack
 
         time_now = time.time_ns()
@@ -1246,6 +1246,44 @@ class Animator:
                 _, strength = new_celstack[idx]
                 new_celstack[idx] = (celname, r * strength)
 
+        return new_celstack
+
+    def _animate_cel_cycle_with_fadeout(self,
+                                                cycle_duration: float, epoch: float, strength: float,
+                                                fadeout_t0: float, fadeout_duration: float,
+                                                cels: List[str],
+                                                celstack: List[Tuple[str, float]]) -> Tuple[float, List[Tuple[str, float]]]:
+        """Generic cel animation driver combining `_animate_cel_cycle` and `_animate_cel_fadeout`, which see.
+
+        Returns `new_epoch, new_celstack`.
+        """
+        # Compute base strengths for the cels
+        epoch, new_celstack = self._animate_cel_cycle(cycle_duration=cycle_duration,
+                                                              epoch=epoch,
+                                                              strength=strength,
+                                                              cels=cels,
+                                                              celstack=celstack)
+        # Make the cels fade out
+        new_celstack = self._animate_cel_fadeout(t0=fadeout_t0,
+                                                 duration=fadeout_duration,
+                                                 cels=cels,
+                                                 celstack=new_celstack)
+        return epoch, new_celstack
+
+    def _animate_cel_sequence_with_fadeout(self,
+                                           t0: float, duration: float, strength: float,
+                                           cels: List[str],
+                                           celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """Generic cel animation driver combining `_animate_cel_sequence` and `_animate_cel_fadeout`, which see."""
+        new_celstack = self._animate_cel_sequence(t0=t0,
+                                                  duration=duration,
+                                                  strength=strength,
+                                                  cels=cels,
+                                                  celstack=celstack)
+        new_celstack = self._animate_cel_fadeout(t0=t0,
+                                                 duration=duration,
+                                                 cels=cels,
+                                                 celstack=new_celstack)
         return new_celstack
 
     def animate_eye_waver(self, strength: float, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
@@ -1279,17 +1317,13 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in ANGERVEIN_EMOTIONS and seconds_since_last_emotion_change < ANGERVEIN_DURATION:
-            # Compute base strengths for the anger veins
-            self.angervein_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(2 / ANGERVEIN_FPS),
-                                                                         epoch=self.angervein_epoch,
-                                                                         strength=1.0,
-                                                                         cels=["fx_angervein1", "fx_angervein2"],
-                                                                         celstack=celstack)
-            # Make the anger veins fade out
-            new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
-                                                     duration=ANGERVEIN_DURATION,
-                                                     cels=["fx_angervein1", "fx_angervein2"],
-                                                     celstack=new_celstack)
+            self.angervein_epoch, new_celstack = self._animate_cel_cycle_with_fadeout(cycle_duration=(2 / ANGERVEIN_FPS),  # 2 = number of cels, i.e. cycle length in frames
+                                                                                      epoch=self.angervein_epoch,
+                                                                                      strength=1.0,
+                                                                                      fadeout_t0=self.last_emotion_change_timestamp,
+                                                                                      fadeout_duration=ANGERVEIN_DURATION,
+                                                                                      cels=["fx_angervein1", "fx_angervein2"],
+                                                                                      celstack=celstack)
             return new_celstack
         return celstack
 
@@ -1301,30 +1335,16 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in SWEATDROP_EMOTIONS and seconds_since_last_emotion_change < SWEATDROP_DURATION:
-            idx1 = avatarutil.get_cel_index_in_stack("fx_sweatdrop1", celstack)
-            if idx1 != -1:  # at least one cel found?
-                idx2 = avatarutil.get_cel_index_in_stack("fx_sweatdrop2", celstack)
-                idx3 = avatarutil.get_cel_index_in_stack("fx_sweatdrop3", celstack)
-                if idx2 != -1 and idx3 != -1:  # all cels found?
-                    # Animate the sweatdrop cel sequence
-                    new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
-                                                                 duration=SWEATDROP_DURATION,
-                                                                 strength=1.0,
-                                                                 cels=["fx_sweatdrop1", "fx_sweatdrop2", "fx_sweatdrop3"],
-                                                                 celstack=celstack)
-                    # Then make it fade out
-                    new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
-                                                             duration=SWEATDROP_DURATION,
-                                                             cels=["fx_sweatdrop1", "fx_sweatdrop2", "fx_sweatdrop3"],
-                                                             celstack=new_celstack)
-                else:  # use just one cel
-                    # Just make it fade out
-                    new_celstack = copy.copy(celstack)
-                    new_celstack[idx1] = ("fx_sweatdrop1", 1.0)  # base strength (before applying fadeout) = full strength
-                    new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
-                                                             duration=SWEATDROP_DURATION,
-                                                             cels=["fx_sweatdrop1"],
-                                                             celstack=new_celstack)
+            cels = []
+            for possible_cel in ("fx_sweatdrop1", "fx_sweatdrop2", "fx_sweatdrop3"):
+                idx = avatarutil.get_cel_index_in_stack(possible_cel, celstack)
+                if idx != -1:  # found?
+                    cels.append(possible_cel)
+            new_celstack = self._animate_cel_sequence_with_fadeout(t0=self.last_emotion_change_timestamp,
+                                                                   duration=SWEATDROP_DURATION,
+                                                                   strength=1.0,
+                                                                   cels=cels,
+                                                                   celstack=celstack)
             return new_celstack
         return celstack
 
@@ -1336,30 +1356,16 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in HEART_EMOTIONS and seconds_since_last_emotion_change < HEART_DURATION:
-            idx1 = avatarutil.get_cel_index_in_stack("fx_heart1", celstack)
-            if idx1 != -1:  # at least one cel found?
-                idx2 = avatarutil.get_cel_index_in_stack("fx_heart2", celstack)
-                idx3 = avatarutil.get_cel_index_in_stack("fx_heart3", celstack)
-                if idx2 != -1 and idx3 != -1:  # all cels found?
-                    # Animate the sweatdrop cel sequence
-                    new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
-                                                                 duration=HEART_DURATION,
-                                                                 strength=1.0,
-                                                                 cels=["fx_heart1", "fx_heart2", "fx_heart3"],
-                                                                 celstack=celstack)
-                    # Then make it fade out
-                    new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
-                                                             duration=HEART_DURATION,
-                                                             cels=["fx_heart1", "fx_heart2", "fx_heart3"],
-                                                             celstack=new_celstack)
-                else:  # use just one cel
-                    # Just make it fade out
-                    new_celstack = copy.copy(celstack)
-                    new_celstack[idx1] = ("fx_heart1", 1.0)  # base strength (before applying fadeout) = full strength
-                    new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
-                                                             duration=HEART_DURATION,
-                                                             cels=["fx_heart1"],
-                                                             celstack=new_celstack)
+            cels = []
+            for possible_cel in ("fx_heart1", "fx_heart2", "fx_heart3"):
+                idx = avatarutil.get_cel_index_in_stack(possible_cel, celstack)
+                if idx != -1:  # found?
+                    cels.append(possible_cel)
+            new_celstack = self._animate_cel_sequence_with_fadeout(t0=self.last_emotion_change_timestamp,
+                                                                   duration=HEART_DURATION,
+                                                                   strength=1.0,
+                                                                   cels=cels,
+                                                                   celstack=celstack)
             return new_celstack
         return celstack
 
@@ -1376,17 +1382,13 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in BLACKCLOUD_EMOTIONS and seconds_since_last_emotion_change < BLACKCLOUD_DURATION:
-            # Compute base strengths for the black cloud cels
-            self.blackcloud_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(2 / BLACKCLOUD_FPS),
-                                                                          epoch=self.blackcloud_epoch,
-                                                                          strength=1.0,
-                                                                          cels=["fx_blackcloud1", "fx_blackcloud2"],
-                                                                          celstack=celstack)
-            # Make the black cloud cels fade out
-            new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
-                                                     duration=BLACKCLOUD_DURATION,
-                                                     cels=["fx_blackcloud1", "fx_blackcloud2"],
-                                                     celstack=new_celstack)
+            self.blackcloud_epoch, new_celstack = self._animate_cel_cycle_with_fadeout(cycle_duration=(2 / BLACKCLOUD_FPS),  # 2 = number of cels, i.e. cycle length in frames
+                                                                                       epoch=self.blackcloud_epoch,
+                                                                                       strength=1.0,
+                                                                                       fadeout_t0=self.last_emotion_change_timestamp,
+                                                                                       fadeout_duration=BLACKCLOUD_DURATION,
+                                                                                       cels=["fx_blackcloud1", "fx_blackcloud2"],
+                                                                                       celstack=celstack)
             return new_celstack
         return celstack
 
@@ -1403,17 +1405,13 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in FLOWERS_EMOTIONS and seconds_since_last_emotion_change < FLOWERS_DURATION:
-            # Compute base strengths for the flowers cels
-            self.flowers_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(2 / FLOWERS_FPS),
-                                                                       epoch=self.flowers_epoch,
-                                                                       strength=1.0,
-                                                                       cels=["fx_flowers1", "fx_flowers2"],
-                                                                       celstack=celstack)
-            # Make the black cloud cels fade out
-            new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
-                                                     duration=FLOWERS_DURATION,
-                                                     cels=["fx_flowers1", "fx_flowers2"],
-                                                     celstack=new_celstack)
+            self.flowers_epoch, new_celstack = self._animate_cel_cycle_with_fadeout(cycle_duration=(2 / FLOWERS_FPS),
+                                                                                    epoch=self.flowers_epoch,
+                                                                                    strength=1.0,
+                                                                                    fadeout_t0=self.last_emotion_change_timestamp,
+                                                                                    fadeout_duration=FLOWERS_DURATION,
+                                                                                    cels=["fx_flowers1", "fx_flowers2"],
+                                                                                    celstack=celstack)
             return new_celstack
         return celstack
 
@@ -1425,14 +1423,11 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in SHOCK_EMOTIONS and seconds_since_last_emotion_change < SHOCK_DURATION:
-            idx = avatarutil.get_cel_index_in_stack("fx_shock1", celstack)
-            if idx != -1:  # found?
-                new_celstack = copy.copy(celstack)
-                new_celstack[idx] = ("fx_shock1", 1.0)  # base strength (before applying fadeout) = full strength
-                new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
-                                                         duration=SHOCK_DURATION,
-                                                         cels=["fx_shock1"],
-                                                         celstack=new_celstack)
+            new_celstack = self._animate_cel_sequence_with_fadeout(t0=self.last_emotion_change_timestamp,
+                                                                   duration=SHOCK_DURATION,
+                                                                   strength=1.0,
+                                                                   cels=["fx_shock1"],
+                                                                   celstack=celstack)
             return new_celstack
         return celstack
 
@@ -1444,7 +1439,7 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in NOTICE_EMOTIONS and seconds_since_last_emotion_change < NOTICE_DURATION:
-            new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
+            new_celstack = self._animate_cel_sequence(t0=self.last_emotion_change_timestamp,
                                                          duration=NOTICE_DURATION,
                                                          strength=1.0,
                                                          cels=["fx_notice1", "fx_notice2"] * 2,  # cycle twice
@@ -1460,7 +1455,7 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in BEAMING_EMOTIONS and seconds_since_last_emotion_change < BEAMING_DURATION:
-            new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
+            new_celstack = self._animate_cel_sequence(t0=self.last_emotion_change_timestamp,
                                                          duration=BEAMING_DURATION,
                                                          strength=1.0,
                                                          cels=["fx_beaming1", "fx_beaming2"],
@@ -1476,7 +1471,7 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in QUESTION_EMOTIONS and seconds_since_last_emotion_change < QUESTION_DURATION:
-            new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
+            new_celstack = self._animate_cel_sequence(t0=self.last_emotion_change_timestamp,
                                                          duration=QUESTION_DURATION,
                                                          strength=1.0,
                                                          cels=["fx_question1", "fx_question2", "fx_question3"],
@@ -1492,7 +1487,7 @@ class Animator:
         time_now = time.time_ns()
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in EXCLAIM_EMOTIONS and seconds_since_last_emotion_change < EXCLAIM_DURATION:
-            new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
+            new_celstack = self._animate_cel_sequence(t0=self.last_emotion_change_timestamp,
                                                          duration=EXCLAIM_DURATION,
                                                          strength=1.0,
                                                          cels=["fx_exclaim1", "fx_exclaim2", "fx_exclaim3"],
