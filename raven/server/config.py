@@ -232,7 +232,7 @@ animator_defaults = {
     "fx_sweatdrop_duration": 0.3,
 
     # black cloud, frustration etc.
-    "fx_blackcloud_emotions": ["annoyance, disapproval"],
+    "fx_blackcloud_emotions": ["annoyance", "disapproval"],
     "fx_blackcloud_duration": 1.0,
     "fx_blackcloud_fps": 6.0,
 
