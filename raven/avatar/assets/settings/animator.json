@@ -21,7 +21,7 @@
  "fx_angervein_emotions": ["anger"],
  "fx_angervein_duration": 1.0,
  "fx_angervein_fps": 6.0,
- "fx_sweatdrop_emotions": ["embarrassment"],
+ "fx_sweatdrop_emotions": ["embarrassment", "nervousness"],
  "fx_sweatdrop_duration": 0.3,
  "fx_heart_emotions": ["desire"],
  "fx_heart_duration": 0.3,

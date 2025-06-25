@@ -228,7 +228,7 @@ animator_defaults = {
     "fx_angervein_fps": 6.0,  # cel animation framerate
 
     # anime sweatdrop
-    "fx_sweatdrop_emotions": ["embarrassment"],
+    "fx_sweatdrop_emotions": ["embarrassment", "nervousness"],
     "fx_sweatdrop_duration": 0.3,
 
     # heart(s)
