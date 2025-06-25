@@ -141,6 +141,7 @@ Animator and postprocessor settings lookup order is:
 - Built-in defaults, hardcoded as `animator_defaults` in [`raven/server/config.py`](../server/config.py).
   - **IMPORTANT**: Never change these!
   - The built-in defaults are used for validation of available settings, so they are guaranteed to be complete.
+  - This file also documents (in comments) what each setting does.
 
 Any setting that is missing from a particular level in the lookup order falls through to be looked up at the next level.
 
