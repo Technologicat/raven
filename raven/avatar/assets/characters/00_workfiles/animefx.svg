@@ -9,7 +9,7 @@
    id="svg5"
    inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
    sodipodi:docname="animefx.svg"
-   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/raven/avatar/assets/characters/other/aria1_fx_beaming2.png"
+   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/raven/avatar/assets/characters/other/aria1_fx_question3.png"
    inkscape:export-xdpi="96.000008"
    inkscape:export-ydpi="96.000008"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -29,14 +29,14 @@
      showgrid="false"
      inkscape:snap-global="false"
      inkscape:zoom="1.34"
-     inkscape:cx="203.73134"
+     inkscape:cx="194.02985"
      inkscape:cy="55.223881"
      inkscape:window-width="3840"
      inkscape:window-height="2088"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:current-layer="layer13"
+     inkscape:current-layer="layer23"
      fit-margin-top="0"
      fit-margin-left="0"
      fit-margin-right="0"
@@ -404,7 +404,7 @@
      inkscape:groupmode="layer"
      id="layer12"
      inkscape:label="beaming1"
-     style="display:inline">
+     style="display:none">
     <path
        style="fill:#898989;fill-opacity:1;stroke:#000000;stroke-width:0.4;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;stop-color:#000000"
        d="m -25.382829,25.195014 c 2.645833,-0.529167 5.291667,-0.529167 5.291667,-0.529167 v -2.645833 h 1.322916 v 2.645833 h 2.645834 v -2.645833 h 1.322916 v 2.645833 c 0,0 2.645833,0 5.2916665,0.529167 v 1.322916 c -2.6458335,-0.529166 -5.2916665,-0.529167 -5.2916665,-0.529167 v 2.645834 h -1.322916 v -2.645834 h -2.645834 v 2.645834 h -1.322916 v -2.645834 c 0,0 -2.645834,1e-6 -5.291667,0.529167 z"
@@ -492,8 +492,38 @@
   </g>
   <g
      inkscape:groupmode="layer"
-     id="layer15"
+     id="layer22"
      inkscape:label="question2"
+     style="display:none">
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use38744"
+       id="use1009"
+       width="100%"
+       height="100%"
+       transform="translate(0,-1.5875)"
+       style="display:inline" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer23"
+     inkscape:label="question3"
+     style="display:inline">
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use38744"
+       id="use1012"
+       width="100%"
+       height="100%"
+       transform="translate(0,-3.1750001)"
+       style="display:inline" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer15"
+     inkscape:label="question2b"
      style="display:none">
     <use
        x="0"
@@ -507,7 +537,7 @@
   <g
      inkscape:groupmode="layer"
      id="layer16"
-     inkscape:label="question3"
+     inkscape:label="question3b"
      style="display:none">
     <use
        x="0"
@@ -545,8 +575,38 @@
   </g>
   <g
      inkscape:groupmode="layer"
-     id="layer18"
+     id="layer20"
      inkscape:label="exclaim2"
+     style="display:none">
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use41170"
+       id="use1001"
+       style="display:inline"
+       width="100%"
+       height="100%"
+       transform="translate(0,-1.5875)" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer21"
+     inkscape:label="exclaim3"
+     style="display:none">
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use41170"
+       id="use1004"
+       style="display:inline"
+       width="100%"
+       height="100%"
+       transform="translate(0,-3.1750001)" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer18"
+     inkscape:label="exclaim2b"
      style="display:none">
     <use
        x="0"
@@ -560,7 +620,7 @@
   <g
      inkscape:groupmode="layer"
      id="layer19"
-     inkscape:label="exclaim3"
+     inkscape:label="exclaim3b"
      style="display:none">
     <use
        x="0"
