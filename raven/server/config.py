@@ -179,7 +179,7 @@ animator_defaults = {
     "breathing_cycle_duration": 4.0,  # seconds, for a full breathing cycle.
 
     # "Intense emotion" eye-waver animation settings.
-    "eye_waver_fps": 6.0,  # cel animation framerate. Special value 0.0 disables the animation.
+    "eye_waver_fps": 12.0,  # cel animation framerate. Special value 0.0 disables the animation.
 
     # animefx: anime-style effects that go *around* the character.
     #
