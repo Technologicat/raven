@@ -9,7 +9,7 @@
    id="svg5"
    inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
    sodipodi:docname="animefx.svg"
-   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/raven/avatar/assets/characters/other/aria1_fx_question3.png"
+   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/raven/avatar/assets/characters/other/aria1_fx_notice2.png"
    inkscape:export-xdpi="96.000008"
    inkscape:export-ydpi="96.000008"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -28,9 +28,9 @@
      inkscape:document-units="mm"
      showgrid="false"
      inkscape:snap-global="false"
-     inkscape:zoom="1.34"
-     inkscape:cx="194.02985"
-     inkscape:cy="55.223881"
+     inkscape:zoom="1.8613282"
+     inkscape:cx="-21.49003"
+     inkscape:cy="258.95486"
      inkscape:window-width="3840"
      inkscape:window-height="2088"
      inkscape:window-x="0"
@@ -333,9 +333,9 @@
      style="display:none">
     <g
        id="g20510"
-       transform="rotate(39.75001,56.127211,81.889786)"
-       inkscape:transform-center-x="-2.9078492"
-       inkscape:transform-center-y="-3.099445">
+       transform="rotate(54.75001,62.019352,73.760577)"
+       inkscape:transform-center-x="-3.1872107"
+       inkscape:transform-center-y="-2.7507333">
       <rect
          style="fill:#edc179;fill-opacity:1;stroke:#9a6715;stroke-width:0.4;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;stop-color:#000000"
          id="rect20438"
@@ -367,12 +367,12 @@
      inkscape:groupmode="layer"
      id="layer10"
      inkscape:label="notice2"
-     style="display:none">
+     style="display:inline">
     <g
        id="g20781"
-       transform="rotate(39.750009,56.127212,81.889788)"
-       inkscape:transform-center-x="-2.9078492"
-       inkscape:transform-center-y="-3.099445">
+       transform="rotate(54.750009,62.019352,73.760578)"
+       inkscape:transform-center-x="-3.1358913"
+       inkscape:transform-center-y="-2.8124372">
       <rect
          style="fill:#edc179;fill-opacity:1;stroke:#9a6715;stroke-width:0.4;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;stop-color:#000000"
          id="rect20775"
@@ -509,7 +509,7 @@
      inkscape:groupmode="layer"
      id="layer23"
      inkscape:label="question3"
-     style="display:inline">
+     style="display:none">
     <use
        x="0"
        y="0"
