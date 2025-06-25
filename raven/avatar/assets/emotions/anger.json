@@ -48,8 +48,8 @@
             "breathing_index": 0.0
         },
         "cels": {
-            "blush1": 0.0,
-            "blush2": 0.0,
+            "blush1": 0.562,
+            "blush2": 0.257,
             "blush3": 0.0,
             "shadow1": 0.0,
             "sweat1": 0.0,
