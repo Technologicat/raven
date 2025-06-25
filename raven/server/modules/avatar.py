@@ -1259,7 +1259,7 @@ class Animator:
         if EYE_WAVER_FPS == 0.0:  # effect disabled?
             new_celstack = copy.copy(celstack)
             return new_celstack
-        self.waver_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(1 / EYE_WAVER_FPS),
+        self.waver_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(2 / EYE_WAVER_FPS),  # 2 = number of cels, i.e. cycle length in frames
                                                                  epoch=self.waver_epoch,
                                                                  strength=strength,
                                                                  cels=["waver1", "waver2"],

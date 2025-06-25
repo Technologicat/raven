@@ -16,7 +16,7 @@
  "sway_macro_strength": 0.6,
  "sway_micro_strength": 0.01,
  "breathing_cycle_duration": 4.0,
- "eye_waver_fps": 6.0,
+ "eye_waver_fps": 12.0,
  "animefx_enabled": true,
  "fx_angervein_emotions": ["anger"],
  "fx_angervein_duration": 1.0,
