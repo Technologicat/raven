@@ -214,31 +214,41 @@ def torch_image_to_numpy(image: torch.tensor) -> np.array:
 # List of cels understood by the character loaders (in `pose_editor` and `animator`).
 # This also defines the canonical render order for the cels (bottommost first).
 #
+# **All of these are optional.** Any missing cel is automatically ignored.
+# However, cels come in groups (below, the cels listed on the same line are a group).
+# If you provide one cel from a group, it is recommended to provide all cels from that group,
+# or animations may not work as intended.
+#
 # This is a fixed list for two reasons:
 #  - Having a fixed set of supported cels makes emotion JSON files compatible between different characters.
-#  - If a particular character does not have some of the cels, simply skipping those blend keys
+#  - If a particular character does not provide some of the cels, simply skipping those blend keys
 #    degrades the look gracefully (instead of completely breaking how the character looks,
 #    e.g. if their hair or clothing was a custom cel).
+#
+# This may change later, e.g. if we implement a clothing/hairstyle system.
+#
 supported_cels = [
-    # Effects that go on the character itself.
+    # Semi-realistic effects that go on the character itself.
     # These can be set up in the pose editor as part of an emotion.
     # Applied before posing.
-    "blush1", "blush2", "blush3",
-    "shadow1",
-    "sweat1", "sweat2", "sweat3",
-    "tears1", "tears2", "tears3",
-    "waver1", "waver2",  # These two are special, for the "intense emotion" eye-wavering effect.
-    # Anime-style effects that go *around* the character.
-    # These are automatically applied by the live animator when the relevant emotion state is entered.
-    # Applied after posing.
-    "fx_angervein1", "fx_angervein2",  # the standalone vein, often red, anger (cycle, then fade out)
-    "fx_sweatdrop1",  # huge sweatdrop (fade out)
-    "fx_blackcloud1", "fx_blackcloud2",  # frustration (cycle, then fade out)
-    "fx_shock1",  # shock lines, fear (fade out)
-    "fx_notice1", "fx_notice2",  # notice lines, realization (quick flash cel1, cel2, then off)
-    "fx_beaming1", "fx_beaming2",  # happy lines, joy (quick flash cel1, cel2, then off)
-    "fx_question1", "fx_question2", "fx_question3",  # question mark(s), confusion (quick flash cel1, cel2, cel3, then off)
-    "fx_exclaim1", "fx_exclaim2", "fx_exclaim3",  # exclamation mark(s), realization (quick flash cel1, cel2, cel3, then off)
+    "blush1", "blush2", "blush3",  # cheeks, ears, full face.
+    "shadow1",  # darkened upper half of face representing shock; can be used e.g. for an anime-style fear or disgust expression.
+    "sweat1", "sweat2", "sweat3",  # sweatdrops
+    "tears1", "tears2", "tears3",  # outer eye corners, inner eye corners, whole lower edge of eye.
+    "waver1", "waver2",  # "intense emotion" eye-wavering effect. In `raven.avatar.pose_editor.app`, the "waver1" slider controls the strength.
+
+    # animefx: anime-style effects that go *around* the character.
+    #
+    # These are automatically applied by the live animator when one of the trigger emotion states is entered.
+    # Applied after posing, but before upscaling or postprocessing.
+    "fx_angervein1", "fx_angervein2",  # hovering stylized forehead vein. Cycle, while fading out.
+    "fx_sweatdrop1", "fx_sweatdrop2", "fx_sweatdrop3",  # hovering sweatdrop. If have just cel 1: fade out. If all cels: flash in sequence, while fading out.
+    "fx_blackcloud1", "fx_blackcloud2",  # black cloud representing frustration. Cycle, while fading out.
+    "fx_shock1",  # shock lines. Fade out.
+    "fx_notice1", "fx_notice2",  # notice lines (or surprise lines). Quickly flash cel1, cel2, cel1, cel2, then off.
+    "fx_beaming1", "fx_beaming2",  # happy lines. Quickly flash cel1, cel2, then off.
+    "fx_question1", "fx_question2", "fx_question3",  # Question mark(s), confusion. Quickly flash cel1, cel2, cel3, then off.
+    "fx_exclaim1", "fx_exclaim2", "fx_exclaim3",  # Exclamation mark(s), realization. Quickly flash cel1, cel2, cel3, then off.
 ]
 
 def scan_addon_cels(image_file_name: str) -> Dict[str, str]:

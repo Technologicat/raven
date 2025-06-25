@@ -120,37 +120,53 @@ animator_defaults = {
     "target_fps": 25,
 
     # The video stream is sent as a multipart-x-mixed-replace of frame images.
-    # Available output formats for a frame are "QOI" (Quite OK Image, lossless, fast) and RGBA formats supported by Pillow: "TGA" (RLE compressed), "PNG", "IM" (IFUNC/LabEye).
+    #
+    # The images are encoded on the CPU.
+    # Available image formats are "QOI" (Quite OK Image, lossless, fast) and RGBA formats supported by Pillow: "PNG", "TGA" (RLE compressed), "IM" (IFUNC/LabEye).
     # For Pillow, see:
     #     https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html
     #
-    # SillyTavern expects PNG. To optimize encoding speed with a custom Python client, we recommend QOI.
+    # To optimize encoding speed when displaying the avatar in a Python client (such as `raven-avatar-settings-editor`), we recommend QOI.
+    # For maximum compatibility, you can try PNG, but be aware that its encoder can be 30x slower than QOI, so especially when upscaling to 2.0, it may be too slow for realtime use.
     #
     "format": "PNG",
+
+    # Upscaler settings.
     "upscale": 1.0,  # 1.0 = send as-is (512x512); e.g. 2.0 = upscale 2x -> 1024x1024 using anime4k before sending
     "upscale_preset": "C",  # only used if upscale != 1.0; "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
     "upscale_quality": "low",  # only used if upscale != 1.0; quality "low": fast, acceptable image quality; "high": slow, good image quality
 
-    "metrics_enabled": False,  # Detailed performance logging; slows the renderer down, but shows how much time each step takes. Average FPS calculation is always on and doesn't slow anything.
+    # Performance profiling settings.
+    "metrics_enabled": False,  # Detailed performance logging for the renderer; slows the renderer down, but shows where the rendering time goes. Average FPS calculation is always on, and doesn't slow down anything.
 
+    # Canvas cropping settings.
+    #
     # If the avatar does not occupy the whole 512x512 canvas, it is possible to cut away the empty space from the edges,
     # which makes postprocessing faster (since fewer pixels).
+    #
+    # Applied after upscaling, but before postprocessing.
+    #
+    # Note this means that the client receiving the video stream will need to read the image size from the stream (from each frame separately!).
     "crop_left": 0.0,  # cut how much inward from left edge, in units where the image width is 2.0
     "crop_right": 0.0,  # cut how much inward from right edge, in units where the image width is 2.0
     "crop_top": 0.0,  # cut how much inward from top edge, in units where the image height is 2.0
     "crop_bottom": 0.0,  # cut how much inward from bottom edge, in units where the image height is 2.0
 
-    "pose_interpolator_step": 0.3,  # 0 < this <= 1; at each frame at a reference of 25 FPS; FPS-corrected automatically; see `interpolate` in `raven.server.modules.avatar`.
+    # Animation speed settings.
+    "pose_interpolator_step": 0.3,  # 0 < this <= 1; relative change toward target at each frame at a reference of 25 FPS; FPS-corrected automatically. For details, see `interpolate` in `raven.server.modules.avatar`.
 
+    # Eye-blinking settings.
     "blink_interval_min": 2.0,  # seconds, lower limit for random minimum time until next blink is allowed.
     "blink_interval_max": 5.0,  # seconds, upper limit for random minimum time until next blink is allowed.
     "blink_probability": 0.03,  # At each frame at a reference of 25 FPS; FPS-corrected automatically.
     "blink_confusion_duration": 10.0,  # seconds, upon entering "confusion" emotion, during which blinking quickly in succession is allowed.
 
-    "talking_fps": 12,  # How often to re-randomize mouth during the simple mouth randomizer talking animation. Not used when lipsyncing.
+    # Talking animation settings.
+    "talking_fps": 12,  # How often to re-randomize mouth during the generic mouth randomizer talking animation. Not used when lipsyncing.
                         # Early 2000s anime used ~12 FPS as the fastest actual framerate of new cels (not counting camera panning effects and such).
-    "talking_morph": "mouth_aaa_index",  # which mouth-open morph to use for talking; for available values, see `util.posedict_keys`
+    "talking_morph": "mouth_aaa_index",  # which mouth-open morph to use for the generic talking animation; for available values, see `posedict_keys` in `raven.server.modules.avatarutil`.
 
+    # Sway (idle pose variation) settings.
     "sway_morphs": ["head_x_index", "head_y_index", "neck_z_index", "body_y_index", "body_z_index"],  # which morphs to sway; see `posedict_keys`
     "sway_interval_min": 5.0,  # seconds, lower limit for random time interval until randomizing new sway pose.
     "sway_interval_max": 10.0,  # seconds, upper limit for random time interval until randomizing new sway pose.
@@ -159,7 +175,87 @@ animator_defaults = {
     # sway will only occur toward the center. See `compute_sway_target_pose` for details.
     "sway_micro_strength": 0.02,  # [0, 1], max abs random noise added each frame. No limiting other than a clamp of final pose to [-1, 1].
 
+    # Breathing animation settings.
     "breathing_cycle_duration": 4.0,  # seconds, for a full breathing cycle.
 
+    # "Intense emotion" eye-waver animation settings.
+    "eye_waver_fps": 6.0,  # cel animation framerate. Special value 0.0 disables the animation.
+
+    # animefx: anime-style effects that go *around* the character.
+    #
+    # For the names of the cels your character needs to supply for these to work, see `supported_cels` in `raven.server.modules.avatarutil`.
+    # All of these effects are optional.
+    #
+    # - If you don't want them for a specific character, simply don't supply those cels for that character.
+    # - To disable an effect for all characters, you can set its duration to the special value 0.0.
+    # - To disable all animefx for all characters, use the "animefx_enabled" setting below.
+    #
+    # Full list of the 28 distilbert emotions, for reference:
+    #   admiration
+    #   amusement
+    #   anger
+    #   annoyance
+    #   approval
+    #   caring
+    #   confusion
+    #   curiosity
+    #   desire
+    #   disappointment
+    #   disapproval
+    #   disgust
+    #   embarrassment
+    #   excitement
+    #   fear
+    #   gratitude
+    #   grief
+    #   joy
+    #   love
+    #   nervousness
+    #   neutral
+    #   optimism
+    #   pride
+    #   realization
+    #   relief
+    #   remorse
+    #   sadness
+    #   surprise
+    #
+    "animefx_enabled": True,  # on/off switch for all animefx (in one animator instance; note each avatar session has its own instance)
+
+    # anger vein, cycling between two cels and fading out
+    "fx_angervein_emotions": ["anger"],  # trigger emotion(s); entering any emotion listed here triggers the effect (anew each time).
+    "fx_angervein_duration": 1.0,  # seconds, for fadeout (special value 0.0 = fadeout disabled)
+    "fx_angervein_fps": 6.0,  # cel animation framerate
+
+    # anime sweatdrop
+    "fx_sweatdrop_emotions": ["embarrassment"],
+    "fx_sweatdrop_duration": 0.3,
+
+    # black cloud, frustration etc.
+    "fx_blackcloud_emotions": ["annoyance, disapproval"],
+    "fx_blackcloud_duration": 1.0,
+    "fx_blackcloud_fps": 6.0,
+
+    # shock lines
+    "fx_shock_emotions": ["disgust", "fear"],
+    "fx_shock_duration": 2.0,
+
+    # notice lines (or surprise lines)
+    "fx_notice_emotions": ["surprise"],
+    "fx_notice_duration": 0.25,
+
+    # "beaming" lines (joy etc.)
+    "fx_beaming_emotions": ["admiration", "amusement", "excitement", "joy"],  # TODO: approval, gratitude, pride?
+    "fx_beaming_duration": 0.25,
+
+    # question mark(s)
+    "fx_question_emotions": ["confusion"],
+    "fx_question_duration": 0.25,
+
+    # exclamation mark(s)
+    "fx_exclaim_emotions": ["realization"],
+    "fx_exclaim_duration": 0.25,
+
+    # postprocessor
     "postprocessor_chain": postprocessor_defaults
 }
