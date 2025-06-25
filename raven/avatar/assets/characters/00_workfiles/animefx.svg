@@ -9,7 +9,7 @@
    id="svg5"
    inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
    sodipodi:docname="animefx.svg"
-   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/raven/avatar/assets/characters/other/aria1_fx_exclaim3.png"
+   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/raven/avatar/assets/characters/other/fx_sweatdrop3.png"
    inkscape:export-xdpi="96.000008"
    inkscape:export-ydpi="96.000008"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -29,14 +29,14 @@
      showgrid="false"
      inkscape:snap-global="false"
      inkscape:zoom="1.8613282"
-     inkscape:cx="105.8384"
+     inkscape:cx="98.854141"
      inkscape:cy="258.41762"
      inkscape:window-width="3840"
      inkscape:window-height="2088"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:current-layer="layer16"
+     inkscape:current-layer="layer4"
      fit-margin-top="0"
      fit-margin-left="0"
      fit-margin-right="0"
@@ -66,10 +66,10 @@
        inkscape:collect="always"
        xlink:href="#linearGradient12432"
        id="radialGradient12530"
-       cx="79.013313"
-       cy="25.930832"
-       fx="79.013313"
-       fy="25.930832"
+       cx="94.067986"
+       cy="22.496962"
+       fx="94.067986"
+       fy="22.496962"
        r="4.2196019"
        gradientTransform="matrix(1.461003,-0.2025581,0.27791384,2.0045257,-44.448082,-9.3867743)"
        gradientUnits="userSpaceOnUse" />
@@ -287,7 +287,7 @@
      inkscape:groupmode="layer"
      id="layer11"
      inkscape:label="sweatdrop3"
-     style="display:none">
+     style="display:inline">
     <use
        x="0"
        y="0"
@@ -664,7 +664,7 @@
      inkscape:groupmode="layer"
      id="layer21"
      inkscape:label="exclaim3"
-     style="display:inline">
+     style="display:none">
     <use
        x="0"
        y="0"
