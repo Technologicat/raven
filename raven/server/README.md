@@ -29,45 +29,50 @@
 
 <!-- markdown-toc end -->
 
+### About this documentation
+
+*This is the old documentation for the Talkinghead module, minimally updated to Raven-avatar (e.g. paths have been updated). For the latest on Raven-avatar, see the [Raven-avatar README](../avatar/README.md).*
+
+*Documentation for the rest of Raven-server is not yet available. Likely it will be in August 2025. Please check back later.*
+
+In the meantime:
+
+- See `raven.server.config` for enabling/disabling server modules, and for specifying HuggingFace model repos to download models from.
+- If you have a CUDA-capable GPU, enable GPU support in `raven.server.config`, by setting up the desired server modules to run on a CUDA device.
+  - Be sure to install the CUDA optional dependencies of Raven (see [main README](../../README.md)).
+- Look at the Python bindings of the web API in `raven.client.api` to get an idea of what the server can do.
+
+*SillyTavern* compatibility:
+
+- The `classify`, `embeddings`, and `websearch` modules work as drop-in replacements for those modules in the discontinued *SillyTavern-extras*.
+  - The `websearch` module provides also a new endpoint (`/api/websearch2`) that returns structured search results. Using this requires new client code.
+- The `tts` module provides an OpenAI compatible TTS endpoint you can use in *SillyTavern*.
+- The `avatar` and `imagefx` modules are **not** compatible with *SillyTavern*, and need new client code. They are currenly meant for use in the Raven constellation. See `raven.avatar.settings_editor.app` for an example.
+
+
 ### Introduction
 
-This software renders a **live, AI-based custom anime avatar for your AI character**.
+The *Raven-avatar* component renders a **live, AI-based custom anime avatar for your AI character**.
 
-In contrast to VTubing software, *raven-avatar* (part of the Raven constellation) is an **AI-based** character animation technology, which produces animation from just **one static 2D image** via the THA3 AI posing engine. This makes creating new characters accessible and cost-effective. All you need is Stable Diffusion and an image editor. Additionally, you can experiment with your character's appearance in an agile way, animating each revision of your design.
+This produces animation from **one static anime-style 2D image** via the THA3 AI posing engine, facilitating easy creation of characters e.g. with *Stable Diffusion* or another AI image generator.
+
+We also provide TTS (text to speech) via the Kokoro speech synthesizer. The AI avatar can be automatically lipsynced to the TTS.
 
 The animator is built on top of a deep learning model, so optimal performance requires a fast GPU. The model can vary the character's expression, and pose some joints by up to 15 degrees. This allows producing parametric animation on the fly, just like from a traditional 2D or 3D model - but from a small generative AI. Modern GPUs have enough compute to do this in realtime.
 
-You only need to provide **one** expression for your character. The model automatically generates the rest of the 28, and seamlessly animates between them. The expressions are based on *emotion templates*, which are essentially just morph settings. To make it convenient to edit the templates, we provide a GUI editor (see *THA3 Pose Editor* below), where you can see how the resulting expression looks on your character.
+We optionally support also cel blending to modify the texture that goes into the poser model (e.g. for sweatdrops or blush), and additional anime-style cel effects, such as floating question marks or anger veins. The additional cels are currently supplied separately for each character. The additional cel effects can also be turned off in the configuration file.
 
-As with any AI technology, there are limitations. The AI-generated animation frames may not look perfect, and in particular the model does not support characters wearing large hats or props. For details (and many example outputs), refer to the [tech report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html) by the model's original author.
+As with any AI technology, there are limitations:
 
-Still images do not do the system justice; the realtime animation is a large part of its appeal. Preferences vary here. If you have the hardware, try it, you might like it. Especially, if you like to make new characters, or to tweak your character design often, this is the animator for you. On the other hand, if you prefer still images, and focus on one particular design, you may get more aesthetically pleasing results by inpainting static expression sprites in Stable Diffusion.
+- The AI-generated posed video frames may not look perfect, and in particular the THA3 poser model does not support large hats or props. For details (and many example outputs), refer to the [tech report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html) by the poser model's original author.
 
-Currently, *raven-avatar* is focused on providing 1-on-1 interactions with your AI character, so support for multiple characters is not included, nor planned at the moment. However, we appreciate any feedback or especially code or documentation contributions towards the growth and development of this software.
+- TTS lipsync may have timing inaccuracies due to limitations of the TTS engine, and the sometimes unpredictable latency of the audio system.
+  - Our code does its best, but for cases when that is not enough, we provide a global delay setting for shifting the timing (both in the client API as well as in the `raven-avatar-settings-editor` GUI app).
 
 
-### Live mode with `raven-llmclient`
+### SillyTavern
 
-As of May 2025, the GUI for `raven-llmclient` is under construction. It will support the live mode of `raven-avatar` right from the beginning.
-
-### Live mode with SillyTavern
-
-**As of June 2025, SillyTavern no longer supports Talkinghead and will need a new custom extension. This section is out of date.**
-
-The live mode server is a web-based technology that replaces the discontinued *SillyTavern-extras*.
-
-To activate the live mode:
-
-- Ensure that your character has a `SillyTavern/public/characters/yourcharacternamehere/talkinghead.png`. This is the input image for the animator.
-  - You can upload one in the *SillyTavern* settings, in *Extensions ⊳ Character Expressions*.
-- To enable **talkinghead mode** in *Character Expressions*, check the checkbox *Extensions ⊳ Character Expressions ⊳ Image Type - talkinghead (extras)*.
-  - **IMPORTANT**: Automatic expression changes for the AI character are powered by **classification**, which detects the AI character's emotional state from the latest message written (or in streaming mode, currently being written) by the character.
-  - However, `talkinghead` **cannot be used with local classification**. If you have local classification enabled, the option to enable `talkinghead` is disabled **and hidden**.
-  - Therefore, to show the option to enable `talkinghead`, **uncheck** the checkbox *Character Expressions ⊳ Local server classification*.
-
-CUDA is very highly recommended. As of late 2023, a recent GPU is also recommended. For example, on a laptop with an RTX 3070 Ti mobile GPU, and the `separable_half` THA3 poser model (fastest and smallest; default when running on GPU), you can expect ≈40-50 FPS render performance. VRAM usage in this case is about 520 MB. CPU mode exists, but is very slow, about ≈2 FPS on an i7-12700H.
-
-See `raven.server.config` for enabling/disabling server modules and for specifying HuggingFace model repos to download models from.
+**As of 2025, SillyTavern no longer supports Talkinghead. This section is out of date.**
 
 #### Testing your installation
 
@@ -376,41 +381,6 @@ Run the editor with the `--help` option for a description of its command-line op
 Currently, you can choose the device to run on (GPU or CPU), and which THA3 model to use. By default, the pose editor uses GPU and the `separable_float` model.
 
 GPU mode gives the best response, but CPU mode (~2 FPS) is useful at least for batch-exporting static sprites when your VRAM is already full of AI.
-
-
-### Troubleshooting
-
-#### Low framerate
-
-The THA3 poser is a deep-learning model. Each animation frame requires an inference pass. This requires lots of compute.
-
-Thus, if you have a CUDA-capable GPU, enable GPU support in `raven.server.config`.
-
-CPU mode is very slow, and without a redesign of the AI model (or distillation, like in the newer [THA4 paper](https://arxiv.org/abs/2311.17409)), there is not much that can be done. It is already running as fast as PyTorch can go, and the performance impact of everything except the posing engine is almost negligible.
-
-#### Low VRAM - what to do?
-
-You can run just `avatar` on the GPU (VRAM usage about 520 MB) to get acceptable animation performance, while running all other extras modules on the CPU. The `classify` or `embeddings` AI modules do not require realtime performance, whereas `avatar` does.
-
-#### Missing THA3 model at startup
-
-If you get an error message like:
-
-```
-FileNotFoundError: Model file /home/xxx/raven-downloadedgitrepo/raven/vendor/tha3/models/separable_float/eyebrow_decomposer.pt not found, please check the path.
-```
-
-the solution is to remove (or rename) your `raven/vendor/tha3/models/` directory, and restart `raven.server`. If the model directory does not exist, *raven-avatar* will download the models at the first run.
-
-The models are actually shared between the live mode and the pose editor, so it doesn't matter which one you run first.
-
-#### Known missing features
-
-The live mode is not compatible with the popular VTuber software Live2D. Rather, this is an independent exploration of somewhat similar functionality in the context of providing a live anime avatar for AI characters.
-
-#### Known bugs
-
-During development, known bugs are collected into [TODO](TODO.md).
 
 
 ### Creating a character
