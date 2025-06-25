@@ -23,7 +23,7 @@
  "fx_angervein_fps": 6.0,
  "fx_sweatdrop_emotions": ["embarrassment"],
  "fx_sweatdrop_duration": 0.3,
- "fx_blackcloud_emotions": ["annoyance, disapproval"],
+ "fx_blackcloud_emotions": ["annoyance", "disapproval"],
  "fx_blackcloud_duration": 1.0,
  "fx_blackcloud_fps": 6.0,
  "fx_shock_emotions": ["disgust", "fear"],
