@@ -231,10 +231,19 @@ animator_defaults = {
     "fx_sweatdrop_emotions": ["embarrassment"],
     "fx_sweatdrop_duration": 0.3,
 
+    # heart(s)
+    "fx_heart_emotions": ["desire"],
+    "fx_heart_duration": 0.3,
+
     # black cloud, frustration etc.
     "fx_blackcloud_emotions": ["annoyance", "disapproval"],
     "fx_blackcloud_duration": 1.0,
     "fx_blackcloud_fps": 6.0,
+
+    # flowers, love etc.
+    "fx_flowers_emotions": ["love"],
+    "fx_flowers_duration": 1.0,
+    "fx_flowers_fps": 6.0,
 
     # shock lines
     "fx_shock_emotions": ["disgust", "fear"],

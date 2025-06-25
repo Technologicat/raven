@@ -621,6 +621,7 @@ class Animator:
         # anime effects
         self.angervein_epoch = t0
         self.blackcloud_epoch = t0
+        self.flowers_epoch = t0
 
         # manual overrides, used for lipsync
         self.animation_key_overrides = {}  # {morph_or_cel_name0: value0, ...}
@@ -1279,7 +1280,7 @@ class Animator:
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in ANGERVEIN_EMOTIONS and seconds_since_last_emotion_change < ANGERVEIN_DURATION:
             # Compute base strengths for the anger veins
-            self.angervein_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(1 / ANGERVEIN_FPS),
+            self.angervein_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(2 / ANGERVEIN_FPS),
                                                                          epoch=self.angervein_epoch,
                                                                          strength=1.0,
                                                                          cels=["fx_angervein1", "fx_angervein2"],
@@ -1327,6 +1328,41 @@ class Animator:
             return new_celstack
         return celstack
 
+    def animate_heart(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """'Huge sweatdrop' anime effect cel animation driver."""
+        HEART_EMOTIONS = self._settings["fx_heart_emotions"]
+        HEART_DURATION = self._settings["fx_heart_duration"]
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion in HEART_EMOTIONS and seconds_since_last_emotion_change < HEART_DURATION:
+            idx1 = avatarutil.get_cel_index_in_stack("fx_heart1", celstack)
+            if idx1 != -1:  # at least one cel found?
+                idx2 = avatarutil.get_cel_index_in_stack("fx_heart2", celstack)
+                idx3 = avatarutil.get_cel_index_in_stack("fx_heart3", celstack)
+                if idx2 != -1 and idx3 != -1:  # all cels found?
+                    # Animate the sweatdrop cel sequence
+                    new_celstack = self._animate_cel_quick_flash(t0=self.last_emotion_change_timestamp,
+                                                                 duration=HEART_DURATION,
+                                                                 strength=1.0,
+                                                                 cels=["fx_heart1", "fx_heart2", "fx_heart3"],
+                                                                 celstack=celstack)
+                    # Then make it fade out
+                    new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
+                                                             duration=HEART_DURATION,
+                                                             cels=["fx_heart1", "fx_heart2", "fx_heart3"],
+                                                             celstack=new_celstack)
+                else:  # use just one cel
+                    # Just make it fade out
+                    new_celstack = copy.copy(celstack)
+                    new_celstack[idx1] = ("fx_heart1", 1.0)  # base strength (before applying fadeout) = full strength
+                    new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
+                                                             duration=HEART_DURATION,
+                                                             cels=["fx_heart1"],
+                                                             celstack=new_celstack)
+            return new_celstack
+        return celstack
+
     def animate_blackcloud(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """'Black cloud' anime effect cel animation driver."""
         BLACKCLOUD_EMOTIONS = self._settings["fx_blackcloud_emotions"]
@@ -1341,7 +1377,7 @@ class Animator:
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         if self.emotion in BLACKCLOUD_EMOTIONS and seconds_since_last_emotion_change < BLACKCLOUD_DURATION:
             # Compute base strengths for the black cloud cels
-            self.blackcloud_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(1 / BLACKCLOUD_FPS),
+            self.blackcloud_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(2 / BLACKCLOUD_FPS),
                                                                           epoch=self.blackcloud_epoch,
                                                                           strength=1.0,
                                                                           cels=["fx_blackcloud1", "fx_blackcloud2"],
@@ -1350,6 +1386,33 @@ class Animator:
             new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
                                                      duration=BLACKCLOUD_DURATION,
                                                      cels=["fx_blackcloud1", "fx_blackcloud2"],
+                                                     celstack=new_celstack)
+            return new_celstack
+        return celstack
+
+    def animate_flowers(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """'Flowers' anime effect cel animation driver."""
+        FLOWERS_EMOTIONS = self._settings["fx_flowers_emotions"]
+        FLOWERS_DURATION = self._settings["fx_flowers_duration"]
+        FLOWERS_FPS = self._settings["fx_flowers_fps"]
+
+        if FLOWERS_FPS == 0.0:  # effect disabled?
+            new_celstack = copy.copy(celstack)
+            return new_celstack
+
+        time_now = time.time_ns()
+        seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
+        if self.emotion in FLOWERS_EMOTIONS and seconds_since_last_emotion_change < FLOWERS_DURATION:
+            # Compute base strengths for the flowers cels
+            self.flowers_epoch, new_celstack = self._animate_cel_cycle(cycle_duration=(2 / FLOWERS_FPS),
+                                                                       epoch=self.flowers_epoch,
+                                                                       strength=1.0,
+                                                                       cels=["fx_flowers1", "fx_flowers2"],
+                                                                       celstack=celstack)
+            # Make the black cloud cels fade out
+            new_celstack = self._animate_cel_fadeout(t0=self.last_emotion_change_timestamp,
+                                                     duration=FLOWERS_DURATION,
+                                                     cels=["fx_flowers1", "fx_flowers2"],
                                                      celstack=new_celstack)
             return new_celstack
         return celstack
@@ -1728,7 +1791,9 @@ class Animator:
                     fx_celstack = [(celname, 0.0) for celname in avatarutil.supported_cels]  # TODO: do this efficiently
                     fx_celstack = self.animate_angervein(fx_celstack)
                     fx_celstack = self.animate_sweatdrop(fx_celstack)
+                    fx_celstack = self.animate_heart(fx_celstack)
                     fx_celstack = self.animate_blackcloud(fx_celstack)
+                    fx_celstack = self.animate_flowers(fx_celstack)
                     fx_celstack = self.animate_shock(fx_celstack)
                     fx_celstack = self.animate_notice(fx_celstack)
                     fx_celstack = self.animate_beaming(fx_celstack)

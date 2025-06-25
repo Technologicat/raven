@@ -254,7 +254,9 @@ supported_cels = [
     # Rendered after the character. Applied after posing, but before upscaling or postprocessing.
     "fx_angervein1", "fx_angervein2",  # hovering stylized forehead veins. Cycle, while fading out.
     "fx_sweatdrop1", "fx_sweatdrop2", "fx_sweatdrop3",  # hovering sweatdrop. If have just cel 1: fade out. If all cels: flash in sequence, while fading out.
-    "fx_blackcloud1", "fx_blackcloud2",  # black cloud representing frustration. Cycle, while fading out.
+    "fx_heart1", "fx_heart2", "fx_heart3",  # hovering heart(s). If have just cel 1: fade out. If all cels: flash in sequence, while fading out.
+    "fx_blackcloud1", "fx_blackcloud2",  # hovering black cloud representing frustration. Cycle, while fading out.
+    "fx_flowers1", "fx_flowers2",  # hovering flowers. Cycle, while fading out.
     "fx_shock1",  # shock lines. Fade out.
     "fx_notice1", "fx_notice2",  # notice lines (or surprise lines). Quickly flash cel1, cel2, cel1, cel2, then off.
     "fx_beaming1", "fx_beaming2",  # happy lines (beaming joy). Quickly flash cel1, cel2, then off.
