@@ -1,0 +1,118 @@
+{
+    "target_fps": 25,
+    "crop_left": 0.0,
+    "crop_right": 0.0,
+    "crop_top": 0.0,
+    "crop_bottom": 0.0,
+    "pose_interpolator_step": 0.3,
+    "blink_interval_min": 2.0,
+    "blink_interval_max": 5.0,
+    "blink_probability": 0.03,
+    "blink_confusion_duration": 10.0,
+    "talking_fps": 12,
+    "talking_morph": "mouth_aaa_index",
+    "sway_morphs": [
+        "head_x_index",
+        "head_y_index",
+        "neck_z_index",
+        "body_y_index",
+        "body_z_index"
+    ],
+    "sway_interval_min": 5.0,
+    "sway_interval_max": 10.0,
+    "sway_macro_strength": 0.6,
+    "sway_micro_strength": 0.01,
+    "breathing_cycle_duration": 4.0,
+    "eye_waver_fps": 12.0,
+    "animefx_enabled": true,
+    "fx_angervein_emotions": ["anger"],
+    "fx_angervein_duration": 1.0,
+    "fx_angervein_fps": 6.0,
+    "fx_sweatdrop_emotions": ["embarrassment", "nervousness"],
+    "fx_sweatdrop_duration": 0.3,
+    "fx_heart_emotions": ["desire"],
+    "fx_heart_duration": 0.3,
+    "fx_blackcloud_emotions": ["annoyance", "disapproval"],
+    "fx_blackcloud_duration": 1.0,
+    "fx_blackcloud_fps": 6.0,
+    "fx_flowers_emotions": ["love"],
+    "fx_flowers_duration": 1.0,
+    "fx_flowers_fps": 6.0,
+    "fx_shock_emotions": ["disgust", "fear"],
+    "fx_shock_duration": 2.0,
+    "fx_notice_emotions": ["surprise"],
+    "fx_notice_duration": 0.25,
+    "fx_beaming_emotions": ["admiration", "amusement", "excitement", "joy"],
+    "fx_beaming_duration": 0.25,
+    "fx_question_emotions": ["confusion"],
+    "fx_question_duration": 0.25,
+    "fx_exclaim_emotions": ["realization"],
+    "fx_exclaim_duration": 0.25,
+    "postprocessor_chain": [
+        [
+            "bloom",
+            {
+                "threshold": 0.5600000023841858,
+                "exposure": 0.8420000076293945
+            }
+        ],
+        [
+            "chromatic_aberration",
+            {
+                "scale": 0.004999999888241291,
+                "sigma": 1.0
+            }
+        ],
+        [
+            "vignetting",
+            {
+                "strength": 0.41999998688697815
+            }
+        ],
+        [
+            "translucency",
+            {
+                "alpha": 0.8999999761581421
+            }
+        ],
+        [
+            "desaturate",
+            {
+                "strength": 1.0,
+                "tint_rgb": [
+                    1.0,
+                    0.7568627450980392,
+                    0.4549019607843137
+                ],
+                "bandpass_reference_rgb": [
+                    1.0,
+                    0.07450980392156863,
+                    0.0
+                ],
+                "bandpass_q": 0.06700000166893005
+            }
+        ],
+        [
+            "banding",
+            {
+                "strength": 0.4000000059604645,
+                "density": 2.0,
+                "speed": 16.0
+            }
+        ],
+        [
+            "scanlines",
+            {
+                "field": 0,
+                "dynamic": true,
+                "double_size": true,
+                "channel": "Y",
+                "strength": 0.10000000149011612
+            }
+        ]
+    ],
+    "format": "QOI",
+    "upscale": 2.0,
+    "upscale_preset": "C",
+    "upscale_quality": "low"
+}
