@@ -110,7 +110,7 @@ def animate_cel_cycle(cycle_duration: float,
     """
     new_celstack = copy.copy(celstack)
     if cycle_duration == 0.0 or not cels:  # convenience feature: zero cycle duration or no cels = effect disabled
-        return new_celstack
+        return epoch, new_celstack
 
     time_now = time.time_ns()
     t = (time_now - epoch) / 10**9
