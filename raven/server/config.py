@@ -181,13 +181,15 @@ animator_defaults = {
     # "Intense emotion" eye-waver animation settings.
     "eye_waver_fps": 12.0,  # cel animation framerate. Special value 0.0 disables the animation.
 
-    # animefx: anime-style effects that go *around* the character.
+    # animefx: anime-style effects that hover *around* the character.
     #
-    # For the names of the cels your character needs to supply for these to work, see `supported_cels` in `raven.server.modules.avatarutil`.
+    # For the names of the cels for these to work, see `supported_cels` in `raven.server.modules.avatarutil`.
     # All of these effects are optional.
     #
-    # - If you don't want them for a specific character, simply don't supply those cels for that character.
-    # - To disable an effect for all characters, you can set its duration to the special value 0.0.
+    # - When animefx are enabled, all characters use generic fx cels ("fx_*.png") by default, so that the effects can be enabled for any character without extra effort.
+    # - If you want to customize the look of the effects for a specific character, supply those cels for that character ("mycharacter_fx_*.png").
+    #   Character-specific cels automatically override the generic ones.
+    # - To disable a specific animefx for all characters, you can set its duration to the special value 0.0.
     # - To disable all animefx for all characters, use the "animefx_enabled" setting below.
     #
     # Full list of the 28 distilbert emotions, for reference:
@@ -227,9 +229,13 @@ animator_defaults = {
     "fx_angervein_duration": 1.0,  # seconds, for fadeout (special value 0.0 = fadeout disabled)
     "fx_angervein_fps": 6.0,  # cel animation framerate
 
-    # anime sweatdrop
-    "fx_sweatdrop_emotions": ["embarrassment", "nervousness"],
+    # anime sweatdrop (large)
+    "fx_sweatdrop_emotions": ["embarrassment"],
     "fx_sweatdrop_duration": 0.3,
+
+    # anime sweatdrop(s) (small)
+    "fx_smallsweatdrop_emotions": ["nervousness"],
+    "fx_smallsweatdrop_duration": 0.3,
 
     # heart(s)
     "fx_heart_emotions": ["desire"],

@@ -7,7 +7,7 @@ __all__ = ["posedict_keys", "posedict_key_to_index",
            "load_emotion_presets",
            "posedict_to_pose", "pose_to_posedict",
            "torch_load_rgba_image", "torch_image_to_numpy",
-           "supported_cels", "scan_addon_cels", "render_celstack", "get_cel_index_in_stack"]
+           "supported_cels", "scan_addon_cels"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +22,6 @@ import numpy as np
 import torch
 
 from ...vendor.tha3.util import torch_linear_to_srgb, numpy_srgb_to_linear, resize_PIL_image, extract_PIL_image_from_filelike
-
 
 # The keys for a pose in the emotion JSON files.
 posedict_keys = ["eyebrow_troubled_left_index", "eyebrow_troubled_right_index",
@@ -57,6 +56,62 @@ assert len(posedict_keys) == 45
 # posedict_keys gives us index->key; make an inverse mapping.
 posedict_key_to_index = {key: idx for idx, key in enumerate(posedict_keys)}
 
+
+# List of cels understood by the character loaders (in `pose_editor` and `animator`).
+# This also defines the canonical render order for the cels (bottommost first).
+#
+# **All of these are optional.** Any missing cel is automatically ignored.
+#
+# However, cels come in groups (below, the cels listed on the same line are a group).
+# If you provide one cel from a group, it is recommended to provide all cels from that group,
+# or animations may not work as intended.
+#
+# For animefx ("fx_*"), we support both character-specific cels, and as a fallback, generic cels.
+#
+# File naming convention is:
+#
+#   mycharacter.png               base image of the character
+#   mycharacter_blush1.png        "blush1" cel (character-specific)
+#   mycharacter_fx_exclaim1.png   "fx_exclaim1" animefx cel (character-specific, takes priority if exists)
+#   fx_exclaim1.png               "fx_exclaim1" animefx cel (generic fallback)
+#
+# Supported cels are a hardcoded list for two reasons:
+#  - Having a fixed set of supported cels makes emotion template JSON files compatible between different characters.
+#  - If a particular character does not provide some of the cels, simply skipping those blend keys
+#    degrades the look gracefully (instead of completely breaking how the character looks,
+#    e.g. if their hair or clothing was a custom cel).
+#  - As for animefx cels, the animator only knows what to do with the ones listed here.
+#
+# This list may change later, e.g. if we implement a clothing/hairstyle system.
+#
+supported_cels = [
+    # Semi-realistic effects that go on the character itself.
+    # These can be set up in the pose editor as part of an emotion.
+    # Applied before posing.
+    "blush1", "blush2", "blush3",  # cheeks, ears, full face.
+    "shadow1",  # darkened upper half of face representing shock; can be used e.g. for an anime-style fear or disgust expression.
+    "sweat1", "sweat2", "sweat3",  # sweatdrops
+    "tears1", "tears2", "tears3",  # outer eye corners, inner eye corners, whole lower edge of eye.
+    "waver1", "waver2",  # "intense emotion" eye-wavering effect. In `raven.avatar.pose_editor.app`, the "waver1" slider controls the strength.
+
+    # animefx: anime-style effects that go *around* the character.
+    #
+    # These are automatically activated by the live animator when one of the trigger emotion states is entered.
+    # Rendered after the character. Applied after posing, but before upscaling or postprocessing.
+    "fx_angervein1", "fx_angervein2",  # hovering stylized forehead veins. Cycle, while fading out.
+    "fx_sweatdrop1", "fx_sweatdrop2", "fx_sweatdrop3",  # hovering sweatdrop (e.g. embarrassed). Show in sequence, while fading out. Omit any missing cels.
+    "fx_smallsweatdrop1", "fx_smallsweatdrop2", "fx_smallsweatdrop3",  # hovering small sweatdrop(s) (e.g. nervous). Show in sequence, while fading out. Omit any missing cels.
+    "fx_heart1", "fx_heart2", "fx_heart3",  # hovering heart(s). Show in sequence, while fading out. Omit any missing cels.
+    "fx_blackcloud1", "fx_blackcloud2",  # hovering black cloud representing frustration. Cycle, while fading out.
+    "fx_flowers1", "fx_flowers2",  # hovering flowers. Cycle, while fading out.
+    "fx_shock1",  # shock lines. Fade out.
+    "fx_notice1", "fx_notice2",  # notice lines (or surprise lines). Show cel1, cel2, cel1, cel2, then off.
+    "fx_beaming1", "fx_beaming2",  # happy lines (beaming joy). Show cel1, cel2, then off.
+    "fx_question1", "fx_question2", "fx_question3",  # Question mark(s), confusion. Show cel1, cel2, cel3, then off.
+    "fx_exclaim1", "fx_exclaim2", "fx_exclaim3",  # Exclamation mark(s), realization. Show cel1, cel2, cel3, then off.
+]
+
+# --------------------------------------------------------------------------------
 
 def load_emotion_presets(directory: str) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
     """Load emotion presets from disk.
@@ -139,6 +194,59 @@ def pose_to_posedict(pose: List[float]) -> Dict[str, float]:
 
 # --------------------------------------------------------------------------------
 
+def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
+    """Given `image_file_name`, scan for its associated add-on cels on disk.
+
+    The cels should have the same basename, followed by an underscore and then the cel name.
+    E.g. "example.png" may have a cel "example_blush.png".
+
+    Returns a dict `{celname0: absolute_filename0, ...}`.
+
+    The result may be empty if there are no add-on cels for `image_file_name`.
+    """
+    logger.info(f"scan_addon_cels: Scanning cels for '{image_file_name}'.")
+    basename = os.path.basename(image_file_name)  # e.g. "/foo/bar/example.png" -> "example.png"
+    stem, ext = os.path.splitext(basename)  # -> "example", ".png"
+    cels_filenames = {}
+    for root, dirs, files in os.walk(os.path.dirname(image_file_name), topdown=True):
+        dirs.clear()  # don't recurse
+
+        # Character-specific cels (first priority)
+        for filename in files:
+            if filename.endswith(ext):
+                if filename.startswith(f"{stem}_"):
+                    base, _ = os.path.splitext(filename)  # "example_blush.png" -> "example_blush"
+                    _, celname = base.split("_", maxsplit=1)  # # "example_blush" -> "blush"
+                    if celname in supported_cels:
+                        logger.info(f"scan_addon_cels: Loading character-specific cel '{filename}' for '{image_file_name}'")
+                        cels_filenames[celname] = os.path.join(root, filename)
+                    else:
+                        logger.warning(f"scan_addon_cels: Ignoring unsupported cel '{celname}' for '{image_file_name}'. Supported cels are: {supported_cels}")
+
+        # Generic animefx cels (fallback)
+        for filename in files:
+            if filename.startswith("fx") and any(filename == f"{celname}{ext}" for celname in supported_cels):  # fallback to generic cels for animefx only
+                celname, _ = os.path.splitext(filename)  # "fx_notice1.png" -> "fx_notice1", ".png"
+                if celname not in cels_filenames:
+                    logger.info(f"scan_addon_cels: Loading generic animefx cel '{filename}' for '{image_file_name}'")
+                    cels_filenames[celname] = os.path.join(root, filename)
+
+    # Sort the results.
+    def index_in_supported_cels(item):
+        celname, filename = item
+        return supported_cels.index(celname)
+    cels_filenames = dict(sorted(cels_filenames.items(), key=index_in_supported_cels))
+
+    if cels_filenames:
+        plural_s = "s" if len(cels_filenames) != 1 else ""
+        logger.info(f"scan_addon_cels: Found {len(cels_filenames)} add-on-cel{plural_s} for '{image_file_name}': {list(cels_filenames.keys())}.")
+    else:
+        logger.info(f"scan_addon_cels: No add-on cels found for '{image_file_name}'.")
+
+    return cels_filenames
+
+# --------------------------------------------------------------------------------
+
 def _preprocess_poser_image(image: np.array) -> np.array:
     """Do some things THA3 needs:
 
@@ -207,172 +315,3 @@ def torch_image_to_numpy(image: torch.tensor) -> np.array:
         image = torch.transpose(image.reshape(c, h * w), 0, 1).reshape(h, w, c)  # -> [h, w, c]
         numpy_image = image.float().detach().cpu().numpy()
     return numpy_image
-
-# --------------------------------------------------------------------------------
-# Cel blending
-
-# List of cels understood by the character loaders (in `pose_editor` and `animator`).
-# This also defines the canonical render order for the cels (bottommost first).
-#
-# **All of these are optional.** Any missing cel is automatically ignored.
-#
-# However, cels come in groups (below, the cels listed on the same line are a group).
-# If you provide one cel from a group, it is recommended to provide all cels from that group,
-# or animations may not work as intended.
-#
-# For animefx ("fx_*"), we support both character-specific cels, and as a fallback, generic cels.
-#
-# File naming convention is:
-#
-#   mycharacter.png               base image of the character
-#   mycharacter_blush1.png        "blush1" cel (character-specific)
-#   mycharacter_fx_exclaim1.png   "fx_exclaim1" animefx cel (character-specific, takes priority if exists)
-#   fx_exclaim1.png               "fx_exclaim1" animefx cel (generic fallback)
-#
-# Supported cels are a hardcoded list for two reasons:
-#  - Having a fixed set of supported cels makes emotion template JSON files compatible between different characters.
-#  - If a particular character does not provide some of the cels, simply skipping those blend keys
-#    degrades the look gracefully (instead of completely breaking how the character looks,
-#    e.g. if their hair or clothing was a custom cel).
-#  - As for animefx cels, the animator only knows what to do with the ones listed here.
-#
-# This list may change later, e.g. if we implement a clothing/hairstyle system.
-#
-supported_cels = [
-    # Semi-realistic effects that go on the character itself.
-    # These can be set up in the pose editor as part of an emotion.
-    # Applied before posing.
-    "blush1", "blush2", "blush3",  # cheeks, ears, full face.
-    "shadow1",  # darkened upper half of face representing shock; can be used e.g. for an anime-style fear or disgust expression.
-    "sweat1", "sweat2", "sweat3",  # sweatdrops
-    "tears1", "tears2", "tears3",  # outer eye corners, inner eye corners, whole lower edge of eye.
-    "waver1", "waver2",  # "intense emotion" eye-wavering effect. In `raven.avatar.pose_editor.app`, the "waver1" slider controls the strength.
-
-    # animefx: anime-style effects that go *around* the character.
-    #
-    # These are automatically activated by the live animator when one of the trigger emotion states is entered.
-    # Rendered after the character. Applied after posing, but before upscaling or postprocessing.
-    "fx_angervein1", "fx_angervein2",  # hovering stylized forehead veins. Cycle, while fading out.
-    "fx_sweatdrop1", "fx_sweatdrop2", "fx_sweatdrop3",  # hovering sweatdrop. Show in sequence, while fading out. Omit any missing cels.
-    "fx_heart1", "fx_heart2", "fx_heart3",  # hovering heart(s). Show in sequence, while fading out. Omit any missing cels.
-    "fx_blackcloud1", "fx_blackcloud2",  # hovering black cloud representing frustration. Cycle, while fading out.
-    "fx_flowers1", "fx_flowers2",  # hovering flowers. Cycle, while fading out.
-    "fx_shock1",  # shock lines. Fade out.
-    "fx_notice1", "fx_notice2",  # notice lines (or surprise lines). Show cel1, cel2, cel1, cel2, then off.
-    "fx_beaming1", "fx_beaming2",  # happy lines (beaming joy). Show cel1, cel2, then off.
-    "fx_question1", "fx_question2", "fx_question3",  # Question mark(s), confusion. Show cel1, cel2, cel3, then off.
-    "fx_exclaim1", "fx_exclaim2", "fx_exclaim3",  # Exclamation mark(s), realization. Show cel1, cel2, cel3, then off.
-]
-
-def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
-    """Given `image_file_name`, scan for its associated add-on cels on disk.
-
-    The cels should have the same basename, followed by an underscore and then the cel name.
-    E.g. "example.png" may have a cel "example_blush.png".
-
-    Returns a dict `{celname0: absolute_filename0, ...}`.
-
-    The result may be empty if there are no add-on cels for `image_file_name`.
-    """
-    logger.info(f"scan_addon_cels: Scanning cels for '{image_file_name}'.")
-    basename = os.path.basename(image_file_name)  # e.g. "/foo/bar/example.png" -> "example.png"
-    stem, ext = os.path.splitext(basename)  # -> "example", ".png"
-    cels_filenames = {}
-    for root, dirs, files in os.walk(os.path.dirname(image_file_name), topdown=True):
-        dirs.clear()  # don't recurse
-
-        # Character-specific cels (first priority)
-        for filename in files:
-            if filename.endswith(ext):
-                if filename.startswith(f"{stem}_"):
-                    base, _ = os.path.splitext(filename)  # "example_blush.png" -> "example_blush"
-                    _, celname = base.split("_", maxsplit=1)  # # "example_blush" -> "blush"
-                    if celname in supported_cels:
-                        logger.info(f"scan_addon_cels: Loading character-specific cel '{filename}' for '{image_file_name}'")
-                        cels_filenames[celname] = os.path.join(root, filename)
-                    else:
-                        logger.warning(f"scan_addon_cels: Ignoring unsupported cel '{celname}' for '{image_file_name}'. Supported cels are: {supported_cels}")
-
-        # Generic animefx cels (fallback)
-        for filename in files:
-            if filename.startswith("fx") and any(filename == f"{celname}{ext}" for celname in supported_cels):  # fallback to generic cels for animefx only
-                celname, _ = os.path.splitext(filename)  # "fx_notice1.png" -> "fx_notice1", ".png"
-                if celname not in cels_filenames:
-                    logger.info(f"scan_addon_cels: Loading generic animefx cel '{filename}' for '{image_file_name}'")
-                    cels_filenames[celname] = os.path.join(root, filename)
-
-    # Sort the results.
-    def index_in_supported_cels(item):
-        celname, filename = item
-        return supported_cels.index(celname)
-    cels_filenames = dict(sorted(cels_filenames.items(), key=index_in_supported_cels))
-
-    if cels_filenames:
-        plural_s = "s" if len(cels_filenames) != 1 else ""
-        logger.info(f"scan_addon_cels: Found {len(cels_filenames)} add-on-cel{plural_s} for '{image_file_name}': {list(cels_filenames.keys())}.")
-    else:
-        logger.info(f"scan_addon_cels: No add-on cels found for '{image_file_name}'.")
-
-    return cels_filenames
-
-def render_celstack(base_image: torch.tensor, celstack: List[Tuple[str, float]], torch_cels: Dict[str, torch.tensor]) -> torch.tensor:
-    """Given a base RGBA image and a stack of RGBA cel images, blend the final image.
-
-    `base_image`: shape [c, h, w], range [0, 1], linear RGB. 4 channels (RGBA).
-
-    `celstack`: The add-on cels to blend in, `[(name0, strength0), ...]`. Each strength is in [0, 1],
-                where 0 means completely off, and 1 means full strength.
-
-                The cells should be listed in a bottom-to-top order (as if they were actual physical cels
-                stacked on top of the base image).
-
-                Cels with zero strength are automatically skipped.
-
-                Cels not present in `torch_cels` (see below) are automatically skipped. This is a
-                convenience feature, as the add-on cels are optional and need to be made separately
-                for each character.
-
-    `torch_cels`: The actual image data for the cels, `{name0: tensor0, ...}`. Each tensor in same format as `base_image`.
-
-    The return value is a tensor of shape [c, h, w], containing the final blended image.
-    """
-    if not celstack:
-        logger.debug("compose_cels: Celstack is empty, returning base image as-is.")
-        return base_image.clone()  # always cloned, because the caller may directly modify the result.
-
-    logger.debug(f"compose_cels: Composing {celstack}.")
-
-    def over(a: torch.tensor, b: torch.tensor) -> torch.tensor:
-        """Alpha-blending operator. "a over b", i.e. "a" sits on top of "b".
-
-        https://en.wikipedia.org/wiki/Alpha_compositing
-        """
-        RGBa = a[:3, :, :]
-        RGBb = b[:3, :, :]
-        alpa = a[3, :, :].unsqueeze(0)  # [1, h, w]
-        alpb = b[3, :, :].unsqueeze(0)
-        alpo = (alpa + alpb * (1 - alpa))
-        RGBo = (RGBa * alpa + RGBb * alpb * (1 - alpa)) / (alpo + 1e-5)
-        return torch.cat([RGBo, alpo], dim=0)
-
-    out = base_image.clone()
-    for celname, strength in celstack:
-        if celname not in torch_cels:  # Ignore any cels that are not loaded (e.g. the character didn't have them).
-            continue
-        if strength == 0.0:
-            continue
-        elif strength == 1.0:
-            cel = torch_cels[celname]
-        else:
-            cel = torch_cels[celname].clone()
-            cel[3, :, :].mul_(strength)
-        out = over(cel, out)
-
-    return out
-
-def get_cel_index_in_stack(celname: str, celstack: List[Tuple[str, float]]) -> int:
-    """Given `celname`, return its position in `celstack`, or -1 if not found."""
-    for idx, (name, strength) in enumerate(celstack):
-        if name == celname:
-            return idx
-    return -1
