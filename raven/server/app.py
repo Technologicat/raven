@@ -39,7 +39,6 @@ from ..common.video.postprocessor import Postprocessor  # available image filter
 from . import config as server_config  # default models etc.
 
 from .modules import avatar
-from .modules import avatarutil
 from .modules import classify
 from .modules import embeddings
 from .modules import imagefx
@@ -216,8 +215,8 @@ def api_avatar_load():
     try:
         stream = request.files["file"].stream  # the base image
         cel_streams = {celname: request.files[celname].stream
-                       for celname in avatarutil.supported_cels
-                       if celname in request.files}  # add-on cels the client also sent, if any
+                       for celname in request.files
+                       if celname not in ("file", "json")}  # add-on cels the client also sent, if any
         instance_id = avatar.load(stream=stream,
                                   cel_streams=cel_streams)
     except Exception as exc:
@@ -254,8 +253,8 @@ def api_avatar_reload():
 
         stream = request.files["file"].stream  # the base image
         cel_streams = {celname: request.files[celname].stream
-                       for celname in avatarutil.supported_cels
-                       if celname in request.files}  # add-on cels the client also sent, if any
+                       for celname in request.files
+                       if celname not in ("file", "json")}  # add-on cels the client also sent, if any
 
         avatar.reload(instance_id=parameters["instance_id"],
                       stream=stream,

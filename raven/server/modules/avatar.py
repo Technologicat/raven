@@ -1503,7 +1503,7 @@ class Animator:
             # Apply these after posing, but before upscaling or postprocessing.
             with timer() as tim_animefx:
                 if self._settings["animefx_enabled"]:
-                    fx_celstack = [(celname, 0.0) for celname in avatarutil.supported_cels]  # TODO: do this efficiently
+                    fx_celstack = [(celname, 0.0) for celname in self.torch_cels if celname.startswith("fx_")]  # TODO: do this efficiently
                     fx_celstack = self.animate_animefx(fx_celstack)
                     output_image = compositor.render_celstack(output_image, fx_celstack, self.torch_cels)
                     maybe_sync_cuda()

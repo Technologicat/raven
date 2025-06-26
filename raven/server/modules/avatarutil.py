@@ -56,59 +56,44 @@ assert len(posedict_keys) == 45
 # posedict_keys gives us index->key; make an inverse mapping.
 posedict_key_to_index = {key: idx for idx, key in enumerate(posedict_keys)}
 
-
-# List of cels understood by the character loaders (in `pose_editor` and `animator`).
-# This also defines the canonical render order for the cels (bottommost first).
+# Cel blending. List of cels understood by the character loaders (in `raven.avatar.pose_editor.app` and `raven.server.modules.avatar`).
 #
-# **All of these are optional.** Any missing cel is automatically ignored.
+# There are two kinds of cels:
 #
-# However, cels come in groups (below, the cels listed on the same line are a group).
+# - Semi-realistic effects (blush, sweat) that go on the character itself. These can be set up in the pose editor as part of an emotion. Applied before posing.
+#   - Only the cels listed below are supported.
+#   - The cels must be supplied separately for each character.
+#
+# - animefx: Anime-style emotional reaction effects that hover *around* the character. Applied after posing, before upscaling and postprocessing.
+#   - Any cel whose name begins with "fx_" is considered supported for animefx. Which cels actually get used depends on animator configuration (see `raven.server.config`).
+#   - Both character-specific animefx cels and generic animefx cels are supported. Whenever a character-specific cel exists, it takes priority.
+#
+# All cels are optional. Any missing cel is automatically ignored.
+#
+# However, cels come in groups. Below, the cels listed on the same line are a group.
 # If you provide one cel from a group, it is recommended to provide all cels from that group,
 # or animations may not work as intended.
-#
-# For animefx ("fx_*"), we support both character-specific cels, and as a fallback, generic cels.
 #
 # File naming convention is:
 #
 #   mycharacter.png               base image of the character
-#   mycharacter_blush1.png        "blush1" cel (character-specific)
+#   mycharacter_blush1.png        "blush1" cel (always character-specific)
 #   mycharacter_fx_exclaim1.png   "fx_exclaim1" animefx cel (character-specific, takes priority if exists)
-#   fx_exclaim1.png               "fx_exclaim1" animefx cel (generic fallback)
+#   fx_exclaim1.png               "fx_exclaim1" animefx cel (generic fallback, usually fine)
 #
-# Supported cels are a hardcoded list for two reasons:
-#  - Having a fixed set of supported cels makes emotion template JSON files compatible between different characters.
+# The supported semi-realistic effect cels are a hardcoded list for two reasons:
+#  - Having a fixed set of cels makes emotion template JSON files compatible between different characters.
 #  - If a particular character does not provide some of the cels, simply skipping those blend keys
 #    degrades the look gracefully (instead of completely breaking how the character looks,
 #    e.g. if their hair or clothing was a custom cel).
-#  - As for animefx cels, the animator only knows what to do with the ones listed here.
 #
-# This list may change later, e.g. if we implement a clothing/hairstyle system.
-#
+# This list also defines the canonical render order for the semi-realistic effect cels (bottommost first).
 supported_cels = [
-    # Semi-realistic effects that go on the character itself.
-    # These can be set up in the pose editor as part of an emotion.
-    # Applied before posing.
     "blush1", "blush2", "blush3",  # cheeks, ears, full face.
     "shadow1",  # darkened upper half of face representing shock; can be used e.g. for an anime-style fear or disgust expression.
     "sweat1", "sweat2", "sweat3",  # sweatdrops
     "tears1", "tears2", "tears3",  # outer eye corners, inner eye corners, whole lower edge of eye.
     "waver1", "waver2",  # "intense emotion" eye-wavering effect. In `raven.avatar.pose_editor.app`, the "waver1" slider controls the strength.
-
-    # animefx: anime-style effects that go *around* the character.
-    #
-    # These are automatically activated by the live animator when one of the trigger emotion states is entered.
-    # Rendered after the character. Applied after posing, but before upscaling or postprocessing.
-    "fx_angervein1", "fx_angervein2",  # hovering stylized forehead veins. Cycle, while fading out.
-    "fx_sweatdrop1", "fx_sweatdrop2", "fx_sweatdrop3",  # hovering sweatdrop (e.g. embarrassed). Show in sequence, while fading out. Omit any missing cels.
-    "fx_smallsweatdrop1", "fx_smallsweatdrop2", "fx_smallsweatdrop3",  # hovering small sweatdrop(s) (e.g. nervous). Show in sequence, while fading out. Omit any missing cels.
-    "fx_heart1", "fx_heart2", "fx_heart3",  # hovering heart(s). Show in sequence, while fading out. Omit any missing cels.
-    "fx_blackcloud1", "fx_blackcloud2",  # hovering black cloud representing frustration. Cycle, while fading out.
-    "fx_flowers1", "fx_flowers2",  # hovering flowers. Cycle, while fading out.
-    "fx_shock1",  # shock lines. Fade out.
-    "fx_notice1", "fx_notice2",  # notice lines (or surprise lines). Show cel1, cel2, cel1, cel2, then off.
-    "fx_beaming1", "fx_beaming2",  # happy lines (beaming joy). Show cel1, cel2, then off.
-    "fx_question1", "fx_question2", "fx_question3",  # Question mark(s), confusion. Show cel1, cel2, cel3, then off.
-    "fx_exclaim1", "fx_exclaim2", "fx_exclaim3",  # Exclamation mark(s), realization. Show cel1, cel2, cel3, then off.
 ]
 
 # --------------------------------------------------------------------------------
@@ -198,11 +183,14 @@ def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
     """Given `image_file_name`, scan for its associated add-on cels on disk.
 
     The cels should have the same basename, followed by an underscore and then the cel name.
-    E.g. "example.png" may have a cel "example_blush.png".
+    E.g. a character "example.png" may have a cel "example_blush1.png".
+
+    For animefx cels, character-specific cels ("example_fx_notice1.png") have priority, but if not present,
+    generic fallback cels ("fx_notice1.png") are automatically tried.
 
     Returns a dict `{celname0: absolute_filename0, ...}`.
 
-    The result may be empty if there are no add-on cels for `image_file_name`.
+    The result may be empty if there no add-on cels were found for `image_file_name`.
     """
     logger.info(f"scan_addon_cels: Scanning cels for '{image_file_name}'.")
     basename = os.path.basename(image_file_name)  # e.g. "/foo/bar/example.png" -> "example.png"
@@ -217,24 +205,27 @@ def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
                 if filename.startswith(f"{stem}_"):
                     base, _ = os.path.splitext(filename)  # "example_blush.png" -> "example_blush"
                     _, celname = base.split("_", maxsplit=1)  # # "example_blush" -> "blush"
-                    if celname in supported_cels:
+                    if celname in supported_cels or celname.startswith("fx_"):
                         logger.info(f"scan_addon_cels: Loading character-specific cel '{filename}' for '{image_file_name}'")
                         cels_filenames[celname] = os.path.join(root, filename)
                     else:
-                        logger.warning(f"scan_addon_cels: Ignoring unsupported cel '{celname}' for '{image_file_name}'. Supported cels are: {supported_cels}")
+                        logger.warning(f"scan_addon_cels: Ignoring unsupported cel '{celname}' for '{image_file_name}'. Supported cels are: {supported_cels} (plus any fx_* cels)")
 
         # Generic animefx cels (fallback)
         for filename in files:
-            if filename.startswith("fx") and any(filename == f"{celname}{ext}" for celname in supported_cels):  # fallback to generic cels for animefx only
+            if filename.startswith("fx_") and filename.endswith(ext):  # fallback to generic cels for animefx only
                 celname, _ = os.path.splitext(filename)  # "fx_notice1.png" -> "fx_notice1", ".png"
-                if celname not in cels_filenames:
+                if celname not in cels_filenames:  # fallback only if no character-specific cel
                     logger.info(f"scan_addon_cels: Loading generic animefx cel '{filename}' for '{image_file_name}'")
                     cels_filenames[celname] = os.path.join(root, filename)
 
     # Sort the results.
     def index_in_supported_cels(item):
         celname, filename = item
-        return supported_cels.index(celname)
+        try:
+            return supported_cels.index(celname), celname
+        except ValueError:  # animefx cels are not listed in `supported_cels`, since which ones are used depends on the server config.
+            return float("+inf"), celname  # sort animefx cels to the end, but alphabetically
     cels_filenames = dict(sorted(cels_filenames.items(), key=index_in_supported_cels))
 
     if cels_filenames:
