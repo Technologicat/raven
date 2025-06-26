@@ -200,7 +200,8 @@ def api_avatar_load():
     The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
 
     Optionally, there may be more file attachments, one for each add-on cel. The attachment name
-    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`.
+    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`,
+    and for animefx cels, `raven.server.config`.
 
     Output is JSON::
 
@@ -233,7 +234,8 @@ def api_avatar_reload():
     The "file" attachment should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
 
     Optionally, there may be more file attachments, one for each add-on cel. The attachment name
-    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`.
+    for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`,
+    and for animefx cels, `raven.server.config`.
 
     The "json" attachment should contain the API call parameters as JSON:
 
