@@ -208,8 +208,11 @@ def animate_cel_fadeout(t0: float,
 
     return new_celstack
 
-def animate_cel_cycle_with_fadeout(cycle_duration: float, epoch: float, strength: float,
-                                   fadeout_t0: float, fadeout_duration: float,
+def animate_cel_cycle_with_fadeout(cycle_duration: float,
+                                   epoch: float,
+                                   strength: float,
+                                   fadeout_t0: float,
+                                   fadeout_duration: float,
                                    cels: List[str],
                                    celstack: List[Tuple[str, float]]) -> Tuple[float, List[Tuple[str, float]]]:
     """Generic cel animation driver combining `animate_cel_cycle` and `animate_cel_fadeout`, which see.
@@ -229,7 +232,9 @@ def animate_cel_cycle_with_fadeout(cycle_duration: float, epoch: float, strength
                                        celstack=new_celstack)
     return epoch, new_celstack
 
-def animate_cel_sequence_with_fadeout(t0: float, duration: float, strength: float,
+def animate_cel_sequence_with_fadeout(t0: float,
+                                      duration: float,
+                                      strength: float,
                                       cels: List[str],
                                       celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
     """Generic cel animation driver combining `animate_cel_sequence` and `animate_cel_fadeout`, which see."""
