@@ -181,15 +181,17 @@ animator_defaults = {
     # "Intense emotion" eye-waver animation settings.
     "eye_waver_fps": 12.0,  # cel animation framerate. Special value 0.0 disables the animation.
 
-    # animefx: anime-style effects that hover *around* the character.
+    # animefx: anime-style emotional reaction effects that hover *around* the character.
     #
-    # For the names of the cels for these to work, see `supported_cels` in `raven.server.modules.avatarutil`.
-    # All of these effects are optional.
+    # All of these effects are optional. Effects are rendered in the order listed below. The ordering matters only if an emotion has multiple effects assigned to it.
     #
     # - When animefx are enabled, all characters use generic fx cels ("fx_*.png") by default, so that the effects can be enabled for any character without extra effort.
+    #
     # - If you want to customize the look of the effects for a specific character, supply those cels for that character ("mycharacter_fx_*.png").
     #   Character-specific cels automatically override the generic ones.
-    # - To disable a specific animefx for all characters, you can set its duration to the special value 0.0.
+    #
+    # - To disable a specific animefx for all characters, set its duration to the special value 0.0.
+    #
     # - To disable all animefx for all characters, use the "animefx_enabled" setting below.
     #
     # Full list of the 28 distilbert emotions, for reference:
@@ -224,52 +226,66 @@ animator_defaults = {
     #
     "animefx_enabled": True,  # on/off switch for all animefx (in one animator instance; note each avatar session has its own instance)
 
-    # anger vein, cycling between two cels and fading out
-    "fx_angervein_emotions": ["anger"],  # trigger emotion(s); entering any emotion listed here triggers the effect (anew each time).
-    "fx_angervein_duration": 1.0,  # seconds, for fadeout (special value 0.0 = fadeout disabled)
-    "fx_angervein_fps": 6.0,  # cel animation framerate
+    # format is [[effect_name0, config_dict0], ...]
+    "animefx": [
+        ["angervein", {"emotions": ["anger"],  # trigger emotion(s); entering any emotion listed here triggers the effect (anew each time).
+                       "type": "cycle_with_fadeout",  # animation type: one of "cycle" (loop indefinitely), "sequence" (play once), "cycle_with_fadeout", "sequence_with_fadeout"
+                       "fps": 6.0,  # for "cycle" or "cycle_with_fadeout": frames per second for the cel cycling
+                       "duration": 1.0,  # seconds, total duration of animation (in this case the fadeout)
+                       "cels": ["fx_angervein1", "fx_angervein2"]}],  # list of one or more cels that the animation consists of
 
-    # anime sweatdrop (large)
-    "fx_sweatdrop_emotions": ["embarrassment"],
-    "fx_sweatdrop_duration": 0.3,
+        ["sweatdrop", {"emotions": ["embarrassment"],
+                       "type": "sequence_with_fadeout",
+                       "duration": 0.3,
+                       "cels": ["fx_sweatdrop1", "fx_sweatdrop2", "fx_sweatdrop3"]}],
 
-    # anime sweatdrop(s) (small)
-    "fx_smallsweatdrop_emotions": ["nervousness"],
-    "fx_smallsweatdrop_duration": 0.3,
+        ["smallsweatdrop", {"emotions": ["nervousness"],
+                            "type": "sequence_with_fadeout",
+                            "duration": 0.3,
+                            "cels": ["fx_smallsweatdrop1", "fx_smallsweatdrop2", "fx_smallsweatdrop3"]}],
 
-    # heart(s)
-    "fx_heart_emotions": ["desire"],
-    "fx_heart_duration": 0.3,
+        ["heart", {"emotions": ["desire"],
+                   "type": "sequence_with_fadeout",
+                   "duration": 0.3,
+                   "cels": ["fx_heart1", "fx_heart2", "fx_heart3"]}],
 
-    # black cloud, frustration etc.
-    "fx_blackcloud_emotions": ["annoyance", "disapproval"],
-    "fx_blackcloud_duration": 1.0,
-    "fx_blackcloud_fps": 6.0,
+        ["blackcloud", {"emotions": ["annoyance", "disapproval"],
+                        "type": "cycle_with_fadeout",
+                        "fps": 6.0,
+                        "duration": 1.0,
+                        "cels": ["fx_blackcloud1", "fx_blackcloud2"]}],
 
-    # flowers, love etc.
-    "fx_flowers_emotions": ["love"],
-    "fx_flowers_duration": 1.0,
-    "fx_flowers_fps": 6.0,
+        ["flowers", {"emotions": ["love"],
+                     "type": "cycle_with_fadeout",
+                     "fps": 6.0,
+                     "duration": 1.0,
+                     "cels": ["fx_flowers1", "fx_flowers2"]}],
 
-    # shock lines
-    "fx_shock_emotions": ["disgust", "fear"],
-    "fx_shock_duration": 2.0,
+        ["shock", {"emotions": ["disgust", "fear"],
+                   "type": "sequence_with_fadeout",
+                   "duration": 2.0,
+                   "cels": ["fx_shock1"]}],  # this "sequence" has just one cel; that's fine
 
-    # notice lines (or surprise lines)
-    "fx_notice_emotions": ["surprise"],
-    "fx_notice_duration": 0.25,
+        ["notice", {"emotions": ["surprise"],
+                    "type": "sequence",
+                    "duration": 0.25,
+                    "cels": ["fx_notice1", "fx_notice2", "fx_notice1", "fx_notice2"]}],  # the same cels can also repeat
 
-    # "beaming" lines (joy etc.)
-    "fx_beaming_emotions": ["admiration", "amusement", "excitement", "joy"],  # TODO: approval, gratitude, pride?
-    "fx_beaming_duration": 0.25,
+        ["beaming", {"emotions": ["admiration", "amusement", "excitement", "joy"],  # TODO: approval, gratitude, pride?
+                     "type": "sequence",
+                     "duration": 0.25,
+                     "cels": ["fx_beaming1", "fx_beaming2"]}],
 
-    # question mark(s)
-    "fx_question_emotions": ["confusion"],
-    "fx_question_duration": 0.25,
+        ["question", {"emotions": ["confusion"],
+                      "type": "sequence",
+                      "duration": 0.25,
+                      "cels": ["fx_question1", "fx_question2", "fx_question3"]}],
 
-    # exclamation mark(s)
-    "fx_exclaim_emotions": ["realization"],
-    "fx_exclaim_duration": 0.25,
+        ["exclaim", {"emotions": ["realization"],
+                     "type": "sequence",
+                     "duration": 0.25,
+                     "cels": ["fx_exclaim1", "fx_exclaim2", "fx_exclaim3"]}],
+    ],
 
     # postprocessor
     "postprocessor_chain": postprocessor_defaults
