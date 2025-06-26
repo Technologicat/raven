@@ -196,9 +196,9 @@ def animate_cel_fadeout(t0: float,
     t = (time_now - t0) / 10**9
     animation_pos = t / duration
     if animation_pos >= 1.0:  # effect ended?
-        return new_celstack
-
-    r = 1.0 - animation_pos  # linear fade; could modify this for other profiles
+        r = 0.0
+    else:
+        r = 1.0 - animation_pos  # linear fade; could modify this for other profiles
 
     for celname in cels:
         idx = get_cel_index_in_stack(celname, new_celstack)
