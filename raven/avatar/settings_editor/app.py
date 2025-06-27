@@ -525,7 +525,8 @@ class PostprocessorSettingsEditorGUI:
                                                         width=self.button_width,
                                                         callback=self.on_send_emotion)
                     self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
-                    dpg.add_spacer(height=8)
+                    dpg.add_checkbox(label="Animefx", default_value=True, callback=self.on_gui_settings_change, tag="animefx_checkbox")  # animefx: emotion change triggered anime effects
+                    dpg.add_spacer(height=2)
 
                     dpg.add_text("Talking animation (generic, non-lipsync)")
                     dpg.add_button(label="Start [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
@@ -536,7 +537,7 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_button(label="X", callback=reset_talking_fps, tag="talking_fps_reset_button")
                         dpg.add_slider_int(label="Talk FPS", default_value=12, min_value=6, max_value=24, clamped=True, width=self.button_width - 86,
                                            callback=self.on_gui_settings_change, tag="talking_fps_slider")
-                    dpg.add_spacer(height=8)
+                    dpg.add_spacer(height=2)
 
                     # AI speech synthesizer
                     tts_alive = api.tts_server_available()
@@ -559,7 +560,6 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 10))
                         dpg.add_slider_int(label="x 0.1x", default_value=10, min_value=5, max_value=20, clamped=True, width=self.button_width - 122,
                                            tag="speak_speed_slider")
-                    dpg.add_spacer(height=4)
                     dpg.add_checkbox(label="Lipsync [adjust video timing below]", default_value=True, tag="speak_lipsync_checkbox")
                     dpg.add_slider_int(label="x 0.1 s", default_value=-6, min_value=-20, max_value=20, clamped=True, width=self.button_width - 64, tag="speak_video_offset")
                     dpg.add_spacer(height=4)
@@ -569,7 +569,6 @@ class PostprocessorSettingsEditorGUI:
                                        tag="speak_input_text")
                     dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_start_speaking, enabled=tts_alive, tag="speak_button")
                     dpg.bind_item_theme("speak_button", "disablable_button_theme")
-                    dpg.add_spacer(height=8)
 
                 # Postprocessor settings editor
                 #
@@ -1005,7 +1004,8 @@ class PostprocessorSettingsEditorGUI:
                                         "pose_interpolator_step": dpg.get_value("pose_interpolator_step_slider") / 10,
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
-                                        "upscale_quality": self.upscale_quality}
+                                        "upscale_quality": self.upscale_quality,
+                                        "animefx_enabled": dpg.get_value("animefx_checkbox")}
             self.animator_settings.update(custom_animator_settings)
 
             # Send to server
@@ -1044,6 +1044,9 @@ class PostprocessorSettingsEditorGUI:
                 self.upscale_quality = animator_settings["upscale_quality"]
                 dpg.set_value("upscale_quality_choice", self.upscale_quality)
 
+            if "animefx_enabled" in animator_settings:
+                dpg.set_value("animefx_checkbox", animator_settings["animefx_enabled"])
+
             # Make sure these fields exist (in case they didn't yet).
             # They're not mandatory (any missing keys are always auto-populated from server defaults),
             # but they're something `PostprocessorSettingsEditorGUI` tracks, so we should sync our state to the server.
@@ -1053,7 +1056,8 @@ class PostprocessorSettingsEditorGUI:
                                         "pose_interpolator_step": dpg.get_value("pose_interpolator_step_slider") / 10,
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
-                                        "upscale_quality": self.upscale_quality}
+                                        "upscale_quality": self.upscale_quality,
+                                        "animefx_enabled": dpg.get_value("animefx_checkbox")}
             animator_settings.update(custom_animator_settings)
 
             # Send to server
