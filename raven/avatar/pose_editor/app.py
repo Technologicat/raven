@@ -73,6 +73,7 @@ from ...common.gui import messagebox
 from ...common.gui import utils as guiutils
 from ...common.hfutil import maybe_install_models
 from ...common.running_average import RunningAverage
+from ...common.video import compositor
 
 from ...server import config as server_config  # hf repo name for downloading THA3 models if needed
 from ...server.modules import avatarutil
@@ -1010,7 +1011,7 @@ class PoseEditorGUI:
         posetensor = torch.tensor(pose, device=self.device, dtype=self.dtype)
         with torch.no_grad():
             # Cel blending: apply cels to base image.
-            torch_source_image = avatarutil.render_celstack(self.torch_base_image, celstack, self.torch_cels)
+            torch_source_image = compositor.render_celstack(self.torch_base_image, celstack, self.torch_cels)
 
             # # DEBUG
             # numpy_source_image = avatarutil.torch_image_to_numpy(torch_source_image)  # display-ready copy to CPU, shape [h, w, c], range [0, 1], SRGB, 4 channels (RGBA), for GUI
