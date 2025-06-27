@@ -622,8 +622,8 @@
     "disapproval": {"pose": {
                       "eyebrow_troubled_left_index": 0.0,
                       "eyebrow_troubled_right_index": 0.0,
-                      "eyebrow_angry_left_index": 1.0,
-                      "eyebrow_angry_right_index": 0.0,
+                      "eyebrow_angry_left_index": 0.9315,
+                      "eyebrow_angry_right_index": 0.9315,
                       "eyebrow_lowered_left_index": 0.0,
                       "eyebrow_lowered_right_index": 0.0,
                       "eyebrow_raised_left_index": 0.0,
