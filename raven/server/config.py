@@ -248,20 +248,20 @@ animator_defaults = {
                             "cels": ["fx_smallsweatdrop1", "fx_smallsweatdrop2", "fx_smallsweatdrop3"]}],
 
         ["heart", {"enabled": True,
-                   "emotions": ["desire"],
+                   "emotions": ["desire", "love"],
                    "type": "sequence_with_fadeout",
                    "duration": 0.3,
                    "cels": ["fx_heart1", "fx_heart2", "fx_heart3"]}],
 
         ["blackcloud", {"enabled": True,
-                        "emotions": ["annoyance", "disapproval"],
+                        "emotions": ["annoyance"],
                         "type": "cycle_with_fadeout",
                         "fps": 6.0,
                         "duration": 1.0,
                         "cels": ["fx_blackcloud1", "fx_blackcloud2"]}],
 
         ["flowers", {"enabled": True,
-                     "emotions": ["love"],
+                     "emotions": ["joy"],
                      "type": "cycle_with_fadeout",
                      "fps": 6.0,
                      "duration": 1.0,
@@ -280,7 +280,7 @@ animator_defaults = {
                     "cels": ["fx_notice1", "fx_notice2", "fx_notice1", "fx_notice2"]}],  # the same cels can also repeat
 
         ["beaming", {"enabled": True,
-                     "emotions": ["admiration", "amusement", "excitement", "joy"],  # TODO: approval, gratitude, pride?
+                     "emotions": ["admiration", "amusement", "excitement", "pride"],  # TODO: approval, gratitude?
                      "type": "sequence",
                      "duration": 0.25,
                      "cels": ["fx_beaming1", "fx_beaming2"]}],
