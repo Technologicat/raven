@@ -900,8 +900,9 @@ class PoseEditorGUI:
             # Scan for and load add-on cels for cel blending.
             # This sets up which cels are actually available for this character.
             # The compositor skips any effects for which the current character has no cel, so we don't need to worry about that.
+            # Here in the pose editor, we also skip all animefx cels by only loading `supported_cels` (cels for the semi-realistic cel blend effects).
             cels_filenames = avatarutil.scan_addon_cels(image_file_name)
-            self.torch_cels = {celname: _load(filename) for celname, filename in cels_filenames.items()}
+            self.torch_cels = {celname: _load(filename) for celname, filename in cels_filenames.items() if celname in avatarutil.supported_cels}
 
             # Load all supported cels into the stack, but set the blend strengths to zero.
             # The live animator needs all cels to be present in the emotion template, even "waver2",
@@ -979,7 +980,7 @@ class PoseEditorGUI:
             panel.write_to_pose(current_pose)
         for panel in self.non_morph_control_panels.values():
             panel.write_to_pose(current_pose)
-        current_celstack = [(celname, 0.0) for celname in self.torch_cels.keys()]
+        current_celstack = [(celname, 0.0) for celname in avatarutil.supported_cels]
         for cel_control_panel in self.cel_control_panels.values():
             cel_control_panel.write_to_celstack(current_celstack)
         return current_pose, current_celstack
