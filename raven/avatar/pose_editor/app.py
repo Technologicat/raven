@@ -1044,7 +1044,6 @@ class PoseEditorGUI:
                 emotion = self.emotions[current_emotion_name]
                 celstack = emotion["cels"]
                 posedict = emotion["pose"]
-                print(celstack, posedict)
                 pose = avatarutil.posedict_to_pose(posedict)
                 self.set_current_pose(pose, celstack)
                 current_pose, current_celstack = pose, celstack
