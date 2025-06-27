@@ -83,7 +83,7 @@ def render_celstack(base_image: torch.tensor, celstack: List[Tuple[str, float]],
     return out
 
 def get_cel_index_in_stack(celname: str, celstack: List[Tuple[str, float]]) -> int:
-    """Given `celname`, return its (zero-based) index in `celstack`, or -1 if not found."""
+    """Given `celname`, return the (zero-based) index of its first occurrence in `celstack`, or -1 if not found."""
     for idx, (name, strength) in enumerate(celstack):
         if name == celname:
             return idx
