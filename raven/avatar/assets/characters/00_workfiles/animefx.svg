@@ -9,7 +9,7 @@
    id="svg5"
    inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
    sodipodi:docname="animefx.svg"
-   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/raven/avatar/assets/characters/other/fx_heart1.png"
+   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/raven/avatar/assets/characters/other/fx_smallsweatdrop3.png"
    inkscape:export-xdpi="96.000008"
    inkscape:export-ydpi="96.000008"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -29,14 +29,14 @@
      showgrid="false"
      inkscape:snap-global="false"
      inkscape:zoom="2.68"
-     inkscape:cx="327.61194"
+     inkscape:cx="327.42537"
      inkscape:cy="141.04478"
      inkscape:window-width="3840"
      inkscape:window-height="2088"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:current-layer="layer24"
+     inkscape:current-layer="g1528"
      fit-margin-top="0"
      fit-margin-left="0"
      fit-margin-right="0"
@@ -78,10 +78,10 @@
        inkscape:collect="always"
        xlink:href="#linearGradient12432"
        id="radialGradient12530"
-       cx="79.013313"
-       cy="25.930832"
-       fx="79.013313"
-       fy="25.930832"
+       cx="94.090271"
+       cy="22.697536"
+       fx="94.090271"
+       fy="22.697536"
        r="4.2196019"
        gradientTransform="matrix(1.461003,-0.2025581,0.27791384,2.0045257,-44.448082,-9.3867743)"
        gradientUnits="userSpaceOnUse" />
@@ -118,6 +118,39 @@
        fx="104.84768"
        fy="25.706697"
        r="7.0299285" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient12432"
+       id="radialGradient1280"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(-0.51432058,-0.20663811,0.29077504,-0.70279511,137.62611,49.950288)"
+       cx="94.090271"
+       cy="22.697536"
+       fx="94.090271"
+       fy="22.697536"
+       r="4.2196019" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient12432"
+       id="radialGradient1520"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(-0.47625712,-0.28355621,0.39577919,-0.64948435,133.00564,54.248204)"
+       cx="94.090271"
+       cy="22.697536"
+       fx="94.090271"
+       fy="22.697536"
+       r="4.2196019" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient12432"
+       id="radialGradient1538"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(-0.39972459,-0.38398596,0.53250212,-0.54305854,124.67563,59.632825)"
+       cx="94.090271"
+       cy="22.697536"
+       fx="94.090271"
+       fy="22.697536"
+       r="4.2196019" />
   </defs>
   <g
      inkscape:label="reference"
@@ -342,6 +375,98 @@
        width="100%"
        height="100%"
        transform="translate(-2.8880686e-7,4.233334)" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer29"
+     inkscape:label="smallsweatdrop1"
+     style="display:none">
+    <g
+       id="g1506">
+      <path
+         style="display:inline;fill:url(#radialGradient1280);fill-opacity:1;stroke:#1a1a1a;stroke-width:0.2;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;stop-color:#000000"
+         d="m 97.422135,15.532602 c 0.142347,-0.57941 -0.27142,-1.302792 -0.789203,-1.599257 -0.517784,-0.29646 -1.358302,-0.291229 -1.795731,0.119228 -0.923951,0.866984 -0.468957,3.747359 -0.468957,3.747359 0,0 2.753222,-1.043478 3.053891,-2.26733 z"
+         id="path1275"
+         sodipodi:nodetypes="aaaca" />
+      <use
+         x="0"
+         y="0"
+         xlink:href="#path1275"
+         id="use1362"
+         width="100%"
+         height="100%"
+         transform="rotate(18.34931,98.093805,28.403929)" />
+      <use
+         x="0"
+         y="0"
+         xlink:href="#path1275"
+         id="use1364"
+         width="100%"
+         height="100%"
+         transform="rotate(45.259254,92.629885,22.27388)" />
+    </g>
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer30"
+     inkscape:label="smallsweatdrop2"
+     style="display:none">
+    <g
+       id="g1514"
+       style="display:inline">
+      <path
+         style="display:inline;fill:url(#radialGradient1520);fill-opacity:1;stroke:#1a1a1a;stroke-width:0.2;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;stop-color:#000000"
+         d="m 98.596593,14.036836 c 0.230083,-0.55049 -0.06706,-1.329074 -0.532868,-1.701915 -0.465813,-0.372836 -1.297064,-0.497418 -1.792611,-0.159406 -1.046711,0.713963 -1.041811,3.630048 -1.041811,3.630048 0,0 2.8813,-0.605958 3.36729,-1.768727 z"
+         id="path1508"
+         sodipodi:nodetypes="aaaca" />
+      <use
+         x="0"
+         y="0"
+         xlink:href="#path1275"
+         id="use1510"
+         width="100%"
+         height="100%"
+         transform="rotate(30.604689,100.09998,25.494118)" />
+      <use
+         x="0"
+         y="0"
+         xlink:href="#path1275"
+         id="use1512"
+         width="100%"
+         height="100%"
+         transform="rotate(72.759561,95.417418,21.646997)" />
+    </g>
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer31"
+     inkscape:label="smallsweatdrop3"
+     style="display:inline">
+    <g
+       id="g1528"
+       style="display:inline">
+      <path
+         style="display:inline;fill:url(#radialGradient1538);fill-opacity:1;stroke:#1a1a1a;stroke-width:0.2;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;stop-color:#000000"
+         d="m 100.26011,12.677325 c 0.3487,-0.484136 0.23547,-1.309767 -0.13386,-1.778354 -0.369347,-0.468587 -1.150833,-0.778065 -1.710021,-0.560977 -1.181137,0.458544 -1.836338,3.300074 -1.836338,3.300074 0,0 2.94368,0.06187 3.680219,-0.960743 z"
+         id="path1522"
+         sodipodi:nodetypes="aaaca" />
+      <use
+         x="0"
+         y="0"
+         xlink:href="#path1275"
+         id="use1524"
+         width="100%"
+         height="100%"
+         transform="rotate(50.862969,100.60842,23.061116)" />
+      <use
+         x="0"
+         y="0"
+         xlink:href="#path1275"
+         id="use1526"
+         width="100%"
+         height="100%"
+         transform="rotate(97.575235,96.917184,21.699936)" />
+    </g>
   </g>
   <g
      inkscape:groupmode="layer"
@@ -875,7 +1000,7 @@
      inkscape:groupmode="layer"
      id="layer24"
      inkscape:label="heart1"
-     style="display:inline">
+     style="display:none">
     <g
        id="g5258">
       <path
