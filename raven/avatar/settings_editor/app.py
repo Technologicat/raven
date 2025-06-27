@@ -1424,7 +1424,7 @@ else:
     sys.exit(255)
 
 # IMPORTANT: `avatar_load` first before we start the GUI, to create the avatar instance.
-_startup_input_image_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "other", "example.png")).expanduser().resolve()
+_startup_input_image_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "characters", "other", "aria1.png")).expanduser().resolve()
 avatar_instance_id = api.avatar_load(_startup_input_image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings into the GUI, as well as send them to the avatar instance.
