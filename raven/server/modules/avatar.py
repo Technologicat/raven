@@ -1439,10 +1439,13 @@ class Animator:
         self.emotion = self.pending_emotion  # update from pending emotion at start of frame (this avoids a race condition between `set_emotion` and `render_animation_frame`)
 
         current_emotion_template = self.emotions[self.emotion]
+        def valid_cels_from_emotion_template():
+            # In an emotion template, accept only the known cels for the semi-realistic effects that render on the character itself
+            return [(celname, strength) for celname, strength in current_emotion_template["cels"] if celname in avatarutil.supported_cels]
         if self.current_pose is None:  # initialize character pose at startup
             # `current_pose` and `current_celstack` hold the character's instantaneous state.
             self.current_pose = avatarutil.posedict_to_pose(current_emotion_template["pose"])
-            self.current_celstack = current_emotion_template["cels"]
+            self.current_celstack = valid_cels_from_emotion_template()
 
         # Some animation drivers need to know when the emotion last changed.
         if self.emotion != self.last_emotion:  # emotion different from previous frame?
@@ -1450,7 +1453,7 @@ class Animator:
 
         # Compute target pose and celstack (which we interpolate toward)
         target_posedict = current_emotion_template["pose"]
-        target_celstack = current_emotion_template["cels"]
+        target_celstack = valid_cels_from_emotion_template()
         target_pose = self.apply_emotion_to_pose(target_posedict, self.current_pose)
         target_pose = self.compute_sway_target_pose(target_pose)
 
