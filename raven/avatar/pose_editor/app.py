@@ -404,22 +404,14 @@ class CelBlendControlPanel:
         self.label = label
         self.slider = dpg.add_slider_int(label=label, default_value=0, min_value=0, max_value=1000, parent=parent)
 
-    def _get_idx_in(self, celstack: List[Tuple[str, float]]):  # Just the first one, really. But that's enough for our purposes.
-        labels = [celname for celname, strength in celstack]
-        try:
-            idx = labels.index(self.label)
-            return idx
-        except ValueError:
-            return None
-
     def write_to_celstack(self, celstack: List[Tuple[str, float]]) -> None:
         """Update a cel stack in-place by the current value set in this control panel.
 
         If `self.label` is missing from `celstack` (it doesn't have the cel this panel is controlling),
         then do nothing.
         """
-        idx = self._get_idx_in(celstack)
-        if idx is not None:
+        idx = compositor.get_cel_index_in_stack(self.label, celstack)
+        if idx != -1:  # found?
             celstack[idx] = (self.label, slider_value_to_relpos(self.slider))
         # else:
         #     logger.warning(f"This control panel's label '{self.label}' not in celstack, ignoring.")  # DEBUG (spammy)
@@ -430,8 +422,8 @@ class CelBlendControlPanel:
         If `self.label` is missing from `celstack` (it doesn't have the cel this panel is controlling),
         then set this control panel to the value 0.
         """
-        idx = self._get_idx_in(celstack)
-        if idx is not None:
+        idx = compositor.get_cel_index_in_stack(self.label, celstack)
+        if idx != -1:  # found?
             _, strength = celstack[idx]
         else:
             strength = 0.0
