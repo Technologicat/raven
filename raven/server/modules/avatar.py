@@ -1167,7 +1167,7 @@ class Animator:
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         for fx_name, fx_config in self._settings["animefx"]:
             # Skip if effect disabled
-            if fx_config["duration"] == 0.0 or not fx_config["cels"]:
+            if not fx_config["enabled"] or fx_config["duration"] == 0.0 or not fx_config["cels"]:
                 continue
 
             # Skip if wrong emotion or if effect ended
