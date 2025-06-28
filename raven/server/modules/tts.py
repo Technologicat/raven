@@ -149,6 +149,10 @@ def text_to_speech(voice: str,
     _, tokens = pipeline.g2p(text)
     metadata = []
     audios = []
+
+    # SillyTavern compatibility: ST sends the whitespace too if the user configured the comma-separated voice list with whitespaces
+    voice = voice.strip()
+
     for result in pipeline.generate_from_tokens(tokens=tokens,
                                                 voice=voice,
                                                 speed=speed):
