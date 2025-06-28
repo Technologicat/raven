@@ -891,7 +891,7 @@ def api_v1_audio_voices():
     """OpenAI compatible endpoint, for SillyTavern; does the exact same thing as "/api/tts/list_voices"."""
     return _list_voices()
 
-@app.route("/v1/audio/speech")
+@app.route("/v1/audio/speech", methods=["POST"])
 def api_v1_audio_speech():
     """OpenAI compatible endpoint, for SillyTavern; does the exact same thing as "/api/tts/speak".
 
