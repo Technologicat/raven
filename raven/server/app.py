@@ -78,7 +78,7 @@ def is_authorized(request) -> bool:
 
     - When not in "--secure" mode, all requests are authorized.
     - HTTP OPTIONS requests are always authoriszed.
-    - If the API endpoint being called is in the server's `ignore_auth`, the request is authorized.
+    - If the API endpoint being called is in the server's `ignore_auth`, the request is always authorized.
 
     Otherwise: the correct API key must be present in the request for the request to be authorized.
     """
