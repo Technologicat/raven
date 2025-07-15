@@ -62,7 +62,7 @@ from ...common.running_average import RunningAverage
 
 from ...client import api  # convenient Python functions that abstract away the web API
 from ...client import config as client_config
-from ...server import config as server_config
+from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
 
 # ----------------------------------------
 # Module bootup

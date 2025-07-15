@@ -1,6 +1,6 @@
 """Client-side-specific config for Raven-avatar."""
 
-from ..server import config as server_config
+from ..server import config as server_config  # NOTE: default config location (can be overridden on the command line when starting the server)
 
 # TODO: Assumption: The `userdata_dir` of the client/server pair is local anyway, so we can just as well use the server app's.
 #

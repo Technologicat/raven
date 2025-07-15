@@ -36,22 +36,20 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from unpythonic import memoize
 
-from .. import config as server_config  # `server_userdata_dir`, for saving debug dumps
-
 # --------------------------------------------------------------------------------
 # Bootup
+
+driver = None
+app = None
+dump_dir = None
+dump_filename = None
 
 # See `navigator.userAgent` in a web browser's JavaScript console (to access it, try pressing F12 or Ctrl+Shift+C)
 user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-dump_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve() / "websearch"
-
 def create_directory(path: Union[str, pathlib.Path]) -> None:
     p = pathlib.Path(path).expanduser().resolve()
     pathlib.Path.mkdir(p, parents=True, exist_ok=True)
-create_directory(dump_dir)
-
-dump_filename = dump_dir / "debug.html"
 
 def is_colab():
     """False. We never run inside colab. Provided for compatibility only."""
@@ -92,13 +90,28 @@ def get_driver():
 driver = None
 def init_module():
     """Initialize the websearch module."""
-    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}websearch{Style.RESET_ALL}...")
     global driver
+    global app
+    global dump_dir
+    global dump_filename
+
+    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}websearch{Style.RESET_ALL}...")
     driver = get_driver()
     if driver is not None:
         def quit_driver():
             driver.quit()
         atexit.register(quit_driver)
+
+        from .. import app  # `app.server_config` contains `server_userdata_dir`, for saving debug dumps
+        dump_dir = pathlib.Path(app.server_config.server_userdata_dir).expanduser().resolve() / "websearch"
+        dump_filename = dump_dir / "debug.html"
+        create_directory(dump_dir)
+    else:
+        driver = None
+        app = None
+        dump_dir = None
+        dump_filename = None
+        raise RuntimeError("websearch module could not load web driver")
 
 def is_available() -> bool:
     """Return whether this module is up and running."""

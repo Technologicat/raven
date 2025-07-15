@@ -75,7 +75,7 @@ from ...common.hfutil import maybe_install_models
 from ...common.running_average import RunningAverage
 from ...common.video import compositor
 
-from ...server import config as server_config  # hf repo name for downloading THA3 models if needed
+from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
 from ...server.modules import avatarutil
 
 logging.basicConfig(level=logging.INFO)

@@ -12,6 +12,7 @@ The `tts` module is new, based on Kokoro-82M. All old TTS options are gone. This
 
 import argparse
 import gc
+import importlib
 import io
 import json
 import os
@@ -36,8 +37,6 @@ from .. import __version__
 from ..common import deviceinfo
 from ..common.video.postprocessor import Postprocessor  # available image filters
 
-from . import config as server_config  # default models etc.
-
 from .modules import avatar
 from .modules import classify
 from .modules import embeddings
@@ -49,8 +48,6 @@ from .modules import websearch
 # Inits that must run before we proceed any further
 
 colorama_init()
-
-deviceinfo.validate(server_config.enabled_modules)  # modifies in-place if CPU fallback needed
 
 app = Flask(__name__)
 CORS(app)  # allow cross-domain requests
@@ -1042,12 +1039,34 @@ def api_websearch2():
 
 parser = argparse.ArgumentParser(prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras")
 parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
-parser.add_argument("--port", type=int, help=f"Specify the port on which the application is hosted (default {server_config.default_port})")
+parser.add_argument("--config", metavar='some.python.module', default="raven.server.config", type=str, help="Python module containing the server config (default is 'raven.server.config')")
+parser.add_argument("--port", type=int, help="Specify the port on which the application is hosted (default is set in the server config module)")
 parser.add_argument("--listen", action="store_true", help="Host the app on the local network (if not set, the server is visible to localhost only)")
 parser.add_argument("--secure", action="store_true", help="Require an API key (will be auto-created first time, and printed to console each time on server startup)")
 parser.add_argument("--max-content-length", help="Set the max content length for the Flask app config.")
 
 args = parser.parse_args()
+
+# Switchable config module, so the user can load different configs e.g. when running with an eGPU vs. just a laptop's internal GPU.
+#
+# Note the security implications: essentially, this is executing user-provided arbitrary code at server startup.
+#   - If the OS user account running the server can run Python (which it needs to, to start the server), it can run arbitrary Python code anyway.
+#   - This is done only once per session, at server startup. By design, there is no way to inject code into a running server.
+#     - If you want to switch configs, you need to restart the server.
+#   - The main risk comes from an attacker replacing the config file with something else; but that can happen with a hardcoded config path, too.
+#   - The server is meant to run in a trusted environment only.
+config_module_name = args.config
+try:
+    server_config = importlib.import_module(config_module_name)
+    print(f"{Fore.GREEN}{Style.BRIGHT}Server config loaded from '{args.config}'.{Style.RESET_ALL}")
+except ModuleNotFoundError:
+    print(f"{Fore.RED}{Style.BRIGHT}Server config '{args.config}' (Python module) not found.{Style.RESET_ALL}")
+    raise
+try:
+    deviceinfo.validate(server_config.enabled_modules)  # modifies in-place if CPU fallback needed
+except AttributeError:  # very basic sanity check while at it
+    print(f"{Fore.RED}{Style.BRIGHT}Server config '{args.config}' (Python module) does not seem to be a Raven server config module.{Style.RESET_ALL}")
+    raise
 
 port = args.port if args.port else server_config.default_port
 host = "0.0.0.0" if args.listen else "localhost"

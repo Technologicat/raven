@@ -28,8 +28,7 @@ from ...common.hfutil import maybe_install_models
 
 from ...vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 
-from .. import config as server_config  # hf repo name for downloading Kokoro models if needed
-
+app = None
 modelsdir = None
 pipeline = None
 lang = None
@@ -51,6 +50,7 @@ def init_module(device_string: str, lang_code="a") -> None:
       🇧🇷 'p' => Brazilian Portuguese pt-br
       🇨🇳 'z' => Mandarin Chinese: pip install misaki[zh]
     """
+    global app
     global modelsdir
     global pipeline
     global lang
@@ -61,16 +61,18 @@ def init_module(device_string: str, lang_code="a") -> None:
     # We need to install the full repo to get a list of available voice names programmatically (like Kokoro-FastAPI does, see `Kokoro-FastAPI/api/src/core/paths.py`).
     # We can't download the model to "raven/vendor/", though, because Kokoro itself won't look for the files there - they must go into HF's default cache location.
     try:
-        modelsdir = maybe_install_models(server_config.kokoro_models)
-        pipeline = KPipeline(lang_code=lang_code, device=device_string, repo_id=server_config.kokoro_models)
+        from .. import app  # `app.server_config` contains hf repo name for downloading Kokoro models if needed
+        modelsdir = maybe_install_models(app.server_config.kokoro_models)
+        pipeline = KPipeline(lang_code=lang_code, device=device_string, repo_id=app.server_config.kokoro_models)
         lang = lang_code
     except Exception as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'tts'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+        app = None
         modelsdir = None
         pipeline = None
         lang = None
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'tts'.{Style.RESET_ALL} Details follow.")
+        traceback.print_exc()
+        logger.error(f"init_module: failed: {type(exc)}: {exc}")
 
 def is_available() -> bool:
     """Return whether this module is up and running."""
