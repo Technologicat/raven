@@ -181,6 +181,9 @@ def summarize_text(text: str) -> str:
         # Detect possible incomplete sentence at the end.
         #   - Summarizer AIs sometimes do that, especially if they run into the user-specified output token limit too soon.
         #   - The input text may have been cut off before it reaches us. When this happens, some summarizer AIs become confused.
+        #     (E.g. Qiliang/bart-large-cnn-samsum-ChatGPT_v3, given the input:
+        #          " The quick brown fox jumped over the lazy dog.  This is the second sentence! What?! This incomplete sentence"
+        #      focuses only on the fact that the last sentence is incomplete, and reports that as the summary.)
         end = -1 if text[-1] not in (".", "!", "?") else None
 
         # Split into sentences via NLP. (This is the sane approach.)
