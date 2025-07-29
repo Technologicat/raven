@@ -1,6 +1,6 @@
 """Server-side image postprocessing and upscaling.
 
-If you want these features locally, just directly use `raven.common.postprocessor` and `raven.common.upscaler`;
+If you want these features locally, just directly use `raven.common.video.postprocessor` and `raven.common.video.upscaler`;
 they operate on Torch tensors and can run on a local GPU.
 
 This module is intended for situations where it is preferred to use the server's GPU.
