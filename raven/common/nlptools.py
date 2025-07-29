@@ -92,7 +92,7 @@ def load_pipeline(model_name: str, device_string: str):
         download(model_name)
         nlp = spacy.load(model_name)
 
-    logger.info(f"load_pipeline: Loaded spaCy model '{model_name}'.")
+    logger.info(f"load_pipeline: Loaded spaCy model '{model_name}' on device '{device_string}'.")
     _pipelines[(model_name, device_string)] = nlp
     return nlp
 
@@ -177,6 +177,7 @@ def load_dehyphenator(model_name: str, device_string: str):
     # Flair requires "no weights only load" mode for Torch; but this is insecure, so only enable it temporarily while loading the Flair model.
     #   https://github.com/flairNLP/flair/issues/3263
     #   https://github.com/pytorch/pytorch/blob/main/torch/serialization.py#L1443
+    logger.warning("load_dehyphenator: Temporarily forcing Torch into 'no weights only' load mode for Flair-NLP compatibility. The mode will be disabled immediately after Flair-NLP is loaded. The security warning is normal.")
     with environ_override(TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD="1"):
         try:
             # How to set CPU/GPU mode for Flair (used by `dehyphen`).
