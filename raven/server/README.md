@@ -33,21 +33,43 @@
 
 *This is the old documentation for the Talkinghead module, minimally updated to Raven-avatar (e.g. paths have been updated). For the latest on Raven-avatar, see the [Raven-avatar README](../avatar/README.md).*
 
-*Documentation for the rest of Raven-server is not yet available. Likely it will be in August 2025. Please check back later.*
+*Documentation for the rest of Raven-server is not yet available. Likely it will be sometime in autumn 2025. Please check back later.*
 
 In the meantime:
 
 - See `raven.server.config` for enabling/disabling server modules, and for specifying HuggingFace model repos to download models from.
-- If you have a CUDA-capable GPU, enable GPU support in `raven.server.config`, by setting up the desired server modules to run on a CUDA device.
-  - Be sure to install the CUDA optional dependencies of Raven (see [main README](../../README.md)).
-- Look at the Python bindings of the web API in `raven.client.api` to get an idea of what the server can do.
+- If you have a CUDA-capable GPU, server modules can be set up to run on a CUDA device in `raven.server.config` (and this is actually the default).
+  - To use CUDA, be sure to install the CUDA optional dependencies of Raven (see [main README](../../README.md)).
+  - If you have several GPUs, the preferred way to point `raven-server` to use a single specific GPU is to `export CUDA_VISIBLE_DEVICES=x`, where `x` is the device number (0-based), and then start the server. This simplifies the server config, as you can then always specify `"cuda:0"` as the GPU in the server config, regardless of which GPU a given session is running on. This is convenient e.g. if you run Raven on a laptop, and sometimes (but not always) have an eGPU available.
+  - Some modules have an automatic CPU fallback in their loader: `classify`, `embeddings`, `sanitize`, and `summarize`.
+    - If loading on GPU fails, these modules will note this in the server log, and auto-retry on the CPU.
+    - The rule of thumb is that, for a given module, if a slow response won't completely break the UX, then that module has a loader with a CPU fallback.
+  - If your machine has low VRAM, see `raven.server.config_lowvram`. This is useful e.g. if you are on the road with a laptop with an 8 GB GPU, and you'd like to dedicate the whole GPU for a 7B/8B LLM.
+    - The low-VRAM config doesn't bother loading the `avatar` module, as it's nearly useless on CPU (~2 FPS; not a typo). It loads all other modules on CPU.
+    - To use the low-VRAM config, start the server as `raven-server --config raven.server.config_lowvram`.
+- To get an idea of what the server can do, look at the Python bindings of the web API in `raven.client.api`.
 
 *SillyTavern* compatibility:
 
 - The `classify`, `embeddings`, `summarize`, and `websearch` modules work as drop-in replacements for those modules in the discontinued *SillyTavern-extras*.
-  - The `websearch` module provides also a new endpoint (`/api/websearch2`) that returns structured search results. Using this requires new client code.
-- The `tts` module provides an OpenAI compatible TTS endpoint you can use in *SillyTavern*.
-- The `avatar` and `imagefx` modules are **not** compatible with *SillyTavern*, and need new client code. They are currenly meant for use in the Raven constellation. See `raven.avatar.settings_editor.app` for an example.
+- The `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`) you can use as a speech synthesizer in *SillyTavern*.
+  - `/v1/audio/voices`, to list supported voices, is also provided.
+
+The following are **not** supported by *SillyTavern*. These are currently meant for use in the Raven constellation. Using these elsewhere requires writing new client code:
+
+- `avatar` replaces and extends the old `talkinghead` (e.g. now has cel effects and lipsyncing). As of summer 2025, `talkinghead` is no longer supported by ST anyway.
+  - This module is rather complex and provides a lot of web API endpoints, so we won't list them all in this overview. See `raven.server.app` for details.
+- `imagefx` (see `/api/imagefx/process`, `/api/imagefx/upscale`) provides postprocessing effects for still images, as well as provides upscaling for still images with Anime4K. Essentially, `imagefx` exposes the parts used by the avatar's postprocessor.
+  - See `raven.avatar.settings_editor.app` for usage examples of both `avatar` and `imagefx`.
+  - `imagefx` is useful when you want to process still images on the server's GPU. But the network roundtrip time (including image encoding and decoding) means that `imagefx` is not fast enough for processing a video stream. If you need to call the same features locally from Python (on the client's GPU; this approach works in realtime), see `raven.common.video.postprocessor` and `raven.common.video.upscaler`.
+- `sanitize` (see `/api/sanitize/dehyphenate`) cleans up broken text (e.g. as extracted from PDFs).
+- `tts` provides also a new endpoint (`/api/tts/speak`) that (with appropriate client code) facilitates lipsyncing the avatar to the speech synthesizer.
+  - For the "appropriate client code", see `tts_speak_lipsynced` in `raven.client.tts`. Once the lipsync driver gets the timestamped phonemes from the server (together with the speech audio file), it's essentially just applying a phoneme-to-morph lookup table and using that to control the avatar's morph overrides in realtime. Lipsyncing is implemented at the client side, because that's where the audio playback happens.
+  - To get a list of supported voices, see `/api/tts/list_voices`. The same endpoint is also available as `/v1/audio/voices` for OpenAI TTS compatibility.
+- `websearch` provides also a new endpoint (`/api/websearch2`) that returns structured search results, preserving the connection between the text of each search result and its corresponding link.
+- New simple ping endpoint `/health` (note no `/api/...`), for a client to easily check that the server is up and running.
+
+As mentioned, examples for how to call all the web API endpoints from Python are provided in the client-side Python bindings, `raven.client.api`. These should be straightforward to port to other programming environments (e.g. JS) if needed.
 
 
 ### Introduction
