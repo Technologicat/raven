@@ -49,7 +49,7 @@ def test():
     logger.info("test: classify_labels")
     print(api.classify_labels())  # get available emotion names from server
 
-    logger.info("selftext: imagefx")
+    logger.info("test: imagefx")
     processed_png_bytes = api.imagefx_process_file(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve(),
                                                    output_format="png",
                                                    filters=[["analog_lowres", {"sigma": 3.0}],  # maximum sigma is 3.0 due to convolution kernel size
