@@ -10,7 +10,6 @@ Usage::
 
 import argparse
 import logging
-import unicodedata
 
 from unpythonic import timer
 
@@ -23,9 +22,6 @@ logger = logging.getLogger(__name__)
 
 ptmap = {"J": "article",
          "B": "book"}  # TODO: "S" (series), "P" (patent)
-
-def normalize_string(s: str) -> str:  # SillyTavern-extras/server.py
-    s = " ".join(unicodedata.normalize("NFKC", s).strip().split())
 
 def bibtex_escape(s: str):
     s = s.replace("\\", "\\\\")
