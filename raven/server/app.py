@@ -806,6 +806,9 @@ def api_summarize():
 
         {"summary": "Blah."}
     """
+    if not summarize.is_available():
+        abort(403, "Module 'summarize' not running")
+
     data = request.get_json()
 
     if "text" not in data or not isinstance(data["text"], str):
