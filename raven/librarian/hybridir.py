@@ -47,7 +47,7 @@ import chromadb  # semantic (vector)
 from ..common import bgtask
 from ..common import deviceinfo
 from ..common import nlptools
-from ..common import utils
+from ..common import utils as common_utils
 
 from . import config as librarian_config
 
@@ -61,85 +61,6 @@ deviceinfo.validate(librarian_config.devices)  # modifies in-place if CPU fallba
 def format_chunk_full_id(document_id: str, chunk_id: str) -> str:
     """Generate an identifier for a chunk of a document, based on the given IDs."""
     return f"doc-{document_id}-chunk-{chunk_id}"
-
-def chunkify(text: str, chunk_size: int, overlap: int, extra: float, trimmer: Optional[Callable] = None) -> List[Dict]:
-    """Sliding window chunker with overlap, for chunking documents for fine-grained search.
-
-    See also `merge_contiguous_spans`, which does unchunking for the search results.
-
-    `text`: The text to be chunked.
-
-    `chunk_size`: The length of one chunk, in characters (technically, Unicode codepoints, because Python's internal string format).
-
-                  The final chunk may be up to 20% larger, to avoid leaving a very short chunk at the end (if the length of `text`
-                  did not divide well with `chunk_size`).
-
-    `extra`:   Orphan control parameter, as fraction of `chunk_size`, to avoid leaving a very small amount of text
-               into a chunk of its own at the end of the document (in the common case where the length of the document
-               does not divide evenly by `chunk_size`).
-
-               E.g. `extra=0.4` allows placing an extra 40% of `chunk_size` of text into the last chunk of the document.
-               Hence the remainder of text at the end of the document is split into a separate small chunk only if
-               that extra 40% is not enough to accommodate it. If it fits into that, we instead make the previous chunk
-               larger (by up to 40%), and place the remainder there.
-
-    `overlap`: How much of the end of the previous chunk should be included in the next chunk,
-               to avoid losing context at the seams.
-
-               E.g. if `chunk_size` is 2000 characters and you want a 25% overlap, set `overlap=500`.
-
-               For non-overlapping fixed-size chunking, set `overlap=0`.
-
-    `trimmer`: Optional callback to clean up the end of a chunk, e.g. to a whole-sentence or whole-word boundary.
-               Signature: str -> (str, int)
-
-               The `trimmer` receives the text of the chunk as input. It must return a tuple `(trimmed_chunk, offset)`,
-               where `offset` means how many characters were trimmed from the beginning. If you trim the end only,
-               then `offset=0`.
-
-               Note that when a trimmer is in use:
-                   - The final size of any given chunk, after trimming, may be smaller than `chunk_size`.
-                   - `overlap` is counted backward from the end of the *trimmed* chunk.
-
-               An NLP pipeline can be useful as a component for building a high-quality trimmer.
-
-    Returns a list of chunks of the form `{"text": actual_content, "chunk_id": running_number, "offset": start_offset_in_original_text}`.
-    The `chunk_id` is provided primarily just for information and for debugging. The chunks are numbered 0, 1, ...
-    The offsets are used by `merge_contiguous_spans` for unchunking search results.
-
-    If `text` is at most `chunk_size` characters in length, returns a single chunk in the same format.
-    """
-    # TODO: better `extra` mechanism: adjust chunk size instead, to spread the extra content evenly?
-
-    if len(text) <= (1 + extra) * chunk_size:
-        return [{"text": text, "chunk_id": 0, "offset": 0}]
-
-    chunks = []
-    chunk_id = 0
-    start = 0
-    is_last = False
-    while start < len(text):
-        if len(text) - start <= (1 + extra) * chunk_size:
-            chunk = text[start:]
-            is_last = True
-        else:
-            chunk = text[start:start + chunk_size]
-
-        if trimmer is not None:
-            chunk, offset = trimmer(chunk)
-            start = start + offset
-
-        chunks.append({"text": chunk,
-                       "chunk_id": chunk_id,
-                       "offset": start})
-        if is_last:
-            break
-        delta = len(chunk) - overlap
-        if delta <= 0:
-            assert False
-        start += delta
-        chunk_id += 1
-    return chunks
 
 def reciprocal_rank_fusion(*item_lists: List[Any], K: int = 60) -> List[Tuple[Any, float]]:
     """Fuse rank from multiple IR systems using Reciprocal Rank Fusion (RRF).
@@ -569,7 +490,7 @@ class HybridIR:
                     "documents": documents_without_embeddings}
 
             logger.info("HybridIR._save_datastore: Saving...")
-            utils.create_directory(self.fulldocs_path)
+            common_utils.create_directory(self.fulldocs_path)
             with open(self.fulldocs_documents_file, "w", encoding="utf-8") as json_file:
                 # Keeping the amount of indentation small improves human-readability,
                 # but also saves some disk space, as there are lots of indented lines in this file.
@@ -612,7 +533,7 @@ class HybridIR:
         # We split each document into chunks. The chunks themselves are useful
         # as the actual search results (the snippets that matched the search).
         logger.info(f"HybridIR._prepare_document_for_indexing: chunkifying document '{document_id}' ({len(text)} characters).")
-        document_chunks = chunkify(text, chunk_size=self.chunk_size, overlap=self.overlap, extra=0.4)  # -> [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
+        document_chunks = common_utils.chunkify_text(text, chunk_size=self.chunk_size, overlap=self.overlap, extra=0.4)  # -> [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
 
         # Tokenizing each chunk enables keyword search. These are used by the keyword index (bm25s).
         # NOTE: This can be slow, since we use spaCy's neural model for lemmatization.

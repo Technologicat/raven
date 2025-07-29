@@ -23,6 +23,8 @@ enabled_modules = {
                    "dtype": torch.float32},
     "imagefx": {"device_string": "cpu",
                 "dtype": torch.float32},
+    "summarize": {"device_string": "cpu",  # device settings used for the simple summarizer
+                  "dtype": torch.float32},
     "tts": {"device_string": "cpu"},
     "websearch": {},
 }

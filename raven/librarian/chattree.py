@@ -20,7 +20,7 @@ from typing import Any, Callable, List, Optional, Union
 
 from unpythonic import gensym, partition
 
-from ..common import utils
+from ..common import utils as common_utils
 
 class Forest:
     def __init__(self):
@@ -405,7 +405,7 @@ class PersistentForest(Forest):
             logger.info(f"PersistentForest._save: Saving datastore to '{str(self.datastore_file)}' (resolved to '{str(absolute_path)}').")
 
             directory = self.datastore_file.parent
-            utils.create_directory(directory)
+            common_utils.create_directory(directory)
 
             with open(absolute_path, "w", encoding="utf-8") as json_file:
                 json.dump(self.nodes, json_file, indent=2)

@@ -62,7 +62,7 @@ with timer() as tim:
 
     from ..common import bgtask
     from ..common import numutils
-    from ..common import utils
+    from ..common import utils as common_utils
 
     from ..common.gui import animation as gui_animation
     from ..common.gui import fontsetup
@@ -76,17 +76,17 @@ with timer() as tim:
 
     # Emit further log messages only from a few select modules (our own plus some vendored)
     for handler in logging.root.handlers:
-        handler.addFilter(utils.UnionFilter(logging.Filter(__name__),
-                                            logging.Filter("raven.common.bgtask"),
-                                            logging.Filter("raven.common.deviceinfo"),
-                                            logging.Filter("raven.common.gui.animation"),
-                                            logging.Filter("raven.common.gui.fontsetup"),
-                                            logging.Filter("raven.common.gui.utils"),
-                                            logging.Filter("raven.common.gui.widgetfinder"),
-                                            logging.Filter("raven.common.utils"),
-                                            logging.Filter("raven.librarian.llmclient"),
-                                            logging.Filter("raven.visualizer.importer"),
-                                            logging.Filter("raven.vendor.file_dialog.fdialog")))
+        handler.addFilter(common_utils.UnionFilter(logging.Filter(__name__),
+                                                   logging.Filter("raven.common.bgtask"),
+                                                   logging.Filter("raven.common.deviceinfo"),
+                                                   logging.Filter("raven.common.gui.animation"),
+                                                   logging.Filter("raven.common.gui.fontsetup"),
+                                                   logging.Filter("raven.common.gui.utils"),
+                                                   logging.Filter("raven.common.gui.widgetfinder"),
+                                                   logging.Filter("raven.common.utils"),
+                                                   logging.Filter("raven.librarian.llmclient"),
+                                                   logging.Filter("raven.visualizer.importer"),
+                                                   logging.Filter("raven.vendor.file_dialog.fdialog")))
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ def get_visible_datapoints():
     """Return a list of all data points (indices to `sorted_xxx`) currently visible in the plotter."""
     global dataset  # only for documenting intent (we don't write to it)
     if dataset is None:  # nothing plotted when no dataset loaded
-        return utils.make_blank_index_array()
+        return common_utils.make_blank_index_array()
 
     xmin, xmax = dpg.get_axis_limits("axis0")  # in data space  # tag
     ymin, ymax = dpg.get_axis_limits("axis1")  # in data space  # tag
@@ -113,10 +113,10 @@ def get_data_idxs_at_mouse():
     """Return a list of data points (indices to `sorted_xxx`) that are currently under the mouse cursor."""
     global dataset  # only for documenting intent (we don't write to it)
     if dataset is None:  # nothing plotted when no dataset loaded
-        return utils.make_blank_index_array()
+        return common_utils.make_blank_index_array()
     pixels_per_data_unit_x, pixels_per_data_unit_y = guiutils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
     if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:
-        return utils.make_blank_index_array()
+        return common_utils.make_blank_index_array()
 
     # FIXME: DPG BUG WORKAROUND: when not initialized yet, `get_plot_mouse_pos` returns `[0, 0]`.
     # This happens especially if the mouse cursor starts outside the plot area when the app starts.
@@ -124,7 +124,7 @@ def get_data_idxs_at_mouse():
     p = np.array(dpg.get_plot_mouse_pos())
     first_time = (p == np.array([0.0, 0.0])).all()  # exactly zero - unlikely to happen otherwise (since we likely get asymmetric axis limits from t-SNE)
     if first_time:
-        return utils.make_blank_index_array()
+        return common_utils.make_blank_index_array()
 
     # Find `k` data points nearest to the mouse cursor.
     # Since the plot aspect ratio is not necessarily square, we need x/y distances separately to judge the pixel distance.
@@ -163,7 +163,7 @@ def reset_undo_history(_update_gui=True):  # This creates the global variables.
     global selection_undo_pos
     global selection_changed
     global selection_anchor_data_idxs_set
-    selection_data_idxs_box = box(utils.make_blank_index_array())
+    selection_data_idxs_box = box(common_utils.make_blank_index_array())
     selection_undo_stack = [unbox(selection_data_idxs_box)]
     selection_undo_pos = 0
     selection_changed = False  # ...after last completed info panel update (that was finalized); used for scroll anchoring
@@ -725,7 +725,7 @@ def parse_dataset_file(filename):
     Returns a dataset: `unpythonic.env` with the datafile contents, and some preprocessed fields to facilitate visualization.
     """
     dataset = env()
-    absolute_filename = utils.absolutize_filename(filename)
+    absolute_filename = common_utils.absolutize_filename(filename)
     dataset.filename = filename
     dataset.absolute_filename = absolute_filename
 
@@ -755,7 +755,7 @@ def parse_dataset_file(filename):
             # Compute normalized titles for searching, and insert a reverse lookup for the item's index in `sorted_xxx`.
             for data_idx, entry in enumerate(dataset.sorted_entries):
                 entry.data_idx = data_idx  # index to `sorted_xxx`
-                entry.normalized_title = utils.normalize_search_string(entry.title.strip())  # for searching
+                entry.normalized_title = common_utils.normalize_search_string(entry.title.strip())  # for searching
 
         # for k, v in dataset.sorted_entries[0].items():  # DEBUG: print one input data record (it's a dict)
         #     print(f"{k}: {v}")
@@ -819,7 +819,7 @@ def reset_app_state(_update_gui=True):
 
         # Clear undo history and selection
         reset_undo_history()
-        update_selection(utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
+        update_selection(common_utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
 
         # Clear the search
         dpg.set_value("search_field", "")  # tag
@@ -905,7 +905,7 @@ def load_data_into_plotter(dataset):
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
     # Trigger an info panel update
-    update_selection(utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
+    update_selection(common_utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
 
 def open_file(filename):
     """Load new data into the GUI. Public API."""
@@ -1172,7 +1172,7 @@ info_panel_scroll_end_flasher = gui_animation.ScrollEndFlasher(target="item_info
                                                                text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
 
 search_string_box = box("")
-search_result_data_idxs_box = box(utils.make_blank_index_array())
+search_result_data_idxs_box = box(common_utils.make_blank_index_array())
 
 def update_search(wait=True):
     """Perform search and update the search results.
@@ -1187,12 +1187,12 @@ def update_search(wait=True):
     """
     search_string = dpg.get_value("search_field")  # tag
     if not search_string:
-        search_result_data_idxs = utils.make_blank_index_array()
+        search_result_data_idxs = common_utils.make_blank_index_array()
     else:
         # Simple O(n) scan for exact matches, ANDed across all fragments. No stopwording, lemmatization or anything fancy.
         # TODO: Search also in document authors (full author list). For this, need to update the GUI wherever we show author names - e.g. searching for "Virtanen" in a paper "Aaltonen et al." that has 200 authors.
         # TODO: With `raven.librarian.hybridir.HybridIR`, we could integrate also a semi-intelligent (keyword + semantic) fulltext search here. Think about the GUI, as the classic mode is useful too.
-        case_sensitive_fragments, case_insensitive_fragments = utils.search_string_to_fragments(search_string, sort=False)  # minor speedup: don't need to sort, since all must match
+        case_sensitive_fragments, case_insensitive_fragments = common_utils.search_string_to_fragments(search_string, sort=False)  # minor speedup: don't need to sort, since all must match
         search_result_data_idxs = []
         for data_idx, entry in enumerate(dataset.sorted_entries):  # `data_idx`: index to `sorted_xxx`
             text = entry.normalized_title
@@ -3402,11 +3402,11 @@ def _update_info_panel(*, task_env=None, env=None):
         #
         # We sort, i.e. we match the fragments from longest to shortest. This prefers the longest match
         # when the fragments have common substrings. For example, "laser las".
-        case_sensitive_fragments, case_insensitive_fragments = utils.search_string_to_fragments(search_string, sort=True)
+        case_sensitive_fragments, case_insensitive_fragments = common_utils.search_string_to_fragments(search_string, sort=True)
 
         # Convert the raw fragments into a format suitable for use in regexes (escaping special characters; matching superscript/subscript digits).
-        case_sensitive_fragments = [utils.search_fragment_to_highlight_regex_fragment(x) for x in case_sensitive_fragments]
-        case_insensitive_fragments = [utils.search_fragment_to_highlight_regex_fragment(x) for x in case_insensitive_fragments]
+        case_sensitive_fragments = [common_utils.search_fragment_to_highlight_regex_fragment(x) for x in case_sensitive_fragments]
+        case_insensitive_fragments = [common_utils.search_fragment_to_highlight_regex_fragment(x) for x in case_insensitive_fragments]
 
         # When highlighting, we must match all fragments simultaneously, to avoid e.g. "col" matching
         # the "<font color=...>" inserted by this highlighter when it first highlights "col".
@@ -4710,7 +4710,7 @@ dpg.show_viewport()
 
 # Load the file optionally provided on the command line
 if opts.filename:
-    _default_path = os.path.dirname(utils.absolutize_filename(opts.filename))
+    _default_path = os.path.dirname(common_utils.absolutize_filename(opts.filename))
     open_file(opts.filename)
 else:
     _default_path = os.getcwd()

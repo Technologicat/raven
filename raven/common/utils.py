@@ -3,8 +3,11 @@
 __all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
            "make_blank_index_array",
            "UnionFilter",
-           "format_bibtex_author", "format_bibtex_authors", "unicodize_basic_markup",
-           "normalize_search_string", "search_string_to_fragments", "search_fragment_to_highlight_regex_fragment"]
+           "format_bibtex_author", "format_bibtex_authors",
+           "normalize_whitespace", "normalize_unicode",
+           "unicodize_basic_markup",
+           "normalize_search_string", "search_string_to_fragments", "search_fragment_to_highlight_regex_fragment",
+           "chunkify_text"]
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -15,7 +18,7 @@ import io
 import os
 import pathlib
 import re
-from typing import Union
+from typing import Callable, Dict, List, Optional, Union
 import unicodedata
 
 import numpy as np
@@ -91,7 +94,7 @@ def make_blank_index_array() -> np.array:
     """Make a blank array of the same type as that used for slicing an array in NumPy."""
     return np.array([], dtype=np.int64)
 
-class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?  TODO: general utility, move to `unpythonic`
+class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?  TODO: very general utility, move to `unpythonic`
     def __init__(self, *filters):
         """A `logging.Filter` that matches a record if at least one of the given `*filters` matches it.
 
@@ -119,7 +122,7 @@ class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?  TODO:
         return any(f.filter(record) for f in self.filters)
 
 # --------------------------------------------------------------------------------
-# String utilities
+# BibTeX utilities
 
 def format_bibtex_author(author):
     """Format an author name for use in a citation.
@@ -183,9 +186,22 @@ def format_bibtex_authors(authors):
         authors_str = ""
     return authors_str
 
-# # https://stackoverflow.com/questions/46501292/normalize-whitespace-with-python
-# def normalize_whitespace(s):
-#     return " ".join(s.split())
+# --------------------------------------------------------------------------------
+# String utilities
+
+def normalize_whitespace(s: str) -> str:
+    """Normalize whitespace in a string, by replacing any consecutive whitespace by a single space.
+    """
+    # # https://stackoverflow.com/questions/46501292/normalize-whitespace-with-python
+    return " ".join(s.strip().split())
+
+def normalize_unicode(s: str) -> str:  # SillyTavern-extras/server.py
+    """Normalize a Unicode string.
+
+    Convert `s` into NFKC form (see `unicodedata.normalize`).
+    """
+    # https://stackoverflow.com/questions/16467479/normalizing-unicode
+    return unicodedata.normalize("NFKC", s)
 
 def _substitute_chars(mapping, html_tag_name, match_obj):
     """Substitute characters in a regex match. Low-level function, used by `unicodize_basic_markup`.
@@ -217,14 +233,21 @@ def _substitute_chars(mapping, html_tag_name, match_obj):
     return sio.getvalue()
 
 def unicodize_basic_markup(s):
-    """Convert applicable parts of HTML and LaTeX in `s` to their Unicode equivalents."""
-    s = " ".join(unicodedata.normalize("NFKC", s).strip().split())
+    """Convert simple HTML/LaTeX markup into Unicode, as far as reasonably possible.
+
+    Apply `normalize_unicode` (which see), and then convert
+    applicable parts of HTML and LaTeX (e.g. superscripts, subscripts)
+    to their Unicode equivalents.
+    """
+    s = normalize_unicode(s)
 
     # Remove some common LaTeX encodings
     s = s.replace(r"\%", "%")
     s = s.replace(r"\$", "$")
 
     # Replace some HTML entities
+    s = s.replace(r"&le;", "≤")
+    s = s.replace(r"&ge;", "≥")
     s = s.replace(r"&apos;", "'")
     s = s.replace(r"&quot;", '"')
     s = s.replace(r"&Auml;", "Ä")
@@ -234,7 +257,7 @@ def unicodize_basic_markup(s):
     s = s.replace(r"&Aring;", "Å")
     s = s.replace(r"&aring;", "å")
 
-    # Replace HTML with Unicode in chemical formulas (e.g. "CO₂", "NOₓ") and math (e.g. "x²")s
+    # Replace HTML with Unicode in chemical formulas (e.g. "CO₂", "NOₓ") and math (e.g. "x²")
     substitute_sub = functools.partial(_substitute_chars, stringmaps.regular_to_subscript, "sub")
     substitute_sup = functools.partial(_substitute_chars, stringmaps.regular_to_superscript, "sup")
     s = re.sub(r"<sub>(.*?)</sub>", substitute_sub, s, flags=re.IGNORECASE)
@@ -245,18 +268,21 @@ def unicodize_basic_markup(s):
     s = re.sub(r"<i>(.*?)</i>", r"/\1/", s, flags=re.IGNORECASE)  # italic
     s = re.sub(r"<u>(.*?)</u>", r"_\1_", s, flags=re.IGNORECASE)  # underline
 
-    # Replace < and > entities last
+    # Replace < and > entities last (so that HTML tags process correctly)
     s = s.replace(r"&lt;", "<")
     s = s.replace(r"&gt;", ">")
 
     return s
 
 def normalize_search_string(s):
-    """Normalize a string for searching.
+    """Normalize a string for use in text search.
 
-    This converts subscripts and superscripts into their regular equivalents.
+    Apply `normalize_unicode` and then `normalize_whitespace` (which see).
+    Then convert subscripts and superscripts into their regular equivalents.
+    E.g. "O₂" -> "O2",  "x²" -> "x2".
     """
-    s = " ".join(unicodedata.normalize("NFKC", s).strip().split())
+    # TODO: search string normalization: we could additionally apply the `dehyphen` package here.
+    s = normalize_whitespace(normalize_unicode(s))
     for k, v in stringmaps.subscript_to_regular.items():
         s = s.replace(k, v)
     for k, v in stringmaps.superscript_to_regular.items():
@@ -266,9 +292,11 @@ def normalize_search_string(s):
 def search_string_to_fragments(s, *, sort):
     """Convert search string `s` into `(case_sensitive_fragments, case_insensitive_fragments)`.
 
+    This first applies `normalize_search_string`, which see.
+
     `sort`: if `True`, sort the fragments (in each set) from longest to shortest.
 
-    Incremental fragment search, like in Emacs HELM (or in Firefox address bar):
+    Incremental fragment search, like in Emacs HELM, or in Firefox address bar:
       - "cat photo" matches "photocatalytic".
       - Lowercase search term means case-insensitive for that term (handled in functions
         that perform search, such as `update_search` and `update_info_panel`).
@@ -297,3 +325,110 @@ def search_fragment_to_highlight_regex_fragment(s):
     for digit in "0123456789":
         s = s.replace(digit, f"({digit}|{stringmaps.regular_to_subscript_numbers[digit]}|{stringmaps.regular_to_superscript_numbers[digit]})")
     return s
+
+def chunkify_text(text: str, chunk_size: int, overlap: int, extra: float, trimmer: Optional[Callable] = None) -> List[Dict]:
+    """Sliding-window text chunker with overlap, e.g. for chunking documents for fine-grained search.
+
+    See also `raven.librarian.hybridir.merge_contiguous_spans`, which does unchunking (the inverse operation)
+    for its search results.
+
+    `text`: The text to be chunked.
+
+    `chunk_size`: The length of one chunk, in characters (technically, Unicode codepoints,
+                  because Python's internal string format).
+
+                  The final chunk may be up to `extra` larger, to avoid leaving a very short chunk at the end
+                  (if the length of `text` did not divide well with `chunk_size`).
+
+    `extra`:   Orphan control parameter, as fraction of `chunk_size`, to avoid leaving a very small amount
+               of text into a chunk of its own at the end of the document (in the common case where the length
+               of the document does not divide evenly by `chunk_size`).
+
+               E.g. `extra=0.4` allows placing an extra 40% of `chunk_size` of text into the last chunk of the
+               document. Hence the remainder of text at the end of the document is split into a separate small
+               chunk only if that extra 40% is not enough to accommodate it. If it fits into that, we instead
+               make the previous chunk larger (by up to 40%), and place the remainder there.
+
+    `overlap`: How much of the end of the previous chunk should be included in the next chunk,
+               to avoid losing context at the seams.
+
+               E.g. if `chunk_size` is 2000 characters and you want a 25% overlap, set `overlap=500`.
+
+               For non-overlapping fixed-size chunking, set `overlap=0`.
+
+    `trimmer`: Optional callback to clean up the start/end of a chunk, e.g. to a whole-sentence
+               or whole-word boundary.
+
+               Signature: str -> (str, int)
+
+               The `trimmer` receives three arguments:
+                  `overlap`: the `overlap` argument above, passed through.
+                             You'll need this if you want to trim at the beginning of the chunk (see below).
+                  `mode`: one of "first", "middle", "last"
+                          "first" means this is the first chunk, so the beginning MUST NOT be trimmed.
+                          "middle" means this chunk is in anywhere in the middle.
+                          "last" means this is the last chunk, so the end MUST NOT be trimmed.
+                  `text`: the text of the chunk before trimming
+
+               The `trimmer` must return a tuple `(trimmed_chunk, offset)`, where `offset` means
+               how many characters were trimmed from the beginning. If you trimmed the end only,
+               then return `offset=0`.
+
+               Trim only, DO NOT make any other edits!
+
+               Note that when a trimmer is in use:
+                   - The final size of any given chunk, after trimming, may be smaller than `chunk_size`.
+                   - `overlap` is counted backward from the end of the *trimmed* chunk.
+                   - If the beginning is trimmed more than there is overlap, then some text will be dropped.
+                     It is highly recommended to avoid doing so.
+
+               An NLP pipeline can be useful as a component for building a high-quality trimmer.
+
+    Returns a list of chunks of the form
+        `{"text": actual_content, "chunk_id": running_number, "offset": start_offset_in_original_text}`.
+
+    The `chunk_id` is provided primarily just for information and for debugging.
+    The chunks are numbered 0, 1, ...
+
+    The offsets can be used e.g. for unchunking search results (see `merge_contiguous_spans`
+    in `raven.librarian.hybridir` for an example).
+
+    If `text` is at most `chunk_size` characters in length, returns a single chunk in the same format.
+    """
+    # TODO: better `extra` mechanism: adjust chunk size instead, to spread the extra content evenly?
+
+    if len(text) <= (1 + extra) * chunk_size:
+        return [{"text": text, "chunk_id": 0, "offset": 0}]
+
+    chunks = []
+    chunk_id = 0
+    start = 0
+    is_last = False
+    while start < len(text):
+        if len(text) - start <= (1 + extra) * chunk_size:
+            chunk = text[start:]
+            is_last = True
+        else:
+            chunk = text[start:start + chunk_size]
+
+        if trimmer is not None:
+            if start == 0:
+                mode = "first"
+            elif is_last:
+                mode = "last"
+            else:
+                mode = "middle"
+            chunk, offset = trimmer(overlap, mode, chunk)
+            start = start + offset
+
+        chunks.append({"text": chunk,
+                       "chunk_id": chunk_id,
+                       "offset": start})
+        if is_last:
+            break
+        delta = len(chunk) - overlap
+        if delta <= 0:
+            assert False
+        start += delta
+        chunk_id += 1
+    return chunks

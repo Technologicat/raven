@@ -30,9 +30,10 @@ devices = {
 
 # NLP model for spaCy, used for tokenization in keyword search (RAG backend `raven.librarian.hybridir`).
 #
-# NOTE: Raven uses spaCy models in two places, and they don't have to be the same.
+# NOTE: Raven uses spaCy models in three places, and they don't have to be the same.
 #  - Raven-visualizer: keyword extraction
 #  - Raven-librarian: tokenization for keyword search (this setting)
+#  - Raven-server: breaking text into sentences in the `summarize` module
 #
 # Auto-downloaded on first use. Uses's spaCy's own auto-download mechanism. See https://spacy.io/models
 #

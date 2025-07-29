@@ -41,7 +41,7 @@ from typing import List
 from unpythonic import timer, ETAEstimator, uniqify
 from unpythonic.env import env
 
-from ..common import utils
+from ..common import utils as common_utils
 
 from ..librarian import chattree
 from ..librarian import config as librarian_config
@@ -829,7 +829,7 @@ def main():
     if opts.output_dir is not None:
         opts.output_dir = str(pathlib.Path(opts.output_dir).expanduser().resolve())
         logger.info(f"Moving done files to {opts.output_dir}.")
-        utils.create_directory(opts.output_dir)
+        common_utils.create_directory(opts.output_dir)
 
     blacklist = []
     paths = []

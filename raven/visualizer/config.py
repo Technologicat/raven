@@ -49,9 +49,10 @@ extract_keywords = True
 
 # NLP model for spaCy, used in keyword extraction.
 #
-# NOTE: Raven uses spaCy models in two places, and they don't have to be the same.
+# NOTE: Raven uses spaCy models in three places, and they don't have to be the same.
 #  - Raven-visualizer: keyword extraction (this setting)
 #  - Raven-librarian: tokenization for keyword search
+#  - Raven-server: breaking text into sentences in the `summarize` module
 #
 # Auto-downloaded on first use. Uses's spaCy's own auto-download mechanism. See https://spacy.io/models
 #

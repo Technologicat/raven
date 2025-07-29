@@ -49,7 +49,8 @@ dependencies = [
     "kokoro>=0.9.4",  # server.tts; you may also need the `espeak-ng` software; on Linux, `sudo apt install espeak-ng`. For Windows, see instructions at https://github.com/hexgrad/kokoro
     "av>=14.2.0",  # TTS audio encoder (for network transport)
     "pygame>=2.6.1",  # TTS audio playback (client side)
-    "qoi>=0.7.2"  # server, fast lossless image format for streaming
+    "qoi>=0.7.2",  # server, fast lossless image format for streaming
+    "dehyphen>=0.3.4"
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]

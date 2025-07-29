@@ -54,7 +54,7 @@ from .. import __version__
 from ..common import bgtask
 from ..common import deviceinfo
 from ..common import nlptools
-from ..common import utils
+from ..common import utils as common_utils
 
 from . import config as visualizer_config
 
@@ -85,6 +85,9 @@ def update_status_and_log(msg, *, log_indent=0):
 # --------------------------------------------------------------------------------
 # TL;DR: AI-based summarization
 
+# TODO: This is now duplicated on the server side, see `raven.server.summarize`.
+# We should probably just call into that.
+
 if visualizer_config.summarize:
     summarization_device = visualizer_config.devices["summarization"]
     summarization_pipeline = transformers.pipeline("summarization",
@@ -101,28 +104,31 @@ def tldr(text: str) -> str:
     The input must fit into the model's context window.
     """
     # Produce raw summary
-    summary = utils.unicodize_basic_markup(summarization_pipeline(f"{visualizer_config.summarization_prefix}{text}",
-                                                                  min_length=50,  # tokens
-                                                                  max_length=100)[0]["summary_text"])
+    summary = summarization_pipeline(f"{visualizer_config.summarization_prefix}{text}",
+                                     min_length=50,  # tokens
+                                     max_length=100)[0]["summary_text"]
 
     # Postprocess the summary
 
+    summary = summary.strip()
+    summary = common_utils.unicodize_basic_markup(summary)
+
     # Decide whether we need to remove an incomplete sentence at the end
-    end = -1 if summary[-1] != "." else None
+    end = -1 if summary[-1] == "." else None  # TODO: handle !, ?
 
     # Normalize whitespace at sentence borders
     parts = summary.split(".")
     parts = [x.strip() for x in parts]
     parts = [x for x in parts if len(x)]
     summary = ". ".join(parts[:end]) + "."
-    summary = re.sub(r"(\d)\. (\d)", r"\1.\2", summary)  # Fix decimal numbers broken by the punctuation fixer
+    summary = re.sub(r"(\d)\. (\d)", r"\1.\2", summary)  # Fix decimal numbers broken by the punctuation fix
 
     # Normalize whitespace around commas
     parts = summary.split(",")
     parts = [x.strip() for x in parts]
     parts = [x for x in parts if len(x)]
     summary = ", ".join(parts)
-    summary = re.sub(r"(\d)\, (\d)", r"\1,\2", summary)  # Fix numbers with American thousands separators, broken by the punctuation fixer
+    summary = re.sub(r"(\d)\, (\d)", r"\1,\2", summary)  # Fix numbers with American thousands separators, broken by the punctuation fix
 
     # Capitalize start of first sentence
     summary = summary[0].upper() + summary[1:]
@@ -186,13 +192,13 @@ def parse_input_files(*filenames):
                     progress.tick()
                     continue
 
-                authors_str = utils.format_bibtex_authors(fields["author"].value)
+                authors_str = common_utils.format_bibtex_authors(fields["author"].value)
                 year = fields["year"].value
-                title = utils.unicodize_basic_markup(fields["title"].value)
+                title = common_utils.normalize_whitespace(common_utils.unicodize_basic_markup(fields["title"].value))
 
                 # abstract is optional
                 if "abstract" in fields and fields["abstract"].value:
-                    abstract = utils.unicodize_basic_markup(fields["abstract"].value)
+                    abstract = common_utils.unicodize_basic_markup(fields["abstract"].value)
                 else:
                     abstract = None
 
@@ -229,7 +235,7 @@ def get_highdim_semantic_vectors(input_data):
     logger.info("Preparing semantic space...")
 
     # Caches are per input file, to make it fast to concatenate new files to the dataset.
-    embeddings_cache_filenames = {fn: utils.make_cache_filename(fn, "embeddings_cache", "npz") for fn in input_data.resolved_filenames}
+    embeddings_cache_filenames = {fn: common_utils.make_cache_filename(fn, "embeddings_cache", "npz") for fn in input_data.resolved_filenames}
 
     all_vectors_by_filename = {}
     sentence_embedder = None
@@ -247,7 +253,7 @@ def get_highdim_semantic_vectors(input_data):
         cache_state = "unknown"
         if os.path.exists(embeddings_cache_filename):
             logger.info(f"        Checking cached embeddings '{embeddings_cache_filename}'...")
-            if utils.validate_cache_mtime(embeddings_cache_filename, filename):  # is cache valid, judging by mtime
+            if common_utils.validate_cache_mtime(embeddings_cache_filename, filename):  # is cache valid, judging by mtime
                 with timer() as tim:
                     embeddings_cached_data = np.load(embeddings_cache_filename)
                 logger.info(f"            Done in {tim.dt:0.6g}s.")
@@ -539,7 +545,7 @@ def extract_keywords(input_data, max_vis_kw=6):
     logger.info("NLP analysis...")
 
     # Caches are per input file, so that it is fast to concatenate new files to the dataset.
-    nlp_cache_filenames = {fn: utils.make_cache_filename(fn, "nlp_cache", "pickle") for fn in input_data.resolved_filenames}
+    nlp_cache_filenames = {fn: common_utils.make_cache_filename(fn, "nlp_cache", "pickle") for fn in input_data.resolved_filenames}
     nlp_cache_version = 1
 
     all_keywords_by_filename = {}
@@ -555,7 +561,7 @@ def extract_keywords(input_data, max_vis_kw=6):
         cache_state = "unknown"
         if os.path.exists(nlp_cache_filename):
             logger.info(f"        Checking cached NLP data '{nlp_cache_filename}'...")
-            if utils.validate_cache_mtime(nlp_cache_filename, filename):  # is cache valid, judging by mtime
+            if common_utils.validate_cache_mtime(nlp_cache_filename, filename):  # is cache valid, judging by mtime
                 with timer() as tim:
                     with open(nlp_cache_filename, "rb") as nlp_cache_file:
                         nlp_cached_data = pickle.load(nlp_cache_file)
@@ -1063,7 +1069,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
 
         # Figures are for the whole input dataset, which consists of all input files.
         # For the visualizer, gather all input filenames into a string that can be used in the filenames of the output figures to easily identify where they came from.
-        all_input_filenames_list = [utils.strip_ext(os.path.basename(fn)) for fn in input_data.resolved_filenames]
+        all_input_filenames_list = [common_utils.strip_ext(os.path.basename(fn)) for fn in input_data.resolved_filenames]
         all_input_filenames_str = "_".join(all_input_filenames_list)
 
         # --------------------------------------------------------------------------------

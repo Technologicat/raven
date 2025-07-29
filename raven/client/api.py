@@ -41,6 +41,7 @@ __all__ = ["initialize",
            "avatar_set_overrides",
            "avatar_result_feed",  # this reads the AI avatar video stream
            "avatar_get_available_filters",  # shared between "avatar" and "imagefx" modules
+           "summarize_summarize",
            "tts_list_voices",
            "tts_speak", "tts_speak_lipsynced",
            "tts_stop",
@@ -576,6 +577,23 @@ def imagefx_upscale_array(image_data: np.array,
     output_image_rgba = np.array(output_image_rgba, dtype=np.float32) / 255  # uint8 -> float [0, 1]
 
     return output_image_rgba
+
+# --------------------------------------------------------------------------------
+# Summarize
+
+def summarize_summarize(text: str) -> str:
+    """Return an abstractive summary of input text."""
+    if not util.api_initialized:
+        raise RuntimeError("summarize_summarize: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    input_data = {"text": text}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/summarize", json=input_data, headers=headers)
+    util.yell_on_error(response)
+    output_data = response.json()
+
+    summary = output_data["summary"]
+    return summary
 
 # --------------------------------------------------------------------------------
 # TTS (text to speech, AI speech synthesizer)

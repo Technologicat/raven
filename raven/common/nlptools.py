@@ -1,15 +1,21 @@
 """NLP (natural language processing) tools.
 
 - Stopword set management.
-- Backend loading.
-  - spaCy and embeddings model caching (load only one copy of each model in the same process).
-  - Device management (which device to load on), with automatic CPU fallback if loading on GPU fails.
 - Word frequency analysis tools, useful for keyword detection.
+- NLP backend loading.
+  - model caching (load only one copy of each model in the same process).
+  - device management (which device to load on), with automatic CPU fallback if loading on GPU fails.
+
+Backends:
+  - spaCy NLP
+  - embeddings (vectorization)
+  - dehyphenation of broken text (e.g. as extracted from a PDF)
 """
 
 __all__ = {"default_stopwords",
            "load_pipeline",
            "load_embedding_model",
+           "load_dehyphenator", "dehyphenate",
            "count_frequencies", "detect_named_entities",
            "suggest_keywords"}
 
@@ -18,12 +24,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import collections
+import contextlib
+import copy
 import math
 import operator
+import os
+import threading
 from typing import Container, Dict, List, Optional, Union
 
 from sentence_transformers import SentenceTransformer
 import spacy
+
+import flair
+import dehyphen
 
 # --------------------------------------------------------------------------------
 
@@ -43,12 +56,12 @@ _pipelines = {}
 def load_pipeline(model_name: str, device_string: str):
     """Load and return the spaCy NLP pipeline.
 
-    If the specified model is already loaded, return the already-loaded instance.
+    If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
     """
-    if model_name in _pipelines:
-        logger.info(f"load_pipeline: '{model_name}' is already loaded, returning it.")
-        return _pipelines[model_name]
-    logger.info(f"load_pipeline: Loading '{model_name}'.")
+    if (model_name, device_string) in _pipelines:
+        logger.info(f"load_pipeline: '{model_name}' is already loaded on device '{device_string}', returning it.")
+        return _pipelines[(model_name, device_string)]
+    logger.info(f"load_pipeline: Loading '{model_name}' on device '{device_string}'.")
 
     if device_string.startswith("cuda"):
         if ":" in device_string:
@@ -64,9 +77,11 @@ def load_pipeline(model_name: str, device_string: str):
             logger.warning(f"load_pipeline: exception while enabling GPU for spaCy: {type(exc)}: {exc}")
             spacy.require_cpu()
             logger.info("load_pipeline: spaCy will run on CPU.")
+            device_string = "cpu"
     else:
         spacy.require_cpu()
         logger.info("load_pipeline: spaCy will run on CPU.")
+        device_string = "cpu"
 
     try:
         nlp = spacy.load(model_name)
@@ -78,20 +93,20 @@ def load_pipeline(model_name: str, device_string: str):
         nlp = spacy.load(model_name)
 
     logger.info(f"load_pipeline: Loaded spaCy model '{model_name}'.")
-    _pipelines[model_name] = nlp
+    _pipelines[(model_name, device_string)] = nlp
     return nlp
 
 # Cache the embedding models (to load only one copy of each model)
 _embedding_models = {}
 def load_embedding_model(model_name: str, device_string: str):
-    """Load and return the embedding model (for vector storage).
+    """Load and return the embedding model (for e.g. vector storage).
 
-    If the specified model is already loaded, return the already-loaded instance.
+    If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
     """
-    if model_name in _embedding_models:
-        logger.info(f"load_embedding_model: '{model_name}' is already loaded, returning it.")
+    if (model_name, device_string) in _embedding_models:
+        logger.info(f"load_embedding_model: '{model_name}' is already loaded on device '{device_string}', returning it.")
         return _embedding_models[model_name]
-    logger.info(f"load_embedding_model: Loading '{model_name}'.")
+    logger.info(f"load_embedding_model: Loading '{model_name}' on device '{device_string}'.")
 
     try:
         embedding_model = SentenceTransformer(model_name, device=device_string)
@@ -104,8 +119,159 @@ def load_embedding_model(model_name: str, device_string: str):
             logger.warning(f"load_embedding_model: failed to load SentenceTransformer: {type(exc)}: {exc}")
             raise
     logger.info(f"load_embedding_model: Loaded model '{model_name}' on device '{device_string}'.")
-    _embedding_models[model_name] = embedding_model
+    _embedding_models[(model_name, device_string)] = embedding_model
     return embedding_model
+
+# --------------------------------------------------------------------------------
+
+_environ_lock = threading.Lock()
+@contextlib.contextmanager
+def environ_override(**bindings):  # TODO: very general utility, move to `unpythonic`
+    """Context manager: Temporarily override OS environment variable(s).
+
+    When the `with` block exits, the previous state of the environment is restored.
+
+    Thread-safe, but blocks if the lock is already taken - only one set of overrides
+    can be active at any one time.
+    """
+    with _environ_lock:
+        # remember old values, if any
+        old_bindings = {key: os.environ[key] for key in bindings.keys() if key in os.environ}
+        try:
+            # apply overrides
+            for key, value in bindings.items():
+                os.environ[key] = value
+            # let the caller do its thing
+            yield
+        finally:
+            # all done - restore old environment
+            for key in bindings.keys():
+                if key in old_bindings:  # restore old value
+                    os.environ[key] = old_bindings[key]
+                else:  # this key wasn't there in the previous state, so pop it
+                    os.environ.pop(key)
+
+_dehyphenators = {}
+def load_dehyphenator(model_name: str, device_string: str):
+    """Load and return the dehyphenator, for fixing broken text (e.g. as extracted from PDFs).
+
+    If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
+
+    `model_name`: Flair contextual embeddings model, see:
+        https://github.com/flairNLP/flair/blob/master/resources/docs/embeddings/FLAIR_EMBEDDINGS.md
+        https://github.com/flairNLP/flair/blob/master/flair/embeddings/token.py
+
+        This is actually loaded by the `dehyphen` package, so omit the "-forward" or "-backward" part of the model name.
+
+        At first, try `model_name="multi"`. If that doesn't perform adequately, then look at the docs.
+
+    See:
+        https://github.com/pd3f/dehyphen
+        https://github.com/flairNLP/flair
+    """
+    if (model_name, device_string) in _dehyphenators:
+        logger.info(f"load_dehyphenator: '{model_name}' is already loaded on device '{device_string}', returning it.")
+        return _dehyphenators[model_name]
+    logger.info(f"load_dehyphenator: Loading '{model_name}' on device '{device_string}'.")
+
+    # Flair requires "no weights only load" mode for Torch; but this is insecure, so only enable it temporarily while loading the Flair model.
+    #   https://github.com/flairNLP/flair/issues/3263
+    #   https://github.com/pytorch/pytorch/blob/main/torch/serialization.py#L1443
+    with environ_override(TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD="1"):
+        try:
+            # How to set CPU/GPU mode for Flair (used by `dehyphen`).
+            # This needs to be done *before* instantiating the model.
+            #   https://github.com/flairNLP/flair/issues/464
+            flair.device = device_string  # TODO, FIXME, UGH!
+            scorer = dehyphen.FlairScorer(lang=model_name)
+        except RuntimeError as exc:
+            logger.warning(f"load_dehyphenator: exception while loading dehyphenator (will try again in CPU mode): {type(exc)}: {exc}")
+            try:
+                device_string = "cpu"
+                flair.device = device_string  # TODO, FIXME, UGH!
+                scorer = dehyphen.FlairScorer(lang=model_name)
+            except Exception as exc:
+                logger.warning(f"load_dehyphenator: failed to load dehyphenator: {type(exc)}: {exc}")
+                raise
+    logger.info(f"load_dehyphenator: Loaded model '{model_name}' on device '{device_string}'.")
+    _dehyphenators[(model_name, device_string)] = scorer
+    return scorer
+
+def _join_paragraphs(scorer, candidate_paragraphs: List[str]) -> List[str]:  # TODO: Should probably move this into `dehyphen`
+    """Internal function; input/output format is as produced by `dehyphen.text_to_format`.
+
+    Essentially, `[[lines, of paragraph, one], [lines, of, paragraph, two], ...]`, where each of the lines is a string.
+
+    `scorer`: return value of `load_dehyphenator`
+    """
+    if len(candidate_paragraphs) >= 2:
+        out = []
+        candidate1 = candidate_paragraphs[0]
+        j = 1
+
+        # handle blank lines at beginning of input
+        while not len(candidate1):  # no lines in this paragraph?
+            candidate1 = candidate_paragraphs[j]
+            j += 1
+
+            # all of input is blank lines?
+            if j == len(candidate_paragraphs):
+                out.append(candidate1)
+                return out
+
+        while True:
+            candidate2 = candidate_paragraphs[j]
+
+            # # DEBUG
+            # print("=" * 80)
+            # print(j)
+            # print("-" * 80)
+            # print("LEFT:")
+            # print(candidate1)
+            # print("-" * 80)
+            # print("RIGHT:")
+            # print(candidate2)
+
+            combined = scorer.is_split_paragraph(candidate1, candidate2)
+
+            # # DEBUG
+            # print("-" * 80)
+            # print(f"combined: {combined}")  # essentially `candidate1 + candidate2` (if `dehyphen` thinks it wasn't complete) or `None` (if it thinks it was complete)
+            # print("-" * 80)
+            # print("LEFT is probably complete, committing" if combined is None else "LEFT is probably NOT complete, joining")
+
+            if j == len(candidate_paragraphs) - 1:  # end of text: commit whatever we have left
+                if combined is None:  # candidate1 is a complete paragraph (candidate2 starts a new paragraph)
+                    out.append(candidate1)
+                    out.append(candidate2)
+                else:
+                    out.append(combined)
+                break
+            else:  # general case: commit only when a paragraph is completed
+                if combined is None:  # candidate1 is a complete paragraph (candidate2 starts a new paragraph)
+                    out.append(candidate1)
+                    candidate1 = candidate2
+                else:  # keep combining
+                    candidate1 = combined
+                j += 1
+    else:
+        out = copy.copy(candidate_paragraphs)
+    return out
+
+def dehyphenate(scorer, text: str) -> str:
+    """Dehyphenate broken text (e.g. as extracted from a PDF), via perplexity analysis using a character-level AI model for NLP.
+
+    `scorer`: return value of `load_dehyphenator`
+    """
+    # Don't send if the input is a single character, to avoid crashing `dehyphen`.
+    if len(text) == 1:
+        return text
+    data = dehyphen.text_to_format(text)
+    data = scorer.dehyphen(data)
+    data = _join_paragraphs(scorer, data)
+    paragraphs = [dehyphen.format_to_paragraph(lines) for lines in data]
+    output_text = "\n\n".join(paragraphs)
+    return output_text
 
 # --------------------------------------------------------------------------------
 

@@ -44,7 +44,7 @@ In the meantime:
 
 *SillyTavern* compatibility:
 
-- The `classify`, `embeddings`, and `websearch` modules work as drop-in replacements for those modules in the discontinued *SillyTavern-extras*.
+- The `classify`, `embeddings`, `summarize`, and `websearch` modules work as drop-in replacements for those modules in the discontinued *SillyTavern-extras*.
   - The `websearch` module provides also a new endpoint (`/api/websearch2`) that returns structured search results. Using this requires new client code.
 - The `tts` module provides an OpenAI compatible TTS endpoint you can use in *SillyTavern*.
 - The `avatar` and `imagefx` modules are **not** compatible with *SillyTavern*, and need new client code. They are currenly meant for use in the Raven constellation. See `raven.avatar.settings_editor.app` for an example.

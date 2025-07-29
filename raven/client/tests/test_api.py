@@ -13,9 +13,15 @@ logger = logging.getLogger(__name__)
 import io
 import os
 import pathlib
+import textwrap
+
 import PIL.Image
 
 from colorama import Fore, Style, init as colorama_init
+
+from unpythonic import timer
+
+from ...common import nlptools
 
 from .. import api
 from .. import config as client_config
@@ -64,6 +70,81 @@ def test():
     image = PIL.Image.open(io.BytesIO(processed_png_bytes))
     print(image.size, image.mode)
     # image.save("study_upscaled_4k.png")  # DEBUG so we can see it (but not useful to run every time the self-test runs)
+
+    logger.info("test: summarize")
+    print(api.summarize_summarize(" The quick brown fox jumped over the lazy dog.  This is the second sentence! What?! This incomplete sentence"))
+
+    # Neumann & Gros 2023
+    scientific_abstract = textwrap.dedent("""
+                 The recent observation of neural power-law scaling relations has made a signifi-
+                 cant impact in the field of deep learning. A substantial amount of attention has
+                 been dedicated as a consequence to the description of scaling laws, although
+                 mostly for supervised learning and only to a reduced extent for reinforcement
+                 learning frameworks. In this paper we present an extensive study of performance
+                 scaling for a cornerstone reinforcement learning algorithm, AlphaZero. On the ba-
+                 sis of a relationship between Elo rating, playing strength and power-law scaling,
+                 we train AlphaZero agents on the games Connect Four and Pentago and analyze
+                 their performance. We find that player strength scales as a power law in neural
+                 network parameter count when not bottlenecked by available compute, and as a
+                 power of compute when training optimally sized agents. We observe nearly iden-
+                 tical scaling exponents for both games. Combining the two observed scaling laws
+                 we obtain a power law relating optimal size to compute similar to the ones ob-
+                 served for language models. We find that the predicted scaling of optimal neural
+                 network size fits our data for both games. We also show that large AlphaZero
+                 models are more sample efficient, performing better than smaller models with the
+                 same amount of training data.
+    """).strip()
+    with timer() as tim:
+        dehyp = nlptools.load_dehyphenator("multi", "cuda:0")  # currently borked in Python 3.10; all Flair embedding models fail to load even if you clear the models cache dir `~/.flair/embeddings`.
+    print(f"load dehyphenator: {tim.dt:0.6g}s")
+    with timer() as tim:
+        scientific_abstract = nlptools.dehyphenate(dehyp, scientific_abstract)
+    print(f"dehyphenate scientific abstract 1: {tim.dt:0.6g}s")
+    print("=" * 80)
+    print(scientific_abstract)
+    print("-" * 80)
+    with timer() as tim:
+        print(api.summarize_summarize(scientific_abstract))
+    print(f"summarize scientific abstract 1: {tim.dt:0.6g}s")
+
+    # Brown et al. 2020
+    input_text = textwrap.dedent("""
+        Giving multi-task models instructions in natural language was first formalized in a supervised setting with [MKXS18]
+        and utilized for some tasks (such as summarizing) in a language model with [RWC+ 19]. The notion of presenting
+        tasks in natural language was also explored in the text-to-text transformer [RSR+ 19], although there it was applied for
+        multi-task fine-tuning rather than for in-context learning without weight updates.
+
+        Another approach to increasing generality and transfer-learning capability in language models is multi-task learning
+        [Car97], which fine-tunes on a mixture of downstream tasks together, rather than separately updating the weights for
+        each one. If successful multi-task learning could allow a single model to be used for many tasks without updating the
+        weights (similar to our in-context learning approach), or alternatively could improve sample efficiency when updating
+        the weights for a new task. Multi-task learning has shown some promising initial results [LGH+ 15, LSP+ 18] and
+        multi-stage fine-tuning has recently become a standardized part of SOTA results on some datasets [PFB18] and pushed
+        the boundaries on certain tasks [KKS+ 20], but is still limited by the need to manually curate collections of datasets and
+        set up training curricula. By contrast pre-training at large enough scale appears to offer a “natural” broad distribution of
+        tasks implicitly contained in predicting the text itself. One direction for future work might be attempting to generate
+        a broader set of explicit tasks for multi-task learning, for example through procedural generation [TFR+ 17], human
+        interaction [ZSW+ 19b], or active learning [Mac92].
+
+        Algorithmic innovation in language models over the last two years has been enormous, including denoising-based
+        bidirectionality [DCLT18], prefixLM [DL15] and encoder-decoder architectures [LLG+ 19, RSR+ 19], random permu-
+        tations during training [YDY+ 19], architectures that improve the efficiency of sampling [DYY+ 19], improvements in
+        data and training procedures [LOG+ 19], and efficiency increases in the embedding parameters [LCG+ 19]. Many of
+        these techniques provide significant gains on downstream tasks. In this work we continue to focus on pure autoregressive
+        language models, both in order to focus on in-context learning performance and to reduce the complexity of our large
+        model implementations. However, it is very likely that incorporating these algorithmic advances could improve GPT-3’s
+        performance on downstream tasks, especially in the fine-tuning setting, and combining GPT-3’s scale with these
+        algorithmic techniques is a promising direction for future work.
+    """).strip()
+    with timer() as tim:
+        input_text = nlptools.dehyphenate(dehyp, input_text)
+    print(f"dehyphenate scientific abstract 2: {tim.dt:0.6g}s")
+    print("=" * 80)
+    print(input_text)
+    print("-" * 80)
+    with timer() as tim:
+        print(api.summarize_summarize(input_text))
+    print(f"summarize scientific abstract 2: {tim.dt:0.6g}s")
 
     logger.info("test: tts: list voices")
     print(api.tts_list_voices())

@@ -41,6 +41,7 @@ from .modules import avatar
 from .modules import classify
 from .modules import embeddings
 from .modules import imagefx
+from .modules import summarize
 from .modules import tts
 from .modules import websearch
 
@@ -179,6 +180,8 @@ def get_modules():
         modules.append("embeddings")
     if imagefx.is_available():
         modules.append("imagefx")
+    if summarize.is_available():
+        modules.append("summarize")
     if tts.is_available():
         modules.append("tts")
     if websearch.is_available():
@@ -786,6 +789,31 @@ def api_imagefx_upscale():
     return Response(processed_image, mimetype=f"image/{format.lower()}")
 
 # ----------------------------------------
+# module: summarize
+
+@app.route("/api/summarize", methods=["POST"])
+def api_summarize():
+    """Summarize the text posted in the request. Return the summary.
+
+    Input is JSON::
+
+        {"text": "Blah blah blah."}
+
+    Output is also JSON::
+
+        {"summary": "Blah."}
+    """
+    data = request.get_json()
+
+    if "text" not in data or not isinstance(data["text"], str):
+        abort(400, '"text" is required')
+
+    print("Summary input:", data["text"], sep="\n")
+    summary = summarize.summarize_text(data["text"])
+    print("Summary output:", summary, sep="\n")
+    return jsonify({"summary": summary})
+
+# ----------------------------------------
 # module: tts
 
 def _list_voices():
@@ -1116,6 +1144,13 @@ def init_server_modules():  # keep global namespace clean
     if (record := server_config.enabled_modules.get("imagefx", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
         imagefx.init_module(device_string, torch_dtype)
+
+    if (record := server_config.enabled_modules.get("summarize", None)) is not None:
+        device_string, torch_dtype = record["device_string"], record["dtype"]
+        summarize.init_module(server_config.summarization_model,
+                              server_config.spacy_model,
+                              device_string, torch_dtype,
+                              summarization_prefix=server_config.summarization_prefix)
 
     if server_config.enabled_modules.get("tts", None) is not None:
         device_string = record["device_string"]  # no configurable dtype

@@ -31,6 +31,8 @@ enabled_modules = {
                    "dtype": torch.float16},
     "imagefx": {"device_string": "cuda:0",
                 "dtype": torch.float16},
+    "summarize": {"device_string": "cuda:0",  # device settings used for the simple summarizer
+                  "dtype": torch.float16},
     "tts": {"device_string": "cuda:0"},
     "websearch": {},  # websearch doesn't use any heavy compute; this is here only to provide the option to turn the module off.
 }
@@ -55,6 +57,36 @@ classification_model = "joeddav/distilbert-base-uncased-go-emotions-student"
 #
 embedding_model = "Snowflake/snowflake-arctic-embed-l"
 # embedding_model = "sentence-transformers/all-mpnet-base-v2"
+
+# NLP model for spaCy, used for breaking text into sentences in the `summarize` module.
+#
+# NOTE: Raven uses spaCy models in three places, and they don't have to be the same.
+#  - Raven-visualizer: keyword extraction
+#  - Raven-librarian: tokenization for keyword search
+#  - Raven-server: breaking text into sentences in the `summarize` module (this setting)
+#
+# Auto-downloaded on first use. Uses's spaCy's own auto-download mechanism. See https://spacy.io/models
+#
+spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but can also benefit from GPU acceleration.
+# spacy_model = "en_core_web_trf"  # Transformer-based pipeline; more accurate, slower, requires GPU, takes lots of VRAM.
+
+# AI model to use by the `summarize` module, for abstractive summarization.
+#
+# This is a small model specialized to the task of summarization ONLY, not a general-purpose LLM.
+#
+# `summarization_prefix`: Some summarization models need input to be formatted like
+#     "summarize: Actual text goes here...". This sets the prefix.
+#     For whether you need this and what the value should be, see the model card for your particular model.
+#
+# summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"
+# summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"
+# summarization_model = "Falconsai/text_summarization"
+summarization_model = "Qiliang/bart-large-cnn-samsum-ChatGPT_v3"
+# summarization_model = "Qiliang/bart-large-cnn-samsum-ElectrifAi_v10"
+summarization_prefix = ""  # for all of the summarizers listed above
+
+# summarization_model = "KipperDev/bart_summarizer_model"
+# summarization_prefix = "summarize: "
 
 # Models for the Kokoro speech synthesizer (text to speech, TTS).
 #
