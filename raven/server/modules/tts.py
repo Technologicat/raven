@@ -160,10 +160,10 @@ def text_to_speech(voice: str,
                                                 speed=speed):
         if get_metadata:
             if not result.tokens:
-                raise RuntimeError("get_speech: No tokens in result, don't know how to get metadata.")
+                raise RuntimeError("text_to_speech: No tokens in result, don't know how to get metadata.")
             for token in result.tokens:
                 if not all(hasattr(token, field) for field in ("text", "start_ts", "end_ts", "phonemes")):
-                    raise RuntimeError(f"get_speech: Token is missing at least one mandatory field ('text', 'start_ts', 'end_ts', 'phonemes'). Data: {token}")
+                    raise RuntimeError(f"text_to_speech: Token is missing at least one mandatory field ('text', 'start_ts', 'end_ts', 'phonemes'). Data: {token}")
                 metadata.append({"word": urllib.parse.quote(token.text, safe=""),
                                  "phonemes": urllib.parse.quote(token.phonemes, safe=""),
                                  "start_time": token.start_ts,
