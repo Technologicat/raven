@@ -16,6 +16,7 @@ __all__ = {"default_stopwords",
            "load_spacy_pipeline",
            "load_dehyphenator", "dehyphenate",
            "load_embedder", "embed_sentences",
+           "load_summarizer", "summarize",
            "count_frequencies", "detect_named_entities",
            "suggest_keywords"}
 
@@ -27,12 +28,14 @@ import collections
 import copy
 import math
 import operator
-from typing import Container, Dict, List, Optional, Union
+import re
+from typing import Container, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
 import torch
 
+from transformers import pipeline
 from sentence_transformers import SentenceTransformer
 
 import spacy
@@ -41,6 +44,7 @@ import flair
 import dehyphen
 
 from . import utils as common_utils
+from . import numutils
 
 # --------------------------------------------------------------------------------
 # Stopword management
@@ -56,7 +60,7 @@ def _load_stopwords() -> List[str]:
 default_stopwords = set(x.lower() for x in _load_stopwords())
 
 # --------------------------------------------------------------------------------
-# NLP backends: spaCy
+# NLP backend: spaCy NLP pipeline
 
 _spacy_pipelines = {}
 def load_spacy_pipeline(model_name: str, device_string: str):
@@ -64,9 +68,10 @@ def load_spacy_pipeline(model_name: str, device_string: str):
 
     If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
     """
-    if (model_name, device_string) in _spacy_pipelines:
+    cache_key = (model_name, device_string)
+    if cache_key in _spacy_pipelines:
         logger.info(f"load_spacy_pipeline: '{model_name}' is already loaded on device '{device_string}', returning it.")
-        return _spacy_pipelines[(model_name, device_string)]
+        return _spacy_pipelines[cache_key]
     logger.info(f"load_spacy_pipeline: Loading '{model_name}' on device '{device_string}'.")
 
     if device_string.startswith("cuda"):
@@ -84,10 +89,12 @@ def load_spacy_pipeline(model_name: str, device_string: str):
             spacy.require_cpu()
             logger.info("load_spacy_pipeline: spaCy will run on CPU.")
             device_string = "cpu"
+            cache_key = (model_name, device_string)
     else:
         spacy.require_cpu()
         logger.info("load_spacy_pipeline: spaCy will run on CPU.")
         device_string = "cpu"
+        cache_key = (model_name, device_string)
 
     try:
         nlp = spacy.load(model_name)
@@ -99,11 +106,11 @@ def load_spacy_pipeline(model_name: str, device_string: str):
         nlp = spacy.load(model_name)
 
     logger.info(f"load_spacy_pipeline: Loaded spaCy model '{model_name}' on device '{device_string}'.")
-    _spacy_pipelines[(model_name, device_string)] = nlp
+    _spacy_pipelines[cache_key] = nlp
     return nlp
 
 # --------------------------------------------------------------------------------
-# NLP backends: dehyphenation
+# NLP backend: dehyphenation
 
 _dehyphenators = {}
 def load_dehyphenator(model_name: str, device_string: str) -> dehyphen.FlairScorer:
@@ -125,9 +132,10 @@ def load_dehyphenator(model_name: str, device_string: str) -> dehyphen.FlairScor
         https://github.com/pd3f/dehyphen
         https://github.com/flairNLP/flair
     """
-    if (model_name, device_string) in _dehyphenators:
+    cache_key = (model_name, device_string)
+    if cache_key in _dehyphenators:
         logger.info(f"load_dehyphenator: '{model_name}' is already loaded on device '{device_string}', returning it.")
-        return _dehyphenators[model_name]
+        return _dehyphenators[cache_key]
     logger.info(f"load_dehyphenator: Loading '{model_name}' on device '{device_string}'.")
 
     # Flair requires "no weights only load" mode for Torch; but this is insecure, so only enable it temporarily while loading the Flair model.
@@ -145,13 +153,14 @@ def load_dehyphenator(model_name: str, device_string: str) -> dehyphen.FlairScor
             logger.warning(f"load_dehyphenator: exception while loading dehyphenator (will try again in CPU mode): {type(exc)}: {exc}")
             try:
                 device_string = "cpu"
+                cache_key = (model_name, device_string)
                 flair.device = device_string  # TODO, FIXME, UGH!
                 scorer = dehyphen.FlairScorer(lang=model_name)
             except Exception as exc:
                 logger.warning(f"load_dehyphenator: failed to load dehyphenator: {type(exc)}: {exc}")
                 raise
     logger.info(f"load_dehyphenator: Loaded model '{model_name}' on device '{device_string}'.")
-    _dehyphenators[(model_name, device_string)] = scorer
+    _dehyphenators[cache_key] = scorer
     return scorer
 
 def _join_paragraphs(scorer: dehyphen.FlairScorer, candidate_paragraphs: List[str]) -> List[str]:  # TODO: Should probably move this into `dehyphen`
@@ -240,18 +249,19 @@ def dehyphenate(scorer: dehyphen.FlairScorer, text: Union[str, List[str]]) -> Un
     return output_text
 
 # --------------------------------------------------------------------------------
-# NLP backends: embeddings (vectorization)
+# NLP backend: semantic embeddings (vectorization)
 
 _embedders = {}
 def load_embedder(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> SentenceTransformer:
-    """Load and return the embedding model (for e.g. vector storage).
+    """Load and return the semantic embedding model (for e.g. vector storage).
 
     If the specified model is already loaded on the same device (identified by `device_string`),
     with the same dtype, then return the already-loaded instance.
     """
-    if (model_name, device_string, str(torch_dtype)) in _embedders:
+    cache_key = (model_name, device_string, str(torch_dtype))
+    if cache_key in _embedders:
         logger.info(f"load_embedder: '{model_name}' (with dtype '{str(torch_dtype)}') is already loaded on device '{device_string}', returning it.")
-        return _embedders[(model_name, device_string, str(torch_dtype))]
+        return _embedders[cache_key]
     logger.info(f"load_embedder: Loading '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
 
     try:
@@ -263,12 +273,13 @@ def load_embedder(model_name: str, device_string: str, torch_dtype: Union[str, t
         try:
             device_string = "cpu"
             torch_dtype = "float32"  # probably (we need a cache key, so let's use this)
+            cache_key = (model_name, device_string, str(torch_dtype))
             embedder = SentenceTransformer(model_name, device=device_string)
         except RuntimeError as exc:
             logger.warning(f"load_embedder: failed to load SentenceTransformer: {type(exc)}: {exc}")
             raise
     logger.info(f"load_embedder: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
-    _embedders[(model_name, device_string, str(torch_dtype))] = embedder
+    _embedders[cache_key] = embedder
     return embedder
 
 def embed_sentences(embedder: SentenceTransformer, text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
@@ -290,6 +301,211 @@ def embed_sentences(embedder: SentenceTransformer, text: Union[str, List[str]]) 
     else:  # isinstance(vectors, list) and all(isinstance(x, np.ndarray) for x in vectors)
         vectors = [x.tolist() for x in vectors]
     return vectors
+
+# --------------------------------------------------------------------------------
+# NLP backend: summarization
+
+_summarizers = {}
+def load_summarizer(model_name: str,
+                    device_string: str,
+                    torch_dtype: Union[str, torch.dtype],
+                    summarization_prefix: str = "") -> Tuple[pipeline, str]:
+    cache_key = (model_name, device_string, str(torch_dtype))
+    if cache_key in _summarizers:
+        return _summarizers[cache_key]
+
+    try:
+        device = torch.device(device_string)
+        summarizer = pipeline(
+            "summarization",
+            model=model_name,
+            device=device,
+            torch_dtype=torch_dtype,
+        )
+        logger.info(f"load_summarizer: model '{model_name}' context window is {summarizer.tokenizer.model_max_length} tokens")
+    except RuntimeError as exc:
+        logger.warning(f"load_summarizer: exception while loading summarizer (will try again in CPU mode): {type(exc)}: {exc}")
+        try:
+            device_string = "cpu"
+            torch_dtype = "float32"  # probably (we need a cache key, so let's use this)
+            cache_key = (model_name, device_string, str(torch_dtype))
+            summarizer = pipeline(
+                "summarization",
+                model=model_name,
+                device=device,
+                torch_dtype=torch_dtype,
+            )
+        except RuntimeError as exc:
+            logger.warning(f"load_embedder: failed to load summarizer: {type(exc)}: {exc}")
+            raise
+    logger.info(f"load_summarizer: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    _summarizers[cache_key] = (summarizer, summarization_prefix)  # save the given prompt prefix with the cached model so they stay together
+    return summarizer, summarization_prefix
+
+def _summarize_one(summarizer: Tuple[pipeline, str], text: str) -> str:
+    """Internal function. Summarize a piece of text that fits into the summarization model's context window.
+
+    If the text does not fit, raises `IndexError`. See `_summarize_chunked` to handle arbitrary length texts.
+    """
+    text_summarization_pipe, text_summarization_prefix = summarizer
+    text = f"{text_summarization_prefix}{text}"  # some summarizer AIs require a prompt (e.g. "summarize: The actual text to be summarized...")
+
+    tokens = text_summarization_pipe.tokenizer.tokenize(text)  # may be useful for debug...
+    length_in_tokens = len(tokens)  # ...but this is what we actually need to set up the summarization lengths semsibly
+    logger.info(f"_summarize_one: Input text length is {len(text)} characters, {length_in_tokens} tokens.")
+
+    if length_in_tokens > text_summarization_pipe.tokenizer.model_max_length:
+        logger.info(f"_summarize_one: Text to be summarized does not fit into model's context window (text length {len(text)} characters, {length_in_tokens} tokens; model limit {text_summarization_pipe.tokenizer.model_max_length} tokens).")
+        raise IndexError  # and let `_summarize_chunked` handle it
+    if length_in_tokens <= 20:  # too short to summarize?
+        return text
+
+    # TODO: summary length: sensible limits that work for very short (one sentence) and very long (several pages) texts. This is optimized for a paragraph or a few at most.
+    lower_limit = min(20, length_in_tokens)  # try to always use at least this many tokens in the summary
+    upper_limit = min(120, length_in_tokens)  # and always try to stay under this limit
+    max_length = numutils.clamp(length_in_tokens // 2, ell=lower_limit, u=upper_limit)
+    min_length = numutils.clamp(length_in_tokens // 10, ell=lower_limit, u=upper_limit)
+    logger.info(f"_summarize_one: Setting summary length guidelines as min = {min_length} tokens, max = {max_length} tokens.")
+
+    summary = text_summarization_pipe(
+        text,
+        truncation=False,
+        min_length=min_length,
+        max_length=max_length,
+    )[0]["summary_text"]
+    return summary
+
+def _summarize_chunked(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
+    """Internal function. Summarize a text that may require chunking before it fits into the summarization model's context window."""
+    try:
+        return _summarize_one(summarizer, text)
+    except IndexError:
+        logger.info("_summarize_chunked: input text (length {len(text)} characters) is long; cutting text in half at a sentence boundary and summarizing the halves separately.")
+
+        with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
+            doc = nlp_pipe(text)
+        sents = list(doc.sents)
+        mid = len(sents) // 2
+        firsthalf = " ".join(str(sent).strip() for sent in sents[:mid])
+        secondhalf = " ".join(str(sent).strip() for sent in sents[mid:])
+        # print("=" * 80)
+        # print("Splitting long text:")
+        # print("-" * 80)
+        # print(firsthalf)
+        # print("-" * 80)
+        # print(secondhalf)
+        # print("-" * 80)
+        return " ".join(
+            [_summarize_chunked(summarizer, nlp_pipe, firsthalf),
+             _summarize_chunked(summarizer, nlp_pipe, secondhalf)]
+        )
+
+        # # Sentence-splitting the output of the general sliding-window chunkifier doesn't seem to work that well here. It's easier to correctly split into sentences when we have all the text available at once.
+        #
+        # def full_sentence_trimmer(overlap, mode, text):
+        #     @memoize  # from `unpythonic`
+        #     def get_sentences(text):
+        #         with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
+        #             doc = nlp_pipe(text)
+        #         return list(doc.sents)
+        #
+        #     offset = 0
+        #     tmp = text.strip()  # ignore whitespace at start/end of chunk when detecting incomplete sentences
+        #     if mode != "first":  # allowed to trim beginning?
+        #         # Lowercase letter at the start of the chunk -> probably not the start of a sentence.
+        #         if tmp[0].upper() != tmp[0]:
+        #             sents = get_sentences(text)
+        #             first_sentence_len = len(sents[0])
+        #             offset = min(overlap, first_sentence_len)  # Prefer to keep incomplete sentence when there's not enough chunk overlap to trim it without losing text.
+        #             text = text[offset:]
+        #     if mode != "last":  # allowed to trim end?
+        #         # No punctuation mark at the end of the chunk -> probably not a complete sentence.
+        #         if tmp[-1] not in (".", "!", "?"):
+        #             sents = get_sentences(text)
+        #             last_sentence_len = len(sents[-1])
+        #             text = text[:-last_sentence_len]
+        #     return text, offset
+        #
+        # chunks = common_utils.chunkify_text(text,
+        #                                     chunk_size=len(text) // 2,
+        #                                     overlap=0,
+        #                                     extra=0.2,
+        #                                     trimmer=full_sentence_trimmer)
+        # summary = " ".join(_summarize_chunked(summarizer, nlp_pipe, chunk["text"]) for chunk in chunks)
+        # return summary
+
+def summarize(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
+    """Return an abstractive summary of input text.
+
+    This uses an AI summarization model (see `raven.server.config.summarization_model`),
+    plus some heuristics to minimally clean up the result.
+    """
+    def normalize_sentence(sent: str) -> str:
+        """Given a sentence, remove surrounding whitespace and capitalize the first word."""
+        sent = str(sent).strip()  # `sent` might actually originally be a spaCy output
+        sent = sent[0].upper() + sent[1:]
+        return sent
+    def sanitize(text: str) -> str:
+        """Sanitize `text`.
+
+        Specifically:
+          - Normalize Unicode representation to NFKC
+          - Normalize whitespace at sentence boundaries (as detected by the loaded spaCy NLP model)
+          - Capitalize start of each sentence
+          - Drop incomplete last sentence if any, but only if there's more than one sentence in total.
+        """
+        text = common_utils.normalize_unicode(text)
+        text = text.strip()
+
+        # Detect possible incomplete sentence at the end.
+        #   - Summarizer AIs sometimes do that, especially if they run into the user-specified output token limit too soon.
+        #   - The input text may have been cut off before it reaches us. When this happens, some summarizer AIs become confused.
+        #     (E.g. Qiliang/bart-large-cnn-samsum-ChatGPT_v3, given the input:
+        #          " The quick brown fox jumped over the lazy dog.  This is the second sentence! What?! This incomplete sentence"
+        #      focuses only on the fact that the last sentence is incomplete, and reports that as the summary.)
+        end = -1 if text[-1] not in (".", "!", "?") else None
+
+        # Split into sentences via NLP. (This is the sane approach.)
+        with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # Process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
+            doc = nlp_pipe(text)
+        sents = list(doc.sents)
+        if end is not None and len(sents) == 1:  # If only one sentence, keep it even if incomplete.
+            end = None
+        text = " ".join(normalize_sentence(sent) for sent in sents[:end])
+        return text
+
+    # Prompt the summarizer to write the raw summary (AI magic happens here)
+    text = sanitize(text)
+    summary = _summarize_chunked(summarizer, nlp_pipe, text)
+
+    # Rudimentary check against AI hallucination: summarizing a very short text sometimes fails with the AI making up more text than there is in the original.
+    if len(summary) > len(text):
+        return text
+
+    # Postprocess the summary
+    summary = sanitize(summary)
+
+    # At this point, depending on the AI model, we still sometimes have the spacing for the punctuation as "Blah blah blah . Bluh bluh..."
+
+    # Normalize whitespace at full-stops (periods)
+    parts = summary.split(".")
+    has_period_at_end = summary.endswith(".")  # might have "!" or "?" instead
+    parts = [x.strip() for x in parts]
+    parts = [x for x in parts if len(x)]
+    summary = ". ".join(parts) + ("." if has_period_at_end else "")
+    summary = re.sub(r"(\d)\. (\d)", r"\1.\2", summary)  # Fix decimal numbers broken by the punctuation fix
+
+    # Normalize whitespace at commas
+    parts = summary.split(",")
+    parts = [x.strip() for x in parts]
+    parts = [x for x in parts if len(x)]
+    summary = ", ".join(parts)
+    summary = re.sub(r"(\d)\, (\d)", r"\1,\2", summary)  # Fix numbers with American thousands separators, broken by the punctuation fix
+
+    # Convert some very basic markup (e.g. superscripts/subscripts) into their Unicode equivalents.
+    summary = common_utils.unicodize_basic_markup(summary)
+
+    return summary
 
 # --------------------------------------------------------------------------------
 # Frequency analysis
