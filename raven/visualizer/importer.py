@@ -26,7 +26,6 @@ import math
 import os
 import pathlib
 import pickle
-import re
 import sys
 import threading
 import traceback
@@ -45,7 +44,6 @@ import numpy as np
 # import pandas as pd
 
 import torch
-import transformers
 
 from sklearn.cluster import HDBSCAN
 
@@ -85,55 +83,27 @@ def update_status_and_log(msg, *, log_indent=0):
 # --------------------------------------------------------------------------------
 # TL;DR: AI-based summarization
 
-# TODO: This is now duplicated on the server side, see `raven.server.summarize`.
-# We should probably just call into that.
-
 if visualizer_config.summarize:
     summarization_device = visualizer_config.devices["summarization"]
-    summarization_pipeline = transformers.pipeline("summarization",
-                                                   model=visualizer_config.summarization_model,
-                                                   device=summarization_device["device_string"],
-                                                   torch_dtype=summarization_device["dtype"])
+    summarizer = nlptools.load_summarizer(visualizer_config.summarization_model,
+                                          summarization_device["device_string"],
+                                          summarization_device["dtype"],
+                                          visualizer_config.summarization_prefix)
+    summarization_nlp_pipe = nlptools.load_spacy_pipeline(visualizer_config.spacy_model,
+                                                          "cpu")
 else:
     summarization_device = None
-    summarization_pipeline = None
+    summarizer = None
+    summarization_nlp_pipe = None
 
 def tldr(text: str) -> str:
     """Return AI-based summary of `text`.
 
     The input must fit into the model's context window.
     """
-    # Produce raw summary
-    summary = summarization_pipeline(f"{visualizer_config.summarization_prefix}{text}",
-                                     min_length=50,  # tokens
-                                     max_length=100)[0]["summary_text"]
-
-    # Postprocess the summary
-
-    summary = summary.strip()
-    summary = common_utils.unicodize_basic_markup(summary)
-
-    # Decide whether we need to remove an incomplete sentence at the end
-    end = -1 if summary[-1] == "." else None  # TODO: handle !, ?
-
-    # Normalize whitespace at sentence borders
-    parts = summary.split(".")
-    parts = [x.strip() for x in parts]
-    parts = [x for x in parts if len(x)]
-    summary = ". ".join(parts[:end]) + "."
-    summary = re.sub(r"(\d)\. (\d)", r"\1.\2", summary)  # Fix decimal numbers broken by the punctuation fix
-
-    # Normalize whitespace around commas
-    parts = summary.split(",")
-    parts = [x.strip() for x in parts]
-    parts = [x for x in parts if len(x)]
-    summary = ", ".join(parts)
-    summary = re.sub(r"(\d)\, (\d)", r"\1,\2", summary)  # Fix numbers with American thousands separators, broken by the punctuation fix
-
-    # Capitalize start of first sentence
-    summary = summary[0].upper() + summary[1:]
-
-    return summary
+    if summarizer is None:
+        raise RuntimeError("tldr: Summarization is not enabled in `raven.visualizer.config`, so the summarizer is not loaded.")
+    return nlptools.summarize(summarizer, summarization_nlp_pipe, text)
 
 # # https://github.com/sciunto-org/python-bibtexparser/issues/467
 # from bibtexparser.library import Library

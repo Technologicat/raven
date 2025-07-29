@@ -310,6 +310,17 @@ def load_summarizer(model_name: str,
                     device_string: str,
                     torch_dtype: Union[str, torch.dtype],
                     summarization_prefix: str = "") -> Tuple[pipeline, str]:
+    """Load a text summarizer.
+
+    This is a small AI model specialized to the task of summarization ONLY, not a general-purpose LLM.
+
+    `model_name`: HuggingFace model name. Try e.g. "Qiliang/bart-large-cnn-samsum-ChatGPT_v3".
+    `summarization_prefix`: Some summarization models need input to be formatted like
+         "summarize: Actual text goes here...". This sets the prefix.
+         For whether you need this and what the value should be, see the model card for your particular model.
+
+    NOTE: To use `summarize`, you also need a spaCy NLP pipeline; see `load_spacy_pipeline`.
+    """
     cache_key = (model_name, device_string, str(torch_dtype))
     if cache_key in _summarizers:
         return _summarizers[cache_key]
@@ -342,7 +353,7 @@ def load_summarizer(model_name: str,
     _summarizers[cache_key] = (summarizer, summarization_prefix)  # save the given prompt prefix with the cached model so they stay together
     return summarizer, summarization_prefix
 
-def _summarize_one(summarizer: Tuple[pipeline, str], text: str) -> str:
+def _summarize_chunk(summarizer: Tuple[pipeline, str], text: str) -> str:
     """Internal function. Summarize a piece of text that fits into the summarization model's context window.
 
     If the text does not fit, raises `IndexError`. See `_summarize_chunked` to handle arbitrary length texts.
@@ -352,10 +363,10 @@ def _summarize_one(summarizer: Tuple[pipeline, str], text: str) -> str:
 
     tokens = text_summarization_pipe.tokenizer.tokenize(text)  # may be useful for debug...
     length_in_tokens = len(tokens)  # ...but this is what we actually need to set up the summarization lengths semsibly
-    logger.info(f"_summarize_one: Input text length is {len(text)} characters, {length_in_tokens} tokens.")
+    logger.info(f"_summarize_chunk: Input text length is {len(text)} characters, {length_in_tokens} tokens.")
 
     if length_in_tokens > text_summarization_pipe.tokenizer.model_max_length:
-        logger.info(f"_summarize_one: Text to be summarized does not fit into model's context window (text length {len(text)} characters, {length_in_tokens} tokens; model limit {text_summarization_pipe.tokenizer.model_max_length} tokens).")
+        logger.info(f"_summarize_chunk: Text to be summarized does not fit into model's context window (text length {len(text)} characters, {length_in_tokens} tokens; model limit {text_summarization_pipe.tokenizer.model_max_length} tokens).")
         raise IndexError  # and let `_summarize_chunked` handle it
     if length_in_tokens <= 20:  # too short to summarize?
         return text
@@ -365,7 +376,7 @@ def _summarize_one(summarizer: Tuple[pipeline, str], text: str) -> str:
     upper_limit = min(120, length_in_tokens)  # and always try to stay under this limit
     max_length = numutils.clamp(length_in_tokens // 2, ell=lower_limit, u=upper_limit)
     min_length = numutils.clamp(length_in_tokens // 10, ell=lower_limit, u=upper_limit)
-    logger.info(f"_summarize_one: Setting summary length guidelines as min = {min_length} tokens, max = {max_length} tokens.")
+    logger.info(f"_summarize_chunk: Setting summary length guidelines as min = {min_length} tokens, max = {max_length} tokens.")
 
     summary = text_summarization_pipe(
         text,
@@ -378,7 +389,7 @@ def _summarize_one(summarizer: Tuple[pipeline, str], text: str) -> str:
 def _summarize_chunked(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
     """Internal function. Summarize a text that may require chunking before it fits into the summarization model's context window."""
     try:
-        return _summarize_one(summarizer, text)
+        return _summarize_chunk(summarizer, text)
     except IndexError:
         logger.info("_summarize_chunked: input text (length {len(text)} characters) is long; cutting text in half at a sentence boundary and summarizing the halves separately.")
 
@@ -439,6 +450,9 @@ def summarize(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
 
     This uses an AI summarization model (see `raven.server.config.summarization_model`),
     plus some heuristics to minimally clean up the result.
+
+    `summarizer`: return value of `load_summarizer`
+    `nlp_pipe`: return value of `load_spacy_pipeline` (used for sentence-boundary splitting during chunking)
     """
     def normalize_sentence(sent: str) -> str:
         """Given a sentence, remove surrounding whitespace and capitalize the first word."""

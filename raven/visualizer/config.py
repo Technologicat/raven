@@ -61,25 +61,26 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 
 summarize = False  # Shorten abstracts using AI? VERY slow; experimental, the results are not used yet.
 
-# AI model to use for summarization.
-# This is a small model specialized to the task of summarization ONLY, not a general-purpose LLM.
+# AI model used by the `summarize` module, for abstractive summarization.
 #
-# Available on HuggingFace. Auto-downloaded on first use.
+# This is a small AI model specialized to the task of summarization ONLY, not a general-purpose LLM.
 #
-# `summarization_prefix`: Some summarization models need input to be formatted like "summarize: Actual text goes here..."; use this to set the prefix.
-# For whether you need this and what the value should be, see the model card for your particular model.
+# NOTE: Raven uses a summarizer model in two places, and they don't have to be the same.
+#  - Raven-visualizer: tldr AI summarization of abstracts in importer (this setting)
+#  - Raven-server: `summarize` module
+#
+# `summarization_prefix`: Some summarization models need input to be formatted like
+#     "summarize: Actual text goes here...". This sets the prefix.
+#     For whether you need this and what the value should be, see the model card for your particular model.
+#
+# summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"  # ~650 MB
+# summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"  # ~1.8 GB
+# summarization_model = "Falconsai/text_summarization"  # ~250 MB
+summarization_model = "Qiliang/bart-large-cnn-samsum-ChatGPT_v3"  # ~1.6 GB, performs well
+summarization_prefix = ""  # for all of the summarizers listed above
 
-# summarization_model = "KipperDev/bart_summarizer_model"  # https://huggingface.co/KipperDev/bart_summarizer_model
+# summarization_model = "KipperDev/bart_summarizer_model"
 # summarization_prefix = "summarize: "
-
-# summarization_model = "Falconsai/text_summarization"
-# summarization_prefix = ""
-
-summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"  # maybe better for scientific use?
-summarization_prefix = ""
-
-# summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"  # there's also a larger variant (slower, with possibly better accuracy)
-# summarization_prefix = ""
 
 # --------------------------------------------------------------------------------
 # Stopword list for importer

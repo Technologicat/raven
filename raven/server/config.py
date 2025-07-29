@@ -100,6 +100,10 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 # AI model used by the `summarize` module, for abstractive summarization.
 #
 # This is a small AI model specialized to the task of summarization ONLY, not a general-purpose LLM.
+
+# NOTE: Raven uses a summarizer model in two places, and they don't have to be the same.
+#  - Raven-visualizer: tldr AI summarization of abstracts in importer
+#  - Raven-server: `summarize` module (this setting)
 #
 # `summarization_prefix`: Some summarization models need input to be formatted like
 #     "summarize: Actual text goes here...". This sets the prefix.
