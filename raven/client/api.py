@@ -15,6 +15,7 @@ We support all modules served by `raven.server.app`:
   - classify    - text sentiment analysis
   - embeddings  - vector embeddings of text, useful for semantic visualization and RAG indexing
   - imagefx     - apply filter effects to an image (see `raven.common.video.postprocessor`)
+  - sanitize    - sanitize text (currently, dehyphenate broken text extracted from PDF)
   - summarize   - write an abstractive summary of given text (using a small specialized AI model)
   - tts         - text-to-speech with and without lipsyncing the AI avatar
   - websearch   - search the web, and parse results for consumption by an LLM
@@ -42,6 +43,7 @@ __all__ = ["initialize",
            "avatar_set_overrides",
            "avatar_result_feed",  # this reads the AI avatar video stream
            "avatar_get_available_filters",  # shared between "avatar" and "imagefx" modules
+           "sanitize_dehyphenate",
            "summarize_summarize",
            "tts_list_voices",
            "tts_speak", "tts_speak_lipsynced",
@@ -578,6 +580,23 @@ def imagefx_upscale_array(image_data: np.array,
     output_image_rgba = np.array(output_image_rgba, dtype=np.float32) / 255  # uint8 -> float [0, 1]
 
     return output_image_rgba
+
+# --------------------------------------------------------------------------------
+# Sanitize
+
+def sanitize_dehyphenate(text: str) -> str:
+    """Dehyphenate input text."""
+    if not util.api_initialized:
+        raise RuntimeError("sanitize_dehyphenate: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    input_data = {"text": text}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/sanitize/dehyphenate", json=input_data, headers=headers)
+    util.yell_on_error(response)
+    output_data = response.json()
+
+    output_text = output_data["text"]
+    return output_text
 
 # --------------------------------------------------------------------------------
 # Summarize

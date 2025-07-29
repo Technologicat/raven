@@ -41,6 +41,7 @@ from .modules import avatar
 from .modules import classify
 from .modules import embeddings
 from .modules import imagefx
+from .modules import sanitize
 from .modules import summarize
 from .modules import tts
 from .modules import websearch
@@ -180,6 +181,8 @@ def get_modules():
         modules.append("embeddings")
     if imagefx.is_available():
         modules.append("imagefx")
+    if sanitize.is_available():
+        modules.append("sanitize")
     if summarize.is_available():
         modules.append("summarize")
     if tts.is_available():
@@ -789,6 +792,77 @@ def api_imagefx_upscale():
     return Response(processed_image, mimetype=f"image/{format.lower()}")
 
 # ----------------------------------------
+# module: sanitize
+
+@app.route("/api/sanitize/dehyphenate", methods=["POST"])
+def api_sanitize_dehyphenate():
+    """Dehyphenate the text posted in the request.
+
+    This can be used to clean up broken text e.g. as extracted
+    from a PDF file:
+
+        Text that was bro-
+        ken by hyphenation.
+
+    -->
+
+        Text that was broken by hyphenation.
+
+    Be aware that this often causes paragraphs to run together,
+    because the likely-paragraph-split analyzer is not perfect.
+    We could analyze one paragraph at a time, but we currently don't,
+    because the broken input text could contain blank lines at
+    arbitrary positions, so these are not a reliable indicator
+    of actual paragraph breaks. If you have known paragraphs you
+    want to preserve, you can send them as a list to process each
+    separately.
+
+    The primary use case for this in Raven is English text; but the
+    backend (with the "multi" model) does autodetect 300+ languages,
+    so give it a try.
+
+    This is based on the `dehyphen` package. The analysis applies a small,
+    specialized AI model (not an LLM) to evaluate the perplexity of the
+    different possible hyphenation options (in the example, "bro ken",
+    "bro-ken", "broken") that could have produced the hyphenated text.
+    The engine automatically picks the choice with the minimal perplexity
+    (i.e. the most likely according to the model).
+
+    The AI is a character-level contextual embeddings model from the
+    Flair-NLP project.
+
+    We then apply some heuristics to clean up the output.
+
+    Input is JSON::
+
+        {"text": "Text that was bro-\nken by hyphenation."}
+
+    or
+
+        {"text": ["Text that was bro-\nken by hyphenation.",
+                  "Some more hyp-\nhenated text."]}
+
+    Output is also JSON::
+
+        {"text": "Text that was broken by hyphenation."}
+
+    or
+
+        {"text": ["Text that was broken by hyphenation.",
+                  "Some more hyphenated text."]}
+
+    respectively.
+    """
+    if not sanitize.is_available():
+        abort(403, "Module 'sanitize' not running")
+
+    data = request.get_json()
+    if "text" not in data or not isinstance(data["text"], str):
+        abort(400, '"text" is required')
+    output_text = sanitize.dehyphenate_text(data["text"])
+    return jsonify({"text": output_text})
+
+# ----------------------------------------
 # module: summarize
 
 @app.route("/api/summarize", methods=["POST"])
@@ -1150,6 +1224,10 @@ def init_server_modules():  # keep global namespace clean
     if (record := server_config.enabled_modules.get("imagefx", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
         imagefx.init_module(device_string, torch_dtype)
+
+    if (record := server_config.enabled_modules.get("sanitize", None)) is not None:
+        device_string = record["device_string"]
+        sanitize.init_module(server_config.dehyphenation_model, device_string)
 
     if (record := server_config.enabled_modules.get("summarize", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]

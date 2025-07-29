@@ -31,6 +31,7 @@ enabled_modules = {
                    "dtype": torch.float16},
     "imagefx": {"device_string": "cuda:0",
                 "dtype": torch.float16},
+    "sanitize": {"device_string": "cuda:0"},  # this module has no dtype setting
     "summarize": {"device_string": "cuda:0",  # device settings used for the simple summarizer
                   "dtype": torch.float16},
     "tts": {"device_string": "cuda:0"},
@@ -44,7 +45,11 @@ default_port = 5100
 # --------------------------------------------------------------------------------
 # Miscellaneous AI model config
 
-# Each is a Huggingface model name, auto-downloaded on first use.
+# Unless otherwise explained for a particular setting, these are HuggingFace model names.
+# Each model is auto-downloaded on first use.
+#
+# Unless otherwise explained, the model install location is the default used by the
+# `huggingface_hub` package, namely `~/.cache/huggingface/hub`.
 
 # Text classification model for emotion detection.
 #
@@ -53,10 +58,30 @@ default_port = 5100
 classification_model = "joeddav/distilbert-base-uncased-go-emotions-student"
 # classification_model = "nateraw/bert-base-uncased-emotion"
 
+# Character-level contextual embeddings by Flair-NLP. Used by the `sanitize` module
+# for dehyphenation of broken text (e.g. as extracted from a PDF file).
+#
+# This is NOT a HuggingFace model name, but is auto-downloaded (by Flair-NLP) on first use.
+#
+# This is installed into `~/.flair/embeddings/`.
+#
+# For available models, see:
+#     https://github.com/flairNLP/flair/blob/master/resources/docs/embeddings/FLAIR_EMBEDDINGS.md
+#     https://github.com/flairNLP/flair/blob/master/flair/embeddings/token.py
+#
+# This model is loaded by the `dehyphen` package; omit the "-forward" or "-backward" part
+# of the model name, those are added automatically.
+#
+# At first, try `model_name="multi"`, it should support 300+ languages. If that doesn't perform adequately,
+# then look at the docs.
+#
+dehyphenation_model = "multi"
+
 # AI model that produces the high-dimensional semantic vectors, for visualization in `raven-visualizer`.
 #
-embedding_model = "Snowflake/snowflake-arctic-embed-l"
-# embedding_model = "sentence-transformers/all-mpnet-base-v2"
+embedding_model = "Snowflake/snowflake-arctic-embed-l"  # ~1.3 GB
+# embedding_model = "Snowflake/snowflake-arctic-embed-m"  # ~440 MB
+# embedding_model = "sentence-transformers/all-mpnet-base-v2"  # ~440 MB
 
 # NLP model for spaCy, used for breaking text into sentences in the `summarize` module.
 #
@@ -65,24 +90,25 @@ embedding_model = "Snowflake/snowflake-arctic-embed-l"
 #  - Raven-librarian: tokenization for keyword search
 #  - Raven-server: breaking text into sentences in the `summarize` module (this setting)
 #
-# Auto-downloaded on first use. Uses's spaCy's own auto-download mechanism. See https://spacy.io/models
+# This is NOT a HuggingFace model name, but is auto-downloaded (by spaCy) on first use.
+# For available models, see:
+#     https://spacy.io/models
 #
 spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but can also benefit from GPU acceleration.
 # spacy_model = "en_core_web_trf"  # Transformer-based pipeline; more accurate, slower, requires GPU, takes lots of VRAM.
 
-# AI model to use by the `summarize` module, for abstractive summarization.
+# AI model used by the `summarize` module, for abstractive summarization.
 #
-# This is a small model specialized to the task of summarization ONLY, not a general-purpose LLM.
+# This is a small AI model specialized to the task of summarization ONLY, not a general-purpose LLM.
 #
 # `summarization_prefix`: Some summarization models need input to be formatted like
 #     "summarize: Actual text goes here...". This sets the prefix.
 #     For whether you need this and what the value should be, see the model card for your particular model.
 #
-# summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"
-# summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"
-# summarization_model = "Falconsai/text_summarization"
-summarization_model = "Qiliang/bart-large-cnn-samsum-ChatGPT_v3"
-# summarization_model = "Qiliang/bart-large-cnn-samsum-ElectrifAi_v10"
+# summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"  # ~650 MB
+# summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"  # ~1.8 GB
+# summarization_model = "Falconsai/text_summarization"  # ~250 MB
+summarization_model = "Qiliang/bart-large-cnn-samsum-ChatGPT_v3"  # ~1.6 GB, performs well
 summarization_prefix = ""  # for all of the summarizers listed above
 
 # summarization_model = "KipperDev/bart_summarizer_model"
@@ -90,16 +116,18 @@ summarization_prefix = ""  # for all of the summarizers listed above
 
 # Models for the Kokoro speech synthesizer (text to speech, TTS).
 #
-kokoro_models = "hexgrad/Kokoro-82M"
+kokoro_models = "hexgrad/Kokoro-82M"  # ~360 MB
 
 # --------------------------------------------------------------------------------
 # AI avatar
 
 # THA3 animator models. There are currently no alternative models, this is just for specifying where to download from.
 #
-# Huggingface model name, auto-downloaded on first use.
+# HuggingFace model name, auto-downloaded on first use.
 #
-talkinghead_models = "OktayAlpk/talking-head-anime-3"
+# Unlike the other HuggingFace models, this is installed into `raven/vendor/tha3/models`.
+#
+talkinghead_models = "OktayAlpk/talking-head-anime-3"  # ~900 MB
 
 # Default configuration for the pixel-space postprocessor, to make the AI's avatar
 # look more cyberpunk via pixel-space glitch artistry.

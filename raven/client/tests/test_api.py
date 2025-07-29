@@ -21,8 +21,6 @@ from colorama import Fore, Style, init as colorama_init
 
 from unpythonic import timer
 
-from ...common import nlptools
-
 from .. import api
 from .. import config as client_config
 
@@ -95,10 +93,7 @@ def test():
                  same amount of training data.
     """).strip()
     with timer() as tim:
-        dehyp = nlptools.load_dehyphenator("multi", "cuda:0")  # currently borked in Python 3.10; all Flair embedding models fail to load even if you clear the models cache dir `~/.flair/embeddings`.
-    print(f"load dehyphenator: {tim.dt:0.6g}s")
-    with timer() as tim:
-        scientific_abstract = nlptools.dehyphenate(dehyp, scientific_abstract)
+        scientific_abstract = api.sanitize_dehyphenate(scientific_abstract)
     print(f"dehyphenate scientific abstract 1: {tim.dt:0.6g}s")
     print("=" * 80)
     print(scientific_abstract)
@@ -137,7 +132,7 @@ def test():
         algorithmic techniques is a promising direction for future work.
     """).strip()
     with timer() as tim:
-        input_text = nlptools.dehyphenate(dehyp, input_text)
+        input_text = api.sanitize_dehyphenate(input_text)
     print(f"dehyphenate scientific abstract 2: {tim.dt:0.6g}s")
     print("=" * 80)
     print(input_text)
