@@ -11,7 +11,7 @@ from colorama import Fore, Style
 
 import torch
 
-from sentence_transformers import SentenceTransformer
+from ...common import nlptools
 
 import numpy as np
 
@@ -21,7 +21,9 @@ def init_module(model_name: str, device_string: str, torch_dtype: Union[str, tor
     global sentence_embedder
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}embeddings{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
     try:
-        sentence_embedder = SentenceTransformer(model_name, device=device_string, model_kwargs={"torch_dtype": torch_dtype})
+        sentence_embedder = nlptools.load_embedding_model(model_name,
+                                                          device_string,
+                                                          torch_dtype)
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'embeddings'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()
