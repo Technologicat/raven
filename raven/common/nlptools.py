@@ -2,20 +2,20 @@
 
 - Stopword set management.
 - Word frequency analysis tools, useful for keyword detection.
-- NLP backend loading.
+- NLP backend loading and functions to call the models.
   - model caching (load only one copy of each model in the same process).
   - device management (which device to load on), with automatic CPU fallback if loading on GPU fails.
 
 Backends:
-  - spaCy NLP
+  - spaCy NLP (no utility functions; do what you want with the `nlp` object)
   - embeddings (vectorization)
   - dehyphenation of broken text (e.g. as extracted from a PDF)
 """
 
 __all__ = {"default_stopwords",
-           "load_pipeline",
-           "load_embedding_model",
+           "load_spacy_pipeline",
            "load_dehyphenator", "dehyphenate",
+           "load_embedder", "embed_sentences",
            "count_frequencies", "detect_named_entities",
            "suggest_keywords"}
 
@@ -24,23 +24,26 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import collections
-import contextlib
 import copy
 import math
 import operator
-import os
-import threading
 from typing import Container, Dict, List, Optional, Union
+
+import numpy as np
 
 import torch
 
 from sentence_transformers import SentenceTransformer
+
 import spacy
 
 import flair
 import dehyphen
 
+from . import utils as common_utils
+
 # --------------------------------------------------------------------------------
+# Stopword management
 
 def _load_stopwords() -> List[str]:
     """Load a default list of stopwords (English default list from spaCy)."""
@@ -53,17 +56,18 @@ def _load_stopwords() -> List[str]:
 default_stopwords = set(x.lower() for x in _load_stopwords())
 
 # --------------------------------------------------------------------------------
+# NLP backends: spaCy
 
-_pipelines = {}
-def load_pipeline(model_name: str, device_string: str):
-    """Load and return the spaCy NLP pipeline.
+_spacy_pipelines = {}
+def load_spacy_pipeline(model_name: str, device_string: str):
+    """Load and return a spaCy NLP pipeline.
 
     If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
     """
-    if (model_name, device_string) in _pipelines:
-        logger.info(f"load_pipeline: '{model_name}' is already loaded on device '{device_string}', returning it.")
-        return _pipelines[(model_name, device_string)]
-    logger.info(f"load_pipeline: Loading '{model_name}' on device '{device_string}'.")
+    if (model_name, device_string) in _spacy_pipelines:
+        logger.info(f"load_spacy_pipeline: '{model_name}' is already loaded on device '{device_string}', returning it.")
+        return _spacy_pipelines[(model_name, device_string)]
+    logger.info(f"load_spacy_pipeline: Loading '{model_name}' on device '{device_string}'.")
 
     if device_string.startswith("cuda"):
         if ":" in device_string:
@@ -74,90 +78,35 @@ def load_pipeline(model_name: str, device_string: str):
 
         try:
             spacy.require_gpu(gpu_id=gpu_id)
-            logger.info("load_pipeline: spaCy will run on GPU (if possible).")
+            logger.info("load_spacy_pipeline: spaCy will run on GPU (if possible).")
         except Exception as exc:
-            logger.warning(f"load_pipeline: exception while enabling GPU for spaCy: {type(exc)}: {exc}")
+            logger.warning(f"load_spacy_pipeline: exception while enabling GPU for spaCy: {type(exc)}: {exc}")
             spacy.require_cpu()
-            logger.info("load_pipeline: spaCy will run on CPU.")
+            logger.info("load_spacy_pipeline: spaCy will run on CPU.")
             device_string = "cpu"
     else:
         spacy.require_cpu()
-        logger.info("load_pipeline: spaCy will run on CPU.")
+        logger.info("load_spacy_pipeline: spaCy will run on CPU.")
         device_string = "cpu"
 
     try:
         nlp = spacy.load(model_name)
     except OSError:
         # https://stackoverflow.com/questions/62728854/how-to-place-spacy-en-core-web-md-model-in-python-package
-        logger.info(f"load_pipeline: Downloading spaCy model '{model_name}' (don't worry, this will only happen once)...")
+        logger.info(f"load_spacy_pipeline: Downloading spaCy model '{model_name}' (don't worry, this will only happen once)...")
         from spacy.cli import download
         download(model_name)
         nlp = spacy.load(model_name)
 
-    logger.info(f"load_pipeline: Loaded spaCy model '{model_name}' on device '{device_string}'.")
-    _pipelines[(model_name, device_string)] = nlp
+    logger.info(f"load_spacy_pipeline: Loaded spaCy model '{model_name}' on device '{device_string}'.")
+    _spacy_pipelines[(model_name, device_string)] = nlp
     return nlp
 
-# Cache the embedding models (to load only one copy of each model)
-_embedding_models = {}
-def load_embedding_model(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]):
-    """Load and return the embedding model (for e.g. vector storage).
-
-    If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
-    """
-    if (model_name, device_string, str(torch_dtype)) in _embedding_models:
-        logger.info(f"load_embedding_model: '{model_name}' (with dtype '{str(torch_dtype)}') is already loaded on device '{device_string}', returning it.")
-        return _embedding_models[(model_name, device_string, str(torch_dtype))]
-    logger.info(f"load_embedding_model: Loading '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
-
-    try:
-        embedding_model = SentenceTransformer(model_name,
-                                              device=device_string,
-                                              model_kwargs={"torch_dtype": torch_dtype})
-    except RuntimeError as exc:
-        logger.warning(f"load_embedding_model: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
-        try:
-            device_string = "cpu"
-            torch_dtype = "float32"  # probably (we need a cache key, so let's use this)
-            embedding_model = SentenceTransformer(model_name, device=device_string)
-        except RuntimeError as exc:
-            logger.warning(f"load_embedding_model: failed to load SentenceTransformer: {type(exc)}: {exc}")
-            raise
-    logger.info(f"load_embedding_model: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
-    _embedding_models[(model_name, device_string, str(torch_dtype))] = embedding_model
-    return embedding_model
-
 # --------------------------------------------------------------------------------
-
-_environ_lock = threading.Lock()
-@contextlib.contextmanager
-def environ_override(**bindings):  # TODO: very general utility, move to `unpythonic`
-    """Context manager: Temporarily override OS environment variable(s).
-
-    When the `with` block exits, the previous state of the environment is restored.
-
-    Thread-safe, but blocks if the lock is already taken - only one set of overrides
-    can be active at any one time.
-    """
-    with _environ_lock:
-        # remember old values, if any
-        old_bindings = {key: os.environ[key] for key in bindings.keys() if key in os.environ}
-        try:
-            # apply overrides
-            for key, value in bindings.items():
-                os.environ[key] = value
-            # let the caller do its thing
-            yield
-        finally:
-            # all done - restore old environment
-            for key in bindings.keys():
-                if key in old_bindings:  # restore old value
-                    os.environ[key] = old_bindings[key]
-                else:  # this key wasn't there in the previous state, so pop it
-                    os.environ.pop(key)
+# NLP backends: dehyphenation
 
 _dehyphenators = {}
-def load_dehyphenator(model_name: str, device_string: str):
+def load_dehyphenator(model_name: str, device_string: str) -> dehyphen.FlairScorer:
     """Load and return the dehyphenator, for fixing broken text (e.g. as extracted from PDFs).
 
     If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
@@ -185,7 +134,7 @@ def load_dehyphenator(model_name: str, device_string: str):
     #   https://github.com/flairNLP/flair/issues/3263
     #   https://github.com/pytorch/pytorch/blob/main/torch/serialization.py#L1443
     logger.warning("load_dehyphenator: Temporarily forcing Torch into 'no weights only' load mode for Flair-NLP compatibility. The mode will be disabled immediately after Flair-NLP is loaded. The security warning is normal.")
-    with environ_override(TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD="1"):
+    with common_utils.environ_override(TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD="1"):
         try:
             # How to set CPU/GPU mode for Flair (used by `dehyphen`).
             # This needs to be done *before* instantiating the model.
@@ -205,7 +154,7 @@ def load_dehyphenator(model_name: str, device_string: str):
     _dehyphenators[(model_name, device_string)] = scorer
     return scorer
 
-def _join_paragraphs(scorer, candidate_paragraphs: List[str]) -> List[str]:  # TODO: Should probably move this into `dehyphen`
+def _join_paragraphs(scorer: dehyphen.FlairScorer, candidate_paragraphs: List[str]) -> List[str]:  # TODO: Should probably move this into `dehyphen`
     """Internal function; input/output format is as produced by `dehyphen.text_to_format`.
 
     Essentially, `[[lines, of paragraph, one], [lines, of, paragraph, two], ...]`, where each of the lines is a string.
@@ -266,22 +215,84 @@ def _join_paragraphs(scorer, candidate_paragraphs: List[str]) -> List[str]:  # T
         out = copy.copy(candidate_paragraphs)
     return out
 
-def dehyphenate(scorer, text: str) -> str:
+def dehyphenate(scorer: dehyphen.FlairScorer, text: Union[str, List[str]]) -> Union[str, List[str]]:
     """Dehyphenate broken text (e.g. as extracted from a PDF), via perplexity analysis using a character-level AI model for NLP.
 
     `scorer`: return value of `load_dehyphenator`
+    `text`: one or more texts to dehyphenate.
+
+    Returns `str` (one input) or `list` of `str` (more inputs).
     """
-    # Don't send if the input is a single character, to avoid crashing `dehyphen`.
-    if len(text) == 1:
-        return text
-    data = dehyphen.text_to_format(text)
-    data = scorer.dehyphen(data)
-    data = _join_paragraphs(scorer, data)
-    paragraphs = [dehyphen.format_to_paragraph(lines) for lines in data]
-    output_text = "\n\n".join(paragraphs)
+    def doit(text: str) -> str:
+        # Don't send if the input is a single character, to avoid crashing `dehyphen`.
+        if len(text) == 1:
+            return text
+        data = dehyphen.text_to_format(text)
+        data = scorer.dehyphen(data)
+        data = _join_paragraphs(scorer, data)
+        paragraphs = [dehyphen.format_to_paragraph(lines) for lines in data]
+        output_text = "\n\n".join(paragraphs)
+        return output_text
+    if isinstance(text, list):
+        output_text = [doit(item) for item in text]
+    else:  # str
+        output_text = doit(text)
     return output_text
 
 # --------------------------------------------------------------------------------
+# NLP backends: embeddings (vectorization)
+
+_embedders = {}
+def load_embedder(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> SentenceTransformer:
+    """Load and return the embedding model (for e.g. vector storage).
+
+    If the specified model is already loaded on the same device (identified by `device_string`),
+    with the same dtype, then return the already-loaded instance.
+    """
+    if (model_name, device_string, str(torch_dtype)) in _embedders:
+        logger.info(f"load_embedder: '{model_name}' (with dtype '{str(torch_dtype)}') is already loaded on device '{device_string}', returning it.")
+        return _embedders[(model_name, device_string, str(torch_dtype))]
+    logger.info(f"load_embedder: Loading '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+
+    try:
+        embedder = SentenceTransformer(model_name,
+                                       device=device_string,
+                                       model_kwargs={"torch_dtype": torch_dtype})
+    except RuntimeError as exc:
+        logger.warning(f"load_embedder: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
+        try:
+            device_string = "cpu"
+            torch_dtype = "float32"  # probably (we need a cache key, so let's use this)
+            embedder = SentenceTransformer(model_name, device=device_string)
+        except RuntimeError as exc:
+            logger.warning(f"load_embedder: failed to load SentenceTransformer: {type(exc)}: {exc}")
+            raise
+    logger.info(f"load_embedder: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    _embedders[(model_name, device_string, str(torch_dtype))] = embedder
+    return embedder
+
+def embed_sentences(embedder: SentenceTransformer, text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
+    """Embed (vectorize) one or more sentences using a semantic embedding AI model.
+
+    `embedder`: return value of `load_embedder`
+    `text`: one (str) or more (List[str]) texts to embed
+
+    Returns a `list` for one input, a `list` of `list`s for more inputs. This is to keep the output easily JSONable
+    (NumPy arrays aren't), to facilitate easily sending the data over the network.
+    """
+    vectors: Union[np.array, List[np.array]] = embedder.encode(text,
+                                                               show_progress_bar=True,  # on console running this app
+                                                               convert_to_numpy=True,
+                                                               normalize_embeddings=True)
+    # NumPy arrays are not JSON serializable, so convert to Python lists
+    if isinstance(vectors, np.ndarray):
+        vectors = vectors.tolist()
+    else:  # isinstance(vectors, list) and all(isinstance(x, np.ndarray) for x in vectors)
+        vectors = [x.tolist() for x in vectors]
+    return vectors
+
+# --------------------------------------------------------------------------------
+# Frequency analysis
 
 def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
                                     List[List[spacy.tokens.token.Token]]],
@@ -332,7 +343,7 @@ def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
                      "foo bar baz",
                      ...]
 
-        nlp = load_pipeline("en_core_web_sm", "cuda:0")
+        nlp = load_spacy_pipeline("en_core_web_sm", "cuda:0")
         tokenss = list(nlp.pipe(documents))
 
         all_frequencies = count_frequencies(tokenss)  # across all documents

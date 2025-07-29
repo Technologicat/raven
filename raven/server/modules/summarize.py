@@ -52,8 +52,8 @@ def init_module(model_name: str,
         # print(text_summarization_pipe.tokenizer)
         # print(dir(text_summarization_pipe.tokenizer))
         text_summarization_prefix = summarization_prefix
-        nlp_pipe = nlptools.load_pipeline(spacy_model_name,
-                                          "cpu")  # device_string    # seems faster to run sentence-splitting on the CPU, at least for short-ish (chat message) inputs.
+        nlp_pipe = nlptools.load_spacy_pipeline(spacy_model_name,
+                                                "cpu")  # device_string    # seems faster to run sentence-splitting on the CPU, at least for short-ish (chat message) inputs.
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'summarize'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()

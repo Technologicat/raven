@@ -256,11 +256,11 @@ class HybridIR:
             self.embedding_model_name = embedding_model_name
             self.documents = {}
 
-        self._semantic_model = nlptools.load_embedding_model(self.embedding_model_name,
-                                                             librarian_config.devices["embeddings"]["device_string"],
-                                                             librarian_config.devices["embeddings"]["dtype"])  # we compute vector embeddings manually (on Raven's side)
-        self._nlp_pipeline = nlptools.load_pipeline(librarian_config.spacy_model,
-                                                    librarian_config.devices["nlp"]["device_string"])
+        self._semantic_embedder = nlptools.load_embedder(self.embedding_model_name,
+                                                         librarian_config.devices["embeddings"]["device_string"],
+                                                         librarian_config.devices["embeddings"]["dtype"])  # we compute vector embeddings manually (on Raven's side)
+        self._nlp_pipeline = nlptools.load_spacy_pipeline(librarian_config.spacy_model,
+                                                          librarian_config.devices["nlp"]["device_string"])
         self._stopwords = nlptools.default_stopwords
 
         # Semantic search: ChromaDB vector storage
@@ -544,10 +544,10 @@ class HybridIR:
         # Embedding each chunk enables semantic search. These are used by the vector index (chromadb).
         # NOTE: This can be slow, depending on the embedding model, and whether GPU acceleration is available.
         logger.info(f"HybridIR._prepare_document_for_indexing: computing semantic embeddings for document '{document_id}'.")
-        document_embeddings = self._semantic_model.encode([chunk["text"] for chunk in document_chunks],
-                                                          show_progress_bar=True,
-                                                          convert_to_numpy=True,
-                                                          normalize_embeddings=True)  # SLOW; embeddings for each chunk
+        document_embeddings = self._semantic_embedder.encode([chunk["text"] for chunk in document_chunks],
+                                                             show_progress_bar=True,
+                                                             convert_to_numpy=True,
+                                                             normalize_embeddings=True)  # SLOW; embeddings for each chunk
         document_embeddings = document_embeddings.tolist()  # for JSON serialization
 
         prepdata = {"chunks": document_chunks,  # [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
@@ -675,10 +675,10 @@ class HybridIR:
         query_tokens = self._tokenize(query)
 
         # Prepare query for vector search
-        query_embedding = self._semantic_model.encode([query],
-                                                      show_progress_bar=True,
-                                                      convert_to_numpy=True,
-                                                      normalize_embeddings=True)[0].tolist()
+        query_embedding = self._semantic_embedder.encode([query],
+                                                         show_progress_bar=True,
+                                                         convert_to_numpy=True,
+                                                         normalize_embeddings=True)[0].tolist()
 
         with self.datastore_lock:
             if not self.documents:

@@ -859,11 +859,7 @@ def api_sanitize_dehyphenate():
     data = request.get_json()
     if "text" not in data or not isinstance(data["text"], (str, list)):
         abort(400, '"text" (string or list of strings) is required')
-    input_text = data["text"]
-    if isinstance(input_text, list):
-        output_text = [sanitize.dehyphenate_text(item) for item in input_text]
-    else:  # str
-        output_text = sanitize.dehyphenate_text(input_text)
+    output_text = sanitize.dehyphenate(data["text"])
     return jsonify({"text": output_text})
 
 # ----------------------------------------

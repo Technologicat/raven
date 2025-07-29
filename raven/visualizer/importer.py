@@ -273,9 +273,9 @@ def get_highdim_semantic_vectors(input_data):
             logger.info(f"        No cached embeddings '{embeddings_cache_filename}', reason: {cache_state}")
             logger.info("        Computing embeddings...")
             if sentence_embedder is None:  # delayed init - load only if needed, on first use
-                sentence_embedder = nlptools.load_embedding_model(visualizer_config.embedding_model,
-                                                                  visualizer_config.devices["embeddings"]["device_string"],
-                                                                  visualizer_config.devices["embeddings"]["dtype"])
+                sentence_embedder = nlptools.load_embedder(visualizer_config.embedding_model,
+                                                           visualizer_config.devices["embeddings"]["device_string"],
+                                                           visualizer_config.devices["embeddings"]["dtype"])
             logger.info("        Encoding...")
             with timer() as tim:
                 all_inputs = [entry.title for entry in entries]  # with mpnet, this works best (and we don't always necessarily have an abstract)
@@ -588,8 +588,8 @@ def extract_keywords(input_data, max_vis_kw=6):
             logger.info("        Extracting keywords...")
             if nlp_pipeline is None:
                 update_status_and_log("Loading NLP pipeline for keyword analysis...", log_indent=2)
-                nlp_pipeline = nlptools.load_pipeline(visualizer_config.spacy_model,
-                                                      visualizer_config.devices["nlp"]["device_string"])
+                nlp_pipeline = nlptools.load_spacy_pipeline(visualizer_config.spacy_model,
+                                                            visualizer_config.devices["nlp"]["device_string"])
                 update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
                 # analysis = nlp_pipeline.analyze_pipes(pretty=True)  # print pipeline overview
                 # nlp_pipeline.disable_pipe("parser")

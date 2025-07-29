@@ -13,17 +13,15 @@ import torch
 
 from ...common import nlptools
 
-import numpy as np
-
 sentence_embedder = None
 
 def init_module(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> None:
     global sentence_embedder
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}embeddings{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
     try:
-        sentence_embedder = nlptools.load_embedding_model(model_name,
-                                                          device_string,
-                                                          torch_dtype)
+        sentence_embedder = nlptools.load_embedder(model_name,
+                                                   device_string,
+                                                   torch_dtype)
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'embeddings'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()
@@ -35,14 +33,4 @@ def is_available() -> bool:
     return (sentence_embedder is not None)
 
 def embed_sentences(text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
-    vectors: Union[np.array, List[np.array]] = sentence_embedder.encode(text,
-                                                                        show_progress_bar=True,  # on console running this app
-                                                                        convert_to_numpy=True,
-                                                                        normalize_embeddings=True)
-    # NumPy arrays are not JSON serializable, so convert to Python lists
-    if isinstance(vectors, np.ndarray):
-        vectors = vectors.tolist()
-    else:  # isinstance(vectors, list) and all(isinstance(x, np.ndarray) for x in vectors)
-        vectors = [x.tolist() for x in vectors]
-
-    return vectors
+    return nlptools.embed_sentences(sentence_embedder, text)

@@ -3,6 +3,7 @@
 __all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
            "make_blank_index_array",
            "UnionFilter",
+           "environ_override",
            "format_bibtex_author", "format_bibtex_authors",
            "normalize_whitespace", "normalize_unicode",
            "unicodize_basic_markup",
@@ -13,11 +14,13 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+import contextlib
 import functools
 import io
 import os
 import pathlib
 import re
+import threading
 from typing import Callable, Dict, List, Optional, Union
 import unicodedata
 
@@ -120,6 +123,33 @@ class UnionFilter(logging.Filter):  # Why isn't this thing in the stdlib?  TODO:
         self.filters = filters
     def filter(self, record):
         return any(f.filter(record) for f in self.filters)
+
+_environ_lock = threading.Lock()
+@contextlib.contextmanager
+def environ_override(**bindings):  # TODO: very general utility, move to `unpythonic`
+    """Context manager: Temporarily override OS environment variable(s).
+
+    When the `with` block exits, the previous state of the environment is restored.
+
+    Thread-safe, but blocks if the lock is already taken - only one set of overrides
+    can be active at any one time.
+    """
+    with _environ_lock:
+        # remember old values, if any
+        old_bindings = {key: os.environ[key] for key in bindings.keys() if key in os.environ}
+        try:
+            # apply overrides
+            for key, value in bindings.items():
+                os.environ[key] = value
+            # let the caller do its thing
+            yield
+        finally:
+            # all done - restore old environment
+            for key in bindings.keys():
+                if key in old_bindings:  # restore old value
+                    os.environ[key] = old_bindings[key]
+                else:  # this key wasn't there in the previous state, so pop it
+                    os.environ.pop(key)
 
 # --------------------------------------------------------------------------------
 # BibTeX utilities
