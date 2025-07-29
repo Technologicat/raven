@@ -274,7 +274,8 @@ def get_highdim_semantic_vectors(input_data):
             logger.info("        Computing embeddings...")
             if sentence_embedder is None:  # delayed init - load only if needed, on first use
                 sentence_embedder = nlptools.load_embedding_model(visualizer_config.embedding_model,
-                                                                  visualizer_config.devices["embeddings"]["device_string"])
+                                                                  visualizer_config.devices["embeddings"]["device_string"],
+                                                                  visualizer_config.devices["embeddings"]["dtype"])
             logger.info("        Encoding...")
             with timer() as tim:
                 all_inputs = [entry.title for entry in entries]  # with mpnet, this works best (and we don't always necessarily have an abstract)

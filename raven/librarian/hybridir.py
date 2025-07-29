@@ -257,7 +257,8 @@ class HybridIR:
             self.documents = {}
 
         self._semantic_model = nlptools.load_embedding_model(self.embedding_model_name,
-                                                             librarian_config.devices["embeddings"]["device_string"])  # we compute vector embeddings manually (on Raven's side)
+                                                             librarian_config.devices["embeddings"]["device_string"],
+                                                             librarian_config.devices["embeddings"]["dtype"])  # we compute vector embeddings manually (on Raven's side)
         self._nlp_pipeline = nlptools.load_pipeline(librarian_config.spacy_model,
                                                     librarian_config.devices["nlp"]["device_string"])
         self._stopwords = nlptools.default_stopwords

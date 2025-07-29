@@ -32,6 +32,8 @@ import os
 import threading
 from typing import Container, Dict, List, Optional, Union
 
+import torch
+
 from sentence_transformers import SentenceTransformer
 import spacy
 
@@ -98,28 +100,31 @@ def load_pipeline(model_name: str, device_string: str):
 
 # Cache the embedding models (to load only one copy of each model)
 _embedding_models = {}
-def load_embedding_model(model_name: str, device_string: str):
+def load_embedding_model(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]):
     """Load and return the embedding model (for e.g. vector storage).
 
     If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
     """
-    if (model_name, device_string) in _embedding_models:
-        logger.info(f"load_embedding_model: '{model_name}' is already loaded on device '{device_string}', returning it.")
-        return _embedding_models[model_name]
-    logger.info(f"load_embedding_model: Loading '{model_name}' on device '{device_string}'.")
+    if (model_name, device_string, str(torch_dtype)) in _embedding_models:
+        logger.info(f"load_embedding_model: '{model_name}' (with dtype '{str(torch_dtype)}') is already loaded on device '{device_string}', returning it.")
+        return _embedding_models[(model_name, device_string, str(torch_dtype))]
+    logger.info(f"load_embedding_model: Loading '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
 
     try:
-        embedding_model = SentenceTransformer(model_name, device=device_string)
+        embedding_model = SentenceTransformer(model_name,
+                                              device=device_string,
+                                              model_kwargs={"torch_dtype": torch_dtype})
     except RuntimeError as exc:
         logger.warning(f"load_embedding_model: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
         try:
             device_string = "cpu"
+            torch_dtype = "float32"  # probably (we need a cache key, so let's use this)
             embedding_model = SentenceTransformer(model_name, device=device_string)
         except RuntimeError as exc:
             logger.warning(f"load_embedding_model: failed to load SentenceTransformer: {type(exc)}: {exc}")
             raise
-    logger.info(f"load_embedding_model: Loaded model '{model_name}' on device '{device_string}'.")
-    _embedding_models[(model_name, device_string)] = embedding_model
+    logger.info(f"load_embedding_model: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    _embedding_models[(model_name, device_string, str(torch_dtype))] = embedding_model
     return embedding_model
 
 # --------------------------------------------------------------------------------
