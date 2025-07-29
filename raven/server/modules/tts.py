@@ -122,7 +122,7 @@ def text_to_speech(voice: str,
 
                     These are returned as JSON in a header, "x-word-timestamps". The format is:
 
-                        [{"word": "reasonably",
+                        [{"word": "reasonably" (URL-encoded to ASCII with percent-escaped UTF-8),
                           "phonemes": "ɹˈizənəbli" (URL-encoded to ASCII with percent-escaped UTF-8),
                           "start_time": 2.15,
                           "end_time": 2.75},
