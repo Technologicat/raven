@@ -808,9 +808,9 @@ def api_summarize():
     if "text" not in data or not isinstance(data["text"], str):
         abort(400, '"text" is required')
 
-    print("Summary input:", data["text"], sep="\n")
+    # print("Summary input:", data["text"], sep="\n")  # DEBUG
     summary = summarize.summarize_text(data["text"])
-    print("Summary output:", summary, sep="\n")
+    # print("Summary output:", summary, sep="\n")
     return jsonify({"summary": summary})
 
 # ----------------------------------------
