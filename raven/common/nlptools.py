@@ -157,13 +157,15 @@ def load_dehyphenator(model_name: str, device_string: str):
 
     If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
 
-    `model_name`: Flair contextual embeddings model, see:
+    `model_name`: Flair-NLP contextual embeddings model, see:
         https://github.com/flairNLP/flair/blob/master/resources/docs/embeddings/FLAIR_EMBEDDINGS.md
         https://github.com/flairNLP/flair/blob/master/flair/embeddings/token.py
 
-        This is actually loaded by the `dehyphen` package, so omit the "-forward" or "-backward" part of the model name.
+        This model is loaded by the `dehyphen` package; omit the "-forward" or "-backward" part
+        of the model name, those are added automatically.
 
-        At first, try `model_name="multi"`. If that doesn't perform adequately, then look at the docs.
+        At first, try `model_name="multi"`, it should support 300+ languages. If that doesn't
+        perform adequately, then look at the docs.
 
     See:
         https://github.com/pd3f/dehyphen
