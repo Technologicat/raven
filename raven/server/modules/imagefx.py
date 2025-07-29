@@ -56,6 +56,9 @@ def is_available() -> bool:
 def decode_image(stream) -> np.array:
     """Read an image from a Flask stream or anything duck-compatible with it.
 
+    Supported input formats are QOI (Quite Ok Image; fast lossless),
+    and anything supported by Pillow for uint8 RGB/RGBA (e.g. PNG).
+
     The whole stream will be read into a temporary buffer to guarantee seekability,
     needed for format detection.
 
@@ -84,6 +87,9 @@ def decode_image(stream) -> np.array:
 
 def encode_image(image_rgba: np.array, output_format: str) -> bytes:
     """Encode an image into `output_format`.
+
+    Supported output formats are "qoi" (Quite Ok Image; fast lossless),
+    and anything supported by Pillow for uint8 RGB/RGBA (e.g. "png").
 
     The input is an `np.array` of size [h, w, c], type uint8.
 
