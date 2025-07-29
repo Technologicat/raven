@@ -15,6 +15,7 @@ We support all modules served by `raven.server.app`:
   - classify    - text sentiment analysis
   - embeddings  - vector embeddings of text, useful for semantic visualization and RAG indexing
   - imagefx     - apply filter effects to an image (see `raven.common.video.postprocessor`)
+  - summarize   - write an abstractive summary of given text (using a small specialized AI model)
   - tts         - text-to-speech with and without lipsyncing the AI avatar
   - websearch   - search the web, and parse results for consumption by an LLM
 
