@@ -42,6 +42,11 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 
 # AI model for semantic search (RAG backend `raven.librarian.hybridir`), encoding both questions and answers into a joint semantic space.
 # Available on HuggingFace. Auto-downloaded on first use.
+#
+# NOTE: Raven uses embedding models in two places, and they don't have to be the same.
+#  - Raven-librarian: RAG backend (this setting)
+#  - Raven-visualizer: producing the semantic map
+#
 qa_embedding_model = "sentence-transformers/multi-qa-mpnet-base-cos-v1"
 
 # Magic directory: put your RAG documents here (plain text for now).

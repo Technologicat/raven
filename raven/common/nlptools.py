@@ -3,17 +3,20 @@
 - Stopword set management.
 - Word frequency analysis tools, useful for keyword detection.
 - NLP backend loading and functions to call the models.
-  - model caching (load only one copy of each model in the same process).
+  - model caching: load only one copy of each model in the same process (if requested for the same device with the same dtype).
   - device management (which device to load on), with automatic CPU fallback if loading on GPU fails.
 
 Backends:
-  - spaCy NLP (no utility functions; do what you want with the `nlp` object)
-  - embeddings (vectorization)
+  - spaCy NLP pipeline
+  - classification (text sentiment)
   - dehyphenation of broken text (e.g. as extracted from a PDF)
+  - embeddings (semantic embedding of sentences for use as vector DB keys)
+  - summarization via specialized AI model
 """
 
 __all__ = {"default_stopwords",
            "load_spacy_pipeline",
+           "load_classifier", "classify",
            "load_dehyphenator", "dehyphenate",
            "load_embedder", "embed_sentences",
            "load_summarizer", "summarize",
@@ -62,9 +65,21 @@ default_stopwords = set(x.lower() for x in _load_stopwords())
 # --------------------------------------------------------------------------------
 # NLP backend: spaCy NLP pipeline
 
+# For this backend, we provide no utility functions; do what you want with the `nlp` object.
+
 _spacy_pipelines = {}
 def load_spacy_pipeline(model_name: str, device_string: str):
     """Load and return a spaCy NLP pipeline.
+
+    `model_name`: spaCy NLP model name. This is NOT a HuggingFace model name, but is auto-downloaded (by spaCy) on first use.
+
+                  See:
+                      https://spacy.io/models
+
+                  For English specifically, usually "en_core_web_sm" (CPU-friendly) or "en_core_web_trf" (Transformer model,
+                  GPU highly recommended) are good choices.
+
+    `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
 
     If the specified model is already loaded on the same device (identified by `device_string`), return the already-loaded instance.
     """
@@ -110,6 +125,75 @@ def load_spacy_pipeline(model_name: str, device_string: str):
     return nlp
 
 # --------------------------------------------------------------------------------
+# NLP backend: sentiment classification
+
+_classifiers = {}
+def load_classifier(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> pipeline:
+    """Load and return a text sentiment classification model.
+
+    `model_name`: HuggingFace model name. Auto-downloaded on first use.
+                  Try e.g. "joeddav/distilbert-base-uncased-go-emotions-student" for a 28-emotion model.
+
+                  See:
+                      https://huggingface.co/tasks/text-classification
+
+    `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
+    `torch_dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
+
+    If the specified model is already loaded on the same device (identified by `device_string`),
+    with the same dtype, then return the already-loaded instance.
+    """
+    cache_key = (model_name, device_string, str(torch_dtype))
+    if cache_key in _classifiers:
+        logger.info(f"load_classifier: '{model_name}' (with dtype '{str(torch_dtype)}') is already loaded on device '{device_string}', returning it.")
+        return _classifiers[cache_key]
+    logger.info(f"load_classifier: Loading '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+
+    try:
+        device = torch.device(device_string)
+        classifier = pipeline("text-classification",
+                              model=model_name,
+                              top_k=None,
+                              device=device,
+                              torch_dtype=torch_dtype)
+    except RuntimeError as exc:
+        logger.warning(f"load_classifier: exception while loading classifier (will try again in CPU mode): {type(exc)}: {exc}")
+        try:
+            device_string = "cpu"
+            torch_dtype = "float32"
+            cache_key = (model_name, device_string, str(torch_dtype))
+            classifier = pipeline("text-classification",
+                                  model=model_name,
+                                  top_k=None,
+                                  device=device,
+                                  torch_dtype=torch_dtype)
+        except RuntimeError as exc:
+            logger.warning(f"load_classifier: failed to load classifier: {type(exc)}: {exc}")
+            raise
+    logger.info(f"load_classifier: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    _classifiers[cache_key] = classifier
+    return classifier
+
+def classify(classifier: pipeline, text: str) -> list:
+    """Classify the sentiment of `text`.
+
+    `classifier`: return value of `load_classifier`
+
+    Returns a list in the format:
+
+        [{"label": emotion0, "score": confidence0},
+         ...]
+
+    sorted by score, descending.
+    """
+    output = classifier(text,
+                        truncation=True,
+                        max_length=classifier.model.config.max_position_embeddings)[0]
+    return list(sorted(output,
+                       key=operator.itemgetter("score"),
+                       reverse=True))
+
+# --------------------------------------------------------------------------------
 # NLP backend: dehyphenation
 
 _dehyphenators = {}
@@ -125,8 +209,10 @@ def load_dehyphenator(model_name: str, device_string: str) -> dehyphen.FlairScor
         This model is loaded by the `dehyphen` package; omit the "-forward" or "-backward" part
         of the model name, those are added automatically.
 
-        At first, try `model_name="multi"`, it should support 300+ languages. If that doesn't
-        perform adequately, then look at the docs.
+        At first, try "multi", it should support 300+ languages. If that doesn't perform adequately,
+        then look at the docs.
+
+    `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
 
     See:
         https://github.com/pd3f/dehyphen
@@ -253,7 +339,21 @@ def dehyphenate(scorer: dehyphen.FlairScorer, text: Union[str, List[str]]) -> Un
 
 _embedders = {}
 def load_embedder(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> SentenceTransformer:
-    """Load and return the semantic embedding model (for e.g. vector storage).
+    """Load and return a semantic embedding model (for e.g. vector storage).
+
+    `model_name`: HuggingFace model name supported by the `sentence_transformers` package. Auto-downloaded on first use.
+
+                  For general use, try e.g. "sentence-transformers/all-mpnet-base-v2" or "Snowflake/snowflake-arctic-embed-l".
+
+                  If you need to embed questions and answers to those questions near each other, try e.g.
+                  "sentence-transformers/multi-qa-mpnet-base-cos-v1".
+
+                  See:
+                      https://sbert.net/docs/sentence_transformer/pretrained_models.html
+                      https://huggingface.co/tasks/sentence-similarity
+
+    `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
+    `torch_dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
 
     If the specified model is already loaded on the same device (identified by `device_string`),
     with the same dtype, then return the already-loaded instance.
@@ -315,6 +415,10 @@ def load_summarizer(model_name: str,
     This is a small AI model specialized to the task of summarization ONLY, not a general-purpose LLM.
 
     `model_name`: HuggingFace model name. Try e.g. "Qiliang/bart-large-cnn-samsum-ChatGPT_v3".
+
+    `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
+    `torch_dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
+
     `summarization_prefix`: Some summarization models need input to be formatted like
          "summarize: Actual text goes here...". This sets the prefix.
          For whether you need this and what the value should be, see the model card for your particular model.
@@ -327,12 +431,10 @@ def load_summarizer(model_name: str,
 
     try:
         device = torch.device(device_string)
-        summarizer = pipeline(
-            "summarization",
-            model=model_name,
-            device=device,
-            torch_dtype=torch_dtype,
-        )
+        summarizer = pipeline("summarization",
+                              model=model_name,
+                              device=device,
+                              torch_dtype=torch_dtype)
         logger.info(f"load_summarizer: model '{model_name}' context window is {summarizer.tokenizer.model_max_length} tokens")
     except RuntimeError as exc:
         logger.warning(f"load_summarizer: exception while loading summarizer (will try again in CPU mode): {type(exc)}: {exc}")
@@ -340,12 +442,10 @@ def load_summarizer(model_name: str,
             device_string = "cpu"
             torch_dtype = "float32"  # probably (we need a cache key, so let's use this)
             cache_key = (model_name, device_string, str(torch_dtype))
-            summarizer = pipeline(
-                "summarization",
-                model=model_name,
-                device=device,
-                torch_dtype=torch_dtype,
-            )
+            summarizer = pipeline("summarization",
+                                  model=model_name,
+                                  device=device,
+                                  torch_dtype=torch_dtype)
         except RuntimeError as exc:
             logger.warning(f"load_embedder: failed to load summarizer: {type(exc)}: {exc}")
             raise

@@ -72,12 +72,15 @@ classification_model = "joeddav/distilbert-base-uncased-go-emotions-student"
 # This model is loaded by the `dehyphen` package; omit the "-forward" or "-backward" part
 # of the model name, those are added automatically.
 #
-# At first, try `model_name="multi"`, it should support 300+ languages. If that doesn't perform adequately,
-# then look at the docs.
+# At first, try "multi", it should support 300+ languages. If that doesn't perform adequately, then look at the docs.
 #
 dehyphenation_model = "multi"
 
-# AI model that produces the high-dimensional semantic vectors, for visualization in `raven-visualizer`.
+# AI model that produces the high-dimensional semantic vectors, served by the `embeddings` module.
+#
+# See:
+#     https://sbert.net/docs/sentence_transformer/pretrained_models.html
+#     https://huggingface.co/tasks/sentence-similarity
 #
 embedding_model = "Snowflake/snowflake-arctic-embed-l"  # ~1.3 GB
 # embedding_model = "Snowflake/snowflake-arctic-embed-m"  # ~440 MB
@@ -100,7 +103,7 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 # AI model used by the `summarize` module, for abstractive summarization.
 #
 # This is a small AI model specialized to the task of summarization ONLY, not a general-purpose LLM.
-
+#
 # NOTE: Raven uses a summarizer model in two places, and they don't have to be the same.
 #  - Raven-visualizer: tldr AI summarization of abstracts in importer
 #  - Raven-server: `summarize` module (this setting)
