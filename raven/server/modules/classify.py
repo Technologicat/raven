@@ -1,13 +1,13 @@
-"""
-Classify module for SillyTavern Extras
+"""Sentiment classification for Raven-server.
+
+Based on the `classify` module of the discontinued SillyTavern-extras.
 
 Authors:
     - Tony Ribeiro (https://github.com/Tony-sama)
     - Cohee (https://github.com/Cohee1207)
+    - Juha Jeronen (https://github.com/Technologicat)
 
-Provides classification features for text
-
-References:
+See:
     - https://huggingface.co/tasks/text-classification
 """
 
