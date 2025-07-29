@@ -73,6 +73,7 @@ def _summarize_one(text: str) -> str:
     """
     tokens = text_summarization_pipe.tokenizer.tokenize(text)  # may be useful for debug...
     length_in_tokens = len(tokens)  # ...but this is what we actually need to set up the summarization lengths semsibly
+    logger.info(f"Input text length is {len(text)} characters, {length_in_tokens} tokens.")
 
     if length_in_tokens > text_summarization_pipe.tokenizer.model_max_length:
         logger.info(f"summarize: text to be summarized does not fit into model's context window (text length {len(text)} characters, {length_in_tokens} tokens; model limit {text_summarization_pipe.tokenizer.model_max_length} tokens).")
@@ -85,8 +86,7 @@ def _summarize_one(text: str) -> str:
     upper_limit = min(120, length_in_tokens)  # and always try to stay under this limit
     max_length = numutils.clamp(length_in_tokens // 2, ell=lower_limit, u=upper_limit)
     min_length = numutils.clamp(length_in_tokens // 10, ell=lower_limit, u=upper_limit)
-
-    logger.info(f"Text length is {len(text)} characters, {length_in_tokens} tokens; setting summary min = {min_length} tokens, max = {max_length} tokens.")
+    logger.info(f"Setting summary min = {min_length} tokens, max = {max_length} tokens.")
 
     summary = text_summarization_pipe(
         text,
