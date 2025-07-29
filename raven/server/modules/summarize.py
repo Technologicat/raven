@@ -1,4 +1,4 @@
-"""Summarization module for Raven-avatar.
+"""Text summarization module for Raven-server.
 
 Based on the `summarize` module of the old SillyTavern-extras server,
 and extended from there.
