@@ -808,6 +808,10 @@ def api_sanitize_dehyphenate():
 
         Text that was broken by hyphenation.
 
+    If you intend to send the text to an LLM, having it broken
+    by hyphenation doesn't matter much in practice, but this
+    makes the text much nicer for humans to look at.
+
     Be aware that this often causes paragraphs to run together,
     because the likely-paragraph-split analyzer is not perfect.
     We could analyze one paragraph at a time, but we currently don't,
