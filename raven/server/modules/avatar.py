@@ -690,7 +690,14 @@ class Animator:
         if emotions is not None:
             logger.info(f"load_emotion_templates: loading user-specified templates for emotions {list(sorted(emotions.keys()))}")
 
-            self.emotions.update(emotions)
+            # Convert "cels" dict to celstack format (see also `avatarutil.load_emotion_presets`)
+            tmp = copy.copy(emotions)
+            for emotion in tmp.values():
+                if isinstance(emotion["cels"], dict):
+                    celstack = list(emotion["cels"].items())
+                    emotion["cels"] = celstack
+
+            self.emotions.update(tmp)
 
             emotion_names = set(self.emotion_names)
             emotion_names.update(emotions.keys())
