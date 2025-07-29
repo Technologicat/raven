@@ -142,7 +142,7 @@ def text_to_speech(voice: str,
     `stream`: Stream the audio, or send the whole response content at once?
 
               All the audio is in any case generated in one go; this just streams the result
-              over the transport.
+              over the network transport.
     """
     # Side effect: validate `format` argument
     audio_encoder = StreamingAudioWriter(format=format,
