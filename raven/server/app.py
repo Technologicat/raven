@@ -884,13 +884,9 @@ def api_summarize():
         abort(403, "Module 'summarize' not running")
 
     data = request.get_json()
-
     if "text" not in data or not isinstance(data["text"], str):
         abort(400, '"text" is required')
-
-    # print("Summary input:", data["text"], sep="\n")  # DEBUG
     summary = summarize.summarize_text(data["text"])
-    # print("Summary output:", summary, sep="\n")
     return jsonify({"summary": summary})
 
 # ----------------------------------------
