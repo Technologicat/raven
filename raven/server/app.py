@@ -795,6 +795,9 @@ def api_imagefx_upscale():
 def api_summarize():
     """Summarize the text posted in the request. Return the summary.
 
+    This uses a small, specialized AI model (not an LLM) plus some
+    heuristics to clean up its output.
+
     Input is JSON::
 
         {"text": "Blah blah blah."}
