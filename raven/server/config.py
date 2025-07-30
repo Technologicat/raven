@@ -78,6 +78,11 @@ dehyphenation_model = "multi"
 
 # AI model that produces the high-dimensional semantic vectors, served by the `embeddings` module.
 #
+# NOTE: Raven uses embedding models in three places, and they don't have to be the same.
+#  - Raven-librarian: RAG backend
+#  - Raven-visualizer: producing the semantic map
+#  - Raven-server: served by the `embeddings` module (this setting)
+#
 # See:
 #     https://sbert.net/docs/sentence_transformer/pretrained_models.html
 #     https://huggingface.co/tasks/sentence-similarity

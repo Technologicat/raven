@@ -30,13 +30,14 @@ devices = {
 # AI model that produces the high-dimensional semantic vectors, for visualization in `raven-visualizer`.
 # Available on HuggingFace. Auto-downloaded on first use.
 #
-# NOTE: Raven uses embedding models in two places, and they don't have to be the same.
+# NOTE: Raven uses embedding models in three places, and they don't have to be the same.
 #  - Raven-librarian: RAG backend
 #  - Raven-visualizer: producing the semantic map (this setting)
+#  - Raven-server: served by the `embeddings` module
 #
-# embedding_model = "sentence-transformers/all-mpnet-base-v2"
-# embedding_model = "Snowflake/snowflake-arctic-embed-m"
 embedding_model = "Snowflake/snowflake-arctic-embed-l"
+# embedding_model = "Snowflake/snowflake-arctic-embed-m"
+# embedding_model = "sentence-transformers/all-mpnet-base-v2"
 
 # Dimension reduction method for hiD -> 2D conversion, used for generating the semantic map.
 #
