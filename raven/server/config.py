@@ -55,6 +55,9 @@ default_port = 5100
 #
 # Used for dynamically auto-updating the emotion shown by the AI's avatar.
 #
+# See:
+#     https://huggingface.co/tasks/text-classification
+#
 classification_model = "joeddav/distilbert-base-uncased-go-emotions-student"
 # classification_model = "nateraw/bert-base-uncased-emotion"
 
