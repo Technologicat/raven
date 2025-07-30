@@ -72,7 +72,7 @@ def test():
     logger.info("test: summarize")
     print(api.summarize_summarize(" The quick brown fox jumped over the lazy dog.  This is the second sentence! What?! This incomplete sentence"))
 
-    # Neumann & Gros 2023
+    # Neumann & Gros 2023, https://arxiv.org/abs/2210.00849
     scientific_abstract = textwrap.dedent("""
                  The recent observation of neural power-law scaling relations has made a signifi-
                  cant impact in the field of deep learning. A substantial amount of attention has
@@ -102,7 +102,7 @@ def test():
         print(api.summarize_summarize(scientific_abstract))
     print(f"summarize scientific abstract 1: {tim.dt:0.6g}s")
 
-    # Brown et al. 2020
+    # Brown et al. 2020, p. 40, https://arxiv.org/abs/2005.14165
     input_text = textwrap.dedent("""
         Giving multi-task models instructions in natural language was first formalized in a supervised setting with [MKXS18]
         and utilized for some tasks (such as summarizing) in a language model with [RWC+ 19]. The notion of presenting
