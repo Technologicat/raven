@@ -6,6 +6,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import importlib
 import traceback
 from typing import List, Union
 
@@ -13,26 +14,38 @@ from colorama import Fore, Style
 
 import torch
 
+from ...common import hfutil
 from ...common import nlptools
 
-embedder = None
+server_config = None
+embedders = {}
 
-def init_module(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> None:
-    global embedder
-    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}embeddings{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
+def init_module(config_module_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> None:
+    global server_config
+    print(f"Initializing {Fore.GREEN}{Style.BRIGHT}embeddings{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
     try:
-        embedder = nlptools.load_embedder(model_name,
-                                          device_string,
-                                          torch_dtype)
+        server_config = importlib.import_module(config_module_name)
+        for role, model_name in server_config.embedding_models.items():
+            logger.info(f"init_module: Ensuring model is installed for role '{Fore.GREEN}{Style.BRIGHT}{role}{Style.RESET_ALL}': model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
+            hfutil.maybe_install_models(model_name)
+        for role, model_name in server_config.embedding_models.items():
+            # `nlptools` already handles caching, loading only one copy of each unique model with the same device/dtype, so we don't have to.
+            logger.info(f"init_module: Loading model for role '{Fore.GREEN}{Style.BRIGHT}{role}{Style.RESET_ALL}': model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
+            embedders[role] = nlptools.load_embedder(model_name,
+                                                     device_string,
+                                                     torch_dtype)
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'embeddings'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()
         logger.error(f"init_module: failed: {type(exc)}: {exc}")
-        embedder = None
+        server_config = None
+        embedders.clear()
 
 def is_available() -> bool:
     """Return whether this module is up and running."""
-    return (embedder is not None)
+    return (server_config is not None)
 
-def embed_sentences(text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
-    return nlptools.embed_sentences(embedder, text)
+def embed_sentences(text: Union[str, List[str]], role: str = "default") -> Union[List[float], List[List[float]]]:
+    if role not in embedders:
+        raise ValueError(f"embed_sentences: Unknown role '{role}'; valid: {list(embedders.keys())}. See server configuration file.")
+    return nlptools.embed_sentences(embedders[role], text)

@@ -618,11 +618,15 @@ def api_classify():
     if "text" not in data or not isinstance(data["text"], str):
         abort(400, 'api_classify: "text" is required')
 
-    print("Classification input:", data["text"], sep="\n")
-    classification = classify.classify_text(data["text"])
-    print("Classification output:", classification, sep="\n")
-    gc.collect()
-    return jsonify({"classification": classification})
+    try:
+        print("Classification input:", data["text"], sep="\n")
+        classification = classify.classify_text(data["text"])
+        print("Classification output:", classification, sep="\n")
+        gc.collect()
+        return jsonify({"classification": classification})
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_classify: failed, reason: {type(exc)}: {exc}")
 
 @app.route("/api/classify/labels", methods=["GET"])
 def api_classify_labels():
@@ -640,9 +644,13 @@ def api_classify_labels():
     if not classify.is_available():
         abort(403, "Module 'classify' not running")
 
-    classification = classify.classify_text("")
-    labels = [x["label"] for x in classification]
-    return jsonify({"labels": labels})
+    try:
+        classification = classify.classify_text("")
+        labels = [x["label"] for x in classification]
+        return jsonify({"labels": labels})
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_classify_labels: failed, reason: {type(exc)}: {exc}")
 
 # ----------------------------------------
 # module: embeddings
@@ -653,12 +661,28 @@ def api_embeddings_compute():
 
     Input is JSON::
 
-        {"text": "Blah blah blah."}
+        {"text": "Blah blah blah.",
+         "model": "default"}
 
     or::
 
         {"text": ["Blah blah blah.",
-                  ...]}
+                  ...],
+         "model": "default"}
+
+    The "model" field is optional:
+
+      - If not specified, "default" is used.
+
+      - If specified, the value must be one of the keys of `embedding_models` in the server config.
+        The default config is `raven.server.config`, but note the server's `--config` command-line
+        option, which can be used to specify a different config at server startup.
+
+      - If specified but not present in server config, the request aborts with HTTP error 400.
+
+    This functionality is provided because different models may be good for different use cases;
+    e.g. beside a general-purpose embedder, having a separate specialized "qa" embedder that maps
+    questions and related answers near each other.
 
     Output is also JSON::
 
@@ -676,16 +700,24 @@ def api_embeddings_compute():
     data = request.get_json()
     if "text" not in data:
         abort(400, 'api_embeddings_compute: "text" is required')
+
     sentences: Union[str, List[str]] = data["text"]
+    role: str = data["model"] if "model" in data else "default"  # one of the keys of `embedding_models` in `raven.server.config`
+
     if not (isinstance(sentences, str) or (isinstance(sentences, list) and all(isinstance(x, str) for x in sentences))):
         abort(400, 'api_embeddings_compute: "text" must be string or array of strings')
     if isinstance(sentences, str):
         nitems = 1
     else:
         nitems = len(sentences)
-    print(f"Computing vector embedding for {nitems} item{'s' if nitems != 1 else ''}")
-    vectors = embeddings.embed_sentences(sentences)
-    return jsonify({"embedding": vectors})
+
+    print(f"Computing vector embedding for {nitems} item{'s' if nitems != 1 else ''} with model '{role}'")
+    try:
+        vectors = embeddings.embed_sentences(sentences, role=role)
+        return jsonify({"embedding": vectors})
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_embeddings_compute: failed, reason: {type(exc)}: {exc}")
 
 # ----------------------------------------
 # module: imagefx
@@ -733,6 +765,7 @@ def api_imagefx_process():
                                           output_format=format,
                                           postprocessor_chain=postprocessor_chain)
     except Exception as exc:
+        traceback.print_exc()
         abort(400, f"api_imagefx_process: failed, reason: {type(exc)}: {exc}")
 
     return Response(processed_image, mimetype=f"image/{format.lower()}")
@@ -787,6 +820,7 @@ def api_imagefx_upscale():
                                           preset=preset,
                                           quality=quality)
     except Exception as exc:
+        traceback.print_exc()
         abort(400, f"api_imagefx_upscale: failed, reason: {type(exc)}: {exc}")
 
     return Response(processed_image, mimetype=f"image/{format.lower()}")
@@ -863,8 +897,13 @@ def api_sanitize_dehyphenate():
     data = request.get_json()
     if "text" not in data or not isinstance(data["text"], (str, list)):
         abort(400, '"text" (string or list of strings) is required')
-    output_text = sanitize.dehyphenate(data["text"])
-    return jsonify({"text": output_text})
+
+    try:
+        output_text = sanitize.dehyphenate(data["text"])
+        return jsonify({"text": output_text})
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_sanitize_dehyphenate: failed, reason: {type(exc)}: {exc}")
 
 # ----------------------------------------
 # module: summarize
@@ -890,8 +929,13 @@ def api_summarize():
     data = request.get_json()
     if "text" not in data or not isinstance(data["text"], str):
         abort(400, '"text" is required')
-    summary = summarize.summarize_text(data["text"])
-    return jsonify({"summary": summary})
+
+    try:
+        summary = summarize.summarize_text(data["text"])
+        return jsonify({"summary": summary})
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_summarize: failed, reason: {type(exc)}: {exc}")
 
 # ----------------------------------------
 # module: tts
@@ -899,7 +943,11 @@ def api_summarize():
 def _list_voices():
     if not tts.is_available():
         abort(403, "Module 'tts' not running")
-    return jsonify({"voices": tts.get_voices()})
+    try:
+        return jsonify({"voices": tts.get_voices()})
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"_list_voices: failed, reason: {type(exc)}: {exc}")
 
 @app.route("/api/tts/list_voices")
 def api_tts_list_voices():
@@ -1061,7 +1109,11 @@ def _websearch_impl():
     if engine not in ("duckduckgo", "google"):
         abort(400, '"engine", if provided, must be one of "duckduckgo", "google"')
 
-    return websearch.search(query, engine=engine, max_links=max_links)
+    try:
+        return websearch.search(query, engine=engine, max_links=max_links)
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"_websearch_impl: failed, reason: {type(exc)}: {exc}")
 
 # legacy ST-compatible websearch endpoint
 @app.route("/api/websearch", methods=["POST"])
@@ -1205,6 +1257,7 @@ if max_content_length is not None:
 # ----------------------------------------
 # Initialize enabled modules
 
+# TODO: Maybe clean up the API: pass `config_module_name` to all modules, and let each `init_module` get whatever it needs from there. For implementation, see the modules that already do this.
 def init_server_modules():  # keep global namespace clean
     if (record := server_config.enabled_modules.get("avatar", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
@@ -1219,7 +1272,7 @@ def init_server_modules():  # keep global namespace clean
 
     if (record := server_config.enabled_modules.get("embeddings", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
-        embeddings.init_module(server_config.embedding_model, device_string, torch_dtype)
+        embeddings.init_module(config_module_name, device_string, torch_dtype)
 
     if (record := server_config.enabled_modules.get("imagefx", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]

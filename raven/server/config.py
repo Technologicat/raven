@@ -79,7 +79,8 @@ classification_model = "joeddav/distilbert-base-uncased-go-emotions-student"
 #
 dehyphenation_model = "multi"
 
-# AI model that produces the high-dimensional semantic vectors, served by the `embeddings` module.
+# AI models that produce the high-dimensional semantic vectors, served by the `embeddings` module.
+# This is a mapping of role -> model name.
 #
 # NOTE: Raven uses embedding models in three places, and they don't have to be the same.
 #  - Raven-librarian: RAG backend
@@ -90,9 +91,20 @@ dehyphenation_model = "multi"
 #     https://sbert.net/docs/sentence_transformer/pretrained_models.html
 #     https://huggingface.co/tasks/sentence-similarity
 #
-embedding_model = "Snowflake/snowflake-arctic-embed-l"  # ~1.3 GB
-# embedding_model = "Snowflake/snowflake-arctic-embed-m"  # ~440 MB
-# embedding_model = "sentence-transformers/all-mpnet-base-v2"  # ~440 MB
+# Some general-use models:
+#     "Snowflake/snowflake-arctic-embed-l"  ~1.3 GB
+#     "Snowflake/snowflake-arctic-embed-m"  ~440 MB
+#     "sentence-transformers/all-mpnet-base-v2"  ~440 MB
+#
+# Several roles can use the same model. Duplicates are handled automatically; only one copy of each unique model is loaded.
+#
+# Keep the number of unique models small. At server startup, *all* unique models are loaded onto the device specified
+# for "embeddings" in `enabled_modules`. So this can eat a lot of VRAM.
+#
+embedding_models = {
+    "default": "Snowflake/snowflake-arctic-embed-l",  # general-use model
+    "qa": "sentence-transformers/multi-qa-mpnet-base-cos-v1",  # maps questions and related answers near each other
+}
 
 # NLP model for spaCy, used for breaking text into sentences in the `summarize` module.
 #
