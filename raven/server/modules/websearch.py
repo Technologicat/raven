@@ -16,6 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import atexit
+import importlib
 import pathlib
 import time
 from typing import Dict, List, Optional, Tuple, Union
@@ -88,10 +89,9 @@ def get_driver():
             return None
 
 driver = None
-def init_module():
+def init_module(config_module_name: str):
     """Initialize the websearch module."""
     global driver
-    global app
     global dump_dir
     global dump_filename
 
@@ -102,13 +102,12 @@ def init_module():
             driver.quit()
         atexit.register(quit_driver)
 
-        from .. import app  # `app.server_config` contains `server_userdata_dir`, for saving debug dumps
-        dump_dir = pathlib.Path(app.server_config.server_userdata_dir).expanduser().resolve() / "websearch"
+        server_config = importlib.import_module(config_module_name)  # contains `server_userdata_dir`, for saving debug dumps
+        dump_dir = pathlib.Path(server_config.server_userdata_dir).expanduser().resolve() / "websearch"
         dump_filename = dump_dir / "debug.html"
         create_directory(dump_dir)
     else:
         driver = None
-        app = None
         dump_dir = None
         dump_filename = None
         raise RuntimeError("websearch module could not load web driver")

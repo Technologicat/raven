@@ -23,6 +23,7 @@ __all__ = ["init_module", "is_available",
 import atexit
 import copy
 import functools
+import importlib
 import io
 import json
 import logging
@@ -68,8 +69,6 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------------
 # Global variables
 
-app = None
-
 talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "vendor")).expanduser().resolve()  # THA3 install location containing the "tha3" folder
 emotions_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "emotions")).expanduser().resolve()  # location containing the emotion template JSON files
 animator_settings_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings")).expanduser().resolve()  # location containing the default "animator.json"
@@ -77,6 +76,7 @@ animator_settings_path = pathlib.Path(os.path.join(os.path.dirname(__file__), ".
 module_initialized = False  # call `init_module` to initialize
 
 # These will be set up in `init_module`
+_server_config = None
 _device = None
 _model = None
 _poser = None  # THA3 engine instance (as returned by `load_poser`)
@@ -86,7 +86,7 @@ _avatar_instances = {}  # {instance_id0: {"animator": <Animator object>, "encode
 # --------------------------------------------------------------------------------
 # Module startup, status check, and auto-cleanup for server shutdown time.
 
-def init_module(device: str, model: str) -> None:
+def init_module(config_module_name: str, device: str, model: str) -> None:
     """Launch the avatar (live mode), served over HTTP.
 
     device: "cpu" or "cuda"
@@ -96,8 +96,8 @@ def init_module(device: str, model: str) -> None:
 
     If something goes horribly wrong, raise `RuntimeError`.
     """
-    global app
     global module_initialized
+    global _server_config
     global _device
     global _model
     global _poser
@@ -108,14 +108,14 @@ def init_module(device: str, model: str) -> None:
 
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}avatar{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model}{Style.RESET_ALL}'...")
 
-    from .. import app  # `app.server_config` contains hf repo name for downloading THA3 models if needed
+    _server_config = importlib.import_module(config_module_name)  # contains hf repo name for downloading THA3 models if needed
 
     sys.path.append(str(talkinghead_path))  # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
     print(f"THA3 is installed at '{str(talkinghead_path)}'")
 
     # Install the THA3 models if needed
     tha3_models_path = str(talkinghead_path / "tha3" / "models")
-    maybe_install_models(hf_reponame=app.server_config.talkinghead_models, modelsdir=tha3_models_path)
+    maybe_install_models(hf_reponame=_server_config.talkinghead_models, modelsdir=tha3_models_path)
 
     try:
         logger.info("init_module: loading the Talking Head Anime 3 (THA3) posing engine")
@@ -130,6 +130,7 @@ def init_module(device: str, model: str) -> None:
         traceback.print_exc()
         logger.error(f"init_module: failed: {type(exc)}: {exc}")
 
+        _server_config = None
         _poser = None
         _device = None
         _model = None
@@ -732,15 +733,15 @@ class Animator:
 
         # Let's define some helpers:
         def drop_unrecognized(settings: Dict[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
-            unknown_fields = [field for field in settings if field not in app.server_config.animator_defaults]
+            unknown_fields = [field for field in settings if field not in _server_config.animator_defaults]
             if unknown_fields:
                 logger.warning(f"load_animator_settings: in {context}: this server did not recognize the following settings, ignoring them: {unknown_fields}")
             for field in unknown_fields:
                 settings.pop(field)
-            assert all(field in app.server_config.animator_defaults for field in settings)  # contract: only known settings remaining
+            assert all(field in _server_config.animator_defaults for field in settings)  # contract: only known settings remaining
 
         def typecheck(settings: Dict[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
-            for field, default_value in app.server_config.animator_defaults.items():
+            for field, default_value in _server_config.animator_defaults.items():
                 type_match = (int, float) if isinstance(default_value, (int, float)) else type(default_value)
                 if field in settings and not isinstance(settings[field], type_match):
                     logger.warning(f"load_animator_settings: in {context}: incorrect type for '{field}': got {type(settings[field])} with value '{settings[field]}', expected {type_match}")
@@ -762,7 +763,7 @@ class Animator:
             typecheck(server_settings, context="server settings")
         # both `settings` and `server_settings` are fully valid at this point
         aggregate(settings, fallback_settings=server_settings, fallback_context="server settings")  # first fill in from server-side settings
-        aggregate(settings, fallback_settings=app.server_config.animator_defaults, fallback_context="built-in defaults")  # then fill in from hardcoded defaults
+        aggregate(settings, fallback_settings=_server_config.animator_defaults, fallback_context="built-in defaults")  # then fill in from hardcoded defaults
 
         logger.info(f"load_animator_settings: final settings (filled in as necessary): {settings}")
 
@@ -1600,7 +1601,7 @@ class Encoder:
     def __init__(self, instance_id: str) -> None:
         self.current_frame = None
         self.encoder_thread = None
-        self.output_format = app.server_config.animator_defaults["format"]  # default until animator settings are loaded; note `output_format` is writable from other threads!
+        self.output_format = _server_config.animator_defaults["format"]  # default until animator settings are loaded; note `output_format` is writable from other threads!
         self.instance_id = instance_id
         self.latest_frame_sent = None  # for co-operation with `result_feed` (NOTE: only one feed allowed per instance!) (TODO: relax this assumption? A bit difficult to do.)
 

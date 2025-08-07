@@ -1211,7 +1211,7 @@ def init_server_modules():  # keep global namespace clean
         # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
         # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
         tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
-        avatar.init_module(device_string, tha3_model_variant)
+        avatar.init_module(config_module_name, device_string, tha3_model_variant)
 
     if (record := server_config.enabled_modules.get("classify", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
@@ -1238,10 +1238,10 @@ def init_server_modules():  # keep global namespace clean
 
     if server_config.enabled_modules.get("tts", None) is not None:
         device_string = record["device_string"]  # no configurable dtype
-        tts.init_module(device_string)
+        tts.init_module(config_module_name, device_string)
 
     if server_config.enabled_modules.get("websearch", None) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
-        websearch.init_module()
+        websearch.init_module(config_module_name)
 init_server_modules()
 
 # ----------------------------------------

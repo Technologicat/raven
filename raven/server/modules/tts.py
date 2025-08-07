@@ -9,6 +9,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import importlib
 import io
 import json
 import os
@@ -17,6 +18,8 @@ from typing import List
 import urllib.parse
 
 from colorama import Fore, Style
+
+from unpythonic import memoize
 
 from kokoro import KPipeline
 
@@ -28,12 +31,11 @@ from ...common.hfutil import maybe_install_models
 
 from ...vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 
-app = None
 modelsdir = None
 pipeline = None
 lang = None
 
-def init_module(device_string: str, lang_code="a") -> None:
+def init_module(config_module_name: str, device_string: str, lang_code="a") -> None:
     """Initialize the speech synthesizer.
 
     Note that the `get_metadata` mode of `text_to_speech` currently
@@ -50,7 +52,6 @@ def init_module(device_string: str, lang_code="a") -> None:
       🇧🇷 'p' => Brazilian Portuguese pt-br
       🇨🇳 'z' => Mandarin Chinese: pip install misaki[zh]
     """
-    global app
     global modelsdir
     global pipeline
     global lang
@@ -61,12 +62,11 @@ def init_module(device_string: str, lang_code="a") -> None:
     # We need to install the full repo to get a list of available voice names programmatically (like Kokoro-FastAPI does, see `Kokoro-FastAPI/api/src/core/paths.py`).
     # We can't download the model to "raven/vendor/", though, because Kokoro itself won't look for the files there - they must go into HF's default cache location.
     try:
-        from .. import app  # `app.server_config` contains hf repo name for downloading Kokoro models if needed
-        modelsdir = maybe_install_models(app.server_config.kokoro_models)
-        pipeline = KPipeline(lang_code=lang_code, device=device_string, repo_id=app.server_config.kokoro_models)
+        server_config = importlib.import_module(config_module_name)  # contains hf repo name for downloading Kokoro models if needed
+        modelsdir = maybe_install_models(server_config.kokoro_models)
+        pipeline = KPipeline(lang_code=lang_code, device=device_string, repo_id=server_config.kokoro_models)
         lang = lang_code
     except Exception as exc:
-        app = None
         modelsdir = None
         pipeline = None
         lang = None
@@ -78,10 +78,13 @@ def is_available() -> bool:
     """Return whether this module is up and running."""
     return (pipeline is not None)
 
+@memoize
 def get_voices() -> List[str]:
     """Get a list of available voices.
 
     These are automatically scanned from the files of the installed Kokoro-82M model.
+
+    The scan occurs only once per server session.
     """
     if modelsdir is None:
         raise RuntimeError("get_voices: `modelsdir` not initialized, cannot get list of voices (did `init_module` succeed?)")
@@ -154,6 +157,9 @@ def text_to_speech(voice: str,
 
     # SillyTavern compatibility: ST sends the whitespace too if the user configured the comma-separated voice list with whitespaces
     voice = voice.strip()
+
+    if voice not in (voices := get_voices()):
+        raise ValueError(f"Unknown voice '{voice}'; installed voices: {voices}")
 
     for result in pipeline.generate_from_tokens(tokens=tokens,
                                                 voice=voice,
