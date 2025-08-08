@@ -572,7 +572,7 @@ class FileDialog:
             #
             # notes:
             #   1. direction is ascending if == 1
-            #   2. direction is ascending if == -1
+            #   2. direction is descending if == -1
 
             self._sort_last_sender = sender
             self._sort_last_specs = sort_specs
