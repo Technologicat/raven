@@ -55,7 +55,6 @@ from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/total
 
 from ...common import bgtask
 from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from ...common.gui import fontsetup
 from ...common.gui import messagebox
 from ...common.gui import utils as guiutils
 from ...common.running_average import RunningAverage
@@ -87,44 +86,8 @@ avatar_instance_id = None
 
 dpg.create_context()
 
-# Initialize fonts. Must be done after `dpg.create_context`, or the app will just segfault at startup.
-# https://dearpygui.readthedocs.io/en/latest/documentation/fonts.html
-with dpg.font_registry() as the_font_registry:
-    # Change the default font to something that looks clean and has good on-screen readability.
-    # https://fonts.google.com/specimen/Open+Sans
-    font_size = 20
-    with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),  # load font from Raven's main assets
-                  font_size) as default_font:
-        fontsetup.setup_font_ranges()
-    dpg.bind_font(default_font)
-
-# Modify global theme
-with dpg.theme() as global_theme:
-    with dpg.theme_component(dpg.mvAll):
-        # dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (53, 168, 84))  # same color as Linux Mint default selection color in the green theme
-        dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
-dpg.bind_theme(global_theme)  # set this theme as the default
-
-# FIX disabled controls not showing as disabled.
-# DPG does not provide a default disabled-item theme, so we provide our own.
-# Everything else is automatically inherited from DPG's global theme.
-#     https://github.com/hoffstadt/DearPyGui/issues/2068
-# TODO: Figure out how to get colors from a theme. Might not always be `(45, 45, 48)`.
-#   - Maybe see how DPG's built-in theme editor does it - unless it's implemented at the C++ level.
-#   - See also the theme color editor in https://github.com/hoffstadt/DearPyGui/wiki/Tools-and-Widgets
-disabled_color = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
-disabled_button_color = (45, 45, 48)
-disabled_button_hover_color = (45, 45, 48)
-disabled_button_active_color = (45, 45, 48)
-with dpg.theme(tag="disablable_button_theme"):
-    # We customize just this. Everything else is inherited from the global theme.
-    with dpg.theme_component(dpg.mvButton, enabled_state=False):
-        dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
-        dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
+font_size = 20
+themes_and_fonts = guiutils.bootup(font_size=font_size)
 
 viewport_width = 1900
 viewport_height = 980

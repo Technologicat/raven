@@ -26,13 +26,12 @@ with timer() as tim:
 
     # Vendored libraries
     from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
-    from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
+    # from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     # from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
     from ..common import bgtask
 
     from ..common.gui import animation as gui_animation
-    from ..common.gui import fontsetup
     from ..common.gui import utils as guiutils
 
     from . import config as librarian_config
@@ -49,90 +48,7 @@ logger.info("DPG bootup...")
 with timer() as tim:
     dpg.create_context()
 
-    # Initialize fonts. Must be done after `dpg.create_context`, or the app will just segfault at startup.
-    # https://dearpygui.readthedocs.io/en/latest/documentation/fonts.html
-    with dpg.font_registry() as the_font_registry:
-        # Change the default font to something that looks clean and has good on-screen readability.
-        # https://fonts.google.com/specimen/Open+Sans
-        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),
-                      gui_config.font_size) as default_font:
-            fontsetup.setup_font_ranges()
-        dpg.bind_font(default_font)
-
-        # FontAwesome 6 for symbols (toolbar button icons etc.).
-        # We bind this font to individual GUI widgets as needed.
-        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", fa.FONT_ICON_FILE_NAME_FAR)).expanduser().resolve(),
-                      gui_config.font_size) as icon_font_regular:
-            dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
-        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", fa.FONT_ICON_FILE_NAME_FAS)).expanduser().resolve(),
-                      gui_config.font_size) as icon_font_solid:
-            dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
-
-    # Configure fonts for the Markdown renderer.
-    #     https://github.com/IvanNazaruk/DearPyGui-Markdown
-    #
-    # USAGE: `dpg_markdown.add_text(some_markdown_string)`
-    #
-    # For font color/size, use these syntaxes:
-    #     <font color="(255, 0, 0)">Test</font>
-    #     <font color="#ff0000">Test</font>
-    #     <font size="50">Test</font>
-    #     <font size=50>Test</font>
-    # color/size can be used in the same font tag.
-    #
-    # The first use (during an app session) of a particular font size/family loads the font into the renderer.
-    #
-    # During app startup (first frame?), don't call `dpg_markdown.add_text` more than once, or it'll crash the app (some kind of race condition in font loading?).
-    # After the app has started, it's fine to call it as often as needed.
-    #
-    dpg_markdown.set_font_registry(the_font_registry)
-    dpg_markdown.set_add_font_function(fontsetup.markdown_add_font_callback)
-    # Set a font that renders scientific Unicode text acceptably.
-    # # https://fonts.google.com/specimen/Inter+Tight
-    # dpg_markdown.set_font(font_size=gui_config.font_size,
-    #                       default=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Regular.ttf")).expanduser().resolve(),
-    #                       bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Bold.ttf")).expanduser().resolve(),
-    #                       italic=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Italic.ttf")).expanduser().resolve(),
-    #                       italic_bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-BoldItalic.ttf")).expanduser().resolve())
-    # https://fonts.google.com/specimen/Open+Sans
-    dpg_markdown.set_font(font_size=gui_config.font_size,
-                          default=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),
-                          bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Bold.ttf")).expanduser().resolve(),
-                          italic=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Italic.ttf")).expanduser().resolve(),
-                          italic_bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-BoldItalic.ttf")).expanduser().resolve())
-
-    # Modify global theme
-    with dpg.theme() as global_theme:
-        with dpg.theme_component(dpg.mvAll):
-            # dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (53, 168, 84))  # same color as Linux Mint default selection color in the green theme
-            dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
-    dpg.bind_theme(global_theme)  # set this theme as the default
-
-    # Add a theme for tight text layout
-    with dpg.theme(tag="my_no_spacing_theme"):
-        with dpg.theme_component(dpg.mvAll):
-            dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 0, category=dpg.mvThemeCat_Core)
-
-    # FIX disabled controls not showing as disabled.
-    # DPG does not provide a default disabled-item theme, so we provide our own.
-    # Everything else is automatically inherited from DPG's global theme.
-    #     https://github.com/hoffstadt/DearPyGui/issues/2068
-    # TODO: Figure out how to get colors from a theme. Might not always be `(45, 45, 48)`.
-    #   - Maybe see how DPG's built-in theme editor does it - unless it's implemented at the C++ level.
-    #   - See also the theme color editor in https://github.com/hoffstadt/DearPyGui/wiki/Tools-and-Widgets
-    disabled_color = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
-    disabled_button_color = (45, 45, 48)
-    disabled_button_hover_color = (45, 45, 48)
-    disabled_button_active_color = (45, 45, 48)
-    with dpg.theme(tag="disablable_button_theme"):
-        # We customize just this. Everything else is inherited from the global theme.
-        with dpg.theme_component(dpg.mvButton, enabled_state=False):
-            dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
+    themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
 
     # Initialize textures.
     with dpg.texture_registry(tag="app_textures"):
@@ -166,7 +82,7 @@ with timer() as tim:
             with dpg.group(horizontal=True):
                 dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
                 dpg.add_text("Response quality and factual accuracy ultimately depend on the AI. Check important facts independently.", color=(255, 180, 120), tag="ai_warning_text")  # orange
-            dpg.bind_item_font("ai_warning_icon", icon_font_solid)  # tag
+            dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag
 
         with dpg.child_window(tag="chat_panel",
                               width=816,  # 800 + round border (8 on each side)
@@ -194,7 +110,7 @@ with timer() as tim:
                                        enabled=False,
                                        width=gui_config.toolbutton_w,
                                        tag="chat_reroll_button")
-                        dpg.bind_item_font("chat_reroll_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_reroll_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("chat_reroll_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_reroll_button"):  # tag
                             dpg.add_text("Regenerate (replace branch)")
@@ -204,7 +120,7 @@ with timer() as tim:
                                        enabled=False,
                                        width=gui_config.toolbutton_w,
                                        tag="chat_new_branch_button")
-                        dpg.bind_item_font("chat_new_branch_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_new_branch_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("chat_new_branch_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_new_branch_button"):  # tag
                             dpg.add_text("Stash and regenerate (new branch)")
@@ -214,7 +130,7 @@ with timer() as tim:
                                        enabled=False,
                                        width=gui_config.toolbutton_w,
                                        tag="chat_delete_branch_button")
-                        dpg.bind_item_font("chat_delete_branch_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_delete_branch_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("chat_delete_branch_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_delete_branch_button"):  # tag
                             dpg.add_text("Delete current branch")
@@ -224,7 +140,7 @@ with timer() as tim:
                                        enabled=False,
                                        width=gui_config.toolbutton_w,
                                        tag="chat_prevbranch_button")
-                        dpg.bind_item_font("chat_prevbranch_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_prevbranch_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("chat_prevbranch_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_prevbranch_button"):  # tag
                             dpg.add_text("Previous branch")
@@ -234,7 +150,7 @@ with timer() as tim:
                                        enabled=False,
                                        width=gui_config.toolbutton_w,
                                        tag="chat_nextbranch_button")
-                        dpg.bind_item_font("chat_nextbranch_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_nextbranch_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("chat_nextbranch_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_nextbranch_button"):  # tag
                             dpg.add_text("Next branch")
@@ -247,7 +163,7 @@ with timer() as tim:
                                        callback=lambda: None,  # TODO
                                        width=gui_config.toolbutton_w,
                                        tag="chat_edit_button")
-                        dpg.bind_item_font("chat_edit_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_edit_button", themes_and_fonts.icon_font_solid)  # tag
                         with dpg.tooltip("chat_edit_button"):  # tag
                             dpg.add_text("Edit (replace)")
 
@@ -255,7 +171,7 @@ with timer() as tim:
                                        callback=lambda: None,  # TODO
                                        width=gui_config.toolbutton_w,
                                        tag="chat_new_branch_button_2")
-                        dpg.bind_item_font("chat_new_branch_button_2", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_new_branch_button_2", themes_and_fonts.icon_font_solid)  # tag
                         with dpg.tooltip("chat_new_branch_button_2"):  # tag
                             dpg.add_text("Stash and clear (new branch)")
 
@@ -263,7 +179,7 @@ with timer() as tim:
                                        callback=lambda: None,  # TODO
                                        width=gui_config.toolbutton_w,
                                        tag="chat_delete_branch_button_2")
-                        dpg.bind_item_font("chat_delete_branch_button_2", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_delete_branch_button_2", themes_and_fonts.icon_font_solid)  # tag
                         with dpg.tooltip("chat_delete_branch_button_2"):  # tag
                             dpg.add_text("Delete current branch")
 
@@ -272,7 +188,7 @@ with timer() as tim:
                                        enabled=False,
                                        width=gui_config.toolbutton_w,
                                        tag="chat_prevbranch_button_2")
-                        dpg.bind_item_font("chat_prevbranch_button_2", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_prevbranch_button_2", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("chat_prevbranch_button_2", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_prevbranch_button_2"):  # tag
                             dpg.add_text("Previous branch")
@@ -282,7 +198,7 @@ with timer() as tim:
                                        enabled=False,
                                        width=gui_config.toolbutton_w,
                                        tag="chat_nextbranch_button_2")
-                        dpg.bind_item_font("chat_nextbranch_button_2", icon_font_solid)  # tag
+                        dpg.bind_item_font("chat_nextbranch_button_2", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("chat_nextbranch_button_2", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_nextbranch_button_2"):  # tag
                             dpg.add_text("Next branch")
@@ -360,7 +276,7 @@ with timer() as tim:
                                callback=lambda: None,  # TODO
                                width=gui_config.toolbutton_w,
                                tag="chat_send_button")
-                dpg.bind_item_font("chat_send_button", icon_font_solid)  # tag  # TODO: make this change into a cancel button while the LLM is writing.
+                dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag  # TODO: make this change into a cancel button while the LLM is writing.
                 with dpg.tooltip("chat_send_button"):  # tag
                     dpg.add_text("Send to AI")
 

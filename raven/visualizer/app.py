@@ -33,7 +33,6 @@ with timer() as tim:
     import itertools
     import math
     import os
-    import pathlib
     import pickle
     import re
     import threading
@@ -65,7 +64,6 @@ with timer() as tim:
     from ..common import utils as common_utils
 
     from ..common.gui import animation as gui_animation
-    from ..common.gui import fontsetup
     from ..common.gui import utils as guiutils
     from ..common.gui import widgetfinder
 
@@ -494,7 +492,7 @@ def _update_word_cloud(*, task_env):
                                                                      target_button="word_cloud_button",
                                                                      target_tooltip=None,  # we handle the tooltip manually
                                                                      target_text=None,
-                                                                     original_theme=global_theme,
+                                                                     original_theme=themes_and_fonts.global_theme,
                                                                      duration=gui_config.acknowledgment_duration))
 
                 # Combine keyword counts of the specified items
@@ -572,7 +570,7 @@ def write_word_cloud(filename):
                                                          target_button="word_cloud_save_button",
                                                          target_tooltip="word_cloud_save_tooltip",
                                                          target_text="word_cloud_save_tooltip_text",
-                                                         original_theme=global_theme,
+                                                         original_theme=themes_and_fonts.global_theme,
                                                          duration=gui_config.acknowledgment_duration))
 
     def write_task():
@@ -600,90 +598,7 @@ logger.info("DPG bootup...")
 with timer() as tim:
     dpg.create_context()
 
-    # Initialize fonts. Must be done after `dpg.create_context`, or the app will just segfault at startup.
-    # https://dearpygui.readthedocs.io/en/latest/documentation/fonts.html
-    with dpg.font_registry() as the_font_registry:
-        # Change the default font to something that looks clean and has good on-screen readability.
-        # https://fonts.google.com/specimen/Open+Sans
-        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),
-                      gui_config.font_size) as default_font:
-            fontsetup.setup_font_ranges()
-        dpg.bind_font(default_font)
-
-        # FontAwesome 6 for symbols (toolbar button icons etc.).
-        # We bind this font to individual GUI widgets as needed.
-        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", fa.FONT_ICON_FILE_NAME_FAR)).expanduser().resolve(),
-                      gui_config.font_size) as icon_font_regular:
-            dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
-        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", fa.FONT_ICON_FILE_NAME_FAS)).expanduser().resolve(),
-                      gui_config.font_size) as icon_font_solid:
-            dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
-
-    # Configure fonts for the Markdown renderer.
-    #     https://github.com/IvanNazaruk/DearPyGui-Markdown
-    #
-    # USAGE: `dpg_markdown.add_text(some_markdown_string)`
-    #
-    # For font color/size, use these syntaxes:
-    #     <font color="(255, 0, 0)">Test</font>
-    #     <font color="#ff0000">Test</font>
-    #     <font size="50">Test</font>
-    #     <font size=50>Test</font>
-    # color/size can be used in the same font tag.
-    #
-    # The first use (during an app session) of a particular font size/family loads the font into the renderer.
-    #
-    # During app startup (first frame?), don't call `dpg_markdown.add_text` more than once, or it'll crash the app (some kind of race condition in font loading?).
-    # After the app has started, it's fine to call it as often as needed.
-    #
-    dpg_markdown.set_font_registry(the_font_registry)
-    dpg_markdown.set_add_font_function(fontsetup.markdown_add_font_callback)
-    # Set a font that renders scientific Unicode text acceptably.
-    # # https://fonts.google.com/specimen/Inter+Tight
-    # dpg_markdown.set_font(font_size=gui_config.font_size,
-    #                       default=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Regular.ttf")).expanduser().resolve(),
-    #                       bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Bold.ttf")).expanduser().resolve(),
-    #                       italic=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-Italic.ttf")).expanduser().resolve(),
-    #                       italic_bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "InterTight-BoldItalic.ttf")).expanduser().resolve())
-    # https://fonts.google.com/specimen/Open+Sans
-    dpg_markdown.set_font(font_size=gui_config.font_size,
-                          default=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Regular.ttf")).expanduser().resolve(),
-                          bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Bold.ttf")).expanduser().resolve(),
-                          italic=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-Italic.ttf")).expanduser().resolve(),
-                          italic_bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "fonts", "OpenSans-BoldItalic.ttf")).expanduser().resolve())
-
-    # Modify global theme
-    with dpg.theme() as global_theme:
-        with dpg.theme_component(dpg.mvAll):
-            # dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (53, 168, 84))  # same color as Linux Mint default selection color in the green theme
-            dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
-    dpg.bind_theme(global_theme)  # set this theme as the default
-
-    # Add a theme for tight text layout
-    with dpg.theme(tag="my_no_spacing_theme"):
-        with dpg.theme_component(dpg.mvAll):
-            dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 0, category=dpg.mvThemeCat_Core)
-
-    # FIX disabled controls not showing as disabled.
-    # DPG does not provide a default disabled-item theme, so we provide our own.
-    # Everything else is automatically inherited from DPG's global theme.
-    #     https://github.com/hoffstadt/DearPyGui/issues/2068
-    # TODO: Figure out how to get colors from a theme. Might not always be `(45, 45, 48)`.
-    #   - Maybe see how DPG's built-in theme editor does it - unless it's implemented at the C++ level.
-    #   - See also the theme color editor in https://github.com/hoffstadt/DearPyGui/wiki/Tools-and-Widgets
-    disabled_color = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
-    disabled_button_color = (45, 45, 48)
-    disabled_button_hover_color = (45, 45, 48)
-    disabled_button_active_color = (45, 45, 48)
-    with dpg.theme(tag="disablable_button_theme"):
-        # We customize just this. Everything else is inherited from the global theme.
-        with dpg.theme_component(dpg.mvButton, enabled_state=False):
-            dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
+    themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
 
     # Initialize textures.
     with dpg.texture_registry(tag="app_textures"):
@@ -1161,7 +1076,7 @@ info_panel_scroll_end_flasher = gui_animation.ScrollEndFlasher(target="item_info
                                                                tag="scroll_end_flasher",
                                                                duration=gui_config.scroll_ends_here_duration,
                                                                custom_finish_pred=lambda self: is_any_modal_window_visible(),  # end animation (and hide the flasher) immediately if any modal window becomes visible
-                                                               font=icon_font_solid,
+                                                               font=themes_and_fonts.icon_font_solid,
                                                                text_top=fa.ICON_ARROWS_UP_TO_LINE,
                                                                text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
 
@@ -1510,7 +1425,7 @@ with timer() as tim:
                         copy_report_button = dpg.add_button(tag="copy_report_to_clipboard_button",
                                                             label=fa.ICON_COPY,
                                                             enabled=False)
-                        dpg.bind_item_font("copy_report_to_clipboard_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("copy_report_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("copy_report_to_clipboard_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("copy_report_to_clipboard_button") as copy_report_tooltip:  # tag
                             copy_report_tooltip_text = dpg.add_text("Copy report to clipboard [F8]\n    no modifier: as plain text\n    with Shift: as Markdown")  # TODO: DRY duplicate definitions for labels
@@ -1563,7 +1478,7 @@ with timer() as tim:
                                                           label=fa.ICON_ANGLES_UP,
                                                           width=gui_config.info_panel_button_w,
                                                           enabled=False)
-                        dpg.bind_item_font("go_to_top_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("go_to_top_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("go_to_top_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("go_to_top_button"):  # tag
                             dpg.add_text("To top [Home, when search field not focused]")
@@ -1572,7 +1487,7 @@ with timer() as tim:
                                                         label=fa.ICON_ANGLE_UP,
                                                         width=gui_config.info_panel_button_w,
                                                         enabled=False)
-                        dpg.bind_item_font("page_up_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("page_up_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("page_up_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("page_up_button"):  # tag
                             dpg.add_text("Page up [Page Up, when search field not focused]")
@@ -1581,7 +1496,7 @@ with timer() as tim:
                                                           label=fa.ICON_ANGLE_DOWN,
                                                           width=gui_config.info_panel_button_w,
                                                           enabled=False)
-                        dpg.bind_item_font("page_down_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("page_down_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("page_down_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("page_down_button"):  # tag
                             dpg.add_text("Page down [Page Down, when search field not focused]")
@@ -1590,7 +1505,7 @@ with timer() as tim:
                                                              label=fa.ICON_ANGLES_DOWN,
                                                              width=gui_config.info_panel_button_w,
                                                              enabled=False)
-                        dpg.bind_item_font("go_to_bottom_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("go_to_bottom_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("go_to_bottom_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("go_to_bottom_button"):  # tag
                             dpg.add_text("To bottom [End, when search field not focused]")
@@ -1604,7 +1519,7 @@ with timer() as tim:
                                                                   label=fa.ICON_CIRCLE_UP,
                                                                   width=gui_config.info_panel_button_w,
                                                                   enabled=False)
-                        dpg.bind_item_font("prev_search_match_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("prev_search_match_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("prev_search_match_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("prev_search_match_button"):  # tag
                             dpg.add_text("Previous search match [Shift+F3]")
@@ -1614,7 +1529,7 @@ with timer() as tim:
                                                                   label=fa.ICON_CIRCLE_DOWN,
                                                                   width=gui_config.info_panel_button_w,
                                                                   enabled=False)
-                        dpg.bind_item_font("next_search_match_button", icon_font_solid)  # tag
+                        dpg.bind_item_font("next_search_match_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("next_search_match_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("next_search_match_button"):  # tag
                             dpg.add_text("Next search match [F3]")
@@ -1698,7 +1613,7 @@ with timer() as tim:
                                callback=show_open_file_dialog,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("open_file_button", icon_font_solid)  # tag
+                dpg.bind_item_font("open_file_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("open_file_button", tag="open_file_tooltip"):  # tag
                     dpg.add_text("Open dataset [Ctrl+O]", tag="open_file_tooltip_text")
 
@@ -1707,7 +1622,7 @@ with timer() as tim:
                                callback=toggle_importer_window,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("open_importer_window_button", icon_font_solid)  # tag
+                dpg.bind_item_font("open_importer_window_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("open_importer_window_button", tag="open_importer_window_tooltip"):  # tag
                     dpg.add_text("Import BibTeX files [Ctrl+I]", tag="open_importer_window_tooltip_text")
 
@@ -1720,7 +1635,7 @@ with timer() as tim:
                                callback=reset_plotter_zoom,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("zoom_reset_button", icon_font_solid)  # tag
+                dpg.bind_item_font("zoom_reset_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("zoom_reset_button", tag="zoom_reset_tooltip"):  # tag
                     dpg.add_text("Reset zoom [Ctrl+Home]", tag="zoom_reset_tooltip_text")
 
@@ -1750,7 +1665,7 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w,
                                enabled=False)
-                dpg.bind_item_font("selection_undo_button", icon_font_solid)  # tag
+                dpg.bind_item_font("selection_undo_button", themes_and_fonts.icon_font_solid)  # tag
                 dpg.bind_item_theme("selection_undo_button", "disablable_button_theme")  # tag
                 with dpg.tooltip("selection_undo_button", tag="selection_undo_tooltip"):  # tag
                     dpg.add_text("Undo selection change [Ctrl+Shift+Z]",
@@ -1762,7 +1677,7 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w,
                                enabled=False)
-                dpg.bind_item_font("selection_redo_button", icon_font_solid)  # tag
+                dpg.bind_item_font("selection_redo_button", themes_and_fonts.icon_font_solid)  # tag
                 dpg.bind_item_theme("selection_redo_button", "disablable_button_theme")  # tag
                 with dpg.tooltip("selection_redo_button", tag="selection_redo_tooltip"):  # tag
                     dpg.add_text("Redo selection change [Ctrl+Shift+Y]",
@@ -1777,7 +1692,7 @@ with timer() as tim:
                                callback=select_search_results,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("select_search_results_button", icon_font_solid)  # tag
+                dpg.bind_item_font("select_search_results_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("select_search_results_button", tag="select_search_results_tooltip"):  # tag
                     dpg.add_text("Select items matched by current search [Enter, while the search field has focus]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
                                  tag="select_search_results_tooltip_text")
@@ -1791,7 +1706,7 @@ with timer() as tim:
                                callback=select_visible_all,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("select_visible_all_button", icon_font_regular)  # tag
+                dpg.bind_item_font("select_visible_all_button", themes_and_fonts.icon_font_regular)  # tag
                 with dpg.tooltip("select_visible_all_button", tag="select_visible_all_tooltip"):  # tag
                     dpg.add_text("Select items currently on-screen in the plotter [F9]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
                                  tag="select_visible_all_tooltip_text")
@@ -1801,7 +1716,7 @@ with timer() as tim:
                                callback=toggle_word_cloud_window,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("word_cloud_button", icon_font_solid)  # tag
+                dpg.bind_item_font("word_cloud_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("word_cloud_button", tag="word_cloud_tooltip"):  # tag
                     dpg.add_text("Toggle word cloud window [F10]",
                                  tag="word_cloud_button_tooltip_text")
@@ -1817,7 +1732,7 @@ with timer() as tim:
                                callback=toggle_fullscreen,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("fullscreen_button", icon_font_solid)  # tag
+                dpg.bind_item_font("fullscreen_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("fullscreen_button", tag="fullscreen_tooltip"):  # tag
                     dpg.add_text("Toggle fullscreen [F11]",
                                  tag="fullscreen_tooltip_text")
@@ -1829,7 +1744,7 @@ with timer() as tim:
                                tag="help_button",
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("help_button", icon_font_solid)  # tag
+                dpg.bind_item_font("help_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("help_button", tag="help_tooltip"):  # tag
                     dpg.add_text("Open the Help card [F1]",
                                  tag="help_tooltip_text")
@@ -1850,7 +1765,7 @@ with timer() as tim:
                         update_search()  # we should wait, because this button may get hammered.
                         dpg.focus_item("search_field")  # tag
                     dpg.add_button(label=fa.ICON_X, callback=clear_search, tag="clear_search_button")
-                    dpg.bind_item_font("clear_search_button", icon_font_solid)  # tag
+                    dpg.bind_item_font("clear_search_button", themes_and_fonts.icon_font_solid)  # tag
                     with dpg.tooltip("clear_search_button", tag="clear_search_tooltip"):  # tag
                         dpg.add_text("Clear the search",
                                      tag="clear_search_tooltip_text")
@@ -1928,7 +1843,7 @@ with timer() as tim:
                            callback=show_save_word_cloud_dialog,
                            indent=gui_config.toolbutton_indent,
                            width=gui_config.toolbutton_w)
-            dpg.bind_item_font("word_cloud_save_button", icon_font_solid)  # tag
+            dpg.bind_item_font("word_cloud_save_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("word_cloud_save_button", tag="word_cloud_save_tooltip"):  # tag
                 dpg.add_text("Save word cloud as PNG [Ctrl+S]", tag="word_cloud_save_tooltip_text")
 
@@ -1984,7 +1899,7 @@ with timer() as tim:
                                tag="importer_save_button",
                                width=gui_config.toolbutton_w,
                                callback=show_save_import_dialog)
-                dpg.bind_item_font("importer_save_button", icon_font_solid)  # tag
+                dpg.bind_item_font("importer_save_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("importer_save_button", tag="importer_save_tooltip"):  # tag
                     dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="importer_save_tooltip_text")
 
@@ -1997,7 +1912,7 @@ with timer() as tim:
                                tag="importer_select_input_files_button",
                                width=gui_config.toolbutton_w,
                                callback=show_open_import_dialog)
-                dpg.bind_item_font("importer_select_input_files_button", icon_font_solid)  # tag
+                dpg.bind_item_font("importer_select_input_files_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("importer_select_input_files_button", tag="importer_select_input_files_tooltip"):  # tag
                     dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="importer_select_input_files_tooltip_text")
 
@@ -2013,7 +1928,7 @@ with timer() as tim:
                                width=gui_config.toolbutton_w,
                                callback=start_or_stop_importer,
                                enabled=True)
-                dpg.bind_item_font("importer_startstop_button", icon_font_solid)  # tag
+                dpg.bind_item_font("importer_startstop_button", themes_and_fonts.icon_font_solid)  # tag
                 dpg.bind_item_theme("importer_startstop_button", "disablable_button_theme")  # tag
                 with dpg.tooltip("importer_startstop_button", tag="importer_startstop_tooltip"):  # tag
                     dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="importer_startstop_tooltip_text")  # TODO: DRY duplicate definitions for labels
@@ -2235,7 +2150,7 @@ def _update_annotation(*, task_env, env=None):
                         if data_idx in info_panel_entry_title_widgets:  # shown in the info panel
                             item_selection_status = item_ininfo
                             selection_mark_text = fa.ICON_CLIPBOARD_CHECK
-                            selection_mark_font = icon_font_solid
+                            selection_mark_font = themes_and_fonts.icon_font_solid
                             if data_idx in selection_data_idxs:  # Usually, all items in the info panel are in the selection...
                                 selection_mark_color = (120, 180, 255)  # blue
                             else:  # ...but while the info panel is updating, the old content (shown until the update completes) may have some items that are no longer included in the new selection.
@@ -2243,7 +2158,7 @@ def _update_annotation(*, task_env, env=None):
                                 selection_mark_color = (80, 80, 80)  # very dark gray  # (255, 180, 120)  # orange
                         else:  # not shown in the info panel
                             selection_mark_text = fa.ICON_CLIPBOARD
-                            selection_mark_font = icon_font_regular
+                            selection_mark_font = themes_and_fonts.icon_font_regular
                             if data_idx in selection_data_idxs:  # selected
                                 item_selection_status = item_selected
                                 selection_mark_color = (120, 180, 255)  # blue
@@ -2263,7 +2178,7 @@ def _update_annotation(*, task_env, env=None):
                                 item_search_status = item_nomatch
                                 search_mark_color = (80, 80, 80)  # very dark gray
                             mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=search_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_search_mark_build{env.internal_build_number}", parent=item_group)
-                            dpg.bind_item_font(mark_widget, icon_font_solid)
+                            dpg.bind_item_font(mark_widget, themes_and_fonts.icon_font_solid)
                         else:  # no search active
                             item_search_status = item_searchoff
 
@@ -2291,26 +2206,26 @@ def _update_annotation(*, task_env, env=None):
                 annotation_help_selection_legend_group = dpg.add_group(horizontal=True, tag=f"annotation_help_selection_legend_group_build{env.internal_build_number}", parent=annotation_target_group)
 
                 selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD_CHECK, color=(120, 180, 255), tag=f"annotation_help_legend_ininfo_icon_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)  # blue
-                dpg.bind_item_font(selection_mark_widget, icon_font_solid)
+                dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_solid)
                 dpg.add_text(": selected, in info panel;", color=hint_color, tag=f"annotation_help_legend_ininfo_explanation_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)
 
                 selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD, color=(120, 180, 255), tag=f"annotation_help_legend_selected_icon_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)  # blue
-                dpg.bind_item_font(selection_mark_widget, icon_font_regular)
+                dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_regular)
                 dpg.add_text(": selected, not in info panel;", color=hint_color, tag=f"annotation_help_legend_selected_explanation_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)
 
                 selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD, color=(80, 80, 80), tag=f"annotation_help_legend_notselected_icon_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)  # very dark gray
-                dpg.bind_item_font(selection_mark_widget, icon_font_regular)
+                dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_regular)
                 dpg.add_text(": not selected", color=hint_color, tag=f"annotation_help_legend_notselected_explanation_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)
 
                 if search_string:
                     annotation_help_search_legend_group = dpg.add_group(horizontal=True, tag=f"annotation_help_search_legend_group_build{env.internal_build_number}", parent=annotation_target_group)
 
                     search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(180, 255, 180), tag=f"annotation_help_legend_match_icon_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
-                    dpg.bind_item_font(search_mark_widget, icon_font_solid)
+                    dpg.bind_item_font(search_mark_widget, themes_and_fonts.icon_font_solid)
                     dpg.add_text(": match;", color=hint_color, tag=f"annotation_help_legend_match_explanation_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
 
                     search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(80, 80, 80), tag=f"annotation_help_legend_nomatch_icon_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
-                    dpg.bind_item_font(search_mark_widget, icon_font_solid)
+                    dpg.bind_item_font(search_mark_widget, themes_and_fonts.icon_font_solid)
                     dpg.add_text(": no match", color=hint_color, tag=f"annotation_help_legend_nomatch_explanation_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
 
                 if have_jumpable_item:
@@ -2318,20 +2233,20 @@ def _update_annotation(*, task_env, env=None):
 
                     dpg.add_text("[Right-click to scroll info panel to topmost", color=hint_color, tag=f"annotation_help_jumpable_explanation_left_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
                     selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD_CHECK, color=(120, 180, 255), tag=f"annotation_help_jumpable_selection_icon_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
-                    dpg.bind_item_font(selection_mark_widget, icon_font_solid)
+                    dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_solid)
                     if search_string:
                         search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(180, 255, 180), tag=f"annotation_help_jumpable_search_icon_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
-                        dpg.bind_item_font(search_mark_widget, icon_font_solid)
+                        dpg.bind_item_font(search_mark_widget, themes_and_fonts.icon_font_solid)
                     dpg.add_text("item]", color=hint_color, tag=f"annotation_help_jumpable_explanation_right_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
                 else:
                     annotation_help_notjumpable_group = dpg.add_group(horizontal=True, tag=f"annotation_help_notjumpable_group_build{env.internal_build_number}", parent=annotation_target_group)
 
                     dpg.add_text("[Right-click disabled, no", color=hint_color, tag=f"annotation_help_notjumpable_explanation_left_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
                     selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD_CHECK, color=(120, 180, 255), tag=f"annotation_help_notjumpable_selection_icon_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
-                    dpg.bind_item_font(selection_mark_widget, icon_font_solid)
+                    dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_solid)
                     if search_string:
                         search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(180, 255, 180), tag=f"annotation_help_notjumpable_search_icon_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
-                        dpg.bind_item_font(search_mark_widget, icon_font_solid)
+                        dpg.bind_item_font(search_mark_widget, themes_and_fonts.icon_font_solid)
                     dpg.add_text("item listed]", color=hint_color, tag=f"annotation_help_notjumpable_explanation_right_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
 
                 # Swap the new content in ("double-buffering")
@@ -2755,7 +2670,7 @@ def _copy_report_to_clipboard(*, report_format):
                                                          target_button=copy_report_button,
                                                          target_tooltip=copy_report_tooltip,
                                                          target_text=copy_report_tooltip_text,
-                                                         original_theme=global_theme,
+                                                         original_theme=themes_and_fonts.global_theme,
                                                          duration=gui_config.acknowledgment_duration))
 
 def copy_current_entry_to_clipboard():
@@ -2798,7 +2713,7 @@ def _copy_entry_to_clipboard(item):
                                                          target_button=button,
                                                          target_tooltip=tooltip,
                                                          target_text=tooltip_text,
-                                                         original_theme=global_theme,
+                                                         original_theme=themes_and_fonts.global_theme,
                                                          duration=gui_config.acknowledgment_duration))
 
 def search_or_select_current_entry():
@@ -3503,7 +3418,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                        enabled=up_enabled,
                                        callback=(make_scroll_info_panel_to_cluster(display_idx - 1) if up_enabled else lambda: None),
                                        parent=cluster_header_group)
-            # dpg.bind_item_font(f"cluster_{cluster_id}_up_button", icon_font_solid)
+            # dpg.bind_item_font(f"cluster_{cluster_id}_up_button", themes_and_fonts.icon_font_solid)
             up_tooltip = dpg.add_tooltip(up_button)
             dpg.add_text("Previous cluster [Ctrl+P]", parent=up_tooltip)
             dpg.bind_item_theme(f"cluster_{cluster_id}_up_button_build{env.internal_build_number}", "disablable_button_theme")  # tag
@@ -3517,7 +3432,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                          enabled=down_enabled,
                                          callback=(make_scroll_info_panel_to_cluster(display_idx + 1) if down_enabled else lambda: None),
                                          parent=cluster_header_group)
-            # dpg.bind_item_font(f"cluster_{cluster_id}_down_button", icon_font_solid)
+            # dpg.bind_item_font(f"cluster_{cluster_id}_down_button", themes_and_fonts.icon_font_solid)
             down_tooltip = dpg.add_tooltip(down_button)
             dpg.add_text("Next cluster [Ctrl+N]", parent=down_tooltip)
             dpg.bind_item_theme(f"cluster_{cluster_id}_down_button_build{env.internal_build_number}", "disablable_button_theme")  # tag
@@ -3577,7 +3492,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                    direction=dpg.mvDir_Up,
                                    callback=make_scroll_info_panel_to_cluster(display_idx),
                                    parent=entry_buttons_column_1_group)
-                dpg.bind_item_font(b, icon_font_solid)
+                dpg.bind_item_font(b, themes_and_fonts.icon_font_solid)
                 b_tooltip = dpg.add_tooltip(b)
                 b_tooltip_text = dpg.add_text(f"Back to top of cluster #{cluster_id} [Ctrl+U]" if cluster_id != -1 else "Back to top of Misc [Ctrl+U]",
                                               parent=b_tooltip)
@@ -3587,7 +3502,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                    tag=f"cluster_{cluster_id}_entry_{data_idx}_copy_to_clipboard_button_build{env.internal_build_number}",
                                    width=gui_config.info_panel_button_w,
                                    parent=entry_buttons_column_1_group)
-                dpg.bind_item_font(b, icon_font_solid)
+                dpg.bind_item_font(b, themes_and_fonts.icon_font_solid)
                 b_tooltip = dpg.add_tooltip(b)
                 b_tooltip_text = dpg.add_text("Copy item authors, year and title to clipboard [Ctrl+Shift+C]",  # TODO: DRY duplicate definitions for labels
                                               parent=b_tooltip)
@@ -3604,7 +3519,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                    tag=f"cluster_{cluster_id}_entry_{data_idx}_search_in_plotter_button_build{env.internal_build_number}",
                                    width=gui_config.info_panel_button_w,
                                    parent=entry_buttons_column_2_group)
-                dpg.bind_item_font(b, icon_font_solid)
+                dpg.bind_item_font(b, themes_and_fonts.icon_font_solid)
                 b_tooltip = dpg.add_tooltip(b)
                 dpg.add_text("Search for this item in the plotter [F6]\n(clear search if already searching for this item)\n    with Shift: set selection to this item only\n    with Ctrl: remove this item from selection",
                              parent=b_tooltip)
@@ -3614,7 +3529,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                    tag=f"cluster_{cluster_id}_entry_{data_idx}_select_this_cluster_button_build{env.internal_build_number}",
                                    width=gui_config.info_panel_button_w,
                                    parent=entry_buttons_column_2_group)
-                dpg.bind_item_font(b, icon_font_solid)
+                dpg.bind_item_font(b, themes_and_fonts.icon_font_solid)
                 b_tooltip = dpg.add_tooltip(b)
                 cluster_name_str = f"#{cluster_id}" if cluster_id != -1 else "Misc"
                 dpg.add_text(f"Select all items in the same cluster ({cluster_name_str}) as this item [F7]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
