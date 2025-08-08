@@ -1251,7 +1251,7 @@ class ResultFeedReader:
         self.gen.close()
         self.gen = None
 
-def si_prefix(number: Union[int, float]) -> str:
+def si_prefix(number: Union[int, float]) -> str:  # TODO: very general utility, move to `unpythonic`, and add binary mode (1024-based units Ki, Mi, Gi, ...)
     """Convert a number to SI format (1000 -> 1K).
 
     https://medium.com/@ryan_forrester_/getting-file-sizes-in-python-a-complete-guide-01293aaa68ef
