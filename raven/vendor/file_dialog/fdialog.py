@@ -429,51 +429,28 @@ class FileDialog:
                             else:
                                 kwargs_file = {'tint_color': [255, 255, 255, 255], 'user_data': item_type}
 
-                            if file_name.endswith((".dll", ".a", ".o", ".so", ".ko")):
-                                dpg.add_image(self.img_gears, **kwargs_file)
+                            ext_icons = {
+                                (".dll", ".a", ".o", ".so", ".ko"): self.img_gears,
+                                (".png", ".jpg", ".jpeg"): self.img_picture,
+                                (".msi", ".exe", ".bat", ".bin", ".elf"): self.img_app,
+                                (".iso",): self.img_iso,
+                                (".zip", ".deb", ".rpm", ".tar.gz", ".tar", ".gz", ".lzo", ".lz4", ".7z", ".ppack"): self.img_zip,
+                                (".py", ".pyo", ".pyw", ".pyi", ".pyc", ".pyz", ".pyd"): self.img_python,
+                                (".c",): self.img_c,
+                                (".js", ".json", ".cs", ".cpp", ".h", ".hpp", ".sh", ".pyl", ".rs", ".vbs", ".cmd"): self.img_script,
+                                (".url",): self.img_url,
+                                (".lnk",): self.img_link,
+                                (".txt",): self.img_note,
+                                (".mp3", ".ogg", ".wav"): self.img_music_note,
+                                (".mp4", ".mov"): self.img_video,
+                                (".obj", ".fbx", ".blend"): self.img_object,
+                                (".svg",): self.img_vector,
+                            }
 
-                            elif file_name.endswith((".png", ".jpg", ".jpeg")):
-                                dpg.add_image(self.img_picture, **kwargs_file)
-
-                            elif file_name.endswith((".msi", ".exe", ".bat", ".bin", ".elf")):
-                                dpg.add_image(self.img_app, **kwargs_file)
-
-                            elif file_name.endswith(".iso"):
-                                dpg.add_image(self.img_iso, **kwargs_file)
-
-                            elif file_name.endswith((".zip", ".deb", ".rpm", ".tar.gz", ".tar", ".gz", ".lzo", ".lz4", ".7z", ".ppack")):
-                                dpg.add_image(self.img_zip, **kwargs_file)
-
-                            elif file_name.endswith((".png", ".jpg", ".jpeg")):
-                                dpg.add_image(self.img_picture, **kwargs_file)
-
-                            elif file_name.endswith((".py", ".pyo", ".pyw", ".pyi", ".pyc", ".pyz", ".pyd")):
-                                dpg.add_image(self.img_python, **kwargs_file)
-
-                            elif file_name.endswith(".c"):
-                                dpg.add_image(self.img_c, **kwargs_file)
-                            elif file_name.endswith((".js", ".json", ".cs", ".cpp", ".h", ".hpp", ".sh", ".pyl", ".rs", ".vbs", ".cmd")):
-                                dpg.add_image(self.img_script, **kwargs_file)
-
-                            elif file_name.endswith(".url"):
-                                dpg.add_image(self.img_url, **kwargs_file)
-                            elif file_name.endswith(".lnk"):
-                                dpg.add_image(self.img_link, **kwargs_file)
-
-                            elif file_name.endswith(".txt"):
-                                dpg.add_image(self.img_note, **kwargs_file)
-                            elif file_name.endswith((".mp3", ".ogg", ".wav")):
-                                dpg.add_image(self.img_music_note, **kwargs_file)
-
-                            elif file_name.endswith((".mp4", ".mov")):
-                                dpg.add_image(self.img_video, **kwargs_file)
-
-                            elif file_name.endswith((".obj", ".fbx", ".blend")):
-                                dpg.add_image(self.img_object, **kwargs_file)
-
-                            elif file_name.endswith(".svg"):
-                                dpg.add_image(self.img_vector, **kwargs_file)
-
+                            for exts, img in ext_icons.items():
+                                if any(file_name.endswith(ext) for ext in exts):
+                                    dpg.add_image(img, **kwargs_file)
+                                    break
                             else:
                                 dpg.add_image(self.img_mini_document, **kwargs_file)
 
