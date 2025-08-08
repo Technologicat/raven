@@ -66,8 +66,8 @@ with timer() as tim:
 
     from ..common.gui import animation as gui_animation
     from ..common.gui import fontsetup
-    from ..common.gui import widgetfinder
     from ..common.gui import utils as guiutils
+    from ..common.gui import widgetfinder
 
     from . import config as visualizer_config
     from . import importer  # BibTeX importer
