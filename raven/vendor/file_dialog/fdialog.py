@@ -69,146 +69,23 @@ class FileDialog:
                     dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=1, y=.5)
 
             # texture loading
-            diwidth, diheight, _, didata = dpg.load_image(os.path.join(cls.fd_img_path, "document.png"))
-            hwidth, hheight, _, hdata = dpg.load_image(os.path.join(cls.fd_img_path, "home.png"))
-            afiwidth, afiheight, _, afidata = dpg.load_image(os.path.join(cls.fd_img_path, "add_folder.png"))
-            afwidth, afheight, _, afdata = dpg.load_image(os.path.join(cls.fd_img_path, "add_file.png"))
-            mfwidth, mfheight, _, mfdata = dpg.load_image(os.path.join(cls.fd_img_path, "mini_folder.png"))
-            fiwidth, fiheight, _, fidata = dpg.load_image(os.path.join(cls.fd_img_path, "folder.png"))
-            mdwidth, mdheight, _, mddata = dpg.load_image(os.path.join(cls.fd_img_path, "mini_document.png"))
-            mewidth, meheight, _, medata = dpg.load_image(os.path.join(cls.fd_img_path, "mini_error.png"))
-            rwidth, rheight, _, rdata = dpg.load_image(os.path.join(cls.fd_img_path, "refresh.png"))
-            hdwidth, hdheight, _, hddata = dpg.load_image(os.path.join(cls.fd_img_path, "hd.png"))
-            pwidth, pheight, _, pdata = dpg.load_image(os.path.join(cls.fd_img_path, "picture.png"))
-            bpwidth, bpheight, _, bpdata = dpg.load_image(os.path.join(cls.fd_img_path, "big_picture.png"))
-            pfwidth, pfheight, _, pfdata = dpg.load_image(os.path.join(cls.fd_img_path, "picture_folder.png"))
-            dwidth, dheight, _, ddata = dpg.load_image(os.path.join(cls.fd_img_path, "desktop.png"))
-            vwidth, vheight, _, vdata = dpg.load_image(os.path.join(cls.fd_img_path, "videos.png"))
-            mwidth, mheight, _, mdata = dpg.load_image(os.path.join(cls.fd_img_path, "music.png"))
-            dfwidth, dfheight, _, dfdata = dpg.load_image(os.path.join(cls.fd_img_path, "downloads.png"))
-            dcfwidth, dcfheight, _, dcfdata = dpg.load_image(os.path.join(cls.fd_img_path, "documents.png"))
-            swidth, sheight, _, sdata = dpg.load_image(os.path.join(cls.fd_img_path, "search.png"))
-            bwidth, bheight, _, bdata = dpg.load_image(os.path.join(cls.fd_img_path, "back.png"))
-            cwidth, cheight, _, cdata = dpg.load_image(os.path.join(cls.fd_img_path, "c.png"))
-            gwidth, gheight, _, gdata = dpg.load_image(os.path.join(cls.fd_img_path, "gears.png"))
-            mnwidth, mnheight, _, mndata = dpg.load_image(os.path.join(cls.fd_img_path, "music_note.png"))
-            nwidth, nheight, _, ndata = dpg.load_image(os.path.join(cls.fd_img_path, "note.png"))
-            owidth, oheight, _, odata = dpg.load_image(os.path.join(cls.fd_img_path, "object.png"))
-            pywidth, pyheight, _, pydata = dpg.load_image(os.path.join(cls.fd_img_path, "python.png"))
-            scwidth, scheight, _, scdata = dpg.load_image(os.path.join(cls.fd_img_path, "script.png"))
-            vfwidth, vfheight, _, vfdata = dpg.load_image(os.path.join(cls.fd_img_path, "video.png"))
-            lwidth, lheight, _, ldata = dpg.load_image(os.path.join(cls.fd_img_path, "link.png"))
-            uwidth, uheight, _, udata = dpg.load_image(os.path.join(cls.fd_img_path, "url.png"))
-            vewidth, veheight, _, vedata = dpg.load_image(os.path.join(cls.fd_img_path, "vector.png"))
-            zwidth, zheight, _, zdata = dpg.load_image(os.path.join(cls.fd_img_path, "zip.png"))
-            awidth, aheight, _, adata = dpg.load_image(os.path.join(cls.fd_img_path, "app.png"))
-            iwidth, iheight, _, idata = dpg.load_image(os.path.join(cls.fd_img_path, "iso.png"))
+            image_names = [
+                "document", "home", "add_folder", "add_file", "mini_folder", "folder", "mini_document",
+                "mini_error", "refresh", "hard_disk", "picture", "big_picture", "picture_folder",
+                "desktop", "videos", "music_folder", "downloads", "document_folder", "search", "back",
+                "c", "gears", "music_note", "note", "object", "python", "script", "video", "link",
+                "url", "vector", "zip", "app", "iso"
+            ]
 
-            cls.ico_document = [diwidth, diheight, didata]
-            cls.ico_home = [hwidth, hheight, hdata]
-            cls.ico_add_folder = [afiwidth, afiheight, afidata]
-            cls.ico_add_file = [afwidth, afheight, afdata]
-            cls.ico_mini_folder = [mfwidth, mfheight, mfdata]
-            cls.ico_folder = [fiwidth, fiheight, fidata]
-            cls.ico_mini_document = [mdwidth, mdheight, mddata]
-            cls.ico_mini_error = [mewidth, meheight, medata]
-            cls.ico_refresh = [rwidth, rheight, rdata]
-            cls.ico_hard_disk = [hdwidth, hdheight, hddata]
-            cls.ico_picture = [pwidth, pheight, pdata]
-            cls.ico_big_picture = [bpwidth, bpheight, bpdata]
-            cls.ico_picture_folder = [pfwidth, pfheight, pfdata]
-            cls.ico_desktop = [dwidth, dheight, ddata]
-            cls.ico_videos = [vwidth, vheight, vdata]
-            cls.ico_music_folder = [mwidth, mheight, mdata]
-            cls.ico_downloads = [dfwidth, dfheight, dfdata]
-            cls.ico_document_folder = [dcfwidth, dcfheight, dcfdata]
-            cls.ico_search = [swidth, sheight, sdata]
-            cls.ico_back = [bwidth, bheight, bdata]
-            cls.ico_c = [cwidth, cheight, cdata]
-            cls.ico_gears = [gwidth, gheight, gdata]
-            cls.ico_music_note = [mnwidth, mnheight, mndata]
-            cls.ico_note = [nwidth, nheight, ndata]
-            cls.ico_object = [owidth, oheight, odata]
-            cls.ico_python = [pywidth, pyheight, pydata]
-            cls.ico_script = [scwidth, scheight, scdata]
-            cls.ico_video = [vfwidth, vfheight, vfdata]
-            cls.ico_link = [lwidth, lheight, ldata]
-            cls.ico_url = [uwidth, uheight, udata]
-            cls.ico_vector = [vewidth, veheight, vedata]
-            cls.ico_zip = [zwidth, zheight, zdata]
-            cls.ico_app = [awidth, aheight, adata]
-            cls.ico_iso = [iwidth, iheight, idata]
+            for img in image_names:
+                width, height, _, data = dpg.load_image(os.path.join(cls.fd_img_path, f"{img}.png"))
+                setattr(cls, f"ico_{img}", [width, height, data])
 
             with dpg.texture_registry():
-                dpg.add_static_texture(width=cls.ico_document[0], height=cls.ico_document[1], default_value=cls.ico_document[2], tag="ico_document")
-                dpg.add_static_texture(width=cls.ico_home[0], height=cls.ico_home[1], default_value=cls.ico_home[2], tag="ico_home")
-                dpg.add_static_texture(width=cls.ico_add_folder[0], height=cls.ico_add_folder[1], default_value=cls.ico_add_folder[2], tag="ico_add_folder")
-                dpg.add_static_texture(width=cls.ico_add_file[0], height=cls.ico_add_file[1], default_value=cls.ico_add_file[2], tag="ico_add_file")
-                dpg.add_static_texture(width=cls.ico_mini_folder[0], height=cls.ico_mini_folder[1], default_value=cls.ico_mini_folder[2], tag="ico_mini_folder")
-                dpg.add_static_texture(width=cls.ico_folder[0], height=cls.ico_folder[1], default_value=cls.ico_folder[2], tag="ico_folder")
-                dpg.add_static_texture(width=cls.ico_mini_document[0], height=cls.ico_mini_document[1], default_value=cls.ico_mini_document[2], tag="ico_mini_document")
-                dpg.add_static_texture(width=cls.ico_mini_error[0], height=cls.ico_mini_error[1], default_value=cls.ico_mini_error[2], tag="ico_mini_error")
-                dpg.add_static_texture(width=cls.ico_refresh[0], height=cls.ico_refresh[1], default_value=cls.ico_refresh[2], tag="ico_refresh")
-                dpg.add_static_texture(width=cls.ico_hard_disk[0], height=cls.ico_hard_disk[1], default_value=cls.ico_hard_disk[2], tag="ico_hard_disk")
-                dpg.add_static_texture(width=cls.ico_picture[0], height=cls.ico_picture[1], default_value=cls.ico_picture[2], tag="ico_picture")
-                dpg.add_static_texture(width=cls.ico_big_picture[0], height=cls.ico_big_picture[1], default_value=cls.ico_big_picture[2], tag="ico_big_picture")
-                dpg.add_static_texture(width=cls.ico_picture_folder[0], height=cls.ico_picture_folder[1], default_value=cls.ico_picture_folder[2], tag="ico_picture_folder")
-                dpg.add_static_texture(width=cls.ico_desktop[0], height=cls.ico_desktop[1], default_value=cls.ico_desktop[2], tag="ico_desktop")
-                dpg.add_static_texture(width=cls.ico_videos[0], height=cls.ico_videos[1], default_value=cls.ico_videos[2], tag="ico_videos")
-                dpg.add_static_texture(width=cls.ico_music_folder[0], height=cls.ico_music_folder[1], default_value=cls.ico_music_folder[2], tag="ico_music_folder")
-                dpg.add_static_texture(width=cls.ico_downloads[0], height=cls.ico_downloads[1], default_value=cls.ico_downloads[2], tag="ico_downloads")
-                dpg.add_static_texture(width=cls.ico_document_folder[0], height=cls.ico_document_folder[1], default_value=cls.ico_document_folder[2], tag="ico_document_folder")
-                dpg.add_static_texture(width=cls.ico_search[0], height=cls.ico_search[1], default_value=cls.ico_search[2], tag="ico_search")
-                dpg.add_static_texture(width=cls.ico_back[0], height=cls.ico_back[1], default_value=cls.ico_back[2], tag="ico_back")
-                dpg.add_static_texture(width=cls.ico_c[0], height=cls.ico_c[1], default_value=cls.ico_c[2], tag="ico_c")
-                dpg.add_static_texture(width=cls.ico_gears[0], height=cls.ico_gears[1], default_value=cls.ico_gears[2], tag="ico_gears")
-                dpg.add_static_texture(width=cls.ico_music_note[0], height=cls.ico_music_note[1], default_value=cls.ico_music_note[2], tag="ico_music_note")
-                dpg.add_static_texture(width=cls.ico_note[0], height=cls.ico_note[1], default_value=cls.ico_note[2], tag="ico_note")
-                dpg.add_static_texture(width=cls.ico_object[0], height=cls.ico_object[1], default_value=cls.ico_object[2], tag="ico_object")
-                dpg.add_static_texture(width=cls.ico_python[0], height=cls.ico_python[1], default_value=cls.ico_python[2], tag="ico_python")
-                dpg.add_static_texture(width=cls.ico_script[0], height=cls.ico_script[1], default_value=cls.ico_script[2], tag="ico_script")
-                dpg.add_static_texture(width=cls.ico_video[0], height=cls.ico_video[1], default_value=cls.ico_video[2], tag="ico_video")
-                dpg.add_static_texture(width=cls.ico_link[0], height=cls.ico_link[1], default_value=cls.ico_link[2], tag="ico_link")
-                dpg.add_static_texture(width=cls.ico_url[0], height=cls.ico_url[1], default_value=cls.ico_url[2], tag="ico_url")
-                dpg.add_static_texture(width=cls.ico_vector[0], height=cls.ico_vector[1], default_value=cls.ico_vector[2], tag="ico_vector")
-                dpg.add_static_texture(width=cls.ico_zip[0], height=cls.ico_zip[1], default_value=cls.ico_zip[2], tag="ico_zip")
-                dpg.add_static_texture(width=cls.ico_app[0], height=cls.ico_app[1], default_value=cls.ico_app[2], tag="ico_app")
-                dpg.add_static_texture(width=cls.ico_iso[0], height=cls.ico_iso[1], default_value=cls.ico_iso[2], tag="ico_iso")
-
-                cls.img_document = "ico_document"
-                cls.img_home = "ico_home"
-                cls.img_add_folder = "ico_add_folder"
-                cls.img_add_file = "ico_add_file"
-                cls.img_mini_folder = "ico_mini_folder"
-                cls.img_folder = "ico_folder"
-                cls.img_mini_document = "ico_mini_document"
-                cls.img_mini_error = "ico_mini_error"
-                cls.img_refresh = "ico_refresh"
-                cls.img_hard_disk = "ico_hard_disk"
-                cls.img_picture = "ico_picture"
-                cls.img_big_picture = "ico_big_picture"
-                cls.img_picture_folder = "ico_picture_folder"
-                cls.img_desktop = "ico_desktop"
-                cls.img_videos = "ico_videos"
-                cls.img_music_folder = "ico_music_folder"
-                cls.img_downloads = "ico_downloads"
-                cls.img_document_folder = "ico_document_folder"
-                cls.img_search = "ico_search"
-                cls.img_back = "ico_back"
-                cls.img_c = "ico_c"
-                cls.img_gears = "ico_gears"
-                cls.img_music_note = "ico_music_note"
-                cls.img_note = "ico_note"
-                cls.img_object = "ico_object"
-                cls.img_python = "ico_python"
-                cls.img_script = "ico_script"
-                cls.img_video = "ico_video"
-                cls.img_link = "ico_link"
-                cls.img_url = "ico_url"
-                cls.img_vector = "ico_vector"
-                cls.img_zip = "ico_zip"
-                cls.img_app = "ico_app"
-                cls.img_iso = "ico_iso"
+                for img in image_names:
+                    width, height, data = getattr(cls, f"ico_{img}")
+                    dpg.add_static_texture(width=width, height=height, default_value=data, tag=f"ico_{img}")
+                    setattr(cls, f"img_{img}", f"ico_{img}")
 
     def __init__(
         self,
