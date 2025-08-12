@@ -36,6 +36,7 @@ devices = {
 #  - Raven-visualizer: keyword extraction
 #  - Raven-librarian: tokenization for keyword search (this setting)
 #  - Raven-server: breaking text into sentences in the `summarize` module
+#                  and served by the `nlp` module
 #
 # Auto-downloaded on first use. Uses's spaCy's own auto-download mechanism. See https://spacy.io/models
 #

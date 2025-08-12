@@ -26,6 +26,10 @@ from .. import config as client_config
 
 def test():
     """DEBUG/TEST - exercise each of the API endpoints."""
+
+    # --------------------------------------------------------------------------------
+    # Initialize
+
     colorama_init()
 
     logger.info("test: initialize API")
@@ -44,10 +48,23 @@ def test():
         print(f"{Fore.RED}{Style.BRIGHT}Canceling self-test.{Style.RESET_ALL}")
         return
 
-    logger.info("test: classify_labels")
-    print(api.classify_labels())  # get available emotion names from server
+    # --------------------------------------------------------------------------------
+    # classify
+
+    logger.info("test: classify")
+    print(f"Emotions supported by the classifier model currently loaded on the server: {api.classify_labels()}")  # get available emotion names from server
+
+    text = "What is the airspeed velocity of an unladen swallow?"
+    classification = api.classify(text)
+    print(f"Sentiment analysis for '{text}': {classification}")
+
+    # --------------------------------------------------------------------------------
+    # imagefx
 
     logger.info("test: imagefx")
+
+    print(api.avatar_get_available_filters())  # this API function is common between imagefx and avatar modules
+
     processed_png_bytes = api.imagefx_process_file(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve(),
                                                    output_format="png",
                                                    filters=[["analog_lowres", {"sigma": 3.0}],  # maximum sigma is 3.0 due to convolution kernel size
@@ -68,6 +85,43 @@ def test():
     image = PIL.Image.open(io.BytesIO(processed_png_bytes))
     print(image.size, image.mode)
     # image.save("study_upscaled_4k.png")  # DEBUG so we can see it (but not useful to run every time the self-test runs)
+
+    # --------------------------------------------------------------------------------
+    # natlang
+
+    logger.info("test: natlang")
+    docs = api.natlang_analyze("This is a test document for NLP analysis.")
+    assert len(docs) == 1
+    doc = docs[0]
+    print("Tokens in analyzed document:")
+    for token in doc:
+        print(f"  {token.text} [{token.lemma_}] {token.pos_}")
+    print("Named entities in analyzed document:")
+    for ent in doc.ents:
+        print(f"  {ent}")
+    print("Sentences in analyzed document:")
+    for sent in list(doc.sents):
+        print(f"  {sent}")
+
+    docs = api.natlang_analyze(["The quick brown fox jumps over the lazy dog.",
+                                "This is another document."])
+    assert len(docs) == 2
+    for doc in docs:
+        print("Tokens in analyzed document:")
+        for token in doc:
+            print(f"  {token.text} [{token.lemma_}] {token.pos_}")
+
+    # optional "pipes" argument: only enable specified pipes (to run a partial analysis faster)
+    docs = api.natlang_analyze("This is a multi-sentence document. It has two sentences, see.",
+                               pipes=["tok2vec", "parser", "senter"])
+    assert len(docs) == 1
+    doc = docs[0]
+    print("Sentences in analyzed document:")
+    for sent in list(doc.sents):
+        print(f"  {sent}")
+
+    # --------------------------------------------------------------------------------
+    # dehyphenate, summarize
 
     logger.info("test: summarize")
     print(api.summarize_summarize(" The quick brown fox jumped over the lazy dog.  This is the second sentence! What?! This incomplete sentence"))
@@ -141,12 +195,14 @@ def test():
         print(api.summarize_summarize(input_text))
     print(f"summarize scientific abstract 2: {tim.dt:0.6g}s")
 
+    # --------------------------------------------------------------------------------
+    # tts
+
     logger.info("test: tts: list voices")
     print(api.tts_list_voices())
 
-    logger.info("test: classify")
-    text = "What is the airspeed velocity of an unladen swallow?"
-    print(api.classify(text))  # classify some text, auto-update avatar's emotion from result
+    # --------------------------------------------------------------------------------
+    # websearch
 
     # logger.info("test: websearch")
     # print(f"{text}\n")
@@ -161,12 +217,15 @@ def test():
     #     print(f"{item['text']}\n")
     # # There's also out["results"] with preformatted text only.
 
+    # --------------------------------------------------------------------------------
+    # embeddings
+
     logger.info("test: embeddings")
     print(api.embeddings_compute(text).shape)
     print(api.embeddings_compute([text, "Testing, 1, 2, 3."]).shape)
 
-    logger.info("test: get metadata of available postprocessor filters")
-    print(api.avatar_get_available_filters())
+    # --------------------------------------------------------------------------------
+    # avatar
 
     logger.info("test: initialize avatar")
     # send an avatar - mandatory
@@ -194,6 +253,8 @@ def test():
         api.avatar_start(avatar_instance_id)  # resume animating the avatar
     finally:
         api.avatar_unload(avatar_instance_id)  # this closes the connection too
+
+    # --------------------------------------------------------------------------------
 
     logger.info("test: all done")
 

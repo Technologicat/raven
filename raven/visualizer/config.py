@@ -58,6 +58,7 @@ extract_keywords = True
 #  - Raven-visualizer: keyword extraction (this setting)
 #  - Raven-librarian: tokenization for keyword search
 #  - Raven-server: breaking text into sentences in the `summarize` module
+#                  and served by the `nlp` module
 #
 # Auto-downloaded on first use. Uses's spaCy's own auto-download mechanism. See https://spacy.io/models
 #
@@ -75,7 +76,7 @@ summarize = False  # Shorten abstracts using AI? VERY slow; experimental, the re
 #  - Raven-server: `summarize` module
 #
 # `summarization_prefix`: Some summarization models need input to be formatted like
-#     "summarize: Actual text goes here...". This sets the prefix.
+#     "summarize: Actual text goes here...". This sets the prefix, which in this example is "summarize: ".
 #     For whether you need this and what the value should be, see the model card for your particular model.
 #
 # summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"  # ~650 MB

@@ -16,6 +16,8 @@ Backends:
 
 __all__ = {"default_stopwords",
            "load_spacy_pipeline",
+           "serialize_spacy_pipeline", "deserialize_spacy_pipeline",
+           "serialize_spacy_docs", "deserialize_spacy_docs",
            "load_classifier", "classify",
            "load_dehyphenator", "dehyphenate",
            "load_embedder", "embed_sentences",
@@ -36,12 +38,13 @@ from typing import Container, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-import torch
+import torch  # import torch before spaCy, so that spaCy finds the GPU (otherwise spaCy will complain that CuPy is not installed, which is not true)
 
 from transformers import pipeline
 from sentence_transformers import SentenceTransformer
 
 import spacy
+from spacy.tokens import DocBin
 
 import flair
 import dehyphen
@@ -123,6 +126,124 @@ def load_spacy_pipeline(model_name: str, device_string: str):
     logger.info(f"load_spacy_pipeline: Loaded spaCy model '{model_name}' on device '{device_string}'.")
     _spacy_pipelines[cache_key] = nlp
     return nlp
+
+# The following four functions are based on:
+#   https://spacy.io/usage/saving-loading
+#   https://spacy.io/usage/processing-pipelines
+#   https://spacy.io/api/language#config
+#
+def serialize_spacy_pipeline(nlp) -> Tuple[str, bytes]:
+    """Utility to serialize a spaCy NLP pipeline so that it can be sent over the network.
+
+    NOTE: This is NOT the function you want for typical use cases. This prepares the pipeline
+          itself for sending, whereas in a client/server setup, one typically wants to send just
+          the analyzed documents to avoid the need to instantiate a GPU-based pipeline on the client.
+
+          See `serialize_spacy_docs`.
+
+    `nlp`: return value of `load_spacy_pipeline`
+
+    Returns `(config_str, data_bytes)`, where:
+      `config_str` is the pipeline config as a string.
+      `data_bytes` is the binary data that stores all non-config parts of the pipeline.
+
+    Both values are needed at deserialization time.
+    """
+    config_str = nlp.config.to_str()
+    data_bytes = nlp.to_bytes()
+    return config_str, data_bytes
+
+def deserialize_spacy_pipeline(config_str: str, data_bytes: bytes):
+    """Utility to deserialize a spaCy NLP pipeline that was earlier serialized with `serialize_spacy_pipeline`.
+
+    NOTE: This is NOT the function you want for typical use cases. This reconstructs the pipeline
+          itself, whereas in a client/server setup, one typically wants to receive just the analyzed
+          documents to avoid the need to instantiate a GPU-based pipeline on the client.
+
+          See `deserialize_spacy_docs`.
+
+    `config_str`, `data_bytes`: return values of `serialize_spacy_pipeline`.
+
+    Returns the NLP pipeline object.
+
+    NOTE: Currently, this does NOT update our pipeline cache, because the model name and device string are lost.
+    """
+    config = spacy.Config().from_str(config_str)
+    lang_cls = spacy.util.get_lang_class(config["nlp"]["lang"])
+    nlp = lang_cls.from_config(config)
+    nlp.from_bytes(data_bytes)
+    return nlp
+
+def serialize_spacy_docs(docs: Union[List[spacy.tokens.token.Token],
+                                     List[List[spacy.tokens.token.Token]]]) -> bytes:
+    """Serialize one or more spaCy NLP pipeline outputs (spaCy "documents") so that they can be sent over the network.
+
+    `docs`: One or more documents.
+        If `docs` is a list of tokens, it is treated as one document.
+        Otherwise `docs` is treated as a list of documents (where each document is a list of tokens).
+
+    Returns a `bytes` object containing the serialized data.
+
+    Example::
+
+        doc1 = nlp("The quick brown fox jumps over the lazy dog.")
+        data1 = serialize_spacy_docs(doc1)  # serialize one document
+
+        doc2 = nlp("This is another document.")
+        data2 = serialize_spacy_docs([doc1, doc2])  # serialize multiple documents
+
+        # ...in another process, later...
+
+        docs1 = deserialize_spacy_docs(data1, lang="en")
+        assert len(docs1) == 1  # one document received
+        doc = docs1[0]  # -> a copy of the data of `doc1`
+
+        # Process the analysis results the same way as if you had called `doc = nlp(text)` in this process.
+        for token in doc:
+            print(token.text, token.lemma_)
+
+        docs2 = deserialize_spacy_docs(data2, lang="en")
+        assert len(docs2) == 2  # two documents received
+        for doc in docs2:
+            for token in doc:
+                print(token.text, token.lemma_)
+
+    NOTE: As noted in spaCy documentation, if you have multiple documents that were processed with the same pipeline,
+    it is more efficient to send all at once, because then e.g. the vocabulary needs to be serialized only once
+    for the whole set of documents. This uses spaCy's `DocBin` to do that.
+
+    See:
+        https://spacy.io/usage/saving-loading
+    """
+    doc_bin = DocBin()
+    if isinstance(docs[0], spacy.tokens.token.Token):  # list of tokens, i.e. single document
+        doc_bin.add(docs)
+    else:  # list of list of tokens, i.e. multiple documents
+        for doc in docs:
+            doc_bin.add(doc)
+    return doc_bin.to_bytes()
+
+def deserialize_spacy_docs(docs_bytes: bytes, lang: str) -> List[List[spacy.tokens.token.Token]]:
+    """Deserialize one or more spaCy NLP pipeline outputs (spaCy "documents") that were earlier serialized with `serialize_spacy_docs`.
+
+    `docs_bytes`: return value of `serialize_spacy_docs`.
+
+    `lang`: spaCy language code, e.g. "en" for English.
+
+            This should match the language of the spaCy NLP pipeline that analyzed the documents at the sending end.
+
+    Returns a `list` of spaCy documents (even if there is only one document stored in `docs_bytes`).
+
+    The documents are loaded into a blank pipeline of language `lang`.
+
+    You can then read the analysis output as usual (e.g. `[token.lemma_ for token in doc]`).
+
+    See example in docstring of `serialize_spacy_docs`.
+    """
+    nlp = spacy.blank(lang)
+    doc_bin = DocBin().from_bytes(docs_bytes)
+    docs = list(doc_bin.get_docs(nlp.vocab))
+    return docs
 
 # --------------------------------------------------------------------------------
 # NLP backend: sentiment classification
@@ -420,7 +541,7 @@ def load_summarizer(model_name: str,
     `torch_dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
 
     `summarization_prefix`: Some summarization models need input to be formatted like
-         "summarize: Actual text goes here...". This sets the prefix.
+         "summarize: Actual text goes here...". This sets the prefix, which in this example is "summarize: ".
          For whether you need this and what the value should be, see the model card for your particular model.
 
     NOTE: To use `summarize`, you also need a spaCy NLP pipeline; see `load_spacy_pipeline`.

@@ -26,9 +26,14 @@
 - Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven.visualizer.config`.
 
 - Move the remaining GPU-dependent components of Raven to the server side.
-  - NLP. Think about the transport format. Can we JSON spaCy token streams?
-  - Embeddings. Web API endpoint exists in `raven.server.app`, and a client-side Python API in `raven.client.api`; now just use it instead of loading `sentence_transformers` locally in `raven.visualizer.importer`.
-  - Have an option to use local embeddings/NLP in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
+  - NLP / spaCy pipeline: use `raven.client.api.natlang_analyze` instead of loading spaCy locally in `raven.visualizer.importer` and `raven.librarian.hybridir`.
+  - Embeddings: Web API endpoint exists in `raven.server.app`, and a client-side Python API in `raven.client.api`; now just use it instead of loading `sentence_transformers` locally in `raven.visualizer.importer` and in `raven.librarian.hybridir`.
+  - Summarization: importer's `tldr` should call the server's `summarize` module. API available (`raven.client.api.summarize_summarize`).
+  - Have an option to use local AI models in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
+
+- Visualizer
+  - Keep the app state in top-level containers, and pass these in/out explicitly. More FP and facilitates adding unit tests later.
+  - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
 
 - Improve MacOSX support
   - Raven already runs on MacOSX, but some things could be improved.

@@ -31,6 +31,7 @@ enabled_modules = {
                    "dtype": torch.float16},
     "imagefx": {"device_string": "cuda:0",
                 "dtype": torch.float16},
+    "natlang": {"device_string": "cuda:0"},  # this module has no dtype setting
     "sanitize": {"device_string": "cuda:0"},  # this module has no dtype setting
     "summarize": {"device_string": "cuda:0",  # device settings used for the simple summarizer
                   "dtype": torch.float16},
@@ -112,6 +113,7 @@ embedding_models = {
 #  - Raven-visualizer: keyword extraction
 #  - Raven-librarian: tokenization for keyword search
 #  - Raven-server: breaking text into sentences in the `summarize` module (this setting)
+#                  and served by the `nlp` module
 #
 # This is NOT a HuggingFace model name, but is auto-downloaded (by spaCy) on first use.
 # For available models, see:
@@ -129,7 +131,7 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 #  - Raven-server: `summarize` module (this setting)
 #
 # `summarization_prefix`: Some summarization models need input to be formatted like
-#     "summarize: Actual text goes here...". This sets the prefix.
+#     "summarize: Actual text goes here...". This sets the prefix, which in this example is "summarize: ".
 #     For whether you need this and what the value should be, see the model card for your particular model.
 #
 # summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"  # ~650 MB

@@ -15,6 +15,7 @@ We support all modules served by `raven.server.app`:
   - classify    - text sentiment analysis
   - embeddings  - vector embeddings of text, useful for semantic visualization and RAG indexing
   - imagefx     - apply filter effects to an image (see `raven.common.video.postprocessor`)
+  - natlang     - low-level NLP analysis (part-of-speech tagging, lemmatization, named entity recognition, ...)
   - sanitize    - sanitize text (currently, dehyphenate broken text extracted from PDF)
   - summarize   - write an abstractive summary of given text (using a small specialized AI model)
   - tts         - text-to-speech with and without lipsyncing the AI avatar
@@ -30,10 +31,6 @@ This module is licensed under the 2-clause BSD license.
 __all__ = ["initialize",
            "raven_server_available",
            "tts_server_available",
-           "classify_labels", "classify",
-           "embeddings_compute",
-           "imagefx_process", "imagefx_process_file", "imagefx_process_array",
-           "imagefx_upscale", "imagefx_upscale_file", "imagefx_upscale_array",
            "avatar_load", "avatar_reload", "avatar_unload",
            "avatar_load_emotion_templates", "avatar_load_emotion_templates_from_file",
            "avatar_load_animator_settings", "avatar_load_animator_settings_from_file",
@@ -43,6 +40,11 @@ __all__ = ["initialize",
            "avatar_set_overrides",
            "avatar_result_feed",  # this reads the AI avatar video stream
            "avatar_get_available_filters",  # shared between "avatar" and "imagefx" modules
+           "classify_labels", "classify",
+           "embeddings_compute",
+           "imagefx_process", "imagefx_process_file", "imagefx_process_array",
+           "imagefx_upscale", "imagefx_upscale_file", "imagefx_upscale_array",
+           "natlang_analyze",
            "sanitize_dehyphenate",
            "summarize_summarize",
            "tts_list_voices",
@@ -65,9 +67,12 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 # import PIL.Image
 import qoi
 
+import spacy
+
 import numpy as np
 
 from ..common import netutil
+from ..common import nlptools
 from ..server.modules import avatarutil
 
 from .tts import tts_list_voices, tts_speak, tts_speak_lipsynced, tts_stop  # noqa: F401: re-export
@@ -597,6 +602,31 @@ def sanitize_dehyphenate(text: str) -> str:
 
     output_text = output_data["text"]
     return output_text
+
+# --------------------------------------------------------------------------------
+# Summarize
+
+def natlang_analyze(text: Union[str, List[str]], pipes: Optional[List[str]] = None) -> List[List[spacy.tokens.token.Token]]:
+    """Perform NLP analysis on input text.
+
+    `pipes`: If provided, enable only the listed pipes. Which ones exist depend on the server's loaded spaCy model.
+             If not provided (default), use the model's default pipes.
+    """
+    if not util.api_initialized:
+        raise RuntimeError("natlang_analyze: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    input_data = {"text": text}
+    if pipes is not None:
+        input_data["pipes"] = pipes
+    response = requests.post(f"{util.api_config.raven_server_url}/api/natlang/analyze", json=input_data, headers=headers)
+    util.yell_on_error(response)
+
+    docs_bytes = response.content  # binary data containing one or more serialized spaCy documents
+    lang = response.headers["x-langcode"]
+
+    docs = nlptools.deserialize_spacy_docs(docs_bytes, lang=lang)
+    return docs
 
 # --------------------------------------------------------------------------------
 # Summarize

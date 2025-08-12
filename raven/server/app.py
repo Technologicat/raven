@@ -41,6 +41,7 @@ from .modules import avatar
 from .modules import classify
 from .modules import embeddings
 from .modules import imagefx
+from .modules import natlang
 from .modules import sanitize
 from .modules import summarize
 from .modules import tts
@@ -181,6 +182,8 @@ def get_modules():
         modules.append("embeddings")
     if imagefx.is_available():
         modules.append("imagefx")
+    if natlang.is_available():
+        modules.append("natlang")
     if sanitize.is_available():
         modules.append("sanitize")
     if summarize.is_available():
@@ -616,7 +619,7 @@ def api_classify():
     data = request.get_json()
 
     if "text" not in data or not isinstance(data["text"], str):
-        abort(400, 'api_classify: "text" is required')
+        abort(400, 'api_classify: "text" is required and must be a string')
 
     try:
         print("Classification input:", data["text"], sep="\n")
@@ -826,6 +829,97 @@ def api_imagefx_upscale():
     return Response(processed_image, mimetype=f"image/{format.lower()}")
 
 # ----------------------------------------
+# module: natlang
+
+@app.route("/api/natlang/analyze", methods=["POST"])
+def api_natlang_analyze():
+    """Perform NLP analysis on the text posted in the request. Return the result.
+
+    NOTE: This endpoint returns Python spaCy data in binary format.
+
+          It can only be read by a Python client process running a Python version
+          that is compatible with the Python running the server. Specifically,
+          since spaCy transmits binary data in the pickle format, the client
+          Python version must be such that it can unpickle data pickled by
+          the server process.
+
+          The point is that you can use the server's GPU to perform the NLP analysis,
+          and then read the results in the client as if they came from a spaCy
+          instance running locally on the client.
+
+          The most convenient way to call this endpoint is `natlang_analyze`
+          in `raven.client.api`.
+
+    The NLP analysis is done via spaCy using the `spacy_model` set in the server config,
+    which by default lives in `raven.server.config`.
+
+    The analysis currently includes part-of-speech tagging, lemmatization,
+    and named entity recognition.
+
+    Input is JSON::
+
+        {"text": "Blah blah blah."}
+
+    To send multiple texts at once, use a list::
+
+        {"text": ["Blah blah blah.",
+                  "The quick brown fox jumps over the lazy dog."]}
+
+    This is more efficient than sending one text at a time, as it allows the spaCy backend
+    to batch the texts.
+
+    The server runs the text(s) through the default set of pipes in the loaded spaCy model.
+    There is an optional "pipes" field you can use to enable only the pipes you want.
+    (Which ones exist depend on the spaCy model that is loaded.)
+
+    This works for both one text, or multiple texts. Here is a one-text example::
+
+        {"text": "Blah blah blah.",
+         "pipes": ["tok2vec", "parser", "senter"]}
+
+    This effectively does `with nlp.select_pipes(enable=pipes): ...` on the server side.
+
+    This can be useful to save processing time if you only need partial analysis,
+    e.g. to split the text into sentences (for the model "en_core_web_sm", the pipes
+    in the example will do just that).
+
+    Output is binary data. It can be loaded on the client side by calling
+    `raven.common.nlptools.deserialize_spacy_docs`, which see.
+
+    The response contains a custom header, "x-langcode", which is the language code
+    of the server's loaded spaCy model (e.g. "en" for English). The client needs the
+    language code to be able to deserialize the data correctly.
+
+    If you use `natlang_analyze` in `raven.client.api`, it already loads the data,
+    and behaves as if you had called `nlp.pipe(...)` (locally, on the client) on the text.
+    """
+    if not natlang.is_available():
+        abort(403, "Module 'natlang' not running")
+
+    data = request.get_json()
+
+    if "text" not in data:
+        abort(400, 'api_natlang_analyze: "text" is required')
+
+    text = data["text"]
+    if not (isinstance(text, str) or (isinstance(text, list) and all(isinstance(item, str) for item in text))):
+        abort(400, 'api_natlang_analyze: "text" must be a string or a list of strings')
+
+    if "pipes" in data:
+        pipes = data["pipes"]
+        if not (isinstance(pipes, list) and all(isinstance(pipe_name, str) for pipe_name in pipes)):
+            abort(400, 'api_natlang_analyze: "pipes", if provided, must be a list of strings')
+    else:
+        pipes = None  # use the default pipes for the loaded spaCy model
+
+    try:
+        response = natlang.analyze(data["text"], pipes)
+        return response
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_natlang_analyze: failed, reason: {type(exc)}: {exc}")
+
+# ----------------------------------------
 # module: sanitize
 
 @app.route("/api/sanitize/dehyphenate", methods=["POST"])
@@ -895,11 +989,16 @@ def api_sanitize_dehyphenate():
         abort(403, "Module 'sanitize' not running")
 
     data = request.get_json()
-    if "text" not in data or not isinstance(data["text"], (str, list)):
-        abort(400, '"text" (string or list of strings) is required')
+
+    if "text" not in data:
+        abort(400, 'api_sanitize_dehyphenate: "text" is required')
+
+    text = data["text"]
+    if not (isinstance(text, str) or (isinstance(text, list) and all(isinstance(item, str) for item in text))):
+        abort(400, 'api_sanitize_dehyphenate: "text" must be a string or a list of strings')
 
     try:
-        output_text = sanitize.dehyphenate(data["text"])
+        output_text = sanitize.dehyphenate(text)
         return jsonify({"text": output_text})
     except Exception as exc:
         traceback.print_exc()
@@ -927,11 +1026,16 @@ def api_summarize():
         abort(403, "Module 'summarize' not running")
 
     data = request.get_json()
-    if "text" not in data or not isinstance(data["text"], str):
-        abort(400, '"text" is required')
+
+    if "text" not in data:
+        abort(400, 'api_summarize: "text" is required')
+
+    text = data["text"]
+    if not (isinstance(text, str) or (isinstance(text, list) and all(isinstance(item, str) for item in text))):
+        abort(400, 'api_summarize: "text" must be a string or a list of strings')
 
     try:
-        summary = summarize.summarize_text(data["text"])
+        summary = summarize.summarize_text(text)
         return jsonify({"summary": summary})
     except Exception as exc:
         traceback.print_exc()
@@ -1278,15 +1382,32 @@ def init_server_modules():  # keep global namespace clean
         device_string, torch_dtype = record["device_string"], record["dtype"]
         imagefx.init_module(device_string, torch_dtype)
 
+    if (record := server_config.enabled_modules.get("natlang", None)) is not None:
+        device_string = record["device_string"]
+        natlang.init_module(server_config.spacy_model,
+                            device_string)
+
     if (record := server_config.enabled_modules.get("sanitize", None)) is not None:
         device_string = record["device_string"]
         sanitize.init_module(server_config.dehyphenation_model, device_string)
 
     if (record := server_config.enabled_modules.get("summarize", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
+
+        # Seems slightly faster to run sentence-splitting on the CPU, at least for short-ish (chat message) inputs.
+        # But if "natlang" is already serving a copy of spaCy, re-use that to save memory.
+        if (natlang_record := server_config.enabled_modules.get("natlang", None)) is not None:
+            spacy_device_string = natlang_record["device_string"]
+            print(f"Initializing {Fore.GREEN}{Style.BRIGHT}summarize{Style.RESET_ALL}: reusing {Fore.GREEN}{Style.BRIGHT}natlang{Style.RESET_ALL}'s already loaded spaCy on device '{Fore.GREEN}{Style.BRIGHT}{spacy_device_string}{Style.RESET_ALL}'")
+        else:
+            print("Initializing: {Fore.GREEN}{Style.BRIGHT}summarize{Style.RESET_ALL}: no spaCy loaded yet, loading on device '{Fore.GREEN}{Style.BRIGHT}cpu{Style.RESET_ALL}'")
+            spacy_device_string = "cpu"
+
         summarize.init_module(server_config.summarization_model,
                               server_config.spacy_model,
-                              device_string, torch_dtype,
+                              device_string,
+                              spacy_device_string,
+                              torch_dtype,
                               summarization_prefix=server_config.summarization_prefix)
 
     if server_config.enabled_modules.get("tts", None) is not None:

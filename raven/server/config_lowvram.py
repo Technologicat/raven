@@ -9,7 +9,7 @@ import torch
 
 from .config import *  # Use the default config as a base.  # noqa: F401, F403
 
-# We override just this, disabling the avatar and running all other modules on CPU.
+# We override just this, disabling the avatar, and running all other modules on CPU.
 #
 # All modules that require heavy compute will be horribly slow - but the point is, a 7B/8B LLM needs
 # about 8GB VRAM by itself, so when running with low VRAM, we can't afford to put anything else on the GPU.
@@ -23,6 +23,7 @@ enabled_modules = {
                    "dtype": torch.float32},
     "imagefx": {"device_string": "cpu",
                 "dtype": torch.float32},
+    "natlang": {"device_string": "cpu"},  # this module has no dtype setting
     "sanitize": {"device_string": "cpu"},  # this module has no dtype setting
     "summarize": {"device_string": "cpu",  # device settings used for the simple summarizer
                   "dtype": torch.float32},
