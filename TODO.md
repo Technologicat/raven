@@ -31,6 +31,10 @@
   - Summarization: importer's `tldr` should call the server's `summarize` module. API available (`raven.client.api.summarize_summarize`).
   - Have an option to use local AI models in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
 
+- Server
+  - Audio device configuration for TTS
+  - Zip the avatar characters, for ease of use (include all extra cels in the zip)?
+
 - Visualizer
   - Keep the app state in top-level containers, and pass these in/out explicitly. More FP and facilitates adding unit tests later.
   - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
