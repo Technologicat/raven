@@ -84,7 +84,11 @@ def minimal_chat_client(backend_url):
         # Refresh the system prompt in the datastore (to the one in this client's source code)
         new_chat_node_id = state["new_chat_HEAD"]
         system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
-        datastore.nodes[system_prompt_node_id]["data"] = llmclient.create_initial_system_message(settings)
+        old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
+        datastore.add_revision(node_id=system_prompt_node_id,
+                               data=llmclient.create_initial_system_message(settings))
+        datastore.delete_revision(node_id=system_prompt_node_id,
+                                  revision_id=old_system_prompt_revision_id)
 
         print(colorizer.colorize(f"Loaded app state from '{state_file}'.", colorizer.Style.BRIGHT))
         return state
