@@ -153,7 +153,8 @@ def test():
     print(scientific_abstract)
     print("-" * 80)
     with timer() as tim:
-        print(api.summarize_summarize(scientific_abstract))
+        scientific_abstract = api.summarize_summarize(scientific_abstract)
+        print(scientific_abstract)
     print(f"summarize scientific abstract 1: {tim.dt:0.6g}s")
 
     # Brown et al. 2020, p. 40, https://arxiv.org/abs/2005.14165
@@ -192,8 +193,28 @@ def test():
     print(input_text)
     print("-" * 80)
     with timer() as tim:
-        print(api.summarize_summarize(input_text))
+        input_text = api.summarize_summarize(input_text)
+        print(input_text)
     print(f"summarize scientific abstract 2: {tim.dt:0.6g}s")
+
+    # --------------------------------------------------------------------------------
+    # translate
+
+    with timer() as tim:
+        print(api.translate_translate(scientific_abstract, source_lang="en", target_lang="fi"))
+    print(f"translate summary of scientific abstract 1: {tim.dt:0.6g}s")
+
+    with timer() as tim:
+        print(api.translate_translate(input_text, source_lang="en", target_lang="fi"))
+    print(f"translate summary of scientific abstract 2: {tim.dt:0.6g}s")
+
+    with timer() as tim:
+        print(api.translate_translate('The failure of any experiment to detect motion through the aether led Hendrik Lorentz, starting in 1892, to develop a theory of electrodynamics based on an immobile luminiferous aether, physical length contraction, and a "local time" in which Maxwell\'s equations retain their form in all inertial frames of reference.', source_lang="en", target_lang="fi"))
+    print(f"translate history of theory of special relativity: {tim.dt:0.6g}s")
+
+    with timer() as tim:
+        print(api.translate_translate("Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts.", source_lang="en", target_lang="fi"))
+    print(f"translate fandom text on Sharon Apple: {tim.dt:0.6g}s")
 
     # --------------------------------------------------------------------------------
     # tts

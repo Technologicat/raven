@@ -22,6 +22,7 @@ __all__ = {"default_stopwords",
            "load_dehyphenator", "dehyphenate",
            "load_embedder", "embed_sentences",
            "load_summarizer", "summarize",
+           "load_translator", "translate",
            "count_frequencies", "detect_named_entities",
            "suggest_keywords"}
 
@@ -741,6 +742,123 @@ def summarize(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
     summary = common_utils.unicodize_basic_markup(summary)
 
     return summary
+
+# --------------------------------------------------------------------------------
+# NLP backend: machine translation
+
+_translators = {}
+def load_translator(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> pipeline:
+    """Load and return a machine translator (for one or more natural languages to another).
+
+    `model_name`: HuggingFace model name. Auto-downloaded on first use.
+                  Try e.g. "Helsinki-NLP/opus-mt-tc-big-en-fi" for English to Finnish.
+
+                  See:
+                      https://huggingface.co/tasks/translation
+
+    `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
+    `torch_dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
+
+    If the specified model is already loaded on the same device (identified by `device_string`),
+    with the same dtype, then return the already-loaded instance.
+
+    NOTE: To use `translate`, you also need a spaCy NLP pipeline; see `load_spacy_pipeline`.
+    """
+    cache_key = (model_name, device_string, str(torch_dtype))
+    if cache_key in _translators:
+        logger.info(f"load_translator: '{model_name}' (with dtype '{str(torch_dtype)}') is already loaded on device '{device_string}', returning it.")
+        return _translators[cache_key]
+    logger.info(f"load_translator: Loading '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+
+    try:
+        device = torch.device(device_string)
+        translator = pipeline("translation",
+                              model=model_name,
+                              device=device,
+                              torch_dtype=torch_dtype)
+    except RuntimeError as exc:
+        logger.warning(f"load_translator: exception while loading translator (will try again in CPU mode): {type(exc)}: {exc}")
+        try:
+            device_string = "cpu"
+            torch_dtype = "float32"
+            cache_key = (model_name, device_string, str(torch_dtype))
+            translator = pipeline("translation",
+                                  model=model_name,
+                                  device=device,
+                                  torch_dtype=torch_dtype)
+        except RuntimeError as exc:
+            logger.warning(f"load_translator: failed to load translator: {type(exc)}: {exc}")
+            raise
+    logger.info(f"load_translator: model '{model_name}' context window is {translator.tokenizer.model_max_length} tokens.")
+    logger.info(f"load_translator: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    _translators[cache_key] = translator
+    return translator
+
+# # TODO: Add support for "translation prefix" like `summarize` has? This would e.g. allow using t5-base as a translator.
+# def _translate_chunk(translator: pipeline, text: str) -> str:
+#     """Internal function. Translate a piece of text that fits into the translation model's context window.
+#
+#     If the text does not fit, raises `IndexError`. See `_translate_chunked` to handle arbitrary length texts.
+#     """
+#     tokens = translator.tokenizer.tokenize(text)
+#     length_in_tokens = len(tokens)
+#     logger.info(f"_translate_chunk: Input text length is {len(text)} characters, {length_in_tokens} tokens.")
+#
+#     if length_in_tokens > translator.tokenizer.model_max_length:
+#         logger.info(f"_translate_chunk: Text to be translated does not fit into model's context window (text length {len(text)} characters, {length_in_tokens} tokens; model limit {translator.tokenizer.model_max_length} tokens).")
+#         raise IndexError  # and let `_translate_chunked` handle it
+#
+#     output = translator(text)
+#     print(output)
+#     translation = output[0]["translation_text"]
+#     return translation
+
+def _translate_chunked(translator: pipeline, nlp_pipe, text: str) -> str:
+    """Internal function. Translate a text that may require chunking before it fits into the translation model's context window."""
+    # Translate one sentence at a time (reliable and keeps the chunks short).
+    # TODO: Can sometimes give bad results:
+    #   - If the sentence splitting is bad (e.g. scientific abstract with [ABC1992] inline citations can confuse spaCy)
+    #   - If the sentences depend on larger context to make sense.
+    with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
+        doc = nlp_pipe(text)
+    sents = list(doc.sents)
+    outputs = translator([str(sent).strip() for sent in sents])
+    translations = [output["translation_text"] for output in outputs]
+    return " ".join(translations)
+
+    # # TODO: This currently misses some sentences for multi-sentence inputs.
+    # try:
+    #     return _translate_chunk(translator, text)
+    # except IndexError:
+    #     logger.info(f"_translate_chunked: input text (length {len(text)} characters) is long; cutting text in half at a sentence boundary and translating the halves separately.")
+    #
+    #     with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
+    #         doc = nlp_pipe(text)
+    #     sents = list(doc.sents)
+    #     mid = len(sents) // 2
+    #     firsthalf = " ".join(str(sent).strip() for sent in sents[:mid])
+    #     secondhalf = " ".join(str(sent).strip() for sent in sents[mid:])
+    #     return " ".join(
+    #         [_translate_chunked(translator, nlp_pipe, firsthalf),
+    #          _translate_chunked(translator, nlp_pipe, secondhalf)]
+    #     )
+
+def translate(translator: pipeline, nlp_pipe, text: Union[str, List[str]]) -> Union[str, List[str]]:
+    """Translate `text` to another natural language.
+
+    `translator`: return value of `load_translator`
+    `nlp_pipe`: return value of `load_spacy_pipeline` (used for sentence-boundary splitting during chunking)
+    `text`: one (str) or more (List[str]) texts to translate
+
+    Returns `str` (one input) or `list` of `str` (more inputs).
+    """
+    def doit(text: str) -> str:
+        return _translate_chunked(translator, nlp_pipe, text)
+    if isinstance(text, list):
+        output_text = [doit(item) for item in text]
+    else:  # str
+        output_text = doit(text)
+    return output_text
 
 # --------------------------------------------------------------------------------
 # Frequency analysis

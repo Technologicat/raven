@@ -35,6 +35,8 @@ enabled_modules = {
     "sanitize": {"device_string": "cuda:0"},  # this module has no dtype setting
     "summarize": {"device_string": "cuda:0",  # device settings used for the simple summarizer
                   "dtype": torch.float16},
+    "translate": {"device_string": "cuda:0",
+                  "dtype": torch.float16},
     "tts": {"device_string": "cuda:0"},
     "websearch": {},  # websearch doesn't use any heavy compute; this is here only to provide the option to turn the module off.
 }
@@ -143,7 +145,33 @@ summarization_prefix = ""  # for all of the summarizers listed above
 # summarization_model = "KipperDev/bart_summarizer_model"
 # summarization_prefix = "summarize: "
 
+# Machine translation AI models.
+#
+# These are used for translating one natural language to another, e.g. English to Finnish.
+#
+# See:
+#   https://huggingface.co/tasks/translation
+#
+# As with `embedding_models`, the models are de-duplicated, and *all* unique models are loaded upon server startup.
+# So keep the number of unique models small to save your sanity and VRAM.
+#
+# The format is:
+#
+#   {target_langcode: {source_langcode: model_name,
+#                      ...},
+#    ...
+#   }
+#
+translation_models = {
+    "fi": {"en": "Helsinki-NLP/opus-mt-tc-big-en-fi"},  # to fi, from en
+    # "en": {"fi": "Helsinki-NLP/opus-mt-tc-big-fi-en"},  # to en, from fi
+}
+
 # Models for the Kokoro speech synthesizer (text to speech, TTS).
+#
+# The newer, smaller and faster KittenTTS is currently not supported, because it does not output
+# per-word timestamps and per-word phonemes, which are needed for avatar lipsync. This is tracked here:
+#   https://github.com/KittenML/KittenTTS/issues/14
 #
 kokoro_models = "hexgrad/Kokoro-82M"  # ~360 MB
 

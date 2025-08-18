@@ -47,6 +47,7 @@ __all__ = ["initialize",
            "natlang_analyze",
            "sanitize_dehyphenate",
            "summarize_summarize",
+           "translate_translate",
            "tts_list_voices",
            "tts_speak", "tts_speak_lipsynced",
            "tts_stop",
@@ -649,6 +650,31 @@ def summarize_summarize(text: str) -> str:
 
     summary = output_data["summary"]
     return summary
+
+# --------------------------------------------------------------------------------
+# Translate
+
+def translate_translate(text: Union[str, List[str]], source_lang: str, target_lang: str) -> Union[str, List[str]]:
+    """Translate input text to another language.
+
+    `source_lang`: language code for input text, e.g. "en". See server config.
+    `target_lang`: language code for desired translation, e.g. "fi". See server config.
+
+    Returns `str` (one input) or `list` of `str` (more inputs).
+    """
+    if not util.api_initialized:
+        raise RuntimeError("translate_translate: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    input_data = {"text": text,
+                  "source_lang": source_lang,
+                  "target_lang": target_lang}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/translate", json=input_data, headers=headers)
+    util.yell_on_error(response)
+    output_data = response.json()
+
+    translation = output_data["translation"]
+    return translation
 
 # --------------------------------------------------------------------------------
 # TTS (text to speech, AI speech synthesizer)

@@ -44,6 +44,7 @@ from .modules import imagefx
 from .modules import natlang
 from .modules import sanitize
 from .modules import summarize
+from .modules import translate
 from .modules import tts
 from .modules import websearch
 
@@ -188,6 +189,8 @@ def get_modules():
         modules.append("sanitize")
     if summarize.is_available():
         modules.append("summarize")
+    if translate.is_available():
+        modules.append("translate")
     if tts.is_available():
         modules.append("tts")
     if websearch.is_available():
@@ -1042,6 +1045,70 @@ def api_summarize():
         abort(400, f"api_summarize: failed, reason: {type(exc)}: {exc}")
 
 # ----------------------------------------
+# module: translate
+
+@app.route("/api/translate", methods=["POST"])
+def api_translate():
+    """Translate the text posted in the request. Return the translation.
+
+    This uses a small, specialized AI model (not an LLM).
+
+    Input is JSON::
+
+        {"text": "The quick brown fox jumps over the lazy dog.",
+         "source_lang": "en",
+         "target_lang": "fi"}
+
+    Output is also JSON::
+
+        {"translation": "Nopea ruskea kettu hyppää laiskan koiran yli."}
+
+    To send several texts, use a list::
+
+        {"text": ["The quick brown fox jumps over the lazy dog.",
+                  "Please translate this text, too."],
+         "source_lang": "en",
+         "target_lang": "fi"}
+
+    -->
+
+        {"translation": ["Nopea ruskea kettu hyppää laiskan koiran yli.",
+                         "Ole hyvä ja käännä tämäkin teksti."]}
+    """
+    if not translate.is_available():
+        abort(403, "Module 'translate' not running")
+
+    data = request.get_json()
+
+    if "text" not in data:
+        abort(400, 'api_translate: "text" is required')
+    if "source_lang" not in data:
+        abort(400, 'api_translate: "source_lang" is required')
+    if "target_lang" not in data:
+        abort(400, 'api_translate: "target_lang" is required')
+
+    text = data["text"]
+    if not (isinstance(text, str) or (isinstance(text, list) and all(isinstance(item, str) for item in text))):
+        abort(400, 'api_translate: "text" must be a string or a list of strings')
+
+    source_lang = data["source_lang"]
+    if not isinstance(source_lang, str):
+        abort(400, 'api_translate: "source_lang" must be a string')
+
+    target_lang = data["target_lang"]
+    if not isinstance(target_lang, str):
+        abort(400, 'api_translate: "target_lang" must be a string')
+
+    try:
+        translation = translate.translate_text(text=text,
+                                               source_lang=source_lang,
+                                               target_lang=target_lang)
+        return jsonify({"translation": translation})
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_translate: failed, reason: {type(exc)}: {exc}")
+
+# ----------------------------------------
 # module: tts
 
 def _list_voices():
@@ -1363,6 +1430,17 @@ if max_content_length is not None:
 
 # TODO: Maybe clean up the API: pass `config_module_name` to all modules, and let each `init_module` get whatever it needs from there. For implementation, see the modules that already do this.
 def init_server_modules():  # keep global namespace clean
+    def get_maybe_shared_spacy_device_string(module_name):
+        # Seems slightly faster to run sentence-splitting on the CPU, at least for short-ish (chat message) inputs.
+        # But if "natlang" is already serving a copy of spaCy, re-use that to save memory.
+        if (natlang_record := server_config.enabled_modules.get("natlang", None)) is not None:
+            spacy_device_string = natlang_record["device_string"]
+            print(f"Initializing {Fore.GREEN}{Style.BRIGHT}{module_name}{Style.RESET_ALL}: reusing {Fore.GREEN}{Style.BRIGHT}natlang{Style.RESET_ALL}'s already loaded spaCy on device '{Fore.GREEN}{Style.BRIGHT}{spacy_device_string}{Style.RESET_ALL}'")
+        else:
+            print("Initializing: {Fore.GREEN}{Style.BRIGHT}{module_name}{Style.RESET_ALL}: natlang not enabled, loading spaCy on device '{Fore.GREEN}{Style.BRIGHT}cpu{Style.RESET_ALL}'")
+            spacy_device_string = "cpu"
+        return spacy_device_string
+
     if (record := server_config.enabled_modules.get("avatar", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
         # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
@@ -1393,22 +1471,22 @@ def init_server_modules():  # keep global namespace clean
 
     if (record := server_config.enabled_modules.get("summarize", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]
-
-        # Seems slightly faster to run sentence-splitting on the CPU, at least for short-ish (chat message) inputs.
-        # But if "natlang" is already serving a copy of spaCy, re-use that to save memory.
-        if (natlang_record := server_config.enabled_modules.get("natlang", None)) is not None:
-            spacy_device_string = natlang_record["device_string"]
-            print(f"Initializing {Fore.GREEN}{Style.BRIGHT}summarize{Style.RESET_ALL}: reusing {Fore.GREEN}{Style.BRIGHT}natlang{Style.RESET_ALL}'s already loaded spaCy on device '{Fore.GREEN}{Style.BRIGHT}{spacy_device_string}{Style.RESET_ALL}'")
-        else:
-            print("Initializing: {Fore.GREEN}{Style.BRIGHT}summarize{Style.RESET_ALL}: no spaCy loaded yet, loading on device '{Fore.GREEN}{Style.BRIGHT}cpu{Style.RESET_ALL}'")
-            spacy_device_string = "cpu"
-
+        spacy_device_string = get_maybe_shared_spacy_device_string("summarize")
         summarize.init_module(server_config.summarization_model,
                               server_config.spacy_model,
                               device_string,
                               spacy_device_string,
                               torch_dtype,
                               summarization_prefix=server_config.summarization_prefix)
+
+    if (record := server_config.enabled_modules.get("translate", None)) is not None:
+        device_string, torch_dtype = record["device_string"], record["dtype"]
+        spacy_device_string = get_maybe_shared_spacy_device_string("translate")
+        translate.init_module(config_module_name,
+                              device_string,
+                              server_config.spacy_model,
+                              spacy_device_string,
+                              torch_dtype)
 
     if server_config.enabled_modules.get("tts", None) is not None:
         device_string = record["device_string"]  # no configurable dtype

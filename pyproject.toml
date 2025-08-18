@@ -50,7 +50,9 @@ dependencies = [
     "av>=14.2.0",  # TTS audio encoder (for network transport)
     "pygame>=2.6.1",  # TTS audio playback (client side)
     "qoi>=0.7.2",  # server, fast lossless image format for streaming
-    "dehyphen>=0.3.4"
+    "dehyphen>=0.3.4",
+    "sentencepiece>=0.2.1",
+    "sacremoses>=0.1.1"
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]
