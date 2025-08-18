@@ -556,7 +556,6 @@ def load_summarizer(model_name: str,
                               model=model_name,
                               device=device,
                               torch_dtype=torch_dtype)
-        logger.info(f"load_summarizer: model '{model_name}' context window is {summarizer.tokenizer.model_max_length} tokens")
     except RuntimeError as exc:
         logger.warning(f"load_summarizer: exception while loading summarizer (will try again in CPU mode): {type(exc)}: {exc}")
         try:
@@ -570,6 +569,7 @@ def load_summarizer(model_name: str,
         except RuntimeError as exc:
             logger.warning(f"load_embedder: failed to load summarizer: {type(exc)}: {exc}")
             raise
+    logger.info(f"load_summarizer: model '{model_name}' context window is {summarizer.tokenizer.model_max_length} tokens.")
     logger.info(f"load_summarizer: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
     _summarizers[cache_key] = (summarizer, summarization_prefix)  # save the given prompt prefix with the cached model so they stay together
     return summarizer, summarization_prefix
@@ -612,7 +612,7 @@ def _summarize_chunked(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) ->
     try:
         return _summarize_chunk(summarizer, text)
     except IndexError:
-        logger.info("_summarize_chunked: input text (length {len(text)} characters) is long; cutting text in half at a sentence boundary and summarizing the halves separately.")
+        logger.info(f"_summarize_chunked: input text (length {len(text)} characters) is long; cutting text in half at a sentence boundary and summarizing the halves separately.")
 
         with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
             doc = nlp_pipe(text)

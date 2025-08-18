@@ -589,8 +589,11 @@ def imagefx_upscale_array(image_data: np.array,
 # --------------------------------------------------------------------------------
 # Sanitize
 
-def sanitize_dehyphenate(text: str) -> str:
-    """Dehyphenate input text."""
+def sanitize_dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
+    """Dehyphenate input text.
+
+    Returns `str` (one input) or `list` of `str` (more inputs).
+    """
     if not util.api_initialized:
         raise RuntimeError("sanitize_dehyphenate: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
@@ -611,6 +614,8 @@ def natlang_analyze(text: Union[str, List[str]], pipes: Optional[List[str]] = No
 
     `pipes`: If provided, enable only the listed pipes. Which ones exist depend on the server's loaded spaCy model.
              If not provided (default), use the model's default pipes.
+
+    Returns a `list` of spaCy documents (even if just one `text`).
     """
     if not util.api_initialized:
         raise RuntimeError("natlang_analyze: The `raven.client.api` module must be initialized before using the API.")

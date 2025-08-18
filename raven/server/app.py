@@ -1031,8 +1031,8 @@ def api_summarize():
         abort(400, 'api_summarize: "text" is required')
 
     text = data["text"]
-    if not (isinstance(text, str) or (isinstance(text, list) and all(isinstance(item, str) for item in text))):
-        abort(400, 'api_summarize: "text" must be a string or a list of strings')
+    if not isinstance(text, str):
+        abort(400, 'api_summarize: "text" must be a string')
 
     try:
         summary = summarize.summarize_text(text)
@@ -1383,12 +1383,12 @@ def init_server_modules():  # keep global namespace clean
         imagefx.init_module(device_string, torch_dtype)
 
     if (record := server_config.enabled_modules.get("natlang", None)) is not None:
-        device_string = record["device_string"]
+        device_string = record["device_string"]  # no configurable dtype
         natlang.init_module(server_config.spacy_model,
                             device_string)
 
     if (record := server_config.enabled_modules.get("sanitize", None)) is not None:
-        device_string = record["device_string"]
+        device_string = record["device_string"]  # no configurable dtype
         sanitize.init_module(server_config.dehyphenation_model, device_string)
 
     if (record := server_config.enabled_modules.get("summarize", None)) is not None:
