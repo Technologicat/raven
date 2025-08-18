@@ -98,6 +98,8 @@ class Forest:
         The contents are copied via `copy.deepcopy`.
 
         Optionally, link the new node to a given parent node (linking is performed in both directions).
+
+        Returns the node ID of the new node that is the copy of node `node_id`.
         """
         original_node = self.nodes[node_id]  # look up first to raise KeyError if needed, before we create any nodes
         new_node_id = self.copy_node(node_id, new_parent_id)
@@ -197,6 +199,8 @@ class Forest:
         """Reparent (reattach to a different parent node) the subtree starting from `node_id`.
 
         If `new_parent_id is None`, just detach that subtree (equivalent to `detach_subtree`).
+
+        For convenience, returns `node_id`.
         """
         with self.lock:
             # look up first to raise KeyError if needed, before we edit any nodes
@@ -210,6 +214,7 @@ class Forest:
             if new_parent_id is not None:
                 node["parent"] = new_parent_id
                 new_parent_node["children"].append(node_id)
+        return node_id
 
     def reparent_children(self, node_id: str, new_parent_id: Optional[str]) -> str:
         """Reparent (reattach to a different parent node) all children of `node_id`.
@@ -217,6 +222,8 @@ class Forest:
         The children are appended to the children list of `new_parent_id`; it does not matter whether it already has child nodes.
 
         If `new_parent_id is None`, just detach the children (equivalent to `detach_children`).
+
+        For convenience, returns `node_id`.
         """
         with self.lock:
             # look up first to raise KeyError if needed, before we edit any nodes
@@ -237,6 +244,7 @@ class Forest:
                     else:
                         child_node["parent"] = new_parent_id
                         new_parent_node["children"].append(child_node_id)
+        return node_id
 
     def walk_up(self, node_id: str, callback: Optional[Callable] = None) -> str:
         """Starting from `node_id`, walk up the parent chain until a root node is reached.
@@ -369,7 +377,7 @@ class Forest:
     def purge(self) -> None:
         """Delete all data in the forest.
 
-        Affects in-memory first; persisted at app shutdown.
+        Affects in-memory first; if this is a `PersistentForest` instance, persisted at app shutdown.
         """
         with self.lock:
             self.nodes.clear()
