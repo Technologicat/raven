@@ -48,7 +48,7 @@ class Forest:
         self.lock = threading.RLock()
 
     def create_node(self, data: Any, parent_id: Optional[str]) -> str:
-        """Create a node conataining `data`, and store it in the forest.
+        """Create a node containing `data`, and store it in the forest.
 
         Link it to the parent node with unique id `parent_id`, if given. Linking is done in both directions:
           - The new node gets a parent node, and
