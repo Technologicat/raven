@@ -353,92 +353,100 @@ def create_chat_message(settings: env,
     return data
 
 def linearize_chat(datastore: chattree.Forest, node_id: str) -> List[Dict]:
-    """Walking up from `node_id` up to and including a root node, return a linearized representation of that chat branch.
+    """In the chat `datastore`, walking up from `node_id` up to and including a root node, return a linearized representation of that branch.
 
-    This collects the active revision of the data from each node, ignores everything except the actual chat message data
-    (i.e. ignores any metadata added by the chat client, such as RAG retrieval attributions, AI token counts, etc.) and
-    puts the messages into a list, in depth order (root node first).
+    This collects the active revision of the data from each node, ignores everything except the chat message data
+    (i.e. ignores any metadata added by the chat client, such as RAG retrieval attributions, AI token counts, etc.)
+    and puts the messages into a list, in depth order (root node first).
 
     Note `node_id` doesn't need to be a leaf node; but it will be the last node of the linearized representation;
     children are not scanned.
+
+    NOTE: The difference between this function and `chattree.Forest.linearize_up` is that this will
+    extract only the "message" field (OpenAI-compatible chat message record) from each payload, whereas
+    that other function returns the full payloads.
+
+    Hence, this is a convenience function for populating a linear chat history for chat clients that use
+    the OpenAI format to communicate with the LLM server.
     """
-    # node data: {"message": {actual chat message},
-    #             "retrieval": RAG metadata if any,
-    #             ...}
-    full_history = datastore.linearize_up(node_id)
-    messages_only_history = [data["message"] for data in full_history]
-    return messages_only_history
+    payload_history = datastore.linearize_up(node_id)  # this auto-selects the active revision of the payload of each node
+    message_history = [payload["message"] for payload in payload_history]
+    return message_history
 
 # v0.2.3+: data format change
 def upgrade(datastore: chattree.Forest, system_prompt_node_id: str) -> None:
-    """Upgrade a datastore's payloads to the latest format, modifying the datastore in-place.
+    """Upgrade a chat datastore's payloads to the latest format, modifying the datastore in-place.
 
-    If the datastore's payloads are already in the latest format, no changes are made.
+    If the chat datastore's payloads are already in the latest format, no changes are made.
 
     `system_prompt_node_id`: The ID of the initial system prompt node (root node)
                              that starts a chat.
 
-                             Even in old formats, the system prompt node has no extra fluff
-                             saved on it, so we use it to get a list of system-level keys
-                             a chat node *should* have.
+                             The reason we need this is that even in the old format (up to v0.2.2),
+                             the system prompt node has no extra fluff saved on it, so we can use it
+                             to get a list of system-level keys a chat node *should* have.
 
-                             On other nodes, any keys that do NOT match are assumed to have
-                             been added by the chat client, and are moved to under the
-                             latest data revision.
+                             On other nodes, any keys that do NOT match those system-level keys
+                             are assumed to be metadata added by the chat client. They are copied
+                             to each existing data revision on the node (independent deepcopy for
+                             each revision), and deleted from the top level of the node, so that
+                             the top level contains only the system keys.
 
-    NOTE: There are two upgrade functions: the forest itself also changed in v0.2.3
-          to allow for data revisioning. That part is automatically handled when
-          an old datastore is loaded (see `chattree.PersistentForest._upgrade`).
+    NOTE: There are two upgrade functions for the chat datastore.
 
-          This function is meant for use by chat clients, and upgrades the payload format
-          inside each revision of each node's data.
+    The forest datastore itself also changed in v0.2.3 to allow for data revisioning.
+    That part is automatically handled when an old datastore is loaded.
+    See `chattree.PersistentForest._upgrade`.
 
-          Up to v0.2.2, the chat message was stored in `node["data"]` directly,
-          so that a node's "data" field content was::
+    This function is meant to be explicitly called by a chat client. This upgrades
+    the chat payload format.
 
-              {"role": ..., "content": ..., "tool_calls": ...}
+    Up to v0.2.2, the chat message was stored in `node["data"]` directly, so that
+    a node's "data" field content was an OpenAI-compatible chat message record::
 
-          In v0.2.3+, the data is revisioned:
+        {"role": ..., "content": ..., "tool_calls": ...}
 
-              {revision_id: payload,
-               ...}
+    In v0.2.3+, the `node["data"]` field is revisioned:
 
-          Additionally, the payload format is now such that the message now lives under
-          a "message" key inside the `payload` part:
+        {revision_id: payload,
+         ...}
 
-              {revision_id: {"message": {"role": ..., "content": ..., "tool_calls": ...},
-                             "other_stuff0": ...,
-                             ...},
-               ...}
+    Additionally, in the payload, the OpenAI-compatible chat message record
+    now lives under the "message" key inside the `payload` part:
 
-          where "other_stuff0" and so on are arbitrary additional metadata keys.
-          As of v0.2.3, this is used for storing the RAG retrieval results,
-          and AI token counts.
+        {revision_id: {"message": {"role": ..., "content": ..., "tool_calls": ...},
+                       "retrieval": {"query": ..., "results": ...},
+                       ...},
+         ...}
+
+    thus allowing the chat client to add arbitrary other keys to the payload.
+    These can be used to store metadata (for the chat client and/or for the user).
+
+    For example, the "retrieval" key stores the RAG query and its retrieval results,
+    which is useful for collecting attributions in the chat client (as well as for debugging).
     """
-    # Get the system-level keys a chat node should have.
-    #
-    # Any other keys, when found on other nodes, are considered extra fluff, which should live
-    # under a specific revision of the node's data. Up to v0.2.2, a node may have an optional
-    # "retrieval" key that is inserted by RAG.
+    # Get the names of system-level keys a chat node should have. Even in the old format (up to v0.2.2),
+    # no extra keys are ever created on the system prompt node, so we can use this node to get an
+    # up-to-date list (since `PersistentForest` auto-upgrades upon loading if the data format has changed).
     system_keys = set(datastore.nodes[system_prompt_node_id].keys())
 
     for node in datastore.nodes.values():
-        revisions = node["data"]  # {revision_id: actual_data, ...}
+        revisions = node["data"]  # {revision_id: payload, ...}
 
-        # Upgrade to new payload format
-        for revision in revisions.values():
-            if "message" not in revision:  # old format?
-                message = copy.copy(revision)
-                revision.clear()
-                revision["message"] = message
+        # v0.2.3: Upgrade payload format
+        for payload in revisions.values():
+            if "message" not in payload:  # old format?
+                message = copy.copy(payload)
+                payload.clear()
+                payload["message"] = message
 
-        # Move any extra keys to under all revisions of the data (as independent copies; will become such upon JSON saving anyway)
+        # v0.2.3: Move any non-system keys on the node to under the revisioned data (one copy per revision; will become copies upon JSON saving anyway)
         existing_keys = list(node.keys())
         for key in existing_keys:
             if key not in system_keys:
                 value = node.pop(key)
-                for revision in revisions.values():
-                    revision[key] = copy.deepcopy(value)
+                for payload in revisions.values():
+                    payload[key] = copy.deepcopy(value)
 
 def create_initial_system_message(settings: env) -> Dict:
     """Create a chat message containing the system prompt and the AI's character card as specified in `settings`."""
@@ -809,7 +817,7 @@ def perform_tool_calls(settings: env, message: Dict) -> List[Dict]:
             kwargs = {}
 
         # TODO: get the tool call ID (OpenAI compatible API) and add it to the message
-        # TODO: websearch return format: for the chat history, need only the preformatted text, but for the eventual GUI, would be nice to have the links separately.
+        # TODO: websearch return format: for the chat history, need only the preformatted text, but for the eventual GUI, would be nice to have the links separately. Could use a new metadata field in the chat datastore for this.
         try:
             tool_output_text = function(**kwargs)
         except Exception as exc:
