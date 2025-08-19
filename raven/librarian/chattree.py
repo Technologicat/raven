@@ -25,7 +25,7 @@ from ..common import utils as common_utils
 
 class Forest:
     def __init__(self):
-        """Forest datastore.
+        """Forest datastore with data revisioning.
 
         Each node has at most one parent, but may have many children, making a forest structure.
         Starting from any node, it is easy to produce a linearized branch up to that point,
@@ -38,10 +38,14 @@ class Forest:
 
         For easy JSON-ability, we store the nodes in a dictionary, as a doubly-linked forest:
 
-        {"node_unique_id": {"id": "node_unique_id",   # so that each node knows its own ID
-                            "data": Any,              # any JSON serializable data, the node content
-                            "parent": Optional[str],  # unique_id_of_parent_node; or for a root node, `None`
-                            "children": List[str]     # [unique_id_of_child0, ...]
+        {"node_unique_id": {"id": "node_unique_id",          # so that each node knows its own ID
+                            "timestamp": int,                # as nanoseconds since epoch
+                            "data": {revision_id: payload,   # payload is any JSON serializable data, the node content
+                                     ...},
+                            "active_revision": int,          # current default revision of data
+                            "next_free_revision": int,       # next revision ID that has never been used for this node
+                            "parent": Optional[str],         # unique_id_of_parent_node; or for a root node, `None`
+                            "children": List[str]            # [unique_id_of_child0, ...]
                            }
         }
         """
@@ -65,7 +69,7 @@ class Forest:
 
                        Data now supports revisioning:
 
-                           "data": {revision_id0: as_data_was_before,
+                           "data": {revision_id0: payload,
                                     ...},
                            "active_revision": revision_id0,
                            "next_free_revision": revision_id1,
@@ -105,6 +109,14 @@ class Forest:
         """Add a new data revision to node `node_id`, and make the new revision active.
 
         Returns the revision ID of the new revision.
+
+        The main use case of revisioning is to facilitate a chat client to allow the user
+        to fix typos and/or perform editorial changes after the fact (e.g. for sharing a
+        polished chat log online).
+
+        For restarting the conversation from a given point and taking it in a completely
+        different direction, then it is better to branch the chat, by creating a new sibling
+        node (i.e. get the original node's parent node, and add a new child node to that).
         """
         with self.lock:
             if node_id not in self.nodes:
@@ -161,6 +173,8 @@ class Forest:
                        If `revision_id is None` (default), return the active revision of the data.
 
         See `get_revisions` (get list of available revisions) and `set_revision` (choose active revision).
+
+        NOTE: This returns a reference to the original data payload as-is (not a copy).
         """
         with self.lock:
             if node_id not in self.nodes:
@@ -178,6 +192,7 @@ class Forest:
         """Copy node `node_id`, copying also its contents.
 
         Optionally, link the new node to a given parent node (linking is performed in both directions).
+        If not linked, the new node becomes another root node in the forest.
 
         The contents are copied via `copy.deepcopy`. Data revisions and their IDs are preserved;
         the new node gets a full deep copy of the revision history of the original node `node_id`.
