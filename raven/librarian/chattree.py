@@ -567,6 +567,12 @@ class PersistentForest(Forest):
         """Migrate `data` (loaded from a saved datastore) to the latest format.
 
         Called automatically by `_load`.
+
+        NOTE: There are two upgrade functions. This updates the forest itself
+              to support revisioned data.
+
+              See also `llmclient.upgrade`, which upgrades the payload format
+              inside each revision of the data.
         """
         upgrade_time = time.time_ns()
         for node_id, node in data.items():

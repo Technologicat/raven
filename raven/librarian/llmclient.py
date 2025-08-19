@@ -8,7 +8,10 @@ If you want to see the final prompt in instruct or chat mode, start your server 
 """
 
 __all__ = ["list_models", "setup",
-           "create_chat_message", "create_initial_system_message",
+           "create_chat_message",
+           "linearize_chat",
+           "upgrade",
+           "create_initial_system_message",
            "factory_reset_chat_datastore",
            "format_chat_datetime_now", "format_reminder_to_focus_on_latest_input", "format_reminder_to_use_information_from_context_only",
            "scrub",
@@ -348,6 +351,94 @@ def create_chat_message(settings: env,
             "content": content,
             "tool_calls": tool_calls if tool_calls is not None else []}
     return data
+
+def linearize_chat(datastore: chattree.Forest, node_id: str) -> List[Dict]:
+    """Walking up from `node_id` up to and including a root node, return a linearized representation of that chat branch.
+
+    This collects the active revision of the data from each node, ignores everything except the actual chat message data
+    (i.e. ignores any metadata added by the chat client, such as RAG retrieval attributions, AI token counts, etc.) and
+    puts the messages into a list, in depth order (root node first).
+
+    Note `node_id` doesn't need to be a leaf node; but it will be the last node of the linearized representation;
+    children are not scanned.
+    """
+    # node data: {"message": {actual chat message},
+    #             "retrieval": RAG metadata if any,
+    #             ...}
+    full_history = datastore.linearize_up(node_id)
+    messages_only_history = [data["message"] for data in full_history]
+    return messages_only_history
+
+# v0.2.3+: data format change
+def upgrade(datastore: chattree.Forest, system_prompt_node_id: str) -> None:
+    """Upgrade a datastore's payloads to the latest format, modifying the datastore in-place.
+
+    If the datastore's payloads are already in the latest format, no changes are made.
+
+    `system_prompt_node_id`: The ID of the initial system prompt node (root node)
+                             that starts a chat.
+
+                             Even in old formats, the system prompt node has no extra fluff
+                             saved on it, so we use it to get a list of system-level keys
+                             a chat node *should* have.
+
+                             On other nodes, any keys that do NOT match are assumed to have
+                             been added by the chat client, and are moved to under the
+                             latest data revision.
+
+    NOTE: There are two upgrade functions: the forest itself also changed in v0.2.3
+          to allow for data revisioning. That part is automatically handled when
+          an old datastore is loaded (see `chattree.PersistentForest._upgrade`).
+
+          This function is meant for use by chat clients, and upgrades the payload format
+          inside each revision of each node's data.
+
+          Up to v0.2.2, the chat message was stored in `node["data"]` directly,
+          so that a node's "data" field content was::
+
+              {"role": ..., "content": ..., "tool_calls": ...}
+
+          In v0.2.3+, the data is revisioned:
+
+              {revision_id: payload,
+               ...}
+
+          Additionally, the payload format is now such that the message now lives under
+          a "message" key inside the `payload` part:
+
+              {revision_id: {"message": {"role": ..., "content": ..., "tool_calls": ...},
+                             "other_stuff0": ...,
+                             ...},
+               ...}
+
+          where "other_stuff0" and so on are arbitrary additional metadata keys.
+          As of v0.2.3, this is used for storing the RAG retrieval results,
+          and AI token counts.
+    """
+    # Get the system-level keys a chat node should have.
+    #
+    # Any other keys, when found on other nodes, are considered extra fluff, which should live
+    # under a specific revision of the node's data. Up to v0.2.2, a node may have an optional
+    # "retrieval" key that is inserted by RAG.
+    system_keys = set(datastore.nodes[system_prompt_node_id].keys())
+
+    for node in datastore.nodes.values():
+        revisions = node["data"]  # {revision_id: actual_data, ...}
+
+        # Upgrade to new payload format
+        for revision in revisions.values():
+            if "message" not in revision:  # old format?
+                message = copy.copy(revision)
+                revision.clear()
+                revision["message"] = message
+
+        # Move any extra keys to under all revisions of the data (as independent copies; will become such upon JSON saving anyway)
+        existing_keys = list(node.keys())
+        for key in existing_keys:
+            if key not in system_keys:
+                value = node.pop(key)
+                for revision in revisions.values():
+                    revision[key] = copy.deepcopy(value)
 
 def create_initial_system_message(settings: env) -> Dict:
     """Create a chat message containing the system prompt and the AI's character card as specified in `settings`."""

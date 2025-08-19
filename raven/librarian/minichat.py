@@ -10,30 +10,38 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import argparse
-import atexit
-import json
-import os
-import pathlib
-import platform
-import requests
-import sys
-from typing import Dict, List, Optional
-
-from mcpyrate import colorizer
-
-from unpythonic import sym, Values
-from unpythonic.env import env
-
 from .. import __version__
 
-from ..client import api
-from ..client import config as client_config
+logger.info(f"Raven-minichat version {__version__} starting.")
 
-from . import chattree
-from . import config as librarian_config
-from . import hybridir
-from . import llmclient
+logger.info("Loading libraries...")
+from unpythonic import timer
+with timer() as tim:
+    import argparse
+    import atexit
+    import json
+    import os
+    import pathlib
+    import platform
+    import requests
+    import sys
+    from typing import Dict, List, Optional
+
+    from mcpyrate import colorizer
+
+    from unpythonic import sym, Values
+    from unpythonic.env import env
+
+    from .. import __version__
+
+    from ..client import api
+    from ..client import config as client_config
+
+    from . import chattree
+    from . import config as librarian_config
+    from . import hybridir
+    from . import llmclient
+logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 def minimal_chat_client(backend_url):
     """Minimal LLM chat client, for testing/debugging."""
@@ -46,9 +54,10 @@ def minimal_chat_client(backend_url):
     db_dir = pathlib.Path(librarian_config.llm_database_dir).expanduser().resolve()  # RAG search indices datastore
 
     datastore = None  # initialized later, during app startup
-    def load_app_state(settings: env) -> Dict:
+
+    def load_app_state(settings: env, datastore: chattree.PersistentForest) -> Dict:
         if datastore is None:
-            assert False  # `datastore` must be initialized before this internal function is called
+            assert False  # The `datastore` container must exist before this internal function is called
 
         def new_datastore():
             state["new_chat_HEAD"] = llmclient.factory_reset_chat_datastore(datastore, settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
@@ -89,6 +98,8 @@ def minimal_chat_client(backend_url):
                                data=llmclient.create_initial_system_message(settings))
         datastore.delete_revision(node_id=system_prompt_node_id,
                                   revision_id=old_system_prompt_revision_id)
+
+        llmclient.upgrade(datastore, system_prompt_node_id)  # v0.2.3+: data format change
 
         print(colorizer.colorize(f"Loaded app state from '{state_file}'.", colorizer.Style.BRIGHT))
         return state
@@ -141,7 +152,7 @@ def minimal_chat_client(backend_url):
         datastore = chattree.PersistentForest(datastore_file)  # This autoloads and auto-persists.
         if datastore.nodes:
             print(colorizer.colorize(f"Loaded chat datastore from '{datastore_file}'.", colorizer.Style.BRIGHT))
-        state = load_app_state(settings)
+        state = load_app_state(settings, datastore)
         print()
 
         # Load RAG database (it will auto-persist at app exit).
@@ -353,7 +364,7 @@ def minimal_chat_client(backend_url):
         action_next_round = sym("next_round")  # skip to start of next round, e.g. after a special command
 
         def user_turn() -> Values:
-            history = datastore.linearize_up(state["HEAD"])
+            history = llmclient.linearize_chat(datastore, state["HEAD"])
             user_message_number = len(history)
 
             # Print a user input prompt and get the user's input.
@@ -374,7 +385,7 @@ def minimal_chat_client(backend_url):
                 state["HEAD"] = state["new_chat_HEAD"]
                 print(f"HEAD is now at '{state['HEAD']}'.")
                 print()
-                chat_print_history(datastore.linearize_up(state["HEAD"]))
+                chat_print_history(llmclient.linearize_chat(datastore, state["HEAD"]))
                 return Values(action=action_next_round)
             elif user_message_text.startswith("!docs"):  # TODO: refactor
                 split_command_text = user_message_text.split()
@@ -420,7 +431,7 @@ def minimal_chat_client(backend_url):
                 state["HEAD"] = new_head_id
                 print(f"HEAD is now at '{state['HEAD']}'.")
                 print()
-                chat_print_history(datastore.linearize_up(state["HEAD"]))
+                chat_print_history(llmclient.linearize_chat(datastore, state["HEAD"]))
                 return Values(action=action_next_round)
             elif user_message_text == "!help":
                 chat_show_help()
@@ -467,9 +478,9 @@ def minimal_chat_client(backend_url):
             # Not a special command.
 
             # Add the user's message to the chat.
-            user_message_node_id = datastore.create_node(data=llmclient.create_chat_message(settings=settings,
-                                                                                            role="user",
-                                                                                            text=user_message_text),
+            user_message_node_id = datastore.create_node(data={"message": llmclient.create_chat_message(settings=settings,
+                                                                                                        role="user",
+                                                                                                        text=user_message_text)},
                                                          parent_id=state["HEAD"])
             state["HEAD"] = user_message_node_id
             return Values(action=action_proceed, text=user_message_text)
@@ -482,19 +493,19 @@ def minimal_chat_client(backend_url):
                                            k=10,
                                            return_extra_info=False)
 
-            # First line of defense: docs on, no matches for given query, speculate off -> bypass LLM
+            # First line of defense (against hallucinations): docs on, no matches for given query, speculate off -> bypass LLM
             if not docs_results and not state["speculate_enabled"]:
                 nomatch_text = "No matches in knowledge base. Please try another query."
-                nomatch_message_node_id = datastore.create_node(data=llmclient.create_chat_message(settings=settings,
-                                                                                                   role="assistant",
-                                                                                                   text=nomatch_text),
+                nomatch_message_node_id = datastore.create_node(data={"message": llmclient.create_chat_message(settings=settings,
+                                                                                                               role="assistant",
+                                                                                                               text=nomatch_text)},
                                                                 parent_id=state["HEAD"])
-                nomatch_message_node = datastore.nodes[nomatch_message_node_id]
-                nomatch_message_node["retrieval"] = {"query": query,
-                                                     "results": []}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
+                nomatch_message_node_data = datastore.get_data(nomatch_message_node_id)
+                nomatch_message_node_data["retrieval"] = {"query": query,
+                                                          "results": []}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
                 state["HEAD"] = nomatch_message_node_id
 
-                history = datastore.linearize_up(state["HEAD"])
+                history = llmclient.linearize_chat(datastore, state["HEAD"])
                 nomatch_message_number = len(history)
                 chat_print_message(message_number=nomatch_message_number,
                                    role="assistant",
@@ -585,7 +596,7 @@ def minimal_chat_client(backend_url):
 
             # AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
             while True:
-                history = datastore.linearize_up(state["HEAD"])  # latest history
+                history = llmclient.linearize_chat(datastore, state["HEAD"])  # latest history
                 ai_message_number = len(history)
 
                 # Prepare the final LLM prompt, by including the temporary injects.
@@ -617,12 +628,12 @@ def minimal_chat_client(backend_url):
                 print()
 
                 # Add the LLM's message to the chat.
-                ai_message_node_id = datastore.create_node(data=out.data,
+                ai_message_node_id = datastore.create_node(data={"message": out.data},
                                                            parent_id=state["HEAD"])
-                ai_message_node = datastore.nodes[ai_message_node_id]
+                ai_message_node_data = datastore.get_data(ai_message_node_id)
                 if state["docs_enabled"]:
-                    ai_message_node["retrieval"] = {"query": rag_query,
-                                                    "results": rag_result["matches"]}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
+                    ai_message_node_data["retrieval"] = {"query": rag_query,
+                                                         "results": rag_result["matches"]}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
                 state["HEAD"] = ai_message_node_id
 
                 # Handle tool calls requested by the LLM, if any.
@@ -639,8 +650,9 @@ def minimal_chat_client(backend_url):
                 if not tool_response_messages:
                     break
 
+                # Add the tool response messages to the chat.
                 for tool_response_message in tool_response_messages:
-                    tool_response_message_node_id = datastore.create_node(data=tool_response_message,
+                    tool_response_message_node_id = datastore.create_node(data={"message": tool_response_message},
                                                                           parent_id=state["HEAD"])
                     state["HEAD"] = tool_response_message_node_id
 
@@ -652,13 +664,13 @@ def minimal_chat_client(backend_url):
                     tool_message_number += 1
 
                 # # DEBUG - show history after the tool calls, before the LLM starts writing again.
-                # history = datastore.linearize_up(state["HEAD"])
+                # history = llmclient.linearize_chat(datastore, state["HEAD"])
                 # chat_print_history(history, show_numbers=False)
 
             return Values(action=action_proceed)
 
         # Show initial history (loaded from datastore, or blank upon first start)
-        chat_print_history(datastore.linearize_up(state["HEAD"]))
+        chat_print_history(llmclient.linearize_chat(datastore, state["HEAD"]))
 
         # Main loop
         while True:
