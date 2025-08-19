@@ -39,6 +39,13 @@
   - Keep the app state in top-level containers, and pass these in/out explicitly. More FP and facilitates adding unit tests later.
   - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
 
+- Librarian
+  - Store in AI message metadata: model name, number of tokens, average generation speed (tokens/s)
+  - Finnish (or other language) captioning for TTS output
+    - Speak and caption one sentence at a time, chain the end callbacks, with an optional exit flag to terminate the chain (so the user can cancel it in the GUI).
+  - RAG: list the chunk full-IDs in retrieval metadata for combined contiguous chunks?
+  - minichat: when are retrieval results `null` in the chat datastore (`data.json`)? Did these come from an old bug that does not exist any more? Could fix while migrating, replacing each null with an empty list.
+
 - Improve MacOSX support
   - Raven already runs on MacOSX, but some things could be improved.
   - When running on MacOSX, instead of the Ctrl key, all hotkeys use the Cmd key instead.
