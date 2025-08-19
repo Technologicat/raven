@@ -364,7 +364,7 @@ def create_initial_system_message(settings: env) -> Dict:
                                role="system",
                                text=text)
 
-def factory_reset_chat_datastore(datastore: chattree.PersistentForest, settings: env) -> str:
+def factory_reset_chat_datastore(datastore: chattree.Forest, settings: env) -> str:
     """Reset `datastore` to its "factory-default" state.
 
     **IMPORTANT**: This deletes all existing chat nodes in the datastore, and CANNOT BE UNDONE.
