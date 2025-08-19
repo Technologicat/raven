@@ -431,10 +431,10 @@ def upgrade(datastore: chattree.Forest, system_prompt_node_id: str) -> None:
     system_keys = set(datastore.nodes[system_prompt_node_id].keys())
 
     for node in datastore.nodes.values():
-        revisions = node["data"]  # {revision_id: payload, ...}
+        payload_revisions = node["data"]  # {revision_id: payload, ...}
 
         # v0.2.3: Upgrade payload format
-        for payload in revisions.values():
+        for payload in payload_revisions.values():
             if "message" not in payload:  # old format?
                 message = copy.copy(payload)
                 payload.clear()
@@ -445,7 +445,7 @@ def upgrade(datastore: chattree.Forest, system_prompt_node_id: str) -> None:
         for key in existing_keys:
             if key not in system_keys:
                 value = node.pop(key)
-                for payload in revisions.values():
+                for payload in payload_revisions.values():
                     payload[key] = copy.deepcopy(value)
 
 def create_initial_system_message(settings: env) -> Dict:
@@ -477,12 +477,12 @@ def factory_reset_chat_datastore(datastore: chattree.Forest, settings: env) -> s
     You can obtain the `settings` object by first calling `setup`.
     """
     datastore.purge()
-    root_node_id = datastore.create_node(data=create_initial_system_message(settings),
+    root_node_id = datastore.create_node(payload={"message": create_initial_system_message(settings)},
                                          parent_id=None)
-    new_chat_node_id = datastore.create_node(data=create_chat_message(settings,
-                                                                      role="assistant",
-                                                                      text=settings.greeting),
-                                                parent_id=root_node_id)
+    new_chat_node_id = datastore.create_node(payload={"message": create_chat_message(settings,
+                                                                                     role="assistant",
+                                                                                     text=settings.greeting)},
+                                             parent_id=root_node_id)
     return new_chat_node_id
 
 # --------------------------------------------------------------------------------
@@ -741,6 +741,7 @@ def invoke(settings: env, history: List[Dict], progress_callback=None) -> env:
                                   add_role_name=False,
                                   tool_calls=tool_calls)
     return env(data=message,
+               model=settings.model,
                n_tokens=n_tokens,
                dt=tim.dt)
 

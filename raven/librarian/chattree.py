@@ -38,22 +38,24 @@ class Forest:
 
         For easy JSON-ability, we store the nodes in a dictionary, as a doubly-linked forest:
 
-        {"node_unique_id": {"id": "node_unique_id",          # so that each node knows its own ID
-                            "timestamp": int,                # as nanoseconds since epoch
-                            "data": {revision_id: payload,   # payload is any JSON serializable data, the node content
+        {"node_unique_id": {"id": "node_unique_id",                  # so that each node knows its own ID
+                            "timestamp": int,                        # as nanoseconds since epoch
+                            "data": {revision_id: payload,           # payload is any JSON serializable data, the node content
                                      ...},
-                            "active_revision": int,          # current default revision of data
-                            "next_free_revision": int,       # next revision ID that has never been used for this node
-                            "parent": Optional[str],         # unique_id_of_parent_node; or for a root node, `None`
-                            "children": List[str]            # [unique_id_of_child0, ...]
+                            "active_revision": int,                  # current default revision of data
+                            "next_free_revision": int,               # next revision ID that has never been used for this node
+                            "revision_names": {revision_id0: name0,  # revisions can be named (optional)
+                                               ...}
+                            "parent": Optional[str],                 # unique_id_of_parent_node; or for a root node, `None`
+                            "children": List[str]                    # [unique_id_of_child0, ...]
                            }
         }
         """
         self.nodes = {}
         self.lock = threading.RLock()
 
-    def create_node(self, data: Any, parent_id: Optional[str]) -> str:
-        """Create a node containing `data`, and store it in the forest.
+    def create_node(self, payload: Any, parent_id: Optional[str]) -> str:
+        """Create a node containing `payload`, and store it in the forest.
 
         Link it to the parent node with unique id `parent_id`, if given. Linking is done in both directions:
           - The new node gets a parent node, and
@@ -67,14 +69,16 @@ class Forest:
                        Note this only concerns newly created nodes; any copied nodes retain their
                        original timestamps.
 
-                       Data now supports revisioning:
+                       The node now supports payload revisioning:
 
                            "data": {revision_id0: payload,
                                     ...},
                            "active_revision": revision_id0,
                            "next_free_revision": revision_id1,
+                           "revision_names": {revision_id0: name0,
+                                              ...}
 
-                       When the node is created, the initial data is stored as revision 1.
+                       When the node is created, the initial payload is stored as revision 1.
 
                        The revision ID is a 1-based integer.
 
@@ -96,7 +100,8 @@ class Forest:
                 "timestamp": time.time_ns(),
                 "active_revision": 1,
                 "next_free_revision": 2,
-                "data": {str(1): data},  # use str key for JSON compatibility (we abstract this detail away; API takes/returns revision IDs as int)
+                "revision_names": {},  # str(int) -> str, to allow a client app to give a human-readable name (entered by the user) to zero or more revisions
+                "data": {str(1): payload},  # use str key for JSON compatibility (we abstract this detail away; API takes/returns revision IDs as int)
                 "parent": parent_id,  # link to parent
                 "children": []}
         with self.lock:
@@ -105,8 +110,20 @@ class Forest:
             self.nodes[node_id] = node
         return node_id
 
-    def add_revision(self, node_id: str, data: Any) -> int:
-        """Add a new data revision to node `node_id`, and make the new revision active.
+    def add_revision(self, node_id: str, payload: Any, revision_name: Optional[str] = None) -> int:
+        """Add a new payload revision to node `node_id`, and make the new revision active.
+
+        `payload`: the payload
+
+        `revision_name`: optional human-readable name for the revision.
+
+                         Most often, revisions are not named, but sometimes it can be
+                         helpful if the user can set a label to help them remember
+                         what the revision was about.
+
+                         This parameter a convenience feature to be able to name the new revision
+                         right away, if a name is known. You can also set/change the name later,
+                         with `set_revision_name`.
 
         Returns the revision ID of the new revision.
 
@@ -123,13 +140,15 @@ class Forest:
                 raise KeyError(f"Forest.add_revision: no such node '{node_id}'")
             node = self.nodes[node_id]
             revision_id = node["next_free_revision"]
-            node["data"][str(revision_id)] = data
+            node["data"][str(revision_id)] = payload
+            if revision_name is not None:
+                node["revision_names"][str(revision_id)] = revision_name
             node["active_revision"] = revision_id
             node["next_free_revision"] += 1
         return revision_id
 
     def delete_revision(self, node_id: str, revision_id: int) -> None:
-        """Delete an existing data revision from node `node_id`."""
+        """Delete an existing payload revision from node `node_id`."""
         with self.lock:
             if node_id not in self.nodes:
                 raise KeyError(f"Forest.delete_revision: no such node '{node_id}'")
@@ -137,9 +156,11 @@ class Forest:
             if str(revision_id) not in node["data"]:
                 raise KeyError(f"Forest.delete_revision: node '{node_id}' has no revision '{revision_id}'")
             node["data"].pop(str(revision_id))
+            if str(revision_id) in node["revision_names"]:  # when deleting a revision, delete its name too (if any)
+                node["revision_names"].pop(str(revision_id))
 
     def get_revisions(self, node_id: str) -> List[int]:
-        """Return a list of all IDs of the data revisions of node `node_id`."""
+        """Return a list of all revision IDs of the payload revisions of node `node_id`, in numerical order."""
         with self.lock:
             if node_id not in self.nodes:
                 raise KeyError(f"Forest.get_revisions: no such node '{node_id}'")
@@ -147,15 +168,32 @@ class Forest:
         return [int(revision_id) for revision_id in node["data"].keys()]  # already sorted because we add revisions in numerical order
 
     def get_revision(self, node_id: str) -> int:
-        """Return the ID of the active data revision of node `node_id`."""
+        """Return the revision ID of the active payload revision of node `node_id`."""
         with self.lock:
             if node_id not in self.nodes:
                 raise KeyError(f"Forest.get_revision: no such node '{node_id}'")
             node = self.nodes[node_id]
         return node["active_revision"]
 
+    def get_revision_name(self, node_id: str, revision_id: int) -> Optional[str]:
+        """Return the human-readable name of payload revision `revision_id` of node `node_id`, if it is named.
+
+        If not named, return `None`.
+
+        To get a list of all revision names::
+
+            revision_names = [datastore.get_revision_name(node_id, revision_id) for revision_id in datastore.get_revisions(node_id)]
+        """
+        with self.lock:
+            if node_id not in self.nodes:
+                raise KeyError(f"Forest.get_revision_name: no such node '{node_id}'")
+            node = self.nodes[node_id]
+            if str(revision_id) in node["revision_names"]:
+                return node["revision_names"][str(revision_id)]
+            return None
+
     def set_revision(self, node_id: str, revision_id: int) -> None:
-        """Set the active data revision of node `node_id`."""
+        """Set the active payload revision of node `node_id`."""
         with self.lock:
             if node_id not in self.nodes:
                 raise KeyError(f"Forest.set_revision: no such node '{node_id}'")
@@ -164,26 +202,45 @@ class Forest:
                 raise KeyError(f"Forest.set_revision: node '{node_id}' has no revision '{revision_id}'")
         node["active_revision"] = revision_id
 
-    def get_data(self, node_id: str, revision_id: Optional[int] = None) -> Any:
-        """Get the data of node `node_id`.
+    def set_revision_name(self, node_id: str, revision_id: int, revision_name: str) -> str:
+        """Set the human-readable name of payload revision `revision_id` of node `node_id`.
 
-        `revision_id`: optionally, specify which revision of the data to return.
+        The revision must exist.
 
-                       If `revision_id is None` (default), return the active revision of the data.
+        The existing name of the revision, if any, is overwritten.
 
-        See `get_revisions` (get list of available revisions) and `set_revision` (choose active revision).
-
-        NOTE: This returns a reference to the original data payload as-is (not a copy).
+        Returns `revision_name`, for convenience.
         """
         with self.lock:
             if node_id not in self.nodes:
-                raise KeyError(f"Forest.get_data: no such node '{node_id}'")
+                raise KeyError(f"Forest.set_revision_name: no such node '{node_id}'")
+            node = self.nodes[node_id]
+            if str(revision_id) not in node["data"]:  # the revision being named must exist in the payloads
+                raise KeyError(f"Forest.set_revision_name: node '{node_id}' has no revision '{revision_id}'")
+            assert str(revision_id) in node["data"]
+            node["revision_names"][str(revision_id)] = revision_name
+            return revision_name
+
+    def get_payload(self, node_id: str, revision_id: Optional[int] = None) -> Any:
+        """Return the payload of node `node_id`.
+
+        `revision_id`: optionally, specify which payload revision to return.
+
+                       If `revision_id is None` (default), return the currently active revision.
+
+        See `get_revisions` (get list of available revisions) and `set_revision` (choose active revision).
+
+        NOTE: This returns a reference to the original payload as-is (not a copy).
+        """
+        with self.lock:
+            if node_id not in self.nodes:
+                raise KeyError(f"Forest.get_payload: no such node '{node_id}'")
             node = self.nodes[node_id]
             if revision_id is None:
                 revision_id = node["active_revision"]
             else:
                 if str(revision_id) not in node["data"]:
-                    raise KeyError(f"Forest.get_data: node '{node_id}' has no revision '{revision_id}'")
+                    raise KeyError(f"Forest.get_payload: node '{node_id}' has no revision '{revision_id}'")
             assert str(revision_id) in node["data"]
             return node["data"][str(revision_id)]
 
@@ -193,7 +250,7 @@ class Forest:
         Optionally, link the new node to a given parent node (linking is performed in both directions).
         If not linked, the new node becomes another root node in the forest.
 
-        The contents are copied via `copy.deepcopy`. Data revisions and their IDs are preserved;
+        The contents are copied via `copy.deepcopy`. Payload revisions and their IDs are preserved;
         the new node gets a full deep copy of the revision history of the original node `node_id`.
 
         Returns the node ID of the new node.
@@ -203,12 +260,14 @@ class Forest:
         """
         with self.lock:
             original_node = self.nodes[node_id]
-            new_node_id = self.create_node("__dummy_content__", new_parent_id)  # we will replace the dummy content almost immediately...
-            # ...by deep-copying the data revision history from the original node
+            new_node_id = self.create_node(payload="__dummy_content__",  # we will replace the dummy content almost immediately...
+                                           parent_id=new_parent_id)
+            # ...by deep-copying the payload revision history from the original node
             new_node = self.nodes[new_node_id]
             new_node["data"] = copy.deepcopy(original_node["data"])
             new_node["active_revision"] = original_node["active_revision"]
             new_node["next_free_revision"] = original_node["next_free_revision"]
+            new_node["revision_names"] = copy.deepcopy(original_node["revision_names"])
             return new_node_id
 
     def copy_subtree(self, node_id: str, new_parent_id: Optional[str]) -> str:
@@ -246,7 +305,7 @@ class Forest:
         with self.lock:
             self.detach_subtree(node_id)  # this will also raise KeyError if the node is not found
             self.detach_children(node_id)
-            self.nodes.pop(node_id)  # the actual datastore has the only reference to the actual node data, so the node becomes eligible for GC
+            self.nodes.pop(node_id)  # the datastore has the only reference to the actual node data, so the node becomes eligible for GC
 
     def delete_subtree(self, node_id: str) -> None:
         """Delete the subtree starting from `node_id`. All child nodes are deleted, recursively."""
@@ -396,14 +455,14 @@ class Forest:
     def linearize_up(self, node_id: str) -> List[Any]:
         """Walking up from `node_id` up to and including a root node, return a linearized representation of that branch.
 
-        This collects the active revision of the data from each node, and puts those into a list, in depth order (root node first).
+        This collects the active revision of the payload from each node, and puts those into a list, in depth order (root node first).
 
         Note `node_id` doesn't need to be a leaf node; but it will be the last node of the linearized representation;
         children are not scanned.
         """
         linearized_history = collections.deque()
         def prepend_to_history(node):
-            linearized_history.appendleft(self.get_data(node_id=node["id"]))  # no `revision_id` -> get active revision by default
+            linearized_history.appendleft(self.get_payload(node_id=node["id"]))  # no `revision_id` -> get active revision of payload by default
         self.walk_up(node_id, callback=prepend_to_history)
         return list(linearized_history)
 
@@ -419,7 +478,7 @@ class Forest:
 
         Note this walks only down (children), not up (parent chain).
 
-        Convenient for purging unreachable data before saving the forest to disk.
+        Convenient for purging unreachable nodes before saving the forest to disk.
         """
         with self.lock:
             reachable_node_ids = set()
@@ -519,7 +578,7 @@ class PersistentForest(Forest):
         #
         # In `Forest`, we are extra careful in any operations that edit the data, to check and raise errors first,
         # before making any edits. Hence whatever the state is at shutdown, it is the latest valid state, and
-        # it's always safe to persist it.
+        # it is always safe to persist it.
         atexit.register(self._save)
 
     def _save(self) -> None:
@@ -563,8 +622,8 @@ class PersistentForest(Forest):
                 plural_s = "s" if len(data) != 1 else ""
                 logger.info(f"PersistentForest._load: PersistentForest loaded successfully ({len(data)} node{plural_s}).")
 
-    def _upgrade(self, data: Dict[str, Dict[str, Any]]) -> None:
-        """Migrate `data` (loaded from a saved datastore) to the latest format.
+    def _upgrade(self, nodes: Dict[str, Dict[str, Any]]) -> None:
+        """Migrate `nodes` (loaded from a saved datastore) to the latest format.
 
         Called automatically by `_load`.
 
@@ -575,7 +634,7 @@ class PersistentForest(Forest):
               inside each revision of the data.
         """
         upgrade_time = time.time_ns()
-        for node_id, node in data.items():
+        for node_id, node in nodes.items():
             # v0.2.3+: chat node timestamps
             if "timestamp" not in node:
                 node["timestamp"] = upgrade_time
@@ -584,4 +643,6 @@ class PersistentForest(Forest):
             if "active_revision" not in node:
                 node["active_revision"] = 1
                 node["next_free_revision"] = 2
-                node["data"] = {str(1): node["data"]}  # up to v0.2.2, "data" field has no revisions container
+                node["data"] = {str(1): node["data"]}  # up to v0.2.2, the "data" field (payload) has no revisions container
+            if "revision_names" not in node:  # separate check, because I didn't think of needing this feature later, until I had committed and uploaded the code
+                node["revision_names"] = {}

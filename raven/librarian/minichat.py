@@ -95,7 +95,7 @@ def minimal_chat_client(backend_url):
         system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
         old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
         datastore.add_revision(node_id=system_prompt_node_id,
-                               data=llmclient.create_initial_system_message(settings))
+                               payload=llmclient.create_initial_system_message(settings))
         datastore.delete_revision(node_id=system_prompt_node_id,
                                   revision_id=old_system_prompt_revision_id)
 
@@ -478,9 +478,9 @@ def minimal_chat_client(backend_url):
             # Not a special command.
 
             # Add the user's message to the chat.
-            user_message_node_id = datastore.create_node(data={"message": llmclient.create_chat_message(settings=settings,
-                                                                                                        role="user",
-                                                                                                        text=user_message_text)},
+            user_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=settings,
+                                                                                                           role="user",
+                                                                                                           text=user_message_text)},
                                                          parent_id=state["HEAD"])
             state["HEAD"] = user_message_node_id
             return Values(action=action_proceed, text=user_message_text)
@@ -496,13 +496,13 @@ def minimal_chat_client(backend_url):
             # First line of defense (against hallucinations): docs on, no matches for given query, speculate off -> bypass LLM
             if not docs_results and not state["speculate_enabled"]:
                 nomatch_text = "No matches in knowledge base. Please try another query."
-                nomatch_message_node_id = datastore.create_node(data={"message": llmclient.create_chat_message(settings=settings,
-                                                                                                               role="assistant",
-                                                                                                               text=nomatch_text)},
+                nomatch_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=settings,
+                                                                                                                  role="assistant",
+                                                                                                                  text=nomatch_text)},
                                                                 parent_id=state["HEAD"])
-                nomatch_message_node_data = datastore.get_data(nomatch_message_node_id)
-                nomatch_message_node_data["retrieval"] = {"query": query,
-                                                          "results": []}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
+                nomatch_message_node_payload = datastore.get_payload(nomatch_message_node_id)
+                nomatch_message_node_payload["retrieval"] = {"query": query,
+                                                             "results": []}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
                 state["HEAD"] = nomatch_message_node_id
 
                 history = llmclient.linearize_chat(datastore, state["HEAD"])
@@ -628,12 +628,12 @@ def minimal_chat_client(backend_url):
                 print()
 
                 # Add the LLM's message to the chat.
-                ai_message_node_id = datastore.create_node(data={"message": out.data},
+                ai_message_node_id = datastore.create_node(payload={"message": out.data},
                                                            parent_id=state["HEAD"])
-                ai_message_node_data = datastore.get_data(ai_message_node_id)
+                ai_message_node_payload = datastore.get_payload(ai_message_node_id)
                 if state["docs_enabled"]:
-                    ai_message_node_data["retrieval"] = {"query": rag_query,
-                                                         "results": rag_result["matches"]}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
+                    ai_message_node_payload["retrieval"] = {"query": rag_query,
+                                                            "results": rag_result["matches"]}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
                 state["HEAD"] = ai_message_node_id
 
                 # Handle tool calls requested by the LLM, if any.
@@ -652,7 +652,7 @@ def minimal_chat_client(backend_url):
 
                 # Add the tool response messages to the chat.
                 for tool_response_message in tool_response_messages:
-                    tool_response_message_node_id = datastore.create_node(data={"message": tool_response_message},
+                    tool_response_message_node_id = datastore.create_node(payload={"message": tool_response_message},
                                                                           parent_id=state["HEAD"])
                     state["HEAD"] = tool_response_message_node_id
 
