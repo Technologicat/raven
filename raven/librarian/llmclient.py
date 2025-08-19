@@ -386,6 +386,9 @@ def factory_reset_chat_datastore(datastore: chattree.Forest, settings: env) -> s
                                                 parent_id=root_node_id)
     return new_chat_node_id
 
+# --------------------------------------------------------------------------------
+# stock message formatting itulities
+
 _weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 def format_chat_datetime_now() -> str:
     """Return the text content of a dynamic system message containing the current date, weekday, and local time."""
@@ -413,6 +416,8 @@ def format_reminder_to_use_information_from_context_only() -> str:
     """
     return "[System information: NOTE: Please answer based on the information provided in the context only.]"
 
+# --------------------------------------------------------------------------------
+# cleanup utilities
 
 _complete_thought_block = re.compile(r"([<\[])(think(ing)?[>\]])(.*?)\1/\2\s*", flags=re.IGNORECASE | re.DOTALL)  # opened and closed correctly; thought contents -> group 4
 _incomplete_thought_block = re.compile(r"([<\[])(think|thinking)([>\]])(?!.*?\1/\2\3)(.*)", flags=re.IGNORECASE | re.DOTALL)  # opened but not closed; thought contents -> group 4
@@ -640,10 +645,14 @@ def invoke(settings: env, history: List[Dict], progress_callback=None) -> env:
                n_tokens=n_tokens,
                dt=tim.dt)
 
+# --------------------------------------------------------------------------------
+# For tool-using LLMs: tool-calling
+
 def perform_tool_calls(settings: env, message: Dict) -> List[Dict]:
     """Perform tool calls as requested in `message["tool_calls"]`.
 
-    Return a list of messages (each with `role="tool"`) containing the tool outputs.
+    Returns a list of messages (each with `role="tool"`) containing the tool outputs,
+    one for each tool call.
 
     If the `tool_calls` field of the message is missing or if it is empty, return the empty list.
     """
