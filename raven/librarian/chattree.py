@@ -134,7 +134,6 @@ class Forest:
             if node_id not in self.nodes:
                 raise KeyError(f"Forest.delete_revision: no such node '{node_id}'")
             node = self.nodes[node_id]
-            print(revision_id, list(node["data"].keys()))  # DEBUG
             if str(revision_id) not in node["data"]:
                 raise KeyError(f"Forest.delete_revision: node '{node_id}' has no revision '{revision_id}'")
             node["data"].pop(str(revision_id))
