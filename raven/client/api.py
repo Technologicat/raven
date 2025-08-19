@@ -68,9 +68,11 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 # import PIL.Image
 import qoi
 
-import spacy
-
 import numpy as np
+
+import torch  # noqa: F401: import torch before spaCy, so that spaCy finds the GPU (otherwise spaCy will complain that CuPy is not installed, which is not true)
+
+import spacy
 
 from ..common import netutil
 from ..common import nlptools
