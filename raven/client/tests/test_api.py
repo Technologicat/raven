@@ -209,10 +209,12 @@ def test():
     print(f"translate summary of scientific abstract 2: {tim.dt:0.6g}s")
 
     with timer() as tim:
+        # https://en.wikipedia.org/wiki/History_of_special_relativity
         print(api.translate_translate('The failure of any experiment to detect motion through the aether led Hendrik Lorentz, starting in 1892, to develop a theory of electrodynamics based on an immobile luminiferous aether, physical length contraction, and a "local time" in which Maxwell\'s equations retain their form in all inertial frames of reference.', source_lang="en", target_lang="fi"))
     print(f"translate history of theory of special relativity: {tim.dt:0.6g}s")
 
     with timer() as tim:
+        # https://otakuusamagazine.com/macross-meet-the-idols/
         print(api.translate_translate("Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts.", source_lang="en", target_lang="fi"))
     print(f"translate fandom text on Sharon Apple: {tim.dt:0.6g}s")
 
