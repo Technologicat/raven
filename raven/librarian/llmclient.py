@@ -221,15 +221,21 @@ def setup(backend_url: str) -> env:
         character_card = f"{character_card}\n\n{tools_info}"
 
     # Generation settings for the LLM backend.
+    #
+    # For the sampler settings, below are some sensible defaults.
+    # But for best results, prefer using the values recommended in your LLM's model card, if known.
+    # E.g. Qwen3-30B-A3B-Thinking-2507 was tuned for T = 0.6, top_k = 20, top_p = 0.95, min_p = 0.
     request_data = {
         "mode": "instruct",  # instruct mode: when invoking the LLM, send it instructions (system prompt and character card), followed by a chat transcript to continue.
-        "max_tokens": 3200,  # 800 is usually good, but thinking models may need (much) more. For them, 1600 or 3200 are good.
-        # Correct sampler order is min_p first, then temperature (and this is also the default).
+        "max_tokens": 6400,  # 800 is usually good, but thinking models may need (much) more. For them, 1600 or 3200 are good. 6400 if you want to be sure.
+        # Correct sampler order is tail-cutters (such as top_k, top_p, min_p) first, then temperature. In oobabooga, this is also the default.
         #
-        # T = 1: Use the predicted logits as-is (as of early 2025, a good default; older models may need T = 0.7).
+        # T = 1: Use the predicted logits as-is.
         # T = 0: Greedy decoding, i.e. always pick the most likely token. Prone to getting stuck in a loop. For fact extraction (for some models).
         # T > 1: Skew logits to emphasize rare continuations ("creative mode").
         # 0 < T < 1: Skew logits to emphasize common continuations.
+        #
+        # Usually T = 1 is a good default; but a particular LLM may have been tuned to use some other value, e.g. 0.7 or 0.6. See the model card of your LLM.
         "temperature": 1,
         # min_p a.k.a. "you must be this tall". Good default sampler, with 0.02 a good value for many models.
         # This is a tail-cutter. The value is the minimum probability a token must have to admit sampling that token,
