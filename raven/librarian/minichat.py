@@ -629,7 +629,13 @@ def minimal_chat_client(backend_url):
                 print()
 
                 # Add the LLM's message to the chat.
-                ai_message_node_id = datastore.create_node(payload={"message": out.data},
+                #
+                # Note the token count of the message actually saved into the chat log may be different from `out.n_tokens`, e.g. if the AI is interrupted or when thoughts blocks are discarded.
+                # However, to correctly compute the generation speed, we need to use the original count before any editing, since `out.dt` was measured for that.
+                ai_message_node_id = datastore.create_node(payload={"message": out.data,
+                                                                    "generation_metadata": {"model": out.model,
+                                                                                            "n_tokens": out.n_tokens,  # could count final tokens with `llmclient.token_count(settings, out.data["content"])`
+                                                                                            "dt": out.dt}},
                                                            parent_id=state["HEAD"])
                 ai_message_node_payload = datastore.get_payload(ai_message_node_id)
                 if state["docs_enabled"]:
@@ -644,22 +650,28 @@ def minimal_chat_client(backend_url):
                 # Each response goes into its own message, with `role="tool"`.
                 #
                 tool_message_number = ai_message_number + 1
-                tool_response_messages = llmclient.perform_tool_calls(settings, message=out.data)
+                tool_response_records = llmclient.perform_tool_calls(settings, message=out.data)
 
                 # When there are no more tool calls, the LLM is done replying.
                 # Each tool call produces exactly one response, so we may as well check this from the number of responses.
-                if not tool_response_messages:
+                if not tool_response_records:
                     break
 
                 # Add the tool response messages to the chat.
-                for tool_response_message in tool_response_messages:
-                    tool_response_message_node_id = datastore.create_node(payload={"message": tool_response_message},
+                for tool_response_record in tool_response_records:
+                    payload = {"message": tool_response_record.data,
+                               "generation_metadata": {"status": tool_response_record.status}}  # status is "success" or "error"
+                    if "toolcall_id" in tool_response_record:
+                        payload["generation_metadata"]["toolcall_id"] = tool_response_record.toolcall_id
+                    if "dt" in tool_response_record:
+                        payload["generation_metadata"]["dt"] = tool_response_record.dt
+                    tool_response_message_node_id = datastore.create_node(payload=payload,
                                                                           parent_id=state["HEAD"])
                     state["HEAD"] = tool_response_message_node_id
 
                     chat_print_message(message_number=tool_message_number,
                                        role="tool",
-                                       text=tool_response_message["content"])
+                                       text=tool_response_record.data["content"])
                     print()
 
                     tool_message_number += 1

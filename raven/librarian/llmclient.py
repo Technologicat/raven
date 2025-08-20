@@ -31,7 +31,7 @@ import os
 import re
 import requests
 from textwrap import dedent
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import sseclient  # pip install sseclient-py
 
@@ -775,13 +775,41 @@ def invoke(settings: env, history: List[Dict], progress_callback=None) -> env:
 # --------------------------------------------------------------------------------
 # For tool-using LLMs: tool-calling
 
-def perform_tool_calls(settings: env, message: Dict) -> List[Dict]:
+def perform_tool_calls(settings: env, message: Dict) -> List[env]:
     """Perform tool calls as requested in `message["tool_calls"]`.
 
-    Returns a list of messages (each with `role="tool"`) containing the tool outputs,
+    Returns a list of payloads (where each message's `role="tool"`) containing the tool outputs,
     one for each tool call.
 
     If the `tool_calls` field of the message is missing or if it is empty, return the empty list.
+
+    Each returned `env` has the following attributes:
+
+        `data`: dict, The new message containing the tool response (for the format, see `create_chat_message`).
+
+        `status`: str, one of "success" or "error".
+
+            When an error occurs, the text of the output message will describe the error instead,
+            and the full error message is posted to the server's log at warning level.
+
+            Even if a tool call errors out, processing continues with the remaining tool calls, if any.
+
+        `toolcall_id`: str. The ID of the tool call, copied from the input `message`.
+                       Missing if no ID was provided.
+
+        `dt`: float, Wall time elapsed for the call, in seconds.
+              Missing if something went wrong before the tool was called (usually, bad input).
+
+    Usually the input `message` looks something like this::
+
+        message = {'role': 'assistant',
+                   'content': '',
+                   'tool_calls': [{'type': 'function',
+                                   'function': {'name': 'websearch',
+                                                'arguments': '{"query": "Sharon Apple"}'},
+                                   'id': 'call_m357947b',
+                                   'index': '0'}],
+                  }
     """
     if "tool_calls" not in message:
         logger.debug(f"perform_tool_calls: `tool_calls` field missing from message record. Data: {message}")
@@ -795,64 +823,75 @@ def perform_tool_calls(settings: env, message: Dict) -> List[Dict]:
     logger.info(f"perform_tool_calls: The LLM requested {len(tool_calls)} tool call{plural_s}.")
 
     tool_response_messages = []
-    def add_tool_response_message(text):
+    def add_tool_response_message(text: str, *,
+                                  status: str,
+                                  toolcall_id: Optional[str],
+                                  dt: Optional[float]) -> None:
         tool_response_message = create_chat_message(settings=settings,
                                                     role="tool",
                                                     text=text,
                                                     add_role_name=False)
-        tool_response_messages.append(tool_response_message)
+        record = env(data=tool_response_message,
+                     status=status)
+        if toolcall_id is not None:
+            record.toolcall_id = toolcall_id
+        if dt is not None:
+            record.dt = dt
+        tool_response_messages.append(record)
 
     for request_record in tool_calls:
+        toolcall_id = request_record["id"] if "id" in request_record else None
+
         if "type" not in request_record:
             # The response message is intended for the LLM, whereas the log message (with all technical details) goes into the log.
-            add_tool_response_message("Tool call failed. The request is missing the 'type' field.")
-            logger.warning(f"perform_tool_calls: missing 'type' field in request. Data: {request_record}")
+            logger.warning(f"perform_tool_calls: {toolcall_id}: missing 'type' field in request. Data: {request_record}")
+            add_tool_response_message("Tool call failed. The request is missing the 'type' field.", status="error", toolcall_id=toolcall_id)
             continue
         if request_record["type"] != "function":
-            add_tool_response_message(f"Tool call failed. Unknown request type '{request_record['type']}'; expected 'function'.")
-            logger.warning(f"perform_tool_calls: unknown type '{request_record['type']}' in request, expected 'function'. Data: {request_record}")
+            logger.warning(f"perform_tool_calls: {toolcall_id}: unknown type '{request_record['type']}' in request, expected 'function'. Data: {request_record}")
+            add_tool_response_message(f"Tool call failed. Unknown request type '{request_record['type']}'; expected 'function'.", status="error", toolcall_id=toolcall_id)
             continue
         if "function" not in request_record:
-            add_tool_response_message("Tool call failed. The request is missing the 'function' field.")
-            logger.warning(f"perform_tool_calls: missing 'function' field. Data: {request_record}")
+            logger.warning(f"perform_tool_calls: {toolcall_id}: missing 'function' field. Data: {request_record}")
+            add_tool_response_message("Tool call failed. The request is missing the 'function' field.", status="error", toolcall_id=toolcall_id)
             continue
 
         function_record = request_record["function"]
         if "name" not in function_record:
-            add_tool_response_message("Tool call failed. The request's function record is missing the 'name' field.")
-            logger.warning(f"perform_tool_calls: missing 'function.name' field in request. Data: {request_record}")
+            logger.warning(f"perform_tool_calls: {toolcall_id}: missing 'function.name' field in request. Data: {request_record}")
+            add_tool_response_message("Tool call failed. The request's function record is missing the 'name' field.", status="error", toolcall_id=toolcall_id)
             continue
 
         function_name = function_record["name"]
         try:
             function = settings.tool_entrypoints[function_name]
         except KeyError:
-            add_tool_response_message(f"Tool call failed. Function not found: '{function_name}'.")
-            logger.warning(f"perform_tool_calls: unknown function '{function_name}'.")
+            logger.warning(f"perform_tool_calls: {toolcall_id}: unknown function '{function_name}'.")
+            add_tool_response_message(f"Tool call failed. Function not found: '{function_name}'.", status="error", toolcall_id=toolcall_id)
             continue
 
         if "arguments" in function_record:
             try:
                 kwargs = json.loads(function_record["arguments"])
             except Exception as exc:
-                add_tool_response_message(f"Tool call failed. When calling '{function_name}', failed to parse the request's JSON for the function arguments.")
-                logger.warning(f"perform_tool_calls: function '{function_name}': failed to parse JSON for arguments: {type(exc)}: {exc}")
+                logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': failed to parse JSON for arguments: {type(exc)}: {exc}")
+                add_tool_response_message(f"Tool call failed. When calling '{function_name}', failed to parse the request's JSON for the function arguments.", status="error", toolcall_id=toolcall_id)
                 continue
             else:
-                logger.debug(f"perform_tool_calls: calling '{function_name}' with arguments {kwargs}.")
+                logger.debug(f"perform_tool_calls: {toolcall_id}: calling '{function_name}' with arguments {kwargs}.")
         else:
-            logger.debug(f"perform_tool_calls: for function '{function_name}: The request's function record is missing the 'arguments' field. Calling without arguments.")
+            logger.debug(f"perform_tool_calls: {toolcall_id}: for function '{function_name}: The request's function record is missing the 'arguments' field. Calling without arguments.")
             kwargs = {}
 
-        # TODO: get the tool call ID (OpenAI compatible API) and add it to the message
         # TODO: websearch return format: for the chat history, need only the preformatted text, but for the eventual GUI, would be nice to have the links separately. Could use a new metadata field in the chat datastore for this.
         try:
-            tool_output_text = function(**kwargs)
+            with timer() as tim:
+                tool_output_text = function(**kwargs)
         except Exception as exc:
-            add_tool_response_message(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}")
-            logger.warning(f"perform_tool_calls: function '{function_name}': exited with exception {type(exc)}: {exc}")
+            logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': exited with exception {type(exc)}: {exc}")
+            add_tool_response_message(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", toolcall_id=toolcall_id, dt=tim.dt)
         else:  # success!
-            logger.debug(f"perform_tool_calls: Function '{function_name}' returned successfully.")
-            add_tool_response_message(tool_output_text)
+            logger.debug(f"perform_tool_calls: {toolcall_id}: Function '{function_name}' returned successfully.")
+            add_tool_response_message(tool_output_text, status="success", toolcall_id=toolcall_id, dt=tim.dt)
 
     return tool_response_messages
