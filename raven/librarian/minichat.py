@@ -96,7 +96,7 @@ def minimal_chat_client(backend_url):
         system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
         old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
         datastore.add_revision(node_id=system_prompt_node_id,
-                               payload=llmclient.create_initial_system_message(settings))
+                               payload={"message": llmclient.create_initial_system_message(settings)})
         datastore.delete_revision(node_id=system_prompt_node_id,
                                   revision_id=old_system_prompt_revision_id)
 
