@@ -631,11 +631,13 @@ def scrub(settings: env, text: str, thoughts_mode: str, add_ai_role_name: bool) 
     # If we should add the AI persona's name, now do so at the beginning of the text content, for consistency.
     # It will appear before the thought block, if any, because this is the easiest to do. :)
     #
-    # Cases where we DON'T need to do this:
-    #   - Chat app, which usually has a separate UI element for the persona name, aside from the actual chat text content UI element.
-    #   - Piping output to a script, in which case the chat framework is superfluous. In that use case, we really use the LLM
-    #     as an instruct-tuned model, i.e. a natural language processor that is programmed via free-form instructions in English.
-    #     Raven's PDF importer does this a lot.
+    # This is also good for detecting the persona name later. The OpenAI-compatible chat log format expects the persona name
+    # at the start of the first line of each chat message ("User: Blah..." or "AI: Blah..."). Hence we should keep it
+    # *only* there, to avoid duplicating information in the chat datastore. (This works as long as characters have unique names.)
+    #
+    # The main case where we DON'T need to do this is when piping the output to a script, in which case the chat framework
+    # is superfluous. In that use case, we really use the LLM as an instruct-tuned model, i.e. a natural language processor
+    # that is programmed via free-form instructions in English. Raven's PDF importer does this a lot.
     if add_ai_role_name:
         text = f"{settings.char}: {text}"
 
