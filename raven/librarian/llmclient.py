@@ -684,6 +684,7 @@ def invoke(settings: env, history: List[Dict], progress_callback=None) -> env:
                 if any(stop):
                     # The local LLM is OpenAI-compatible, so the same trick works - to tell the server to stop, just close the stream.
                     # https://community.openai.com/t/interrupting-completion-stream-in-python/30628/7
+                    # Alternatively, in oobabooga, we could call the undocumented "/v1/internal/stop-generation" endpoint.
                     client.close()
                     stopped = True
                     break
