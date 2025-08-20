@@ -45,6 +45,9 @@
     - Speak and caption one sentence at a time, chain the end callbacks, with an optional exit flag to terminate the chain (so the user can cancel it in the GUI).
   - RAG: list the chunk full-IDs in retrieval metadata for combined contiguous chunks?
   - minichat: when are retrieval results `null` in the chat datastore (`data.json`)? Did these come from an old bug that does not exist any more? Could fix while migrating, replacing each null with an empty list.
+  - LLM context compaction
+    - Drop and/or summarize old messages when the LLM's context window fills.
+    - Use `raven.llmclient.token_count` to check token count from LLM backend. Should be possible to bisect the linearized history quickly to find the point where it just fits (plus account for max response length; get this from `settings.request_data["max_tokens"]`, where `settings` is the return value of `raven.llmclient.setup`).
 
 - Improve MacOSX support
   - Raven already runs on MacOSX, but some things could be improved.
