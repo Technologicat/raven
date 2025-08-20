@@ -1,7 +1,8 @@
 """Minimal chat client for testing/debugging that Raven can connect to your LLM.
 
 Although a "minimal" client, this does have some fancy features, such as GNU readline input history,
-auto-persisted branching chat history and RAG (retrieval-augmented generation; query your plain-text documents).
+auto-persisted branching chat history, RAG (retrieval-augmented generation; query your plain-text documents),
+and tool-calling support.
 
 This module demonstrates how to build an LLM client using `raven.librarian.llmclient`.
 """
