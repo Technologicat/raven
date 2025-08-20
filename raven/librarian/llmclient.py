@@ -822,11 +822,11 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
     plural_s = "s" if len(tool_calls) != 1 else ""
     logger.info(f"perform_tool_calls: The LLM requested {len(tool_calls)} tool call{plural_s}.")
 
-    tool_response_messages = []
-    def add_tool_response_message(text: str, *,
-                                  status: str,
-                                  toolcall_id: Optional[str],
-                                  dt: Optional[float]) -> None:
+    tool_response_records = []
+    def add_tool_response_record(text: str, *,
+                                 status: str,
+                                 toolcall_id: Optional[str],
+                                 dt: Optional[float]) -> None:
         tool_response_message = create_chat_message(settings=settings,
                                                     role="tool",
                                                     text=text,
@@ -837,7 +837,7 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
             record.toolcall_id = toolcall_id
         if dt is not None:
             record.dt = dt
-        tool_response_messages.append(record)
+        tool_response_records.append(record)
 
     for request_record in tool_calls:
         toolcall_id = request_record["id"] if "id" in request_record else None
@@ -845,21 +845,21 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
         if "type" not in request_record:
             # The response message is intended for the LLM, whereas the log message (with all technical details) goes into the log.
             logger.warning(f"perform_tool_calls: {toolcall_id}: missing 'type' field in request. Data: {request_record}")
-            add_tool_response_message("Tool call failed. The request is missing the 'type' field.", status="error", toolcall_id=toolcall_id)
+            add_tool_response_record("Tool call failed. The request is missing the 'type' field.", status="error", toolcall_id=toolcall_id)
             continue
         if request_record["type"] != "function":
             logger.warning(f"perform_tool_calls: {toolcall_id}: unknown type '{request_record['type']}' in request, expected 'function'. Data: {request_record}")
-            add_tool_response_message(f"Tool call failed. Unknown request type '{request_record['type']}'; expected 'function'.", status="error", toolcall_id=toolcall_id)
+            add_tool_response_record(f"Tool call failed. Unknown request type '{request_record['type']}'; expected 'function'.", status="error", toolcall_id=toolcall_id)
             continue
         if "function" not in request_record:
             logger.warning(f"perform_tool_calls: {toolcall_id}: missing 'function' field. Data: {request_record}")
-            add_tool_response_message("Tool call failed. The request is missing the 'function' field.", status="error", toolcall_id=toolcall_id)
+            add_tool_response_record("Tool call failed. The request is missing the 'function' field.", status="error", toolcall_id=toolcall_id)
             continue
 
         function_record = request_record["function"]
         if "name" not in function_record:
             logger.warning(f"perform_tool_calls: {toolcall_id}: missing 'function.name' field in request. Data: {request_record}")
-            add_tool_response_message("Tool call failed. The request's function record is missing the 'name' field.", status="error", toolcall_id=toolcall_id)
+            add_tool_response_record("Tool call failed. The request's function record is missing the 'name' field.", status="error", toolcall_id=toolcall_id)
             continue
 
         function_name = function_record["name"]
@@ -867,7 +867,7 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
             function = settings.tool_entrypoints[function_name]
         except KeyError:
             logger.warning(f"perform_tool_calls: {toolcall_id}: unknown function '{function_name}'.")
-            add_tool_response_message(f"Tool call failed. Function not found: '{function_name}'.", status="error", toolcall_id=toolcall_id)
+            add_tool_response_record(f"Tool call failed. Function not found: '{function_name}'.", status="error", toolcall_id=toolcall_id)
             continue
 
         if "arguments" in function_record:
@@ -875,7 +875,7 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
                 kwargs = json.loads(function_record["arguments"])
             except Exception as exc:
                 logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': failed to parse JSON for arguments: {type(exc)}: {exc}")
-                add_tool_response_message(f"Tool call failed. When calling '{function_name}', failed to parse the request's JSON for the function arguments.", status="error", toolcall_id=toolcall_id)
+                add_tool_response_record(f"Tool call failed. When calling '{function_name}', failed to parse the request's JSON for the function arguments.", status="error", toolcall_id=toolcall_id)
                 continue
             else:
                 logger.debug(f"perform_tool_calls: {toolcall_id}: calling '{function_name}' with arguments {kwargs}.")
@@ -889,9 +889,9 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
                 tool_output_text = function(**kwargs)
         except Exception as exc:
             logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': exited with exception {type(exc)}: {exc}")
-            add_tool_response_message(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", toolcall_id=toolcall_id, dt=tim.dt)
+            add_tool_response_record(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", toolcall_id=toolcall_id, dt=tim.dt)
         else:  # success!
             logger.debug(f"perform_tool_calls: {toolcall_id}: Function '{function_name}' returned successfully.")
-            add_tool_response_message(tool_output_text, status="success", toolcall_id=toolcall_id, dt=tim.dt)
+            add_tool_response_record(tool_output_text, status="success", toolcall_id=toolcall_id, dt=tim.dt)
 
-    return tool_response_messages
+    return tool_response_records
