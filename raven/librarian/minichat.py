@@ -337,15 +337,15 @@ def minimal_chat_client(backend_url):
                 out = persona
                 if color:
                     out = colorizer.colorize(out, colorizer.Style.BRIGHT)
-                return f"{out}:"
+                return out
 
         def format_message_heading(message_number: Optional[int], role: str, color: bool):
             colorful_number = format_message_number(message_number, color)
             colorful_persona = format_persona(role, color)
             if message_number is not None:
-                return f"{colorful_number} {colorful_persona} "
+                return f"{colorful_number} {colorful_persona}: "
             else:
-                return f"{colorful_persona} "
+                return f"{colorful_persona}: "
 
         def chat_print_message(message_number: Optional[int], role: str, text: str) -> None:
             print(format_message_heading(message_number, role, color=True), end="")
