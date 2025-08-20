@@ -82,7 +82,7 @@ def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 1
 # --------------------------------------------------------------------------------
 # Utilities
 
-def list_models(backend_url):
+def list_models(backend_url: str) -> List[str]:
     """List all models available at `backend_url`."""
     response = requests.get(f"{backend_url}/v1/internal/model/list",
                             headers=headers,
