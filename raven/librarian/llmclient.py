@@ -198,6 +198,10 @@ def setup(backend_url: str) -> env:
         tools_json = "\n".join(json.dumps(tool) for tool in tools)
 
         # This comes from the template built into QwQ-32B.
+        #
+        # Note QwQ-32B and Qwen3 don't actually need this, because they have a template built in;
+        # this is for slightly older models that support tool-calling but lack the built-in template,
+        # such as DeepSeek-R1-Distill-Qwen-7B.
         tools_info = dedent(f"""
         # Tools
 

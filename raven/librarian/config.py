@@ -72,9 +72,9 @@ hybridir_demo_save_dir = global_config.toplevel_userdata_dir / "hybridir_demo"
 # Typically the instructions state that tools are available, and include a dynamically
 # generated list of available functions and their call signatures.
 #
-# Newer models, e.g. QwQ-32B, include a templates for these instructions in their built-in
-# prompt template. In this case, the LLM backend builds the instructions automatically,
-# based on data sent by the LLM client (see `tools` in `llmclient.setup`).
+# Newer models, e.g. QwQ-32B as well as Qwen3, include a template for these instructions
+# in their built-in prompt template. In this case, the LLM backend builds the instructions
+# automatically, based on data sent by the LLM client (see `tools` in `llmclient.setup`).
 #
 # However, there exist LLMs that are capable of tool-calling, but have no instruction template
 # for that. E.g. the DeepSeek-R1-Distill-Qwen-7B model is like this.
