@@ -8,6 +8,7 @@ If you want to see the final prompt in instruct or chat mode, start your server 
 """
 
 __all__ = ["list_models", "setup",
+           "token_count",
            "create_chat_message",
            "linearize_chat",
            "upgrade",
@@ -311,6 +312,19 @@ def setup(backend_url: str) -> env:
 # "n_predict": 800,
 # "num_predict": 800,
 # "num_ctx": 65536,
+
+def token_count(settings: env, text: str) -> int:
+    """Get number of tokens in `text`, according to the model currently loaded at the LLM backend.
+
+    This is useful for checking how long the prompt is (after you have injected all RAG context etc.).
+    """
+    # In oobabooga, undocumented web API endpoints can be found at `text-generation-webui/extensions/openai/script.py`
+    data = {"text": text}
+    response = requests.post(f"{settings.backend_url}/v1/internal/token-count",
+                             headers=headers,
+                             json=data)
+    output_data = response.json()
+    return output_data["length"]
 
 def create_chat_message(settings: env,
                         role: str,
