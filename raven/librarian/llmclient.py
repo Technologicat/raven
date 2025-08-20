@@ -83,7 +83,7 @@ def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 1
 
 def list_models(backend_url):
     """List all models available at `backend_url`."""
-    response = requests.get(f"{librarian_config.llm_backend_url}/v1/internal/model/list",
+    response = requests.get(f"{backend_url}/v1/internal/model/list",
                             headers=headers,
                             verify=False)
     payload = response.json()
