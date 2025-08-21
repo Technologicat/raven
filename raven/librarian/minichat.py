@@ -711,6 +711,8 @@ def main():
 
     print()
     if api.raven_server_available():
+        # Websearch is set up as a tool in `raven.librarian.llmclient`, and the same module handles the communication
+        # with the Raven server when the LLM performs a websearch tool-call. Here we just inform the user.
         print(colorizer.colorize(f"Connected to Raven-server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
         print(colorizer.colorize("The LLM will have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
     else:
