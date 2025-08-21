@@ -930,7 +930,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
                                           path=str(abspath),
                                           text=content)
                 logger.debug(f"HybridIRFileSystemEventHandler.scheduled_update: file '{path}': scheduling commit to save changes to HybridIR.")
-                task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
+                task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each update
             return scheduled_update
 
         elif kind == "delete":
@@ -939,7 +939,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
                 self.retriever.delete(document_id)
 
                 logger.debug(f"HybridIRFileSystemEventHandler.scheduled_delete: file '{path}': scheduling commit to save changes to HybridIR.")
-                task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each add
+                task_managers["commit"].submit(self.commit_task, envcls(wait=True))  # Schedule delayed commit after each delete
             return scheduled_delete
 
         else:
