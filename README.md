@@ -9,9 +9,59 @@
 <i>12 000 studies on a semantic map. Items matching your search terms are highlighted as you type.</i>
 </p>
 
+# The Raven constellation
+
+As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I properly update the documentation, here is a short overview:
+
+- :white_check_mark: *Raven-visualizer*: **Research literature visualization tool**
+  - **Goal**: Take 10k+ studies, find the most relevant ones.
+    - Status: Fully operational. Could still use more features; we plan to add some later.
+  - **Features**: See below, after this section.
+  - This was the original *Raven*.
+
+- :white_check_mark: *Raven-server*: **Web API server for GPU-powered components: avatar, TTS, NLP**
+  - **Goal**: Run all GPU processing in the server process, wherever it is on the local network.
+    - Status: Fully operational. On the client side, `raven-importer` and the RAG subsystem of *Raven-librarian* have no server support yet.
+  - **Features**:
+    - [AI-animated anime avatar](raven/avatar/README.md) for PR stunts and for fun.
+      - Represent your LLM as a custom, talking anime character with support for emotions. (The `classify` module can detect emotions from the generated text).
+      - A test client / tech demo for the avatar is available as `raven-avatar-settings-editor`.
+        - For this to start, `raven-server` must be running.
+        - On the client side, set the server URL to connect to in [`raven/client/config.py`](raven/client/config.py). Default is to run both server and client on localhost.
+      - To edit the emotion templates of the avatar, `raven-avatar-pose-editor`.
+    - Speech synthesizer that the avatar **can lipsync to**.
+    - Various [GPU-accelerated AI components for natural language processing](raven/server/README.md) so that all Raven apps can take advantage of their capabilities.
+  - The server was originally developed as a continuation of the discontinued *SillyTavern-extras*, but has since been extended in various ways.
+    - The `classify`, `embeddings`, `summarize`, and `websearch` modules are compatible with those modules of *SillyTavern-Extras*.
+    - Additionally, the `tts` module provides an OpenAI compatible speech endpoint, which *SillyTavern* can use as its TTS.
+    - The aim is to introduce `avatar` to replace the discontinued `talkinghead`, but at the moment, there are no development resources to write a JS client for the avatar. See [SillyTavern#4034](https://github.com/SillyTavern/SillyTavern/issues/4034) for details.
+  - Python bindings for Raven-server are provided in [`raven/client/api.py`](raven/client/api.py). These double as documentation for how to call the web API endpoints.
+    - The client API abstracts away the fact that you're calling a remote process - you just call regular Python functions.
+  - The server can be configured in [`raven/server/config.py`](raven/server/config.py). Or make your own config file, and point to that using the `--config` command-line option when you start the server. See [`raven/server/config_lowvram.py`](raven/server/config_lowvram.py) for an example.
+
+- :construction: *Raven-librarian*: **Scientific LLM frontend** (under development)
+  - **Goal**: Efficiently interrogate a stack of 2k scientific papers. Talk with a local LLM for synthesis, clarifications, speculation, ...
+    - Status: A command-line prototype `raven-minichat` is available.
+      - We recommend having `raven-server` running; this allows the LLM to search the web.
+      - A GUI application is planned, but not available yet.
+  - **Features**:
+    - Natively nonlinear branching chat history - think [Loom](https://github.com/cosmicoptima/loom) or [SillyTavern-Timelines](https://github.com/SillyTavern/SillyTavern-Timelines).
+      - Chat messages are stored as nodes in a tree. A chat branch is just its HEAD pointer; the chat app follows the `parent` links to reconstruct the linear history for that branch.
+      - The command-line prototype can create chat branches and switch between them, but not delete them. Complete control for chat branches will be in the GUI app.
+    - RAG (retrieval-augmented generation) with hybrid (semantic + keyword) search.
+      - Semantic backend: [ChromaDB](https://www.trychroma.com/) (with telemetry off, for maximum privacy).
+      - Keyword backend: [bm25s](https://huggingface.co/blog/xhluca/bm25s), which implements the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking algorithm.
+      - Results are combined with [reciprocal rank fusion](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search).
+    - Tool-calling (a.k.a. tool use)
+      - Currently, a websearch tool is provided.
+  - Uses [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) as the LLM backend through its OpenAI-compatible API.
+    - We currently test our scaffolding with the Qwen series of LLMs. Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
+
 # Introduction
 
-**Raven** is an easy-to-use research literature visualization tool, powered by AI and [NLP](https://en.wikipedia.org/wiki/Natural_language_processing). It is intended to help a scholar or subject matter expert to stay up to date as well as to learn new topics, by helping to narrow down which texts from a large dataset form the most important background for a given topic or problem.
+**NOTE**: *As of 08/2025, the rest of this README talks about Raven-visualizer only.*
+
+**Raven-visualizer** is an easy-to-use research literature visualization tool, powered by AI and [NLP](https://en.wikipedia.org/wiki/Natural_language_processing). It is intended to help a scholar or subject matter expert to stay up to date as well as to learn new topics, by helping to narrow down which texts from a large dataset form the most important background for a given topic or problem.
 
 - **Graphical user interface** (GUI). Easy to use.
 - **Fully local**. Your data never leaves your workstation/laptop.
@@ -41,6 +91,7 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 
+- [The Raven constellation](#the-raven-constellation)
 - [Introduction](#introduction)
 - [Import](#import)
     - [BibTeX](#bibtex)
@@ -607,7 +658,9 @@ Note that installing Raven will auto-install dependencies into the same venv (vi
 
 # Other similar tools
 
-To our knowledge, [LitStudy](https://nlesc.github.io/litstudy/) is the closest existing tool, but it is a Jupyter notebook, not a desktop app, and its analysis methods seem slightly different to what we use. Also, having existed since 2022, it does have many more importers than we do at the moment.
+[LitStudy](https://nlesc.github.io/litstudy/) is a Jupyter notebook with similar goals. Its analysis methods seem slightly different to what we use. Also, having existed since 2022, it has many more importers than we do at the moment.
+
+[BERTopic](https://maartengr.github.io/BERTopic/index.html) is a library for *topic modeling*, to automatically extract topics from a large dataset of texts. BERTopic uses many of the same ideas and methods that *Raven-visualizer* uses to generate its semantic map (embed semantically, cluster with HDBSCAN, reduce the dimension), although our approach to keyword extraction for the clusters is different. Raven was developed independently, before I became aware of BERTopic; while the library has existed since 2022, for some reason it didn't come up in my initial searches at the beginning of the Raven project. As of H2/2025, BERTopic has become very popular, and has been mentioned several times in various technically flavored AI news outlets. It seems that as of 2025, this kind of textual overview analysis is in the zeitgeist.
 
 
 # License
