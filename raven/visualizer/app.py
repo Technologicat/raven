@@ -85,7 +85,7 @@ with timer() as tim:
                                                    logging.Filter("raven.librarian.llmclient"),
                                                    logging.Filter("raven.visualizer.importer"),
                                                    logging.Filter("raven.vendor.file_dialog.fdialog")))
-logger.info(f"    Done in {tim.dt:0.6g}s.")
+logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
 # Utilities for working with the plotter
