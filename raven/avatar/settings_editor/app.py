@@ -19,49 +19,57 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import atexit
-import concurrent.futures
-import copy
-import io
-import json
-import os
-import pathlib
-import platform
-import requests
-import sys
-import threading
-import time
-import traceback
-from typing import Optional, Tuple, Union
+from ... import __version__
 
-import qoi
-import PIL.Image
+logger.info(f"Raven-avatar-settings-editor version {__version__} starting.")
 
-from colorama import Fore, Style, init as colorama_init
-from unpythonic.env import env as envcls
+logger.info("Loading libraries...")
+from unpythonic import timer
+with timer() as tim:
+    import atexit
+    import concurrent.futures
+    import copy
+    import io
+    import json
+    import os
+    import pathlib
+    import platform
+    import requests
+    import sys
+    import threading
+    import time
+    import traceback
+    from typing import Optional, Tuple, Union
 
-import numpy as np
+    import qoi
+    import PIL.Image
 
-colorama_init()
+    from colorama import Fore, Style, init as colorama_init
+    from unpythonic.env import env as envcls
 
-# WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
-# https://github.com/hoffstadt/DearPyGui/issues/554
-if platform.system().upper() == "LINUX":
-    os.environ["__GLVND_DISALLOW_PATCHING"] = "1"
+    import numpy as np
 
-import dearpygui.dearpygui as dpg
+    colorama_init()
 
-from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
+    # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
+    # https://github.com/hoffstadt/DearPyGui/issues/554
+    if platform.system().upper() == "LINUX":
+        os.environ["__GLVND_DISALLOW_PATCHING"] = "1"
 
-from ...common import bgtask
-from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from ...common.gui import messagebox
-from ...common.gui import utils as guiutils
-from ...common.running_average import RunningAverage
+    import dearpygui.dearpygui as dpg
 
-from ...client import api  # convenient Python functions that abstract away the web API
-from ...client import config as client_config
-from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
+    from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
+
+    from ...common import bgtask
+    from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+    from ...common.gui import messagebox
+    from ...common.gui import utils as guiutils
+    from ...common.running_average import RunningAverage
+
+    from ...client import api  # convenient Python functions that abstract away the web API
+    from ...client import config as client_config
+    from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
+logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # ----------------------------------------
 # Module bootup

@@ -41,45 +41,50 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-import argparse
-import functools
-import json
-import logging
-import os
-import pathlib
-import sys
-import threading
-import time
-import traceback
-from typing import Dict, List, Tuple, Optional, Union
+from ... import __version__
 
-import PIL.Image
+logger.info(f"Raven-avatar-pose-editor version {__version__} starting.")
 
-import numpy as np
+logger.info("Loading libraries...")
+from unpythonic import timer
+with timer() as tim:
+    import argparse
+    import functools
+    import json
+    import logging
+    import os
+    import pathlib
+    import sys
+    import threading
+    import time
+    import traceback
+    from typing import Dict, List, Tuple, Optional, Union
 
-import torch
+    import PIL.Image
 
-import dearpygui.dearpygui as dpg
+    import numpy as np
 
-from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
+    import torch
 
-from ...vendor.tha3.poser.modes.load_poser import load_poser
-from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
-from ...vendor.tha3.util import torch_linear_to_srgb
+    import dearpygui.dearpygui as dpg
 
-from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
-from ...common.gui import fontsetup
-from ...common.gui import messagebox
-from ...common.gui import utils as guiutils
-from ...common.hfutil import maybe_install_models
-from ...common.running_average import RunningAverage
-from ...common.video import compositor
+    from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
-from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
-from ...server.modules import avatarutil
+    from ...vendor.tha3.poser.modes.load_poser import load_poser
+    from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
+    from ...vendor.tha3.util import torch_linear_to_srgb
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+    from ...common.gui import fontsetup
+    from ...common.gui import messagebox
+    from ...common.gui import utils as guiutils
+    from ...common.hfutil import maybe_install_models
+    from ...common.running_average import RunningAverage
+    from ...common.video import compositor
+
+    from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
+    from ...server.modules import avatarutil
+logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # The vendored code from THA3 expects to find the `tha3` module at the top level of the module hierarchy
 talkinghead_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "vendor")).expanduser().resolve()  # THA3 install location containing the "tha3" folder
