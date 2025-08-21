@@ -10,43 +10,55 @@ The `tts` module is new, based on Kokoro-82M. All old TTS options are gone. This
 
 # TODO: convert prints to use logger where appropriate
 
-import argparse
-import gc
-import importlib
-import io
-import json
-import os
-import pathlib
-import secrets
-import time
-import traceback
-from typing import Any, Dict, List, Union
-
-from colorama import Fore, Style, init as colorama_init
-import markdown
-
-from flask import Flask, jsonify, request, abort, render_template_string, Response
-from flask_cors import CORS
-from flask_compress import Compress
-from waitress import serve
-
-import torch
+import logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 from .. import __version__
 
-from ..common import deviceinfo
-from ..common.video.postprocessor import Postprocessor  # available image filters
+logger.info(f"Raven-server {__version__} starting.")
 
-from .modules import avatar
-from .modules import classify
-from .modules import embeddings
-from .modules import imagefx
-from .modules import natlang
-from .modules import sanitize
-from .modules import summarize
-from .modules import translate
-from .modules import tts
-from .modules import websearch
+logger.info("Loading libraries...")
+from unpythonic import timer
+with timer() as tim:
+    import argparse
+    import gc
+    import importlib
+    import io
+    import json
+    import os
+    import pathlib
+    import secrets
+    import time
+    import traceback
+    from typing import Any, Dict, List, Union
+
+    from colorama import Fore, Style, init as colorama_init
+    import markdown
+
+    from flask import Flask, jsonify, request, abort, render_template_string, Response
+    from flask_cors import CORS
+    from flask_compress import Compress
+    from waitress import serve
+
+    import torch
+
+    from .. import __version__
+
+    from ..common import deviceinfo
+    from ..common.video.postprocessor import Postprocessor  # available image filters
+
+    from .modules import avatar
+    from .modules import classify
+    from .modules import embeddings
+    from .modules import imagefx
+    from .modules import natlang
+    from .modules import sanitize
+    from .modules import summarize
+    from .modules import translate
+    from .modules import tts
+    from .modules import websearch
+logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further
