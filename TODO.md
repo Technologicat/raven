@@ -47,6 +47,17 @@
   - LLM context compaction
     - Drop and/or summarize old messages when the LLM's context window fills.
     - Use `raven.llmclient.token_count` to check token count from LLM backend. Should be possible to bisect the linearized history quickly to find the point where it just fits (plus account for max response length; get this from `settings.request_data["max_tokens"]`, where `settings` is the return value of `raven.llmclient.setup`).
+  - RAG: PDF support
+    - Use `pdftotext` (from `poppler-utils`) to extract the text, run it through `sanitize`, then add the result to the RAG index
+      - May need to improve paragraph break detection in `sanitize`
+    - Store a copy of the original document, and keep a link to it
+      - In the current design, we can use the `callback` in `HybridIRFileSystemEventHandler` to extract the text; the PDFs can live in the "docs" directory
+      - The HybridIR engine chunks the text and indexes those, and throws the original full text away (since not needed for search).
+        If we want a copy of the extracted text (for debugging etc.), maybe make an "text" directory (`docs/file.pdf` -> `text/file.txt`), and save the text there in the callback
+      - Rename `callback` to `add_or_update_callback`; add a `delete_callback` so we can delete the extracted texts as necessary
+    - Upon retrieval, return also the link to the original document (useful for GUI: launch original in viewer, with viewer command configured in librarian settings)
+    - This readily generalizes to other input formats
+      - Images, too, if we use CLIP or something to generate a natural-language caption
 
 - Improve MacOSX support
   - Raven already runs on MacOSX, but some things could be improved.
