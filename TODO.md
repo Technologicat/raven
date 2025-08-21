@@ -32,7 +32,6 @@
   - Have an option to use local AI models in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
 
 - Server
-  - Audio device configuration for TTS
   - Zip the avatar characters, for ease of use (include all extra cels in the zip)?
 
 - Visualizer

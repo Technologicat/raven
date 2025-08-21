@@ -53,7 +53,8 @@ api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
                tts_server_type=client_config.tts_server_type,
                tts_url=client_config.tts_url,
-               tts_api_key_file=client_config.tts_api_key_file)  # let it create a default executor
+               tts_api_key_file=client_config.tts_api_key_file,
+               tts_playback_audio_device=client_config.tts_playback_audio_device)  # let it create a default executor
 
 # ----------------------------------------
 # LLM communication setup

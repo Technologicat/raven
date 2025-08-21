@@ -37,3 +37,14 @@ tts_api_key_file = raven_api_key_file
 # tts_server_type = None
 # tts_url = None
 # tts_api_key_file = None
+
+# Which audio device to use for TTS speech.
+#
+# This is the device name as a string.
+# For available devices on your system, run `raven-check-audio-devices`.
+#
+# The special value `None` uses the system's default device.
+#
+tts_playback_audio_device = None
+# tts_playback_audio_device = "Built-in Audio Analog Stereo"
+# tts_playback_audio_device = "M Audio Duo Analog Stereo"

@@ -37,6 +37,7 @@ def initialize_api(raven_server_url: str,
                    tts_server_type: Optional[str],
                    tts_url: Optional[str],
                    tts_api_key_file: Optional[Union[pathlib.Path, str]],
+                   tts_playback_audio_device: Optional[str],
                    executor: Optional = None):
     """Set up URLs and API keys, and initialize the audio mixer.
 
@@ -86,10 +87,13 @@ def initialize_api(raven_server_url: str,
 
         # Initialize audio mixer for playing back TTS audio
         # https://www.pygame.org/docs/ref/mixer.html
+        if tts_playback_audio_device is not None:
+            logger.info(f"Initializing TTS audio playback on non-default audio device '{tts_playback_audio_device}' (this can be set in `raven.client.config`).")
         pygame.mixer.init(frequency=api_config.audio_frequency,
                           size=-16,  # minus: signed values will be used
                           channels=2,
-                          buffer=api_config.audio_buffer_size)  # There seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it to know it.
+                          buffer=api_config.audio_buffer_size,  # There seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it to know it.
+                          devicename=tts_playback_audio_device)  # `None` is the default, and means to use the system's default playback device.
 
     api_initialized = True
 
