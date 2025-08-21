@@ -1,3 +1,8 @@
+<p align="center">
+<img src="../../img/avatar-notice-lines.png" alt="Animefx example" width="800"/> <br/>
+<i>The upgraded avatar engine provides also <b>animefx</b> effects, such as these notice lines, which appear briefly when she becomes surprised.</i>
+</p>
+
 # Raven-avatar
 
 The *Raven-avatar* component renders a live avatar for the AI, using AI animation technology.
@@ -13,12 +18,21 @@ The server-side implementation uses PyTorch, including the fragment shaders in t
 
 ## GUI apps
 
-As of May 2025, the GUI for `raven-llmclient` is under construction. It will support the live mode of `raven-avatar` right from the beginning. Automatic expression changes for the AI character will be powered by **classification** (provided by Raven-server), which determines the AI character's emotional state from a piece of text (or thought) most recently written by the AI.
+As of August 2025, the GUI for `raven-llmclient` is under construction. It will support the live mode of `raven-avatar` right from the beginning. Automatic expression changes for the AI character will be powered by **classification** (provided by Raven-server), which determines the AI character's emotional state from a piece of text (or thought) most recently written by the AI.
 
 But until we get there, we provide a postprocessor settings editor GUI app, `raven-avatar-settings-editor`, that you can use to test your characters. This also doubles as a tech demo of the avatar. Make sure that `raven-server` is running first before you start `raven-avatar-settings-editor`.
 
 We also provide a separate pose editor GUI app, `raven-avatar-pose-editor`, which is standalone. With this, you can edit the emotion templates.
 
+<p align="center">
+<img src="../../img/avatar-settings-editor.png" alt="Screenshot of Raven-avatar-settings-editor" width="800"/> <br/>
+<i>With Raven-avatar-settings-editor, you can configure the postprocessor in the GUI, as well as test new avatar characters.</i>
+</p>
+
+<p align="center">
+<img src="../../img/avatar-pose-editor.png" alt="Screenshot of Raven-avatar-pose-editor" width="800"/> <br/>
+<i>The emotion templates can be edited with Raven-avatar-pose-editor.</i>
+</p>
 
 ## Why anime?
 
