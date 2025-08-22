@@ -123,7 +123,7 @@ path = "raven/__init__.py"
 
 [tool.pdm.build]
 includes = ["raven"]
-excludes = ["**/test", "**/__pycache__"]
+excludes = ["**/tests", "**/__pycache__"]
 
 [[tool.pdm.source]]
 name = "nvidia"
