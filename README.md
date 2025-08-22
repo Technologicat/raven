@@ -4,10 +4,45 @@
 
 -----
 
-<p align="center">
-<img src="img/screenshot-main.png" alt="Screenshot of Raven's main window" width="800"/> <br/>
-<i>12 000 studies on a semantic map. Items matching your search terms are highlighted as you type.</i>
-</p>
+<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
+**Table of Contents**
+
+- [The Raven constellation](#the-raven-constellation)
+- [Raven-visualizer](#raven-visualizer)
+    - [Import](#import)
+        - [In the GUI](#in-the-gui)
+            - [Save imported dataset as](#save-imported-dataset-as)
+            - [Select input BibTeX files](#select-input-bibtex-files)
+            - [Start the import](#start-the-import)
+        - [From the command line](#from-the-command-line)
+        - [Good to know](#good-to-know)
+        - [Importing from other formats](#importing-from-other-formats)
+            - [arXiv](#arxiv)
+            - [WOS (Web of Science)](#wos-web-of-science)
+            - [PDF (human-readable abstracts)](#pdf-human-readable-abstracts)
+    - [Visualize](#visualize)
+        - [Load a dataset file in the GUI](#load-a-dataset-file-in-the-gui)
+        - [Load a dataset file from the command line, when starting the app](#load-a-dataset-file-from-the-command-line-when-starting-the-app)
+        - [Create a word cloud](#create-a-word-cloud)
+            - [Save the word cloud as PNG](#save-the-word-cloud-as-png)
+    - [Limitations](#limitations)
+    - [Other similar tools](#other-similar-tools)
+- [Install & run](#install--run)
+    - [From PyPI](#from-pypi)
+    - [From source](#from-source)
+        - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
+        - [Install Raven via PDM](#install-raven-via-pdm)
+            - [Install on an Intel Mac with MacOSX 10.x](#install-on-an-intel-mac-with-macosx-10x)
+        - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
+        - [Activate the Raven venv (to run Raven commands such as `raven-visualizer`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer)
+        - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
+        - [Exit from the Raven venv (optional)](#exit-from-the-raven-venv-optional)
+- [Uninstall](#uninstall)
+- [Technologies](#technologies)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
+
+<!-- markdown-toc end -->
 
 # The Raven constellation
 
@@ -16,7 +51,7 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I p
 - :white_check_mark: *Raven-visualizer*: **Research literature visualization tool**
   - **Goal**: Take 10k+ studies, find the most relevant ones.
     - Status: Fully operational. Could still use more features; we plan to add some later.
-  - **Features**: See below, after this section.
+  - **Features**: See [Raven-visualizer](#raven-visualizer) section below.
   - This was the original *Raven*.
 
 - :white_check_mark: *Raven-server*: **Web API server for GPU-powered components: avatar, TTS, NLP**
@@ -57,9 +92,14 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I p
   - Uses [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) as the LLM backend through its OpenAI-compatible API.
     - We currently test our scaffolding with the Qwen series of LLMs. Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
 
-# Introduction
+-----
 
-**NOTE**: *As of 08/2025, the rest of this README talks about Raven-visualizer only.*
+<p align="center">
+<img src="img/screenshot-main.png" alt="Screenshot of Raven's main window" width="800"/> <br/>
+<i>12 000 studies on a semantic map. Items matching your search terms are highlighted as you type.</i>
+</p>
+
+# Raven-visualizer
 
 **Raven-visualizer** is an easy-to-use research literature visualization tool, powered by AI and [NLP](https://en.wikipedia.org/wiki/Natural_language_processing). It is intended to help a scholar or subject matter expert to stay up to date as well as to learn new topics, by helping to narrow down which texts from a large dataset form the most important background for a given topic or problem.
 
@@ -88,50 +128,7 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
 <i>The help card. Most functions are accessible from the keyboard.</i>
 </p>
 
-<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
-**Table of Contents**
-
-- [The Raven constellation](#the-raven-constellation)
-- [Introduction](#introduction)
-- [Import](#import)
-    - [BibTeX](#bibtex)
-        - [In the GUI](#in-the-gui)
-            - [Save imported dataset as](#save-imported-dataset-as)
-            - [Select input BibTeX files](#select-input-bibtex-files)
-            - [Start the import](#start-the-import)
-        - [From the command line](#from-the-command-line)
-        - [Good to know](#good-to-know)
-    - [Other formats](#other-formats)
-        - [arXiv](#arxiv)
-        - [WOS (Web of Science)](#wos-web-of-science)
-        - [PDF (human-readable abstracts)](#pdf-human-readable-abstracts)
-            - [How it works](#how-it-works)
-            - [LLM requirements](#llm-requirements)
-- [Visualize](#visualize)
-    - [Load a dataset file in the GUI](#load-a-dataset-file-in-the-gui)
-    - [Load a dataset file from the command line, when starting the app](#load-a-dataset-file-from-the-command-line-when-starting-the-app)
-    - [Create a word cloud](#create-a-word-cloud)
-        - [Save the word cloud as PNG](#save-the-word-cloud-as-png)
-- [Install & run](#install--run)
-    - [From PyPI](#from-pypi)
-    - [From source](#from-source)
-        - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
-        - [Install Raven via PDM](#install-raven-via-pdm)
-            - [Install on an Intel Mac with MacOSX 10.x](#install-on-an-intel-mac-with-macosx-10x)
-        - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
-        - [Activate the Raven venv (to run Raven commands such as `raven-visualizer`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer)
-        - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
-        - [Exit from the Raven venv (optional)](#exit-from-the-raven-venv-optional)
-- [Uninstall](#uninstall)
-- [Limitations](#limitations)
-- [Technologies](#technologies)
-- [Other similar tools](#other-similar-tools)
-- [License](#license)
-- [Acknowledgements](#acknowledgements)
-
-<!-- markdown-toc end -->
-
-# Import
+## Import
 
 Raven uses the following workflow:
 
@@ -153,12 +150,7 @@ The data is clustered automatically, and each cluster of data has its keywords a
 
 The preprocessing step produces a **dataset file**, which can then be opened and explored in the GUI.
 
-
-## BibTeX
-
-BibTeX is considered the native input format of Raven.
-
-You can import BibTeX files in Raven's GUI, as well as from the command line.
+You can preprocess BibTeX files into dataset files in Raven's GUI, as well as from the command line. How to do this is described in more detail below.
 
 ### In the GUI
 
@@ -265,14 +257,16 @@ Currently, the dimension reduction that produces the 2D semantic map is trained 
 Currently, it is not possible to add new data into an existing Raven-visualizer dataset (to overlay new data on an existing, already trained dimension reduction). This is currently a major usability drawback, particularly for the use case of following ongoing research trends, so this will likely change in the future.
 
 
-## Other formats
+### Importing from other formats
 
 First import your data into BibTeX format, then preprocess the BibTeX data into a dataset as explained above.
+
+Available importers are described in more detail below.
 
 We plan to add more importers in the future.
 
 
-### arXiv
+#### arXiv
 
 Useful especially for AI/CS topics.
 
@@ -310,7 +304,7 @@ python -m pip install git+https://github.com/nathangrigg/arxiv2bib.git@master
 ```
 
 
-### WOS (Web of Science)
+#### WOS (Web of Science)
 
 Useful for the engineering sciences.
 
@@ -326,7 +320,7 @@ where the input `.txt` files are WOS files exported from Web of Science.
 In the example, the output is written to `output.bib`, and any log messages (such as warnings for broken input data) are written to `log.txt`.
 
 
-### PDF (human-readable abstracts)
+#### PDF (human-readable abstracts)
 
 Abstract submissions to scientific conferences sometimes arrive as free-form, human-readable PDF files.
 
@@ -367,7 +361,7 @@ raven-pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>>output.bi
 
 That is, just use the append mode (`>>` instead of `>`) for redirecting the output into files.
 
-#### How it works
+**How the PDF importer works**
 
 The PDF importer analyzes the human-readable text content of the PDF via an LLM. If the text contains a section title *"References"*, anything after that point is discarded before processing. This is done to prevent cross-contamination, which would otherwise be an issue especially when extracting the title and the author list.
 
@@ -379,7 +373,7 @@ Note that people do actually sometimes submit PDF abstracts with no author list,
 
 As is well known, LLMs may make things up, may respond incorrectly, or may occasionally fail to follow instructions correctly. Hence this functionality is in beta.
 
-#### LLM requirements
+**LLM requirements for PDF import**
 
 The `raven-pdf2bib` tool requires a locally hosted LLM (on the same network as Raven, or even on the same machine), with an OpenAI compatible API. Some LLM backends suitable for this are e.g. [AnythingLLM](https://anythingllm.com/) or [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui). The main advantages of a local LLM are full privacy, since the data never leaves the local network, and full customizability (including the system prompt).
 
@@ -390,7 +384,7 @@ As of February 2025, support for thinking LLMs has been added. This is done by a
 Supporting cloud LLMs is not a high priority, but PRs are welcome. The main issues here are that LLM API keys are not currently supported, and that the importer expects the LLM to accept a custom system prompt. Cloud LLMs could probably run without the customized system prompt, as this is a fairly standard instruction-following task.
 
 
-# Visualize
+## Visualize
 
 First, if the `raven-visualizer` app is not yet running, start it:
 
@@ -401,7 +395,7 @@ raven-visualizer
 
 **:exclamation: For details on how to use the app (including a list of hotkeys), see the built-in Help card. To show the help, click the "?" button in the toolbar, or press F1. :exclamation:**
 
-## Load a dataset file in the GUI
+### Load a dataset file in the GUI
 
 To load your dataset file, click on the *Open dataset* button in the toolbar, or press Ctrl+O, thus bringing up this dialog:
 
@@ -418,7 +412,7 @@ If you use the search feature (Ctrl+F) to open a file by typing a part of its na
 
 **:exclamation: With the exception of the search functionality, the file picker currently requires using the mouse. This is a known issue. :exclamation:**
 
-## Load a dataset file from the command line, when starting the app
+### Load a dataset file from the command line, when starting the app
 
 Like many GUI apps, Raven also accepts a dataset file from the command line, when the app starts:
 
@@ -427,7 +421,7 @@ raven-visualizer mydata.pickle
 ```
 
 
-## Create a word cloud
+### Create a word cloud
 
 Raven can make a word cloud from the auto-detected per-entry keywords of the individual studies in the current selection. The size of each word in the picture represents its relative number of occurrences within the selection:
 
@@ -446,13 +440,33 @@ The rendering algorithm allocates regions and colors randomly, so even re-render
 
 The word cloud renderer is Python-based, so it can be rather slow for large selections containing very many data points. The render runs in the background, so you can continue working (as long as you don't change the selection) while the word cloud is being rendered.
 
-### Save the word cloud as PNG
+#### Save the word cloud as PNG
 
 Click the "hard disk" button, or press Ctrl+S while the *word cloud window* is open. A *save-as dialog* opens, offering to save the word cloud image as PNG.
 
 This dialog works similarly to the dataset save-as dialog in the *BibTeX import window*.
 
 The file extension (`.png`) is added automatically to the filename you specify.
+
+
+## Limitations
+
+- Scalability? Beta version tested up to 12k entries, but datasets can be 100k entries in size.
+- Hardware requirements, especially GPU. Tested on a laptop with an NVIDIA RTX 3070 Ti mobile, 8 GB VRAM.
+- Clustering in high-dimensional spaces is an open problem in data science. Semantic vectors have upwards of 1k dimensions. This causes many entries to be placed into a catch-all "*Misc*" cluster.
+- Hyperparameters of the clustering algorithm in the preprocessor may be dataset-dependent, but are not yet configurable. This will change in the future.
+- Dataset files are currently **not** portable across different Python versions.
+- We attempt to provide keyboard access to GUI features whenever reasonably possible, but there are currently some features where this is not reasonably possible; notably the plotter, and navigation within the *Open dataset* dialog window.
+- Configuration is currently hardcoded. See [`raven/visualizer/config.py`](raven/visualizer/config.py). We believe that `.py` files are as good a plaintext configuration format as any, but in the long term, we aim to have a GUI to configure at least the most important parts.
+
+
+## Other similar tools
+
+[LitStudy](https://nlesc.github.io/litstudy/) is a Jupyter notebook with similar goals. Its analysis methods seem slightly different to what we use. Also, having existed since 2022, it has many more importers than we do at the moment.
+
+[BERTopic](https://maartengr.github.io/BERTopic/index.html) is a library for *topic modeling*, to automatically extract topics from a large dataset of texts. BERTopic uses many of the same ideas and methods that *Raven-visualizer* uses to generate its semantic map (embed semantically, cluster with HDBSCAN, reduce the dimension), although our approach to keyword extraction for the clusters is different. Raven was developed independently, before I became aware of BERTopic. While the library has existed since 2022, for some reason it didn't come up in my initial searches at the beginning of the Raven project. As of H2/2025, BERTopic has become very popular, and has been mentioned several times in various technically flavored AI news outlets. It seems that as of 2025, this kind of overview analysis of large text datasets is in the zeitgeist.
+
+-----
 
 
 # Install & run
@@ -510,6 +524,8 @@ pdm install
 
 **Install with GPU compute support**:
 
+:exclamation: **Help wanted!** Raven does not directly depend on CUDA, but only on PyTorch and on various AI libraries in the Python ecosystem. If you have an AMD system and would be willing to collaborate to get Raven working on it, [please chime in](https://github.com/Technologicat/raven/issues/1)! :exclamation:
+
 This requires an NVIDIA GPU, the proprietary NVIDIA drivers, and CUDA. The GPU will be used for accelerating BibTeX imports.
 
 ```bash
@@ -563,7 +579,7 @@ This command will print some system info into the terminal, saying whether it fo
 
 ### Activate the Raven venv (to run Raven commands such as `raven-visualizer`)
 
-**:exclamation: This is the (early) state of things as of April 2025. We aim to provide easier startup scripts in the future. :exclamation:**
+**:exclamation: This is the (early) state of things as of August 2025. We aim to provide easier startup scripts in the future. :exclamation:**
 
 In a terminal that sees your Python environment, navigate to the Raven folder.
 
@@ -619,17 +635,6 @@ python -m pip uninstall raven-visualizer
 Or just delete the venv, located in the `.venv` subfolder of the Raven folder.
 
 
-# Limitations
-
-- Scalability? Beta version tested up to 12k entries, but datasets can be 100k entries in size.
-- Hardware requirements, especially GPU. Tested on a laptop with an NVIDIA RTX 3070 Ti mobile, 8 GB VRAM.
-- Clustering in high-dimensional spaces is an open problem in data science. Semantic vectors have upwards of 1k dimensions. This causes many entries to be placed into a catch-all "*Misc*" cluster.
-- Hyperparameters of the clustering algorithm in the preprocessor may be dataset-dependent, but are not yet configurable. This will change in the future.
-- Dataset files are currently **not** portable across different Python versions.
-- We attempt to provide keyboard access to GUI features whenever reasonably possible, but there are currently some features where this is not reasonably possible; notably the plotter, and navigation within the *Open dataset* dialog window.
-- Configuration is currently hardcoded. See `config.py`. We believe that `.py` files are as good a plaintext configuration format as any, but in the long term, we aim to have a GUI to configure at least the most important parts.
-
-
 # Technologies
 
 Raven builds upon several AI, NLP, statistical, numerical and software engineering technologies:
@@ -637,13 +642,21 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
 - Semantic embedding
   - AI model: [snowflake-arctic](https://huggingface.co/Snowflake/snowflake-arctic-embed-l).
   - Engine for running embedding models: [sentence_transformers](https://sbert.net/).
-- Keyword extraction: [spaCy](https://spacy.io/).
+- Low-level NLP analysis for keyword extraction: [spaCy](https://spacy.io/).
 - High-dimensional clustering: [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/index.html).
 - Dimension reduction: [OpenTSNE](https://opentsne.readthedocs.io/en/stable/).
 - AI-powered PDF import
-  - AI model: a large language model (LLM), such as [Llama 3.1 8B](https://huggingface.co/meta-llama/Llama-3.1-8B), [Sky-T1 32B](https://huggingface.co/NovaSky-AI/Sky-T1-32B-Preview), or [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B).
-  - Engine for running LLMs: an LLM server such as [Oobabooga](https://github.com/oobabooga/text-generation-webui).
-  - Communication with the LLM server: [sseclient-py](https://github.com/mpetazzoni/sseclient).
+  - A large language model (LLM), such as:
+    - For machines with at least 24 GB VRAM:
+      - [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507) (**recommended** as of 08/2025)
+      - [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B)
+      - [Sky-T1 32B](https://huggingface.co/NovaSky-AI/Sky-T1-32B-Preview)
+    - For machines with 8 GB VRAM (e.g. a laptop with an internal NVIDIA GPU):
+      - [Qwen3-4B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507) (**recommended** as of 08/2025; punches well above its size class)
+      - [Deepseek-R1-Distill-Qwen-7B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B)
+      - [Llama 3.1 8B](https://huggingface.co/meta-llama/Llama-3.1-8B)
+  - LLM inference server; we recommend [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) (start it with the `--api` option to let Raven see it).
+  - Communication with the LLM inference server: [sseclient-py](https://github.com/mpetazzoni/sseclient).
 - File format support
   - BibTeX: [BibtexParser](https://bibtexparser.readthedocs.io/en/main/).
   - Web of Science: [wosfile](https://github.com/rafguns/wosfile).
@@ -654,13 +667,6 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
   - Word cloud renderer: [word_cloud](https://github.com/amueller/word_cloud).
 
 Note that installing Raven will auto-install dependencies into the same venv (virtual environment). This list is here just to provide a flavor of the kinds of parts needed to build a tool like this.
-
-
-# Other similar tools
-
-[LitStudy](https://nlesc.github.io/litstudy/) is a Jupyter notebook with similar goals. Its analysis methods seem slightly different to what we use. Also, having existed since 2022, it has many more importers than we do at the moment.
-
-[BERTopic](https://maartengr.github.io/BERTopic/index.html) is a library for *topic modeling*, to automatically extract topics from a large dataset of texts. BERTopic uses many of the same ideas and methods that *Raven-visualizer* uses to generate its semantic map (embed semantically, cluster with HDBSCAN, reduce the dimension), although our approach to keyword extraction for the clusters is different. Raven was developed independently, before I became aware of BERTopic; while the library has existed since 2022, for some reason it didn't come up in my initial searches at the beginning of the Raven project. As of H2/2025, BERTopic has become very popular, and has been mentioned several times in various technically flavored AI news outlets. It seems that as of 2025, this kind of textual overview analysis is in the zeitgeist.
 
 
 # License
