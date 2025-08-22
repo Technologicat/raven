@@ -1,3 +1,9 @@
+<p align="center">
+<img src="../../img/logo.png" alt="Logo of Raven" height="200"/> <br/>
+</p>
+
+-----
+
 ## Raven-avatar (fork of Talkinghead)
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
