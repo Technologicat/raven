@@ -6,7 +6,7 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 __all__ = ["clamp", "nonanalytic_smooth_transition", "psi"]
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import warnings

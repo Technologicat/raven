@@ -11,7 +11,7 @@ The `tts` module is new, based on Kokoro-82M. All old TTS options are gone. This
 # TODO: convert prints to use logger where appropriate
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from .. import __version__

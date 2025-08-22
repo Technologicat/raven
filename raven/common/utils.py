@@ -11,7 +11,7 @@ __all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_
            "chunkify_text"]
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import contextlib

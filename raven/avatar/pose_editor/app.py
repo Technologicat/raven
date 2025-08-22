@@ -38,7 +38,7 @@ This module was part of the old Talkinghead, and is licensed under the GNU AGPL,
 # which is BSD-licensed.
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from ... import __version__

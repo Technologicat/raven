@@ -8,7 +8,7 @@ __all__ = ["Animator", "animator",  # controller and its global instance (need o
            "action_continue", "action_finish", "action_cancel"]  # return values for `render_frame`
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import math
