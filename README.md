@@ -50,9 +50,9 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I f
     - JS bindings possible, but not implemented yet. See [#2](https://github.com/Technologicat/raven/issues/2).
   - **Features**:
     - Talking anime character with 28 emotional expressions.
-    - Video stream generated in realtime from one static input image (THA3 engine).
+    - Easily customizable: video stream generated in realtime from one static input image (THA3 engine).
     - Lipsync to *Raven-server*'s TTS.
-    - Anime4K realtime upscaler.
+    - Realtime Anime4K upscaler.
     - Realtime video postprocessor with visual effects such as [bloom](https://en.wikipedia.org/wiki/Bloom_(shader_effect)), [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration), or [scanlines](https://en.wikipedia.org/wiki/Scan_line).
 
 - :white_check_mark: *Raven-server*: **Web API server for Raven's GPU-powered components**
