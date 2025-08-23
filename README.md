@@ -54,6 +54,7 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I f
     - Lipsync to *Raven-server*'s TTS.
     - Realtime Anime4K upscaler.
     - Realtime video postprocessor with visual effects such as [bloom](https://en.wikipedia.org/wiki/Bloom_(shader_effect)), [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration), or [scanlines](https://en.wikipedia.org/wiki/Scan_line).
+    - Web API to receive avatar video stream and to control the avatar.
 
 - :white_check_mark: *Raven-server*: **Web API server for Raven's GPU-powered components**
   - **Documentation**: [Server user manual](raven/server/README.md)
