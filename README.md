@@ -14,9 +14,11 @@
         - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
         - [Install Raven via PDM](#install-raven-via-pdm)
             - [Install on an Intel Mac with MacOSX 10.x](#install-on-an-intel-mac-with-macosx-10x)
+            - [Install on Windows (if Windows Defender gets angry)](#install-on-windows-if-windows-defender-gets-angry)
         - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
         - [Activate the Raven venv (to run Raven commands such as `raven-visualizer`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer)
         - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
+        - [Choose which GPU to use (optional)](#choose-which-gpu-to-use-optional)
         - [Exit from the Raven venv (optional)](#exit-from-the-raven-venv-optional)
 - [Uninstall](#uninstall)
 - [Technologies](#technologies)
@@ -30,32 +32,43 @@
 As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I properly update the documentation, here is a short overview:
 
 - :white_check_mark: *Raven-visualizer*: **Research literature visualization tool**
-  - **Documentation**: [User manual](raven/visualizer/README.md)
+  - **Documentation**: [Visualizer user manual](raven/visualizer/README.md)
   - **Goal**: Take 10k+ studies, find the most relevant ones.
     - Status: Fully operational. Could still use more features; we plan to add some later.
-  - **Features**: See [Raven-visualizer](#raven-visualizer) section below.
+  - **Features**:
+    - GUI app for analyzing BibTeX databases
+    - Semantic clustering
+    - Automatic per-cluster keyword detection
+    - Command-line converters for Web of Science (WOS) and arXiv
+    - 100% local, maximum privacy, no cloud services
   - This was the original *Raven*.
 
-- :white_check_mark: *Raven-server*: **Web API server for GPU-powered components: avatar, TTS, NLP**
-  - **Documentation**: [Server manual](raven/server/README.md), [Avatar manual](raven/avatar/README.md)
-  - **Goal**: Run all GPU processing in the server process, wherever it is on the local network.
+- :white_check_mark: *Raven-avatar*: **AI-animated anime avatar**
+  - **Documentation**: [Avatar user manual](raven/avatar/README.md)
+  - **Goal**: Visually represent your LLM as a custom anime character, for PR stunts and for fun.
+    - Status: Fully operational standalone tech demo, and Python bindings to integrate the avatar to Python-based GUI apps.
+    - JS bindings possible, but not implemented yet. See [#2](https://github.com/Technologicat/raven/issues/2).
+  - **Features**:
+    - Talking anime character with 28 emotional expressions.
+    - Video stream generated in realtime from one static input image (THA3 engine).
+    - Lipsync to *Raven-server*'s TTS.
+
+- :white_check_mark: *Raven-server*: **Web API server for Raven's GPU-powered components**
+  - **Documentation**: [Server user manual](raven/server/README.md)
+  - **Goal**: Run all of the Raven constellations's GPU processing in the server process, wherever it is on the local network.
     - Status: Fully operational. On the client side, `raven-importer` and the RAG subsystem of *Raven-librarian* have no server support yet.
   - **Features**:
-    - AI-animated anime avatar, for PR stunts and for fun.
-      - Represent your LLM as a custom, talking anime character with support for emotions. (The `classify` module can detect emotions from the generated text).
-      - A test client / tech demo for the avatar is available as `raven-avatar-settings-editor`.
-        - For this to start, `raven-server` must be running.
-        - On the client side, set the server URL to connect to in [`raven/client/config.py`](raven/client/config.py). Default is to run both server and client on localhost.
-      - To edit the emotion templates of the avatar, `raven-avatar-pose-editor`.
-    - Speech synthesizer that the avatar **can lipsync to**.
-    - Various [GPU-accelerated AI components for natural language processing](raven/server/README.md) so that all Raven apps can take advantage of their capabilities.
+    - Various AI components for natural language processing.
+    - Speech synthesizer (TTS), using [Kokoro-82M](https://github.com/hexgrad/kokoro)
+    - Server side of *Raven-avatar*
   - The server was originally developed as a continuation of the discontinued *SillyTavern-extras*, but has since been extended in various ways.
     - The `classify`, `embeddings`, `summarize`, and `websearch` modules are compatible with those modules of *SillyTavern-Extras*.
     - Additionally, the `tts` module provides an OpenAI compatible speech endpoint, which *SillyTavern* can use as its TTS.
-    - It would be interesting to introduce `avatar` to replace the discontinued `talkinghead`, but at the moment, there are no development resources to write a JS client for the avatar. See [SillyTavern#4034](https://github.com/SillyTavern/SillyTavern/issues/4034) for details.
   - Python bindings for Raven-server are provided in [`raven/client/api.py`](raven/client/api.py). These double as documentation for how to call the web API endpoints.
     - The client API abstracts away the fact that you're calling a remote process - you just call regular Python functions.
-  - The server can be configured in [`raven/server/config.py`](raven/server/config.py). Or make your own config file, and point to that using the `--config` command-line option when you start the server. See [`raven/server/config_lowvram.py`](raven/server/config_lowvram.py) for an example.
+    - The server URL to connect to is configured in [`raven/client/config.py`](raven/client/config.py). Default is to run both server and client on localhost.
+  - The server can be configured in [`raven/server/config.py`](raven/server/config.py).
+    - Or make your own config file, and point to that using the `--config` command-line option when you start the server. See [`raven/server/config_lowvram.py`](raven/server/config_lowvram.py) for an example.
 
 - :construction: *Raven-librarian*: **Scientific LLM frontend** (under development)
   - **Documentation**: under development
@@ -64,6 +77,7 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I p
       - We recommend having `raven-server` running; this allows the LLM to search the web.
       - A GUI application is planned, but not available yet.
   - **Features**:
+    - 100% local (when using a locally hosted LLM)
     - Natively nonlinear branching chat history - think [Loom](https://github.com/cosmicoptima/loom) or [SillyTavern-Timelines](https://github.com/SillyTavern/SillyTavern-Timelines).
       - Chat messages are stored as nodes in a tree. A chat branch is just its HEAD pointer; the chat app follows the `parent` links to reconstruct the linear history for that branch.
       - The command-line prototype can create chat branches and switch between them, but not delete them. Complete control for chat branches will be in the GUI app.
@@ -93,7 +107,7 @@ Raven has been developed and tested on Linux Mint. It should work in any environ
 
 Raven has the following requirements:
 
- - A Python environment for running the [PDM](https://pdm-project.org/en/latest/) installer. Linux OSs have one built-in; on other OSs it is possible to use tools such as [Conda](https://www.anaconda.com/docs/getting-started/miniconda/main) to install one.
+ - A Python environment for running the [PDM](https://pdm-project.org/en/latest/) installer. Linux OSs have one built-in; on other OSs it is possible to use tools such as [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) to install one.
  - An NVIDIA GPU for running AI models via CUDA. (This is subject to change in the future.)
 
 ### Install PDM in your Python environment
@@ -168,14 +182,60 @@ becomes
 
 Then run `pdm install` again.
 
+#### Install on Windows (if Windows Defender gets angry)
+
+*Installing Raven needs no admin rights.*
+
+- Raven can be installed as a regular user. We recommend [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) as the Python environment.
+- The only exception, that **does** need admin rights, is installing `espeak-ng`, so the TTS (speech synthesizer) can use that as its fallback phonemizer.
+  - `espeak-ng` is only ever used with the TTS feature, and only for those inputs for which the TTS's built-in [Misaki](https://github.com/hexgrad/misaki) phonemizer fails.
+
+*Using Raven needs no admin rights.*
+
+- All the apps are regular userspace apps that can run as a regular user.
+
+If you get a **permission error** when trying to run `pdm`, try replacing "`pdm`" with "`python -m pdm`".
+
+For example, instead of:
+
+```
+pdm install
+```
+
+run the command:
+
+```
+python -m pdm install
+```
+
+This works because PDM is just a Python module. This will be allowed to run if `python` is allowed to run.
+
+Similarly, Raven apps are just Python modules, and can be run via Python, as follows. Full list as of Raven v0.2.3:
+
+```
+Command                                Replacement
+
+raven-visualizer                  →    python -m raven.visualizer.app
+raven-importer                    →    python -m raven.visualizer.importer
+raven-arxiv2id                    →    python -m raven.tools.arxiv2id
+raven-wos2bib                     →    python -m raven.tools.wos2bib
+raven-pdf2bib                     →    python -m raven.tools.pdf2bib
+raven-server                      →    python -m raven.server.app
+raven-avatar-settings-editor      →    python -m raven.avatar.settings_editor.app
+raven-avatar-pose-editor          →    python -m raven.avatar.pose_editor.app
+raven-check-cuda                  →    python -m raven.raven.check_cuda
+raven-check-audio-devices         →    python -m raven.raven.check_audio_devices
+raven-minichat                    →    python -m raven.librarian.minichat
+```
+
 
 ### Check that CUDA works (optional)
 
 If you want to use the optional GPU compute support, you will need an NVIDIA GPU and the proprietary NVIDIA drivers (which provide CUDA). How to install them depends on your OS.
 
-Currently Raven uses GPU compute only in the preprocessor (BibTeX import), to accelerate the computation of semantic vectors and the NLP analysis. For large datasets, using a GPU can make these steps much faster.
-
 **:exclamation: Currently Raven uses CUDA 12.x. Make sure your NVIDIA drivers support this version. :exclamation:**
+
+**:exclamation: Using CUDA requires the proprietary NVIDIA drivers also on Linux. :exclamation:**
 
 Once you have the NVIDIA drivers, and you have installed Raven with GPU compute support, you can check if Raven detects your CUDA installation:
 
@@ -183,11 +243,9 @@ Once you have the NVIDIA drivers, and you have installed Raven with GPU compute 
 raven-check-cuda
 ```
 
-This command will print some system info into the terminal, saying whether it found CUDA, and if it did, which device CUDA is running on. It will also check whether the `cupy` library loads successfully.
+This command will print some system info into the terminal, saying whether it found CUDA, and if it did, which device CUDA is running on. It will also check whether the `cupy` library loads successfully (this library is used by the spaCy natural language analyzer).
 
 ### Activate the Raven venv (to run Raven commands such as `raven-visualizer`)
-
-**:exclamation: This is the (early) state of things as of August 2025. We aim to provide easier startup scripts in the future. :exclamation:**
 
 In a terminal that sees your Python environment, navigate to the Raven folder.
 
@@ -199,11 +257,19 @@ $(pdm venv activate)
 
 Note the Bash exec syntax `$(...)`; the command `pdm venv activate` just prints the actual internal activation command.
 
-Whenever Raven's venv is active, you can use Raven commands. Most of the time you'll want `raven-visualizer`, which opens the GUI app.
+:exclamation: *Windows users note: The command `$(pdm venv activate)` needs the `bash` shell, and will **not** work in most Windows command prompts.* :exclamation:
+
+Alternatively, you can run the venv activation script directly. You can find the script in `.venv/bin/`.
+
+For Linux and Mac OS X, the script is typically named `.venv/bin/activate`; for Windows, typically `.venv/bin/activate.ps1` or `./venv/bin/activate.bat`.
+
+Whenever Raven's venv is active, you can use Raven commands, such as `raven-visualizer`.
 
 ### Activate GPU compute support (optional)
 
-With the venv activated, and the terminal in the Raven folder, you can enable CUDA support by:
+If CUDA support is installed but not working, you can try enabling CUDA (for the current command prompt session) as follows.
+
+With the venv activated, and the terminal in the Raven folder, run the following `bash` command:
 
 ```bash
 source env.sh
@@ -211,9 +277,17 @@ source env.sh
 
 This sets up the library paths and `$PATH` so that Raven finds the CUDA libraries. This script is coded to look for them in Raven's `.venv` subfolder.
 
-If you have multiple GPUs, you can use the `CUDA_VISIBLE_DEVICES` environment variable to set which GPU Raven should use. We provide an example script [`run-on-internal-gpu.sh`](run-on-internal-gpu.sh), meant for a laptop with a Thunderbolt eGPU (external GPU), when we want to force Raven to run on the *internal* GPU (useful e.g. if your eGPU is in use by a self-hosted LLM).
+### Choose which GPU to use (optional)
 
-With the terminal still in the Raven folder, usage is:
+If your machine has multiple GPUs, there are two ways to tell Raven which GPU to use.
+
+To make a permanent setup, adjust the device settings in [`raven.server.config`](raven/server/config.py), [`raven.visualizer.config`](raven/visualizer/config.py), and [`raven.librarian.config`](raven/librarian/config.py).
+
+If you run on a different GPU only occasionally, you can use the `CUDA_VISIBLE_DEVICES` environment variable to choose the GPU temporarily (for the duration of a command prompt session).
+
+We provide an example script [`run-on-internal-gpu.sh`](run-on-internal-gpu.sh), meant for a laptop with a Thunderbolt eGPU (external GPU), when we want to force Raven to run on the *internal* GPU when the external is connected (useful e.g. if your eGPU is in use by a self-hosted LLM).
+
+With the venv activated, and the terminal in the Raven folder, run the following `bash` command:
 
 ```bash
 source run-on-internal-gpu.sh
