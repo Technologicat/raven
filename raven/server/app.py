@@ -322,7 +322,7 @@ def api_avatar_load_emotion_templates():
                       ...}
         }
 
-    For details, see `Animator.load_emotion_templates` in `animator.py`.
+    For details, see `Animator.load_emotion_templates` in `raven/server/modules/avatar.py`.
 
     To reload server defaults, send `"emotions": {}` or omit it.
 
