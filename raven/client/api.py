@@ -523,7 +523,7 @@ def imagefx_upscale(stream,
     `upscaled_width`, `upscaled_height`: desired output image resolution.
     `preset`: One of "A", "B" or "C", corresponding to the Anime4K preset with the same letter;
              for the meanings, see `raven.common.video.upscaler`.
-     `quality`: One of "high" or "low".
+    `quality`: One of "high" or "low".
 
     Returns a `bytes` object containing the upscaled image, encoded in `output_format`.
     """
