@@ -73,8 +73,7 @@ In case you need to go back to factory default emotion templates, the pose edito
 
 The avatar will visually represent the AI character in the GUI of `raven-librarian`, our upcoming scientific LLM frontend. The AI character's emotional state will be automatically determined from a piece of text (or thought) most recently written by the LLM, via the `classification` module of *Raven-server*. This is the same approach that was used by *Talkinghead*.
 
-It would be interesting to introduce *Raven-avatar* to replace the discontinued *Talkinghead* in *SillyTavern*, but at the moment, there are no development resources to write a JS client for the avatar. Much of the porting should be straightforward. However, there are some technical points such as handling the video streaming format, and porting the lipsync code (in [`raven.client.tts`](../client/tts.py)) to JS. For details, see [SillyTavern#4034](https://github.com/SillyTavern/SillyTavern/issues/4034).
-
+*Talkinghead* support has been discontinued in *SillyTavern*. It would be interesting to introduce *Raven-avatar* as an upgraded replacement, but at the moment, there are no development resources to write a JS client for the avatar. If interested, much of the porting should be straightforward; see [#2](https://github.com/Technologicat/raven/issues/2).
 
 <p align="center">
 <img src="../../img/avatar-settings-editor.png" alt="Screenshot of Raven-avatar-settings-editor" width="800"/> <br/>
@@ -249,6 +248,8 @@ The model files are shared between the live animator and the standalone pose edi
 
 - TTS lipsync may have timing inaccuracies due to limitations of the TTS engine, and the sometimes unpredictable latency of the audio system.
   - Our code does its best, but for cases when that is not enough, we provide a global delay setting for shifting the timing (both in the client API as well as in the `raven-avatar-settings-editor` app).
+  - Lipsync is implemented on the client side, because that is where audio playback occurs.
+    - For developers, this means that to use lipsync from a programming language other than Python (such as JavaScript), at least the TTS parts of the existing Python bindings must be ported to that language. See [#2](https://github.com/Technologicat/raven/issues/2).
 
 - This software is not compatible with characters created for VTuber software, such as Live2D. Rather, this is an independent exploration of somewhat similar functionality, for providing a live anime avatar for AI characters.
 

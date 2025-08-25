@@ -149,7 +149,7 @@ pdm install
 
 **Install with GPU compute support**:
 
-:exclamation: **Help wanted!** Raven does not directly depend on CUDA, but only on PyTorch and on various AI libraries in the Python ecosystem. If you have an AMD system and would be willing to collaborate to get Raven working on it, [please chime in](https://github.com/Technologicat/raven/issues/1)! :exclamation:
+:exclamation: **Help wanted!** If you have an AMD GPU and would be willing to collaborate to get Raven working on it, [please chime in](https://github.com/Technologicat/raven/issues/1). Raven does not directly depend on CUDA, but only on PyTorch and on various AI libraries in the Python ecosystem. :exclamation:
 
 This requires an NVIDIA GPU, the proprietary NVIDIA drivers, and CUDA. The GPU will be used for accelerating BibTeX imports.
 
@@ -171,7 +171,7 @@ On MacOSX, installing torch 2.3.0 or later requires an ARM64 processor and MacOS
 
 If you have an Intel Mac (x86_64) with MacOSX 10.x, to work around this, you can use Torch 2.2.x.
 
-To do this, modify Raven's `pyproject.toml` in a text editor, so that the line
+To do this, modify Raven's [`pyproject.toml`](pyproject.toml) in a text editor, so that the line
 
 ```
     "torch>=2.4.0",
@@ -187,15 +187,15 @@ Then run `pdm install` again.
 
 #### Install on Windows (if Windows Defender gets angry)
 
-*Installing Raven needs no admin rights.*
+*Installing Raven does **not** need admin rights.*
 
 - Raven can be installed as a regular user. We recommend [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) as the Python environment.
 - The only exception, that **does** need admin rights, is installing `espeak-ng`, so the TTS (speech synthesizer) can use that as its fallback phonemizer.
-  - `espeak-ng` is only ever used with the TTS feature, and only for those inputs for which the TTS's built-in [Misaki](https://github.com/hexgrad/misaki) phonemizer fails.
+  - Raven only ever calls `espeak-ng` from *Raven-server*'s `tts` module, and only for those inputs for which the TTS's built-in [Misaki](https://github.com/hexgrad/misaki) phonemizer fails.
 
-*Using Raven needs no admin rights.*
+*Using Raven does **not** need admin rights.*
 
-- All the apps are regular userspace apps that can run as a regular user.
+- All the apps are regular userspace apps that you can run as a regular user.
 
 If you get a **permission error** when trying to run `pdm`, try replacing "`pdm`" with "`python -m pdm`".
 
@@ -238,7 +238,7 @@ If you want to use the optional GPU compute support, you will need an NVIDIA GPU
 
 **:exclamation: Currently Raven uses CUDA 12.x. Make sure your NVIDIA drivers support this version. :exclamation:**
 
-**:exclamation: Using CUDA requires the proprietary NVIDIA drivers also on Linux. :exclamation:**
+**:exclamation: Using CUDA requires the proprietary NVIDIA drivers, also on Linux. :exclamation:**
 
 Once you have the NVIDIA drivers, and you have installed Raven with GPU compute support, you can check if Raven detects your CUDA installation:
 
@@ -246,7 +246,9 @@ Once you have the NVIDIA drivers, and you have installed Raven with GPU compute 
 raven-check-cuda
 ```
 
-This command will print some system info into the terminal, saying whether it found CUDA, and if it did, which device CUDA is running on. It will also check whether the `cupy` library loads successfully (this library is used by the spaCy natural language analyzer).
+This command will print some system info into the terminal, saying whether it found CUDA, and if it did, which device CUDA is running on.
+
+It will also check whether the `cupy` library loads successfully. This library is needed by the [spaCy](https://spacy.io/) natural language analyzer (so that too can run on GPU).
 
 ### Activate the Raven venv (to run Raven commands such as `raven-visualizer`)
 
@@ -264,7 +266,7 @@ Note the Bash exec syntax `$(...)`; the command `pdm venv activate` just prints 
 
 Alternatively, you can run the venv activation script directly. You can find the script in `.venv/bin/`.
 
-For Linux and Mac OS X, the script is typically named `.venv/bin/activate`; for Windows, typically `.venv/bin/activate.ps1` or `./venv/bin/activate.bat`.
+:exclamation: *For Linux and Mac OS X, the script is typically named `.venv/bin/activate`; for Windows, typically `.venv/bin/activate.ps1` or `./venv/bin/activate.bat`.* :exclamation:
 
 Whenever Raven's venv is active, you can use Raven commands, such as `raven-visualizer`.
 
@@ -284,11 +286,11 @@ This sets up the library paths and `$PATH` so that Raven finds the CUDA librarie
 
 If your machine has multiple GPUs, there are two ways to tell Raven which GPU to use.
 
-To make a permanent setup, adjust the device settings in [`raven.server.config`](raven/server/config.py), [`raven.visualizer.config`](raven/visualizer/config.py), and [`raven.librarian.config`](raven/librarian/config.py).
+If your system *permanently* has several GPUs connected, and you want to use a different GPU *permanently*, you can adjust the device settings in [`raven.server.config`](raven/server/config.py), [`raven.visualizer.config`](raven/visualizer/config.py), and [`raven.librarian.config`](raven/librarian/config.py).
 
-If you run on a different GPU only occasionally, you can use the `CUDA_VISIBLE_DEVICES` environment variable to choose the GPU temporarily (for the duration of a command prompt session).
+If you switch GPUs only occasionally (e.g. a laptop that sometimes has an eGPU connected and sometimes doesn't), you can use the `CUDA_VISIBLE_DEVICES` environment variable to choose the GPU temporarily, for the duration of a command prompt session.
 
-We provide an example script [`run-on-internal-gpu.sh`](run-on-internal-gpu.sh), meant for a laptop with a Thunderbolt eGPU (external GPU), when we want to force Raven to run on the *internal* GPU when the external is connected (useful e.g. if your eGPU is in use by a self-hosted LLM).
+We provide an example script [`run-on-internal-gpu.sh`](run-on-internal-gpu.sh), meant for a laptop with a Thunderbolt eGPU (external GPU), which forces Raven to run on the *internal* GPU when the external is connected (which is useful e.g. if your eGPU is dedicated for a self-hosted LLM). On the machine where the script was tested, PyTorch sees the eGPU as GPU 0 when available, pushing the internal GPU to become GPU 1. When the eGPU is not connected, the internal is GPU 0.
 
 With the venv activated, and the terminal in the Raven folder, run the following `bash` command:
 
@@ -296,7 +298,7 @@ With the venv activated, and the terminal in the Raven folder, run the following
 source run-on-internal-gpu.sh
 ```
 
-Then you can use Raven commands as usual.
+Then for the rest of the command prompt session, any Raven commands (such as `raven-visualizer`) will only see the internal GPU, and `"cuda:0"` in the device settings will point to the only visible GPU.
 
 ### Exit from the Raven venv (optional)
 

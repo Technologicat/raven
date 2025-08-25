@@ -4,509 +4,364 @@
 
 -----
 
-## Raven-avatar (fork of Talkinghead)
-
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 
-- [Raven-avatar (fork of Talkinghead)](#raven-avatar-fork-of-talkinghead)
-    - [Introduction](#introduction)
-    - [Live mode with `raven-llmclient`](#live-mode-with-raven-llmclient)
-    - [Live mode with SillyTavern](#live-mode-with-sillytavern)
-        - [Testing your installation](#testing-your-installation)
-        - [Configuration](#configuration)
-        - [Emotion templates](#emotion-templates)
-        - [Animator configuration](#animator-configuration)
-        - [Postprocessor configuration](#postprocessor-configuration)
-        - [Postprocessor example: HDR, scifi hologram](#postprocessor-example-hdr-scifi-hologram)
-        - [Postprocessor example: cheap video camera, amber monochrome computer monitor](#postprocessor-example-cheap-video-camera-amber-monochrome-computer-monitor)
-        - [Postprocessor example: HDR, cheap video camera, 1980s VHS tape](#postprocessor-example-hdr-cheap-video-camera-1980s-vhs-tape)
-        - [Complete example: animator and postprocessor settings](#complete-example-animator-and-postprocessor-settings)
-    - [THA3 Pose Editor](#tha3-pose-editor)
-    - [Troubleshooting](#troubleshooting)
-        - [Low framerate](#low-framerate)
-        - [Low VRAM - what to do?](#low-vram---what-to-do)
-        - [Missing THA3 model at startup](#missing-tha3-model-at-startup)
-        - [Known missing features](#known-missing-features)
-        - [Known bugs](#known-bugs)
-    - [Creating a character](#creating-a-character)
-        - [Tips for Stable Diffusion](#tips-for-stable-diffusion)
-    - [Acknowledgements](#acknowledgements)
+- [Introduction](#introduction)
+- [Command-line options](#command-line-options)
+- [Server modules](#server-modules)
+    - [List of server modules](#list-of-server-modules)
+- [Server configuration](#server-configuration)
+    - [Low VRAM config (8 GB)](#low-vram-config-8-gb)
+    - [Choosing which GPU to use (optional)](#choosing-which-gpu-to-use-optional)
+- [SillyTavern compatibility](#sillytavern-compatibility)
+    - [Raven-server TTS for SillyTavern](#raven-server-tts-for-sillytavern)
+- [Python bindings (easy client API)](#python-bindings-easy-client-api)
+- [Web API endpoints](#web-api-endpoints)
 
 <!-- markdown-toc end -->
 
-### About this documentation
+# Introduction
 
-*This is the old documentation for the Talkinghead module, minimally updated to Raven-avatar (e.g. paths have been updated). For the latest on Raven-avatar, see the [Raven-avatar README](../avatar/README.md).*
+*Raven-server* is a web API server that hosts local, specialized AI models on the GPU:
 
-*Documentation for the rest of Raven-server is not yet available. Likely it will be sometime in autumn 2025. Please check back later.*
+- **Avatar**: AI-animated custom anime character for your LLM. This is the server side of [*Raven-avatar*](../avatar/README.md).
+- **Speech synthesizer (TTS)**: built-in, locally hosted [Kokoro-82M](https://github.com/hexgrad/kokoro).
+- **Natural language processing (NLP)**: various components for GPU-accelerated natural language analysis and processing.
 
-In the meantime:
+Although the default is to run both the server and the client apps on localhost, the server can run anywhere on the local network. This allows a separate machine with a powerful GPU to host the server for one or more clients on the local network.
 
-- See `raven.server.config` for enabling/disabling server modules, and for specifying HuggingFace model repos to download models from.
-- If you have a CUDA-capable GPU, server modules can be set up to run on a CUDA device in `raven.server.config` (and this is actually the default).
-  - To use CUDA, be sure to install the CUDA optional dependencies of Raven (see [main README](../../README.md)).
-  - If you have several GPUs, the preferred way to point `raven-server` to use a single specific GPU is to `export CUDA_VISIBLE_DEVICES=x`, where `x` is the device number (0-based), and then start the server. This simplifies the server config, as you can then always specify `"cuda:0"` as the GPU in the server config, regardless of which GPU a given session is running on. This is convenient e.g. if you run Raven on a laptop, and sometimes (but not always) have an eGPU available.
-  - Some modules have an automatic CPU fallback in their loader: `classify`, `embeddings`, `sanitize`, and `summarize`.
-    - If loading on GPU fails, these modules will note this in the server log, and auto-retry on the CPU.
-    - The rule of thumb is that, for a given module, if a slow response won't completely break the UX, then that module has a loader with a CPU fallback.
-  - If your machine has low VRAM, see `raven.server.config_lowvram`. This is useful e.g. if you are on the road with a laptop with an 8 GB GPU, and you'd like to dedicate the whole GPU for a 7B/8B LLM.
-    - The low-VRAM config doesn't bother loading the `avatar` module, as it's nearly useless on CPU (~2 FPS; not a typo). It loads all other modules on CPU.
-    - To use the low-VRAM config, start the server as `raven-server --config raven.server.config_lowvram`.
-- To get an idea of what the server can do, look at the Python bindings of the web API in `raven.client.api`.
+Most of the server functions are stateless; the only exception is *Raven-avatar*, which gives you a session ID.
 
-*SillyTavern* compatibility:
+For the speech synthesizer, we provide two web API endpoints: an OpenAI compatible one, and a custom one. The custom endpoint provides word timestamps and per-word phoneme data, which is needed for lipsyncing the avatar. The actual lipsync driver lives on the client side, in the [Python bindings](#python-bindings-easy-client-api), because the speech audio playback is done on the client side, too.
 
-- The `classify`, `embeddings`, `summarize`, and `websearch` modules work as drop-in replacements for those modules in the discontinued *SillyTavern-extras*.
-- The `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`) you can use as a speech synthesizer in *SillyTavern*.
-  - `/v1/audio/voices`, to list supported voices, is also provided.
+Historically, *Raven-server* began as a continuation of the discontinued *SillyTavern-extras*. One important reason was to keep the avatar technology alive; it was a promising, unique experiment that no other project seems to have followed up on. But also, a web API server for various specialized NLP functionality happened to be exactly what *Raven-visualizer* and the upcoming *Raven-librarian* needed. The server has since been extended in various ways: the avatar has several new features, the built-in TTS is new, and several new NLP modules have been added.
 
-The following are **not** supported by *SillyTavern*. These are currently meant for use in the Raven constellation. Using these elsewhere requires writing new client code:
 
-- `avatar` replaces and extends the old `talkinghead` (e.g. now has cel effects and lipsyncing). As of summer 2025, `talkinghead` is no longer supported by ST anyway.
-  - This module is rather complex and provides a lot of web API endpoints, so we won't list them all in this overview. See `raven.server.app` for details.
-- `imagefx` (see `/api/imagefx/process`, `/api/imagefx/upscale`) provides postprocessing effects for still images, as well as provides upscaling for still images with Anime4K. Essentially, `imagefx` exposes the parts used by the avatar's postprocessor.
-  - See `raven.avatar.settings_editor.app` for usage examples of both `avatar` and `imagefx`.
-  - `imagefx` is useful when you want to process still images on the server's GPU. But the network roundtrip time (including image encoding and decoding) means that `imagefx` is not fast enough for processing a video stream. If you need to call the same features locally from Python (on the client's GPU; this approach works in realtime), see `raven.common.video.postprocessor` and `raven.common.video.upscaler`.
-- `natlang` (see `/api/natlang/analyze`) performs low-level NLP analysis on text (e.g. part-of-speech tagging, lemmatization, named entity recognition, sentence splitting) using the [spaCy](https://spacy.io/) NLP library.
-  - For example for English, spaCy supports several models, including a model Transformers-based neural model.
-  - This endpoint uses spaCy's binary data format, so it only works with a Python client that can read this format. See `raven.client.api.natlang_analyze` for a convenient all-in-one solution.
-  - Using this module, a Python client can run spaCy on the server's GPU, while receiving the analysis results in the exact same rich structured format as when using spaCy locally.
-- `sanitize` (see `/api/sanitize/dehyphenate`) cleans up broken text (e.g. as extracted from PDFs).
-- `tts` provides also a new endpoint (`/api/tts/speak`) that (with appropriate client code) facilitates lipsyncing the `avatar` to the speech synthesizer.
-  - We provide a Python implementation. For the "appropriate client code", see `tts_speak_lipsynced` in `raven.client.tts`. Once the lipsync driver gets the timestamped phonemes from the server (together with the speech audio file), it's essentially just applying a phoneme-to-morph lookup table and using that to control the avatar's morph overrides in realtime. Lipsyncing is implemented at the client side, because that's where the audio playback happens.
-  - To get a list of supported voices, see `/api/tts/list_voices`. The same endpoint is also available as `/v1/audio/voices` for OpenAI TTS compatibility.
-- `websearch` provides also a new endpoint (`/api/websearch2`) that returns structured search results, preserving the connection between the text of each search result and its corresponding link.
-- New simple ping endpoint `/health` (note no `/api/...`), for a client to easily check that the server is up and running.
+# Command-line options
 
-As mentioned, examples for how to call all the web API endpoints from Python are provided in the client-side Python bindings, `raven.client.api`. These should be straightforward to port to other programming environments (e.g. JS) if needed.
+For a guaranteed-up-to-date list of available command-line options, run `raven-server --help`.
 
-
-### Introduction
-
-The *Raven-avatar* component renders a **live, AI-based custom anime avatar for your AI character**.
-
-This produces animation from **one static anime-style 2D image** via the THA3 AI posing engine, facilitating easy creation of characters e.g. with *Stable Diffusion* or another AI image generator.
-
-We also provide TTS (text to speech) via the Kokoro speech synthesizer. The AI avatar can be automatically lipsynced to the TTS.
-
-The animator is built on top of a deep learning model, so optimal performance requires a fast GPU. The model can vary the character's expression, and pose some joints by up to 15 degrees. This allows producing parametric animation on the fly, just like from a traditional 2D or 3D model - but from a small generative AI. Modern GPUs have enough compute to do this in realtime.
-
-We optionally support also cel blending to modify the texture that goes into the poser model (e.g. for sweatdrops or blush), and additional anime-style cel effects, such as floating question marks or anger veins. The additional cels are currently supplied separately for each character. The additional cel effects can also be turned off in the configuration file.
-
-As with any AI technology, there are limitations:
-
-- The AI-generated posed video frames may not look perfect, and in particular the THA3 poser model does not support large hats or props. For details (and many example outputs), refer to the [tech report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html) by the poser model's original author.
-
-- TTS lipsync may have timing inaccuracies due to limitations of the TTS engine, and the sometimes unpredictable latency of the audio system.
-  - Our code does its best, but for cases when that is not enough, we provide a global delay setting for shifting the timing (both in the client API as well as in the `raven-avatar-settings-editor` GUI app).
-
-
-### SillyTavern
-
-**As of 2025, SillyTavern no longer supports Talkinghead. This section is out of date.**
-
-#### Testing your installation
-
-To check that `raven-avatar` works, you can use the example character. Just copy `raven/vendor/tha3/images/example.png` to `SillyTavern/public/characters/yourcharacternamehere/talkinghead.png`.
-
-To check that changing the character's expression works, use `/emote xxx` in SillyTavern, where `xxx` is name of one of the 28 emotions. See e.g. the filenames of the emotion templates in `raven/avatar/emotions/`.
-
-The *Character Expressions* control panel also has a full list of emotions. In fact, instead of using the `/emote xxx` command, clicking one of the sprite slots in that control panel should apply that expression to the character.
-
-If manually changing the character's expression works, then changing it automatically with `classify` will also work, provided that `classify` itself works.
-
-#### Configuration
-
-The live mode is configured per-character, via files **at the client end**:
-
-- `SillyTavern/public/characters/yourcharacternamehere/talkinghead.png`: required. The **input image** for the animator.
-  - The `talkinghead` extension does not use or even see the other `.png` files. They are used by *Character Expressions* when *talkinghead mode* is disabled.
-- `SillyTavern/public/characters/yourcharacternamehere/_animator.json`: optional. **Animator and postprocessor settings**.
-  - If a character does not have this file, server-side default settings are used.
-- `SillyTavern/public/characters/yourcharacternamehere/_emotions.json`: optional. **Custom emotion templates**.
-  - If a character does not have this file, server-side default settings are used. Most of the time, there is no need to customize the emotion templates per-character.
-  - *At the client end*, only this one file is needed (or even supported) to customize the emotion templates.
-
-By default, the **sprite position** on the screen is static. However, by enabling the **MovingUI** checkbox in SillyTavern's *User Settings ⊳ Advanced*, you can manually position the sprite in the GUI, by dragging its move handle. Note that there is some empty space in the sprite canvas around the sides of the character, so the character will not be able to fit flush against the edge of the window (since that empty space hits the edge of the window first). To cut away that empty space, see the crop options in *Animator configuration*.
-
-Due to the base pose used by the posing engine, the character's legs are always cut off at the bottom of the image; the sprite is designed to be placed at the bottom of the window. You may need to create a custom background image that works with such a placement. Of the default SillyTavern backgrounds, at least the cyberpunk bedroom looks fine.
-
-**IMPORTANT**: Changing your web browser's zoom level will change the size of the character, too, because doing so rescales all images, including the live feed.
-
-We rate-limit the output to 25 FPS (maximum, default) to avoid DoSing the SillyTavern GUI, and we attempt to reach a constant 25 FPS. If the renderer runs faster, the average GPU usage will be lower, because the animation engine only generates as many frames as are actually consumed. If the renderer runs slower, the latest available frame will be re-sent as many times as needed, to isolate the client side from any render hiccups. The maximum FPS defaults to 25, but is configurable; see *Animator configuration*.
-
-#### Emotion templates
-
-The *THA3 Pose Editor* app included with *raven-avatar* is a GUI editor for these templates.
-
-The batch export of the pose editor produces a set of static expression images (and corresponding emotion templates), but also an `_emotions.json`, in your chosen output folder. You can use this file at the client end as `SillyTavern/public/characters/yourcharacternamehere/_emotions.json`. This is convenient if you have customized your emotion templates, and wish to share one of your characters with other users, making it automatically use your version of the templates.
-
-The file `_emotions.json` uses the same format as the factory settings in `raven/avatar/assets/emotions/_defaults.json`.
-
-Emotion template lookup order is:
-
-- The set of per-character custom templates sent by the ST client, read from `SillyTavern/public/characters/yourcharacternamehere/_emotions.json` if it exists.
-- Server defaults, from the individual files `raven/avatar/assets/emotions/emotionnamehere.json`.
-  - These are customizable. You can e.g. overwrite `curiosity.json` to change the default template for the *"curiosity"* emotion.
-  - **IMPORTANT**: *However, updating SillyTavern-extras from git may overwrite your changes to the server-side default emotion templates. Keep a backup if you customize these.*
-- Factory settings, from `raven/avatar/assets/emotions/_defaults.json`.
-  - **IMPORTANT**: Never overwrite or remove this file.
-
-Any emotion that is missing from a particular level in the lookup order falls through to be looked up at the next level.
-
-If you want to edit the emotion templates manually (without using the GUI) for some reason, the following may be useful sources of information:
-
-- `posedict_keys` in [`raven/server/modules/avatarutil.py`](../server/modules/avatarutil.py) lists the morphs available in THA3.
-- [`raven/vendor/tha3/poser/modes/pose_parameters.py`](../vendor/tha3/poser/modes/pose_parameters.py) contains some more detail.
-  - *"Arity 2"* means `posedict_keys` has separate left/right morphs.
-- The GUI panel implementations in [`raven/avatar/pose_editor/app.py`](../avatar/pose_editor/app.py).
-
-Any morph that is not mentioned for a particular emotion defaults to zero. Thus only those morphs that have nonzero values need to be mentioned.
-
-
-#### Animator configuration
-
-*The available settings keys and examples are kept up-to-date on a best-effort basis, but there is a risk of this documentation being out of date. When in doubt, refer to the actual source code, which comes with extensive docstrings and comments. The final authoritative source is the implementation itself.*
-
-Animator and postprocessor settings lookup order is:
-
-- The custom per-character settings sent by the ST client, read from `SillyTavern/public/characters/yourcharacternamehere/_animator.json` if it exists.
-- Server defaults, from `raven/avatar/assets/settings/animator.json`, if it exists.
-  - This file is customizable.
-  - **IMPORTANT**: *However, updating SillyTavern-extras from git may overwrite your changes to the server-side animator and postprocessor configuration. Keep a backup if you customize this.*
-- Built-in defaults, hardcoded as `animator_defaults` in [`raven/server/config.py`](../server/config.py).
-  - **IMPORTANT**: Never change these!
-  - The built-in defaults are used for validation of available settings, so they are guaranteed to be complete.
-  - This file also documents (in comments) what each setting does.
-
-Any setting that is missing from a particular level in the lookup order falls through to be looked up at the next level.
-
-The idea of per-character animator and postprocessor settings is that this allows giving some personality to different characters. For example, they may sway by different amounts, the breathing cycle duration may be different, and importantly, the postprocessor settings may be different - which allows e.g. making a specific character into a scifi hologram, while others render normally.
-
-Here is a complete example of `animator.json`, showing the default values (TODO: this example is out of date):
-
-```json
-{"target_fps": 25,
- "crop_left": 0.0,
- "crop_right": 0.0,
- "crop_top": 0.0,
- "crop_bottom": 0.0,
- "pose_interpolator_step": 0.1,
- "blink_interval_min": 2.0,
- "blink_interval_max": 5.0,
- "blink_probability": 0.03,
- "blink_confusion_duration": 10.0,
- "talking_fps": 12,
- "talking_morph": "mouth_aaa_index",
- "sway_morphs": ["head_x_index", "head_y_index", "neck_z_index", "body_y_index", "body_z_index"],
- "sway_interval_min": 5.0,
- "sway_interval_max": 10.0,
- "sway_macro_strength": 0.6,
- "sway_micro_strength": 0.02,
- "breathing_cycle_duration": 4.0,
- "postprocessor_chain": []}
-```
-
-Note that some settings make more sense as server defaults, while others make more sense as per-character settings.
-
-Particularly, `target_fps` makes the most sense to set globally at the server side, in `raven/avatar/assets/settings/animator.json`, while almost everything else makes more sense per-character, in `SillyTavern/public/characters/yourcharacternamehere/_animator.json`. Nevertheless, providing server-side defaults is a good idea, since the per-character animation configuration is optional.
-
-**What each settings does**:
-
-- `target_fps`: Desired output frames per second. Note this only affects smoothness of the output, provided that the hardware is fast enough. The speed at which the animation evolves is based on wall time. Snapshots are rendered at the target FPS, or if the hardware is slower, then as often as hardware allows. Regardless of render FPS, network send always occurs at `target_fps`, provided that the connection is fast enough. *Recommendation*: For smooth animation, make `target_fps` lower than what your hardware could produce, so that some compute remains untapped, available to smooth over the occasional hiccup from other running programs.
-- `crop_left`, `crop_right`, `crop_top`, `crop_bottom`: in units where the width and height of the image are both 2.0. Cut away empty space on the canvas around the character. Note the poser always internally runs on the full 512x512 image due to its design, but the rest (particularly the postprocessor) can take advantage of the smaller size of the cropped image.
-- `pose_interpolator_step`: A value such that `0 < step <= 1`. Sets how fast pose and expression changes are. The step is applied at each frame at a reference of 25 FPS (to standardize the meaning of the setting), with automatic internal FPS-correction to the actual output FPS. Note that the animation is nonlinear: the change starts suddenly, and slows down. The step controls how much of the *remaining distance* to the current target pose is covered in 1/25 seconds. Once the remaining distance approaches zero, the pose then snaps to the target pose, once the distance becomes small enough for this final discontinuous jump to become unnoticeable.
-- `blink_interval_min`: seconds. After blinking, lower limit for random minimum time until next blink is allowed.
-- `blink_interval_max`: seconds. After blinking, upper limit for random minimum time until next blink is allowed.
-- `blink_probability`: Applied at each frame at a reference of 25 FPS, with automatic internal FPS-correction to the actual output FPS. This is the probability of initiating a blink in each 1/25 second interval.
-- `blink_confusion_duration`: seconds. Upon entering the `"confusion"` emotion, the character may blink quickly in succession, temporarily disregarding the blink interval settings. This sets how long that state lasts.
-- `talking_fps`: How often to re-randomize the mouth during the talking animation. The default value is based on the fact that early 2000s anime used ~12 FPS as the fastest actual framerate of new cels, not counting camera panning effects and such.
-- `talking_morph`: Which mouth-open morph to use for talking. For available values, see `posedict_keys` in [`raven/server/modules/avatarutil.py`](../server/modules/avatarutil.py).
-- `sway_morphs`: Which morphs participate in the sway (fidgeting) animation. This setting is mainly useful for disabling some or all of them, e.g. for a robot character. For available values, see `posedict_keys` in [`raven/server/modules/avatarutil.py`](../server/modules/avatarutil.py).
-- `sway_interval_min`: seconds. Lower limit for random time interval until randomizing a new target pose for the sway animation.
-- `sway_interval_max`: seconds. Upper limit for random time interval until randomizing a new target pose for the sway animation.
-- `sway_macro_strength`: A value such that `0 < strength <= 1`. In the sway target pose, this sets the maximum absolute deviation from the target pose specified by the current emotion, but also the maximum deviation from the center position. The setting is applied to each sway morph separately. The emotion pose itself may use higher values for the morphs; in such cases, sway will only occur toward the center. For details, see `compute_sway_target_pose` in [`raven/server/modules/avatar.py`](../server/modules/avatar.py).
-- `sway_micro_strength`: A value such that `0 < strength <= 1`. This is the maximum absolute value of random noise added to the sway target pose at each 1/25 second interval. To this, no limiting is applied, other than a clamp of the final randomized value of each sway morph to the valid range [-1, 1]. A small amount of random jitter makes the character look less robotic.
-- `breathing_cycle_duration`: seconds. The duration of a full cycle of the breathing animation.
-- `postprocessor_chain`: Pixel-space glitch artistry settings. The default is empty (no postprocessing); see below for examples of what can be done with this. For details, see [`raven/common/video/postprocessor.py`](../common/video/postprocessor.py).
-
-#### Postprocessor configuration
-
-**As of the Raven-avatar move, we now have a GUI postprocessor settings editor. See `raven.avatar.settings_editor.app`.**
-
-*The available settings keys and examples are kept up-to-date on a best-effort basis, but there is a risk of this documentation being out of date. When in doubt, refer to the actual source code, which comes with extensive docstrings and comments. The final authoritative source is the implementation itself.*
-
-The postprocessor configuration is stored as part of the animator configuration, stored under the key `"postprocessor_chain"`.
-
-Postprocessing requires some additional compute, depending on the filters used and their settings. When `avatar` runs on the GPU, also the postprocessing filters run on the GPU. In gaming technology terms, they are essentially fragment shaders, implemented in PyTorch.
-
-The filters in the postprocessor chain are applied to the image in the order in which they appear in the list. That is, the filters themselves support rendering in any order. However, for best results, it is useful to keep in mind the process a real physical signal would travel through:
-
-*Light* ⊳ *Camera* ⊳ *Transport* ⊳ *Display*
-
-and set the order for the filters based on that. However, this does not mean that there is just one correct ordering. Some filters are *general-use*, and may make sense at several points in the chain, depending on what you wish to simulate. Feel free to improvise, but make sure to understand why your filter chain makes sense.
-
-The chain is allowed have several instances of the same filter. This is useful e.g. for multiple copies of an effect with different parameter values, or for applying the same general-use effect at more than one point in the chain. Note that some dynamic filters require tracking some state. These filters have a `name` parameter. The dynamic state storage is accessed by name, so the different instances should be configured with different names, so that they will not step on each others' toes in tracking their state.
-
-The following postprocessing filters are available. Options for each filter are documented in the docstrings in [`raven/common/video/postprocessor.py`](../common/video/postprocessor.py).
-
-**Light**:
-
-- `bloom`: Bloom effect (fake HDR). Popular in early 2000s anime. Makes bright parts of the image bleed light into their surroundings, enhancing perceived contrast. Only makes sense when the avatar is rendered on a relatively dark background (such as the cyberpunk bedroom in the ST default backgrounds).
-
-**Camera**:
-
-- `chromatic_aberration`: Simulates the two types of [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration) in a camera lens, axial (index of refraction varying w.r.t. wavelength) and transverse (focal distance varying w.r.t. wavelength).
-- `vignetting`: Simulates [vignetting](https://en.wikipedia.org/wiki/Vignetting), i.e. less light hitting the corners of a film frame or CCD sensor, causing the corners to be slightly darker than the center.
-
-**Transport**:
-
-- `analog_lowres`: Simulates a low-resolution analog video signal by blurring the image.
-- `analog_rippling_hsync`: Simulates bad horizontal synchronization (hsync) of an analog video signal, causing a wavy effect that causes the outline of the character to ripple.
-- `analog_runaway_hsync`: Simulates a rippling, runaway hsync near the top or bottom edge of an image. This can happen with some equipment if the video cable is too long.
-- `analog_vhsglitches`: Simulates a damaged 1980s VHS tape. In each 25 FPS frame, causes random lines to glitch with VHS noise.
-- `analog_vhstracking`: Simulates a 1980s VHS tape with bad tracking. The image floats up and down, and a band of VHS noise appears at the bottom.
-- `digital_glitches`: A glitchy digital video transport as sometimes depicted in sci-fi, with random blocks of lines suddenly shifted horizontally temporarily.
-
-**Display**:
-
-- `translucency`: Makes the character translucent, as if a scifi hologram.
-- `banding`: Simulates the look of a CRT display as it looks when filmed on video without syncing. Brighter and darker bands travel through the image.
-- `scanlines`: Simulates CRT TV like scanlines. Optionally dynamic (flipping the dimmed field at each frame).
-  - From my experiments with the Phosphor deinterlacer in VLC, which implements the same effect, dynamic mode for `scanlines` would look *absolutely magical* when synchronized with display refresh, closely reproducing the look of an actual CRT TV. However, that is not possible here. Thus, it looks best at low but reasonable FPS, and a very high display refresh rate, so that small timing variations will not make much of a difference in how long a given field is actually displayed on the physical monitor.
-  - If the timing is too uneven, the illusion breaks. In that case, consider using the static mode (`"dynamic": false`).
-
-**General use**:
-
-- `noise`: Adds noise to the brightness (luminance) or to the alpha channel (translucency).
-- `desaturate`: A desaturation filter with bells and whistles. Beside converting the image to grayscale, can optionally pass through colors that match the hue of a given RGB color (e.g. keep red things, while desaturating the rest), and tint the final result (e.g. for an amber monochrome computer monitor look).
-
-The noise filters could represent the display of a lo-fi scifi hologram, as well as noise in an analog video tape (which in this scheme belongs to "transport").
-
-The `desaturate` filter could represent either a black and white video camera, or a monochrome display.
-
-#### Postprocessor example: HDR, scifi hologram
-
-The bloom works best on a dark background. We use `noise` to add an imperfection to the simulated display device, causing individual pixels to dynamically vary in their brightness (luminance). The `banding` and `scanlines` filters complete the look of how holograms are often depicted in scifi video games and movies. The `"dynamic": true` makes the dimmed field (top or bottom) flip each frame, like on a CRT television, and `"channel": "A"` applies the effect to the alpha channel, making the "hologram" translucent. (The default is `"channel": "Y"`, affecting the brightness, but not translucency.)
+It will print a usage summary and exit, like this (output as of v0.2.3):
 
 ```
-"postprocessor_chain": [["bloom", {}],
-                        ["noise", {"strength": 0.1, "sigma": 0.0, "channel": "Y"}],
-                        ["banding", {}],
-                        ["scanlines", {"dynamic": true, "channel": "A"}]
-                       ]
+usage: Raven-server [-h] [-v] [--config some.python.module] [--port PORT] [--listen] [--secure] [--max-content-length MAX_CONTENT_LENGTH]
+
+Server for specialized local AI models, based on the discontinued SillyTavern-extras
+
+options:
+  -h, --help            show this help message and exit
+  -v, --version         show program's version number and exit
+  --config some.python.module
+                        Python module containing the server config (default is 'raven.server.config')
+  --port PORT           Specify the port on which the application is hosted (default is set in the server config module)
+  --listen              Host the app on the local network (if not set, the server is visible to localhost only)
+  --secure              Require an API key (will be auto-created first time, and printed to console each time on server startup)
+  --max-content-length MAX_CONTENT_LENGTH
+                        Set the max content length for the Flask app config.
 ```
 
-Note that we could also use the `translucency` filter to make the character translucent, e.g.: `["translucency", {"alpha": 0.7}]`.
+The default port is 5100.
 
-Also, for some glitching video transport that shifts random blocks of lines horizontally, we could add these:
+**Important difference to SillyTavern-extras**
+
+In *Raven-server*, server modules are enabled/disabled and configured **in the server config file**, not on the command line.
+
+Thus, to support environments with varying use cases, we only provide **one** command-line option for server module configuration: namely, `--config`, to load a different config file.
+
+
+# Server modules
+
+:exclamation: *To be able to use GPU, be sure to install the CUDA optional dependencies of Raven (see [installation in the main README](../../README.md#install-raven-via-pdm)).* :exclamation:
+
+The server's functionality is split into *modules* that can be enabled or disabled individually. Disabling server modules you don't need can save VRAM as well as allow the server to start up faster.
+
+Modules are enabled/disabled in the *server config* ([see below](#server-configuration)). The modules' compute device and dtype (data type), and any HuggingFace models they use, can also be specified there.
+
+Devices and dtypes follow the PyTorch format.
+
+Typical compute devices are `"cuda:0"` (for the first visible NVIDIA GPU) and `"cpu"`.
+
+Typical dtypes are `"float16"` (commonly used on GPU) and `"float32"` (used on CPU).
+
+Note that not all modules have a dtype setting, and one (`websearch`) doesn't even have a device setting, as it doesn't do any heavy computation. In such cases, the existence of blank config record means that the module is enabled.
+
+## List of server modules
+
+*Last updated for v0.2.3.*
+
+*This server module list is maintained on a best-effort basis, but sometimes, recent changes may be missing. The ground truth is [`raven.server.app`](../server/app.py), especially the function `init_server_modules`.*
+
+*If you are feeling lucky, you can also just skim the `from .modules import ...` statements at the beginning of the file.*
+
+We provide the following server modules:
+
+- `avatar`: The server side of [*Raven-avatar*](../avatar/README.md).
+- `classify`: Emotion classification from text, via distilBERT (28 emotions).
+  - Useful for controlling the avatar's emotional state, by running `classify` on the last few sentences of LLM output, and then setting the avatar's emotion based on the result.
+- `embeddings`: Semantic embeddings, a.k.a. vector embeddings. Supports several *roles* that may each use a different embedding model.
+  - The `"default"` role is useful e.g. for sentence similarity and for semantic visualization.
+  - The `"qa"` role maps questions and their answers near each other, so it is useful e.g. as RAG vector DB keys.
+- `imagefx`: server-side Anime4K upscaling and image filters for still images. No relation to the Google product.
+  - Essentially, `imagefx` exposes the parts used by the avatar's postprocessor.
+  - Used by `raven-avatar-settings-editor` to blur the background.
+  - The `imagefx` module is useful when you want to process still images on the server's GPU. But the network roundtrip time (including image encoding and decoding) means it is not fast enough for processing a video stream.
+  - If you want to use the same features locally, from Python (on the client's GPU), then don't use this module. Instead, use `raven.common.video.postprocessor` and `raven.common.video.upscaler` directly; those are fast enough for realtime. The `imagefx` module is just a web API wrapper for those.
+- `natlang`: server-side [spaCy](https://spacy.io/) NLP. Python clients only.
+  - Just like calling spaCy locally in the client process, but the model runs on the server's GPU.
+  - Supports e.g. part-of-speech (POS) tagging, lemmatization, named entity recognition, and splitting into sentences.
+- `sanitize`: Fix text broken by hyphenation, such as that extracted from scientific paper PDFs.
+- `summarize`: Abstractive summarization of text, using a small, specialized AI model.
+  - This is **much faster** than an LLM, but the result quality may not be as good.
+  - The module has an automatic internal splitter that handles input that is longer than the model's context window, which is automatically queried from the model.
+- `translate`: Natural language translation using a small, specialized AI model.
+  - The module has an automatic internal splitter that sends one sentence at a time.
+    - Many translation-specific AI models expect this format, and may fail spectacularly (even sometimes ignoring large parts of the input) if sent several sentences at a time.
+    - Sentence boundaries are detected with the loaded spaCy model.
+    - Note the implication: context is not preserved between sentences, so this will not be able to translate texts where seeing several sentences at once is important for the meaning.
+  - A default config for English → Finnish is included, based on [Helsinki-NLP/opus-mt-tc-big-en-fi](https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-fi).
+    - This was found to perform better than more recent solutions such as [EuroLLM](https://huggingface.co/collections/utter-project/eurollm-66b2bd5402f755e41c5d9c6d), or even [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
+    - As of 08/2025, open-weight LLMs aren't that good with even moderately low-resource languages, like Finnish.
+  - Models for other language combinations can be found on HuggingFace: [opus-mt-tc-big](https://huggingface.co/models?sort=trending&search=helsinki+opus+mt+big); [others](https://huggingface.co/tasks/translation).
+  - There exist [updated translation models](https://huggingface.co/collections/HPLT/hplt-20-uni-direction-translation-models-67f2fc7ae54845f9b182957a) from the [HPLT consortium](https://hplt-project.org/) (released in 2025), but as of 08/2025, these don't support Transformers yet.
+  - Note that the `translate` module currently requires a model that **does not** need a prefix instruction or a language code specification in the text sent to the model, so e.g. `base-t5` is not compatible.
+- `tts`: Built-in, locally hosted [Kokoro-82M](https://github.com/hexgrad/kokoro).
+  - Provides per-word timestamps and corresponding per-word phoneme data, useful for lipsyncing.
+  - :exclamation: *For `tts`, you may need to install `espeak-ng` and have it available on your `PATH`, because the Kokoro TTS uses it as a fallback phonemizer.* :exclamation:
+  - :exclamation: *`espeak-ng` is **not** a Python package, but a separate command-line app; how to install it depends on your OS.* :exclamation:
+  - :exclamation: *In a Debian-based Linux (such as Ubuntu or Mint), `sudo apt install espeak-ng`. This is the **only** part of installing Raven that needs admin privileges.* :exclamation:
+  - :exclamation: *Raven only ever calls `espeak-ng` from its `tts` module, and only for those inputs for which the TTS's built-in [Misaki](https://github.com/hexgrad/misaki) phonemizer fails.* :exclamation:
+- `websearch`: A local [SERP](https://en.wikipedia.org/wiki/Search_engine_results_page) processor, used by the `websearch` tool of *Raven-minichat* (and will be similarly used by the upcoming *Raven-librarian*).
+  - Continuation of the `websearch` module of *SillyTavern-Extras*, with improvements ported from the newer extension [SillyTavern-WebSearch-Selenium](https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium).
+  - We also provide a custom web API endpoint that returns structured search results (to easily keep each link with the corresponding search result).
+
+Many of the NLP modules have an automatic CPU fallback in their loader: `classify`, `embeddings`, `natlang`, `sanitize`, `summarize`, and `translate`. If loading on GPU fails, these modules will note this in the server log, and auto-retry on the CPU. The rule of thumb is that, for a given module, if a slow response won't completely break the UX, then that module has a loader with a CPU fallback.
+
+The `natlang` module is the only one that only works with Python clients. It needs a compatible instance of spaCy on the client side, to read the internal binary format (which is essentially a Python *pickle*). It was felt this is necessary to support arbitrary use cases of spaCy without overcomplicating the web API, or increasing *Raven-server*'s need of maintenance too much.
+
+All other modules can be used with a client written in any programming language.
+
+
+# Server configuration
+
+:exclamation: *The server config file is, technically, arbitrary Python code.* :exclamation:
+
+:exclamation: ***Never** install a server config from the internet, unless you are sure what that particular config does.* :exclamation:
+
+The server config file is a Python module, which by default is [`raven.server.config`](../server/config.py).
+
+To start the server with a custom config, use the `--config` command-line option.
+
+The server config file is only read **once** per server session, when the server starts up.
+
+## Low VRAM config (8 GB)
+
+If your machine has 8 GB or less VRAM, see [`raven.server.config_lowvram`](../server/config_lowvram.py). To use it, start the server as:
 
 ```
-["digital_glitches", {"strength": 0.05, "name": "shift_right"}],
-["digital_glitches", {"strength": -0.05, "name": "shift_left"}],
+raven-server --config raven.server.config_lowvram
 ```
 
-Having a unique name for each instance is important, because the name acts as a texture cache key.
+This is useful e.g. if you are on the road with a laptop, and you'd like to dedicate the whole GPU for an LLM.
 
-#### Postprocessor example: cheap video camera, amber monochrome computer monitor
+The low-VRAM config doesn't bother loading the `avatar` module, as it's nearly useless on CPU (~2 FPS; not a typo). It loads all other modules on CPU.
 
-We first simulate a cheap video camera with low-quality optics via the `chromatic_aberration` and `vignetting` filters.
+The low-VRAM config also doubles as an example of how to make your own customized config.
 
-We then use `desaturate` with the tint option to produce the amber monochrome look.
+Especially, note that you can just `import` the base config and customize only the parts you want to change.
 
-The `banding` and `scanlines` filters suit this look, so we apply them here, too. They could be left out to simulate a higher-quality display device. Setting `"dynamic": false` makes the scanlines stay stationary.
+## Choosing which GPU to use (optional)
 
-```
-"postprocessor_chain": [["chromatic_aberration", {}],
-                        ["vignetting", {}],
-                        ["desaturate", {"tint_rgb": [1.0, 0.5, 0.2]}],
-                        ["banding", {}],
-                        ["scanlines", {"dynamic": false, "channel": "A"}]
-                       ]
-```
+If your machine has multiple GPUs, there are two ways to tell *Raven-server* which GPU to use.
 
-#### Postprocessor example: HDR, cheap video camera, 1980s VHS tape
+If your system *permanently* has several GPUs connected (like a desktop server rig), and you want to use a different GPU *permanently*, you can adjust the device settings in [`raven.server.config`](raven/server/config.py). These are configurable per-module.
 
-After capturing the light with a cheap video camera (just like in the previous example), we simulate the effects of transporting the signal on a 1980s VHS tape. First, we blur the image with `analog_lowres`. Then we apply `noise` with a nonzero `sigma` to make the noise blobs larger than a single pixel, and a rather high `strength`. This simulates the brightness noise on a VHS tape. Then we make the image ripple horizontally with `analog_rippling_hsync`, and add a damaged video tape effect with `analog_vhsglitches`. Finally, we add a bad VHS tracking effect to complete the "bad analog video tape" look.
+If you run all server modules on the same GPU, and switch GPUs only occasionally (e.g. a laptop that sometimes has an eGPU connected and sometimes doesn't), you can use the `CUDA_VISIBLE_DEVICES` environment variable to choose the GPU temporarily, for the duration of a command prompt session.
 
-Then we again render the output on a simulated CRT TV, as appropriate for the 1980s time period.
+We provide an example script [`run-on-internal-gpu.sh`](run-on-internal-gpu.sh), meant for a laptop with a Thunderbolt eGPU (external GPU), which forces Raven to run on the *internal* GPU when the external is connected (which is useful e.g. if your eGPU is dedicated for a self-hosted LLM). On the machine where the script was tested, PyTorch sees the eGPU as GPU 0 when available, pushing the internal GPU to become GPU 1. When the eGPU is not connected, the internal is GPU 0.
 
-```
-"postprocessor_chain": [["bloom", {}],
-                        ["analog_lowres", {}],
-                        ["noise", {"strength": 0.3, "sigma": 2.0, "channel": "Y"}],
-                        ["analog_rippling_hsync", {}],
-                        ["analog_vhsglitches", {"unboost": 1.0}],
-                        ["analog_vhstracking", {}],
-                        ["banding", {}],
-                        ["scanlines", {"dynamic": true, "channel": "A"}]
-                       ]
-```
-
-#### Complete example: animator and postprocessor settings
-
-This example combines the default values for the animator with the "scifi hologram" postprocessor example above.
-
-This part goes **at the server end** as `raven/avatar/assets/settings/animator.json`, to make it apply to all avatars that do not provide their own values for these settings:
-
-```json
-{"target_fps": 25,
- "pose_interpolator_step": 0.1,
- "blink_interval_min": 2.0,
- "blink_interval_max": 5.0,
- "blink_probability": 0.03,
- "blink_confusion_duration": 10.0,
- "talking_fps": 12,
- "talking_morph": "mouth_aaa_index",
- "sway_morphs": ["head_x_index", "head_y_index", "neck_z_index", "body_y_index", "body_z_index"],
- "sway_interval_min": 5.0,
- "sway_interval_max": 10.0,
- "sway_macro_strength": 0.6,
- "sway_micro_strength": 0.02,
- "breathing_cycle_duration": 4.0
-}
-```
-
-This part goes **at the client end** as `SillyTavern/public/characters/yourcharacternamehere/_animator.json`, to make it apply only to a specific character (i.e. the one that we want to make into a scifi hologram):
-
-```json
-{"postprocessor_chain": [["bloom", {}],
-                         ["translucency", {"alpha": 0.9}],
-                         ["noise", {"strength": 0.1, "sigma": 0.0, "channel": "A"}],
-                         ["banding", {}],
-                         ["scanlines", {"dynamic": true}]
-                        ]
-}
-```
-
-To refresh a running avatar after updating any of its settings files, make `avatar` reload your character. (Pausing and resuming the animation isn't enough.) Upon loading a character, the settings are re-read from disk both at client at server ends.
-
-
-### THA3 Pose Editor
-
-This is a standalone graphical app that you can run locally on the machine where you installed `raven-avatar`. It is based on the original manual poser app in the THA3 tech demo, but this version has some important new convenience features and usability improvements. The GUI toolkit has also changed from wxPython to [DearPyGui](https://github.com/hoffstadt/DearPyGui/), so that this integrates better with my other stuff.
-
-The pose editor uses the same THA3 poser models as the live mode. If the directory `raven/vendor/tha3/models/` does not exist, the model files are automatically downloaded from HuggingFace and installed there.
-
-With this app, you can:
-
-- **Graphically edit the emotion templates** used by the live mode.
-  - They are JSON files, found in `raven/avatar/assets/emotions/`.
-    - The GUI also has a dropdown to quickload any preset.
-  - **NEVER** delete or modify `_defaults.json`. That file stores the factory settings, and the app will not run without it.
-  - For blunder recovery: to reset an emotion back to its factory setting, see the `--factory-reset=EMOTION` command-line option, which will use the factory settings to overwrite the corresponding emotion preset JSON. To reset **all** emotion presets to factory settings, see `--factory-reset-all`. Careful, these operations **cannot** be undone!
-- **Batch-generate the 28 static expression sprites** for a character.
-  - Input is the same single static image format as used by the live mode.
-  - You can then use the generated images as the static expression sprites for your AI character. No need to run the live mode.
-  - You may also want to do this even if you mostly use the live mode, in the rare case you want to save compute and VRAM.
-
-To run the pose editor, open a terminal in your `raven` directory, and:
+With the venv activated, and the terminal in the Raven folder, run the following `bash` command:
 
 ```bash
-$(pdm venv activate)
-python -m raven.avatar.editor
+source run-on-internal-gpu.sh
 ```
 
-Run the editor with the `--help` option for a description of its command-line options. The command-line options of the pose editor are **completely independent** from the options of `raven.server` itself.
-
-Currently, you can choose the device to run on (GPU or CPU), and which THA3 model to use. By default, the pose editor uses GPU and the `separable_float` model.
-
-GPU mode gives the best response, but CPU mode (~2 FPS) is useful at least for batch-exporting static sprites when your VRAM is already full of AI.
+Then for the rest of the command prompt session, any Raven commands (such as `raven-server`) will only see the internal GPU, and `"cuda:0"` in the device settings will point to the only visible GPU.
 
 
-### Creating a character
+# SillyTavern compatibility
 
-To create an AI avatar that `avatar` understands:
+By default, *Raven-server* listens on `http://localhost:5100`, just like *SillyTavern-extras* did.
 
-- The image must be of size 512x512, in PNG format.
-- **The image must have an alpha channel**.
-  - Any pixel with nonzero alpha is part of the character.
-  - If the edges of the silhouette look like a cheap photoshop job (especially when ST renders the character on a different background), check them manually for background bleed.
-- Using any method you prefer, create a front view of your character within [these specifications](readme/Character_Card_Guide.png).
-  - In practice, you can create an image of the character in the correct pose first, and align it as a separate step.
-  - If you use Stable Diffusion, see separate section below.
-  - **IMPORTANT**: *The character's eyes and mouth must be open*, so that the model sees what they look like when open.
-    - See [the THA3 example character](../vendor/tha3/images/example.png).
-    - If that's easier to produce, an open-mouth smile also works.
-- To add an alpha channel to an image that has the character otherwise fine, but on a background:
-  - In Stable Diffusion, you can try the [rembg](https://github.com/AUTOMATIC1111/stable-diffusion-webui-rembg) extension for Automatic1111 to get a rough first approximation.
-  - Also, you can try the *Fuzzy Select* (magic wand) tool in traditional image editors such as GIMP or Photoshop.
-  - Manual pixel-per-pixel editing of edges is recommended for best results. Takes about 20 minutes per character.
-    - If you rendered the character on a light background, use a dark background layer when editing the edges, and vice versa.
-    - This makes it much easier to see which pixels have background bleed and need to be erased.
-- Finally, align the character on the canvas to conform to the placement the THA3 posing engine expects.
-  - We recommend using [the THA3 example character](../vendor/tha3/images/example.png) as an alignment template.
-  - **IMPORTANT**: Export the final edited image, *without any background layer*, as a PNG with an alpha channel.
-- Load up the result into *SillyTavern* as a `talkinghead.png`, and see how well it performs.
+The following modules work as drop-in replacements for the module with the same name in the discontinued *SillyTavern-extras*:
 
-#### Tips for Stable Diffusion
+  - `classify`
+  - `embeddings`
+  - `summarize`
+  - `websearch`
 
-**These tips are old, for SD 1.5.** As of May 2025, I'd recommend a checkpoint based on *Illustrious-XL*.
+The `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`) you can use as a speech synthesizer in *SillyTavern*.
 
-**Time needed**: about 1.5h. Most of that time will be spent rendering lots of gens to get a suitable one, but you should set aside 20-30 minutes to cut your final character cleanly from the background, using image editing software such as GIMP or Photoshop.
+The endpoint `/v1/audio/voices`, to list supported voices, is also provided, but ST doesn't call it.
 
-It is possible to create an `avatar` character render with Stable Diffusion. We assume that you already have a local installation of the [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui-rembg) webui.
+*Talkinghead* support has been discontinued in *SillyTavern*. It would be interesting to introduce *Raven-avatar* as an upgraded replacement, but at the moment, there are no development resources to write a JS client for the avatar. If interested, much of the porting should be straightforward; see [#2](https://github.com/Technologicat/raven/issues/2).
 
-- Don't initially worry about the alpha channel. You can add the alpha channel after you have generated the image.
-- Try the various **VTuber checkpoints** floating around the Internet.
-  - These are trained on talking anime heads in particular, so it's much easier getting a pose that works as input for THA3.
-  - Many human-focused SD checkpoints render best quality at 512x768 (portrait). You can always crop the image later.
-- I've had good results with `meina-pro-mistoon-hll3`.
-  - It can produce good quality anime art (that looks like it came from an actual anime), and it knows how to pose a talking head.
-  - It's capable of NSFW so be careful. Use the negative prompt appropriately.
-  - As the VAE, the standard `vae-ft-mse-840000-ema-pruned.ckpt` is fine.
-  - Settings: *512x768, 20 steps, DPM++ 2M Karras, CFG scale 7*.
-  - Optionally, you can use the [Dynamic Thresholding (CFG Scale Fix)](https://github.com/mcmonkeyprojects/sd-dynamic-thresholding) extension for Automatic1111 to render the image at CFG 15 (to increase the chances of SD following the prompt correctly), but make the result look like as if it was rendered at CFG 7.
-    - Recommended settings: *Half Cosine Up, minimum CFG scale 3, mimic CFG scale 7*, all else at default values.
-- Expect to render **upwards of a hundred** *txt2img* gens to get **one** result good enough for further refinement. At least you can produce and triage them quickly.
-- **Make it easy for yourself to find and fix the edges.**
-  - If your character's outline consists mainly of dark colors, prompt for a light background, and vice versa.
-- As always with SD, some unexpected words may generate undesirable elements that are impossible to get rid of.
-  - For example, I wanted an AI character wearing a *"futuristic track suit"*, but SD interpreted the *"futuristic"* to mean that the character should be posed on a background containing unrelated scifi tech greebles, or worse, that the result should look something like the female lead of [*Saikano* (2002)](https://en.wikipedia.org/wiki/Saikano). Removing that word solved it, but did change the outfit style, too.
+## Raven-server TTS for SillyTavern
 
-**Prompt** for `meina-pro-mistoon-hll3`:
+To connect *SillyTavern* to the `tts` module of *Raven-server*, to use it as ST's speech synthesizer:
 
-```
-(front view, symmetry:1.2), ...character description here..., standing, arms at sides, open mouth, smiling,
-simple white background, single-color white background, (illustration, 2d, cg, masterpiece:1.2)
-```
+- Open ST, and go into _Extensions ⊳ TTS_.
+- Set the TTS provider to _OpenAI Compatible_.
+- Set the provider endpoint to `http://127.0.0.1:5100/v1/audio/speech`.
 
-The `front view` and `symmetry`, appropriately weighted and placed at the beginning, greatly increase the chances of actually getting a direct front view.
+To test, you can use `af_nova` as the voice.
 
-**Negative prompt**:
+To view a full list of available voices, point a browser to `http://127.0.0.1:5100/v1/audio/voices`.
 
-```
-(three quarters view, detailed background:1.2), full body shot, (blurry, sketch, 3d, photo:1.2),
-...character-specific negatives here..., negative_hand-neg, verybadimagenegative_v1.3
-```
+The first letter of a voice name is the language code; the second letter is 'f' for female, 'm' for male.
 
-As usual, the negative embeddings can be found on [Civitai](https://civitai.com/) ([negative_hand-neg](https://civitai.com/models/56519), [verybadimagenegative_v1.3](https://civitai.com/models/11772))
+Kokoro's single-letter language codes are (from [its README](https://github.com/hexgrad/kokoro?tab=readme-ov-file#advanced-usage)):
 
-Then just test it, and equip the negative prompt with NSFW terms if needed.
+- 🇺🇸 'a' => American English, 🇬🇧 'b' => British English
+- 🇪🇸 'e' => Spanish es
+- 🇫🇷 'f' => French fr-fr
+- 🇮🇳 'h' => Hindi hi
+- 🇮🇹 'i' => Italian it
+- 🇯🇵 'j' => Japanese
+- 🇧🇷 'p' => Brazilian Portuguese pt-br
+- 🇨🇳 'z' => Mandarin Chinese
 
-The camera angle terms in the prompt may need some experimentation. Above, we put `full body shot` in the negative prompt, because in SD 1.5, at least with many anime models, full body shots often get a garbled face. However, a full body shot can actually be useful here, because it has the legs available so you can crop them at whatever point they need to be cropped to align the character's face with the template.
+*All* of the voices can speak English, regardless of which language they were designed for (at least as long as you have `espeak-ng` installed; I haven't tested without it).
 
-One possible solution is to ask for a `full body shot`, and *txt2img* for a good pose and composition only, no matter the face. Then *img2img* the result, using the [ADetailer](https://github.com/Bing-su/adetailer) extension for Automatic1111 (0.75 denoise, with [ControlNet inpaint](https://stable-diffusion-art.com/controlnet/#ControlNet_Inpainting) enabled) to fix the face. You can also use *ADetailer* in *txt2img* mode, but that wastes compute (and wall time) on fixing the face in the large majority of gens that do not have the perfect composition and/or outfit.
+For example, if you use `ff_siwis` as the voice, you'll get a French accent. (_Editor's note: Raven-avatar provides a maid character for testing._)
 
-Finally, you may want to upscale, to have enough pixels available to align and crop a good-looking result. Beside latent upscaling with `ControlNet Tile` [[1]](https://github.com/Mikubill/sd-webui-controlnet/issues/1033) [[2]](https://civitai.com/models/59811/4k-resolution-upscale-8x-controlnet-tile-resample-in-depth-with-resources) [[3]](https://stable-diffusion-art.com/controlnet/#Tile_resample), you could try especially the `Remacri` or `AnimeSharp` GANs (in the *Extras* tab of Automatic1111). Many AI upscalers can be downloaded at [OpenModelDB](https://openmodeldb.info/).
-
-**ADetailer notes**
-
-- Some versions of ADetailer may fail to render anything into the final output image if the main denoise is set to 0, no matter the ADetailer denoise setting.
-  - To work around this, use a small value for the main denoise (0.05) to force it to render, without changing the rest of the image too much.
-- When inpainting, **the inpaint mask must cover the whole area that contains the features to be detected**. Otherwise ADetailer will start to process correctly, but since the inpaint mask doesn't cover the area to be edited, it can't write there in the final output image.
-  - This makes sense in hindsight: when inpainting, the area to be edited must be masked. It doesn't matter how the inpainted image data is produced.
+Similarly, `jf_alpha` yields a Japanese accent.
 
 
-### Acknowledgements
+# Python bindings (easy client API)
 
-This software incorporates the [THA3](https://github.com/pkhungurn/talking-head-anime-3-demo) AI-based anime posing engine developed by Pramook Khungurn. The THA3 code is used under the MIT license, and the THA3 AI models are used under the Creative Commons Attribution 4.0 International license. The THA3 example character is used under the Creative Commons Attribution-NonCommercial 4.0 International license. The trained models are currently mirrored [on HuggingFace](https://huggingface.co/OktayAlpk/talking-head-anime-3).
+*Last updated for v0.2.3.*
 
-The pose editor app has been rewritten twice: first updated into a working app and expanded for *SillyTavern-extras*, then ported to DearPyGui for *Raven-avatar*. The live mode (the animation driver) is original to *SillyTavern-extras*, although initially inspired by THA3's *IFacialMocap* VTuber tech demo. The avatar settings editor (GUI for postprocessor settings) is original to *Raven-avatar*.
+*This API documentation is maintained on a best-effort basis, but sometimes, recent changes may be missing. For the ground truth, see below.*
 
-The components of *Raven-avatar* that derive from *SillyTavern-extras* (`raven.server`, `raven.avatar.pose_editor`) are licensed under the same license as *SillyTavern-Extras*, namely *GNU Affero General Public License v3*.
+For integration with Python-based apps, we provide *Python bindings*, i.e. an easy-to-use API that abstracts away the fact that you're interfacing with a server. With the Python bindings, you can call the web API endpoints on the server by calling regular Python functions - your code does not need to care about JSON or HTTP.
 
-New components, or any components where I (@Technologicat) am the only author (particularly `raven.avatar.settings_editor` and `raven.common.video.postprocessor`) are licensed under the 2-clause BSD license, like the rest of *Raven*.
+The server URL that the Python bindings call, can be set in [`raven.client.config`](../client/config.py). The default is `http://localhost:5100`.
 
-As an exception, the `raven.common.video.upscaler` module is licensed under the MIT license, to match the license of the Anime4K engine it uses (so that they can be easily taken together anywhere).
+The Python bindings live in [`raven.client.api`](../client/api.py) and [`raven.client.tts`](../client/tts.py). This split is because the TTS client includes the avatar lipsync driver, which is a couple hundred SLOC, although rather simple.
+
+To avoid duplication, most of the client API functions are not documented separately. The documentation lives on the server side, in the docstrings of [`raven.server.app`](../server/app.py), for the function that serves each specific web API endpoint. The parameters of the Python bindings are the natural Python equivalent of what goes into the web API as JSON.
+
+Full list of Python API functions:
+
+- **General**:
+  - `initialize`: Must be called first.
+    - This loads the client configuration, and starts the audio service so that TTS can work.
+    - The implementation of this one client API function actually lives in `raven.client.util`; see function `initialize_api`.
+  - `raven_server_available`: Check whether the client can connect to *Raven-server* (whose URL was specified when `initialize` was called).
+  - `tts_server_available`: Same, but check the TTS server. This isn't needed when using *Raven-server*'s internal TTS.
+- **Raven-avatar client** (AI-animated anime avatar):
+  - `avatar_load`: Create an avatar session and load a character into it. You'll get a **session ID**, which is needed for **all other** avatar API functions; they operate on a specific session.
+  - `avatar_reload`: Reload a character into the specified avatar session; useful e.g. if the image file has changed on disk, or if you want to switch to another character.
+    - Used by `raven-avatar-settings-editor` for its character-loading and refresh features.
+  - `avatar_unload`: End an avatar session.
+  - `avatar_load_emotion_templates`: Load a set of avatar emotion templates, from a Python dictionary.
+    - Format of the dictionary is:
+        ```
+        {"emotion0": {"morph0": value0,
+                      ...}
+         ...}
+        ```
+      Here morphs include cel blends (except animefx).
+
+      See `Animator.load_emotion_templates` in [`raven.server.modules.avatar`](../server/modules/avatar.py).
+
+      The factory-default emotions file [`raven/avatar/assets/emotions/_defaults.json`](../avatar/assets/emotions/_defaults.json) is a full example using this format.
+  - `avatar_load_emotion_templates_from_file`: Load a set of avatar emotion templates, from an emotion JSON file.
+    - Format as above. You could point this to the factory-default emotions file to load that.
+  - `avatar_load_animator_settings`: Load animator, upscaler and postprocessor settings, from a Python dictionary.
+    - Format of the dictionary is:
+        ```
+        {"name0": value0,
+         ...}
+        ```
+      See `animator_defaults` (and `postprocessor_defaults`) in [`raven.server.config`](../server/config.py) for a full example (which also doubles as an authoritative list of supported settings, documented in comments).
+
+      The settings files in [`raven/avatar/assets/settings/`](../avatar/assets/settings/) are examples using this format.
+
+      The `raven-avatar-settings-editor` GUI app saves settings files with this format.
+  - `avatar_load_animator_settings_from_file`: Load animator, upscaler and postprocessor settings, from a settings JSON file.
+    - Format as above. You could point this to a settings file saved by the `raven-avatar-settings-editor` GUI app.
+  - `avatar_start`: Start (resume) avatar animation.
+  - `avatar_stop`: Stop (pause) avatar animation.
+  - `avatar_start_talking`: Start a generic talking animation (randomized mouth) for no-audio environments. See also `tts_speak_lipsynced`.
+  - `avatar_stop_talking`: Stop the generic talking animation.
+  - `avatar_set_emotion`: Set the avatar character's current emotion.
+  - `avatar_set_overrides`: Manually control specific morphs (including cel blends, except animefx).
+    - Used by the lipsync driver to control the character's mouth based on timestamped phoneme data.
+  - `avatar_result_feed`: Receive the video feed of the avatar, as a `multipart/x-mixed-replace` stream of images.
+    - Image format and desired framerate are set in the animator settings.
+    - The server will try hard to keep the desired framerate.
+      - If rendering falls behind, so that a new frame is not available when needed, the latest available frame is re-sent.
+      - If network transport falls behind, so that frames would pile up on the server, rendering auto-pauses until the latest frame has been sent.
+      - In normal operation, the server works on three consecutive frames at once: while frame X is being sent, X+1 is being encoded, and X+2 is being rendered.
+        - This increases parallelization at the cost of some latency.
+    - In the Python API, this returns a generator that yields video frames from the server. See usage example in [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py).
+    - **NOTE**: In the web API, unlike most others, this is a `GET` endpoint. The session ID is sent as a URL parameter.
+  - `avatar_get_available_filters`: Get list of available image filters in the postprocessor.
+    - The same image filters are also exposed to the `imagefx` module. This is the only API function to get the list.
+- **Text sentiment classification**:
+  - `classify_labels`: Get list of emotions supported by the `classify` model loaded to the server.
+    - By default, the model is distilBERT, with 28 emotions, compatible with the avatar's emotion templates.
+  - `classify`: Classify the emotion from a piece of text.
+- **Semantic embeddings of text**:
+  - `embeddings_compute`: Compute semantic embeddings (vector embeddings).
+    - This uses `sentence_transformers`.
+    - You can optionally specify the *role*. By default, the `"default"` role is used. You may want `"qa"`, depending on the use case. See [the server config file](../server/config.py).
+- **Image processing**:
+  - `imagefx_process`: Apply postprocess filters (on the server) to an image from a filelike or a `bytes` object.
+    - The filters are a filter chain, formatted as in `raven.server.config.postprocessor_defaults`.
+    - Be sure to set some filters; the default is a blank list, which does nothing.
+  - `imagefx_process_file`: Apply postprocess filters (on the server) to an image from a file.
+  - `imagefx_process_array`: Apply postprocess filters (on the server) to an image from a NumPy array.
+    - Array format `float32`, range `[0, 1]`, layout `[h, w, c]`, either RGB (3 channels) or RGBA (4 channels).
+  - `imagefx_upscale`: Anime4K upscale (on the server) an image from a filelike or a `bytes` object.
+    - Anime4K presets `A`, `B` and `C`, with high or low quality. For details, see docstring.
+  - `imagefx_upscale_file`: Anime4K upscale (on the server) to an image from a file.
+  - `imagefx_upscale_array`: Anime4K upscale (on the server) to an image from a NumPy array.
+- **Server-side spaCy NLP**:
+  - `natlang_analyze`: Run text through a spaCy pipeline on the server, using the loaded spaCy model, and send the results to the client.
+    - The transport is spaCy's binary format (which uses Python's *pickle*), so the client must be running a compatible spaCy with a compatible version of Python.
+    - The client loads an empty English pipeline to receive the results. This behaves as if the result came from a local spaCy instance in the client process: you can look at tokens, their parts of speech and lemmas, sentences, ...
+    - You can optionally specify which spaCy pipes to enable. This is useful to speed up processing by skipping unnecessary pipes, if e.g. just sentence splitting is needed (`pipes=["tok2vec", "parser", "senter"]`).
+- **Text cleanup**:
+  - `sanitize_dehyphenate`: Fix text broken by hyphenation, such as that extracted from scientific paper PDFs.
+- **Text summarization**:
+  - `summarize_summarize`: Generate an abstractive summary for text.
+    - This uses a small, specialized AI model, which is not as accurate as an LLM, but is much faster.
+- **Natural language translation**:
+  - `translate_translate`: Translate text from one natural language to another.
+    - This uses a small, specialized AI model for sentence-level translation.
+    - Default configuration for English to Finnish is provided.
+- **Speech synthesizer (TTS)**:
+  - `tts_list_voices`: Get a list of all voice names supported by the TTS.
+  - `tts_speak`: Speak text using the TTS. No lipsync.
+  - `tts_speak_lipsynced`: Speak text using the TTS. Lipsync the specified avatar session to the speech audio.
+  - `tts_stop`: Stop speaking. Useful for canceling while speech in progress. (Will in any case stop automatically when the speech audio ends.)
+- **Web search**:
+  - `websearch_search`: Perform a web search and parse the [SERP](https://en.wikipedia.org/wiki/Search_engine_results_page).
+    - As a new feature over what *SillyTavern-Extras* did, you'll now get the results in a structured format that preserves the information of which link belongs to which search result.
+    - Search engines change things over time, so this is likely to break at some point. If you notice it doesn't work, please open an issue.
+
+
+# Web API endpoints
+
+*Last updated for v0.2.3.*
+
+*This web API endpoint documentation is maintained on a best-effort basis, but sometimes, recent changes may be missing. The ground truth are the docstrings, and ultimately the actual implementation, both of which can be found in [`raven.server.app`](../server/app.py).*
+
+For usage examples, look at the Python bindings of the web API in [`raven.client.api`](../client/api.py) and [`raven.client.tts`](../client/tts.py). These should be straightforward to port to other programming environments if needed. Porting the bindings specifically to JavaScript, for web app clients, is tracked in [#2](https://github.com/Technologicat/raven/issues/2).
+
+**TODO: document each web API endpoint here; name, docstring from `raven.server.app`**
+
+- New simple ping endpoint `/health` (note no `/api/...`), for a client to easily check that the server is up and running.
