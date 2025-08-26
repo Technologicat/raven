@@ -260,6 +260,21 @@ This command will print some system info into the terminal, saying whether it fo
 
 It will also check whether the `cupy` library loads successfully. This library is needed by the [spaCy](https://spacy.io/) natural language analyzer (so that too can run on GPU).
 
+Example output:
+
+```
+INFO:raven.tools.check_cuda:Raven-check-cuda version 0.2.3
+Checking dependencies...
+1. PyTorch availability check [SUCCESS] ✅
+2. CUDA device availability check [SUCCESS] ✅ (Using NVIDIA GeForce RTX 3070 Ti Laptop GPU)
+3. CuPy & CuPyX (for spaCy NLP) [SUCCESS] ✅
+
+System information:
+   Python version: 3.10.12
+   OS: Linux 6.8.0-109049-tuxedo
+   PyTorch version: 2.7.0+cu126
+```
+
 ### Activate the Raven venv (to run Raven commands such as `raven-visualizer` or `raven-server`)
 
 In a terminal that sees your Python environment, navigate to the Raven folder.
