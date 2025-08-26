@@ -739,7 +739,7 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
     """
     update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
     with timer() as tim:
-        logger.info("        Collecting keywords from data points in each cluster...")
+        logger.info("        Collecting keywords from data points in each cluster (`suggest_keywords` will treat each cluster as a 'document')...")
         keywords_by_cluster = [collections.Counter() for _ in range(n_vis_clusters)]
         for entry in vis_data:
             if entry.cluster_id >= 0:  # not an outlier
