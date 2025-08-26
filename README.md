@@ -96,7 +96,8 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app:
     - Tool-calling (a.k.a. tool use)
       - Currently, a websearch tool is provided.
   - Uses [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) as the LLM backend through its OpenAI-compatible API.
-    - We currently test our scaffolding with the Qwen series of LLMs. Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
+    - We currently test our scaffolding with the Qwen series of LLMs.
+    - Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
 
 
 # Install & run
