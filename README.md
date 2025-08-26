@@ -12,6 +12,8 @@
     - [From source](#from-source)
         - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
         - [Install Raven via PDM](#install-raven-via-pdm)
+            - [Basic install without GPU compute support](#basic-install-without-gpu-compute-support)
+            - [Install with GPU compute support](#install-with-gpu-compute-support)
             - [Install on an Intel Mac with MacOSX 10.x](#install-on-an-intel-mac-with-macosx-10x)
             - [Install on Windows (if Windows Defender gets angry)](#install-on-windows-if-windows-defender-gets-angry)
         - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
@@ -147,15 +149,15 @@ The venv will be installed in the `.venv` hidden subfolder of the Raven folder.
 
 Then, install Raven's dependencies as follows. (If you are a seasoned pythonista, note that there is no `requirements.txt`; the dependency list lives in `pyproject.toml`.)
 
-**Basic install without GPU compute support**:
+#### Basic install without GPU compute support
 
 ```bash
 pdm install
 ```
 
-**Install with GPU compute support**:
+#### Install with GPU compute support
 
-Currently this requires an NVIDIA GPU, the proprietary NVIDIA drivers, and CUDA.
+:exclamation: *Currently this requires an NVIDIA GPU, the proprietary NVIDIA drivers, and CUDA.* :exclamation:
 
 ```bash
 pdm install --prod -G cuda
