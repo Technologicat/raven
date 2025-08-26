@@ -76,6 +76,7 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app:
     - Server side of *Raven-avatar*.
   - Partially compatible with *SillyTavern*. Originally developed as a continuation of *SillyTavern-extras*.
   - Python bindings (client for web API) provided.
+    - JS bindings possible, but not implemented yet. See [#2](https://github.com/Technologicat/raven/issues/2).
 
 - :construction: *Raven-librarian*: **Scientific LLM frontend** (under development)
   - **Documentation**: under development
