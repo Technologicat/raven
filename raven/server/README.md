@@ -17,7 +17,60 @@
 - [SillyTavern compatibility](#sillytavern-compatibility)
     - [Raven-server TTS for SillyTavern](#raven-server-tts-for-sillytavern)
 - [Python bindings (easy client API)](#python-bindings-easy-client-api)
+    - [General](#general)
+    - [Raven-avatar client](#raven-avatar-client)
+    - [Text sentiment classification](#text-sentiment-classification)
+    - [Semantic embeddings](#semantic-embeddings)
+    - [Image processing](#image-processing)
+    - [Server-side spaCy NLP](#server-side-spacy-nlp)
+    - [Text cleanup](#text-cleanup)
+    - [Text summarization](#text-summarization)
+    - [Natural language translation](#natural-language-translation)
+    - [Speech synthesizer (TTS)](#speech-synthesizer-tts)
+    - [Web search](#web-search)
 - [Web API endpoints](#web-api-endpoints)
+    - [General](#general-1)
+        - [GET "/"](#get-)
+        - [GET "/health"](#get-health)
+        - [GET "/api/modules"](#get-apimodules)
+    - [Raven-avatar client](#raven-avatar-client-1)
+        - [POST "/api/avatar/load"](#post-apiavatarload)
+        - [POST "/api/avatar/reload"](#post-apiavatarreload)
+        - [POST "/api/avatar/unload"](#post-apiavatarunload)
+        - [POST "/api/avatar/load_emotion_templates"](#post-apiavatarload_emotion_templates)
+        - [POST "/api/avatar/load_animator_settings"](#post-apiavatarload_animator_settings)
+        - [POST "/api/avatar/start"](#post-apiavatarstart)
+        - [POST "/api/avatar/stop"](#post-apiavatarstop)
+        - [POST "/api/avatar/start_talking"](#post-apiavatarstart_talking)
+        - [POST "/api/avatar/stop_talking"](#post-apiavatarstop_talking)
+        - [POST "/api/avatar/set_emotion"](#post-apiavatarset_emotion)
+        - [POST "/api/avatar/set_overrides"](#post-apiavatarset_overrides)
+        - [GET "/api/avatar/result_feed"](#get-apiavatarresult_feed)
+        - [GET "/api/avatar/get_available_filters"](#get-apiavatarget_available_filters)
+    - [Text sentiment classification](#text-sentiment-classification-1)
+        - [POST "/api/classify"](#post-apiclassify)
+        - [GET "/api/classify/labels"](#get-apiclassifylabels)
+    - [Semantic embeddings](#semantic-embeddings-1)
+        - [POST "/api/embeddings/compute"](#post-apiembeddingscompute)
+    - [Image processing](#image-processing-1)
+        - [POST "/api/imagefx/process"](#post-apiimagefxprocess)
+        - [POST "/api/imagefx/upscale"](#post-apiimagefxupscale)
+    - [Server-side spaCy NLP](#server-side-spacy-nlp-1)
+        - [POST "/api/natlang/analyze"](#post-apinatlanganalyze)
+    - [Text cleanup](#text-cleanup-1)
+        - [POST "/api/sanitize/dehyphenate"](#post-apisanitizedehyphenate)
+    - [Text summarization](#text-summarization-1)
+        - [POST "/api/summarize"](#post-apisummarize)
+    - [Natural language translation](#natural-language-translation-1)
+        - [POST "/api/translate"](#post-apitranslate)
+    - [Speech synthesizer (TTS)](#speech-synthesizer-tts-1)
+        - [GET "/api/tts/list_voices"](#get-apittslist_voices)
+        - [POST "/api/tts/speak"](#post-apittsspeak)
+        - [GET "/v1/audio/voices"](#get-v1audiovoices)
+        - [POST "/v1/audio/speech"](#post-v1audiospeech)
+    - [Web search](#web-search-1)
+        - [POST "/api/websearch"](#post-apiwebsearch)
+        - [POST "/api/websearch2"](#post-apiwebsearch2)
 
 <!-- markdown-toc end -->
 
@@ -128,6 +181,7 @@ We provide the following server modules:
 - `tts`: Built-in, locally hosted [Kokoro-82M](https://github.com/hexgrad/kokoro).
   - Provides per-word timestamps and corresponding per-word phoneme data, useful for lipsyncing.
   - :exclamation: *For `tts`, you may need to install `espeak-ng` and have it available on your `PATH`, because the Kokoro TTS uses it as a fallback phonemizer.* :exclamation:
+  - :exclamation: *In practice, the fallback is used for out-of-dictionary words in English, as well as for some non-English languages.* :exclamation:
   - :exclamation: *`espeak-ng` is **not** a Python package, but a separate command-line app; how to install it depends on your OS.* :exclamation:
   - :exclamation: *In a Debian-based Linux (such as Ubuntu or Mint), `sudo apt install espeak-ng`. This is the **only** part of installing Raven that needs admin privileges.* :exclamation:
   - :exclamation: *Raven only ever calls `espeak-ng` from its `tts` module, and only for those inputs for which the TTS's built-in [Misaki](https://github.com/hexgrad/misaki) phonemizer fails.* :exclamation:
@@ -252,106 +306,129 @@ The Python bindings live in [`raven.client.api`](../client/api.py) and [`raven.c
 
 To avoid duplication, most of the client API functions are not documented separately. The documentation lives on the server side, in the docstrings of [`raven.server.app`](../server/app.py), for the function that serves each specific web API endpoint. The parameters of the Python bindings are the natural Python equivalent of what goes into the web API as JSON.
 
-Full list of Python API functions:
+Full list of Python API functions follows.
 
-- **General**:
-  - `initialize`: Must be called first.
-    - This loads the client configuration, and starts the audio service so that TTS can work.
-    - The implementation of this one client API function actually lives in `raven.client.util`; see function `initialize_api`.
-  - `raven_server_available`: Check whether the client can connect to *Raven-server* (whose URL was specified when `initialize` was called).
-  - `tts_server_available`: Same, but check the TTS server. This isn't needed when using *Raven-server*'s internal TTS.
-- **Raven-avatar client** (AI-animated anime avatar):
-  - `avatar_load`: Create an avatar session and load a character into it. You'll get a **session ID**, which is needed for **all other** avatar API functions; they operate on a specific session.
-  - `avatar_reload`: Reload a character into the specified avatar session; useful e.g. if the image file has changed on disk, or if you want to switch to another character.
-    - Used by `raven-avatar-settings-editor` for its character-loading and refresh features.
-  - `avatar_unload`: End an avatar session.
-  - `avatar_load_emotion_templates`: Load a set of avatar emotion templates, from a Python dictionary.
-    - Format of the dictionary is:
-        ```
-        {"emotion0": {"morph0": value0,
-                      ...}
-         ...}
-        ```
-      Here morphs include cel blends (except animefx).
+## General
 
-      See `Animator.load_emotion_templates` in [`raven.server.modules.avatar`](../server/modules/avatar.py).
+- `initialize`: Must be called first.
+  - This loads the client configuration, and starts the audio service so that TTS can work.
+  - The implementation of this one client API function actually lives in `raven.client.util`; see function `initialize_api`.
+- `raven_server_available`: Check whether the client can connect to *Raven-server* (whose URL was specified when `initialize` was called).
+- `tts_server_available`: Same, but check the TTS server. This isn't needed when using *Raven-server*'s internal TTS.
 
-      The factory-default emotions file [`raven/avatar/assets/emotions/_defaults.json`](../avatar/assets/emotions/_defaults.json) is a full example using this format.
-  - `avatar_load_emotion_templates_from_file`: Load a set of avatar emotion templates, from an emotion JSON file.
-    - Format as above. You could point this to the factory-default emotions file to load that.
-  - `avatar_load_animator_settings`: Load animator, upscaler and postprocessor settings, from a Python dictionary.
-    - Format of the dictionary is:
-        ```
-        {"name0": value0,
-         ...}
-        ```
-      See `animator_defaults` (and `postprocessor_defaults`) in [`raven.server.config`](../server/config.py) for a full example (which also doubles as an authoritative list of supported settings, documented in comments).
+## Raven-avatar client
 
-      The settings files in [`raven/avatar/assets/settings/`](../avatar/assets/settings/) are examples using this format.
+AI-animated anime avatar for your LLM.
 
-      The `raven-avatar-settings-editor` GUI app saves settings files with this format.
-  - `avatar_load_animator_settings_from_file`: Load animator, upscaler and postprocessor settings, from a settings JSON file.
-    - Format as above. You could point this to a settings file saved by the `raven-avatar-settings-editor` GUI app.
-  - `avatar_start`: Start (resume) avatar animation.
-  - `avatar_stop`: Stop (pause) avatar animation.
-  - `avatar_start_talking`: Start a generic talking animation (randomized mouth) for no-audio environments. See also `tts_speak_lipsynced`.
-  - `avatar_stop_talking`: Stop the generic talking animation.
-  - `avatar_set_emotion`: Set the avatar character's current emotion.
-  - `avatar_set_overrides`: Manually control specific morphs (including cel blends, except animefx).
-    - Used by the lipsync driver to control the character's mouth based on timestamped phoneme data.
-  - `avatar_result_feed`: Receive the video feed of the avatar, as a `multipart/x-mixed-replace` stream of images.
-    - Image format and desired framerate are set in the animator settings.
-    - The server will try hard to keep the desired framerate.
-      - If rendering falls behind, so that a new frame is not available when needed, the latest available frame is re-sent.
-      - If network transport falls behind, so that frames would pile up on the server, rendering auto-pauses until the latest frame has been sent.
-      - In normal operation, the server works on three consecutive frames at once: while frame X is being sent, X+1 is being encoded, and X+2 is being rendered.
-        - This increases parallelization at the cost of some latency.
-    - In the Python API, this returns a generator that yields video frames from the server. See usage example in [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py).
-    - **NOTE**: In the web API, unlike most others, this is a `GET` endpoint. The session ID is sent as a URL parameter.
-  - `avatar_get_available_filters`: Get list of available image filters in the postprocessor.
-    - The same image filters are also exposed to the `imagefx` module. This is the only API function to get the list.
-- **Text sentiment classification**:
-  - `classify_labels`: Get list of emotions supported by the `classify` model loaded to the server.
-    - By default, the model is distilBERT, with 28 emotions, compatible with the avatar's emotion templates.
-  - `classify`: Classify the emotion from a piece of text.
-- **Semantic embeddings of text**:
-  - `embeddings_compute`: Compute semantic embeddings (vector embeddings).
-    - This uses `sentence_transformers`.
-    - You can optionally specify the *role*. By default, the `"default"` role is used. You may want `"qa"`, depending on the use case. See [the server config file](../server/config.py).
-- **Image processing**:
-  - `imagefx_process`: Apply postprocess filters (on the server) to an image from a filelike or a `bytes` object.
-    - The filters are a filter chain, formatted as in `raven.server.config.postprocessor_defaults`.
-    - Be sure to set some filters; the default is a blank list, which does nothing.
-  - `imagefx_process_file`: Apply postprocess filters (on the server) to an image from a file.
-  - `imagefx_process_array`: Apply postprocess filters (on the server) to an image from a NumPy array.
-    - Array format `float32`, range `[0, 1]`, layout `[h, w, c]`, either RGB (3 channels) or RGBA (4 channels).
-  - `imagefx_upscale`: Anime4K upscale (on the server) an image from a filelike or a `bytes` object.
-    - Anime4K presets `A`, `B` and `C`, with high or low quality. For details, see docstring.
-  - `imagefx_upscale_file`: Anime4K upscale (on the server) to an image from a file.
-  - `imagefx_upscale_array`: Anime4K upscale (on the server) to an image from a NumPy array.
-- **Server-side spaCy NLP**:
-  - `natlang_analyze`: Run text through a spaCy pipeline on the server, using the loaded spaCy model, and send the results to the client.
-    - The transport is spaCy's binary format (which uses Python's *pickle*), so the client must be running a compatible spaCy with a compatible version of Python.
-    - The client loads an empty English pipeline to receive the results. This behaves as if the result came from a local spaCy instance in the client process: you can look at tokens, their parts of speech and lemmas, sentences, ...
-    - You can optionally specify which spaCy pipes to enable. This is useful to speed up processing by skipping unnecessary pipes, if e.g. just sentence splitting is needed (`pipes=["tok2vec", "parser", "senter"]`).
-- **Text cleanup**:
-  - `sanitize_dehyphenate`: Fix text broken by hyphenation, such as that extracted from scientific paper PDFs.
-- **Text summarization**:
-  - `summarize_summarize`: Generate an abstractive summary for text.
-    - This uses a small, specialized AI model, which is not as accurate as an LLM, but is much faster.
-- **Natural language translation**:
-  - `translate_translate`: Translate text from one natural language to another.
-    - This uses a small, specialized AI model for sentence-level translation.
-    - Default configuration for English to Finnish is provided.
-- **Speech synthesizer (TTS)**:
-  - `tts_list_voices`: Get a list of all voice names supported by the TTS.
-  - `tts_speak`: Speak text using the TTS. No lipsync.
-  - `tts_speak_lipsynced`: Speak text using the TTS. Lipsync the specified avatar session to the speech audio.
-  - `tts_stop`: Stop speaking. Useful for canceling while speech in progress. (Will in any case stop automatically when the speech audio ends.)
-- **Web search**:
-  - `websearch_search`: Perform a web search and parse the [SERP](https://en.wikipedia.org/wiki/Search_engine_results_page).
-    - As a new feature over what *SillyTavern-Extras* did, you'll now get the results in a structured format that preserves the information of which link belongs to which search result.
-    - Search engines change things over time, so this is likely to break at some point. If you notice it doesn't work, please open an issue.
+- `avatar_load`: Create an avatar session and load a character into it. You'll get a **session ID**, which is needed for **all other** avatar API functions; they operate on a specific session.
+- `avatar_reload`: Reload a character into the specified avatar session; useful e.g. if the image file has changed on disk, or if you want to switch to another character.
+  - Used by `raven-avatar-settings-editor` for its character-loading and refresh features.
+- `avatar_unload`: End an avatar session.
+- `avatar_load_emotion_templates`: Load a set of avatar emotion templates, from a Python dictionary.
+  - Format of the dictionary is:
+      ```
+      {"emotion0": {"morph0": value0,
+                    ...}
+       ...}
+      ```
+    Here morphs include cel blends (except animefx).
+
+    See `Animator.load_emotion_templates` in [`raven.server.modules.avatar`](../server/modules/avatar.py).
+
+    The factory-default emotions file [`raven/avatar/assets/emotions/_defaults.json`](../avatar/assets/emotions/_defaults.json) is a full example using this format.
+- `avatar_load_emotion_templates_from_file`: Load a set of avatar emotion templates, from an emotion JSON file.
+  - Format as above. You could point this to the factory-default emotions file to load that.
+- `avatar_load_animator_settings`: Load animator, upscaler and postprocessor settings, from a Python dictionary.
+  - Format of the dictionary is:
+      ```
+      {"name0": value0,
+       ...}
+      ```
+    See `animator_defaults` (and `postprocessor_defaults`) in [`raven.server.config`](../server/config.py) for a full example (which also doubles as an authoritative list of supported settings, documented in comments).
+
+    The settings files in [`raven/avatar/assets/settings/`](../avatar/assets/settings/) are examples using this format.
+
+    The `raven-avatar-settings-editor` GUI app saves settings files with this format.
+- `avatar_load_animator_settings_from_file`: Load animator, upscaler and postprocessor settings, from a settings JSON file.
+  - Format as above. You could point this to a settings file saved by the `raven-avatar-settings-editor` GUI app.
+- `avatar_start`: Start (resume) avatar animation.
+- `avatar_stop`: Stop (pause) avatar animation.
+- `avatar_start_talking`: Start a generic talking animation (randomized mouth) for no-audio environments. See also `tts_speak_lipsynced`.
+- `avatar_stop_talking`: Stop the generic talking animation.
+- `avatar_set_emotion`: Set the avatar character's current emotion.
+- `avatar_set_overrides`: Manually control specific morphs (including cel blends, except animefx).
+  - Used by the lipsync driver to control the character's mouth based on timestamped phoneme data.
+- `avatar_result_feed`: Receive the video feed of the avatar, as a `multipart/x-mixed-replace` stream of images.
+  - Image format and desired framerate are set in the animator settings.
+  - The server will try hard to keep the desired framerate.
+    - If rendering falls behind, so that a new frame is not available when needed, the latest available frame is re-sent.
+    - If network transport falls behind, so that frames would pile up on the server, rendering auto-pauses until the latest frame has been sent.
+    - In normal operation, the server works on three consecutive frames at once: while frame X is being sent, X+1 is being encoded, and X+2 is being rendered.
+      - This increases parallelization at the cost of some latency.
+  - In the Python API, this returns a generator that yields video frames from the server. See usage example in [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py).
+  - **NOTE**: In the web API, unlike most others, this is a `GET` endpoint. The session ID is sent as a URL parameter.
+- `avatar_get_available_filters`: Get list of available image filters in the postprocessor.
+  - The same image filters are also exposed to the `imagefx` module. This is the only API function to get the list.
+
+## Text sentiment classification
+
+- `classify_labels`: Get list of emotions supported by the `classify` model loaded to the server.
+  - By default, the model is distilBERT, with 28 emotions, compatible with the avatar's emotion templates.
+- `classify`: Classify the emotion from a piece of text.
+
+## Semantic embeddings
+
+- `embeddings_compute`: Compute semantic embeddings (vector embeddings) of text.
+  - This uses `sentence_transformers`.
+  - You can optionally specify the *role*. By default, the `"default"` role is used. You may want `"qa"`, depending on the use case. See [the server config file](../server/config.py).
+
+## Image processing
+
+- `imagefx_process`: Apply postprocess filters (on the server) to an image from a filelike or a `bytes` object.
+  - The filters are a filter chain, formatted as in `raven.server.config.postprocessor_defaults`.
+  - Be sure to set some filters; the default is a blank list, which does nothing.
+- `imagefx_process_file`: Apply postprocess filters (on the server) to an image from a file.
+- `imagefx_process_array`: Apply postprocess filters (on the server) to an image from a NumPy array.
+  - Array format `float32`, range `[0, 1]`, layout `[h, w, c]`, either RGB (3 channels) or RGBA (4 channels).
+- `imagefx_upscale`: Anime4K upscale (on the server) an image from a filelike or a `bytes` object.
+  - Anime4K presets `A`, `B` and `C`, with high or low quality. For details, see docstring.
+- `imagefx_upscale_file`: Anime4K upscale (on the server) to an image from a file.
+- `imagefx_upscale_array`: Anime4K upscale (on the server) to an image from a NumPy array.
+
+## Server-side spaCy NLP
+
+- `natlang_analyze`: Run text through a spaCy pipeline on the server, using the loaded spaCy model, and send the results to the client.
+  - The transport is spaCy's binary format (which uses Python's *pickle*), so the client must be running a compatible spaCy with a compatible version of Python.
+  - The client loads an empty English pipeline to receive the results. This behaves as if the result came from a local spaCy instance in the client process: you can look at tokens, their parts of speech and lemmas, sentences, ...
+  - You can optionally specify which spaCy pipes to enable. This is useful to speed up processing by skipping unnecessary pipes, if e.g. just sentence splitting is needed (`pipes=["tok2vec", "parser", "senter"]`).
+
+## Text cleanup
+
+- `sanitize_dehyphenate`: Fix text broken by hyphenation, such as that extracted from scientific paper PDFs.
+
+## Text summarization
+
+- `summarize_summarize`: Generate an abstractive summary for text.
+  - This uses a small, specialized AI model, which is not as accurate as an LLM, but is much faster.
+
+## Natural language translation
+
+- `translate_translate`: Translate text from one natural language to another.
+  - This uses a small, specialized AI model for sentence-level translation.
+  - Default configuration for English to Finnish is provided.
+
+## Speech synthesizer (TTS)
+
+- `tts_list_voices`: Get a list of all voice names supported by the TTS.
+- `tts_speak`: Speak text using the TTS. No lipsync.
+- `tts_speak_lipsynced`: Speak text using the TTS. Lipsync the specified avatar session to the speech audio.
+- `tts_stop`: Stop speaking. Useful for canceling while speech in progress. (Will in any case stop automatically when the speech audio ends.)
+
+## Web search
+
+- `websearch_search`: Perform a web search and parse the [SERP](https://en.wikipedia.org/wiki/Search_engine_results_page).
+  - As a new feature over what *SillyTavern-Extras* did, you'll now get the results in a structured format that preserves the information of which link belongs to which search result.
+  - Search engines change things over time, so this is likely to break at some point. If you notice it doesn't work, please open an issue.
 
 
 # Web API endpoints
@@ -362,6 +439,771 @@ Full list of Python API functions:
 
 For usage examples, look at the Python bindings of the web API in [`raven.client.api`](../client/api.py) and [`raven.client.tts`](../client/tts.py). These should be straightforward to port to other programming environments if needed. Porting the bindings specifically to JavaScript, for web app clients, is tracked in [#2](https://github.com/Technologicat/raven/issues/2).
 
-**TODO: document each web API endpoint here; name, docstring from `raven.server.app`**
 
-- New simple ping endpoint `/health` (note no `/api/...`), for a client to easily check that the server is up and running.
+## General
+
+### GET "/"
+
+  Return this documentation.
+
+  No inputs.
+
+  Output is suitable for rendering in a web browser.
+
+
+### GET "/health"
+
+  A simple ping endpoint for clients to check that the server is running.
+
+  No inputs, no outputs - if you get a 200 OK, it means the server heard you.
+
+
+### GET "/api/modules"
+
+  Get a list of enabled modules.
+
+  No inputs.
+
+  Output format is JSON:
+
+      {"modules": ["modulename0",
+                   ...]}
+
+
+## Raven-avatar client
+
+AI-animated anime avatar for your LLM.
+
+### POST "/api/avatar/load"
+
+Start a new avatar instance, and load the avatar sprite posted as a file in the request.
+
+Input is POST, Content-Type `"multipart/form-data"`, with one file attachment, named `"file"`.
+
+The file should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
+
+Optionally, there may be more file attachments, one for each add-on cel. The attachment name
+for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`,
+and for animefx cels, `raven.server.config`.
+
+Output is JSON:
+
+    {"instance_id": "some_important_string"}
+
+Here the important string is the instance ID the new avatar instance. Use this instance ID in the
+other avatar API endpoints to target the operations to this instance.
+
+
+### POST "/api/avatar/reload"
+
+For an existing avatar instance, load the avatar sprite posted as a file in the request, replacing the current sprite.
+
+Input is POST, Content-Type `"multipart/form-data"`, with two file attachments, named `"file"` and `"json"`.
+
+The `"file"` attachment should be an RGBA image in a format that Pillow can read. It will be autoscaled to 512x512.
+
+Optionally, there may be more file attachments, one for each add-on cel. The attachment name
+for each is the cel name. For supported cels, see `supported_cels` in `raven.server.avatarutil`,
+and for animefx cels, `raven.server.config`.
+
+The "json" attachment should contain the API call parameters as JSON:
+
+    {"instance_id": "some_important_string"}
+
+Here the important string is the instance ID you got from `api_avatar_load`.
+
+No outputs.
+
+
+### POST "/api/avatar/unload"
+
+Unload (delete) the given avatar instance.
+
+This automatically causes the `result_feed` for that instance to shut down.
+
+Input is JSON:
+
+    {"instance_id": "some_important_string"}
+
+Here the important string is the instance ID you got from `api_avatar_load`.
+
+No outputs.
+
+
+### POST "/api/avatar/load_emotion_templates"
+
+Load custom emotion templates for avatar, or reset to defaults.
+
+Input is JSON:
+
+    {"instance_id": "some_important_string",
+     "emotions": {"emotion0": {"morph0": value0,
+                               ...}
+                  ...}
+    }
+
+For details, see `Animator.load_emotion_templates` in `raven/server/modules/avatar.py`.
+
+To reload server defaults, send `"emotions": {}` or omit it.
+
+Here the important string is the instance ID you got from `api_avatar_load`.
+
+No outputs.
+
+
+### POST "/api/avatar/load_animator_settings"
+
+Load custom settings for avatar animator and postprocessor, or reset to defaults.
+
+Input is JSON:
+
+    {"instance_id": "some_important_string",
+     "animator_settings": {"name0": value0,
+                           ...}
+    }
+
+For details, see `Animator.load_animator_settings` in `animator.py`.
+
+To reload server defaults, send `"animator_settings": {}` or omit it.
+
+Here the important string is the instance ID you got from `api_avatar_load`.
+
+No outputs.
+
+
+### POST "/api/avatar/start"
+
+Start the avatar animation.
+
+Input is JSON::
+
+    {"instance_id": "some_important_string"}
+
+Here the important string is the instance ID you got from `api_avatar_load`.
+
+No outputs.
+
+A character must be loaded first; use `/api/avatar/load` to do that.
+
+To pause, use `/api/avatar/stop`.
+
+
+### POST "/api/avatar/stop"
+
+Pause the avatar animation.
+
+Input is JSON::
+
+    {"instance_id": "some_important_string"}
+
+Here the important string is the instance ID you got from `api_avatar_load`.
+
+No outputs.
+
+To resume, use `/api/avatar/start`.
+
+
+### POST "/api/avatar/start_talking"
+
+Start the mouth animation for talking.
+
+Input is JSON:
+
+    {"instance_id": "some_important_string"}
+
+Here the important string is the instance ID you got from `api_avatar_load`.
+
+No outputs.
+
+This is the generic, non-lipsync animation that randomizes the mouth.
+
+This is useful for applications without actual voiced audio, such as
+an LLM when TTS is offline, or a low-budget visual novel.
+
+For speech with automatic lipsync, see `tts_speak_lipsynced`.
+
+
+### POST "/api/avatar/stop_talking"
+
+Stop the mouth animation for talking.
+
+Input is JSON::
+
+    {"instance_id": "some_important_string"}
+
+Here the important string is the instance ID you got from `api_avatar_load`.
+
+No outputs.
+
+This is the generic, non-lipsync animation that randomizes the mouth.
+
+This is useful for applications without actual voiced audio, such as
+an LLM when TTS is offline, or a low-budget visual novel.
+
+For speech with automatic lipsync, see `tts_speak_lipsynced`.
+
+
+### POST "/api/avatar/set_emotion"
+
+Set avatar emotion to that posted in the request.
+
+Input is JSON:
+
+    {"instance_id": "some_important_string",
+     "emotion_name": "curiosity"}
+
+where the key "emotion_name" is literal, and the value is the emotion to set.
+
+Here the important string is the instance ID you got from `api_avatar_load`.
+
+No outputs.
+
+There is no getter, by design. If the emotion state is meaningful to you,
+keep a copy in your frontend, and sync that to the server.
+
+
+### POST "/api/avatar/set_overrides"
+
+Directly control the animator's morphs from the client side.
+
+Useful for lipsyncing.
+
+Input is JSON::
+
+    {"instance_id": "some_important_string",
+     "overrides": {"morph0": value0,
+                   ...}
+    }
+
+To unset overrides, set `"overrides": {}` or omit it.
+
+See `raven.avatar.editor` for available morphs. Value range for most morphs is [0, 1],
+and for morphs taking also negative values, it is [-1, 1].
+
+No outputs.
+
+There is no getter, by design. If the override state is meaningful to you,
+keep a copy in your frontend, and sync that to the server.
+
+
+### GET "/api/avatar/result_feed"
+
+Video output.
+
+Example:
+
+    GET /api/avatar/result_feed?instance_id=some_important_string
+
+where `some_important_string` is what `/api/avatar/load` gave you.
+
+The instance ID is an URL parameter to make it trivially easy to display the video stream
+in a web browser. (You still have to get the ID from `/api/avatar/load`; it's an UUID,
+so unfortunately it's not very human-friendly.)
+
+Output is a `"multipart/x-mixed-replace"` stream of video frames, each as an image file.
+The payload separator is `"--frame"`.
+
+The file format can be set in the animator settings. The frames are always sent
+with the Content-Type and Content-Length headers set.
+
+
+### GET "/api/avatar/get_available_filters"
+
+Get metadata of all available postprocessor filters and their available parameters.
+
+The intended audience of this endpoint is developers; this is useful for dynamically
+building an editor GUI for the postprocessor chain.
+
+No inputs.
+
+Output is JSON:
+
+    {"filters": [
+                  [filter_name, {"defaults": {param0_name: default_value0,
+                                              ...},
+                                 "ranges": {param0_name: [min_value0, max_value0],
+                                            ...}}],
+                   ...
+                ]
+    }
+
+For any given parameter, the format of the parameter range depends on the parameter type:
+
+  - numeric (int or float): [min_value, max_value]
+  - bool: [true, false]
+  - multiple-choice str: [choice0, choice1, ...]
+  - RGB color: ["!RGB"]
+  - safe to ignore in GUI: ["!ignore"]
+
+In the case of an RGB color parameter, the default value is of the form [R, G, B],
+where each component is a float in the range [0, 1].
+
+You can detect the type from the default value.
+
+
+## Text sentiment classification
+
+### POST "/api/classify"
+
+Perform sentiment analysis (emotion classification) on the text posted in the request. Return the result.
+
+Input is JSON:
+
+    {"text": "Blah blah blah."}
+
+Output is JSON::
+
+    {"classification": [{"label": emotion0, "score": confidence0},
+                        ...]}
+
+sorted by score, descending, so that the most probable emotion is first.
+
+
+### GET "/api/classify/labels"
+
+Return the available classifier labels for text sentiment (character emotion).
+
+No inputs.
+
+Output is JSON:
+
+    {"labels": [emotion0,
+                ...]}
+
+The actual labels depend on the classifier model.
+
+
+## Semantic embeddings
+
+### POST "/api/embeddings/compute"
+
+Compute the vector embedding of one or more sentences of text.
+
+Input is JSON:
+
+    {"text": "Blah blah blah.",
+     "model": "default"}
+
+or:
+
+    {"text": ["Blah blah blah.",
+              ...],
+     "model": "default"}
+
+The "model" field is optional. It selects the role:
+
+  - If not specified, "default" is used.
+
+  - If specified, the value must be one of the keys of `embedding_models` in the server config.
+    The default config is `raven.server.config`, but note the server's `--config` command-line
+    option, which can be used to specify a different config at server startup.
+
+  - If specified but not present in server config, the request aborts with HTTP error 400.
+
+This functionality is provided because different models may be good for different use cases;
+e.g. beside a general-purpose embedder, having a separate specialized "qa" embedder that maps
+questions and related answers near each other.
+
+Output is also JSON:
+
+    {"embedding": array}
+
+or:
+
+    {"embedding": [array0,
+                   ...]}
+
+respectively.
+
+
+## Image processing
+
+### POST "/api/imagefx/process"
+
+Run an image through a postprocessor chain.
+
+This can be used e.g. for blurring a client-side background for the AI avatar,
+running the blur filter on the server's GPU.
+
+Input is POST, Content-Type `"multipart/form-data"`, with two file attachments:
+
+    "file": the actual image file (binary, any supported format)
+    "json": the API call parameters, in JSON format.
+
+The parameters are:
+
+    {"format": "png",
+     "filters": [[filter0, {param0_name: value0, ...}],
+                 ...]}
+
+Supported image formats (both input and output) are RGB/RGBA formats supported by Pillow,
+and QOI (Quite OK Image).
+
+If you need speed, and your client supports it, prefer the QOI format. Especially the
+encoder is dozens of times faster than PNG's, and compresses almost as tightly.
+
+To get supported filters, call the endpoint `/api/avatar/get_available_filters`.
+Don't mind the name - the endpoint is available whenever at least one of `avatar`
+or `imagefx` is loaded.
+
+Output is an image with mimetype `"image/<format>"`.
+
+
+### POST "/api/imagefx/upscale"
+
+Upscale an image with Anime4K.
+
+Input is POST, Content-Type `"multipart/form-data"`, with two file attachments:
+
+    "file": the actual image file (binary, any supported format)
+    "json": the API call parameters, in JSON format.
+
+The parameters are:
+
+    {"format": "png",
+     "upscaled_width": 1920,
+     "upscaled_height": 1080,
+     "preset": "C",
+     "quality": "high"}
+
+Supported image formats (both input and output) are RGB/RGBA formats supported by Pillow,
+and QOI (Quite OK Image).
+
+Preset is "A", "B" or "C", corresponding to the Anime4K preset with the same letter;
+for the meanings, see `raven.common.video.upscaler`.
+
+Quality is "high" or "low".
+
+If you need speed, and your client supports it, prefer the QOI format. Especially the
+encoder is dozens of times faster than PNG's, and compresses almost as tightly.
+
+Output is an image with mimetype `"image/<format>"`.
+
+
+## Server-side spaCy NLP
+
+### POST "/api/natlang/analyze"
+
+Perform NLP analysis on the text posted in the request. Return the result.
+
+:exclamation: *This endpoint returns Python spaCy data in binary format.* :exclamation:
+
+:exclamation: *It can only be read by a Python client process running a Python version
+that is compatible with the Python running the server. Specifically,
+since spaCy transmits binary data in the pickle format, the client
+Python version must be such that it can unpickle data pickled by
+the server process.* :exclamation:
+
+:exclamation: *The point is that you can use the server's GPU to perform the NLP analysis,
+and then read the results in the client as if they came from a spaCy
+instance running locally on the client.* :exclamation:
+
+:exclamation: *The most convenient way to call this endpoint is `natlang_analyze`
+in `raven.client.api`.* :exclamation:
+
+The NLP analysis is done via spaCy using the `spacy_model` set in the server config,
+which by default lives in `raven.server.config`.
+
+The analysis currently includes part-of-speech tagging, lemmatization,
+and named entity recognition.
+
+Input is JSON:
+
+    {"text": "Blah blah blah."}
+
+To send multiple texts at once, use a list:
+
+    {"text": ["Blah blah blah.",
+              "The quick brown fox jumps over the lazy dog."]}
+
+This is more efficient than sending one text at a time, as it allows the spaCy backend
+to batch the texts.
+
+The server runs the text(s) through the default set of pipes in the loaded spaCy model.
+There is an optional "pipes" field you can use to enable only the pipes you want.
+(Which ones exist depend on the spaCy model that is loaded.)
+
+This works for both one text, or multiple texts. Here is a one-text example:
+
+    {"text": "Blah blah blah.",
+     "pipes": ["tok2vec", "parser", "senter"]}
+
+This effectively does `with nlp.select_pipes(enable=pipes): ...` on the server side.
+
+This can be useful to save processing time if you only need partial analysis,
+e.g. to split the text into sentences (for the model `"en_core_web_sm"`, the pipes
+in the example will do just that).
+
+Output is binary data. It can be loaded on the client side by calling
+`raven.common.nlptools.deserialize_spacy_docs`, which see.
+
+The response contains a **custom header**, `"x-langcode"`, which is the language code
+of the server's loaded spaCy model (e.g. `"en"` for English). The client needs the
+language code to be able to deserialize the data correctly.
+
+If you use `natlang_analyze` in `raven.client.api`, it already loads the data,
+and behaves as if you had called `nlp.pipe(...)` (locally, on the client) on the text.
+
+
+## Text cleanup
+
+### POST "/api/sanitize/dehyphenate"
+
+Dehyphenate the text posted in the request, using a small, specialized AI model.
+
+The AI is a character-level contextual embeddings model from the
+Flair-NLP project.
+
+This can be used to clean up broken text e.g. as extracted
+from a PDF file:
+
+    Text that was bro-
+    ken by hyphenation.
+
+→
+
+    Text that was broken by hyphenation.
+
+If you intend to send the text to an LLM, having it broken
+by hyphenation doesn't matter much in practice, but this
+makes the text much nicer for humans to look at.
+
+Be aware that this often causes paragraphs to run together,
+because the likely-paragraph-split analyzer is not perfect.
+We could analyze one paragraph at a time, but we currently don't,
+because the broken input text could contain blank lines at
+arbitrary positions, so these are not a reliable indicator
+of actual paragraph breaks. If you have known paragraphs you
+want to preserve, you can send them as a list to process each
+separately.
+
+The primary use case for this in Raven is English text; but the
+backend (with the `"multi"` model) does autodetect 300+ languages,
+so give it a try.
+
+This is based on the `dehyphen` package. The analysis applies a small,
+specialized AI model (not an LLM) to evaluate the perplexity of the
+different possible hyphenation options (in the example, "bro ken",
+"bro-ken", "broken") that could have produced the hyphenated text.
+The engine automatically picks the choice with the minimal perplexity
+(i.e. the most likely according to the model).
+
+We then apply some heuristics to clean up the output.
+
+Input is JSON:
+
+    {"text": "Text that was bro-\nken by hyphenation."}
+
+or
+
+    {"text": ["Text that was bro-\nken by hyphenation.",
+              "Some more hyp-\nhenated text."]}
+
+Output is also JSON:
+
+    {"text": "Text that was broken by hyphenation."}
+
+or
+
+    {"text": ["Text that was broken by hyphenation.",
+              "Some more hyphenated text."]}
+
+respectively.
+
+
+## Text summarization
+
+### POST "/api/summarize"
+
+Summarize the text posted in the request. Return the summary.
+
+This uses a small, specialized AI model (not an LLM) plus some
+heuristics to clean up its output.
+
+Input is JSON:
+
+    {"text": "Blah blah blah."}
+
+Output is also JSON:
+
+    {"summary": "Blah."}
+
+
+## Natural language translation
+
+### POST "/api/translate"
+
+Translate the text posted in the request. Return the translation.
+
+This uses a small, specialized AI model (not an LLM).
+
+Input is JSON::
+
+    {"text": "The quick brown fox jumps over the lazy dog.",
+     "source_lang": "en",
+     "target_lang": "fi"}
+
+Output is also JSON:
+
+    {"translation": "Nopea ruskea kettu hyppää laiskan koiran yli."}
+
+To send several texts, use a list:
+
+    {"text": ["The quick brown fox jumps over the lazy dog.",
+              "Please translate this text, too."],
+     "source_lang": "en",
+     "target_lang": "fi"}
+
+→
+
+    {"translation": ["Nopea ruskea kettu hyppää laiskan koiran yli.",
+                     "Ole hyvä ja käännä tämäkin teksti."]}
+
+
+## Speech synthesizer (TTS)
+
+:exclamation: *To use TTS, `espeak-ng` must be installed manually on the server because it's a non-Python dependency of the TTS feature.* :exclamation:
+
+:exclamation: *The TTS engine Kokoro-82M uses it as a phonemizer fallback for out-of-dictionary words
+in English, as well as for some non-English languages.* :exclamation:
+
+### GET "/api/tts/list_voices"
+
+Text to speech.
+
+Get list of voice names from the speech synthesizer.
+
+No inputs.
+
+Output is JSON:
+
+    {"voices": [voice0, ...]}
+
+See:
+
+[https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)
+
+
+### POST "/api/tts/speak"
+
+:exclamation: *This endpoint is general, for both non-lipsynced and lipsynced speech. The avatar lipsync driver is on the client side.* :exclamation:
+
+Text to speech.
+
+Input is JSON:
+
+    {"text": "Blah blah blah.",
+     "voice": "af_bella",
+     "speed": 1.0,
+     "format": "mp3",
+     "get_metadata": true,
+     "stream": false}
+
+Only the "text" field is mandatory.
+
+For available voices, call the endpoint `/api/tts/list_voices`.
+
+For available formats, see `tts.text_to_speech`.
+
+The audio file is returned as the response content. Content-Type is `"audio/<format>"`, e.g. `"audio/mp3"`.
+
+If `"get_metadata"` is true, an extra **custom header** `"x-word-timestamps"` is returned, with JSON data
+containing word-level timestamps and phonemes:
+
+    [{"word": "reasonably" (URL-encoded to ASCII with percent-escaped UTF-8),
+      "phonemes": "ɹˈizənəbli" (URL-encoded to ASCII with percent-escaped UTF-8),
+      "start_time": 2.15,
+      "end_time": 2.75},
+     ...]
+
+The start and end times are measured in seconds from start of audio.
+
+This data is useful for lipsyncing and captioning.
+
+Note `"get_metadata"` currently only works in English (we use a local Kokoro with only English installed).
+
+
+### GET "/v1/audio/voices"
+
+OpenAI compatible endpoint, for SillyTavern; does the exact same thing as `"/api/tts/list_voices"`.
+
+
+### POST "/v1/audio/speech"
+
+OpenAI compatible endpoint, for SillyTavern; does the exact same thing as `"/api/tts/speak"`.
+
+However, this endpoint does **not** support `"get_metadata"`, because it's not part of the OAI format.
+If you need lipsyncing or captioning, use `"/api/tts/speak"` instead.
+
+Input is JSON:
+
+    {"input": "Blah blah blah.",
+     "voice": "af_bella",
+     "speed": 1.0,
+     "response_format": "mp3",
+     "stream": false}
+
+The audio file is returned as the response content. Content-Type is `"audio/<format>"`, e.g. `"audio/mp3"`.
+
+
+## Web search
+
+### POST "/api/websearch"
+
+:exclamation: *Legacy endpoint, for compatibility. For new clients, prefer `"/api/websearch2"`.* :exclamation:
+
+Perform a web search with the query posted in the request.
+
+This is the SillyTavern compatible legacy endpoint.
+For new clients, prefer to use `"/api/websearch2"`, which gives
+structured output and has a `"max_links"` option.
+
+Input is JSON:
+
+    {"query": "what is the airspeed velocity of an unladen swallow",
+     "engine": "duckduckgo"}
+
+In the input, `"engine"` is optional. Valid values are `"duckduckgo"` (default)
+and `"google"`.
+
+Technically, this endpoint can also accept `"max_links"` (like in `/api/websearch2`),
+but SillyTavern doesn't send it.
+
+Output is JSON:
+
+    {"results": preformatted_text,
+     "links": [link0, ...]}
+
+where the `"links"` field contains a list of all links to the search results.
+
+
+### POST "/api/websearch2"
+
+Perform a web search with the query posted in the request.
+
+Input is JSON:
+
+    {"query": "what is the airspeed velocity of an unladen swallow",
+     "engine": "duckduckgo",
+     "max_links": 10}
+
+In the input, some fields are optional:
+
+  - `"engine"`: valid values are `"duckduckgo"` (default) and `"google"`.
+  - `"max_links"`: default 10.
+
+The `"max_links"` field is a hint; the search engine may return more
+results, especially if you set it to a small value (e.g. 3).
+
+Output is JSON:
+
+    {"results": preformatted_text,
+     "data": [{"title": ...,
+               "link": ...,
+               "text": ...}],
+              ...}
+
+In the output, the title field may be missing; not all search engines return it.
+
+This format preserves the connection between the text of the result
+and its corresponding link.
