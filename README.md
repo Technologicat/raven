@@ -155,6 +155,10 @@ Then, install Raven's dependencies as follows. (If you are a seasoned pythonista
 pdm install
 ```
 
+This may take a while (several minutes).
+
+Now the installation should be complete.
+
 #### Install with GPU compute support
 
 :exclamation: *Currently this requires an NVIDIA GPU and CUDA.* :exclamation:
