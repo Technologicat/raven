@@ -356,9 +356,9 @@ def api_avatar_start():
 
     No outputs.
 
-    A character must be loaded first; use '/api/avatar/load' to do that.
+    A character must be loaded first; use `/api/avatar/load` to do that.
 
-    To pause, use '/api/avatar/stop'.
+    To pause, use `/api/avatar/stop`.
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
@@ -382,7 +382,7 @@ def api_avatar_stop():
 
     No outputs.
 
-    To resume, use '/api/avatar/start'.
+    To resume, use `/api/avatar/start`.
     """
     if not avatar.is_available():
         abort(403, "Module 'avatar' not running")
@@ -491,7 +491,6 @@ def api_avatar_set_overrides():
 
     Input is JSON::
 
-
         {"instance_id": "some_important_string",
          "overrides": {"morph0": value0,
                        ...}
@@ -523,14 +522,14 @@ def api_avatar_set_overrides():
 def api_avatar_result_feed():
     """Video output.
 
-    Example:
+    Example::
 
-      GET /api/avatar/result_feed?instance_id=some_important_string
+        GET /api/avatar/result_feed?instance_id=some_important_string
 
-    where `some_important_string` is what "/api/avatar/load" gave you.
+    where `some_important_string` is what `/api/avatar/load` gave you.
 
     The instance ID is an URL parameter to make it trivially easy to display the video stream
-    in a web browser. (You still have to get the ID from "/api/avatar/load"; it's an UUID,
+    in a web browser. (You still have to get the ID from `/api/avatar/load`; it's an UUID,
     so unfortunately it's not very human-friendly.)
 
     Output is a "multipart/x-mixed-replace" stream of video frames, each as an image file.
@@ -555,14 +554,14 @@ def api_avatar_get_available_filters():
 
     Output is JSON::
 
-      {"filters": [
-                    [filter_name, {"defaults": {param0_name: default_value0,
-                                                ...},
-                                   "ranges": {param0_name: [min_value0, max_value0],
-                                              ...}}],
-                     ...
-                  ]
-      }
+        {"filters": [
+                      [filter_name, {"defaults": {param0_name: default_value0,
+                                                  ...},
+                                     "ranges": {param0_name: [min_value0, max_value0],
+                                                ...}}],
+                       ...
+                    ]
+        }
 
     For any given parameter, the format of the parameter range depends on the parameter type:
 
@@ -646,7 +645,7 @@ def api_classify_labels():
 
 @app.route("/api/embeddings/compute", methods=["POST"])
 def api_embeddings_compute():
-    """For making vector DB keys. Compute the vector embedding of one or more sentences of text.
+    """Compute the vector embedding of one or more sentences of text.
 
     Input is JSON::
 
@@ -659,7 +658,7 @@ def api_embeddings_compute():
                   ...],
          "model": "default"}
 
-    The "model" field is optional:
+    The "model" field is optional. It selects the role:
 
       - If not specified, "default" is used.
 
@@ -735,9 +734,9 @@ def api_imagefx_process():
     If you need speed, and your client supports it, prefer the QOI format. Especially the
     encoder is dozens of times faster than PNG's, and compresses almost as tightly.
 
-    To get supported filters, call the endpoint "/api/avatar/get_available_filters".
-    Don't mind the name - the endpoint is available whenever at least one of "avatar"
-    or "imagefx" is loaded.
+    To get supported filters, call the endpoint `/api/avatar/get_available_filters`.
+    Don't mind the name - the endpoint is available whenever at least one of `avatar`
+    or `imagefx` is loaded.
 
     Output is an image with mimetype "image/<format>".
     """
@@ -872,7 +871,7 @@ def api_natlang_analyze():
     Output is binary data. It can be loaded on the client side by calling
     `raven.common.nlptools.deserialize_spacy_docs`, which see.
 
-    The response contains a custom header, "x-langcode", which is the language code
+    The response contains a **custom header**, "x-langcode", which is the language code
     of the server's loaded spaCy model (e.g. "en" for English). The client needs the
     language code to be able to deserialize the data correctly.
 
@@ -910,7 +909,10 @@ def api_natlang_analyze():
 
 @app.route("/api/sanitize/dehyphenate", methods=["POST"])
 def api_sanitize_dehyphenate():
-    """Dehyphenate the text posted in the request.
+    """Dehyphenate the text posted in the request, using a small, specialized AI model.
+
+    The AI is a character-level contextual embeddings model from the
+    Flair-NLP project.
 
     This can be used to clean up broken text e.g. as extracted
     from a PDF file:
@@ -945,9 +947,6 @@ def api_sanitize_dehyphenate():
     "bro-ken", "broken") that could have produced the hyphenated text.
     The engine automatically picks the choice with the minimal perplexity
     (i.e. the most likely according to the model).
-
-    The AI is a character-level contextual embeddings model from the
-    Flair-NLP project.
 
     We then apply some heuristics to clean up the output.
 
@@ -1140,16 +1139,16 @@ def api_tts_speak():
 
     Only the "text" field is mandatory.
 
-    For available voices, call the endpoint "/api/tts/list_voices".
+    For available voices, call the endpoint `/api/tts/list_voices`.
 
     For available formats, see `tts.text_to_speech`.
 
     The audio file is returned as the response content. Content-Type is "audio/<format>", e.g. "audio/mp3".
 
-    If "get_metadata" is true, an extra header "x-word-timestamps" is returned, with JSON data
+    If "get_metadata" is true, an extra **custom header** "x-word-timestamps" is returned, with JSON data
     containing word-level timestamps and phonemes:
 
-        [{"word": "reasonably",
+        [{"word": "reasonably" (URL-encoded to ASCII with percent-escaped UTF-8),
           "phonemes": "ɹˈizənəbli" (URL-encoded to ASCII with percent-escaped UTF-8),
           "start_time": 2.15,
           "end_time": 2.75},
@@ -1278,9 +1277,6 @@ def api_websearch():
     For new clients, prefer to use "/api/websearch2", which gives
     structured output and has a "max_links" option.
 
-    (Technically, this endpoint can also accept "max_links",
-     but SillyTavern doesn't send it.)
-
     Input is JSON::
 
         {"query": "what is the airspeed velocity of an unladen swallow",
@@ -1289,7 +1285,10 @@ def api_websearch():
     In the input, "engine" is optional. Valid values are "duckduckgo" (default)
     and "google".
 
-    Output is JSON:
+    Technically, this endpoint can also accept "max_links" (like in `/api/websearch2`),
+    but SillyTavern doesn't send it.
+
+    Output is JSON::
 
         {"results": preformatted_text,
          "links": [link0, ...]}
@@ -1322,7 +1321,7 @@ def api_websearch2():
     The "max_links" field is a hint; the search engine may return more
     results, especially if you set it to a small value (e.g. 3).
 
-    Output is JSON:
+    Output is JSON::
 
         {"results": preformatted_text,
          "data": [{"title": ...,
