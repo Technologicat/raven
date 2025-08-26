@@ -9,7 +9,6 @@
 
 - [The Raven constellation](#the-raven-constellation)
 - [Install & run](#install--run)
-    - [From PyPI](#from-pypi)
     - [From source](#from-source)
         - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
         - [Install Raven via PDM](#install-raven-via-pdm)
@@ -101,10 +100,6 @@ Raven is a traditional desktop app. It needs to be installed.
 Currently, this takes the form of installing the app and dependencies into a venv (virtual environment). At least at this stage of development, app packaging into a single executable is not a priority.
 
 Raven has been developed and tested on Linux Mint. It should work in any environment that has `bash` and `pdm`.
-
-## From PyPI
-
-**Coming soon**
 
 ## From source
 
