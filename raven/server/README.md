@@ -242,20 +242,22 @@ Then for the rest of the command prompt session, any Raven commands (such as `ra
 
 # SillyTavern compatibility
 
-By default, *Raven-server* listens on `http://localhost:5100`, just like *SillyTavern-extras* did.
+By default, *Raven-server* listens on `http://localhost:5100`, just like the discontinued *SillyTavern-extras* did.
 
-The following modules work as drop-in replacements for the module with the same name in the discontinued *SillyTavern-extras*:
+The following modules work as drop-in replacements for the module with the same name in ST-Extras:
 
   - `classify`
   - `embeddings`
   - `summarize`
   - `websearch`
 
-The `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`) you can use as a speech synthesizer in *SillyTavern*.
+Additionally, the `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`) you can use as a speech synthesizer in ST ([see below](#raven-server-tts-for-sillytavern)). The endpoint `/v1/audio/voices`, to list supported voices, is also provided, but ST doesn't call it.
 
-The endpoint `/v1/audio/voices`, to list supported voices, is also provided, but ST doesn't call it.
+The `embeddings` module is the most useful one, because the GPU-accelerated embedder runs much faster than ST's built-in one. Speed is crucial if you routinely upload 20-page PDFs to the data bank.
 
-*Talkinghead* support has been discontinued in *SillyTavern*. It would be interesting to introduce *Raven-avatar* as an upgraded replacement, but at the moment, there are no development resources to write a JS client for the avatar. If interested, much of the porting should be straightforward; see [#2](https://github.com/Technologicat/raven/issues/2).
+The recommended way to add web search to ST is [SillyTavern-WebSearch-Selenium](https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium), which is an official extension by the ST developers. *Raven-server* provides a `websearch` module mainly because Raven itself needs that functionality.
+
+*Talkinghead* support has been discontinued in ST. It would be interesting to introduce *Raven-avatar* as an upgraded replacement, but at the moment, there are no development resources to write a JS client for the avatar. If you are a developer interested in solving this, see [#2](https://github.com/Technologicat/raven/issues/2).
 
 
 ## Important differences to SillyTavern-extras
