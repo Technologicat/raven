@@ -75,6 +75,8 @@
   - Author search
     - Show full author list if it fits
     - How to show author list if "Aaltonen et al." and the user is searching for "Virtanen" (200 names later in the same author list)
+  - Abstract search
+  - LATER: use HybridIR search backend
   - Word cloud window size: make it possible to scale the window and image
     - Make the word cloud window resizable
     - Add a 1:1 button to the word cloud window's toolbar to return to pixel-perfect size
