@@ -17,44 +17,50 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import argparse
-import atexit
-import collections
-import copy
-import itertools
-import math
-import os
-import pathlib
-import pickle
-import sys
-import threading
-import traceback
-from typing import Optional
-
-import bibtexparser
-
-from unpythonic.env import env
-from unpythonic import box, dyn, islice, make_dynvar, sym, timer, uniqify
-
-# # To connect to the live REPL:  python -m unpythonic.net.client localhost
-# from unpythonic.net import server
-# server.start(locals={"main": sys.modules["__main__"]})
-
-import numpy as np
-# import pandas as pd
-
-import torch
-
-from sklearn.cluster import HDBSCAN
-
 from .. import __version__
 
-from ..common import bgtask
-from ..common import deviceinfo
-from ..common import nlptools
-from ..common import utils as common_utils
+logger.info(f"Raven-importer version {__version__} loading.")
 
-from . import config as visualizer_config
+logger.info("Loading libraries...")
+from unpythonic import timer
+with timer() as tim:
+    import argparse
+    import atexit
+    import collections
+    import copy
+    import itertools
+    import math
+    import os
+    import pathlib
+    import pickle
+    import sys
+    import threading
+    import traceback
+    from typing import Optional
+
+    import bibtexparser
+
+    from unpythonic.env import env
+    from unpythonic import box, dyn, islice, make_dynvar, sym, timer, uniqify
+
+    # # To connect to the live REPL:  python -m unpythonic.net.client localhost
+    # from unpythonic.net import server
+    # server.start(locals={"main": sys.modules["__main__"]})
+
+    import numpy as np
+    # import pandas as pd
+
+    import torch
+
+    from sklearn.cluster import HDBSCAN
+
+    from ..common import bgtask
+    from ..common import deviceinfo
+    from ..common import nlptools
+    from ..common import utils as common_utils
+
+    from . import config as visualizer_config
+logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further
