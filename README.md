@@ -117,6 +117,8 @@ Raven has the following requirements:
  - A Python environment for running the [PDM](https://pdm-project.org/en/latest/) installer. Linux OSs have one built-in; on other OSs it is possible to use tools such as [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) to install one.
  - An NVIDIA GPU for running AI models via CUDA. (This is subject to change in the future.)
 
+:exclamation: **Help wanted!** If you have an AMD GPU and would be willing to collaborate to get Raven working on it, [please chime in](https://github.com/Technologicat/raven/issues/1). Raven does not directly depend on CUDA, but only on PyTorch and on various AI libraries in the Python ecosystem. :exclamation:
+
 ### Install PDM in your Python environment
 
 Raven uses [PDM](https://pdm-project.org/en/latest/) to manage its dependencies. This allows easy installation of the app and its dependencies into a venv (virtual environment) that is local to this one app, so that installing Raven will not break your other apps that use machine-learning libraries (which tend to be very version-sensitive).
@@ -153,9 +155,7 @@ pdm install
 
 **Install with GPU compute support**:
 
-:exclamation: **Help wanted!** If you have an AMD GPU and would be willing to collaborate to get Raven working on it, [please chime in](https://github.com/Technologicat/raven/issues/1). Raven does not directly depend on CUDA, but only on PyTorch and on various AI libraries in the Python ecosystem. :exclamation:
-
-This requires an NVIDIA GPU, the proprietary NVIDIA drivers, and CUDA. The GPU will be used for accelerating BibTeX imports.
+Currently this requires an NVIDIA GPU, the proprietary NVIDIA drivers, and CUDA.
 
 ```bash
 pdm install --prod -G cuda
@@ -193,7 +193,8 @@ Then run `pdm install` again.
 
 *Installing Raven does **not** need admin rights.*
 
-- Raven can be installed as a regular user. We recommend [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) as the Python environment.
+- Raven can be installed as a regular user.
+  - We recommend [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) as the Python environment.
 - The only exception, that **does** need admin rights, is installing `espeak-ng`, so the TTS (speech synthesizer) can use that as its fallback phonemizer.
   - Raven only ever calls `espeak-ng` from *Raven-server*'s `tts` module, and only for those inputs for which the TTS's built-in [Misaki](https://github.com/hexgrad/misaki) phonemizer fails.
   - In practice, that is for out-of-dictionary words in English, as well as for some non-English languages.
