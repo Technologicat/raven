@@ -157,7 +157,11 @@ pdm install
 
 #### Install with GPU compute support
 
-:exclamation: *Currently this requires an NVIDIA GPU, the proprietary NVIDIA drivers, and CUDA.* :exclamation:
+:exclamation: *Currently this requires an NVIDIA GPU and CUDA.* :exclamation:
+
+:exclamation: *Using CUDA requires the proprietary NVIDIA drivers, also on Linux.* :exclamation:
+
+:exclamation: *Currently Raven uses CUDA 12.x. Make sure your NVIDIA drivers support this version.* :exclamation:
 
 ```bash
 pdm install --prod -G cuda
@@ -241,10 +245,6 @@ raven-minichat                    →    python -m raven.librarian.minichat
 
 
 ### Check that CUDA works (optional)
-
-**:exclamation: Using CUDA requires the proprietary NVIDIA drivers, also on Linux. :exclamation:**
-
-**:exclamation: Currently Raven uses CUDA 12.x. Make sure your NVIDIA drivers support this version. :exclamation:**
 
 If you want to use the optional GPU compute support, you will need an NVIDIA GPU and the proprietary NVIDIA drivers (which provide CUDA). How to install them depends on your OS.
 
