@@ -15,7 +15,7 @@
             - [Install on an Intel Mac with MacOSX 10.x](#install-on-an-intel-mac-with-macosx-10x)
             - [Install on Windows (if Windows Defender gets angry)](#install-on-windows-if-windows-defender-gets-angry)
         - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
-        - [Activate the Raven venv (to run Raven commands such as `raven-visualizer`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer)
+        - [Activate the Raven venv (to run Raven commands such as `raven-visualizer` or `raven-server`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer-or-raven-server)
         - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
         - [Choose which GPU to use (optional)](#choose-which-gpu-to-use-optional)
         - [Exit from the Raven venv (optional, to end the session)](#exit-from-the-raven-venv-optional-to-end-the-session)
@@ -256,7 +256,7 @@ This command will print some system info into the terminal, saying whether it fo
 
 It will also check whether the `cupy` library loads successfully. This library is needed by the [spaCy](https://spacy.io/) natural language analyzer (so that too can run on GPU).
 
-### Activate the Raven venv (to run Raven commands such as `raven-visualizer`)
+### Activate the Raven venv (to run Raven commands such as `raven-visualizer` or `raven-server`)
 
 In a terminal that sees your Python environment, navigate to the Raven folder.
 
