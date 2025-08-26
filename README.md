@@ -250,9 +250,7 @@ raven-minichat                    →    python -m raven.librarian.minichat
 
 ### Check that CUDA works (optional)
 
-If you want to use the optional GPU compute support, you will need an NVIDIA GPU and the proprietary NVIDIA drivers (which provide CUDA). How to install them depends on your OS.
-
-Once you have the NVIDIA drivers, and you have installed Raven with GPU compute support, you can check if Raven detects your CUDA installation:
+Once you have installed Raven with GPU compute support, you can check if Raven detects your CUDA installation:
 
 ```bash
 raven-check-cuda
