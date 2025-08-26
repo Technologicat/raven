@@ -281,7 +281,7 @@ Particularly:
 
 **No STT support.** Potentially interesting. We could add STT via [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo), but this needs some consideration of the UX. *Raven-server* might run on a different machine than the client, so the audio needs to be recorded on the client, and sent to the server for transcription.
 
-**No image captioning support.** Potentially interesting, if we expand other components of Raven to handle images later.
+**No image captioning support.** Potentially interesting, if we expand other components of Raven to handle image analysis later.
 
 **No image generation support.** Out of scope for Raven.
 
