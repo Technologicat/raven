@@ -85,24 +85,6 @@ from .util import api_config, yell_on_error  # noqa: F401: re-export
 from .util import initialize_api as initialize  # noqa: F401: re-export
 
 # --------------------------------------------------------------------------------
-# Internal utilities
-
-def pack_parameters_into_json_file_attachment(parameters: Dict[str, Any]) -> str:
-    """Pack API call parameters from a `dict`, for sending in the request as a JSON file attachment.
-
-    The return value can be used as a value in the `files` argument of a `requests.post` call::
-
-        files={"my_param_file": pack_parameters_into_json_file_attachment(...),
-               "my_data_file": ...}
-
-    This is meant for endpoints that on the server side receive "multipart/form-data" because
-    they need a file input, but also simultenously need a JSON input to pass some API call parameters.
-
-    The counterpart is `raven.server.app.unpack_parameters_from_json_file_attachment`.
-    """
-    return ("parameters.json", json.dumps(parameters, indent=4), "application/json")
-
-# --------------------------------------------------------------------------------
 # General utilities
 
 def raven_server_available() -> bool:
@@ -189,7 +171,7 @@ def avatar_reload(instance_id: str, filename: Union[pathlib.Path, str]) -> None:
     # Web API call parameters and the base image file.
     # We must jump through some hoops to send parameters in the same request. A convenient way is to put the parameters into another (virtual) file.
     parameters = {"instance_id": instance_id}
-    files = {"json": pack_parameters_into_json_file_attachment(parameters),
+    files = {"json": netutil.pack_parameters_into_json_file_attachment(parameters),
              "file": (str(filename), _load_file(filename), "application/octet-stream")}
 
     # Any supported cels, if present in the same folder
@@ -443,7 +425,7 @@ def imagefx_process(stream,
     headers = copy.copy(util.api_config.raven_default_headers)
     parameters = {"format": output_format,
                   "filters": filters}
-    files = {"json": pack_parameters_into_json_file_attachment(parameters),
+    files = {"json": netutil.pack_parameters_into_json_file_attachment(parameters),
              "file": ("image.bin", stream, "application/octet-stream")}
     response = requests.post(f"{util.api_config.raven_server_url}/api/imagefx/process", headers=headers, files=files)
     util.yell_on_error(response)
@@ -537,7 +519,7 @@ def imagefx_upscale(stream,
                   "upscaled_height": upscaled_height,
                   "preset": preset,
                   "quality": quality}
-    files = {"json": pack_parameters_into_json_file_attachment(parameters),
+    files = {"json": netutil.pack_parameters_into_json_file_attachment(parameters),
              "file": ("image.bin", stream, "application/octet-stream")}
     response = requests.post(f"{util.api_config.raven_server_url}/api/imagefx/upscale", headers=headers, files=files)
     util.yell_on_error(response)

@@ -3,9 +3,12 @@
 This module is licensed under the 2-clause BSD license.
 """
 
-__all__ = ["multipart_x_mixed_replace_payload_extractor"]
+__all__ = ["multipart_x_mixed_replace_payload_extractor",
+           "pack_parameters_into_json_file_attachment", "unpack_parameters_from_json_file_attachment"]
 
-from typing import Generator, Iterator, Optional, Tuple
+import io
+import json
+from typing import Any, Dict, Generator, Iterator, Optional, Tuple
 
 from unpythonic.net.util import ReceiveBuffer
 
@@ -97,3 +100,46 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
         received_mimetype, body_length_bytes = read_headers()
         payload = read_body(body_length_bytes)
         yield received_mimetype, payload
+
+def pack_parameters_into_json_file_attachment(parameters: Dict[str, Any]) -> str:
+    """Pack API call parameters from a `dict`, for sending in the request as a JSON file attachment.
+
+    The return value can be used as a value in the `files` argument of a `requests.post` call::
+
+        files={"my_param_file": pack_parameters_into_json_file_attachment(...),
+               "my_data_file": ...}
+
+    This is meant for endpoints that on the server side receive "multipart/form-data" because
+    they need a file input, but also simultenously need a JSON input to pass some API call parameters.
+
+    The counterpart is `unpack_parameters_from_json_file_attachment`.
+    """
+    return ("parameters.json", json.dumps(parameters, indent=2), "application/json")
+
+def unpack_parameters_from_json_file_attachment(stream) -> Dict[str, Any]:
+    """Return API call parameters as `dict`, that came in the request as a JSON file.
+
+    `stream`: the `request.files["my_tag"].stream`.
+
+    Returns a dictionary `{param_name0: value0, ...}`.
+
+    This is meant for endpoints that receive "multipart/form-data" because they need a file input,
+    but also simultenously need a JSON input to pass some API call parameters.
+
+    The counterpart is `pack_parameters_into_json_file_attachment`.
+    """
+    # TODO: Do we need to run this through a `BytesIO` to copy the data? Probably not?
+    # The internet says that in some versions of Flask, touching most of the attributes
+    # of a `FileStorage` causes a disk write to a temporary file, but `.stream` can be
+    # safely accessed in-memory.
+    buffer = io.BytesIO()
+    buffer.write(stream.read())
+    parameters_bytes = buffer.getvalue()
+    parameters_python = json.loads(parameters_bytes)
+
+    # # Simpler way without `BytesIO`:
+    # parameters_filestorage = request.files["json"]
+    # parameters_bytes = parameters_filestorage.read()
+    # parameters_python = json.loads(parameters_bytes)
+
+    return parameters_python

@@ -24,14 +24,12 @@ with timer() as tim:
     import argparse
     import gc
     import importlib
-    import io
-    import json
     import os
     import pathlib
     import secrets
     import time
     import traceback
-    from typing import Any, Dict, List, Union
+    from typing import List, Union
 
     from colorama import Fore, Style, init as colorama_init
     import markdown
@@ -46,6 +44,7 @@ with timer() as tim:
     from .. import __version__
 
     from ..common import deviceinfo
+    from ..common import netutil
     from ..common.video.postprocessor import Postprocessor  # available image filters
 
     from .modules import avatar
@@ -123,34 +122,6 @@ def after_request(response):
     duration = time.monotonic() - request.start_time
     response.headers["X-Request-Duration"] = str(duration)  # seconds
     return response
-
-def unpack_parameters_from_json_file_attachment(stream) -> Dict[str, Any]:
-    """Return API call parameters as `dict`, that came in the request as a JSON file.
-
-    `stream`: the `request.files["my_tag"].stream`.
-
-    Returns a dictionary `{param_name0: value0, ...}`.
-
-    This is meant for endpoints that receive "multipart/form-data" because they need a file input,
-    but also simultenously need a JSON input to pass some API call parameters.
-
-    The counterpart is `raven.client.api.pack_parameters_into_json_file_attachment`.
-    """
-    # TODO: Do we need to run this through a `BytesIO` to copy the data? Probably not?
-    # The internet says that in some versions of Flask, touching most of the attributes
-    # of a `FileStorage` causes a disk write to a temporary file, but `.stream` can be
-    # safely accessed in-memory.
-    buffer = io.BytesIO()
-    buffer.write(stream.read())
-    parameters_bytes = buffer.getvalue()
-    parameters_python = json.loads(parameters_bytes)
-
-    # # Simpler way without `BytesIO`:
-    # parameters_filestorage = request.files["json"]
-    # parameters_bytes = parameters_filestorage.read()
-    # parameters_python = json.loads(parameters_bytes)
-
-    return parameters_python
 
 # ----------------------------------------
 # server metadata endpoints
@@ -270,7 +241,7 @@ def api_avatar_reload():
         abort(403, "Module 'avatar' not running")
 
     try:
-        parameters = unpack_parameters_from_json_file_attachment(request.files["json"].stream)
+        parameters = netutil.unpack_parameters_from_json_file_attachment(request.files["json"].stream)
         if "instance_id" not in parameters or not isinstance(parameters["instance_id"], str):
             abort(400, 'api_avatar_reload: "instance_id" is required')
 
@@ -775,7 +746,7 @@ def api_imagefx_process():
 
     try:
         file = request.files["file"]
-        parameters = unpack_parameters_from_json_file_attachment(request.files["json"].stream)
+        parameters = netutil.unpack_parameters_from_json_file_attachment(request.files["json"].stream)
         postprocessor_chain = parameters["filters"]
         format = parameters["format"]
 
@@ -823,7 +794,7 @@ def api_imagefx_upscale():
 
     try:
         file = request.files["file"]
-        parameters = unpack_parameters_from_json_file_attachment(request.files["json"].stream)
+        parameters = netutil.unpack_parameters_from_json_file_attachment(request.files["json"].stream)
 
         format = parameters["format"]
         upscaled_width = parameters["upscaled_width"]
