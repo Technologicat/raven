@@ -18,7 +18,7 @@
         - [Activate the Raven venv (to run Raven commands such as `raven-visualizer`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer)
         - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
         - [Choose which GPU to use (optional)](#choose-which-gpu-to-use-optional)
-        - [Exit from the Raven venv (optional)](#exit-from-the-raven-venv-optional)
+        - [Exit from the Raven venv (optional, to end the session)](#exit-from-the-raven-venv-optional-to-end-the-session)
 - [Uninstall](#uninstall)
 - [Technologies](#technologies)
 - [License](#license)
@@ -306,7 +306,9 @@ source run-on-internal-gpu.sh
 
 Then for the rest of the command prompt session, any Raven commands (such as `raven-visualizer`) will only see the internal GPU, and `"cuda:0"` in the device settings will point to the only visible GPU.
 
-### Exit from the Raven venv (optional)
+### Exit from the Raven venv (optional, to end the session)
+
+:exclamation: *There is usually no need to do this. You can just close the terminal window.* :exclamation:
 
 If you want to exit from the Raven venv without exiting your terminal session, you can deactivate the venv like this:
 
