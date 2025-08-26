@@ -253,7 +253,7 @@ The following modules work as drop-in replacements for the module with the same 
 
 Additionally, the `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`) you can use as a speech synthesizer in ST ([see below](#raven-server-tts-for-sillytavern)).
 
-The `embeddings` module is the most useful one, because the GPU-accelerated embedder runs much faster than ST's built-in one. Speed is crucial if you routinely upload 20-page PDFs to the data bank.
+The `embeddings` module is the most useful one, because the GPU-accelerated embedder runs much faster than ST's built-in one. Speed is crucial if you routinely upload 20-page PDFs to the data bank to discuss them with your LLM.
 
 The recommended way to add web search to ST is [SillyTavern-WebSearch-Selenium](https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium), which is an official extension by the ST developers. *Raven-server* provides a `websearch` module mainly because Raven itself needs that functionality.
 
