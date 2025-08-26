@@ -251,7 +251,7 @@ The following modules work as drop-in replacements for the module with the same 
   - `summarize`
   - `websearch`
 
-Additionally, the `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`) you can use as a speech synthesizer in ST ([see below](#raven-server-tts-for-sillytavern)). The endpoint `/v1/audio/voices`, to list supported voices, is also provided, but ST doesn't call it.
+Additionally, the `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`) you can use as a speech synthesizer in ST ([see below](#raven-server-tts-for-sillytavern)).
 
 The `embeddings` module is the most useful one, because the GPU-accelerated embedder runs much faster than ST's built-in one. Speed is crucial if you routinely upload 20-page PDFs to the data bank.
 
