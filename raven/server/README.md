@@ -4,6 +4,11 @@
 
 -----
 
+<p align="center">
+<img src="../../img/screenshot-server.png" alt="Screenshot of Raven-server" width="800"/> <br/>
+<i>Raven-server serving on localhost.</i>
+</p>
+
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 

@@ -31,6 +31,10 @@
 As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I finish updating the documentation, here is a short overview:
 
 - :white_check_mark: *Raven-visualizer*: **Research literature visualization tool**
+
+  <a href="raven/visualizer/README.md"><img src="img/screenshot-main.png" alt="Screenshot of Raven's main window" height="200"/></a>
+  <a href="raven/visualizer/README.md"><img src="img/screenshot-wordcloud.png" alt="Screenshot of Raven's wordcloud window" height="200"/></a>
+
   - **Documentation**: [Visualizer user manual](raven/visualizer/README.md)
   - **Goal**: Take 10k+ studies, find the most relevant ones.
     - Status: Fully operational. Could still use more features; we plan to add some later.
@@ -43,6 +47,10 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I f
   - This was the original *Raven*.
 
 - :white_check_mark: *Raven-avatar*: **AI-animated anime avatar**
+
+  <a href="raven/avatar/README.md"><img src="img/avatar-settings-editor.png" alt="Screenshot of Raven-avatar-settings-editor" height="200"/></a>
+  <a href="raven/avatar/README.md"><img src="img/avatar-pose-editor.png" alt="Screenshot of Raven-avatar-pose-editor" height="200"/></a>
+
   - **Documentation**: [Avatar user manual](raven/avatar/README.md)
   - **Goal**: Visually represent your LLM as a custom anime character, for PR stunts and for fun.
     - Status: Fully operational standalone tech demo, and Python bindings to integrate the avatar to Python-based GUI apps.
@@ -56,6 +64,9 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I f
     - Web API to receive avatar video stream and to control the avatar.
 
 - :white_check_mark: *Raven-server*: **Web API server for Raven's GPU-powered components**
+
+  <a href="raven/server/README.md"><img src="img/screenshot-server.png" alt="Screenshot of Raven-server" height="200"/></a>
+
   - **Documentation**: [Server user manual](raven/server/README.md)
   - **Goal**: Run all of the Raven constellations's GPU processing in the server process, wherever it is on the local network.
     - Status: Fully operational. On the client side, `raven-importer` and the RAG subsystem of *Raven-librarian* have no server support yet.
