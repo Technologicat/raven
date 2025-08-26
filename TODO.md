@@ -82,6 +82,7 @@
       - Keep a separate copy of the full-resolution texture (word cloud output)
       - Keep a dynamic texture copy that is shown in the GUI
       - Lanczos-scale the data in the GUI texture in a bgtask (Lanczos scale to target size, then nearest-neighbor scale the result to the fixed texture size)
+    - Selectable color scheme (for white background, for export to papers)
   - Toggle fullscreen -> Fullscreen mode / Exit fullscreen mode, with icons
   - Full report of all selected items that doesn't care whether the items fit into the info panel
   - Make the text headings clickable in the import window (same as clicking the corresponding button)
@@ -286,6 +287,7 @@
 
 - BibTeX importer:
   - Detect and report duplicate entry keys to ease debugging on BibTeX databases.
+  - Run the abstracts through the `sanitize` module.
   - Make it configurable which fields to use for the semantic embedding.
   - Make the stopword list configurable (text file).
   - Investigate more advanced NLP methods to improve the quality of the automatically extracted keyword list.
