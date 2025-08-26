@@ -30,7 +30,7 @@
 
 As of 08/2025, *Raven* is now a constellation, no longer a single app:
 
-- :white_check_mark: *Raven-visualizer*: **Research literature visualization tool**
+- :white_check_mark: *Raven-visualizer*: **Visualize research literature**
 
   <a href="raven/visualizer/README.md"><img src="img/screenshot-main.png" alt="Screenshot of Raven's main window" height="200"/></a>
   <a href="raven/visualizer/README.md"><img src="img/screenshot-wordcloud.png" alt="Screenshot of Raven's wordcloud window" height="200"/></a>
@@ -63,7 +63,7 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app:
     - Realtime video postprocessor with visual effects such as [bloom](https://en.wikipedia.org/wiki/Bloom_(shader_effect)), [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration), or [scanlines](https://en.wikipedia.org/wiki/Scan_line).
     - Web API to receive avatar video stream and to control the avatar.
 
-- :white_check_mark: *Raven-server*: **Web API server for Raven's GPU-powered components**
+- :white_check_mark: *Raven-server*: **Web API server**
 
   <a href="raven/server/README.md"><img src="img/screenshot-server.png" alt="Screenshot of Raven-server" height="200"/></a>
 
@@ -362,7 +362,7 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
   - Toolbutton icons: [Font Awesome](https://github.com/FortAwesome/Font-Awesome) v6.6.0.
   - Word cloud renderer: [word_cloud](https://github.com/amueller/word_cloud).
 
-Note that installing Raven will auto-install dependencies into the same venv (virtual environment). This list is here just to provide a flavor of the kinds of parts needed to build a tool like this.
+Note that installing Raven will auto-install dependencies into the same venv (virtual environment). This list is here just to provide a flavor of the kinds of parts needed to build a constellation like this.
 
 
 # License
