@@ -267,6 +267,6 @@ Image assets original to *Raven-avatar* (located in [`raven/avatar/assets/`](../
 
 # Acknowledgements
 
-Thanks to @pkhungurn (Pramook Khungurn) for the *Talking Head Anime 3* (THA3) AI posing engine, used under the MIT license.
+Thanks to @pkhungurn (Pramook Khungurn) for the *Talking Head Anime 3* (THA3) AI posing engine, used under the MIT license. See [code](https://github.com/pkhungurn/talking-head-anime-3-demo), [models](https://huggingface.co/OktayAlpk/talking-head-anime-3/tree/main), [tech report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html), [THA4 paper](https://arxiv.org/abs/2311.17409).
 
 Thanks to the authors of *SillyTavern-extras* for the original implementation of the *Talkinghead* module, which showed a tantalizing vision of what is possible when we repurpose VTubing software to render an AI avatar.

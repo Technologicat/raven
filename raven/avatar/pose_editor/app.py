@@ -17,8 +17,10 @@ This module uses THA3 directly, as does `raven.server.modules.avatar`.
 **Who**:
 
 Original code written and neural networks designed and trained by Pramook Khungurn (@pkhungurn):
-    https://github.com/pkhungurn/talking-head-anime-3-demo
-    https://arxiv.org/abs/2311.17409
+    code: https://github.com/pkhungurn/talking-head-anime-3-demo
+    models: https://huggingface.co/OktayAlpk/talking-head-anime-3/tree/main
+    tech report: https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html
+    THA4 paper: https://arxiv.org/abs/2311.17409
 
 This fork was originally maintained by the SillyTavern-extras project.
 
