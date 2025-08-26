@@ -28,7 +28,7 @@
 
 # The Raven constellation
 
-As of 08/2025, *Raven* is now a constellation, no longer a single app. Until I finish updating the documentation, here is a short overview:
+As of 08/2025, *Raven* is now a constellation, no longer a single app:
 
 - :white_check_mark: *Raven-visualizer*: **Research literature visualization tool**
 
