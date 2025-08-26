@@ -68,20 +68,14 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app:
   <a href="raven/server/README.md"><img src="img/screenshot-server.png" alt="Screenshot of Raven-server" height="200"/></a>
 
   - **Documentation**: [Server user manual](raven/server/README.md)
-  - **Goal**: Run all of the Raven constellations's GPU processing in the server process, wherever it is on the local network.
+  - **Goal**: Run all GPU processing on the server, anywhere on the local network.
     - Status: Fully operational. On the client side, `raven-importer` and the RAG subsystem of *Raven-librarian* have no server support yet.
   - **Features**:
-    - Various AI components for natural language processing.
-    - Speech synthesizer (TTS), using [Kokoro-82M](https://github.com/hexgrad/kokoro)
-    - Server side of *Raven-avatar*
-  - The server was originally developed as a continuation of the discontinued *SillyTavern-extras*, but has since been extended in various ways.
-    - The `classify`, `embeddings`, `summarize`, and `websearch` modules are compatible with those modules of *SillyTavern-Extras*.
-    - Additionally, the `tts` module provides an OpenAI compatible speech endpoint, which *SillyTavern* can use as its TTS.
-  - Python bindings for Raven-server are provided in [`raven/client/api.py`](raven/client/api.py). These double as documentation for how to call the web API endpoints.
-    - The client API abstracts away the fact that you're calling a remote process - you just call regular Python functions.
-    - The server URL to connect to is configured in [`raven/client/config.py`](raven/client/config.py). Default is to run both server and client on localhost.
-  - The server can be configured in [`raven/server/config.py`](raven/server/config.py).
-    - Or make your own config file, and point to that using the `--config` command-line option when you start the server. See [`raven/server/config_lowvram.py`](raven/server/config_lowvram.py) for an example.
+    - AI components for natural language processing (NLP).
+    - Speech synthesizer (TTS), using [Kokoro-82M](https://github.com/hexgrad/kokoro).
+    - Server side of *Raven-avatar*.
+  - Partially compatible with *SillyTavern*. Originally developed as a continuation of *SillyTavern-extras*.
+  - Python bindings (client for web API) provided in [`raven/client/api.py`](raven/client/api.py).
 
 - :construction: *Raven-librarian*: **Scientific LLM frontend** (under development)
   - **Documentation**: under development
