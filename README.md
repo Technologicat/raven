@@ -192,6 +192,7 @@ Then run `pdm install` again.
 - Raven can be installed as a regular user. We recommend [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) as the Python environment.
 - The only exception, that **does** need admin rights, is installing `espeak-ng`, so the TTS (speech synthesizer) can use that as its fallback phonemizer.
   - Raven only ever calls `espeak-ng` from *Raven-server*'s `tts` module, and only for those inputs for which the TTS's built-in [Misaki](https://github.com/hexgrad/misaki) phonemizer fails.
+  - In practice, that is for out-of-dictionary words in English, as well as for some non-English languages.
 
 *Using Raven does **not** need admin rights.*
 
