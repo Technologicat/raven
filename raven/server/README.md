@@ -16,7 +16,7 @@
     - [Choosing which GPU to use (optional)](#choosing-which-gpu-to-use-optional)
 - [SillyTavern compatibility](#sillytavern-compatibility)
     - [Important differences to SillyTavern-extras](#important-differences-to-sillytavern-extras)
-        - [Fewer command-line options](#fewer-command-line-options)
+        - [Overhauled command-line options](#overhauled-command-line-options)
         - [Removed modules](#removed-modules)
     - [Raven-server TTS for SillyTavern](#raven-server-tts-for-sillytavern)
 - [Python bindings (easy client API)](#python-bindings-easy-client-api)
@@ -260,7 +260,7 @@ The endpoint `/v1/audio/voices`, to list supported voices, is also provided, but
 
 ## Important differences to SillyTavern-extras
 
-### Fewer command-line options
+### Overhauled command-line options
 
 In *Raven-server*, server modules are enabled/disabled and configured **in the server config file**, not on the command line.
 
