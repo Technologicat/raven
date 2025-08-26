@@ -285,6 +285,7 @@
   - OpenSans is missing the subscript-x glyph, which also breaks the rendering of chemistry formulas (e.g. "NOₓ").
 
 - BibTeX importer:
+  - Detect and report duplicate entry keys to ease debugging on BibTeX databases.
   - Make it configurable which fields to use for the semantic embedding.
   - Make the stopword list configurable (text file).
   - Investigate more advanced NLP methods to improve the quality of the automatically extracted keyword list.
