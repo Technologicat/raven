@@ -37,6 +37,12 @@ def setup_font_ranges():
     dpg.add_font_chars([0x2070, 0x00b9, 0x00b2, 0x00b3, 0x2074, 0x2075, 0x2076, 0x2077, 0x2078, 0x2079])  # zero through nine
     dpg.add_font_chars([0x2071, 0x207f])  # i, n
     dpg.add_font_range(0x207a, 0x207e)  # +, -, =, (, )
+    # from biology dataset
+    dpg.add_font_chars([0x0131])  # ı
+    dpg.add_font_chars([0x2013])  # – (en dash)
+    dpg.add_font_chars([0x2014])  # — (em dash)
+    dpg.add_font_range(0x2018, 0x2019)  # ‘, ’
+    dpg.add_font_range(0x201C, 0x201D)  # “, ”
 
 def markdown_add_font_callback(file, size: int | float, parent=0, **kwargs) -> int:  # IMPORTANT: parameter names as in `dpg_markdown`, arguments are sent in by name.
     """Callback for `dpg_markdown` to load a font. Called whenever a new font size or family is needed.
