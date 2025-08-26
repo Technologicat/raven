@@ -39,6 +39,10 @@ def setup_font_ranges():
     dpg.add_font_range(0x207a, 0x207e)  # +, -, =, (, )
     # from biology dataset
     dpg.add_font_chars([0x0131])  # ı
+    dpg.add_font_chars([0x0107])  # ć
+    dpg.add_font_range(0xBC, 0xBE)  # ¼, ½, ¾
+    dpg.add_font_range(0x2150, 0x215E)  # other vulgar fractions
+    dpg.add_font_chars([0x2189])  # ↉
     dpg.add_font_chars([0x2013])  # – (en dash)
     dpg.add_font_chars([0x2014])  # — (em dash)
     dpg.add_font_range(0x2018, 0x2019)  # ‘, ’
