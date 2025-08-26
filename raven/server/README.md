@@ -15,6 +15,9 @@
     - [Low VRAM config (8 GB)](#low-vram-config-8-gb)
     - [Choosing which GPU to use (optional)](#choosing-which-gpu-to-use-optional)
 - [SillyTavern compatibility](#sillytavern-compatibility)
+    - [Important differences to SillyTavern-extras](#important-differences-to-sillytavern-extras)
+        - [Fewer command-line options](#fewer-command-line-options)
+        - [Removed modules](#removed-modules)
     - [Raven-server TTS for SillyTavern](#raven-server-tts-for-sillytavern)
 - [Python bindings (easy client API)](#python-bindings-easy-client-api)
     - [General](#general)
@@ -88,7 +91,7 @@ Most of the server functions are stateless; the only exception is *Raven-avatar*
 
 For the speech synthesizer, we provide two web API endpoints: an OpenAI compatible one, and a custom one. The custom endpoint provides word timestamps and per-word phoneme data, which is needed for lipsyncing the avatar. The actual lipsync driver lives on the client side, in the [Python bindings](#python-bindings-easy-client-api), because the speech audio playback is done on the client side, too.
 
-Historically, *Raven-server* began as a continuation of the discontinued *SillyTavern-extras*. One important reason was to keep the avatar technology alive; it was a promising, unique experiment that no other project seems to have followed up on. But also, a web API server for various specialized NLP functionality happened to be exactly what *Raven-visualizer* and the upcoming *Raven-librarian* needed. The server has since been extended in various ways: the avatar has several new features, the built-in TTS is new, and several new NLP modules have been added.
+Historically, *Raven-server* began as a continuation of the discontinued *SillyTavern-extras*. One important reason was to keep the avatar technology alive; it is a promising, unique experiment that no other project seems to have followed up on. But also, a web API server for various specialized NLP functionality happened to be exactly what *Raven-visualizer* and the upcoming *Raven-librarian* needed. The server has since been extended in various ways: the avatar has several new features, the built-in TTS is new, and several new NLP modules have been added.
 
 
 # Command-line options
@@ -115,12 +118,6 @@ options:
 ```
 
 The default port is 5100.
-
-**Important difference to SillyTavern-extras**
-
-In *Raven-server*, server modules are enabled/disabled and configured **in the server config file**, not on the command line.
-
-Thus, to support environments with varying use cases, we only provide **one** command-line option for server module configuration: namely, `--config`, to load a different config file.
 
 
 # Server modules
@@ -259,6 +256,35 @@ The `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`)
 The endpoint `/v1/audio/voices`, to list supported voices, is also provided, but ST doesn't call it.
 
 *Talkinghead* support has been discontinued in *SillyTavern*. It would be interesting to introduce *Raven-avatar* as an upgraded replacement, but at the moment, there are no development resources to write a JS client for the avatar. If interested, much of the porting should be straightforward; see [#2](https://github.com/Technologicat/raven/issues/2).
+
+
+## Important differences to SillyTavern-extras
+
+### Fewer command-line options
+
+In *Raven-server*, server modules are enabled/disabled and configured **in the server config file**, not on the command line.
+
+Thus, to support environments with varying use cases, we only provide **one** command-line option for server module configuration: namely, `--config`, to load a different config file.
+
+### Removed modules
+
+Some modules have been removed:
+
+- `caption`
+- `chromadb`: use ST's Vector Storage instead.
+- `coqui-tts`, `edge-tts`, `rvc`, `silero-tts`: replaced by the new `tts` module.
+- `streaming-stt`, `vosk-stt`, `whisper-stt`
+- `sd`
+- `talkinghead`: replaced by the new `avatar` module (currently not supported by SillyTavern).
+
+Particularly:
+
+**No STT support.** Potentially interesting. We could add STT via [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo), but this needs some consideration of the UX. *Raven-server* might run on a different machine than the client, so the audio needs to be recorded on the client, and sent to the server for transcription. This is different from how the `whisper-stt` module of *SillyTavern-Extras* worked, as it recorded on the server's microphone.
+
+**No image captioning support.** Potentially interesting, if we expand other components of Raven to handle images later.
+
+**No image generation support.** Out of scope for Raven.
+
 
 ## Raven-server TTS for SillyTavern
 
