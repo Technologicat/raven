@@ -102,11 +102,13 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app:
 
 # Install & run
 
-Raven is a traditional desktop app. It needs to be installed.
+The Raven constellation consists traditional desktop apps. It needs to be installed.
 
 Currently, this takes the form of installing the app and dependencies into a venv (virtual environment). At least at this stage of development, app packaging into a single executable is not a priority.
 
 Raven has been developed and tested on Linux Mint. It should work in any environment that has `bash` and `pdm`.
+
+It has been reported to work on Mac OS X, as well as on Windows (with Miniconda).
 
 ## From source
 
