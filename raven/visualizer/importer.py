@@ -272,9 +272,18 @@ def get_highdim_semantic_vectors(input_data):
                                                            visualizer_config.devices["embeddings"]["dtype"])
             logger.info("        Encoding...")
             with timer() as tim:
-                all_inputs = [entry.title for entry in entries]  # with mpnet, this works best (and we don't always necessarily have an abstract)
-                # all_inputs = [entry.abstract for entry in entries]  # testing with snowflake
-                # all_inputs = [" ".join(entry.keywords) for entry in entries]
+                def format_entry_for_vectorization(entry: env) -> str:
+                    # return entry.title  # original solution - with mpnet, this works best (and we don't always necessarily have an abstract)
+                    # return entry.abstract  # early versions with snowflake used this
+                    # return " ".join(entry.keywords)  # meh, not all entries have keywords
+
+                    # Maybe best of both worlds?
+                    if entry.abstract:
+                        return entry.title + ".\n\n" + entry.abstract
+                    else:
+                        return entry.title
+
+                all_inputs = [format_entry_for_vectorization(entry) for entry in entries]
                 all_vectors = sentence_embedder.encode(all_inputs,
                                                        show_progress_bar=True,
                                                        convert_to_numpy=True,
