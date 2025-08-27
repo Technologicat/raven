@@ -124,6 +124,24 @@ def tldr(text: str) -> str:
 #             field.key = field.key.lower()
 #         return entry
 
+# # TODO: For some reason, this doesn't see the duplicates. The `seen` set is collected correctly (judging by its `len` after reading in the .bib file), but the warning never triggers though there are duplicate blocks.
+#
+# from typing import Collection, Union
+# from bibtexparser.middlewares import BlockMiddleware
+# from bibtexparser.library import Library
+# from bibtexparser.model import Block, Entry
+# class DetectDuplicateKeys(BlockMiddleware):
+#     def __init__(self, allow_inplace_modification: bool = True):
+#         super().__init__(allow_inplace_modification=allow_inplace_modification,
+#                          allow_parallel_execution=False)
+#         self.seen = set()
+#
+#     def transform_entry(self, entry: Entry, library: "Library") -> Union[Block, Collection[Block], None]:
+#         if entry.key in self.seen:
+#             logger.warning(f"Duplicate BibTeX entry key detected: '{entry.key}'")
+#         self.seen.add(entry.key)
+#         return entry
+
 # --------------------------------------------------------------------------------
 
 def parse_input_files(*filenames):
