@@ -682,7 +682,7 @@ def summarize(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
         sent = sent[0].upper() + sent[1:]
         return sent
     def sanitize(text: str) -> str:
-        """Sanitize `text`.
+        """Preprocess `text` for summarization.
 
         Specifically:
           - Normalize Unicode representation to NFKC
