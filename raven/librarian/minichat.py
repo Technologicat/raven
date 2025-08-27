@@ -20,7 +20,6 @@ from unpythonic import timer
 with timer() as tim:
     import argparse
     import atexit
-    import json
     import os
     import pathlib
     import platform
@@ -31,14 +30,13 @@ with timer() as tim:
     from mcpyrate import colorizer
 
     from unpythonic import sym, Values
-    from unpythonic.env import env
 
     from .. import __version__
 
     from ..client import api
     from ..client import config as client_config
 
-    from . import chattree
+    from . import appstate
     from . import config as librarian_config
     from . import hybridir
     from . import llmclient
@@ -55,67 +53,6 @@ def minimal_chat_client(backend_url):
     db_dir = pathlib.Path(librarian_config.llm_database_dir).expanduser().resolve()  # RAG search indices datastore
 
     datastore = None  # initialized later, during app startup
-
-    def load_app_state(settings: env, datastore: chattree.PersistentForest) -> Dict:
-        if datastore is None:
-            assert False  # The `datastore` container must exist before this internal function is called
-
-        def new_datastore():
-            state["new_chat_HEAD"] = llmclient.factory_reset_chat_datastore(datastore, settings)  # do this first - this creates the first two nodes (system prompt with character card, and the AI's initial greeting)
-            state["HEAD"] = state["new_chat_HEAD"]  # current last node in chat; like HEAD pointer in git
-
-        try:
-            with open(state_file, "r", encoding="utf-8") as json_file:
-                state = json.load(json_file)
-        except FileNotFoundError:
-            new_datastore()
-            state["docs_enabled"] = True
-
-        if not datastore.nodes:  # No stored chat history -> reset datastore
-            logger.warning("load_app_state: no chat nodes in datastore, creating new datastore")
-            new_datastore()
-
-        if "new_chat_HEAD" not in state:  # New-chat start node ID missing -> reset datastore
-            logger.warning(f"load_app_state: missing key 'new_chat_HEAD' in '{state_file}', creating new datastore")
-            new_datastore()
-
-        if "HEAD" not in state:  # Current chat node ID missing -> start at new chat
-            logger.warning(f"load_app_state: missing key 'HEAD' in '{state_file}', resetting it to 'new_chat_HEAD'")
-            state["HEAD"] = state["new_chat_HEAD"]
-
-        if "docs_enabled" not in state:
-            logger.warning(f"load_app_state: missing key 'docs_enabled' in '{state_file}', using default")
-            state["docs_enabled"] = True
-
-        if "speculate_enabled" not in state:
-            logger.warning(f"load_app_state: missing key 'speculate_enabled' in '{state_file}', using default")
-            state["speculate_enabled"] = False
-
-        # Refresh the system prompt in the datastore (to the one in this client's source code)
-        new_chat_node_id = state["new_chat_HEAD"]
-        system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
-        old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
-        datastore.add_revision(node_id=system_prompt_node_id,
-                               payload={"message": llmclient.create_initial_system_message(settings)})
-        datastore.delete_revision(node_id=system_prompt_node_id,
-                                  revision_id=old_system_prompt_revision_id)
-
-        llmclient.upgrade(datastore, system_prompt_node_id)  # v0.2.3+: data format change
-
-        print(colorizer.colorize(f"Loaded app state from '{state_file}'.", colorizer.Style.BRIGHT))
-        return state
-
-    def save_app_state(state: Dict) -> None:
-        # validate
-        required_keys = ("new_chat_HEAD",
-                         "HEAD",
-                         "docs_enabled",
-                         "speculate_enabled")
-        if any(key not in state for key in required_keys):
-            raise KeyError  # at least one required setting missing from `state`
-
-        with open(state_file, "w", encoding="utf-8") as json_file:
-            json.dump(state, json_file, indent=2)
 
     # Ugh for the presentation order, but this is needed in two places, starting immediately below.
     def chat_show_model_info():
@@ -149,11 +86,8 @@ def minimal_chat_client(backend_url):
             settings = llmclient.setup(backend_url=backend_url)
             chat_show_model_info()
 
-        # Persistent, branching chat history.
-        datastore = chattree.PersistentForest(datastore_file)  # This autoloads and auto-persists.
-        if datastore.nodes:
-            print(colorizer.colorize(f"Loaded chat datastore from '{datastore_file}'.", colorizer.Style.BRIGHT))
-        state = load_app_state(settings, datastore)
+        # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
+        datastore, state = appstate.load(settings, datastore_file, state_file)
         print()
 
         # Load RAG database (it will auto-persist at app exit).
@@ -191,12 +125,7 @@ def minimal_chat_client(backend_url):
             readline.set_history_length(1000)
             readline.write_history_file(history_file)
 
-            try:
-                save_app_state(state)
-            except KeyError:
-                logger.warning(f"During app shutdown: app `state` missing at least one required key, cannot persist it. Existing keys: {list(state.keys())}")
-
-            # Before saving (which happens automatically at exit),
+            # Before saving the chat database (which happens automatically at exit),
             # remove any nodes not reachable from the initial message, and also remove dead links.
             # There shouldn't be any, but this way we exercise these features, too.
             try:
@@ -207,7 +136,7 @@ def minimal_chat_client(backend_url):
             else:
                 datastore.prune_unreachable_nodes(system_prompt_node_id)
                 datastore.prune_dead_links(system_prompt_node_id)
-        # We register later than `chattree.PersistentForest` (which we already instantiated above), so ours runs first.
+        # We register later than `datastore` does (which `appstate.load` sets up), so ours runs first.
         # Hence we'll have the chance to prune before the forest is persisted to disk.
         #     https://docs.python.org/3/library/atexit.html
         atexit.register(persist)
