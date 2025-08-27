@@ -157,7 +157,7 @@ def load(settings: env,
 
     # Set up auto-persist for app state
     atexit.register(functools.partial(save,
-                                      state_file=state_file,
+                                      state_file=orig_state_file,
                                       state=state))
 
     return datastore, state
@@ -181,5 +181,10 @@ def save(state_file: Union[str, pathlib.Path],
     if any(key not in state for key in required_keys):
         raise KeyError(f"at least one required setting missing from `state`; required keys = {list(sorted(required_keys))}; got existing keys = {list(sorted(state.keys()))}")
 
+    orig_state_file = state_file
+    state_file = pathlib.Path(state_file).expanduser().resolve()
+
     with open(state_file, "w", encoding="utf-8") as json_file:
         json.dump(state, json_file, indent=2)
+
+    logger.info(f"save: Saved app state to '{orig_state_file}' (resolved to '{state_file}').")
