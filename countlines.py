@@ -42,6 +42,8 @@ def report(paths):
         filenames = listpy(path)
         results = []
         for filename in filenames:
+            if filename.startswith("."):  # hidden file, ignore
+                continue
             with open(os.path.join(path, filename), "rt", encoding="utf-8") as f:
                 content = f.read()
             code = count_sloc(content, blanks=False, docstrings=False, comments=False)
@@ -60,7 +62,7 @@ def report(paths):
     print(f"\n{format_name('Total')}     {format_number(codes_grandtotal)} / {format_number(slocs_grandtotal)}  {int(codes_grandtotal / slocs_grandtotal * 100):d}% code")
 
 def main():
-    blacklist = [".git", "build", "dist", "__pycache__", "00_stuff"]
+    blacklist = [".git", ".venv", "build", "dist", "__pycache__", "00_stuff"]
     paths = []
     for root, dirs, files in os.walk("."):
         paths.append(root)
