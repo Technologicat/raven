@@ -32,13 +32,16 @@
   - Have an option to use local AI models in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
 
 - Server
-  - Zip the avatar characters, for ease of use (include all extra cels in the zip)?
+  - Zip the avatar characters, for ease of use
+    - Include all extra cels in the zip, as well as optional animator/postprocessor settings, and optional emotion templates
+    - Implement zip loading on server side, add a new web API endpoint
 
 - Visualizer
   - Keep the app state in top-level containers, and pass these in/out explicitly. More FP and facilitates adding unit tests later.
   - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
 
 - Librarian
+  - Add a lockfile so that `raven-minichat` and `raven-librarian` can't be running at the same time (to prevent losing changes made in one of the apps)
   - Store in AI message metadata: model name, number of tokens, average generation speed (tokens/s)
   - Finnish (or other language) captioning for TTS output
     - Speak and caption one sentence at a time, chain the end callbacks, with an optional exit flag to terminate the chain (so the user can cancel it in the GUI).
@@ -290,6 +293,8 @@
 - BibTeX importer:
   - Detect and report duplicate entry keys to ease debugging on BibTeX databases.
   - Run the abstracts through the `sanitize` module.
+  - For cluster-level keyword detection, first de-duplicate words in each abstract?
+    (This avoids "keyword spam" from a single abstract from dominating the cluster keywords.)
   - Make it configurable which fields to use for the semantic embedding.
   - Make the stopword list configurable (text file).
   - Investigate more advanced NLP methods to improve the quality of the automatically extracted keyword list.
