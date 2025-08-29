@@ -87,7 +87,7 @@ def minimal_chat_client(backend_url):
             chat_show_model_info()
 
         # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
-        datastore, state = appstate.load(settings, datastore_file, state_file)
+        datastore, app_state = appstate.load(settings, datastore_file, state_file)
         print()
 
         # Load RAG database (it will auto-persist at app exit).
@@ -95,11 +95,11 @@ def minimal_chat_client(backend_url):
                                                     recursive=librarian_config.llm_docs_dir_recursive,
                                                     db_dir=db_dir,
                                                     embedding_model_name=librarian_config.qa_embedding_model)
-        docs_enabled_str = "ON" if state["docs_enabled"] else "OFF"
+        docs_enabled_str = "ON" if app_state["docs_enabled"] else "OFF"
         colorful_rag_status = colorizer.colorize(f"RAG (retrieval-augmented generation) autosearch is currently {docs_enabled_str}.",
                                                  colorizer.Style.BRIGHT)
         print(f"{colorful_rag_status} Toggle with the `!docs` command.")
-        print(f"    Document store is at '{str(librarian_config.llm_docs_dir)}'.")
+        print(f"    RAG document store is at '{str(librarian_config.llm_docs_dir)}' (put your plain-text documents here).")
         # The retriever's `documents` attribute must be locked before accessing.
         with retriever.datastore_lock:
             plural_s = "s" if len(retriever.documents) != 1 else ""
@@ -129,7 +129,7 @@ def minimal_chat_client(backend_url):
             # remove any nodes not reachable from the initial message, and also remove dead links.
             # There shouldn't be any, but this way we exercise these features, too.
             try:
-                new_chat_node_id = state["new_chat_HEAD"]
+                new_chat_node_id = app_state["new_chat_HEAD"]
                 system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
             except KeyError as exc:
                 logger.warning(f"During app shutdown: while pruning chat forest: {type(exc)}: {exc}")
@@ -149,8 +149,8 @@ def minimal_chat_client(backend_url):
             print()
             print("    Special commands (tab-completion available):")
             print("        !clear                  - Start new chat")
-            print(f"        !docs [True|False]      - RAG autosearch on/off/toggle (currently {state['docs_enabled']}; document store at '{str(librarian_config.llm_docs_dir)}')")
-            print(f"        !speculate [True|False] - LLM speculate on/off/toggle (currently {state['speculate_enabled']}); used only if docs is True.")
+            print(f"        !docs [True|False]      - RAG autosearch on/off/toggle (currently {app_state['docs_enabled']}; document store at '{str(librarian_config.llm_docs_dir)}')")
+            print(f"        !speculate [True|False] - LLM speculate on/off/toggle (currently {app_state['speculate_enabled']}); used only if docs is True.")
             print("                                  If speculate is False, try to use only RAG results to answer.")
             print("                                  If speculate is True, let the LLM respond however it wants.")
             print("        !dump                   - See raw contents of chat node datastore")
@@ -294,7 +294,7 @@ def minimal_chat_client(backend_url):
         action_next_round = sym("next_round")  # skip to start of next round, e.g. after a special command
 
         def user_turn() -> Values:
-            history = llmclient.linearize_chat(datastore, state["HEAD"])
+            history = llmclient.linearize_chat(datastore, app_state["HEAD"])
             user_message_number = len(history)
 
             # Print a user input prompt and get the user's input.
@@ -312,22 +312,22 @@ def minimal_chat_client(backend_url):
             # Interpret special commands for this LLM client
             if user_message_text == "!clear":
                 print(colorizer.colorize("Starting new chat session.", colorizer.Style.BRIGHT))
-                state["HEAD"] = state["new_chat_HEAD"]
-                print(f"HEAD is now at '{state['HEAD']}'.")
+                app_state["HEAD"] = app_state["new_chat_HEAD"]
+                print(f"HEAD is now at '{app_state['HEAD']}'.")
                 print()
-                chat_print_history(llmclient.linearize_chat(datastore, state["HEAD"]))
+                chat_print_history(llmclient.linearize_chat(datastore, app_state["HEAD"]))
                 return Values(action=action_next_round)
             elif user_message_text.startswith("!docs"):  # TODO: refactor
                 split_command_text = user_message_text.split()
                 nargs = len(split_command_text) - 1
                 if nargs == 0:
-                    state["docs_enabled"] = not state["docs_enabled"]
+                    app_state["docs_enabled"] = not app_state["docs_enabled"]
                 elif nargs == 1:
                     arg = split_command_text[-1]
                     if arg == "True":
-                        state["docs_enabled"] = True
+                        app_state["docs_enabled"] = True
                     elif arg == "False":
-                        state["docs_enabled"] = False
+                        app_state["docs_enabled"] = False
                     else:
                         print(f"!docs: unrecognized argument '{arg}'; expected 'True' or 'False'.")
                         print()
@@ -336,12 +336,12 @@ def minimal_chat_client(backend_url):
                     print("!docs: wrong number of arguments; expected at most one, 'True' or 'False'.")
                     print()
                     return Values(action=action_next_round)
-                docs_enabled_str = "ON" if state["docs_enabled"] else "OFF"
+                docs_enabled_str = "ON" if app_state["docs_enabled"] else "OFF"
                 print(f"RAG autosearch is now {docs_enabled_str}.")
                 print()
                 return Values(action=action_next_round)
             elif user_message_text == "!dump":
-                print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {state['HEAD']})")
+                print(colorizer.colorize("Raw datastore content:", colorizer.Style.BRIGHT) + f" (current HEAD is at {app_state['HEAD']})")
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 print(f"{datastore}", end="")  # -> str; also, already has the final blank line
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
@@ -358,10 +358,10 @@ def minimal_chat_client(backend_url):
                     print(f"!head: no such chat node '{new_head_id}'; see `!dump` for available chat nodes.")
                     print()
                     return Values(action=action_next_round)
-                state["HEAD"] = new_head_id
-                print(f"HEAD is now at '{state['HEAD']}'.")
+                app_state["HEAD"] = new_head_id
+                print(f"HEAD is now at '{app_state['HEAD']}'.")
                 print()
-                chat_print_history(llmclient.linearize_chat(datastore, state["HEAD"]))
+                chat_print_history(llmclient.linearize_chat(datastore, app_state["HEAD"]))
                 return Values(action=action_next_round)
             elif user_message_text == "!help":
                 chat_show_help()
@@ -383,13 +383,13 @@ def minimal_chat_client(backend_url):
                 split_command_text = user_message_text.split()
                 nargs = len(split_command_text) - 1
                 if nargs == 0:
-                    state["speculate_enabled"] = not state["speculate_enabled"]
+                    app_state["speculate_enabled"] = not app_state["speculate_enabled"]
                 elif nargs == 1:
                     arg = split_command_text[-1]
                     if arg == "True":
-                        state["speculate_enabled"] = True
+                        app_state["speculate_enabled"] = True
                     elif arg == "False":
-                        state["speculate_enabled"] = False
+                        app_state["speculate_enabled"] = False
                     else:
                         print(f"!speculate: unrecognized argument '{arg}'; expected 'True' or 'False'.")
                         print()
@@ -398,7 +398,7 @@ def minimal_chat_client(backend_url):
                     print("!speculate: wrong number of arguments; expected at most one, 'True' or 'False'.")
                     print()
                     return Values(action=action_next_round)
-                speculate_enabled_str = "ON" if state["speculate_enabled"] else "OFF"
+                speculate_enabled_str = "ON" if app_state["speculate_enabled"] else "OFF"
                 print(f"LLM speculation is now {speculate_enabled_str}.")
                 print()
                 return Values(action=action_next_round)
@@ -411,12 +411,12 @@ def minimal_chat_client(backend_url):
             user_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=settings,
                                                                                                            role="user",
                                                                                                            text=user_message_text)},
-                                                         parent_id=state["HEAD"])
-            state["HEAD"] = user_message_node_id
+                                                         parent_id=app_state["HEAD"])
+            app_state["HEAD"] = user_message_node_id
             return Values(action=action_proceed, text=user_message_text)
 
         def rag_search_with_bypass(query: str) -> Values:
-            if not state["docs_enabled"]:
+            if not app_state["docs_enabled"]:
                 return Values(action=action_proceed, matches=[])
 
             docs_results = retriever.query(query,
@@ -424,18 +424,18 @@ def minimal_chat_client(backend_url):
                                            return_extra_info=False)
 
             # First line of defense (against hallucinations): docs on, no matches for given query, speculate off -> bypass LLM
-            if not docs_results and not state["speculate_enabled"]:
+            if not docs_results and not app_state["speculate_enabled"]:
                 nomatch_text = "No matches in knowledge base. Please try another query."
                 nomatch_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=settings,
                                                                                                                   role="assistant",
                                                                                                                   text=nomatch_text)},
-                                                                parent_id=state["HEAD"])
+                                                                parent_id=app_state["HEAD"])
                 nomatch_message_node_payload = datastore.get_payload(nomatch_message_node_id)
                 nomatch_message_node_payload["retrieval"] = {"query": query,
                                                              "results": []}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
-                state["HEAD"] = nomatch_message_node_id
+                app_state["HEAD"] = nomatch_message_node_id
 
-                history = llmclient.linearize_chat(datastore, state["HEAD"])
+                history = llmclient.linearize_chat(datastore, app_state["HEAD"])
                 nomatch_message_number = len(history)
                 chat_print_message(message_number=nomatch_message_number,
                                    role="assistant",
@@ -491,7 +491,7 @@ def minimal_chat_client(backend_url):
             # If docs on, speculate off (-> `perform_injects` gets called if there is at least one RAG match), remind the LLM to use information from context only.
             #                           This increases the changes of the user's query working correctly when the search returns irrelevant results.
             # If docs off, the whole point is to use the LLM's static knowledge, so in that case don't bother.
-            if state["docs_enabled"] and not state["speculate_enabled"]:
+            if app_state["docs_enabled"] and not app_state["speculate_enabled"]:
                 message_to_inject = llmclient.create_chat_message(settings=settings,
                                                                   role="system",
                                                                   text=llmclient.format_reminder_to_use_information_from_context_only())
@@ -526,7 +526,7 @@ def minimal_chat_client(backend_url):
 
             # AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
             while True:
-                history = llmclient.linearize_chat(datastore, state["HEAD"])  # latest history
+                history = llmclient.linearize_chat(datastore, app_state["HEAD"])  # latest history
                 ai_message_number = len(history)
 
                 # Prepare the final LLM prompt, by including the temporary injects.
@@ -565,12 +565,12 @@ def minimal_chat_client(backend_url):
                                                                     "generation_metadata": {"model": out.model,
                                                                                             "n_tokens": out.n_tokens,  # could count final tokens with `llmclient.token_count(settings, out.data["content"])`
                                                                                             "dt": out.dt}},
-                                                           parent_id=state["HEAD"])
+                                                           parent_id=app_state["HEAD"])
                 ai_message_node_payload = datastore.get_payload(ai_message_node_id)
-                if state["docs_enabled"]:
+                if app_state["docs_enabled"]:
                     ai_message_node_payload["retrieval"] = {"query": rag_query,
                                                             "results": rag_result["matches"]}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
-                state["HEAD"] = ai_message_node_id
+                app_state["HEAD"] = ai_message_node_id
 
                 # Handle tool calls requested by the LLM, if any.
                 #
@@ -595,8 +595,8 @@ def minimal_chat_client(backend_url):
                     if "dt" in tool_response_record:
                         payload["generation_metadata"]["dt"] = tool_response_record.dt
                     tool_response_message_node_id = datastore.create_node(payload=payload,
-                                                                          parent_id=state["HEAD"])
-                    state["HEAD"] = tool_response_message_node_id
+                                                                          parent_id=app_state["HEAD"])
+                    app_state["HEAD"] = tool_response_message_node_id
 
                     chat_print_message(message_number=tool_message_number,
                                        role="tool",
@@ -612,7 +612,7 @@ def minimal_chat_client(backend_url):
             return Values(action=action_proceed)
 
         # Show initial history (loaded from datastore, or blank upon first start)
-        chat_print_history(llmclient.linearize_chat(datastore, state["HEAD"]))
+        chat_print_history(llmclient.linearize_chat(datastore, app_state["HEAD"]))
 
         # Main loop
         while True:
