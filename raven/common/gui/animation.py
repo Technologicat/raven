@@ -149,7 +149,7 @@ class Animation:
         return action_finish
 
     def finish(self):
-        """Override this in a derived class to clean up any state for your animation when it finishes normally."""
+        """Override this in a derived class, if you need to clean up any state for your animation when it finishes normally."""
 
 # --------------------------------------------------------------------------------
 # Overlay window support
