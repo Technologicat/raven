@@ -51,7 +51,8 @@ class ResultFeedReader:
         self.gen = None
 
     def start(self) -> None:
-        self.gen = api.avatar_result_feed(self.avatar_instance_id)
+        if self.gen is None:
+            self.gen = api.avatar_result_feed(self.avatar_instance_id)
 
     def is_running(self) -> bool:
         return self.gen is not None
@@ -61,8 +62,9 @@ class ResultFeedReader:
         return next(self.gen)  # next-gen lol
 
     def stop(self) -> None:
-        self.gen.close()
-        self.gen = None
+        if self.gen is not None:
+            self.gen.close()
+            self.gen = None
 
 def si_prefix(number: Union[int, float]) -> str:  # TODO: very general utility, move to `unpythonic`, and add binary mode (1024-based units Ki, Mi, Gi, ...)
     """Convert a number to SI format (1000 -> 1K).
@@ -356,6 +358,8 @@ class DPGAvatarRenderer:
                 self.animator_running = False
                 dpg.hide_item(f"avatar_live_image_{self.live_texture_id_counter}")  # tag
                 maybe_set_fps_counter(describe_performance(None, None, None))
+            finally:
+                reader.stop()  # Close the stream to ensure that the server's network send thread serving our request exits.
             logger.info(f"DPGAvatarRenderer.start.update_live_texture: Background task for avatar instance '{avatar_instance_id}' exiting.")
 
         logger.info(f"DPGAvatarRenderer.start: Submitting background task to task manager for avatar instance '{avatar_instance_id}'.")
