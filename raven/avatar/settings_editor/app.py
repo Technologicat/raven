@@ -1181,8 +1181,8 @@ avatar_instance_id = api.avatar_load(_startup_input_image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings into the GUI, as well as send them to the avatar instance.
 gui_instance.current_input_image_path = _startup_input_image_path  # so that the Refresh button works
-api.avatar_start(avatar_instance_id)
-gui_instance.dpg_avatar_renderer.start(avatar_instance_id)
+api.avatar_start(avatar_instance_id)  # start the avatar rendering on the server...
+gui_instance.dpg_avatar_renderer.start(avatar_instance_id)  # ...and start displaying the live video on the client
 
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
