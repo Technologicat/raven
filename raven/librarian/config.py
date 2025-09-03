@@ -9,6 +9,8 @@ import torch
 
 from .. import config as global_config
 
+from ..common.video import colorspace
+
 llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 
 # URL used to connect to the LLM API.
@@ -93,6 +95,10 @@ llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
 gui_config = env(  # ----------------------------------------
                  # GUI element sizes, in pixels.
                  main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
+                 ai_warning_h=42,
+                 chat_controls_h=42,
+                 chat_panel_w=(1920 // 2),
+                 chat_text_w=(1920 // 2 - 100),
                  # help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
                  # toolbar_inner_w=36,  # Width of the content area of the "Tools" toolbar.
                  # toolbar_separator_h=12,  # Height of a section separator spacer in the toolbar.
@@ -109,12 +115,13 @@ gui_config = env(  # ----------------------------------------
                  # Chat
                  chat_icon_size=32,  # pixels
                  margin=8,  # around chat GUI elements (such as icon); the DPG default theme uses 8 elsewhere
-                 chat_color_ai_front=(80, 80, 83),
+                 chat_color_ai_front=colorspace.hex_to_rgb("#c6c6c6ff"),
+                 chat_color_think_front=colorspace.hex_to_rgb("#9ea2eeff"),
                  chat_color_ai_back=(45, 45, 48),
-                 chat_color_user_front=(70, 70, 90),
-                 chat_color_user_back=(40, 40, 50),
-                 chat_color_system_front=(80, 80, 83),  # TODO: chat "system" role colors
+                 chat_color_user_front=colorspace.hex_to_rgb("#8e8e8eff"),
+                 chat_color_user_back=(45, 45, 48),
+                 chat_color_system_front=colorspace.hex_to_rgb("#d59231ff"),
                  chat_color_system_back=(45, 45, 48),
-                 chat_color_tool_front=(80, 80, 83),  # TODO: chat "tool" role colors
+                 chat_color_tool_front=colorspace.hex_to_rgb("#45ab49ff"),
                  chat_color_tool_back=(45, 45, 48),
                 )

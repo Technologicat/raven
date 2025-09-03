@@ -18,7 +18,8 @@ with timer() as tim:
     import platform
     import requests
     import sys
-    from typing import Dict, Optional, Union
+    import threading
+    from typing import Optional, Union
     import uuid
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -135,8 +136,10 @@ logger.info(f"RAG document store loaded in {tim.dt:0.6g}s.")
 # --------------------------------------------------------------------------------
 # Linear chat view (of current branch)
 
-def make_ai_message_buttons(gui_parent: Union[int, str], uuid: str):
-    g = dpg.add_group(horizontal=True, tag=f"ai_message_group_{uuid}", parent=gui_parent)
+def make_ai_message_buttons(uuid: str,
+                            message_node_id: str,
+                            gui_parent: Union[int, str]) -> None:
+    g = dpg.add_group(horizontal=True, tag=f"ai_buttons_group_{uuid}", parent=gui_parent)
 
     # dpg.add_text("[0 t, 0 s, ∞ t/s]", color=(180, 180, 180), tag=f"performance_stats_text_ai_{uuid}", parent=g)  # TODO: add the performance stats
 
@@ -163,7 +166,7 @@ def make_ai_message_buttons(gui_parent: Union[int, str], uuid: str):
     dpg.bind_item_font(f"chat_new_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
     dpg.bind_item_theme(f"chat_new_branch_button_{uuid}", "disablable_button_theme")  # tag
     new_branch_tooltip = dpg.add_tooltip(f"chat_new_branch_button_{uuid}")  # tag
-    dpg.add_text("Branch from here", parent=new_branch_tooltip)
+    dpg.add_text("Branch from this node", parent=new_branch_tooltip)
 
     dpg.add_button(label=fa.ICON_TRASH_CAN,
                    callback=lambda: None,  # TODO
@@ -174,11 +177,29 @@ def make_ai_message_buttons(gui_parent: Union[int, str], uuid: str):
     dpg.bind_item_font(f"chat_delete_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
     dpg.bind_item_theme(f"chat_delete_branch_button_{uuid}", "disablable_button_theme")  # tag
     delete_branch_tooltip = dpg.add_tooltip(f"chat_delete_branch_button_{uuid}")  # tag
-    dpg.add_text("Delete current branch", parent=delete_branch_tooltip)
+    dpg.add_text("Delete branch (this node and all descendants)", parent=delete_branch_tooltip)
+
+    def _scroll_to_end():
+        max_y_scroll = dpg.get_y_scroll_max("chat_panel")
+        dpg.set_y_scroll("chat_panel", max_y_scroll)
+    def make_navigate_to_prev_sibling(message_node_id):
+        def prev_sibling():
+            node_id = next_or_prev_sibling(message_node_id, direction="prev")
+            if node_id is not None:
+                build_linearized_chat(node_id)
+                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_to_end)
+        return prev_sibling
+    def make_navigate_to_next_sibling(message_node_id):
+        def next_sibling():
+            node_id = next_or_prev_sibling(message_node_id, direction="next")
+            if node_id is not None:
+                build_linearized_chat(node_id)
+                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_to_end)
+        return next_sibling
 
     dpg.add_button(label=fa.ICON_ANGLE_LEFT,
-                   callback=lambda: None,  # TODO
-                   enabled=False,
+                   callback=make_navigate_to_prev_sibling(message_node_id),
+                   # enabled=False,
                    width=gui_config.toolbutton_w,
                    tag=f"chat_prevbranch_button_{uuid}",
                    parent=g)
@@ -188,8 +209,8 @@ def make_ai_message_buttons(gui_parent: Union[int, str], uuid: str):
     dpg.add_text("Switch to previous sibling", parent=prevbranch_tooltip)
 
     dpg.add_button(label=fa.ICON_ANGLE_RIGHT,
-                   callback=lambda: None,  # TODO
-                   enabled=False,
+                   callback=make_navigate_to_next_sibling(message_node_id),
+                   # enabled=False,
                    width=gui_config.toolbutton_w,
                    tag=f"chat_nextbranch_button_{uuid}",
                    parent=g)
@@ -198,8 +219,10 @@ def make_ai_message_buttons(gui_parent: Union[int, str], uuid: str):
     nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
     dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
 
-def make_user_message_buttons(gui_parent: Union[int, str], uuid: str):
-    g = dpg.add_group(horizontal=True, tag=f"user_message_group_{uuid}", parent=gui_parent)
+def make_user_message_buttons(uuid: str,
+                              message_node_id: str,
+                              gui_parent: Union[int, str]) -> None:
+    g = dpg.add_group(horizontal=True, tag=f"user_buttons_group_{uuid}", parent=gui_parent)
 
     # dpg.add_spacer(width=800 - 5 * (gui_config.toolbutton_w + 8),  # 8 = DPG outer margin
     #                tag=f"user_message_buttons_spacer_{uuid}",
@@ -221,7 +244,7 @@ def make_user_message_buttons(gui_parent: Union[int, str], uuid: str):
                    parent=g)
     dpg.bind_item_font(f"chat_new_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
     new_branch_tooltip = dpg.add_tooltip(f"chat_new_branch_button_{uuid}")  # tag
-    dpg.add_text("Branch from here", parent=new_branch_tooltip)
+    dpg.add_text("Branch from this node", parent=new_branch_tooltip)
 
     dpg.add_button(label=fa.ICON_TRASH_CAN,
                    callback=lambda: None,  # TODO
@@ -230,11 +253,29 @@ def make_user_message_buttons(gui_parent: Union[int, str], uuid: str):
                    parent=g)
     dpg.bind_item_font(f"chat_delete_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
     delete_branch_tooltip = dpg.add_tooltip(f"chat_delete_branch_button_{uuid}")  # tag
-    dpg.add_text("Delete current branch", parent=delete_branch_tooltip)
+    dpg.add_text("Delete branch (this node and all descendants)", parent=delete_branch_tooltip)
+
+    def _scroll_to_end():
+        max_y_scroll = dpg.get_y_scroll_max("chat_panel")
+        dpg.set_y_scroll("chat_panel", max_y_scroll)
+    def make_navigate_to_prev_sibling(message_node_id):
+        def prev_sibling():
+            node_id = next_or_prev_sibling(message_node_id, direction="prev")
+            if node_id is not None:
+                build_linearized_chat(node_id)
+                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_to_end)
+        return prev_sibling
+    def make_navigate_to_next_sibling(message_node_id):
+        def next_sibling():
+            node_id = next_or_prev_sibling(message_node_id, direction="next")
+            if node_id is not None:
+                build_linearized_chat(node_id)
+                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_to_end)
+        return next_sibling
 
     dpg.add_button(label=fa.ICON_ANGLE_LEFT,
-                   callback=lambda: None,  # TODO
-                   enabled=False,
+                   callback=make_navigate_to_prev_sibling(message_node_id),
+                   # enabled=False,
                    width=gui_config.toolbutton_w,
                    tag=f"chat_prevbranch_button_{uuid}",
                    parent=g)
@@ -244,8 +285,8 @@ def make_user_message_buttons(gui_parent: Union[int, str], uuid: str):
     dpg.add_text("Switch to previous sibling", parent=prevbranch_tooltip)
 
     dpg.add_button(label=fa.ICON_ANGLE_RIGHT,
-                   callback=lambda: None,  # TODO
-                   enabled=False,
+                   callback=make_navigate_to_next_sibling(message_node_id),
+                   # enabled=False,
                    width=gui_config.toolbutton_w,
                    tag=f"chat_nextbranch_button_{uuid}",
                    parent=g)
@@ -254,19 +295,45 @@ def make_user_message_buttons(gui_parent: Union[int, str], uuid: str):
     nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
     dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
 
+
 class DisplayedChatMessage:
+    class_lock = threading.RLock()
+    callbacks = {}
+
+    @classmethod
+    def run_callbacks(cls):
+        with cls.class_lock:
+            callbacks = list(cls.callbacks.items())
+            for tag, function in callbacks:
+                function()
+                cls.callbacks.pop(tag)
+
     def __init__(self,
                  gui_parent: Union[int, str],
-                 node_payload: Dict):
+                 node_id: str):
         self.gui_parent = gui_parent  # GUI container to render in (DPG ID or tag)
-        self.node_payload = node_payload  # reference to the chat node data (ORIGINAL, not a copy)
+        self.node_id = node_id  # reference to the chat node (ORIGINAL, not a copy)
         self.gui_uuid = str(uuid.uuid4())  # used in GUI widget tags
         self.gui_container_group = dpg.add_group(tag=f"chat_item_container_group_{self.gui_uuid}",
                                                  parent=self.gui_parent)
         self.build()
 
     def build(self) -> None:
-        dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content if any
+        node_payload = datastore.get_payload(self.node_id)
+        message = node_payload["message"]
+        message_role = message["role"]
+        message_text = message["content"]
+        gui_role_icons = {"assistant": "icon_ai_texture",
+                          "user": "icon_user_texture",
+                          }
+        role_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},
+                       "system": {"front": gui_config.chat_color_system_front, "back": gui_config.chat_color_system_back},
+                       "tool": {"front": gui_config.chat_color_tool_front, "back": gui_config.chat_color_tool_back},
+                       "user": {"front": gui_config.chat_color_user_front, "back": gui_config.chat_color_user_back},
+                       }
+
+        # clear old GUI content if any
+        dpg.delete_item(self.gui_container_group, children_only=True)
 
         # lay out the role icon and the text content horizontally
         icon_and_text_container_group = dpg.add_group(horizontal=True,
@@ -276,26 +343,27 @@ class DisplayedChatMessage:
         # ----------------------------------------
         # role icon
 
-        # TODO: add icons for system and tool; improve user/AI icons
-        message = self.node_payload["message"]
-        message_role = message["role"]
-        message_text = message["content"]
-        gui_role_icons = {"assistant": "icon_ai_texture",
-                          "user": "icon_user_texture"}
-        dpg.add_drawlist(width=(2 * gui_config.margin + gui_config.chat_icon_size),
-                         height=(2 * gui_config.margin + gui_config.chat_icon_size),
-                         tag=f"chat_icon_drawlist_{self.gui_uuid}",
-                         parent=icon_and_text_container_group)  # empty drawlist acts as placeholder if no icon
+        # TODO: add icons and colors for system and tool; improve user/AI icons
+        icon_drawlist = dpg.add_drawlist(width=(2 * gui_config.margin + gui_config.chat_icon_size),
+                                         height=(2 * gui_config.margin + gui_config.chat_icon_size),
+                                         tag=f"chat_icon_drawlist_{self.gui_uuid}",
+                                         parent=icon_and_text_container_group)  # empty drawlist acts as placeholder if no icon
         if message_role in gui_role_icons:
             dpg.draw_image(gui_role_icons[message_role],
                            (gui_config.margin, gui_config.margin),
                            (gui_config.margin + gui_config.chat_icon_size, gui_config.margin + gui_config.chat_icon_size),
                            uv_min=(0, 0),
                            uv_max=(1, 1),
-                           parent=f"chat_icon_drawlist_{self.gui_uuid}")
+                           parent=icon_drawlist)
 
         # ----------------------------------------
         # text content
+
+        # # colored border
+        # dpg.add_drawlist(width=4,
+        #                  height=4,  # to be updated after the text is rendered
+        #                  tag=f"chat_colored_border_drawlist_{self.gui_uuid}",
+        #                  parent=icon_and_text_container_group)
 
         # adjust text vertical positioning
         text_vertical_layout_group = dpg.add_group(tag=f"chat_text_vertical_layout_group_{self.gui_uuid}",
@@ -303,33 +371,125 @@ class DisplayedChatMessage:
         dpg.add_spacer(height=gui_config.margin,
                        parent=text_vertical_layout_group)
 
-        # render the actual text
-        colorized_message_text = f"<font color='#ffffff'>{message_text}</font>"
+        # render the actual text (TODO: handle thought blocks)
+        color = role_colors[message_role]["front"] if message_role in role_colors else "#ffffff"
+        colorized_message_text = f"<font color='{color}'>{message_text}</font>"
         chat_message_widget = dpg_markdown.add_text(colorized_message_text,
-                                                    wrap=700,  # TODO: figure out the correct wrap width
+                                                    wrap=gui_config.chat_text_w,
                                                     parent=text_vertical_layout_group)
         dpg.set_item_alias(chat_message_widget, f"chat_message_{message_role}_{self.gui_uuid}")
 
-        # ----------------------------------------
-        # buttons
-
+        # text area end spacer
         dpg.add_spacer(height=2,
                        parent=text_vertical_layout_group)
 
+        # ----------------------------------------
+        # buttons (below text)
+
+        buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
+                                                        tag=f"chat_buttons_container_group_{self.gui_uuid}",
+                                                        parent=text_vertical_layout_group)
+        dpg.add_spacer(width=gui_config.chat_text_w - 5 * (gui_config.toolbutton_w + 8),  # 8 = DPG outer margin
+                       parent=buttons_horizontal_layout_group)
+
         if message_role == "user":
-            make_user_message_buttons(gui_parent=text_vertical_layout_group,
-                                      uuid=self.gui_uuid)
+            make_user_message_buttons(uuid=self.gui_uuid,
+                                      message_node_id=self.node_id,
+                                      gui_parent=buttons_horizontal_layout_group)
         elif message_role == "assistant":
-            make_ai_message_buttons(gui_parent=text_vertical_layout_group,
-                                    uuid=self.gui_uuid)
+            make_ai_message_buttons(uuid=self.gui_uuid,
+                                    message_node_id=self.node_id,
+                                    gui_parent=buttons_horizontal_layout_group)
+
+        # ----------------------------------------
+        # chat turn end spacers and line
+
+        dpg.add_spacer(height=4,
+                       tag=f"chat_turn_end_spacer1_{self.gui_uuid}",
+                       parent=self.gui_container_group)
+
+        if message_role in role_colors:
+            dpg.add_drawlist(height=1,
+                             width=(gui_config.chat_text_w + 64),
+                             tag=f"chat_turn_end_drawlist_{self.gui_uuid}",
+                             parent=self.gui_container_group)
+            dpg.draw_rectangle((64, 0), (gui_config.chat_text_w + 64, 1),
+                               color=(80, 80, 80),
+                               fill=(80, 80, 80),
+                               parent=f"chat_turn_end_drawlist_{self.gui_uuid}")
+
+        dpg.add_spacer(height=4,
+                       tag=f"chat_turn_end_spacer2_{self.gui_uuid}",
+                       parent=self.gui_container_group)
+
+        # # Render background color after the content has been rendered once (so that we can get its size)
+        # if message_role in role_colors:
+        #     def add_colored_border():
+        #         logger.info(f"{self.gui_uuid}: running callback ({message_role})")
+        #
+        #         # w, h = dpg.get_item_rect_size(self.gui_container_group)  # TODO: might not actually work
+        #         w, h = dpg.get_item_rect_size(chat_message_widget)  # TODO: might not actually work
+        #
+        #         drawlist_tag = f"chat_colored_border_drawlist_{self.gui_uuid}"
+        #         dpg.delete_item(drawlist_tag, children_only=True)
+        #         dpg.configure_item(drawlist_tag, width=4, height=h)
+        #         dpg.draw_rectangle((0, 0), (4, h),
+        #                            color=role_colors[message_role]["front"],
+        #                            fill=role_colors[message_role]["front"],
+        #                            parent=drawlist_tag)
+        #
+        #         # xbase, ybase = guiutils.get_widget_pos("chat_panel")
+        #         # logger.info(f"{self.gui_uuid}: xbase = {xbase}, ybase = {ybase}")
+        #         # x0_local, y0_local = guiutils.get_widget_relative_pos(self.gui_container_group, reference="chat_panel")  # tag
+        #         # w, h = dpg.get_item_rect_size(self.gui_container_group)  # TODO: might not actually work
+        #         # logger.info(f"{self.gui_uuid}: x0 = {x0_local}, y0 = {y0_local}, w = {w}, h = {h}")
+        #         # drawlist_bg_box = dpg.add_drawlist(width=w, height=h,
+        #         #                                    pos=(x0_local, y0_local),
+        #         #                                    tag=f"background_box_drawlist_{self.gui_uuid}",
+        #         #                                    parent=self.gui_container_group,
+        #         #                                    before=icon_and_text_container_group)
+        #         # dpg.set_item_pos(self.gui_container_group, (x0_local, y0_local))
+        #         # dpg.draw_rectangle((0, 0),
+        #         #                    (w, h),
+        #         #                    color=role_colors[message_role]["front"],
+        #         #                    fill=role_colors[message_role]["back"],
+        #         #                    rounding=8,
+        #         #                    parent=drawlist_bg_box)
+        #     # DPG can only assign one frame callback per frame, so we queue them and set a master callback to run through the queue.
+        #     logger.info(f"{self.gui_uuid}: setting callback")
+        #     with type(self).class_lock:
+        #         type(self).callbacks[self.gui_uuid] = add_colored_border
+        #     dpg.set_frame_callback(dpg.get_frame_count() + 10,
+        #                            type(self).run_callbacks)
+
 
 def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
     if head_node_id is None:  # use current HEAD from app_state?
         head_node_id = app_state["HEAD"]
-    payload_history = datastore.linearize_up(head_node_id)
-    for payload in payload_history:
+    node_id_history = datastore.linearize_up(head_node_id)
+    dpg.delete_item("chat_group", children_only=True)  # clear old content from GUI
+    for node_id in node_id_history:
         DisplayedChatMessage(gui_parent="chat_group",
-                             node_payload=payload)
+                             node_id=node_id)
+
+def next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
+    with datastore.lock:
+        node = datastore.nodes[node_id]
+        parent_node_id = node["parent"]
+        if parent_node_id is None:  # root node?
+            return None  # TODO: use root scan (may need to cache)
+
+        parent_node = datastore.nodes[parent_node_id]
+        siblings = parent_node["children"]  # including the node itself so we can get its index
+        node_index = siblings.index(node_id)  # TODO: handle errors
+
+        if direction == "next":
+            if node_index < len(siblings) - 1:
+                return siblings[node_index + 1]
+        else:  # direction == "prev":
+            if node_index > 0:
+                return siblings[node_index - 1]
+        return None  # no sibling found
 
 # --------------------------------------------------------------------------------
 # Set up the main window
@@ -343,7 +503,7 @@ with timer() as tim:
                     label="Raven-librarian main window",
                     no_scrollbar=True, autosize=True) as main_window:  # DPG "window" inside the app OS window ("viewport"), container for the whole GUI
         with dpg.child_window(tag="chat_ai_warning",
-                              height=42,
+                              height=gui_config.ai_warning_h,
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
             with dpg.group(horizontal=True):
@@ -352,8 +512,8 @@ with timer() as tim:
             dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag
 
         with dpg.child_window(tag="chat_panel",
-                              width=816,  # 800 + round border (8 on each side)
-                              height=600):
+                              width=(gui_config.chat_panel_w + 16),  # 16 = round border (8 on each side)
+                              height=gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8):
             # dummy chat item for testing  # TODO: make a class for this
             with dpg.group(tag="chat_group"):
                 initial_message_container_height = 2 * gui_config.margin + gui_config.chat_icon_size
@@ -419,15 +579,15 @@ with timer() as tim:
             # dpg.set_frame_callback(11, place)
 
         with dpg.child_window(tag="chat_controls",
-                              width=816,
-                              height=42,
+                              width=(gui_config.chat_panel_w + 16),  # 16 = round border (8 on each side)
+                              height=gui_config.chat_controls_h,
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
             with dpg.group(horizontal=True):
                 dpg.add_input_text(tag="chat_field",
                                    default_value="",
                                    hint="[ask the AI questions here]",
-                                   width=800 - gui_config.toolbutton_w - 8,
+                                   width=gui_config.chat_panel_w - gui_config.toolbutton_w - 8,
                                    callback=lambda: None)  # TODO
                 dpg.add_button(label=fa.ICON_PAPER_PLANE,
                                callback=lambda: None,  # TODO
