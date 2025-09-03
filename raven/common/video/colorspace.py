@@ -5,7 +5,9 @@ Input/output is Torch tensor in [c, h, w] format.
 This module is licensed under the 2-clause BSD license.
 """
 
-__all__ = ["rgb_to_yuv", "yuv_to_rgb", "luminance"]
+__all__ = ["rgb_to_yuv", "yuv_to_rgb", "luminance", "hex_to_rgb"]
+
+from typing import Tuple
 
 import torch
 
@@ -104,3 +106,9 @@ _RGB_TO_Y = _RGB_TO_YCBCR[0, :]
 def luminance(image: torch.tensor) -> torch.tensor:
     """RGB (linear 0...1) -> Y (true relative luminance)"""
     return torch.einsum("c,cij->ij", (_RGB_TO_Y.to(image.dtype).to(image.device), image))
+
+def hex_to_rgb(hex: str) -> Tuple[int]:
+    """HTML hex color '#rrggbb' or '#rrggbbaa' to tuple of integers in [0, 255]."""
+    hex = hex.removeprefix('#')
+    rgb = tuple(int(hex[i:i + 2], 16) for i in [*range(0, len(hex), 2)])
+    return rgb
