@@ -388,13 +388,14 @@ def linearize_chat(datastore: chattree.Forest, node_id: str) -> List[Dict]:
     children are not scanned.
 
     NOTE: The difference between this function and `chattree.Forest.linearize_up` is that this will
-    extract only the "message" field (OpenAI-compatible chat message record) from each payload, whereas
-    that other function returns the full payloads.
+    automatically extract the "message" field (OpenAI-compatible chat message record) from each node,
+    using the active revision of the payload, whereas that other function returns the node IDs.
 
     Hence, this is a convenience function for populating a linear chat history for chat clients that use
     the OpenAI format to communicate with the LLM server.
     """
-    payload_history = datastore.linearize_up(node_id)  # this auto-selects the active revision of the payload of each node
+    node_id_history = datastore.linearize_up(node_id)
+    payload_history = [datastore.get_payload(node_id=node_id) for node_id in node_id_history]  # this auto-selects the active revision of the payload of each node
     message_history = [payload["message"] for payload in payload_history]
     return message_history
 

@@ -452,17 +452,17 @@ class Forest:
                 node = self.nodes[parent_node_id]
             return node["id"]
 
-    def linearize_up(self, node_id: str) -> List[Any]:
+    def linearize_up(self, node_id: str) -> List[str]:
         """Walking up from `node_id` up to and including a root node, return a linearized representation of that branch.
 
-        This collects the active revision of the payload from each node, and puts those into a list, in depth order (root node first).
+        This collects the node ID of each node, and puts those into a list, in depth order (root node first).
 
-        Note `node_id` doesn't need to be a leaf node; but it will be the last node of the linearized representation;
-        children are not scanned.
+        Note that the starting `node_id` doesn't need to be a leaf node; but it will be the last node of the linearized
+        representation; children are not scanned.
         """
         linearized_history = collections.deque()
         def prepend_to_history(node):
-            linearized_history.appendleft(self.get_payload(node_id=node["id"]))  # no `revision_id` -> get active revision of payload by default
+            linearized_history.appendleft(node["id"])
         self.walk_up(node_id, callback=prepend_to_history)
         return list(linearized_history)
 
