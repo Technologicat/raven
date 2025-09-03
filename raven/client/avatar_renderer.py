@@ -33,6 +33,7 @@ import dearpygui.dearpygui as dpg
 from ..common import bgtask
 from ..common.gui import utils as guiutils
 from ..common.running_average import RunningAverage
+from ..common.numutils import si_prefix
 
 from . import api
 
@@ -65,19 +66,6 @@ class ResultFeedReader:
         if self.gen is not None:
             self.gen.close()
             self.gen = None
-
-def si_prefix(number: Union[int, float]) -> str:  # TODO: very general utility, move to `unpythonic`, and add binary mode (1024-based units Ki, Mi, Gi, ...)
-    """Convert a number to SI format (1000 -> 1K).
-
-    https://medium.com/@ryan_forrester_/getting-file-sizes-in-python-a-complete-guide-01293aaa68ef
-    """
-    if number < 1000:
-        return f"{number:.2f}"
-    for unit in ['', 'K', 'M', 'G', 'T', 'P']:
-        if number < 1000:
-            return f"{number:.2f} {unit}"
-        number /= 1000
-    return f"{number:.2f} E"
 
 # --------------------------------------------------------------------------------
 # API
