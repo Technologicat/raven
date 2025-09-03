@@ -38,7 +38,7 @@
 - **Animefx**. Optional anime-style cel effects, e.g. notice lines, sweatdrops, anger veins, ...
 - **Upscaling**. Animation is 512×512, but can be Anime4K-upscaled to e.g. 1024×1024.
 - **Postprocessing**. Visual effects such as [bloom](https://en.wikipedia.org/wiki/Bloom_(shader_effect)), [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration), [scanlines](https://en.wikipedia.org/wiki/Scan_line), ...
-- **Web API**: Integrate the avatar into your own apps. We provide Python bindings (see [`raven.client.api`](../client/api.py)).
+- **Web API**: Integrate the avatar into your own apps. We provide Python bindings (see [`raven.client.api`](../client/api.py) and [`raven.client.avatar_renderer`](../client/avatar_renderer.py)).
 
 **Historical note**
 
@@ -250,6 +250,7 @@ The model files are shared between the live animator and the standalone pose edi
   - Our code does its best, but for cases when that is not enough, we provide a global delay setting for shifting the timing (both in the client API as well as in the `raven-avatar-settings-editor` app).
   - Lipsync is implemented on the client side, because that is where audio playback occurs.
     - For developers, this means that to use lipsync from a programming language other than Python (such as JavaScript), at least the TTS parts of the existing Python bindings must be ported to that language. See [#2](https://github.com/Technologicat/raven/issues/2).
+    - For the implementation, see [`raven.client.tts`](../client/tts.py).
 
 - This software is not compatible with characters created for VTuber software, such as Live2D. Rather, this is an independent exploration of somewhat similar functionality, for providing a live anime avatar for AI characters.
 

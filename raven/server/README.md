@@ -337,17 +337,19 @@ The server URL that the Python bindings call, can be set in [`raven.client.confi
 
 The Python bindings live in [`raven.client.api`](../client/api.py) and [`raven.client.tts`](../client/tts.py). This split is because the TTS client includes the avatar lipsync driver, which is a couple hundred SLOC, although rather simple.
 
+There is also a DPG GUI driver in [`raven.client.avatar_renderer`](../client/avatar_renderer.py). If you use Python and DPG, this is the easy way to integrate the avatar to your app. If you use another GUI toolkit or another programming language, this serves as a complete example of the low-level client code needed to build a GUI driver for the avatar.
+
 To avoid duplication, most of the client API functions are not documented separately. The documentation lives on the server side, in the docstrings of [`raven.server.app`](../server/app.py), for the function that serves each specific web API endpoint. The parameters of the Python bindings are the natural Python equivalent of what goes into the web API as JSON.
 
 Full list of Python API functions follows.
 
 ## General
 
-- `initialize`: Must be called first.
+- `initialize`: **Must be called first.**
   - This loads the client configuration, and starts the audio service so that TTS can work.
   - The implementation of this one client API function actually lives in `raven.client.util`; see function `initialize_api`.
 - `raven_server_available`: Check whether the client can connect to *Raven-server* (whose URL was specified when `initialize` was called).
-- `tts_server_available`: Same, but check the TTS server. This isn't needed when using *Raven-server*'s internal TTS.
+- `tts_server_available`: Same, but check the TTS server. This isn't needed when using *Raven-server*'s internal TTS (recommended).
 
 ## Raven-avatar client
 
@@ -398,10 +400,20 @@ AI-animated anime avatar for your LLM.
     - If network transport falls behind, so that frames would pile up on the server, rendering auto-pauses until the latest frame has been sent.
     - In normal operation, the server works on three consecutive frames at once: while frame X is being sent, X+1 is being encoded, and X+2 is being rendered.
       - This increases parallelization at the cost of some latency.
-  - In the Python API, this returns a generator that yields video frames from the server. See usage example in [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py).
+  - In the Python API, this returns a generator that yields video frames from the server.
+    - Note that `avatar_result_feed` is the low-level API, meant for building GUI drivers for the avatar.
+    - We provide a GUI driver for DearPyGui (DPG); see `DPGAvatarRenderer` in [`raven.client.avatar_renderer`](../client/avatar_renderer.py). It also doubles as a usage example of `avatar_result_feed`; see especially the `start` method and the background task spawned there.
   - **NOTE**: In the web API, unlike most others, this is a `GET` endpoint. The session ID is sent as a URL parameter.
 - `avatar_get_available_filters`: Get list of available image filters in the postprocessor.
   - The same image filters are also exposed to the `imagefx` module. This is the only API function to get the list.
+
+### DPG GUI driver for avatar
+
+This lives in a separate module, [`raven.client.avatar_renderer`](../client/avatar_renderer.py). It is part of the API, but not imported automatically.
+
+- `DPGAvatarRenderer`: Receive the avatar video stream, and render it in a DearPyGui (DPG) image widget.
+  - This also serves as a starting point for porting the avatar's GUI driver to other GUI toolkits and to other programming languages.
+  - Instantiate `DPGAvatarRenderer`, then configure it, then `start` it. See docstrings for details. See usage example in [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py).
 
 ## Text sentiment classification
 

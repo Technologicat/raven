@@ -29,23 +29,18 @@ with timer() as tim:
     import atexit
     import concurrent.futures
     import copy
-    import io
     import json
     import os
     import pathlib
     import platform
     import requests
     import sys
-    import threading
-    import time
     import traceback
-    from typing import Optional, Tuple, Union
+    from typing import Optional, Union
 
-    import qoi
     import PIL.Image
 
     from colorama import Fore, Style, init as colorama_init
-    from unpythonic.env import env as envcls
 
     import numpy as np
 
@@ -64,10 +59,11 @@ with timer() as tim:
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import messagebox
     from ...common.gui import utils as guiutils
-    from ...common.running_average import RunningAverage
 
     from ...client import api  # convenient Python functions that abstract away the web API
     from ...client import config as client_config
+    from ...client.avatar_renderer import DPGAvatarRenderer
+
     from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
@@ -358,26 +354,20 @@ def is_any_modal_window_visible():
 class PostprocessorSettingsEditorGUI:
     """Main app window for the postprocessor settings editor for `raven.avatar`."""
     def __init__(self):
-        self.source_image_size = 512  # THA3 uses 512x512 images, can't be changed...
-
-        self.postprocessor_enabled = True
+        self.source_image_size = 512  # THA3 always uses 512x512 inputs...
 
         self.upscale = 2.0  # ...but the animator has a realtime super-resolution filter (anime4k). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
         self.upscale_preset = "C"  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
         self.upscale_quality = "low"  # "low": fast, acceptable quality; "high": slow, good quality
-        self.image_size = int(self.upscale * self.source_image_size)  # final size in GUI (for pixel-perfect texture)
+
+        self.postprocessor_enabled = True
 
         self.target_fps = 25  # default 25; maybe better to lower this when upscaling (see the server's terminal output for available FPS)
         self.comm_format = "QOI"  # Frame format for video stream
 
         self.button_width = 300
 
-        self.upscale_change_lock = threading.Lock()
         self.current_input_image_path = None  # for the Refresh (reload current character) feature
-        self.live_texture = None  # The raw texture object
-        self.live_texture_id_counter = 0  # For creating unique DPG IDs when the size changes on the fly, since the delete might not take immediately.
-        self.live_image_widget = None  # GUI widget the texture renders to
-        self.last_image_rgba = None  # For rescaling last received frame on upscaler size change before we get new data
 
         self.backdrop_texture = None  # The raw texture object
         self.backdrop_texture_id_counter = 0
@@ -388,7 +378,6 @@ class PostprocessorSettingsEditorGUI:
 
         self.talking_animation_running = False  # simple mouth randomizing animation
         self.speaking = False  # TTS
-        self.animator_running = True
         self.animator_settings = None  # not loaded yet
 
         dpg.add_texture_registry(tag="avatar_settings_editor_textures")  # the DPG live texture and the window backdrop texture will be stored here
@@ -404,16 +393,21 @@ class PostprocessorSettingsEditorGUI:
                                       tag="avatar_child_window"):
                     dpg.add_drawlist(tag="backdrop_drawlist", width=1024, height=1024, pos=(0, 0))  # for backdrop image
                     # dpg.add_spacer(width=1024, height=0)  # keep the group at the image's width even when the image is hidden
-                    self.init_live_texture(self.image_size)
-                    dpg.add_text("FPS counter will appear here", color=(0, 255, 0), pos=(8, 0), tag="fps_text")
-                    self.fps_statistics = RunningAverage()
-                    self.frame_size_statistics = RunningAverage()
+
+                    self.dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="avatar_settings_editor_textures",
+                                                                 gui_parent="avatar_child_window",
+                                                                 avatar_x_center=512,
+                                                                 avatar_y_bottom=viewport_height - 16,
+                                                                 task_manager=task_manager)
+                    image_size = int(self.upscale * self.source_image_size)
+                    self.dpg_avatar_renderer.configure_live_texture(image_size)
+                    self.dpg_avatar_renderer.configure_fps_counter(show=True)
 
                 def position_please_standby_text():
-                    # x0, y0 = guiutils.get_widget_relative_pos(f"live_image_{self.live_texture_id_counter}", reference="main_window")
-                    x0, y0 = guiutils.get_widget_pos(f"live_image_{self.live_texture_id_counter}")
-                    dpg.add_text("[No image loaded]", pos=(x0 + self.image_size / 2 - 60,
-                                                           y0 + self.image_size / 2 - (font_size / 2)),
+                    # x0, y0 = guiutils.get_widget_relative_pos(f"avatar_live_image_{self.dpg_avatar_renderer.live_texture_id_counter}", reference="main_window")
+                    x0, y0 = guiutils.get_widget_pos(f"avatar_live_image_{self.dpg_avatar_renderer.live_texture_id_counter}")
+                    dpg.add_text("[No image loaded]", pos=(x0 + self.dpg_avatar_renderer.image_size / 2 - 60,
+                                                           y0 + self.dpg_avatar_renderer.image_size / 2 - (font_size / 2)),
                                  tag="please_standby_text",
                                  parent="avatar_child_window",
                                  show=False)
@@ -659,69 +653,6 @@ class PostprocessorSettingsEditorGUI:
                     # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
                     build_postprocessor_gui()
 
-    def init_live_texture(self, new_image_size: int) -> None:
-        """Initialize (or re-initialize) the texture and image widgets for rendering the video stream of the live AI avatar.
-
-        The image has square aspect ratio;, `new_image_size` is the length of a side, in pixels.
-        """
-        with self.upscale_change_lock:
-            old_texture_id = self.live_texture_id_counter
-            new_texture_id = old_texture_id + 1
-
-            logger.info(f"init_live_texture: Creating new GUI item live_texture_{new_texture_id} for new size {new_image_size}x{new_image_size}")
-            self.blank_texture = np.zeros([new_image_size,  # height
-                                           new_image_size,  # width
-                                           4],  # RGBA
-                                          dtype=np.float32).ravel()
-            if self.last_image_rgba is not None:
-                # To reduce flicker when the texture is replaced: take the last frame we have,
-                # rescale it, and use that as the initial content of the new texture.
-                image_rgba = self.last_image_rgba  # from the background thread
-                pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
-                if image_rgba.shape[2] == 4:
-                    alpha_channel = image_rgba[:, :, 3]
-                    pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
-                pil_image = pil_image.resize((new_image_size, new_image_size),
-                                             resample=PIL.Image.LANCZOS)
-                image_rgba = pil_image.convert("RGBA")
-                image_rgba = np.asarray(image_rgba, dtype=np.float32) / 255
-                default_image = image_rgba.ravel()
-            else:
-                default_image = self.blank_texture
-            self.live_texture = dpg.add_raw_texture(width=new_image_size,
-                                                    height=new_image_size,
-                                                    default_value=default_image,
-                                                    format=dpg.mvFormat_Float_rgba,
-                                                    tag=f"live_texture_{new_texture_id}",
-                                                    parent="avatar_settings_editor_textures")
-            self.live_texture_id_counter += 1  # now the new texture exists so it's safe to write to (in the background thread)
-            self.image_size = new_image_size
-
-            first_time = (self.live_image_widget is None)
-            logger.info(f"init_live_texture: Creating new GUI item live_image_{new_texture_id}")
-            self.live_image_widget = dpg.add_image(f"live_texture_{new_texture_id}",
-                                                   show=self.animator_running,  # if paused, leave it hidden
-                                                   tag=f"live_image_{new_texture_id}",
-                                                   parent="avatar_child_window",
-                                                   before="fps_text")
-            if first_time:  # first frame; window size not initialized yet, so we can't rely on `self._resize_gui`
-                dpg.set_item_pos(self.live_image_widget, (512 - self.image_size // 2, viewport_height - self.image_size))
-            else:
-                dpg.split_frame()  # For some reason, waiting for a frame before resizing the GUI eliminates flicker when the texture object is replaced.
-                self._resize_gui()
-
-            try:
-                dpg.hide_item(f"live_image_{old_texture_id}")
-            except SystemError:  # does not exist
-                pass
-            else:
-                dpg.split_frame()  # Only safe after startup, once the GUI render loop is running. At startup, the old image widget doesn't exist, so we detect the situation from that.
-            # Now the old image widget is guaranteed to be hidden, so we can delete it without breaking GUI render
-            guiutils.maybe_delete_item(f"live_image_{old_texture_id}")
-            guiutils.maybe_delete_item(f"live_texture_{old_texture_id}")
-
-            logger.info("init_live_texture: done!")
-
     def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]) -> None:
         """Load a backdrop image. To clear the background, use `filename=None`."""
         if filename is not None:
@@ -739,11 +670,7 @@ class PostprocessorSettingsEditorGUI:
         if w == 0 or h == 0:  # no meaningful main window size yet?
             return
 
-        try:
-            if self.live_image_widget is not None:
-                dpg.set_item_pos(self.live_image_widget, (512 - self.image_size // 2, h - self.image_size))
-        except SystemError:  # main window or live image widget does not exist
-            pass
+        self.dpg_avatar_renderer.reposition(new_y_bottom=h)
 
         try:
             dpg.set_item_height("avatar_child_window", h - 16)
@@ -939,11 +866,11 @@ class PostprocessorSettingsEditorGUI:
 
     def on_upscaler_settings_change(self, sender, app_data):
         """Update the upscaler status and send changes to server."""
-        old_image_size = self.image_size
+        old_image_size = self.dpg_avatar_renderer.image_size
         new_upscale = dpg.get_value("upscale_slider") / 10
         new_image_size = int(new_upscale * self.source_image_size)
         if new_image_size != old_image_size:
-            self.init_live_texture(new_image_size)
+            self.dpg_avatar_renderer.configure_live_texture(new_image_size)
 
         self.upscale = new_upscale
         self.upscale_preset = dpg.get_value("upscale_preset_choice")
@@ -1083,18 +1010,18 @@ class PostprocessorSettingsEditorGUI:
 
     def toggle_animator_paused(self) -> None:
         """Pause or resume the animation. Pausing when the avatar won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
-        if self.animator_running:
+        if self.dpg_avatar_renderer.animator_running:
             api.avatar_stop(avatar_instance_id)
             dpg.set_value("please_standby_text", "[Animator is paused]")
             dpg.show_item("please_standby_text")
-            dpg.hide_item(f"live_image_{self.live_texture_id_counter}")
+            dpg.hide_item(f"avatar_live_image_{self.dpg_avatar_renderer.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")
         else:
             api.avatar_start(avatar_instance_id)
             dpg.hide_item("please_standby_text")
-            dpg.show_item(f"live_image_{self.live_texture_id_counter}")
+            dpg.show_item(f"avatar_live_image_{self.dpg_avatar_renderer.live_texture_id_counter}")
             dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")
-        self.animator_running = not self.animator_running
+        self.dpg_avatar_renderer.animator_running = not self.dpg_avatar_renderer.animator_running
 
     def on_stop_speaking(self, sender, app_data) -> None:
         api.tts_stop()
@@ -1161,7 +1088,7 @@ def _resize_gui():
 dpg.set_viewport_resize_callback(_resize_gui)
 
 # Hotkey support
-choice_map = None
+choice_map = None   # DPG tag or ID -> (choice_strings, callback)
 def avatar_settings_editor_hotkeys_callback(sender, app_data):
     if gui_instance is None:
         return
@@ -1240,157 +1167,6 @@ with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # glo
     dpg.add_key_press_handler(tag="avatar_settings_editor_hotkeys_handler", callback=avatar_settings_editor_hotkeys_callback)
 
 # --------------------------------------------------------------------------------
-# Animation client task
-
-class ResultFeedReader:
-    def __init__(self):
-        self.gen = None
-
-    def start(self) -> None:
-        self.gen = api.avatar_result_feed(avatar_instance_id)
-
-    def is_running(self) -> bool:
-        return self.gen is not None
-
-    def get_frame(self) -> Tuple[Optional[str], bytes]:
-        """-> (received_mimetype, payload)"""
-        return next(self.gen)  # next-gen lol
-
-    def stop(self) -> None:
-        self.gen.close()
-        self.gen = None
-
-def si_prefix(number: Union[int, float]) -> str:  # TODO: very general utility, move to `unpythonic`, and add binary mode (1024-based units Ki, Mi, Gi, ...)
-    """Convert a number to SI format (1000 -> 1K).
-
-    https://medium.com/@ryan_forrester_/getting-file-sizes-in-python-a-complete-guide-01293aaa68ef
-    """
-    if number < 1000:
-        return f"{number:.2f}"
-    for unit in ['', 'K', 'M', 'G', 'T', 'P']:
-        if number < 1000:
-            return f"{number:.2f} {unit}"
-        number /= 1000
-    return f"{number:.2f} E"
-
-# We must continuously retrieve new frames as they become ready, so this runs in the background.
-def update_live_texture(task_env) -> None:
-    assert task_env is not None
-    def describe_performance(gui: PostprocessorSettingsEditorGUI, video_format: str, video_height: int, video_width: int):  # actual received video height/width of the frame being described
-        if gui is None:
-            return "RX (avg) -- B/s @ -- FPS; avg -- B per frame (--x--, -- px, --)"
-
-        avg_fps = gui.fps_statistics.average()
-        avg_bytes = int(gui.frame_size_statistics.average())
-        pixels = video_height * video_width
-
-        if gui.upscale != 1.0:
-            upscale_str = f"up {gui.upscale_preset} {gui.upscale_quality[0].upper()}Q @{gui.upscale}x -> "
-        else:
-            upscale_str = ""
-
-        return f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({upscale_str}{video_width}x{video_height}, {si_prefix(pixels)}px, {video_format})"
-
-    reader = ResultFeedReader()
-    reader.start()
-    try:
-        while not task_env.cancelled:
-            frame_start_time = time.time_ns()
-
-            # Important: grab reference to the global `gui_instance` just once per loop; during app shutdown, it may disappear at any time.
-            gui = gui_instance
-
-            if gui:  # sync `ResultFeedReader` state from GUI `animator_running` state
-                if not gui.animator_running and reader.is_running():
-                    reader.stop()
-                    try:
-                        dpg.set_value("fps_text", describe_performance(None, None, None, None))
-                    except SystemError:  # does not exist (can happen at app shutdown)
-                        pass
-                elif gui.animator_running and not reader.is_running():
-                    reader.start()
-
-            if reader.is_running():
-                mimetype, image_data = reader.get_frame()
-                gui.frame_size_statistics.add_datapoint(len(image_data))
-
-            # Here:
-            #   - `gui` can be `None` during app startup
-            #   - If the `ResultFeedReader` isn't running, there's nothing to do at the moment.
-            if gui is None or not reader.is_running():
-                time.sleep(0.04)   # 1/25 s
-                continue
-
-            try:  # EAFP to avoid TOCTTOU
-                # Before blitting, make sure the texture is of the expected size. When an upscale change is underway, it will be temporarily of the wrong size.
-                tex = gui.live_texture  # Get the reference only once, since it could change at any time if the user changes the upscaler settings.
-                config = dpg.get_item_configuration(tex)
-                expected_w = config["width"]
-                expected_h = config["height"]
-            except SystemError:  # does not exist (can happen at least during app shutdown, or during a texture object swap)
-                time.sleep(0.04)   # 1/25 s
-                continue  # can't do anything without a texture to blit to, so discard this frame
-
-            if mimetype == "image/qoi":
-                image_rgba = qoi.decode(image_data)  # -> uint8 array of shape (h, w, c)
-                # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
-                h, w = image_rgba.shape[:2]
-                if w != expected_w or h != expected_h:
-                    logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {expected_w}x{expected_h}")
-                    pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
-                    if image_rgba.shape[2] == 4:
-                        alpha_channel = image_rgba[:, :, 3]
-                        pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
-                    pil_image = pil_image.resize((expected_w, expected_h),
-                                                 resample=PIL.Image.LANCZOS)
-                    image_rgba = np.asarray(pil_image.convert("RGBA"))
-            else:  # use PIL
-                image_file = io.BytesIO(image_data)
-                pil_image = PIL.Image.open(image_file)
-                # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
-                w, h = pil_image.size
-                if w != expected_w or h != expected_h:
-                    logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {expected_w}x{expected_h}")
-                    pil_image = pil_image.resize((expected_w, expected_h),
-                                                 resample=PIL.Image.LANCZOS)
-                image_rgba = np.asarray(pil_image.convert("RGBA"))
-            gui.last_image_rgba = image_rgba  # for reducing flicker when upscaler settings change
-            image_rgba = np.array(image_rgba, dtype=np.float32) / 255
-            raw_data = image_rgba.ravel()  # shape [h, w, c] -> linearly indexed
-            try:  # EAFP to avoid TOCTTOU
-                dpg.set_value(tex, raw_data)  # to GUI
-            except SystemError:  # does not exist (might have gone bye-bye while we were decoding)
-                continue  # can't do anything without a texture to blit to, so discard this frame
-
-            # Update FPS counter.
-            # NOTE: Since we wait on the server to send a frame, the refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS.
-            #       If the machine could render faster, this just means less than 100% CPU/GPU usage.
-            elapsed_time = time.time_ns() - frame_start_time
-            fps = 1.0 / (elapsed_time / 10**9)
-            gui.fps_statistics.add_datapoint(fps)
-
-            try:
-                dpg.set_value("fps_text", describe_performance(gui, mimetype, h, w))
-            except SystemError:  # DPG widget does not exist (can happen at app shutdown)
-                pass
-            except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
-                pass
-    except EOFError:  # `result_feed` has shut down (normal at app exit, after we call `api.avatar_unload`)
-        pass
-    except Exception as exc:
-        traceback.print_exc()
-        logger.error(f"PostprocessorSettingsEditorGUI.update_live_texture: {type(exc)}: {exc}")
-
-        # TODO: recovery if the server comes back online
-        if gui_instance is not None:
-            gui_instance.animator_running = False
-            dpg.set_value("please_standby_text", "[Connection lost]")
-            dpg.show_item("please_standby_text")
-            dpg.hide_item(f"live_image_{gui_instance.live_texture_id_counter}")
-            dpg.set_value("fps_text", describe_performance(None, None, None, None))
-
-
-# --------------------------------------------------------------------------------
 # Main program
 
 if api.raven_server_available():
@@ -1406,6 +1182,7 @@ api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> 
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings into the GUI, as well as send them to the avatar instance.
 gui_instance.current_input_image_path = _startup_input_image_path  # so that the Refresh button works
 api.avatar_start(avatar_instance_id)
+gui_instance.dpg_avatar_renderer.start(avatar_instance_id)
 
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
@@ -1429,8 +1206,6 @@ def app_shutdown() -> None:
         except requests.exceptions.ConnectionError:  # server has gone bye-bye
             pass
 atexit.register(app_shutdown)
-
-task_manager.submit(update_live_texture, envcls())
 
 dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)
