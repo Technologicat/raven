@@ -179,11 +179,21 @@ def bootup(font_size: int, font_basename: str = "OpenSans"):
             dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
 
+    with dpg.theme(tag="disablable_red_button_theme") as disablable_red_button_theme:  # useful for dangerous delete buttons and such
+        with dpg.theme_component(dpg.mvButton, enabled_state=False):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+
     out = env(icon_font_regular=icon_font_regular,
               icon_font_solid=icon_font_solid,
               global_theme=global_theme,
               my_no_spacing_theme=my_no_spacing_theme,
-              disablable_button_theme=disablable_button_theme)
+              disablable_button_theme=disablable_button_theme,
+              disablable_red_button_theme=disablable_red_button_theme)
     return out
 
 def maybe_delete_item(item):

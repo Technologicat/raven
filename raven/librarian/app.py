@@ -213,7 +213,10 @@ def make_ai_message_buttons(uuid: str,
     dpg.bind_item_font(f"chat_delete_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
     dpg.bind_item_theme(f"chat_delete_branch_button_{uuid}", "disablable_button_theme")  # tag
     delete_branch_tooltip = dpg.add_tooltip(f"chat_delete_branch_button_{uuid}")  # tag
-    dpg.add_text("Delete branch (this node and all descendants)", parent=delete_branch_tooltip)
+
+    c_red = '<font color="(255, 96, 96)">'
+    c_end = '</font>'
+    dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_branch_tooltip)
 
     def make_navigate_to_prev_sibling(message_node_id):
         def prev_sibling():
@@ -252,6 +255,15 @@ def make_ai_message_buttons(uuid: str,
     dpg.bind_item_theme(f"chat_nextbranch_button_{uuid}", "disablable_button_theme")  # tag
     nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
     dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
+
+    dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
+                   callback=lambda: None,  # TODO
+                   width=gui_config.toolbutton_w,
+                   tag=f"chat_open_graph_button_{uuid}",
+                   parent=g)
+    dpg.bind_item_font(f"chat_open_graph_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+    nextbranch_tooltip = dpg.add_tooltip(f"chat_open_graph_button_{uuid}")  # tag
+    dpg.add_text("Open graph view", parent=nextbranch_tooltip)
 
     if siblings is not None:
         dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
@@ -289,8 +301,12 @@ def make_user_message_buttons(uuid: str,
                    tag=f"chat_delete_branch_button_{uuid}",
                    parent=g)
     dpg.bind_item_font(f"chat_delete_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+    dpg.bind_item_theme(f"chat_delete_branch_button_{uuid}", "disablable_button_theme")  # tag
     delete_branch_tooltip = dpg.add_tooltip(f"chat_delete_branch_button_{uuid}")  # tag
-    dpg.add_text("Delete branch (this node and all descendants)", parent=delete_branch_tooltip)
+
+    c_red = '<font color="(255, 96, 96)">'
+    c_end = '</font>'
+    dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_branch_tooltip)
 
     def make_navigate_to_prev_sibling(message_node_id):
         def prev_sibling():
@@ -329,6 +345,15 @@ def make_user_message_buttons(uuid: str,
     dpg.bind_item_theme(f"chat_nextbranch_button_{uuid}", "disablable_button_theme")  # tag
     nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
     dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
+
+    dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
+                   callback=lambda: None,  # TODO
+                   width=gui_config.toolbutton_w,
+                   tag=f"chat_open_graph_button_{uuid}",
+                   parent=g)
+    dpg.bind_item_font(f"chat_open_graph_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+    nextbranch_tooltip = dpg.add_tooltip(f"chat_open_graph_button_{uuid}")  # tag
+    dpg.add_text("Open graph view", parent=nextbranch_tooltip)
 
     if siblings is not None:
         dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
@@ -430,7 +455,7 @@ class DisplayedChatMessage:
         buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
-        dpg.add_spacer(width=gui_config.chat_text_w - 5 * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 32 = some space for sibling counter
+        dpg.add_spacer(width=gui_config.chat_text_w - 6 * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 32 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
         if message_role == "user":
@@ -516,6 +541,15 @@ def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
     dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
 
 def get_siblings(node_id: str) -> Tuple[Optional[List[str]], Optional[int]]:  # TODO: move to `chattree`
+    """Return a list of siblings of `node_id`, including that node itself.
+
+    Returns the tuple `(siblings, node_index)`, where:
+        `siblings` is a list of node IDs,
+        `node_index` is the (0-based) index of `node_id` itself in the `siblings` list.
+
+    The sibling scan is performed via the parent node of `node_id`. If the parent is not found,
+    this function returns `(None, None)`.
+    """
     with datastore.lock:
         node = datastore.nodes[node_id]
         parent_node_id = node["parent"]
@@ -526,6 +560,16 @@ def get_siblings(node_id: str) -> Tuple[Optional[List[str]], Optional[int]]:  # 
         siblings = parent_node["children"]  # including the node itself so we can get its index
         node_index = siblings.index(node_id)  # TODO: handle errors
         return siblings, node_index
+
+def get_children(node_id: str) -> List[str]:  # TODO: move to `chattree`
+    """Return a list of children of `node_id`.
+
+    That list may be empty (if `node_id` is currently a leaf node).
+    """
+    with datastore.lock:
+        node = datastore.nodes[node_id]
+        children = node["children"]
+        return children
 
 def get_next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
     siblings, node_index = get_siblings(node_id)

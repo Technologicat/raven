@@ -54,6 +54,7 @@
         - Sentence splitting
         - Avatar emotion update during live preview (also during thinking)
         - Call the lipsynced TTS and the English->Finnish translation and captioning system when we get a complete sentence
+          - TTS audio output toggle icons: `ICON_COMMENT`, `ICON_COMMENT_SLASH`
         - Add GUI element to display captions (large font) on top of the avatar video
       - Avatar emotion update from final message
     - Add feature: Copy message to clipboard
