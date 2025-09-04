@@ -41,6 +41,7 @@ with timer() as tim:
     from . import hybridir
     from . import llmclient
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
+print()
 
 def minimal_chat_client(backend_url):
     """Minimal LLM chat client, for testing/debugging."""
@@ -62,16 +63,15 @@ def minimal_chat_client(backend_url):
 
     # Main program
     try:
-        # API key already loaded during module bootup; here, we just inform the user.
-        if "Authorization" in llmclient.headers:
-            print()
-            print(f"Loaded LLM API key from '{str(librarian_config.llm_api_key_file)}'.")
+        if api.raven_server_available():
+            # Websearch is set up as a tool in `raven.librarian.llmclient`, and the same module handles the communication
+            # with the Raven server when the LLM performs a websearch tool-call. Here we just inform the user.
+            print(colorizer.colorize(f"Connected to Raven-server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+            print(colorizer.colorize("The LLM will have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
             print()
         else:
-            print()
-            print(f"No LLM API key configured. If your LLM needs an API key to connect, put it into '{str(librarian_config.llm_api_key_file)}'.")
-            print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
-            print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
+            print(colorizer.colorize(f"WARNING: Cannot connect to Raven-server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
+            print(colorizer.colorize("The LLM will NOT have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
             print()
 
         try:
@@ -85,6 +85,16 @@ def minimal_chat_client(backend_url):
             print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
             settings = llmclient.setup(backend_url=backend_url)
             chat_show_model_info()
+
+        # API key already loaded during module bootup; here, we just inform the user.
+        if "Authorization" in llmclient.headers:
+            print(f"{colorizer.Fore.GREEN}{colorizer.Style.BRIGHT}Loaded LLM API key from '{str(librarian_config.llm_api_key_file)}'.{colorizer.Style.RESET_ALL}")
+            print()
+        else:
+            print(f"{colorizer.Fore.YELLOW}{colorizer.Style.BRIGHT}No LLM API key configured.{colorizer.Style.RESET_ALL} If your LLM needs an API key to connect, put it into '{str(librarian_config.llm_api_key_file)}'.")
+            print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
+            print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
+            print()
 
         # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
         datastore, app_state = appstate.load(settings, datastore_file, state_file)
@@ -637,16 +647,6 @@ def main():
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help=f"where to access the LLM API (default, currently '{librarian_config.llm_backend_url}', is set in `raven/librarian/config.py`)")
     opts = parser.parse_args()
-
-    print()
-    if api.raven_server_available():
-        # Websearch is set up as a tool in `raven.librarian.llmclient`, and the same module handles the communication
-        # with the Raven server when the LLM performs a websearch tool-call. Here we just inform the user.
-        print(colorizer.colorize(f"Connected to Raven-server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
-        print(colorizer.colorize("The LLM will have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
-    else:
-        print(colorizer.colorize(f"WARNING: Cannot connect to Raven-server at {client_config.raven_server_url}", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
-        print(colorizer.colorize("The LLM will NOT have access to websearch.", colorizer.Style.BRIGHT, colorizer.Fore.YELLOW))
 
     # print(llmclient.websearch_wrapper("what is the airspeed velocity of an unladen swallow"))  # DEBUG
     minimal_chat_client(opts.backend_url)

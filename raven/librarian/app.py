@@ -12,13 +12,16 @@ logger.info(f"Raven-librarian version {__version__} starting.")
 logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
+    import atexit
     import concurrent.futures
+    import json
     import os
     import pathlib
     import platform
     import requests
     import sys
     import threading
+    import traceback
     from typing import Optional, Union
     import uuid
 
@@ -36,6 +39,10 @@ with timer() as tim:
     from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     # from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
+    from ..client import api  # Raven-server support
+    from ..client.avatar_renderer import DPGAvatarRenderer
+    from ..client import config as client_config
+
     from ..common import bgtask
 
     from ..common.gui import animation as gui_animation
@@ -50,6 +57,24 @@ with timer() as tim:
     gui_config = librarian_config.gui_config  # shorthand, this is used a lot
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
+# ----------------------------------------
+# Module bootup
+
+bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
+task_manager = bgtask.TaskManager(name="librarian",
+                                  mode="concurrent",
+                                  executor=bg)
+api.initialize(raven_server_url=client_config.raven_server_url,
+               raven_api_key_file=client_config.raven_api_key_file,
+               tts_server_type=client_config.tts_server_type,
+               tts_url=client_config.tts_url,
+               tts_api_key_file=client_config.tts_api_key_file,
+               tts_playback_audio_device=client_config.tts_playback_audio_device,
+               executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
+
+# These are initialized later, when the app starts
+avatar_instance_id = None
+
 # --------------------------------------------------------------------------------
 # Set up DPG - basic startup, load fonts, set up global theme
 
@@ -62,7 +87,7 @@ with timer() as tim:
     themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
 
     # Initialize textures.
-    with dpg.texture_registry(tag="app_textures"):
+    with dpg.texture_registry(tag="librarian_app_textures"):
         w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve()))
         icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture")
 
@@ -74,23 +99,20 @@ with timer() as tim:
                         height=gui_config.main_window_h)  # OS window (DPG "viewport")
     dpg.setup_dearpygui()
 logger.info(f"    Done in {tim.dt:0.6g}s.")
+print()
 
 # --------------------------------------------------------------------------------
-# Connect to LLM backend, load datastores
+# Connect to servers, load datastores
 
-backend_url = librarian_config.llm_backend_url
-
-# API key already loaded during module bootup; here, we just inform the user.
-if "Authorization" in llmclient.headers:
-    print()
-    print(f"Loaded LLM API key from '{str(librarian_config.llm_api_key_file)}'.")
+if api.raven_server_available():
+    print(f"{colorizer.Fore.GREEN}{colorizer.Style.BRIGHT}Connected to Raven-server at {client_config.raven_server_url}.{colorizer.Style.RESET_ALL}")
     print()
 else:
-    print()
-    print(f"No LLM API key configured. If your LLM needs an API key to connect, put it into '{str(librarian_config.llm_api_key_file)}'.")
-    print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
-    print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
-    print()
+    print(f"{colorizer.Fore.RED}{colorizer.Style.BRIGHT}ERROR: Cannot connect to Raven-server at {client_config.raven_server_url}.{colorizer.Style.RESET_ALL} Is Raven-server running?")
+    logger.error(f"Failed to connect to Raven-server at '{client_config.raven_server_url}'.")
+    sys.exit(255)
+
+backend_url = librarian_config.llm_backend_url
 
 try:
     llmclient.list_models(backend_url)  # just do something, to try to connect
@@ -102,6 +124,16 @@ except requests.exceptions.ConnectionError as exc:
 else:
     print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
     settings = llmclient.setup(backend_url=backend_url)
+    print()
+
+# API key already loaded during module bootup; here, we just inform the user.
+if "Authorization" in llmclient.headers:
+    print(f"{colorizer.Fore.GREEN}{colorizer.Style.BRIGHT}Loaded LLM API key from '{str(librarian_config.llm_api_key_file)}'.{colorizer.Style.RESET_ALL}")
+    print()
+else:
+    print(f"{colorizer.Fore.YELLOW}{colorizer.Style.BRIGHT}No LLM API key configured.{colorizer.Style.RESET_ALL} If your LLM needs an API key to connect, put it into '{str(librarian_config.llm_api_key_file)}'.")
+    print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
+    print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
     print()
 
 logger.info("Loading chat datastore.")
@@ -496,9 +528,6 @@ def next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]
 
 logger.info("Initial GUI setup...")
 with timer() as tim:
-    # TODO: GUI for AI summaries
-    # TODO: hotkeys
-    # TODO: separate hotkey mode while `chat_field` is focused
     with dpg.window(show=True, modal=False, no_title_bar=False, tag="summarizer_window",
                     label="Raven-librarian main window",
                     no_scrollbar=True, autosize=True) as main_window:  # DPG "window" inside the app OS window ("viewport"), container for the whole GUI
@@ -508,94 +537,112 @@ with timer() as tim:
                               no_scroll_with_mouse=True):
             with dpg.group(horizontal=True):
                 dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
-                dpg.add_text("Response quality and factual accuracy ultimately depend on the AI. Check important facts independently.", color=(255, 180, 120), tag="ai_warning_text")  # orange
+                dpg.add_text("Response quality and factual accuracy depend on the connected AI. Always verify important facts independently.", color=(255, 180, 120), tag="ai_warning_text")  # orange
             dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag
 
-        with dpg.child_window(tag="chat_panel",
-                              width=(gui_config.chat_panel_w + 16),  # 16 = round border (8 on each side)
-                              height=gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8):
-            # dummy chat item for testing  # TODO: make a class for this
-            with dpg.group(tag="chat_group"):
-                initial_message_container_height = 2 * gui_config.margin + gui_config.chat_icon_size
-                before_buttons_spacing = 1
-                message_spacing = 8
+        with dpg.group(horizontal=True):
+            with dpg.group():
+                with dpg.child_window(tag="chat_panel",
+                                      width=(gui_config.chat_panel_w + 16),  # 16 = round border (8 on each side)
+                                      height=gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8):
+                    # dummy chat item for testing  # TODO: make a class for this
+                    with dpg.group(tag="chat_group"):
+                        initial_message_container_height = 2 * gui_config.margin + gui_config.chat_icon_size
+                        before_buttons_spacing = 1
+                        message_spacing = 8
 
-            #     # We need to draw text using a text widget, not `draw_text`, so that we can use Markdown.
-            #     # But we want a visual frame, which needs a drawlist. The chat icon can also go into this drawlist.
-            #     # To draw the text on top of the drawlist, we add the drawlist first (so it will be below the text in z-order),
-            #     # and then, while adding the text widget, manually set the position (in child-window coordinates).
-            #     with dpg.drawlist(width=800, height=initial_message_container_height, tag="chat_text_drawlist_ai"):
-            #         dpg.draw_rectangle((0, 0), (800, initial_message_container_height), color=gui_config.chat_color_ai_front, fill=gui_config.chat_color_ai_back, rounding=8)
-            #         dpg.draw_image("icon_ai_texture", (gui_config.margin, gui_config.margin), (gui_config.margin + gui_config.chat_icon_size, gui_config.margin + gui_config.chat_icon_size), uv_min=(0, 0), uv_max=(1, 1))
-            #     dpg.add_spacer(height=before_buttons_spacing)
-            #     make_ai_message_buttons(gui_parent="chat_group", uuid="mockup_ai")
-            #     with dpg.group(horizontal=True):
-            #         dpg.add_spacer(tag="branch_count_spacer_ai")
-            #         dpg.add_text("1/1", color=(180, 180, 180), tag="branch_count_text_ai")
-            #         with dpg.tooltip("branch_count_text_ai"):  # tag
-            #             dpg.add_text("Current branch, number of branches at this point")
-            #     dpg.add_spacer(height=message_spacing)
-            #
-            #     with dpg.drawlist(width=800, height=initial_message_container_height, tag="chat_text_drawlist_user"):
-            #         dpg.draw_rectangle((0, 0), (800, initial_message_container_height), color=gui_config.chat_color_user_front, fill=gui_config.chat_color_user_back, rounding=8)
-            #         dpg.draw_image("icon_user_texture", (gui_config.margin, gui_config.margin), (gui_config.margin + gui_config.chat_icon_size, gui_config.margin + gui_config.chat_icon_size), uv_min=(0, 0), uv_max=(1, 1))
-            #     dpg.add_spacer(height=before_buttons_spacing)
-            #     make_user_message_buttons(gui_parent="chat_group", uuid="mockup_user")
-            #     with dpg.group(horizontal=True):
-            #         dpg.add_spacer(tag="branch_count_spacer_user")
-            #         dpg.add_text("1/1", color=(180, 180, 180), tag="branch_count_text_user")
-            #         with dpg.tooltip("branch_count_text_user"):  # tag
-            #             dpg.add_text("Current branch, number of branches at this point")
-            #     dpg.add_spacer(height=message_spacing)
-            #
-            # # We must wait for the drawlists to get a position before we can overlay a text widget on them.
-            # def add_chat_texts():
-            #     # Align branch counts to the right
-            #     w_header, h_header = dpg.get_item_rect_size("branch_count_text_ai")
-            #     dpg.set_item_width("branch_count_spacer_ai", 800 - (w_header + 8))
-            #
-            #     w_header, h_header = dpg.get_item_rect_size("branch_count_text_user")
-            #     dpg.set_item_width("branch_count_spacer_user", 800 - (w_header + 8))
-            #
-            #     w_header, h_header = dpg.get_item_rect_size("performance_stats_text_ai")
-            #     dpg.set_item_width("ai_message_buttons_spacer", 800 - 5 * (gui_config.toolbutton_w + 8) - (w_header + 8))
-            #
-            #     # Write the "chat messages" for the mockup
-            #     x0_local, y0_local = guiutils.get_widget_relative_pos("chat_text_drawlist_ai", reference="chat_panel")  # tag
-            #     dpg.add_text("Hello! I'll be your AI summarizer. To begin, select item(s) and click Summarize.",
-            #                  pos=(x0_local + 8 + 3 + gui_config.margin + gui_config.chat_icon_size, y0_local + 3 + gui_config.chat_icon_size // 2 - (gui_config.font_size // 2)),  # 8 = extra spacing; 3 = DPG inner margin
-            #                  color=(255, 255, 255), tag="chat_test_text_ai", parent="chat_group")
-            #
-            #     x0_local, y0_local = guiutils.get_widget_relative_pos("chat_text_drawlist_user", reference="chat_panel")  # tag
-            #     dpg.add_text("That's great. Testing 1 2 3?",
-            #                  pos=(x0_local + 8 + 3 + gui_config.margin + gui_config.chat_icon_size, y0_local + 3 + gui_config.chat_icon_size // 2 - (gui_config.font_size // 2)),  # 8 = extra spacing; 3 = DPG inner margin
-            #                  color=(255, 255, 255), tag="chat_test_text_user", parent="chat_group")
-            # dpg.set_frame_callback(11, add_chat_texts)
+                    #     # We need to draw text using a text widget, not `draw_text`, so that we can use Markdown.
+                    #     # But we want a visual frame, which needs a drawlist. The chat icon can also go into this drawlist.
+                    #     # To draw the text on top of the drawlist, we add the drawlist first (so it will be below the text in z-order),
+                    #     # and then, while adding the text widget, manually set the position (in child-window coordinates).
+                    #     with dpg.drawlist(width=800, height=initial_message_container_height, tag="chat_text_drawlist_ai"):
+                    #         dpg.draw_rectangle((0, 0), (800, initial_message_container_height), color=gui_config.chat_color_ai_front, fill=gui_config.chat_color_ai_back, rounding=8)
+                    #         dpg.draw_image("icon_ai_texture", (gui_config.margin, gui_config.margin), (gui_config.margin + gui_config.chat_icon_size, gui_config.margin + gui_config.chat_icon_size), uv_min=(0, 0), uv_max=(1, 1))
+                    #     dpg.add_spacer(height=before_buttons_spacing)
+                    #     make_ai_message_buttons(gui_parent="chat_group", uuid="mockup_ai")
+                    #     with dpg.group(horizontal=True):
+                    #         dpg.add_spacer(tag="branch_count_spacer_ai")
+                    #         dpg.add_text("1/1", color=(180, 180, 180), tag="branch_count_text_ai")
+                    #         with dpg.tooltip("branch_count_text_ai"):  # tag
+                    #             dpg.add_text("Current branch, number of branches at this point")
+                    #     dpg.add_spacer(height=message_spacing)
+                    #
+                    #     with dpg.drawlist(width=800, height=initial_message_container_height, tag="chat_text_drawlist_user"):
+                    #         dpg.draw_rectangle((0, 0), (800, initial_message_container_height), color=gui_config.chat_color_user_front, fill=gui_config.chat_color_user_back, rounding=8)
+                    #         dpg.draw_image("icon_user_texture", (gui_config.margin, gui_config.margin), (gui_config.margin + gui_config.chat_icon_size, gui_config.margin + gui_config.chat_icon_size), uv_min=(0, 0), uv_max=(1, 1))
+                    #     dpg.add_spacer(height=before_buttons_spacing)
+                    #     make_user_message_buttons(gui_parent="chat_group", uuid="mockup_user")
+                    #     with dpg.group(horizontal=True):
+                    #         dpg.add_spacer(tag="branch_count_spacer_user")
+                    #         dpg.add_text("1/1", color=(180, 180, 180), tag="branch_count_text_user")
+                    #         with dpg.tooltip("branch_count_text_user"):  # tag
+                    #             dpg.add_text("Current branch, number of branches at this point")
+                    #     dpg.add_spacer(height=message_spacing)
+                    #
+                    # # We must wait for the drawlists to get a position before we can overlay a text widget on them.
+                    # def add_chat_texts():
+                    #     # Align branch counts to the right
+                    #     w_header, h_header = dpg.get_item_rect_size("branch_count_text_ai")
+                    #     dpg.set_item_width("branch_count_spacer_ai", 800 - (w_header + 8))
+                    #
+                    #     w_header, h_header = dpg.get_item_rect_size("branch_count_text_user")
+                    #     dpg.set_item_width("branch_count_spacer_user", 800 - (w_header + 8))
+                    #
+                    #     w_header, h_header = dpg.get_item_rect_size("performance_stats_text_ai")
+                    #     dpg.set_item_width("ai_message_buttons_spacer", 800 - 5 * (gui_config.toolbutton_w + 8) - (w_header + 8))
+                    #
+                    #     # Write the "chat messages" for the mockup
+                    #     x0_local, y0_local = guiutils.get_widget_relative_pos("chat_text_drawlist_ai", reference="chat_panel")  # tag
+                    #     dpg.add_text("Hello! I'll be your AI summarizer. To begin, select item(s) and click Summarize.",
+                    #                  pos=(x0_local + 8 + 3 + gui_config.margin + gui_config.chat_icon_size, y0_local + 3 + gui_config.chat_icon_size // 2 - (gui_config.font_size // 2)),  # 8 = extra spacing; 3 = DPG inner margin
+                    #                  color=(255, 255, 255), tag="chat_test_text_ai", parent="chat_group")
+                    #
+                    #     x0_local, y0_local = guiutils.get_widget_relative_pos("chat_text_drawlist_user", reference="chat_panel")  # tag
+                    #     dpg.add_text("That's great. Testing 1 2 3?",
+                    #                  pos=(x0_local + 8 + 3 + gui_config.margin + gui_config.chat_icon_size, y0_local + 3 + gui_config.chat_icon_size // 2 - (gui_config.font_size // 2)),  # 8 = extra spacing; 3 = DPG inner margin
+                    #                  color=(255, 255, 255), tag="chat_test_text_user", parent="chat_group")
+                    # dpg.set_frame_callback(11, add_chat_texts)
 
-            # def place():
-            #     x0, y0 = guiutils.get_widget_pos("chat_text_drawlist")  # tag
-            #     print(x0, y0)
-            #     # dpg.set_item_pos("chat_test_text", x0 + 16, y0 + 16)
-            # dpg.set_frame_callback(11, place)
+                    # def place():
+                    #     x0, y0 = guiutils.get_widget_pos("chat_text_drawlist")  # tag
+                    #     print(x0, y0)
+                    #     # dpg.set_item_pos("chat_test_text", x0 + 16, y0 + 16)
+                    # dpg.set_frame_callback(11, place)
 
-        with dpg.child_window(tag="chat_controls",
-                              width=(gui_config.chat_panel_w + 16),  # 16 = round border (8 on each side)
-                              height=gui_config.chat_controls_h,
-                              no_scrollbar=True,
-                              no_scroll_with_mouse=True):
-            with dpg.group(horizontal=True):
-                dpg.add_input_text(tag="chat_field",
-                                   default_value="",
-                                   hint="[ask the AI questions here]",
-                                   width=gui_config.chat_panel_w - gui_config.toolbutton_w - 8,
-                                   callback=lambda: None)  # TODO
-                dpg.add_button(label=fa.ICON_PAPER_PLANE,
-                               callback=lambda: None,  # TODO
-                               width=gui_config.toolbutton_w,
-                               tag="chat_send_button")
-                dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag  # TODO: make this change into a cancel button while the LLM is writing.
-                with dpg.tooltip("chat_send_button"):  # tag
-                    dpg.add_text("Send to AI")
+                with dpg.child_window(tag="chat_controls",
+                                      width=(gui_config.chat_panel_w + 16),  # 16 = round border (8 on each side)
+                                      height=gui_config.chat_controls_h,
+                                      no_scrollbar=True,
+                                      no_scroll_with_mouse=True):
+                    with dpg.group(horizontal=True):
+                        dpg.add_input_text(tag="chat_field",
+                                           default_value="",
+                                           hint="[ask the AI questions here]",
+                                           width=gui_config.chat_panel_w - gui_config.toolbutton_w - 8,
+                                           callback=lambda: None)  # TODO
+                        dpg.add_button(label=fa.ICON_PAPER_PLANE,
+                                       callback=lambda: None,  # TODO
+                                       width=gui_config.toolbutton_w,
+                                       tag="chat_send_button")
+                        dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag  # TODO: make this change into a cancel button while the LLM is writing.
+                        with dpg.tooltip("chat_send_button"):  # tag
+                            dpg.add_text("Send to AI")
+
+            with dpg.child_window(tag="avatar_panel",
+                                  width=-1,
+                                  height=-1,
+                                  no_scrollbar=True,
+                                  no_scroll_with_mouse=True):
+                avatar_panel_w = (gui_config.main_window_w - gui_config.chat_panel_w - 16)
+                dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="librarian_app_textures",
+                                                        gui_parent="avatar_panel",
+                                                        avatar_x_center=(avatar_panel_w // 2),
+                                                        avatar_y_bottom=(gui_config.main_window_h - gui_config.ai_warning_h - 16 - 6),
+                                                        paused_text="[No video]",
+                                                        task_manager=task_manager)
+                global upscale
+                upscale = 1.5
+                dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * 512))
 
 # --------------------------------------------------------------------------------
 # Animations, live updates
@@ -620,18 +667,73 @@ dpg.set_exit_callback(clean_up_at_exit)
 
 logger.info("App bootup...")
 
-bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
-task_manager = bgtask.TaskManager(name="annotation_update",
-                                  mode="concurrent",
-                                  executor=bg)
+_avatar_image_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "characters", "other", "aria1.png")).expanduser().resolve()
+avatar_instance_id = api.avatar_load(_avatar_image_path)
+api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
+api.avatar_start(avatar_instance_id)
+dpg_avatar_renderer.start(avatar_instance_id)
+
+def gui_shutdown() -> None:
+    """App exit: gracefully shut down parts that access DPG."""
+    # api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.  TODO: enable after we enable TTS in Raven-librarian
+    task_manager.clear(wait=True)  # wait until background tasks actually exit
+    gui_animation.animator.clear()
+    # global gui_instance  # TODO: maybe we need to encapsulate the main GUi into a class? Or maybe not?
+    # gui_instance = None
+dpg.set_exit_callback(gui_shutdown)
+
+def app_shutdown() -> None:
+    """App exit: gracefully shut down parts that don't need DPG.
+
+    This is guaranteed to run even if DPG shutdown never completes gracefully.
+
+    Currently, we release server-side resources here.
+    """
+    if avatar_instance_id is not None:
+        try:
+            api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
+        except requests.exceptions.ConnectionError:  # server has gone bye-bye
+            pass
+atexit.register(app_shutdown)
 
 dpg.set_primary_window(main_window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)
 dpg.show_viewport()
 
-def build_initial_chat_callback(sender, app_data):
+# Load default animator settings from disk.
+#
+# We must defer loading the animator settings until after the GUI has been rendered at least once,
+# so that if there are any issues during loading, we can open a modal dialog. (We don't currently do that, though.)
+def _load_initial_animator_settings():
+    animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "settings", "animator.json")).expanduser().resolve()
+
+    try:
+        with open(animator_json_path, "r", encoding="utf-8") as json_file:
+            animator_settings = json.load(json_file)
+    except FileNotFoundError:
+        print(colorizer.colorize(f"AI avatar animator default config file not found at '{animator_json_path}'.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Please run `raven-avatar-settings-editor` once to create it.")
+        logger.error(f"_load_initial_animator_settings: AI avatar animator default config file not found at '{animator_json_path}'. Please run `raven-avatar-settings-editor` once to create it.")
+        sys.exit(255)
+    except BaseException as exc:  # yes, also Ctrl+C
+        print(colorizer.colorize("Failed to load AI avatar animator default config file.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Details follow.")
+        logger.error(f"_load_initial_animator_settings: Failed, reason {type(exc)}: {exc}")
+        traceback.print_exc()
+        sys.exit(255)
+
+    librarian_specific_animator_settings = {"format": "QOI",
+                                            "target_fps": 20,
+                                            "upscale": upscale,
+                                            "upscale_preset": "C",
+                                            "upscale_quality": "high"}
+    animator_settings.update(librarian_specific_animator_settings)
+
+    api.avatar_load_animator_settings(avatar_instance_id, animator_settings)  # send settings to server
+
+dpg.set_frame_callback(2, _load_initial_animator_settings)
+
+def _build_initial_chat_view(sender, app_data):
     build_linearized_chat()
-dpg.set_frame_callback(11, build_initial_chat_callback)
+dpg.set_frame_callback(11, _build_initial_chat_view)
 
 logger.info("App render loop starting.")
 
