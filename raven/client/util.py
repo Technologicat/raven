@@ -56,6 +56,12 @@ def initialize_api(raven_server_url: str,
     """
     global api_initialized
 
+    if api_initialized:  # initialize only once
+        logger.info("initialize_api: `raven.client.api` is already initialized. Using existing initialization.")
+        return
+
+    logger.info(f"initialize_api: Initializing `raven.client.api` with raven_server_url = '{raven_server_url}', raven_api_key_file = '{str(raven_api_key_file)}', tts_server_type = '{tts_server_type}', tts_api_key_file='{str(tts_api_key_file)}', tts_playback_audio_device = '{tts_playback_audio_device}', executor = {executor}.")
+
     if executor is None:
         executor = concurrent.futures.ThreadPoolExecutor()
     api_config.task_manager = bgtask.TaskManager(name="raven_client_api",
