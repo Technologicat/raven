@@ -634,11 +634,15 @@ with timer() as tim:
                                   height=-1,
                                   no_scrollbar=True,
                                   no_scroll_with_mouse=True):
+                # We all love magic numbers!
+                #
+                # The size of the avatar panel is not available at startup, until the GUI is rendered at least once.
                 avatar_panel_w = (gui_config.main_window_w - gui_config.chat_panel_w - 16)
+                avatar_panel_h = (gui_config.main_window_h - gui_config.ai_warning_h - 16 - 6)
                 dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="librarian_app_textures",
                                                         gui_parent="avatar_panel",
                                                         avatar_x_center=(avatar_panel_w // 2),
-                                                        avatar_y_bottom=(gui_config.main_window_h - gui_config.ai_warning_h - 16 - 6),
+                                                        avatar_y_bottom=avatar_panel_h,
                                                         paused_text="[No video]",
                                                         task_manager=task_manager)
                 # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
