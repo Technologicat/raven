@@ -398,20 +398,11 @@ class PostprocessorSettingsEditorGUI:
                                                                  gui_parent="avatar_child_window",
                                                                  avatar_x_center=512,
                                                                  avatar_y_bottom=viewport_height - 16,
+                                                                 paused_text="[Animator is paused]",
                                                                  task_manager=task_manager)
                     image_size = int(self.upscale * self.source_image_size)
                     self.dpg_avatar_renderer.configure_live_texture(image_size)
                     self.dpg_avatar_renderer.configure_fps_counter(show=True)
-
-                def position_please_standby_text():
-                    # x0, y0 = guiutils.get_widget_relative_pos(f"avatar_live_image_{self.dpg_avatar_renderer.live_texture_id_counter}", reference="main_window")
-                    x0, y0 = guiutils.get_widget_pos(f"avatar_live_image_{self.dpg_avatar_renderer.live_texture_id_counter}")
-                    dpg.add_text("[No image loaded]", pos=(x0 + self.dpg_avatar_renderer.image_size / 2 - 60,
-                                                           y0 + self.dpg_avatar_renderer.image_size / 2 - (font_size / 2)),
-                                 tag="please_standby_text",
-                                 parent="avatar_child_window",
-                                 show=False)
-                dpg.set_frame_callback(10, position_please_standby_text)
 
                 with dpg.child_window(width=self.button_width + 16, autosize_y=True):
                     dpg.add_button(label="Fullscreen/windowed [F11]", width=self.button_width, callback=toggle_fullscreen, tag="fullscreen_button")
@@ -1011,17 +1002,11 @@ class PostprocessorSettingsEditorGUI:
     def toggle_animator_paused(self) -> None:
         """Pause or resume the animation. Pausing when the avatar won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
         if self.dpg_avatar_renderer.animator_running:
-            api.avatar_stop(avatar_instance_id)
-            dpg.set_value("please_standby_text", "[Animator is paused]")
-            dpg.show_item("please_standby_text")
-            dpg.hide_item(f"avatar_live_image_{self.dpg_avatar_renderer.live_texture_id_counter}")
+            self.dpg_avatar_renderer.pause(action="pause")
             dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")
         else:
-            api.avatar_start(avatar_instance_id)
-            dpg.hide_item("please_standby_text")
-            dpg.show_item(f"avatar_live_image_{self.dpg_avatar_renderer.live_texture_id_counter}")
+            self.dpg_avatar_renderer.pause(action="resume")
             dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")
-        self.dpg_avatar_renderer.animator_running = not self.dpg_avatar_renderer.animator_running
 
     def on_stop_speaking(self, sender, app_data) -> None:
         api.tts_stop()

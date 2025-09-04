@@ -70,9 +70,7 @@ class ResultFeedReader:
 # --------------------------------------------------------------------------------
 # API
 
-# TODO: pause/resume functions (should show/hide image widget; maybe also take a "no video" message in the constructor, and show/hide it when paused/resumed)
 # TODO: manage our own texture registry?
-# TODO: shutdown function? (store task_env in self, set the cancelled flag)
 
 class DPGAvatarRenderer:
     def __init__(self,
@@ -80,6 +78,7 @@ class DPGAvatarRenderer:
                  gui_parent: Union[str, int],
                  avatar_x_center: int,
                  avatar_y_bottom: int,
+                 paused_text: Optional[str],
                  task_manager: bgtask.TaskManager):
         """DPG GUI driver for Raven-avatar.
 
@@ -89,6 +88,7 @@ class DPGAvatarRenderer:
         `gui_parent`: DPG tag or ID; where to put the GUI image widget that displays the live texture.
         `avatar_x_center`: x center position of avatar video feed, in pixels, in the coordinate system of `gui_parent`.
         `avatar_y_bottom`: y bottom (one past end) of avatar video feed, in pixels, in the coordinate system of `gui_parent`.
+        `paused_text`: Text to show when the animator is not running, or `None` to leave empty.
         `task_manager`: For submitting the background task when you call the `start` method.
 
         Once you have instantiated `DPGAvatarRenderer`, you can call the `configure_*` methods at any time,
@@ -103,6 +103,7 @@ class DPGAvatarRenderer:
         self.texture_registry = texture_registry
         self.gui_parent = gui_parent
         self.task_manager = task_manager
+        self._task_env = None  # This holds the local namespace (`unpythonic.env.env`) of the background task, so we can cancel the task if needed.
 
         self.live_texture = None  # The raw texture object
         self.blank_texture = None  # Raw blank texture
@@ -110,6 +111,7 @@ class DPGAvatarRenderer:
         self.live_image_widget = None  # GUI widget the texture renders to
         self.last_image_rgba = None  # For rescaling last received frame on upscaler size change before we get new data
 
+        self.avatar_instance_id = None  # initialized at `start`
         self.animator_running = False
         self.image_size = None  # initialized at first call of `configure_live_texture`
         self.avatar_x_center = avatar_x_center
@@ -125,6 +127,12 @@ class DPGAvatarRenderer:
                                                 show=False,
                                                 tag="avatar_fps_text",
                                                 parent=gui_parent)
+        # Text to show while paused. This will be positioned when shown.
+        paused_str = paused_text if paused_text is not None else ""
+        self.paused_text_gui_widget = dpg.add_text(paused_str,
+                                                   show=False,
+                                                   tag="paused_text",
+                                                   parent=gui_parent)
 
     def configure_fps_counter(self, show: bool) -> None:
         """Show or hide the FPS counter."""
@@ -187,11 +195,10 @@ class DPGAvatarRenderer:
                                                tag=f"avatar_live_image_{new_texture_id}",
                                                parent=self.gui_parent,
                                                before=self.fps_text_gui_widget)
+        self.reposition()
 
         if not first_time:
             dpg.split_frame()  # For some reason, waiting for a frame here eliminates flicker when the texture object is replaced.
-        self.reposition()
-
         try:
             dpg.hide_item(f"avatar_live_image_{old_texture_id}")  # tag
         except SystemError:  # does not exist
@@ -223,9 +230,59 @@ class DPGAvatarRenderer:
             dpg.set_item_pos(self.live_image_widget, (x_left, y_top))
         except SystemError:  # window or live image widget does not exist
             logger.info("DPGAvatarRenderer.reposition: Live image GUI widget doesn't exist; ignoring. (This is normal at app shutdown.)")
-            pass
         else:
             logger.info("DPGAvatarRenderer.reposition: success")
+
+    def pause(self, action: str) -> None:
+        """Pause or resume the animator.
+
+        `action`: One of "pause", "resume", or "toggle".
+
+        This also pauses/resumes the avatar instance on the server.
+
+        When paused, if a `paused_text` was set in `__init__`, it is shown in the center of the video feed area.
+
+        When resumed, the `paused_text` (if any) is hidden, and the video feed resumes.
+
+        NOTE: If you need to query the current state, it is in the `animator_running` (bool) attribute.
+              It is part of the public API, but consider it read-only.
+
+              Querying the state and acting explicitly can be convenient, instead of just toggling, if you need to
+              do custom GUI actions (such as changing the text on a pause/resume button) when you pause/resume.
+        """
+        if action not in ("pause", "resume", "toggle"):
+            raise ValueError(f"DPGAvatarRenderer.pause: Unknown `action` '{action}'; valid actions: 'pause', 'resume', 'toggle'.")
+        if self.avatar_instance_id is None:
+            raise RuntimeError(f"DPGAvatarRenderer.pause (action '{action}'): The renderer must be started first by calling `start` before the `pause` method can be called.")
+
+        if action == "toggle":
+            if self.animator_running:
+                action = "pause"
+            else:
+                action = "resume"
+        assert action in ("pause", "resume")
+
+        if action == "pause":
+            # center the paused indicator on the video feed in the GUI
+            try:
+                # position offscreen and render, to compute size
+                dpg.set_item_pos(self.paused_text_gui_widget, (0, -100))
+                dpg.show_item(self.paused_text_gui_widget)
+                dpg.split_frame()
+                w, h = guiutils.get_widget_size(self.paused_text_gui_widget)
+                dpg.set_item_pos(self.paused_text_gui_widget, (((self.image_size - w) // 2), (self.image_size // 2)))  # TODO: account for font size / height
+                dpg.hide_item(f"avatar_live_image_{self.live_texture_id_counter}")
+                api.avatar_stop(self.avatar_instance_id)
+                self.animator_running = False
+            except SystemError:  # window or live image widget does not exist
+                logger.info(f"DPGAvatarRenderer.pause (avatar instance '{self.avatar_instance_id}', action '{action}'): Pause text GUI widget doesn't exist.")
+        else:  # action == "resume":
+            api.avatar_start(self.avatar_instance_id)
+            dpg.hide_item(self.paused_text_gui_widget)
+            dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")
+            self.animator_running = True
+
+        logger.info(f"DPGAvatarRenderer.pause (avatar instance '{self.avatar_instance_id}', action '{action}'): success")
 
     def start(self,
               avatar_instance_id: str) -> None:
@@ -236,7 +293,12 @@ class DPGAvatarRenderer:
         There is currently no function to stop receiving. You can just close the session (`raven.client.api.avatar_unload`);
         the background task then shuts down gracefully.
         """
+        if self._task_env is not None:
+            raise RuntimeError("DPGAvatarRenderer.start: already running, cannot start again. If you need to connect to a different avatar session, `stop` first.")
+
         logger.info(f"DPGAvatarRenderer.start: Setting up background task for avatar instance '{avatar_instance_id}'.")
+
+        self.avatar_instance_id = avatar_instance_id  # store for pause/resume
 
         # We must continuously retrieve new frames as they become ready, so this runs in the background.
         def update_live_texture(task_env) -> None:
@@ -343,14 +405,26 @@ class DPGAvatarRenderer:
                 logger.error(f"DPGAvatarRenderer.start.update_live_texture: {type(exc)}: {exc}")
 
                 # TODO: recovery if the server comes back online
-                self.animator_running = False
-                dpg.hide_item(f"avatar_live_image_{self.live_texture_id_counter}")  # tag
+                dpg.set_value(self.paused_text_gui_widget, "[Connection lost]")
+                self.pause(action="pause")
                 maybe_set_fps_counter(describe_performance(None, None, None))
             finally:
                 reader.stop()  # Close the stream to ensure that the server's network send thread serving our request exits.
+                self.avatar_instance_id = None
+                self._task_env = None
             logger.info(f"DPGAvatarRenderer.start.update_live_texture: Background task for avatar instance '{avatar_instance_id}' exiting.")
 
         logger.info(f"DPGAvatarRenderer.start: Submitting background task to task manager for avatar instance '{avatar_instance_id}'.")
-        self.task_manager.submit(update_live_texture, envcls())
+        self._task_env = envcls()
+        self.task_manager.submit(update_live_texture, self._task_env)
         self.animator_running = True  # start in animator running state
         dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")  # and show the image  # tag
+
+    def stop(self):
+        """The opposite of `start`.
+
+        This disconnects the `DPGAvatarRenderer` instance from the avatar instance.
+        """
+        if self._task_env is None:
+            raise RuntimeError("DPGAvatarRenderer.stop: not running, nothing to stop.")
+        self._task_env.cancelled = True
