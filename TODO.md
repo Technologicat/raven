@@ -56,6 +56,8 @@
         - Call the lipsynced TTS and the English->Finnish translation and captioning system when we get a complete sentence
         - Add GUI element to display captions (large font) on top of the avatar video
       - Avatar emotion update from final message
+    - Add feature: Copy message to clipboard
+    - Add feature: Copy chat to clipboard
     - Add feature: Regenerate LLM response
     - Add feature: Interrupt AI generation
     - Add feature: Continue AI generation in current HEAD node (creating a new revision?)
