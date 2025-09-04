@@ -515,7 +515,7 @@ def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
                              node_id=node_id)
     dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
 
-def get_siblings(node_id: str) -> Tuple[Optional[List[str]], Optional[int]]:
+def get_siblings(node_id: str) -> Tuple[Optional[List[str]], Optional[int]]:  # TODO: move to `chattree`
     with datastore.lock:
         node = datastore.nodes[node_id]
         parent_node_id = node["parent"]
