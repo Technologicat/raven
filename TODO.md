@@ -47,7 +47,6 @@
         - Make per-character AI chat icons
       - Make chat icons for system, tool roles
       - Finish the new app icon for Raven (small and large sizes)
-    - In chat view, show sibling count at each node
     - Add feature: New chat (!clear of minichat)
     - Add feature: User text entry
       - Submit user input to LLM

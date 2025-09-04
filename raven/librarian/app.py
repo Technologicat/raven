@@ -22,7 +22,7 @@ with timer() as tim:
     import sys
     import threading
     import traceback
-    from typing import Optional, Union
+    from typing import List, Optional, Tuple, Union
     import uuid
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -217,22 +217,23 @@ def make_ai_message_buttons(uuid: str,
 
     def make_navigate_to_prev_sibling(message_node_id):
         def prev_sibling():
-            node_id = next_or_prev_sibling(message_node_id, direction="prev")
+            node_id = get_next_or_prev_sibling(message_node_id, direction="prev")
             if node_id is not None:
                 build_linearized_chat(node_id)
                 dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
         return prev_sibling
     def make_navigate_to_next_sibling(message_node_id):
         def next_sibling():
-            node_id = next_or_prev_sibling(message_node_id, direction="next")
+            node_id = get_next_or_prev_sibling(message_node_id, direction="next")
             if node_id is not None:
                 build_linearized_chat(node_id)
                 dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
         return next_sibling
+    siblings, node_index = get_siblings(message_node_id)
 
     dpg.add_button(label=fa.ICON_ANGLE_LEFT,
                    callback=make_navigate_to_prev_sibling(message_node_id),
-                   # enabled=False,
+                   enabled=(node_index is not None and node_index > 0),
                    width=gui_config.toolbutton_w,
                    tag=f"chat_prevbranch_button_{uuid}",
                    parent=g)
@@ -243,7 +244,7 @@ def make_ai_message_buttons(uuid: str,
 
     dpg.add_button(label=fa.ICON_ANGLE_RIGHT,
                    callback=make_navigate_to_next_sibling(message_node_id),
-                   # enabled=False,
+                   enabled=(node_index is not None and node_index < len(siblings) - 1),
                    width=gui_config.toolbutton_w,
                    tag=f"chat_nextbranch_button_{uuid}",
                    parent=g)
@@ -251,6 +252,9 @@ def make_ai_message_buttons(uuid: str,
     dpg.bind_item_theme(f"chat_nextbranch_button_{uuid}", "disablable_button_theme")  # tag
     nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
     dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
+
+    if siblings is not None:
+        dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
 
 def make_user_message_buttons(uuid: str,
                               message_node_id: str,
@@ -290,22 +294,23 @@ def make_user_message_buttons(uuid: str,
 
     def make_navigate_to_prev_sibling(message_node_id):
         def prev_sibling():
-            node_id = next_or_prev_sibling(message_node_id, direction="prev")
+            node_id = get_next_or_prev_sibling(message_node_id, direction="prev")
             if node_id is not None:
                 build_linearized_chat(node_id)
                 dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
         return prev_sibling
     def make_navigate_to_next_sibling(message_node_id):
         def next_sibling():
-            node_id = next_or_prev_sibling(message_node_id, direction="next")
+            node_id = get_next_or_prev_sibling(message_node_id, direction="next")
             if node_id is not None:
                 build_linearized_chat(node_id)
                 dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
         return next_sibling
+    siblings, node_index = get_siblings(message_node_id)
 
     dpg.add_button(label=fa.ICON_ANGLE_LEFT,
                    callback=make_navigate_to_prev_sibling(message_node_id),
-                   # enabled=False,
+                   enabled=(node_index is not None and node_index > 0),
                    width=gui_config.toolbutton_w,
                    tag=f"chat_prevbranch_button_{uuid}",
                    parent=g)
@@ -316,7 +321,7 @@ def make_user_message_buttons(uuid: str,
 
     dpg.add_button(label=fa.ICON_ANGLE_RIGHT,
                    callback=make_navigate_to_next_sibling(message_node_id),
-                   # enabled=False,
+                   enabled=(node_index is not None and node_index < len(siblings) - 1),
                    width=gui_config.toolbutton_w,
                    tag=f"chat_nextbranch_button_{uuid}",
                    parent=g)
@@ -324,6 +329,9 @@ def make_user_message_buttons(uuid: str,
     dpg.bind_item_theme(f"chat_nextbranch_button_{uuid}", "disablable_button_theme")  # tag
     nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
     dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
+
+    if siblings is not None:
+        dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
 
 
 class DisplayedChatMessage:
@@ -422,7 +430,7 @@ class DisplayedChatMessage:
         buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
-        dpg.add_spacer(width=gui_config.chat_text_w - 5 * (gui_config.toolbutton_w + 8),  # 8 = DPG outer margin
+        dpg.add_spacer(width=gui_config.chat_text_w - 5 * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 32 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
         if message_role == "user":
@@ -507,24 +515,31 @@ def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
                              node_id=node_id)
     dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
 
-def next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
+def get_siblings(node_id: str) -> Tuple[Optional[List[str]], Optional[int]]:
     with datastore.lock:
         node = datastore.nodes[node_id]
         parent_node_id = node["parent"]
         if parent_node_id is None:  # root node?
-            return None  # TODO: use root scan (may need to cache)
+            return None, None  # TODO: use root scan (may need to cache)
 
         parent_node = datastore.nodes[parent_node_id]
         siblings = parent_node["children"]  # including the node itself so we can get its index
         node_index = siblings.index(node_id)  # TODO: handle errors
+        return siblings, node_index
 
-        if direction == "next":
-            if node_index < len(siblings) - 1:
-                return siblings[node_index + 1]
-        else:  # direction == "prev":
-            if node_index > 0:
-                return siblings[node_index - 1]
-        return None  # no sibling found
+def get_next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
+    siblings, node_index = get_siblings(node_id)
+    if siblings is None:
+        return None
+
+    if direction == "next":
+        if node_index < len(siblings) - 1:
+            return siblings[node_index + 1]
+    else:  # direction == "prev":
+        if node_index > 0:
+            return siblings[node_index - 1]
+
+    return None  # no sibling found
 
 # --------------------------------------------------------------------------------
 # Set up the main window
