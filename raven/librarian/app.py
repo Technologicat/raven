@@ -123,7 +123,7 @@ except requests.exceptions.ConnectionError as exc:
     sys.exit(255)
 else:
     print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
-    settings = llmclient.setup(backend_url=backend_url)
+    llmclient_settings = llmclient.setup(backend_url=backend_url)
     print()
 
 # API key already loaded during module bootup; here, we just inform the user.
@@ -142,7 +142,7 @@ with timer() as tim:
     state_file = librarian_config.llmclient_userdata_dir / "state.json"     # important node IDs for the chat client state
 
     # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
-    datastore, app_state = appstate.load(settings, datastore_file, state_file)
+    datastore, app_state = appstate.load(llmclient_settings, datastore_file, state_file)
 logger.info(f"Datastore loaded in {tim.dt:0.6g}s.")
 
 logger.info("Loading RAG (retrieval-augmented generation) document store.")
@@ -640,9 +640,12 @@ with timer() as tim:
                                                         avatar_y_bottom=(gui_config.main_window_h - gui_config.ai_warning_h - 16 - 6),
                                                         paused_text="[No video]",
                                                         task_manager=task_manager)
+                # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
+                global source_image_size
                 global upscale
+                source_image_size = 512  # THA3 engine
                 upscale = 1.5
-                dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * 512))
+                dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * source_image_size))
 
 # --------------------------------------------------------------------------------
 # Animations, live updates
