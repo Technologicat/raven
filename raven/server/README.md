@@ -407,7 +407,7 @@ AI-animated anime avatar for your LLM.
 - `avatar_get_available_filters`: Get list of available image filters in the postprocessor.
   - The same image filters are also exposed to the `imagefx` module. This is the only API function to get the list.
 
-### DPG GUI driver for avatar
+**DPG GUI driver for avatar**
 
 This lives in a separate module, [`raven.client.avatar_renderer`](../client/avatar_renderer.py). It is part of the API, but not imported automatically.
 
