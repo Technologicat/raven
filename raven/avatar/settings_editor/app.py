@@ -1224,7 +1224,6 @@ def _load_initial_animator_settings():
             raise
 
     gui_instance.load_animator_settings(animator_json_path)
-
     # gui_instance.load_backdrop_image(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "backdrops", "anime-plains.png")).expanduser().resolve())  # DEBUG
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
