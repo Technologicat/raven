@@ -355,6 +355,9 @@ class DisplayedChatMessage:
         message = node_payload["message"]
         message_role = message["role"]
         message_text = message["content"]
+        message_text = llmclient.remove_role_name_from_start_of_line(settings=llmclient_settings,
+                                                                     role=message_role,
+                                                                     text=message_text)
         gui_role_icons = {"assistant": "icon_ai_texture",
                           "user": "icon_user_texture",
                           }
