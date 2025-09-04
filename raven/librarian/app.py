@@ -501,6 +501,7 @@ def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
     node_id_history = datastore.linearize_up(head_node_id)
     dpg.delete_item("chat_group", children_only=True)  # clear old content from GUI
     for node_id in node_id_history:
+        # TODO: store the objects, don't just create and discard them (side effects populate the GUI and DPG keeps alive the references to the GUI controls)
         DisplayedChatMessage(gui_parent="chat_group",
                              node_id=node_id)
 
