@@ -69,8 +69,8 @@ def initialize_api(raven_server_url: str,
     api_config.tts_url = tts_url
     api_config.tts_server_type = tts_server_type
     if tts_server_type not in ("kokoro", "raven", None):
-        logger.error(f"init_module: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
-        raise ValueError(f"init_module: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
+        logger.error(f"initialize_api: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
+        raise ValueError(f"initialize_api: Unknown `tts_server_type` '{tts_server_type}'. Valid: 'kokoro', 'raven', or None.")
 
     if tts_server_type is not None:
         if raven_api_key_file is not None and os.path.exists(raven_api_key_file):  # TODO: test this (I have no idea what I'm doing)
@@ -88,7 +88,7 @@ def initialize_api(raven_server_url: str,
         # Initialize audio mixer for playing back TTS audio
         # https://www.pygame.org/docs/ref/mixer.html
         if tts_playback_audio_device is not None:
-            logger.info(f"Initializing TTS audio playback on non-default audio device '{tts_playback_audio_device}' (this can be set in `raven.client.config`).")
+            logger.info(f"initialize_api: Initializing TTS audio playback on non-default audio device '{tts_playback_audio_device}' (this can be set in `raven.client.config`).")
         pygame.mixer.init(frequency=api_config.audio_frequency,
                           size=-16,  # minus: signed values will be used
                           channels=2,
