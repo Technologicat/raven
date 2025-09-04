@@ -168,6 +168,10 @@ logger.info(f"RAG document store loaded in {tim.dt:0.6g}s.")
 # --------------------------------------------------------------------------------
 # Linear chat view (of current branch)
 
+def _scroll_chat_view_to_end():
+    max_y_scroll = dpg.get_y_scroll_max("chat_panel")
+    dpg.set_y_scroll("chat_panel", max_y_scroll)
+
 def make_ai_message_buttons(uuid: str,
                             message_node_id: str,
                             gui_parent: Union[int, str]) -> None:
@@ -211,22 +215,19 @@ def make_ai_message_buttons(uuid: str,
     delete_branch_tooltip = dpg.add_tooltip(f"chat_delete_branch_button_{uuid}")  # tag
     dpg.add_text("Delete branch (this node and all descendants)", parent=delete_branch_tooltip)
 
-    def _scroll_to_end():
-        max_y_scroll = dpg.get_y_scroll_max("chat_panel")
-        dpg.set_y_scroll("chat_panel", max_y_scroll)
     def make_navigate_to_prev_sibling(message_node_id):
         def prev_sibling():
             node_id = next_or_prev_sibling(message_node_id, direction="prev")
             if node_id is not None:
                 build_linearized_chat(node_id)
-                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_to_end)
+                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
         return prev_sibling
     def make_navigate_to_next_sibling(message_node_id):
         def next_sibling():
             node_id = next_or_prev_sibling(message_node_id, direction="next")
             if node_id is not None:
                 build_linearized_chat(node_id)
-                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_to_end)
+                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
         return next_sibling
 
     dpg.add_button(label=fa.ICON_ANGLE_LEFT,
@@ -287,22 +288,19 @@ def make_user_message_buttons(uuid: str,
     delete_branch_tooltip = dpg.add_tooltip(f"chat_delete_branch_button_{uuid}")  # tag
     dpg.add_text("Delete branch (this node and all descendants)", parent=delete_branch_tooltip)
 
-    def _scroll_to_end():
-        max_y_scroll = dpg.get_y_scroll_max("chat_panel")
-        dpg.set_y_scroll("chat_panel", max_y_scroll)
     def make_navigate_to_prev_sibling(message_node_id):
         def prev_sibling():
             node_id = next_or_prev_sibling(message_node_id, direction="prev")
             if node_id is not None:
                 build_linearized_chat(node_id)
-                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_to_end)
+                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
         return prev_sibling
     def make_navigate_to_next_sibling(message_node_id):
         def next_sibling():
             node_id = next_or_prev_sibling(message_node_id, direction="next")
             if node_id is not None:
                 build_linearized_chat(node_id)
-                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_to_end)
+                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
         return next_sibling
 
     dpg.add_button(label=fa.ICON_ANGLE_LEFT,
@@ -507,6 +505,7 @@ def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
         # TODO: store the objects, don't just create and discard them (side effects populate the GUI and DPG keeps alive the references to the GUI controls)
         DisplayedChatMessage(gui_parent="chat_group",
                              node_id=node_id)
+    dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
 
 def next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
     with datastore.lock:
