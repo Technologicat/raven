@@ -42,18 +42,13 @@
 
 - Librarian
   - First, build the minimal demo:
-    - In chat view, show sibling count at each node
-    - Improve chat panel
-      - Add double-buffering for rebuilding, like in Raven-visualizer
-      - See how Raven-visualizer successfully updates its scroll position after info panel update (the MD renderer doesn't say when the output is ready, so wait how long before setting the scroll position?)
     - Draw assets:
       - Make better chat icons for AI/user roles
         - Make per-character AI chat icons
       - Make chat icons for system, tool roles
       - Finish the new app icon for Raven (small and large sizes)
-    - Add feature: Display AI avatar live video stream
+    - In chat view, show sibling count at each node
     - Add feature: New chat (!clear of minichat)
-    - Add feature: Branch chat at this node (!head ... of minichat)
     - Add feature: User text entry
       - Submit user input to LLM
       - Live preview of LLM output
@@ -63,23 +58,31 @@
         - Add GUI element to display captions (large font) on top of the avatar video
       - Avatar emotion update from final message
     - Add feature: Regenerate LLM response
-    - Add feature: HTML coloring mode for thought blocks, for use with MD renderer
-      - Store the thought blocks in the chat datastore, too
     - Add feature: Interrupt AI generation
     - Add feature: Continue AI generation in current HEAD node (creating a new revision?)
+    - Add feature: Branch chat at this node (!head ... of minichat)
     - Add document database toggles (RAG; !docs, !speculate of minichat)
     - Add websearch toggle?
+    - Add GUI dynamic resizing on window size change
+    - Improve chat panel
+      - Add double-buffering for rebuilding, like in Raven-visualizer
+      - See how Raven-visualizer successfully updates its scroll position after info panel update (the MD renderer doesn't say when the output is ready, so wait how long before setting the scroll position?)
+    - Add feature: HTML coloring mode for thought blocks, for use with MD renderer
+      - Store the thought blocks in the chat datastore, too
   - Later:
+    - Avatar: add cel effect for internet access / tool use (data eyes)
     - Add feature: collapsible thought blocks
     - Add feature: message editing (use chattree's revision system)
     - Improve text entry: multiline input
     - Add hotkeys
+      - Separate hotkey mode while `chat_field` is focused
     - Add chat graph editor (this is part of where the true power of Librarian will come from)
       - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_viewmodel.py#L206
       - how to get mouse position: https://github.com/hoffstadt/DearPyGui/issues/2164
       - simple examples:
         - https://github.com/DataExplorerUser/drag_drop_node_editor/blob/main/drag_and_drop_node_editor_dear_py_gui.py
         - https://github.com/hoshianaaa/DearPyGUI_NodeEditor_Template/tree/main
+    - AI summary and synthesis of selected studies from visualizer
 
   - Add a lockfile so that `raven-minichat` and `raven-librarian` can't be running at the same time (to prevent losing changes made in one of the apps)
   - Store in AI message metadata: model name, number of tokens, average generation speed (tokens/s)
