@@ -146,6 +146,7 @@ def load(settings: env,
     new_chat_node_id = state["new_chat_HEAD"]
     new_chat_node = datastore.nodes[new_chat_node_id]
     system_prompt_node_id = new_chat_node["parent"]
+    state["system_prompt_node_id"] = system_prompt_node_id  # remember it, the GUI chat client needs it
     old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
     datastore.add_revision(node_id=system_prompt_node_id,
                            payload={"message": llmclient.create_initial_system_message(settings)})

@@ -14,6 +14,7 @@ from unpythonic import timer
 with timer() as tim:
     import atexit
     import concurrent.futures
+    import io
     import json
     import os
     import pathlib
@@ -34,6 +35,8 @@ with timer() as tim:
 
     from mcpyrate import colorizer
 
+    from unpythonic.env import env
+
     # Vendored libraries
     from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
     from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
@@ -49,6 +52,7 @@ with timer() as tim:
     from ..common.gui import utils as guiutils
 
     from . import appstate
+    from . import chatutil
     from . import config as librarian_config
     # from . import chattree
     from . import hybridir
@@ -72,8 +76,13 @@ api.initialize(raven_server_url=client_config.raven_server_url,
                tts_playback_audio_device=client_config.tts_playback_audio_device,
                executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
 
+llm_backend_url = librarian_config.llm_backend_url
+
 # These are initialized later, when the app starts
 avatar_instance_id = None
+
+current_chat_history = []
+current_chat_history_lock = threading.RLock()
 
 # --------------------------------------------------------------------------------
 # Set up DPG - basic startup, load fonts, set up global theme
@@ -112,18 +121,16 @@ else:
     logger.error(f"Failed to connect to Raven-server at '{client_config.raven_server_url}'.")
     sys.exit(255)
 
-backend_url = librarian_config.llm_backend_url
-
 try:
-    llmclient.list_models(backend_url)  # just do something, to try to connect
+    llmclient.list_models(llm_backend_url)  # just do something, to try to connect
 except requests.exceptions.ConnectionError as exc:
-    print(colorizer.colorize(f"Cannot connect to LLM backend at {backend_url}.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
-    msg = f"Failed to connect to LLM backend at {backend_url}, reason {type(exc)}: {exc}"
+    print(colorizer.colorize(f"Cannot connect to LLM backend at {llm_backend_url}.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
+    msg = f"Failed to connect to LLM backend at {llm_backend_url}, reason {type(exc)}: {exc}"
     logger.error(msg)
     sys.exit(255)
 else:
-    print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
-    llmclient_settings = llmclient.setup(backend_url=backend_url)
+    print(colorizer.colorize(f"Connected to LLM backend at {llm_backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+    llmclient_settings = llmclient.setup(backend_url=llm_backend_url)
     print()
 
 # API key already loaded during module bootup; here, we just inform the user.
@@ -172,119 +179,66 @@ def _scroll_chat_view_to_end():
     max_y_scroll = dpg.get_y_scroll_max("chat_panel")
     dpg.set_y_scroll("chat_panel", max_y_scroll)
 
-def make_ai_message_buttons(uuid: str,
-                            message_node_id: str,
-                            gui_parent: Union[int, str]) -> None:
-    g = dpg.add_group(horizontal=True, tag=f"ai_buttons_group_{uuid}", parent=gui_parent)
+def format_chat_message_for_clipboard(llm_settings: env,
+                                      message_number: Optional[int],
+                                      message_role: str,
+                                      message_text: str) -> str:
+    message_heading = chatutil.format_message_heading(llm_settings=llmclient_settings,
+                                                      message_number=message_number,
+                                                      role=message_role,
+                                                      markup="markdown")
+    message_text = llmclient.remove_role_name_from_start_of_line(settings=llmclient_settings,
+                                                                 role=message_role,
+                                                                 text=message_text)
+    return f"{message_heading}{message_text}"
+
+def make_message_buttons(uuid: str,
+                         message_node_id: str,
+                         message_text: str,
+                         role: str,
+                         gui_parent: Union[int, str]) -> None:
+    g = dpg.add_group(horizontal=True, tag=f"{role}_message_buttons_group_{uuid}", parent=gui_parent)
 
     # dpg.add_text("[0 t, 0 s, ∞ t/s]", color=(180, 180, 180), tag=f"performance_stats_text_ai_{uuid}", parent=g)  # TODO: add the performance stats
 
     # dpg.add_spacer(tag=f"ai_message_buttons_spacer_{uuid}",
     #                parent=g)
 
-    dpg.add_button(label=fa.ICON_COPY,
-                   callback=lambda: None,  # TODO
-                   width=gui_config.toolbutton_w,
-                   tag=f"message_copy_to_clipboard_button_{uuid}",
-                   parent=g)
+    def copy_message_to_clipboard():
+        formatted_message = format_chat_message_for_clipboard(llm_settings=llmclient_settings,
+                                                              message_number=None,
+                                                              message_role=role,
+                                                              message_text=message_text)
+        dpg.set_clipboard_text(f"{formatted_message}\n")
+        # Acknowledge the action in the GUI.
+        gui_animation.animator.add(gui_animation.ButtonFlash(message="Copied to clipboard!",
+                                                             target_button=copy_message_button,
+                                                             target_tooltip=copy_message_tooltip,
+                                                             target_text=copy_message_tooltip_text,
+                                                             original_theme=themes_and_fonts.global_theme,
+                                                             duration=gui_config.acknowledgment_duration))
+    copy_message_button = dpg.add_button(label=fa.ICON_COPY,
+                                         callback=copy_message_to_clipboard,
+                                         width=gui_config.toolbutton_w,
+                                         tag=f"message_copy_to_clipboard_button_{uuid}",
+                                         parent=g)
     dpg.bind_item_font(f"message_copy_to_clipboard_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
     copy_message_tooltip = dpg.add_tooltip(f"message_copy_to_clipboard_button_{uuid}")  # tag
-    dpg.add_text("Copy message to clipboard", parent=copy_message_tooltip)
+    copy_message_tooltip_text = dpg.add_text("Copy message to clipboard", parent=copy_message_tooltip)
 
-    dpg.add_button(label=fa.ICON_RECYCLE,
-                   callback=lambda: None,  # TODO
-                   enabled=False,
-                   width=gui_config.toolbutton_w,
-                   tag=f"chat_reroll_button_{uuid}",
-                   parent=g)
-    dpg.bind_item_font(f"chat_reroll_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    dpg.bind_item_theme(f"chat_reroll_button_{uuid}", "disablable_button_theme")  # tag
-    reroll_tooltip = dpg.add_tooltip(f"chat_reroll_button_{uuid}")  # tag
-    dpg.add_text("Reroll (create new sibling)", parent=reroll_tooltip)
-
-    dpg.add_button(label=fa.ICON_CODE_BRANCH,
-                   callback=lambda: None,  # TODO
-                   enabled=False,
-                   width=gui_config.toolbutton_w,
-                   tag=f"chat_new_branch_button_{uuid}",
-                   parent=g)
-    dpg.bind_item_font(f"chat_new_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    dpg.bind_item_theme(f"chat_new_branch_button_{uuid}", "disablable_button_theme")  # tag
-    new_branch_tooltip = dpg.add_tooltip(f"chat_new_branch_button_{uuid}")  # tag
-    dpg.add_text("Branch from this node", parent=new_branch_tooltip)
-
-    dpg.add_button(label=fa.ICON_TRASH_CAN,
-                   callback=lambda: None,  # TODO
-                   enabled=(message_node_id != app_state["new_chat_HEAD"]),  # disallow deleting the AI's initial greeting
-                   width=gui_config.toolbutton_w,
-                   tag=f"chat_delete_branch_button_{uuid}",
-                   parent=g)
-    dpg.bind_item_font(f"chat_delete_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    dpg.bind_item_theme(f"chat_delete_branch_button_{uuid}", "disablable_button_theme")  # tag
-    delete_branch_tooltip = dpg.add_tooltip(f"chat_delete_branch_button_{uuid}")  # tag
-
-    c_red = '<font color="(255, 96, 96)">'
-    c_end = '</font>'
-    dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_branch_tooltip)
-
-    def make_navigate_to_prev_sibling(message_node_id):
-        def prev_sibling():
-            node_id = get_next_or_prev_sibling(message_node_id, direction="prev")
-            if node_id is not None:
-                build_linearized_chat(node_id)
-                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
-        return prev_sibling
-    def make_navigate_to_next_sibling(message_node_id):
-        def next_sibling():
-            node_id = get_next_or_prev_sibling(message_node_id, direction="next")
-            if node_id is not None:
-                build_linearized_chat(node_id)
-                dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
-        return next_sibling
-    siblings, node_index = get_siblings(message_node_id)
-
-    dpg.add_button(label=fa.ICON_ANGLE_LEFT,
-                   callback=make_navigate_to_prev_sibling(message_node_id),
-                   enabled=(node_index is not None and node_index > 0),
-                   width=gui_config.toolbutton_w,
-                   tag=f"chat_prevbranch_button_{uuid}",
-                   parent=g)
-    dpg.bind_item_font(f"chat_prevbranch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    dpg.bind_item_theme(f"chat_prevbranch_button_{uuid}", "disablable_button_theme")  # tag
-    prevbranch_tooltip = dpg.add_tooltip(f"chat_prevbranch_button_{uuid}")  # tag
-    dpg.add_text("Switch to previous sibling", parent=prevbranch_tooltip)
-
-    dpg.add_button(label=fa.ICON_ANGLE_RIGHT,
-                   callback=make_navigate_to_next_sibling(message_node_id),
-                   enabled=(node_index is not None and node_index < len(siblings) - 1),
-                   width=gui_config.toolbutton_w,
-                   tag=f"chat_nextbranch_button_{uuid}",
-                   parent=g)
-    dpg.bind_item_font(f"chat_nextbranch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    dpg.bind_item_theme(f"chat_nextbranch_button_{uuid}", "disablable_button_theme")  # tag
-    nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
-    dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
-
-    if siblings is not None:
-        dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
-
-def make_user_message_buttons(uuid: str,
-                              message_node_id: str,
-                              gui_parent: Union[int, str]) -> None:
-    g = dpg.add_group(horizontal=True, tag=f"user_buttons_group_{uuid}", parent=gui_parent)
-
-    # dpg.add_spacer(width=800 - 5 * (gui_config.toolbutton_w + 8),  # 8 = DPG outer margin
-    #                tag=f"user_message_buttons_spacer_{uuid}",
-    #                parent=g)
-
-    dpg.add_button(label=fa.ICON_COPY,
-                   callback=lambda: None,  # TODO
-                   width=gui_config.toolbutton_w,
-                   tag=f"message_copy_to_clipboard_button_{uuid}",
-                   parent=g)
-    dpg.bind_item_font(f"message_copy_to_clipboard_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    copy_message_tooltip = dpg.add_tooltip(f"message_copy_to_clipboard_button_{uuid}")  # tag
-    dpg.add_text("Copy message to clipboard", parent=copy_message_tooltip)
+    if role == "assistant":  # only AI messages can be rerolled
+        dpg.add_button(label=fa.ICON_RECYCLE,
+                       callback=lambda: None,  # TODO
+                       enabled=False,
+                       width=gui_config.toolbutton_w,
+                       tag=f"message_reroll_button_{uuid}",
+                       parent=g)
+        dpg.bind_item_font(f"message_reroll_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+        dpg.bind_item_theme(f"message_reroll_button_{uuid}", "disablable_button_theme")  # tag
+        reroll_tooltip = dpg.add_tooltip(f"message_reroll_button_{uuid}")  # tag
+        dpg.add_text("Reroll AI response (create new sibling)", parent=reroll_tooltip)
+    else:
+        dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
     dpg.add_button(label=fa.ICON_PENCIL,
                    callback=lambda: None,  # TODO
@@ -297,21 +251,24 @@ def make_user_message_buttons(uuid: str,
 
     dpg.add_button(label=fa.ICON_CODE_BRANCH,
                    callback=lambda: None,  # TODO
+                   enabled=False,
                    width=gui_config.toolbutton_w,
-                   tag=f"chat_new_branch_button_{uuid}",
+                   tag=f"message_new_branch_button_{uuid}",
                    parent=g)
-    dpg.bind_item_font(f"chat_new_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    new_branch_tooltip = dpg.add_tooltip(f"chat_new_branch_button_{uuid}")  # tag
+    dpg.bind_item_font(f"message_new_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+    dpg.bind_item_theme(f"message_new_branch_button_{uuid}", "disablable_button_theme")  # tag
+    new_branch_tooltip = dpg.add_tooltip(f"message_new_branch_button_{uuid}")  # tag
     dpg.add_text("Branch from this node", parent=new_branch_tooltip)
 
     dpg.add_button(label=fa.ICON_TRASH_CAN,
                    callback=lambda: None,  # TODO
+                   enabled=(message_node_id not in (app_state["system_prompt_node_id"], app_state["new_chat_HEAD"])),  # disallow deleting the system prompt and the AI's initial greeting
                    width=gui_config.toolbutton_w,
-                   tag=f"chat_delete_branch_button_{uuid}",
+                   tag=f"message_delete_branch_button_{uuid}",
                    parent=g)
-    dpg.bind_item_font(f"chat_delete_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    dpg.bind_item_theme(f"chat_delete_branch_button_{uuid}", "disablable_button_theme")  # tag
-    delete_branch_tooltip = dpg.add_tooltip(f"chat_delete_branch_button_{uuid}")  # tag
+    dpg.bind_item_font(f"message_delete_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+    dpg.bind_item_theme(f"message_delete_branch_button_{uuid}", "disablable_button_theme")  # tag
+    delete_branch_tooltip = dpg.add_tooltip(f"message_delete_branch_button_{uuid}")  # tag
 
     c_red = '<font color="(255, 96, 96)">'
     c_end = '</font>'
@@ -337,23 +294,23 @@ def make_user_message_buttons(uuid: str,
                    callback=make_navigate_to_prev_sibling(message_node_id),
                    enabled=(node_index is not None and node_index > 0),
                    width=gui_config.toolbutton_w,
-                   tag=f"chat_prevbranch_button_{uuid}",
+                   tag=f"message_prev_branch_button_{uuid}",
                    parent=g)
-    dpg.bind_item_font(f"chat_prevbranch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    dpg.bind_item_theme(f"chat_prevbranch_button_{uuid}", "disablable_button_theme")  # tag
-    prevbranch_tooltip = dpg.add_tooltip(f"chat_prevbranch_button_{uuid}")  # tag
-    dpg.add_text("Switch to previous sibling", parent=prevbranch_tooltip)
+    dpg.bind_item_font(f"message_prev_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+    dpg.bind_item_theme(f"message_prev_branch_button_{uuid}", "disablable_button_theme")  # tag
+    prev_branch_tooltip = dpg.add_tooltip(f"message_prev_branch_button_{uuid}")  # tag
+    dpg.add_text("Switch to previous sibling", parent=prev_branch_tooltip)
 
     dpg.add_button(label=fa.ICON_ANGLE_RIGHT,
                    callback=make_navigate_to_next_sibling(message_node_id),
                    enabled=(node_index is not None and node_index < len(siblings) - 1),
                    width=gui_config.toolbutton_w,
-                   tag=f"chat_nextbranch_button_{uuid}",
+                   tag=f"message_next_branch_button_{uuid}",
                    parent=g)
-    dpg.bind_item_font(f"chat_nextbranch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    dpg.bind_item_theme(f"chat_nextbranch_button_{uuid}", "disablable_button_theme")  # tag
-    nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
-    dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
+    dpg.bind_item_font(f"message_next_branch_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+    dpg.bind_item_theme(f"message_next_branch_button_{uuid}", "disablable_button_theme")  # tag
+    next_branch_tooltip = dpg.add_tooltip(f"message_next_branch_button_{uuid}")  # tag
+    dpg.add_text("Switch to next sibling", parent=next_branch_tooltip)
 
     if siblings is not None:
         dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
@@ -455,18 +412,15 @@ class DisplayedChatMessage:
         buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
-        n_message_buttons = 6
+        n_message_buttons = 7
         dpg.add_spacer(width=gui_config.chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 32 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
-        if message_role == "user":
-            make_user_message_buttons(uuid=self.gui_uuid,
-                                      message_node_id=self.node_id,
-                                      gui_parent=buttons_horizontal_layout_group)
-        elif message_role == "assistant":
-            make_ai_message_buttons(uuid=self.gui_uuid,
-                                    message_node_id=self.node_id,
-                                    gui_parent=buttons_horizontal_layout_group)
+        make_message_buttons(uuid=self.gui_uuid,
+                             message_node_id=self.node_id,
+                             message_text=message_text,  # for copy to clipboard function
+                             role=message_role,
+                             gui_parent=buttons_horizontal_layout_group)
 
         # ----------------------------------------
         # chat turn end spacers and line
@@ -529,16 +483,16 @@ class DisplayedChatMessage:
         #     dpg.set_frame_callback(dpg.get_frame_count() + 10,
         #                            type(self).run_callbacks)
 
-
 def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
     if head_node_id is None:  # use current HEAD from app_state?
         head_node_id = app_state["HEAD"]
     node_id_history = datastore.linearize_up(head_node_id)
-    dpg.delete_item("chat_group", children_only=True)  # clear old content from GUI
-    for node_id in node_id_history:
-        # TODO: store the objects, don't just create and discard them (side effects populate the GUI and DPG keeps alive the references to the GUI controls)
-        DisplayedChatMessage(gui_parent="chat_group",
-                             node_id=node_id)
+    with current_chat_history_lock:
+        current_chat_history.clear()
+        dpg.delete_item("chat_group", children_only=True)  # clear old content from GUI
+        for node_id in node_id_history:
+            current_chat_history.append(DisplayedChatMessage(gui_parent="chat_group",
+                                                             node_id=node_id))
     dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
 
 def get_siblings(node_id: str) -> Tuple[Optional[List[str]], Optional[int]]:  # TODO: move to `chattree`
@@ -711,12 +665,28 @@ with timer() as tim:
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
             with dpg.group(horizontal=True):
-                def start_new_chat():
+                def start_new_chat() -> None:
                     build_linearized_chat(head_node_id=app_state["new_chat_HEAD"])
                     # TODO: update app_state["HEAD"] to point to the new_chat_HEAD after we can actually chat with LLM
-                def copy_chatlog_to_clipboard():
-                    # dpg.set_clipboard_text(...)  # TODO
 
+                def copy_chatlog_to_clipboard_as_markdown() -> None:
+                    with current_chat_history_lock:
+                        if not current_chat_history:
+                            return
+
+                        text = io.StringIO()
+                        text.write(f"# Chatlog for HEAD node '{current_chat_history[-1].node_id}'\n\n")
+                        for message_number, displayed_chat_message in enumerate(current_chat_history):
+                            node_payload = datastore.get_payload(displayed_chat_message.node_id)
+                            message = node_payload["message"]
+                            message_role = message["role"]
+                            message_text = message["content"]
+                            formatted_message = format_chat_message_for_clipboard(llm_settings=llmclient_settings,
+                                                                                  message_number=message_number,
+                                                                                  message_role=message_role,
+                                                                                  message_text=message_text)
+                            text.write(f"{formatted_message}\n\n{'-' * 80}\n\n")
+                    dpg.set_clipboard_text(text.getvalue())
                     # Acknowledge the action in the GUI.
                     gui_animation.animator.add(gui_animation.ButtonFlash(message="Copied to clipboard!",
                                                                          target_button=copy_chat_button,
@@ -743,7 +713,7 @@ with timer() as tim:
                 dpg.add_text("Open graph view", parent=open_graph_tooltip)
 
                 copy_chat_button = dpg.add_button(label=fa.ICON_COPY,
-                                                  callback=copy_chatlog_to_clipboard,
+                                                  callback=copy_chatlog_to_clipboard_as_markdown,
                                                   width=gui_config.toolbutton_w,
                                                   tag="chat_copy_to_clipboard_button")
                 dpg.bind_item_font("chat_copy_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag

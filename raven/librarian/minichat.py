@@ -37,6 +37,7 @@ with timer() as tim:
     from ..client import config as client_config
 
     from . import appstate
+    from . import chatutil
     from . import config as librarian_config
     from . import hybridir
     from . import llmclient
@@ -256,38 +257,8 @@ def minimal_chat_client(backend_url):
                 print(f"        {model_name}")
             print()
 
-        # TODO: we don't need the `color=False` option now that we fixed `colorize` to work with `readline`/`input`.
-        def format_message_number(message_number: Optional[int], color: bool) -> None:
-            if message_number is not None:
-                out = f"[#{message_number}]"
-                if color:
-                    out = colorizer.colorize(out, colorizer.Style.DIM)
-                return out
-            return ""
-
-        def format_persona(role: str, color: bool) -> None:
-            persona = settings.role_names.get(role, None)
-            if persona is None:
-                out = f"<<{role}>>"  # currently, this include "<<system>>" and "<<tool>>"
-                if color:
-                    out = colorizer.colorize(out, colorizer.Style.DIM)
-                return out
-            else:
-                out = persona
-                if color:
-                    out = colorizer.colorize(out, colorizer.Style.BRIGHT)
-                return out
-
-        def format_message_heading(message_number: Optional[int], role: str, color: bool):
-            colorful_number = format_message_number(message_number, color)
-            colorful_persona = format_persona(role, color)
-            if message_number is not None:
-                return f"{colorful_number} {colorful_persona}: "
-            else:
-                return f"{colorful_persona}: "
-
         def chat_print_message(message_number: Optional[int], role: str, text: str) -> None:
-            print(format_message_heading(message_number, role, color=True), end="")
+            print(chatutil.format_message_heading(message_number, role, markup="ansi"), end="")
             print(llmclient.remove_role_name_from_start_of_line(settings=settings, role=role, text=text))
 
         def chat_print_history(history: List[Dict], show_numbers: bool = True) -> None:
@@ -315,7 +286,7 @@ def minimal_chat_client(backend_url):
             #
             # This avoids the input prompt getting overwritten when browsing history entries, and prevents backspacing over the input prompt.
             # https://stackoverflow.com/questions/75987688/how-can-readline-be-told-not-to-erase-externally-supplied-prompt
-            input_prompt = format_message_heading(user_message_number, role="user", color=True)
+            input_prompt = chatutil.format_message_heading(user_message_number, role="user", markup="ansi")
             user_message_text = input(input_prompt)
             print()
 
@@ -543,7 +514,7 @@ def minimal_chat_client(backend_url):
                 perform_injects(history, docs_matches=rag_result["matches"])
 
                 # Invoke the LLM.
-                print(format_message_number(ai_message_number, color=True))
+                print(chatutil.format_message_number(ai_message_number, markup="ansi"))
                 chars = 0
                 def progress_callback(n_chunks, chunk_text):  # any UI live-update code goes here, in the callback
                     # TODO: think of a better way to split to lines
