@@ -512,7 +512,7 @@ def factory_reset_chat_datastore(datastore: chattree.Forest, settings: env) -> s
     return new_chat_node_id
 
 # --------------------------------------------------------------------------------
-# stock message formatting itulities
+# stock message formatting utilities
 
 _weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 def format_chat_datetime_now() -> str:
