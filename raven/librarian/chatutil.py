@@ -47,7 +47,7 @@ def format_persona(llm_settings: env,
                    markup: Optional[str]) -> str:
     """Format the persona name for `role`.
 
-    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup`.
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
                     Contains (among other things) a mapping of roles to persona names.
 
     `role`: One of the roles supported by `raven.librarian.llmclient`.
@@ -141,27 +141,40 @@ _nan_thought_block = re.compile(r"([<\[])(think|thinking)([>\]])\nNaN\n([<\[])/(
 _thought_begin_tag = re.compile(r"([<\[])(think|thinking)([>\]])", flags=re.IGNORECASE | re.DOTALL)
 _thought_end_tag = re.compile(r"([<\[])/(think|thinking)([>\]])", flags=re.IGNORECASE | re.DOTALL)
 
-def remove_role_name_from_start_of_line(settings: env,
+def remove_role_name_from_start_of_line(llm_settings: env,
                                         role: str,
                                         text: str) -> str:
-    """Transform e.g. "User: blah blah" -> "blah blah", for every line in `text`."""
-    persona = settings.role_names.get(role, None)
+    """Transform e.g. "User: blah blah" -> "blah blah", for every line in `text`.
+
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+
+    `role`: One of the roles supported by `raven.librarian.llmclient`.
+            Typically, one of "assistant", "system", "tool", or "user".
+
+    `text`: The text to process.
+
+    Returns the processed text.
+    """
+    persona = llm_settings.role_names.get(role, None)
     if persona is None:
         return text
     _role_name_at_start_of_line = re.compile(f"^{persona}:\\s+", re.MULTILINE)
     text = re.sub(_role_name_at_start_of_line, r"", text)
     return text
 
-def scrub(settings: env,
+def scrub(llm_settings: env,
           text: str,
           thoughts_mode: str,
           add_ai_role_name: bool) -> str:
     """Heuristically clean up the text content of an LLM-generated message.
 
-    `settings`: Obtain this by calling `setup()` at app start time.
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+
     `text`: The text content of the message to scrub.
+
     `thoughts_mode`: one of "discard", "colorize". or "keep". What to do with thought blocks,
                      for thinking models.
+
     `add_ai_role_name`: Whether to format the final text as "AI: blah blah" or just "blah blah".
 
     Returns the scrubbed text content.
@@ -174,7 +187,7 @@ def scrub(settings: env,
     #
     # This is important for consistency, since many models randomly sometimes add the persona name, and sometimes don't.
     #
-    text = remove_role_name_from_start_of_line(settings=settings, role="assistant", text=text)
+    text = remove_role_name_from_start_of_line(llm_settings=llm_settings, role="assistant", text=text)
 
     # Fix the most common kinds of broken thought blocks (for thinking models)
     text = re.sub(_doubled_think_tag, r"\1\2\3", text)  # <think><think>...
@@ -236,6 +249,6 @@ def scrub(settings: env,
     # is superfluous. In that use case, we really use the LLM as an instruct-tuned model, i.e. a natural language processor
     # that is programmed via free-form instructions in English. Raven's PDF importer does this a lot.
     if add_ai_role_name:
-        text = f"{settings.char}: {text}"
+        text = f"{llm_settings.char}: {text}"
 
     return text

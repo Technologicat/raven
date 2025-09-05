@@ -58,8 +58,8 @@ def minimal_chat_client(backend_url):
 
     # Ugh for the presentation order, but this is needed in two places, starting immediately below.
     def chat_show_model_info():
-        print(f"    {colorizer.colorize('Model', colorizer.Style.BRIGHT)}: {settings.model}")
-        print(f"    {colorizer.colorize('Character', colorizer.Style.BRIGHT)}: {settings.char} [defined in this client]")
+        print(f"    {colorizer.colorize('Model', colorizer.Style.BRIGHT)}: {llm_settings.model}")
+        print(f"    {colorizer.colorize('Character', colorizer.Style.BRIGHT)}: {llm_settings.char} [defined in this client]")
         print()
 
     # Main program
@@ -84,7 +84,7 @@ def minimal_chat_client(backend_url):
             sys.exit(255)
         else:
             print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
-            settings = llmclient.setup(backend_url=backend_url)
+            llm_settings = llmclient.setup(backend_url=backend_url)
             chat_show_model_info()
 
         # API key already loaded during module bootup; here, we just inform the user.
@@ -98,7 +98,7 @@ def minimal_chat_client(backend_url):
             print()
 
         # Persistent, branching chat history, and app settings (these will auto-persist at app exit).
-        datastore, app_state = appstate.load(settings, datastore_file, state_file)
+        datastore, app_state = appstate.load(llm_settings, datastore_file, state_file)
         print()
 
         # Load RAG database (it will auto-persist at app exit).
@@ -258,12 +258,12 @@ def minimal_chat_client(backend_url):
             print()
 
         def chat_print_message(message_number: Optional[int], role: str, text: str) -> None:
-            print(chatutil.format_message_heading(llm_settings=settings,
+            print(chatutil.format_message_heading(llm_settings=llm_settings,
                                                   message_number=message_number,
                                                   role=role,
                                                   markup="ansi"),
                   end="")
-            print(chatutil.remove_role_name_from_start_of_line(settings=settings, role=role, text=text))
+            print(chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings, role=role, text=text))
 
         def chat_print_history(history: List[Dict], show_numbers: bool = True) -> None:
             if show_numbers:
@@ -290,7 +290,7 @@ def minimal_chat_client(backend_url):
             #
             # This avoids the input prompt getting overwritten when browsing history entries, and prevents backspacing over the input prompt.
             # https://stackoverflow.com/questions/75987688/how-can-readline-be-told-not-to-erase-externally-supplied-prompt
-            input_prompt = chatutil.format_message_heading(llm_settings=settings,
+            input_prompt = chatutil.format_message_heading(llm_settings=llm_settings,
                                                            message_number=user_message_number,
                                                            role="user",
                                                            markup="ansi")
@@ -396,7 +396,7 @@ def minimal_chat_client(backend_url):
             # Not a special command.
 
             # Add the user's message to the chat.
-            user_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=settings,
+            user_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=llm_settings,
                                                                                                            role="user",
                                                                                                            text=user_message_text)},
                                                          parent_id=app_state["HEAD"])
@@ -414,7 +414,7 @@ def minimal_chat_client(backend_url):
             # First line of defense (against hallucinations): docs on, no matches for given query, speculate off -> bypass LLM
             if not docs_results and not app_state["speculate_enabled"]:
                 nomatch_text = "No matches in knowledge base. Please try another query."
-                nomatch_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=settings,
+                nomatch_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=llm_settings,
                                                                                                                   role="assistant",
                                                                                                                   text=nomatch_text)},
                                                                 parent_id=app_state["HEAD"])
@@ -464,14 +464,14 @@ def minimal_chat_client(backend_url):
             for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
                 # TODO: Should the RAG match notification show the query string, too?
                 search_result_text = f"[System information: Knowledge-base match from '{docs_result['document_id']}'.]\n\n{docs_result['text'].strip()}\n-----"
-                message_to_inject = llmclient.create_chat_message(settings=settings,
+                message_to_inject = llmclient.create_chat_message(settings=llm_settings,
                                                                   role="system",
                                                                   text=search_result_text)
                 history.insert(1, message_to_inject)  # after system prompt / character card combo
 
             # Always-on injects, e.g. current local datetime
             for thunk in injectors:
-                message_to_inject = llmclient.create_chat_message(settings=settings,
+                message_to_inject = llmclient.create_chat_message(settings=llm_settings,
                                                                   role="system",
                                                                   text=thunk())
                 history.append(message_to_inject)
@@ -480,7 +480,7 @@ def minimal_chat_client(backend_url):
             #                           This increases the changes of the user's query working correctly when the search returns irrelevant results.
             # If docs off, the whole point is to use the LLM's static knowledge, so in that case don't bother.
             if app_state["docs_enabled"] and not app_state["speculate_enabled"]:
-                message_to_inject = llmclient.create_chat_message(settings=settings,
+                message_to_inject = llmclient.create_chat_message(settings=llm_settings,
                                                                   role="system",
                                                                   text=chatutil.format_reminder_to_use_information_from_context_only())
                 history.append(message_to_inject)
@@ -535,11 +535,11 @@ def minimal_chat_client(backend_url):
                     print(chunk_text, end="")
                     sys.stdout.flush()
                 # `invoke` uses a linearized history, as expected by the LLM API.
-                out = llmclient.invoke(settings, history, progress_callback)  # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
+                out = llmclient.invoke(llm_settings, history, progress_callback)  # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
                 print()  # print the final newline
 
                 # Clean up the LLM's reply (heuristically). This version goes into the chat history.
-                out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=True)
+                out.data["content"] = chatutil.scrub(llm_settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=True)
 
                 # Show LLM performance statistics
                 print(colorizer.colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))
@@ -567,7 +567,7 @@ def minimal_chat_client(backend_url):
                 # Each response goes into its own message, with `role="tool"`.
                 #
                 tool_message_number = ai_message_number + 1
-                tool_response_records = llmclient.perform_tool_calls(settings, message=out.data)
+                tool_response_records = llmclient.perform_tool_calls(llm_settings, message=out.data)
 
                 # When there are no more tool calls, the LLM is done replying.
                 # Each tool call produces exactly one response, so we may as well check this from the number of responses.
