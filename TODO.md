@@ -47,7 +47,6 @@
         - Make per-character AI chat icons
       - Make chat icons for system, tool roles
       - Finish the new app icon for Raven (small and large sizes)
-    - Add feature: New chat (!clear of minichat)
     - Add feature: User text entry
       - Submit user input to LLM
       - Live preview of LLM output
@@ -73,6 +72,8 @@
       - Store the thought blocks in the chat datastore, too
   - Later:
     - Avatar: add cel effect for internet access / tool use (data eyes)
+    - Avatar on/off toggle (for low VRAM)
+      - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: collapsible thought blocks
     - Add feature: message editing (use chattree's revision system)
     - Improve text entry: multiline input
