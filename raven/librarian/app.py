@@ -205,13 +205,16 @@ def make_message_buttons(uuid: str,
     #                parent=g)
 
     def copy_message_to_clipboard():
+        shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
         formatted_message = format_chat_message_for_clipboard(llm_settings=llmclient_settings,
                                                               message_number=None,
                                                               message_role=role,
                                                               message_text=message_text)
-        dpg.set_clipboard_text(f"{formatted_message}\n")
+        header = f"*Node ID*: `{message_node_id}`\n\n" if shift_pressed else ""
+        mode = "with node ID" if shift_pressed else "as-is"
+        dpg.set_clipboard_text(f"{header}{formatted_message}\n")
         # Acknowledge the action in the GUI.
-        gui_animation.animator.add(gui_animation.ButtonFlash(message="Copied to clipboard!",
+        gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Copied to clipboard! ({mode})",
                                                              target_button=copy_message_button,
                                                              target_tooltip=copy_message_tooltip,
                                                              target_text=copy_message_tooltip_text,
@@ -224,7 +227,7 @@ def make_message_buttons(uuid: str,
                                          parent=g)
     dpg.bind_item_font(f"message_copy_to_clipboard_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
     copy_message_tooltip = dpg.add_tooltip(f"message_copy_to_clipboard_button_{uuid}")  # tag
-    copy_message_tooltip_text = dpg.add_text("Copy message to clipboard", parent=copy_message_tooltip)
+    copy_message_tooltip_text = dpg.add_text("Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID", parent=copy_message_tooltip)
 
     if role == "assistant":  # only AI messages can be rerolled
         dpg.add_button(label=fa.ICON_RECYCLE,
@@ -670,12 +673,13 @@ with timer() as tim:
                     # TODO: update app_state["HEAD"] to point to the new_chat_HEAD after we can actually chat with LLM
 
                 def copy_chatlog_to_clipboard_as_markdown() -> None:
+                    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
                     with current_chat_history_lock:
                         if not current_chat_history:
                             return
 
                         text = io.StringIO()
-                        text.write(f"# Chatlog for HEAD node '{current_chat_history[-1].node_id}'\n\n")
+                        text.write(f"# Raven-librarian chatlog\n\n- *HEAD node ID*: `{current_chat_history[-1].node_id}`\n- *Log generated*: {chatutil.format_chatlog_datetime_now()}\n\n{'-' * 80}\n\n")
                         for message_number, displayed_chat_message in enumerate(current_chat_history):
                             node_payload = datastore.get_payload(displayed_chat_message.node_id)
                             message = node_payload["message"]
@@ -685,10 +689,12 @@ with timer() as tim:
                                                                                   message_number=message_number,
                                                                                   message_role=message_role,
                                                                                   message_text=message_text)
-                            text.write(f"{formatted_message}\n\n{'-' * 80}\n\n")
+                            header = f"- *Node ID*: `{displayed_chat_message.node_id}`\n\n" if shift_pressed else ""
+                            text.write(f"{header}{formatted_message}\n\n{'-' * 80}\n\n")
                     dpg.set_clipboard_text(text.getvalue())
                     # Acknowledge the action in the GUI.
-                    gui_animation.animator.add(gui_animation.ButtonFlash(message="Copied to clipboard!",
+                    mode = "with node IDs" if shift_pressed else "as-is"
+                    gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Copied to clipboard! ({mode})",
                                                                          target_button=copy_chat_button,
                                                                          target_tooltip=copy_chat_tooltip,
                                                                          target_text=copy_chat_tooltip_text,
@@ -718,7 +724,7 @@ with timer() as tim:
                                                   tag="chat_copy_to_clipboard_button")
                 dpg.bind_item_font("chat_copy_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
                 copy_chat_tooltip = dpg.add_tooltip("chat_copy_to_clipboard_button")  # tag
-                copy_chat_tooltip_text = dpg.add_text("Copy full conversation to clipboard", parent=copy_chat_tooltip)
+                copy_chat_tooltip_text = dpg.add_text("Copy this conversation to clipboard\n    no modifier: as-is\n    with Shift: include message node IDs", parent=copy_chat_tooltip)
 
                 n_below_chat_buttons = 3
                 avatar_panel_left = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8)

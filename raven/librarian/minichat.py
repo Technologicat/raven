@@ -539,7 +539,7 @@ def minimal_chat_client(backend_url):
                 print()  # print the final newline
 
                 # Clean up the LLM's reply (heuristically). This version goes into the chat history.
-                out.data["content"] = chatutil.scrub(llm_settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=True)
+                out.data["content"] = chatutil.scrub(llm_settings, out.data["content"], thoughts_mode="discard", markup="ansi", add_ai_role_name=True)
 
                 # Show LLM performance statistics
                 print(colorizer.colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))

@@ -3,7 +3,7 @@
 __all__ = ["format_message_number",
            "format_persona",
            "format_message_heading",
-           "format_chat_datetime_now",
+           "format_chat_datetime_now", "format_chatlog_datetime_now",
            "format_reminder_to_focus_on_latest_input",
            "format_reminder_to_use_information_from_context_only",
            "scrub"]
@@ -113,6 +113,14 @@ def format_chat_datetime_now() -> str:
     isotime = now.time().replace(microsecond=0).isoformat()
     return f"[System information: Today is {weekday}, {date} (in ISO format). The local time now is {isotime}.]"
 
+def format_chatlog_datetime_now() -> str:
+    """Return the current date, weekday, and local time in a human-readable format."""
+    now = datetime.datetime.now()
+    weekday = _weekdays[now.weekday()]
+    date = now.date().isoformat()
+    isotime = now.time().replace(microsecond=0).isoformat()
+    return f"{weekday} {date} {isotime}"
+
 def format_reminder_to_focus_on_latest_input() -> str:
     """Return the text content of a system message that reminds the LLM to focus on the user's latest input.
 
@@ -165,6 +173,7 @@ def remove_role_name_from_start_of_line(llm_settings: env,
 def scrub(llm_settings: env,
           text: str,
           thoughts_mode: str,
+          markup: Optional[str],
           add_ai_role_name: bool) -> str:
     """Heuristically clean up the text content of an LLM-generated message.
 
@@ -172,13 +181,22 @@ def scrub(llm_settings: env,
 
     `text`: The text content of the message to scrub.
 
-    `thoughts_mode`: one of "discard", "colorize". or "keep". What to do with thought blocks,
+    `thoughts_mode`: one of "discard", "markup". or "keep". What to do with thought blocks,
                      for thinking models.
+
+    `markup`: used when `thoughts_mode='markup'`. Which markup kind to use, or `None` for no markup. One of:
+        "ansi": ANSI terminal color codes
+        "markdown": Markdown markup, with HTML tags for colors.
+        `None` (the special value): no markup. (Same effect as setting `thoughts_mode='keep'`.)
 
     `add_ai_role_name`: Whether to format the final text as "AI: blah blah" or just "blah blah".
 
     Returns the scrubbed text content.
     """
+    _yell_if_unsupported_markup(markup)
+
+    if thoughts_mode not in ("discard", "markup", "keep"):
+        raise ValueError("scrub: Unknown thoughts_mode '{thoughts_mode}'; valid values: 'discard', 'markup', 'keep'.")
 
     # First remove any mentions of the AI persona's name at the start of any line in the text.
     # The model might generate this anywhere - before the thought block, or after the thought block.
@@ -187,12 +205,16 @@ def scrub(llm_settings: env,
     #
     # This is important for consistency, since many models randomly sometimes add the persona name, and sometimes don't.
     #
-    text = remove_role_name_from_start_of_line(llm_settings=llm_settings, role="assistant", text=text)
+    text = remove_role_name_from_start_of_line(llm_settings=llm_settings,
+                                               role="assistant",
+                                               text=text)
 
     # Fix the most common kinds of broken thought blocks (for thinking models)
     text = re.sub(_doubled_think_tag, r"\1\2\3", text)  # <think><think>...
     text = re.sub(_nan_thought_block, r"", text)  # <think>NaN</think>
 
+    # September 2025 update: This seems to work with Qwen 3 2507, too.
+    #
     # QwQ-32B: the model was trained not to emit the opening <think> tag, but to begin thinking right away. Still, it sometimes inserts that tag, but not always.
     #
     # Also sometimes, the model skips thinking and starts writing the final answer immediately (although it shouldn't do that). There's no way to detect this case
@@ -216,7 +238,7 @@ def scrub(llm_settings: env,
     if thoughts_mode == "discard":  # for cases where we're not going to read them anyway (e.g. when we pipe the output to a script that only needs the final answer)
         text = re.sub(_complete_thought_block, r"", text)
         text = re.sub(_incomplete_thought_block, r"", text)
-    elif thoughts_mode == "colorize":  # For cases where we want to see the thought blocks. Colorize them. (TODO: Maybe make some kind of data structure instead.)
+    elif thoughts_mode == "markup":  # For cases where we want to see the thought blocks. Colorize them. (TODO: Maybe make some kind of data structure instead.)
         # Colorize thought blocks (thinking models)
         #
         # TODO: This colorizes for text terminals for now; support also HTML colorization. Something like:
@@ -224,13 +246,22 @@ def scrub(llm_settings: env,
         # r"<hr><font color="#8080ff"><details name="thought"><summary><i>Thought</i></summary><font color="#a0a0a0">$4</font></details></font><hr>"  -- complete thought
         # r"<hr><font color="#8080ff"><i>Thinking...</i><br><font color="#a0a0a0">$4<br></font><i>Thinking...</i></font><hr>"  -- incomplete thought
         #
-        blue_thought = colorizer.colorize("Thought", colorizer.Fore.BLUE)
-        def _colorize(match_obj):
-            s = match_obj.group(4)
-            s = colorizer.colorize(s, colorizer.Style.DIM)
-            return f"⊳⊳⊳{blue_thought}⊳⊳⊳\n{s}⊲⊲⊲{blue_thought}⊲⊲⊲\n"
-        text = re.sub(_complete_thought_block, _colorize, text)
-        text = re.sub(_incomplete_thought_block, _colorize, text)
+        if markup == "ansi":
+            blue_thought = colorizer.colorize("Thought", colorizer.Fore.BLUE)
+            def _colorize(match_obj):
+                s = match_obj.group(4)
+                s = colorizer.colorize(s, colorizer.Style.DIM)
+                return f"⊳⊳⊳{blue_thought}⊳⊳⊳\n{s}⊲⊲⊲{blue_thought}⊲⊲⊲\n"
+        elif markup == "markdown":
+            blue_thought = '<font color="#808080ff">Thought</font>'
+            def _colorize(match_obj):
+                s = match_obj.group(4)
+                s = f'<font color="#a0a0a0">{s}</font>'
+                return f"⊳⊳⊳{blue_thought}⊳⊳⊳\n-----\n{s}\n-----\n⊲⊲⊲{blue_thought}⊲⊲⊲\n"
+
+        if markup is not None:  # one of the supported markup types was picked?
+            text = re.sub(_complete_thought_block, _colorize, text)
+            text = re.sub(_incomplete_thought_block, _colorize, text)
     # else do nothing, i.e. keep thought blocks as-is.
 
     # Remove whitespace surrounding the whole text content. (Do this last.)
