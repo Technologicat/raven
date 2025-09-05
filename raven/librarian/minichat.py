@@ -258,8 +258,12 @@ def minimal_chat_client(backend_url):
             print()
 
         def chat_print_message(message_number: Optional[int], role: str, text: str) -> None:
-            print(chatutil.format_message_heading(message_number, role, markup="ansi"), end="")
-            print(llmclient.remove_role_name_from_start_of_line(settings=settings, role=role, text=text))
+            print(chatutil.format_message_heading(llm_settings=settings,
+                                                  message_number=message_number,
+                                                  role=role,
+                                                  markup="ansi"),
+                  end="")
+            print(chatutil.remove_role_name_from_start_of_line(settings=settings, role=role, text=text))
 
         def chat_print_history(history: List[Dict], show_numbers: bool = True) -> None:
             if show_numbers:
@@ -286,7 +290,10 @@ def minimal_chat_client(backend_url):
             #
             # This avoids the input prompt getting overwritten when browsing history entries, and prevents backspacing over the input prompt.
             # https://stackoverflow.com/questions/75987688/how-can-readline-be-told-not-to-erase-externally-supplied-prompt
-            input_prompt = chatutil.format_message_heading(user_message_number, role="user", markup="ansi")
+            input_prompt = chatutil.format_message_heading(llm_settings=settings,
+                                                           message_number=user_message_number,
+                                                           role="user",
+                                                           markup="ansi")
             user_message_text = input(input_prompt)
             print()
 
@@ -429,8 +436,8 @@ def minimal_chat_client(backend_url):
 
         # Perform the temporary injects. These are not meant to be persistent, so we don't even add them
         # as nodes to the chat tree, but only into the temporary linearized history.
-        injectors = [llmclient.format_chat_datetime_now,  # let the LLM know the current local time and date
-                     llmclient.format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
+        injectors = [chatutil.format_chat_datetime_now,  # let the LLM know the current local time and date
+                     chatutil.format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
         def perform_injects(history: List[Dict], docs_matches: List[Dict]) -> None:
             # # This causes Qwen3 to miss the user's last message. Maybe better to put the RAG results at another position.
             # #
@@ -475,7 +482,7 @@ def minimal_chat_client(backend_url):
             if app_state["docs_enabled"] and not app_state["speculate_enabled"]:
                 message_to_inject = llmclient.create_chat_message(settings=settings,
                                                                   role="system",
-                                                                  text=llmclient.format_reminder_to_use_information_from_context_only())
+                                                                  text=chatutil.format_reminder_to_use_information_from_context_only())
                 history.append(message_to_inject)
 
             # # DEBUG - show history with injects.
@@ -532,7 +539,7 @@ def minimal_chat_client(backend_url):
                 print()  # print the final newline
 
                 # Clean up the LLM's reply (heuristically). This version goes into the chat history.
-                out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=True)
+                out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=True)
 
                 # Show LLM performance statistics
                 print(colorizer.colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))

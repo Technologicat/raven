@@ -44,6 +44,7 @@ from unpythonic.env import env
 from ..common import utils as common_utils
 
 from ..librarian import chattree
+from ..librarian import chatutil
 from ..librarian import config as librarian_config
 from ..librarian import llmclient
 
@@ -334,7 +335,7 @@ def setup_prompts(settings: env) -> env:
         #                                             parent_id=root_node_id)
         #     history = llmclient.linearize_chat(datastore, request_node_id)
         #     out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="*"))
-        #     out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+        #     out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
         #     has_author_list = out.data["content"][-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
         #     has_author_list = has_author_list.translate(str.maketrans('', '', string.punctuation))  # Strip punctuation, in case of spurious formatting.
         #     answers[has_author_list] += 1
@@ -362,7 +363,7 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = llmclient.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="A"))
-        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+        out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        extracted : {out.data}")
 
@@ -378,7 +379,7 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = llmclient.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="a"))
-        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+        out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        LLM pass 1: {out.data}")
 
@@ -388,7 +389,7 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = llmclient.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
-        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+        out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        LLM pass 2: {out.data}")
 
@@ -537,7 +538,7 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = llmclient.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="T"))
-        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+        out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        original : {out.data}")
 
@@ -597,7 +598,7 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = llmclient.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="K"))
-        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+        out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         logger.debug(f"\n        original : {out.data}")
 
@@ -669,7 +670,7 @@ def setup_prompts(settings: env) -> env:
                                                 parent_id=root_node_id)
         history = llmclient.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
-        out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+        out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
 
         abstract = out.data["content"].strip()
 
@@ -782,7 +783,7 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                                                                     parent_id=root_node_id)
                             history = llmclient.linearize_chat(datastore, request_node_id)
                             out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph=progress_symbol))
-                            out.data["content"] = llmclient.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
+                            out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", add_ai_role_name=False)
                             bibtex_entry.write(f"    {field_key} = {{{out.data['content']}}},\n")
                         elif data_kind == "function":
                             function_output = data(uid, text_from_pdf)

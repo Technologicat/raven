@@ -187,9 +187,9 @@ def format_chat_message_for_clipboard(llm_settings: env,
                                                       message_number=message_number,
                                                       role=message_role,
                                                       markup="markdown")
-    message_text = llmclient.remove_role_name_from_start_of_line(settings=llmclient_settings,
-                                                                 role=message_role,
-                                                                 text=message_text)
+    message_text = chatutil.remove_role_name_from_start_of_line(settings=llmclient_settings,
+                                                                role=message_role,
+                                                                text=message_text)
     return f"{message_heading}{message_text}"
 
 def make_message_buttons(uuid: str,
@@ -343,9 +343,9 @@ class DisplayedChatMessage:
         message = node_payload["message"]
         message_role = message["role"]
         message_text = message["content"]
-        message_text = llmclient.remove_role_name_from_start_of_line(settings=llmclient_settings,
-                                                                     role=message_role,
-                                                                     text=message_text)
+        message_text = chatutil.remove_role_name_from_start_of_line(settings=llmclient_settings,
+                                                                    role=message_role,
+                                                                    text=message_text)
         gui_role_icons = {"assistant": "icon_ai_texture",
                           "user": "icon_user_texture",
                           }
