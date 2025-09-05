@@ -69,6 +69,7 @@
       - See how Raven-visualizer successfully updates its scroll position after info panel update (the MD renderer doesn't say when the output is ready, so wait how long before setting the scroll position?)
     - Add feature: HTML coloring mode for thought blocks, for use with MD renderer
       - Store the thought blocks in the chat datastore, too
+    - Add feature: timestamped chat messages
   - Later:
     - Avatar: add cel effect for internet access / tool use (data eyes)
     - Avatar on/off toggle (for low VRAM)
