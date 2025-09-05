@@ -47,6 +47,7 @@
         - Make per-character AI chat icons
       - Make chat icons for system, tool roles
       - Finish the new app icon for Raven (small and large sizes)
+    - Add feature: Switch chat (from all leaf nodes in datastore)
     - Add feature: User text entry
       - Submit user input to LLM
       - Live preview of LLM output
@@ -74,6 +75,7 @@
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: collapsible thought blocks
     - Add feature: message editing (use chattree's revision system)
+    - Add feature: search for chats (incremental fragment search for now)
     - Improve text entry: multiline input
     - Add hotkeys
       - Separate hotkey mode while `chat_field` is focused
