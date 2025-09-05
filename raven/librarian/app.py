@@ -182,6 +182,15 @@ def make_ai_message_buttons(uuid: str,
     # dpg.add_spacer(tag=f"ai_message_buttons_spacer_{uuid}",
     #                parent=g)
 
+    dpg.add_button(label=fa.ICON_COPY,
+                   callback=lambda: None,  # TODO
+                   width=gui_config.toolbutton_w,
+                   tag=f"message_copy_to_clipboard_button_{uuid}",
+                   parent=g)
+    dpg.bind_item_font(f"message_copy_to_clipboard_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+    copy_message_tooltip = dpg.add_tooltip(f"message_copy_to_clipboard_button_{uuid}")  # tag
+    dpg.add_text("Copy message to clipboard", parent=copy_message_tooltip)
+
     dpg.add_button(label=fa.ICON_RECYCLE,
                    callback=lambda: None,  # TODO
                    enabled=False,
@@ -206,7 +215,7 @@ def make_ai_message_buttons(uuid: str,
 
     dpg.add_button(label=fa.ICON_TRASH_CAN,
                    callback=lambda: None,  # TODO
-                   enabled=False,
+                   enabled=(message_node_id != app_state["new_chat_HEAD"]),  # disallow deleting the AI's initial greeting
                    width=gui_config.toolbutton_w,
                    tag=f"chat_delete_branch_button_{uuid}",
                    parent=g)
@@ -256,15 +265,6 @@ def make_ai_message_buttons(uuid: str,
     nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
     dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
 
-    dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
-                   callback=lambda: None,  # TODO
-                   width=gui_config.toolbutton_w,
-                   tag=f"chat_open_graph_button_{uuid}",
-                   parent=g)
-    dpg.bind_item_font(f"chat_open_graph_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    nextbranch_tooltip = dpg.add_tooltip(f"chat_open_graph_button_{uuid}")  # tag
-    dpg.add_text("Open graph view", parent=nextbranch_tooltip)
-
     if siblings is not None:
         dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
 
@@ -276,6 +276,15 @@ def make_user_message_buttons(uuid: str,
     # dpg.add_spacer(width=800 - 5 * (gui_config.toolbutton_w + 8),  # 8 = DPG outer margin
     #                tag=f"user_message_buttons_spacer_{uuid}",
     #                parent=g)
+
+    dpg.add_button(label=fa.ICON_COPY,
+                   callback=lambda: None,  # TODO
+                   width=gui_config.toolbutton_w,
+                   tag=f"message_copy_to_clipboard_button_{uuid}",
+                   parent=g)
+    dpg.bind_item_font(f"message_copy_to_clipboard_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
+    copy_message_tooltip = dpg.add_tooltip(f"message_copy_to_clipboard_button_{uuid}")  # tag
+    dpg.add_text("Copy message to clipboard", parent=copy_message_tooltip)
 
     dpg.add_button(label=fa.ICON_PENCIL,
                    callback=lambda: None,  # TODO
@@ -345,15 +354,6 @@ def make_user_message_buttons(uuid: str,
     dpg.bind_item_theme(f"chat_nextbranch_button_{uuid}", "disablable_button_theme")  # tag
     nextbranch_tooltip = dpg.add_tooltip(f"chat_nextbranch_button_{uuid}")  # tag
     dpg.add_text("Switch to next sibling", parent=nextbranch_tooltip)
-
-    dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
-                   callback=lambda: None,  # TODO
-                   width=gui_config.toolbutton_w,
-                   tag=f"chat_open_graph_button_{uuid}",
-                   parent=g)
-    dpg.bind_item_font(f"chat_open_graph_button_{uuid}", themes_and_fonts.icon_font_solid)  # tag
-    nextbranch_tooltip = dpg.add_tooltip(f"chat_open_graph_button_{uuid}")  # tag
-    dpg.add_text("Open graph view", parent=nextbranch_tooltip)
 
     if siblings is not None:
         dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
@@ -455,7 +455,8 @@ class DisplayedChatMessage:
         buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
-        dpg.add_spacer(width=gui_config.chat_text_w - 6 * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 32 = some space for sibling counter
+        n_message_buttons = 6
+        dpg.add_spacer(width=gui_config.chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 32 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
         if message_role == "user":
@@ -593,20 +594,12 @@ with timer() as tim:
     with dpg.window(show=True, modal=False, no_title_bar=False, tag="summarizer_window",
                     label="Raven-librarian main window",
                     no_scrollbar=True, autosize=True) as main_window:  # DPG "window" inside the app OS window ("viewport"), container for the whole GUI
-        with dpg.child_window(tag="chat_ai_warning",
-                              height=gui_config.ai_warning_h,
-                              no_scrollbar=True,
-                              no_scroll_with_mouse=True):
-            with dpg.group(horizontal=True):
-                dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
-                dpg.add_text("Response quality and factual accuracy depend on the connected AI. Always verify important facts independently.", color=(255, 180, 120), tag="ai_warning_text")  # orange
-            dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag
-
         with dpg.group(horizontal=True):
             with dpg.group():
+                chat_panel_h = gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8
                 with dpg.child_window(tag="chat_panel",
                                       width=(gui_config.chat_panel_w + 16),  # 16 = round border (8 on each side)
-                                      height=gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8):
+                                      height=chat_panel_h):
                     # dummy chat item for testing  # TODO: make a class for this
                     with dpg.group(tag="chat_group"):
                         initial_message_container_height = 2 * gui_config.margin + gui_config.chat_icon_size
@@ -692,7 +685,7 @@ with timer() as tim:
 
             with dpg.child_window(tag="avatar_panel",
                                   width=-1,
-                                  height=-1,
+                                  height=chat_panel_h,
                                   no_scrollbar=True,
                                   no_scroll_with_mouse=True):
                 # We all love magic numbers!
@@ -712,6 +705,59 @@ with timer() as tim:
                 source_image_size = 512  # THA3 engine
                 upscale = 1.5
                 dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * source_image_size))
+
+        with dpg.child_window(tag="chat_ai_warning",
+                              height=gui_config.ai_warning_h,
+                              no_scrollbar=True,
+                              no_scroll_with_mouse=True):
+            with dpg.group(horizontal=True):
+                def start_new_chat():
+                    build_linearized_chat(head_node_id=app_state["new_chat_HEAD"])
+                    # TODO: update app_state["HEAD"] to point to the new_chat_HEAD after we can actually chat with LLM
+                def copy_chatlog_to_clipboard():
+                    # dpg.set_clipboard_text(...)  # TODO
+
+                    # Acknowledge the action in the GUI.
+                    gui_animation.animator.add(gui_animation.ButtonFlash(message="Copied to clipboard!",
+                                                                         target_button=copy_chat_button,
+                                                                         target_tooltip=copy_chat_tooltip,
+                                                                         target_text=copy_chat_tooltip_text,
+                                                                         original_theme=themes_and_fonts.global_theme,
+                                                                         duration=gui_config.acknowledgment_duration))
+
+                dpg.add_button(label=fa.ICON_FILE,
+                               callback=start_new_chat,
+                               width=gui_config.toolbutton_w,
+                               tag="chat_new_button")
+                dpg.bind_item_font("chat_new_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_theme("chat_new_button", "disablable_button_theme")  # tag
+                reroll_tooltip = dpg.add_tooltip("chat_new_button")  # tag
+                dpg.add_text("Start new chat", parent=reroll_tooltip)
+
+                dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
+                               callback=lambda: None,  # TODO
+                               width=gui_config.toolbutton_w,
+                               tag="chat_open_graph_button")
+                dpg.bind_item_font("chat_open_graph_button", themes_and_fonts.icon_font_solid)  # tag
+                open_graph_tooltip = dpg.add_tooltip("chat_open_graph_button")  # tag
+                dpg.add_text("Open graph view", parent=open_graph_tooltip)
+
+                copy_chat_button = dpg.add_button(label=fa.ICON_COPY,
+                                                  callback=copy_chatlog_to_clipboard,
+                                                  width=gui_config.toolbutton_w,
+                                                  tag="chat_copy_to_clipboard_button")
+                dpg.bind_item_font("chat_copy_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
+                copy_chat_tooltip = dpg.add_tooltip("chat_copy_to_clipboard_button")  # tag
+                copy_chat_tooltip_text = dpg.add_text("Copy full conversation to clipboard", parent=copy_chat_tooltip)
+
+                n_below_chat_buttons = 3
+                avatar_panel_left = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8)
+                dpg.add_spacer(width=avatar_panel_left + 60)
+
+                with dpg.group(horizontal=True):
+                    dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
+                    dpg.add_text("Response quality and factual accuracy depend on the connected AI. Always verify important facts independently.", color=(255, 180, 120), tag="ai_warning_text")  # orange
+                dpg.bind_item_font("ai_warning_icon", themes_and_fonts.icon_font_solid)  # tag
 
 # --------------------------------------------------------------------------------
 # Animations, live updates
