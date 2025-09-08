@@ -195,10 +195,10 @@ def ai_turn(llm_settings: env,
     else:
         docs_matches = []
 
-    message_history = chatutil.linearize_chat(datastore=datastore,
-                                              node_id=head_node_id)
-
     while True:
+        message_history = chatutil.linearize_chat(datastore=datastore,
+                                                  node_id=head_node_id)
+
         # Prepare the final LLM prompt, by including the temporary injects.
         _perform_injects(llm_settings=llm_settings,
                          history=message_history,
