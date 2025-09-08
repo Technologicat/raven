@@ -183,6 +183,29 @@ def format_chat_message_for_clipboard(llm_settings: env,
                                       message_number: Optional[int],
                                       message_role: str,
                                       message_text: str) -> str:
+    """Format a chat message for copying to clipboard, by adding a metadata header as Markdown.
+
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+
+    `message_number`: The sequential number of the message in the current linearized view.
+                      If `None`, the number part in the formatted output is omitted.
+
+    `message_role`: One of the roles supported by `raven.librarian.llmclient`.
+                    Typically, one of "assistant", "system", "tool", or "user".
+
+    `message_text`: The text content of the chat message to format.
+                    The content is pasted into the output as-is.
+
+    Returns the formatted message.
+
+    Example::
+
+        Lorem ipsum.
+
+    becomes:
+
+        *[#42]* **Aria**: Lorem ipsum.
+    """
     message_heading = chatutil.format_message_heading(llm_settings=llmclient_settings,
                                                       message_number=message_number,
                                                       role=message_role,
@@ -197,6 +220,22 @@ def make_message_buttons(uuid: str,
                          message_text: str,
                          role: str,
                          gui_parent: Union[int, str]) -> None:
+    """Build the set of control buttons for a single chat message in the GUI.
+
+    `uuid`: The GUI UUID of the `DisplayedChatMessage` (which see) creating the buttons.
+
+    `message_node_id`: The ID of the chat node, in the datastore, from which to extract the data to show.
+
+    `message_text`: The text content of the chat message to format.
+                    Used by the copy to clipboard functionality.
+
+    `message_role`: One of the roles supported by `raven.librarian.llmclient`.
+                    Typically, one of "assistant", "system", "tool", or "user".
+
+                    This determines which buttons are added (e.g. only AI messages have a "regenerate" button).
+
+    `gui_parent`: DPG tag or ID of the GUI widget (typically a group) to add the buttons to.
+    """
     g = dpg.add_group(horizontal=True, tag=f"{role}_message_buttons_group_{uuid}", parent=gui_parent)
 
     # dpg.add_text("[0 t, 0 s, ∞ t/s]", color=(180, 180, 180), tag=f"performance_stats_text_ai_{uuid}", parent=g)  # TODO: add the performance stats
@@ -334,6 +373,11 @@ class DisplayedChatMessage:
     def __init__(self,
                  gui_parent: Union[int, str],
                  node_id: str):
+        """A chat message displayed in the linearized chat view, linked to a node ID in the datastore.
+
+        `gui_parent`: DPG tag or ID of the GUI widget (typically child window or group) to add the chat message to.
+        `node_id`: The ID of the chat node, in the datastore, from which to extract the data to show.
+        """
         self.gui_parent = gui_parent  # GUI container to render in (DPG ID or tag)
         self.node_id = node_id  # reference to the chat node (ORIGINAL, not a copy)
         self.gui_uuid = str(uuid.uuid4())  # used in GUI widget tags
@@ -487,6 +531,7 @@ class DisplayedChatMessage:
         #                            type(self).run_callbacks)
 
 def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
+    global current_chat_history  # to document intent only; we write to this, but we don't replace it.
     if head_node_id is None:  # use current HEAD from app_state?
         head_node_id = app_state["HEAD"]
     node_id_history = datastore.linearize_up(head_node_id)
