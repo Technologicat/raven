@@ -18,7 +18,7 @@ from typing import Dict, Union
 from unpythonic.env import env
 
 from . import chattree
-from . import llmclient
+from . import chatutil
 
 # --------------------------------------------------------------------------------
 # Helper functions
@@ -31,7 +31,7 @@ def _reset_datastore_and_update_state(settings: env,
     Its fresh 'new_chat_HEAD' will be written to `state`, and the 'HEAD' of `state` will be set to the 'new_chat_HEAD'.
     """
     # Factory-reset first. This creates the first two nodes (system prompt with character card, and the AI's initial greeting).
-    state["new_chat_HEAD"] = llmclient.factory_reset_chat_datastore(datastore, settings)
+    state["new_chat_HEAD"] = chatutil.factory_reset_datastore(datastore, settings)
     state["HEAD"] = state["new_chat_HEAD"]  # current last node in chat; like HEAD pointer in git
 
 def _scan_for_new_chat_head(datastore: chattree.Forest) -> str:
@@ -57,12 +57,12 @@ def _scan_for_new_chat_head(datastore: chattree.Forest) -> str:
 # --------------------------------------------------------------------------------
 # API
 
-def load(settings: env,
+def load(llm_settings: env,
          datastore_file: Union[str, pathlib.Path],
          state_file: Union[str, pathlib.Path]) -> Dict:
     """Load chat app state.
 
-    `settings`: LLM client settings; this is the return value of `llmclient.setup`.
+    `llm_settings`: LLM client settings; this is the return value of `llmclient.setup`.
 
     `datastore_file`: Path to the JSON file to load the persistent chat forest from.
                       Will be auto-persisted to the same path at app exit.
@@ -121,7 +121,7 @@ def load(settings: env,
         logger.info(f"load: Loaded chat datastore from '{orig_datastore_file}' (resolved to '{datastore_file}'). Found {len(datastore.nodes)} chat nodes in datastore.")
     else:
         logger.info("load: No chat nodes in datastore at '{orig_datastore_file}' (resolved to '{datastore_file}'). Creating new datastore, will be saved at app exit.")
-        _reset_datastore_and_update_state(settings, datastore, state)
+        _reset_datastore_and_update_state(llm_settings, datastore, state)
 
     # Set any missing app state to defaults
     #
@@ -149,12 +149,12 @@ def load(settings: env,
     state["system_prompt_node_id"] = system_prompt_node_id  # remember it, the GUI chat client needs it
     old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
     datastore.add_revision(node_id=system_prompt_node_id,
-                           payload={"message": llmclient.create_initial_system_message(settings)})
+                           payload={"message": chatutil.create_initial_system_message(llm_settings)})
     datastore.delete_revision(node_id=system_prompt_node_id,
                               revision_id=old_system_prompt_revision_id)
 
     # Migrate datastore (this updates only if needed)
-    llmclient.upgrade(datastore, system_prompt_node_id)  # v0.2.3+: data format change
+    chatutil.upgrade_datastore(datastore, system_prompt_node_id)  # v0.2.3+: data format change
 
     # Set up auto-persist for app state
     atexit.register(functools.partial(save,

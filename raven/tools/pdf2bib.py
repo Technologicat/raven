@@ -318,7 +318,7 @@ def setup_prompts(settings: env) -> env:
 
         **ORIGINAL INPUT, please analyze this**
         """)
-        root_node_id = llmclient.factory_reset_chat_datastore(datastore, settings)
+        root_node_id = chatutil.factory_reset_datastore(datastore, settings)
 
         # # Sanity-check for presence of author list, for logging a warning if the LLM thinks the author list is missing.
         # # This doesn't work well with an 8B model, even with majority voting ( see Wang et al., 2023 https://arxiv.org/abs/2203.11171 ).
@@ -329,11 +329,11 @@ def setup_prompts(settings: env) -> env:
         # answers = collections.Counter()
         # for _ in range(3):
         #     print(_ + 1, end="", file=sys.stderr)
-        #     request_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings,
+        #     request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
         #                                                                                               role="user",
         #                                                                                               text=f"{prompt_check_authorlist}\n\n{text}")},
         #                                             parent_id=root_node_id)
-        #     history = llmclient.linearize_chat(datastore, request_node_id)
+        #     history = chatutil.linearize_chat(datastore, request_node_id)
         #     out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="*"))
         #     out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", markup=None, add_ai_role_name=False)
         #     has_author_list = out.data["content"][-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
@@ -357,11 +357,11 @@ def setup_prompts(settings: env) -> env:
         #     else:
         #         logger.info(f"Input file '{uid}': LLM returned unknown author list detection result '{has_author_list}', should be 'YES' or 'NO'; manual check recommended.")
 
-        request_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings,
+        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
                                                                                                   role="user",
                                                                                                   text=f"{prompt_get_authors}\n-----\n\n{text}")},
                                                 parent_id=root_node_id)
-        history = llmclient.linearize_chat(datastore, request_node_id)
+        history = chatutil.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="A"))
         out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", markup=None, add_ai_role_name=False)
 
@@ -373,21 +373,21 @@ def setup_prompts(settings: env) -> env:
         #   - The list may use commas instead of the word "and"
         # so we perform some post-processing.
 
-        request_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings,
+        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
                                                                                                   role="user",
                                                                                                   text=prompt_drop_author_affiliations.format(author_names=out.data["content"]))},
                                                 parent_id=root_node_id)
-        history = llmclient.linearize_chat(datastore, request_node_id)
+        history = chatutil.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="a"))
         out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", markup=None, add_ai_role_name=False)
 
         logger.debug(f"\n        LLM pass 1: {out.data}")
 
-        request_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings,
+        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
                                                                                                   role="user",
                                                                                                   text=prompt_reformat_author_separators.format(author_names=out.data["content"]))},
                                                 parent_id=root_node_id)
-        history = llmclient.linearize_chat(datastore, request_node_id)
+        history = chatutil.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
         out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", markup=None, add_ai_role_name=False)
 
@@ -531,12 +531,12 @@ def setup_prompts(settings: env) -> env:
         """
         text = strip_postamble(text)
 
-        root_node_id = llmclient.factory_reset_chat_datastore(datastore, settings)
-        request_node_id = datastore.create_node(payload={llmclient.create_chat_message(settings,
+        root_node_id = chatutil.factory_reset_datastore(datastore, settings)
+        request_node_id = datastore.create_node(payload={chatutil.create_chat_message(settings,
                                                                                        role="user",
                                                                                        text=f"{prompt_get_title}\n-----\n\n{text}")},
                                                 parent_id=root_node_id)
-        history = llmclient.linearize_chat(datastore, request_node_id)
+        history = chatutil.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="T"))
         out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", markup=None, add_ai_role_name=False)
 
@@ -591,12 +591,12 @@ def setup_prompts(settings: env) -> env:
             logger.warning(f"Input file '{uid}': No keywords provided in original input, skipping keyword extraction.")
             return None  # No keywords provided
 
-        root_node_id = llmclient.factory_reset_chat_datastore(datastore, settings)
-        request_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings,
+        root_node_id = chatutil.factory_reset_datastore(datastore, settings)
+        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
                                                                                                   role="user",
                                                                                                   text=f"{prompt_get_keywords}\n-----\n\n{text}")},
                                                 parent_id=root_node_id)
-        history = llmclient.linearize_chat(datastore, request_node_id)
+        history = chatutil.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="K"))
         out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", markup=None, add_ai_role_name=False)
 
@@ -663,12 +663,12 @@ def setup_prompts(settings: env) -> env:
         """
         text = strip_postamble(text)
 
-        root_node_id = llmclient.factory_reset_chat_datastore(datastore, settings)
-        request_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings,
+        root_node_id = chatutil.factory_reset_datastore(datastore, settings)
+        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
                                                                                                   role="user",
                                                                                                   text=f"{prompt_get_abstract}\n-----\n\n{text}")},
                                                 parent_id=root_node_id)
-        history = llmclient.linearize_chat(datastore, request_node_id)
+        history = chatutil.linearize_chat(datastore, request_node_id)
         out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."))
         out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", markup=None, add_ai_role_name=False)
 
@@ -776,12 +776,12 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                         elif data_kind == "prompt":
                             # To keep things simple, we use a single-turn conversation for querying the LLM.
                             # Note this typically causes a full prompt rescan for every query.
-                            root_node_id = llmclient.factory_reset_chat_datastore(datastore, settings)
-                            request_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings,
+                            root_node_id = chatutil.factory_reset_datastore(datastore, settings)
+                            request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
                                                                                                                       role="user",
                                                                                                                       text=f"{data}\n-----\n\n{text_from_pdf}")},
                                                                     parent_id=root_node_id)
-                            history = llmclient.linearize_chat(datastore, request_node_id)
+                            history = chatutil.linearize_chat(datastore, request_node_id)
                             out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph=progress_symbol))
                             out.data["content"] = chatutil.scrub(settings, out.data["content"], thoughts_mode="discard", markup=None, add_ai_role_name=False)
                             bibtex_entry.write(f"    {field_key} = {{{out.data['content']}}},\n")

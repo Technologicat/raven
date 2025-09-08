@@ -41,6 +41,7 @@ with timer() as tim:
     from . import config as librarian_config
     from . import hybridir
     from . import llmclient
+    from . import scaffold
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 print()
 
@@ -275,11 +276,11 @@ def minimal_chat_client(backend_url):
                     chat_print_message(message_number=None, role=message["role"], text=message["content"])
                     print()
 
-        action_proceed = sym("proceed")  # proceed current round as normal
-        action_next_round = sym("next_round")  # skip to start of next round, e.g. after a special command
+        action_proceed = sym("proceed")  # proceed current round as usual
+        action_next_round = sym("next_round")  # skip to start of next round (after the user entered a special command)
 
         def user_turn() -> Values:
-            history = llmclient.linearize_chat(datastore, app_state["HEAD"])
+            history = chatutil.linearize_chat(datastore, app_state["HEAD"])
             user_message_number = len(history)
 
             # Print a user input prompt and get the user's input.
@@ -303,7 +304,7 @@ def minimal_chat_client(backend_url):
                 app_state["HEAD"] = app_state["new_chat_HEAD"]
                 print(f"HEAD is now at '{app_state['HEAD']}'.")
                 print()
-                chat_print_history(llmclient.linearize_chat(datastore, app_state["HEAD"]))
+                chat_print_history(chatutil.linearize_chat(datastore, app_state["HEAD"]))
                 return Values(action=action_next_round)
             elif user_message_text.startswith("!docs"):  # TODO: refactor
                 split_command_text = user_message_text.split()
@@ -349,7 +350,7 @@ def minimal_chat_client(backend_url):
                 app_state["HEAD"] = new_head_id
                 print(f"HEAD is now at '{app_state['HEAD']}'.")
                 print()
-                chat_print_history(llmclient.linearize_chat(datastore, app_state["HEAD"]))
+                chat_print_history(chatutil.linearize_chat(datastore, app_state["HEAD"]))
                 return Values(action=action_next_round)
             elif user_message_text == "!help":
                 chat_show_help()
@@ -396,211 +397,86 @@ def minimal_chat_client(backend_url):
             # Not a special command.
 
             # Add the user's message to the chat.
-            user_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=llm_settings,
-                                                                                                           role="user",
-                                                                                                           text=user_message_text)},
-                                                         parent_id=app_state["HEAD"])
-            app_state["HEAD"] = user_message_node_id
+            new_head_node_id = scaffold.user_turn(llm_settings=llm_settings,
+                                                  datastore=datastore,
+                                                  head_node_id=app_state["HEAD"],
+                                                  user_message_text=user_message_text)
+            app_state["HEAD"] = new_head_node_id
             return Values(action=action_proceed, text=user_message_text)
 
-        def rag_search_with_bypass(query: str) -> Values:
-            if not app_state["docs_enabled"]:
-                return Values(action=action_proceed, matches=[])
-
-            docs_results = retriever.query(query,
-                                           k=10,
-                                           return_extra_info=False)
-
-            # First line of defense (against hallucinations): docs on, no matches for given query, speculate off -> bypass LLM
-            if not docs_results and not app_state["speculate_enabled"]:
-                nomatch_text = "No matches in knowledge base. Please try another query."
-                nomatch_message_node_id = datastore.create_node(payload={"message": llmclient.create_chat_message(settings=llm_settings,
-                                                                                                                  role="assistant",
-                                                                                                                  text=nomatch_text)},
-                                                                parent_id=app_state["HEAD"])
-                nomatch_message_node_payload = datastore.get_payload(nomatch_message_node_id)
-                nomatch_message_node_payload["retrieval"] = {"query": query,
-                                                             "results": []}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
-                app_state["HEAD"] = nomatch_message_node_id
-
-                history = llmclient.linearize_chat(datastore, app_state["HEAD"])
-                nomatch_message_number = len(history)
-                chat_print_message(message_number=nomatch_message_number,
-                                   role="assistant",
-                                   text=nomatch_text)
-                print()
-
-                return Values(action=action_next_round)
-
-            return Values(action=action_proceed, matches=docs_results)
-
-        # Perform the temporary injects. These are not meant to be persistent, so we don't even add them
-        # as nodes to the chat tree, but only into the temporary linearized history.
-        injectors = [chatutil.format_chat_datetime_now,  # let the LLM know the current local time and date
-                     chatutil.format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
-        def perform_injects(history: List[Dict], docs_matches: List[Dict]) -> None:
-            # # This causes Qwen3 to miss the user's last message. Maybe better to put the RAG results at another position.
-            # #
-            # # Format RAG results like a tool-call reply to the user's message.
-            # # First, find the user's latest message in the linearized history.
-            # for depth, message in enumerate(reversed(history)):
-            #     if message["role"] == "user":
-            #         break
-            # else:  # no user message found (should not happen)
-            #     depth = None
-            #     message = None
-            #
-            # if message is not None:
-            #     position = len(history) - depth
-            #     for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
-            #         # TODO: Should the RAG match notification show the query string, too?
-            #         search_result_text = f"Knowledge-base match from '{docs_result['document_id']}':\n\n{docs_result['text'].strip()}\n-----"
-            #         message_to_inject = llmclient.create_chat_message(settings=settings,
-            #                                                           role="tool",
-            #                                                           text=search_result_text)
-            #         history.insert(position, message_to_inject)
-
-            # Insert RAG results at the start of the history, as system messages.
-            for docs_result in reversed(docs_matches):  # reverse to keep original order, because we insert each item at the same position.
-                # TODO: Should the RAG match notification show the query string, too?
-                search_result_text = f"[System information: Knowledge-base match from '{docs_result['document_id']}'.]\n\n{docs_result['text'].strip()}\n-----"
-                message_to_inject = llmclient.create_chat_message(settings=llm_settings,
-                                                                  role="system",
-                                                                  text=search_result_text)
-                history.insert(1, message_to_inject)  # after system prompt / character card combo
-
-            # Always-on injects, e.g. current local datetime
-            for thunk in injectors:
-                message_to_inject = llmclient.create_chat_message(settings=llm_settings,
-                                                                  role="system",
-                                                                  text=thunk())
-                history.append(message_to_inject)
-
-            # If docs on, speculate off (-> `perform_injects` gets called if there is at least one RAG match), remind the LLM to use information from context only.
-            #                           This increases the changes of the user's query working correctly when the search returns irrelevant results.
-            # If docs off, the whole point is to use the LLM's static knowledge, so in that case don't bother.
-            if app_state["docs_enabled"] and not app_state["speculate_enabled"]:
-                message_to_inject = llmclient.create_chat_message(settings=llm_settings,
-                                                                  role="system",
-                                                                  text=chatutil.format_reminder_to_use_information_from_context_only())
-                history.append(message_to_inject)
-
-            # # DEBUG - show history with injects.
-            # # Message numbers counted from the modified history (with injects) would be wrong, so don't show them.
-            # chat_print_history(history, show_numbers=False)
-
         def ai_turn(user_message_text: str) -> Values:
-            # Perform the RAG autosearch (if enabled; will check automatically).
-            # If docs is on, no match, and speculate is off -> bypass the LLM.
-            #
-            # NOTE: This is very rudimentary.
-            #   - We simply use the user's new message as-is as the query.
-            #   - Hence, this does NOT match on any earlier message, and may result in spurious matches.
-            #     E.g. "Can cats jump?" and "Does your knowledge base say if cats can jump?" return
-            #     different results, because the term "knowledge base" in the latter may match e.g.
-            #     AI/CS articles that the user happens to have included in the KB.
-            #     - In this example, with the example data, the shorter query correctly returns no matches.
-            #     - The longer query returns two AI agent abstracts, leaving it to the LLM to put the
-            #       pieces together and notice that the user's query and provided KB context don't actually match.
-            #   - This could be improved by querying the LLM itself - "given the chat history so far and
-            #     the user's most recent message, please formulate query terms for a knowledge base search."
-            #     and then run the search with the final output of that.
-            #   - We could also build a slightly more complex scaffold to support tool-calling,
-            #     and instruct the LLM to send a query when it itself thinks it needs to.
-            rag_query = user_message_text
-            rag_result = rag_search_with_bypass(query=rag_query)
-            if rag_result["action"] is action_next_round:  # bypass triggered
-                return Values(action=action_next_round)
+            # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality.)
+            docs_query = user_message_text if app_state["docs_enabled"] else None
 
-            # AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
-            while True:
-                history = llmclient.linearize_chat(datastore, app_state["HEAD"])  # latest history
-                ai_message_number = len(history)
+            history = chatutil.linearize_chat(datastore, app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
+            ai_message_number = len(history)
 
-                # Prepare the final LLM prompt, by including the temporary injects.
-                perform_injects(history, docs_matches=rag_result["matches"])
-
-                # Invoke the LLM.
+            def on_llm_start():  # Called just before the LLM starts writing. The LLM will start once at the beginning of the turn, and then once after each set of tool calls.
+                nonlocal ai_message_number  # for documenting intent only
                 print(chatutil.format_message_number(ai_message_number, markup="ansi"))
-                chars = 0
-                def progress_callback(n_chunks, chunk_text):  # any UI live-update code goes here, in the callback
-                    # TODO: think of a better way to split to lines
-                    nonlocal chars
-                    chars += len(chunk_text)
-                    if "\n" in chunk_text:  # one token at a time; should have either one linefeed or no linefeed
-                        chars = 0  # good enough?
-                    elif chars >= librarian_config.llm_line_wrap_width:
-                        print()
-                        chars = 0
-                    print(chunk_text, end="")
-                    sys.stdout.flush()
-                # `invoke` uses a linearized history, as expected by the LLM API.
-                out = llmclient.invoke(llm_settings, history, progress_callback)  # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
-                print()  # print the final newline
 
-                # Clean up the LLM's reply (heuristically). This version goes into the chat history.
-                out.data["content"] = chatutil.scrub(llm_settings, out.data["content"], thoughts_mode="discard", markup="ansi", add_ai_role_name=True)
+            chars = 0
+            def on_llm_progress(n_chunks, chunk_text):  # Called while streaming the response from the LLM, typically once per generated token.
+                nonlocal chars
+                chars += len(chunk_text)
+                if "\n" in chunk_text:  # one token at a time; should have either one linefeed or no linefeed
+                    chars = 0  # good enough?
+                elif chars >= librarian_config.llm_line_wrap_width:  # TODO: think of a better way to split to lines
+                    print()
+                    chars = 0
+                print(chunk_text, end="")
+                sys.stdout.flush()
+
+            def on_llm_done(node_id):  # Called after the LLM is done writing and the new chat node has been added to the chat datastore.
+                nonlocal ai_message_number
+
+                print()  # Print the final newline
 
                 # Show LLM performance statistics
-                print(colorizer.colorize(f"[{out.n_tokens}t, {out.dt:0.2f}s, {out.n_tokens/out.dt:0.2f}t/s]", colorizer.Style.DIM))
+                ai_message_node_payload = datastore.get_payload(node_id)
+                n_tokens = ai_message_node_payload["generation_metadata"]["n_tokens"]
+                dt = ai_message_node_payload["generation_metadata"]["dt"]
+                speed = n_tokens / dt
+                print(colorizer.colorize(f"[{n_tokens}t, {dt:0.2f}s, {speed:0.2f}t/s]", colorizer.Style.DIM))
                 print()
 
-                # Add the LLM's message to the chat.
-                #
-                # Note the token count of the message actually saved into the chat log may be different from `out.n_tokens`, e.g. if the AI is interrupted or when thoughts blocks are discarded.
-                # However, to correctly compute the generation speed, we need to use the original count before any editing, since `out.dt` was measured for that.
-                ai_message_node_id = datastore.create_node(payload={"message": out.data,
-                                                                    "generation_metadata": {"model": out.model,
-                                                                                            "n_tokens": out.n_tokens,  # could count final tokens with `llmclient.token_count(settings, out.data["content"])`
-                                                                                            "dt": out.dt}},
-                                                           parent_id=app_state["HEAD"])
-                ai_message_node_payload = datastore.get_payload(ai_message_node_id)
-                if app_state["docs_enabled"]:
-                    ai_message_node_payload["retrieval"] = {"query": rag_query,
-                                                            "results": rag_result["matches"]}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
-                app_state["HEAD"] = ai_message_node_id
+                ai_message_number += 1
 
-                # Handle tool calls requested by the LLM, if any.
-                #
-                # Call the tool(s) specified by the LLM, with arguments specified by the LLM, and add the result to the chat.
-                #
-                # Each response goes into its own message, with `role="tool"`.
-                #
-                tool_message_number = ai_message_number + 1
-                tool_response_records = llmclient.perform_tool_calls(llm_settings, message=out.data)
+            def on_docs_nomatch_done(node_id):  # Called instead of on_`llm_progress`/`on_llm_done` if the LLM was bypassed (no docs match, speculate off), after the new chat node has been added to the chat datastore.
+                nomatch_message_node_payload = datastore.get_payload(node_id)
+                chat_print_message(message_number=ai_message_number,
+                                   role="assistant",
+                                   text=nomatch_message_node_payload["message"]["content"])
+                print()
 
-                # When there are no more tool calls, the LLM is done replying.
-                # Each tool call produces exactly one response, so we may as well check this from the number of responses.
-                if not tool_response_records:
-                    break
+            def on_tool_done(node_id):  # Called *after* `on_llm_done`, once per tool call result, if there were tool calls, after the tool's response chat node has been added to the chat datastore.
+                nonlocal ai_message_number
 
-                # Add the tool response messages to the chat.
-                for tool_response_record in tool_response_records:
-                    payload = {"message": tool_response_record.data,
-                               "generation_metadata": {"status": tool_response_record.status}}  # status is "success" or "error"
-                    if "toolcall_id" in tool_response_record:
-                        payload["generation_metadata"]["toolcall_id"] = tool_response_record.toolcall_id
-                    if "dt" in tool_response_record:
-                        payload["generation_metadata"]["dt"] = tool_response_record.dt
-                    tool_response_message_node_id = datastore.create_node(payload=payload,
-                                                                          parent_id=app_state["HEAD"])
-                    app_state["HEAD"] = tool_response_message_node_id
+                nomatch_message_node_payload = datastore.get_payload(node_id)
+                chat_print_message(message_number=ai_message_number,
+                                   role="tool",
+                                   text=nomatch_message_node_payload["message"]["content"])
+                print()
 
-                    chat_print_message(message_number=tool_message_number,
-                                       role="tool",
-                                       text=tool_response_record.data["content"])
-                    print()
+                ai_message_number += 1
 
-                    tool_message_number += 1
-
-                # # DEBUG - show history after the tool calls, before the LLM starts writing again.
-                # history = llmclient.linearize_chat(datastore, state["HEAD"])
-                # chat_print_history(history, show_numbers=False)
-
+            new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
+                                                datastore=datastore,
+                                                retriever=retriever,
+                                                head_node_id=app_state["HEAD"],
+                                                docs_query=docs_query,
+                                                speculate=app_state["speculate_enabled"],
+                                                markup="ansi",
+                                                on_llm_start=on_llm_start,
+                                                on_llm_progress=on_llm_progress,
+                                                on_llm_done=on_llm_done,
+                                                on_docs_nomatch_done=on_docs_nomatch_done,
+                                                on_tool_done=on_tool_done)
+            app_state["HEAD"] = new_head_node_id
             return Values(action=action_proceed)
 
         # Show initial history (loaded from datastore, or blank upon first start)
-        chat_print_history(llmclient.linearize_chat(datastore, app_state["HEAD"]))
+        chat_print_history(chatutil.linearize_chat(datastore, app_state["HEAD"]))
 
         # Main loop
         while True:
