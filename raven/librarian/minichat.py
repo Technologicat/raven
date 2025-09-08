@@ -411,7 +411,7 @@ def minimal_chat_client(backend_url):
             history = chatutil.linearize_chat(datastore, app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
             ai_message_number = len(history)
 
-            def on_llm_start():  # Called just before the LLM starts writing. The LLM will start once at the beginning of the turn, and then once after each set of tool calls.
+            def on_llm_start():  # Called just before the LLM starts writing. The LLM will start once at the beginning of the AI's turn, and then once after each set of tool calls.
                 nonlocal ai_message_number  # for documenting intent only
                 print(chatutil.format_message_number(ai_message_number, markup="ansi"))
 
@@ -442,7 +442,7 @@ def minimal_chat_client(backend_url):
 
                 ai_message_number += 1
 
-            def on_docs_nomatch_done(node_id):  # Called instead of on_`llm_progress`/`on_llm_done` if the LLM was bypassed (no docs match, speculate off), after the new chat node has been added to the chat datastore.
+            def on_docs_nomatch_done(node_id):  # Called instead of `on_llm_start`/`on_llm_progress`/`on_llm_done` if the LLM was bypassed (no docs match, speculate off), after the new chat node has been added to the chat datastore.
                 nomatch_message_node_payload = datastore.get_payload(node_id)
                 chat_print_message(message_number=ai_message_number,
                                    role="assistant",
