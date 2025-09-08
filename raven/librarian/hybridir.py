@@ -1004,7 +1004,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             logger.info(f"HybridIRFileSystemEventHandler.rescan: File '{path}' was deleted: scheduling deletion from index.")
             task_managers["ingest"].submit(self._make_task(kind="delete", path=path), envcls())
 
-    def on_created(self, event):
+    def on_created(self, event) -> None:
         path = event.src_path
         logger.info(f"HybridIRFileSystemEventHandler.on_created: File '{path}'.")
         if not self._sanity_check(path):
@@ -1012,7 +1012,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         logger.info(f"HybridIRFileSystemEventHandler.on_created: File '{path}': scheduling ingest.")
         task_managers["ingest"].submit(self._make_task(kind="add", path=path), envcls())
 
-    def on_modified(self, event):
+    def on_modified(self, event) -> None:
         path = event.src_path
         logger.info(f"HybridIRFileSystemEventHandler.on_modified: File '{path}'.")
         if not self._sanity_check(path):
@@ -1020,7 +1020,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         logger.info(f"HybridIRFileSystemEventHandler.on_created: File '{path}': scheduling ingest.")
         task_managers["ingest"].submit(self._make_task(kind="update", path=path), envcls())
 
-    def on_deleted(self, event):
+    def on_deleted(self, event) -> None:
         path = event.src_path
         logger.info(f"HybridIRFileSystemEventHandler.on_deleted: File '{path}'.")
         if not self._sanity_check(path):
@@ -1040,7 +1040,7 @@ def setup(docs_dir: Union[pathlib.Path, str],
           embedding_model_name: str = "sentence-transformers/multi-qa-mpnet-base-cos-v1",
           chunk_size: int = 1000,
           overlap_fraction: float = 0.25,
-          executor: Optional = None) -> None:
+          executor: Optional = None) -> Tuple[HybridIR, HybridIRFileSystemEventHandler]:
     """Set up hybrid keyword/semantic search for a directory containing document files.
 
     This is a convenience function that wires up both `HybridIR` and `HybridIRFileSystemEventHandler`
