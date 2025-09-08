@@ -430,6 +430,8 @@ def minimal_chat_client(backend_url):
             def on_llm_done(node_id):  # Called after the LLM is done writing and the new chat node has been added to the chat datastore.
                 nonlocal ai_message_number
 
+                app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
+
                 print()  # Print the final newline
 
                 # Show LLM performance statistics
@@ -451,6 +453,8 @@ def minimal_chat_client(backend_url):
 
             def on_tool_done(node_id):  # Called *after* `on_llm_done`, once per tool call result, if there were tool calls, after the tool's response chat node has been added to the chat datastore.
                 nonlocal ai_message_number
+
+                app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
 
                 nomatch_message_node_payload = datastore.get_payload(node_id)
                 chat_print_message(message_number=ai_message_number,
