@@ -690,7 +690,7 @@ def user_turn(text: str) -> None:
     add_chat_message_to_linearized_chat_panel(new_head_node_id)
 
 def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
-    docs_query = docs_query if app_state["docs_enabled"] else None  # TODO: add "Autosearch documents" checkbox to GUI
+    docs_query = docs_query if app_state["docs_enabled"] else None
 
     streaming_chat_message = None
     def delete_streaming_chat_message():  # for replacing with completed message
@@ -747,7 +747,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                                         retriever=retriever,
                                         head_node_id=app_state["HEAD"],
                                         docs_query=docs_query,
-                                        speculate=app_state["speculate_enabled"],  # TODO: add "AI speculation" checkbox to GUI
+                                        speculate=app_state["speculate_enabled"],
                                         markup="markdown",
                                         on_prompt_ready=None,  # debug/info hook
                                         on_llm_start=on_llm_start,
@@ -857,28 +857,42 @@ with timer() as tim:
                         with dpg.tooltip("chat_send_button"):  # tag
                             dpg.add_text("Send to AI")
 
-            with dpg.child_window(tag="avatar_panel",
-                                  width=-1,
-                                  height=chat_panel_h,
-                                  no_scrollbar=True,
-                                  no_scroll_with_mouse=True):
-                # We all love magic numbers!
-                #
-                # The size of the avatar panel is not available at startup, until the GUI is rendered at least once.
-                avatar_panel_w = (gui_config.main_window_w - gui_config.chat_panel_w - 16)
-                avatar_panel_h = (gui_config.main_window_h - gui_config.ai_warning_h - 16 - 6)
-                dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="librarian_app_textures",
-                                                        gui_parent="avatar_panel",
-                                                        avatar_x_center=(avatar_panel_w // 2),
-                                                        avatar_y_bottom=avatar_panel_h,
-                                                        paused_text="[No video]",
-                                                        task_manager=task_manager)
-                # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
-                global source_image_size
-                global upscale
-                source_image_size = 512  # THA3 engine
-                upscale = 1.5
-                dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * source_image_size))
+            with dpg.group():
+                with dpg.child_window(tag="avatar_panel",
+                                      width=-1,
+                                      height=chat_panel_h,
+                                      no_scrollbar=True,
+                                      no_scroll_with_mouse=True):
+                    # We all love magic numbers!
+                    #
+                    # The size of the avatar panel is not available at startup, until the GUI is rendered at least once.
+                    avatar_panel_w = (gui_config.main_window_w - gui_config.chat_panel_w - 16)
+                    avatar_panel_h = (gui_config.main_window_h - gui_config.ai_warning_h - 16 - 6)
+                    dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="librarian_app_textures",
+                                                            gui_parent="avatar_panel",
+                                                            avatar_x_center=(avatar_panel_w // 2),
+                                                            avatar_y_bottom=avatar_panel_h,
+                                                            paused_text="[No video]",
+                                                            task_manager=task_manager)
+                    # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
+                    global source_image_size
+                    global upscale
+                    source_image_size = 512  # THA3 engine
+                    upscale = 1.5
+                    dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * source_image_size))
+
+                with dpg.child_window(tag="mode_toggle_controls",
+                                      width=-1,
+                                      height=gui_config.chat_controls_h,
+                                      no_scrollbar=True,
+                                      no_scroll_with_mouse=True):
+                    with dpg.group(horizontal=True):
+                        def toggle_docs_enabled():
+                            app_state["docs_enabled"] = not app_state["docs_enabled"]
+                        def toggle_speculate_enabled():
+                            app_state["speculate_enabled"] = not app_state["speculate_enabled"]
+                        dpg.add_checkbox(label="Autosearch documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
+                        dpg.add_checkbox(label="AI speculation", default_value=app_state["speculate_enabled"], callback=toggle_speculate_enabled, tag="speculate_enabled_checkbox")
 
         with dpg.child_window(tag="chat_ai_warning",
                               height=gui_config.ai_warning_h,
