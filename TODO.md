@@ -48,30 +48,31 @@
       - Make chat icons for system, tool roles
       - Finish the new app icon for Raven (small and large sizes)
     - Add feature: Switch chat (from all leaf nodes in datastore)
-    - Add feature: User text entry
-      - Submit user input to LLM
-      - Live preview of LLM output
-        - Sentence splitting
-        - Avatar emotion update during live preview (also during thinking)
-        - Call the lipsynced TTS and the English->Finnish translation and captioning system when we get a complete sentence
-          - TTS audio output toggle icons: `ICON_COMMENT`, `ICON_COMMENT_SLASH`
-        - Add GUI element to display captions (large font) on top of the avatar video
+    - Improve live preview of LLM output
+      - Eliminate GUI flicker during live preview (needs double-buffering?)
+      - Thought block detection
+        - Store the thought blocks in the chat datastore, too, so that we can render them (`raven.librarian.scaffold.ai_turn` currently discards them)
+      - Sentence splitting
+       - Avatar emotion update during live preview (also during thinking)
+      - Call the lipsynced TTS and the English->Finnish translation and captioning system when we get a complete sentence
+        - TTS audio output toggle icons: `ICON_COMMENT`, `ICON_COMMENT_SLASH`
+      - Add GUI element to display captions (large font) on top of the avatar video
       - Avatar emotion update from final message
-    - Add feature: Regenerate LLM response
-    - Add feature: Interrupt AI generation
+    - Add feature: Regenerate (reroll) LLM response
+    - Add feature: Interrupt AI generation (backend exists now; `return action_stop` from the `on_llm_progress` callback to interrupt the LLM)
     - Add feature: Continue AI generation in current HEAD node (creating a new revision?)
-    - Add feature: Branch chat at this node (!head ... of minichat)
-    - Add document database toggles (RAG; !docs, !speculate of minichat)
-    - Add websearch toggle?
+    - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
+    - Add websearch toggle? (Need to regenerate system prompt with/without tools)
     - Add GUI dynamic resizing on window size change
     - Improve chat panel
       - Add double-buffering for rebuilding, like in Raven-visualizer
-      - See how Raven-visualizer successfully updates its scroll position after info panel update (the MD renderer doesn't say when the output is ready, so wait how long before setting the scroll position?)
-    - Add feature: HTML coloring mode for thought blocks, for use with MD renderer
-      - Store the thought blocks in the chat datastore, too
-    - Add feature: timestamped chat messages
+    - Add feature: timestamped chat messages (when adding them to datastore; see `raven.librarian.scaffold`)
+    - Add feature: save full prompt with each AI message (get it from the `on_prompt_ready` event of `raven.librarian.scaffold.ai_turn`)
+      - Add a GUI button and window to show the full prompt (render as Markdown) and to copy it to clipboard
   - Later:
     - Avatar: add cel effect for internet access / tool use (data eyes)
+    - Avatar: add digital glitch effect when switching chat branches (change postprocessor config on the fly)
+    - Avatar: eliminate stutter while receiving LLM response
     - Avatar on/off toggle (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: collapsible thought blocks
@@ -86,7 +87,9 @@
       - simple examples:
         - https://github.com/DataExplorerUser/drag_drop_node_editor/blob/main/drag_and_drop_node_editor_dear_py_gui.py
         - https://github.com/hoshianaaa/DearPyGUI_NodeEditor_Template/tree/main
-    - AI summary and synthesis of selected studies from visualizer
+      - Maybe better to just use a the plotter, with custom tooltips? We don't need a node *editor* here, but rather just something to visualize a graph.
+    - Integration with *Raven-visualizer*: AI summary and synthesis of selected studies
+      - The apps could talk to each other over the network? For example, *Raven-visualizer* could send its selection data to *Raven-server*, from which *Raven-librarian* could query the document names to enable.
 
   - Add a lockfile so that `raven-minichat` and `raven-librarian` can't be running at the same time (to prevent losing changes made in one of the apps)
   - Store in AI message metadata: model name, number of tokens, average generation speed (tokens/s)
