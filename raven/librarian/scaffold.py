@@ -26,7 +26,15 @@ def user_turn(llm_settings: env,
               user_message_text: str) -> str:
     """Add the user's message with content `user_message_text` to `datastore`.
 
-    Returns the new HEAD node ID (i.e. the message node that was just added).
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+
+    `datastore`: The chat datastore.
+
+    `head_node_id`: Current HEAD node of the chat. Used as the parent for the no-match message, if needed.
+
+    `user_message_text`: The message text to add.
+
+    Returns the new HEAD node ID (i.e. the chat node that was just added).
     """
     # Add the user's message to the chat.
     user_message_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(llm_settings=llm_settings,
@@ -56,7 +64,7 @@ def _search_docs_with_bypass(llm_settings: env,
 
     `head_node_id`: Current HEAD node of the chat. Used as the parent for the no-match message, if needed.
 
-    `speculate`: If `False`, and the query returns no matches, bypass the LLM, and create the no-match chat node.
+    `speculate`: If `False`, and the search returns no matches, bypass the LLM, and creating a no-match chat node.
                  If `True`, always just return the search results.
 
     `query`: The query string to search with in the document database. (Note "with", not "for"; the query may
@@ -160,7 +168,6 @@ def _perform_injects(llm_settings: env,
         history.append(message_to_inject)
 
 
-# TODO: docstring
 def ai_turn(llm_settings: env,
             datastore: chattree.Forest,
             retriever: hybridir.HybridIR,
@@ -177,7 +184,74 @@ def ai_turn(llm_settings: env,
 
     This continues the current branch with as many chat nodes as needed: one for each LLM response, and one for each tool call.
 
-    Returns the new HEAD node ID (i.e. the last message node that was just added).
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+
+    `datastore`: The chat datastore.
+
+    `retriever`: A `raven.librarian.hybridir.HybridIR` retriever connected to the document database.
+
+    `head_node_id`: Current HEAD node of the chat. Used as the parent for the no-match message, if needed.
+
+    `query`: Optional query string to search with in the document database.
+
+             If supplied, `retriever` is queried, and the search results are injected into the context
+             before sending the context to the LLM.
+
+             If `None`, no search is performed.
+
+    `speculate`: Used only if `query` is supplied.
+
+                 If `False`:
+
+                     If the search returns no matches, bypass the LLM, creating a no-match chat node.
+
+                     If the search returns at least one match, then remind the LLM to base its reply on the
+                     information provided in the context only. How well this works depends on the LLM used;
+                     Qwen3 2507 30B-A3B mostly seems to do fine.
+
+                 If `True`, allow the LLM to respond regardless.
+
+    `markup`: Markup type to use for marking thought blocks, or `None` for no markup. One of:
+        "ansi": ANSI terminal color codes.
+        "markdown": Markdown markup, with HTML tags for colors.
+        `None` (the special value): no markup, keep thought blocks as-is.
+
+    We provide the following optional callbacks/events, which are useful for live UI updates.
+    The return value of the callbacks is ignored.
+
+    `on_llm_start`: 0-argument callable. Called just before the LLM starts writing.
+                    The LLM will start once at the beginning of the AI's turn,
+                    and then once after each set of tool calls.
+
+    `on_llm_progress`: 2-argument callable, with arguments `(n_chunks, chunk_text)`.
+                       Called while streaming the response from the LLM, typically once per generated token.
+
+           `n_chunks`: int, how many chunks have been generated so far (for this invocation).
+                       This is useful for live UI updates.
+
+           `chunk_text` str, the text of the current chunk.
+
+    `on_llm_done`: 1-argument callable, with argument `node_id`.
+
+                   Called after the LLM is done writing and the new chat node has been added to the chat datastore.
+
+                   The argument is the node ID of this new chat node.
+
+    `on_docs_nomatch_done`: 1-argument callable, with argument `node_id`.
+
+                            Called instead of `on_llm_start`/`on_llm_progress`/`on_llm_done` if the LLM was bypassed,
+                            after the new chat node has been added to the chat datastore.
+
+                            The argument is the node ID of this new chat node.
+
+    `on_tool_done`: 1-argument callable, with argument `node_id`.
+
+                    Called *after* `on_llm_done`, once per tool call result, if there were tool calls, after the
+                    tool's response chat node has been added to the chat datastore.
+
+                    The argument is the node ID of this new chat node.
+
+    Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
     if docs_query is not None:
         docs_result = _search_docs_with_bypass(llm_settings=llm_settings,
@@ -210,6 +284,7 @@ def ai_turn(llm_settings: env,
         out = llmclient.invoke(llm_settings, message_history, on_llm_progress)  # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
 
         # Clean up the LLM's reply (heuristically). This version goes into the chat history.
+        # TODO: Keep the thought blocks; strip them only when sending the history to the LLM.
         out.data["content"] = chatutil.scrub(llm_settings,
                                              out.data["content"],
                                              thoughts_mode="discard",
