@@ -95,7 +95,8 @@ from . import line_atributes
 from . import parser
 from . import text_attributes
 from . import text_entities
-from .font_attributes import set_font_registry, set_add_font_function, set_font
+from .attribute_types import set_font_registry, set_add_font_function  # noqa: F401: for export
+from .font_attributes import set_font  # noqa: F401: for export
 
 
 def wrap_text_entity(text: text_entities.StrEntity | text_entities.TextEntity, width: int | float = -1) -> text_entities.LineEntity:
@@ -321,32 +322,32 @@ def add_text(markdown_text: str,
 def add_text_italic(default_value: str = '', *, label: str = None, user_data: Any = None, use_internal_label: bool = True, tag: Union[int, str] = 0, indent: int = -1, parent: Union[int, str] = 0, before: Union[int, str] = 0, source: Union[int, str] = 0, payload_type: str = '$$DPG_PAYLOAD', drag_callback: Callable = None, drop_callback: Callable = None, show: bool = True, pos: Union[List[int], Tuple[int, ...]] = [], filter_key: str = '', tracked: bool = False, track_offset: float = 0.5, wrap: int = -1, bullet: bool = False, color: Union[List[int], Tuple[int, ...]] = (-255, 0, 0, 255), show_label: bool = False, **kwargs) -> Union[int, str]:
     """	 Adds italic text. Text can have an optional label that will display to the right of the text.
 
-	Args:
-		default_value (str, optional):
-		label (str, optional): Overrides 'name' as label.
-		user_data (Any, optional): User data for callbacks
-		use_internal_label (bool, optional): Use generated internal label instead of user specified (appends ### uuid).
-		tag (Union[int, str], optional): Unique id used to programmatically refer to the item.If label is unused this will be the label.
-		indent (int, optional): Offsets the widget to the right the specified number multiplied by the indent style.
-		parent (Union[int, str], optional): Parent to add this item to. (runtime adding)
-		before (Union[int, str], optional): This item will be displayed before the specified item in the parent.
-		source (Union[int, str], optional): Overrides 'id' as value storage key.
-		payload_type (str, optional): Sender string type must be the same as the target for the target to run the payload_callback.
-		drag_callback (Callable, optional): Registers a drag callback for drag and drop.
-		drop_callback (Callable, optional): Registers a drop callback for drag and drop.
-		show (bool, optional): Attempt to render widget.
-		pos (Union[List[int], Tuple[int, ...]], optional): Places the item relative to window coordinates, [0,0] is top left.
-		filter_key (str, optional): Used by filter widget.
-		tracked (bool, optional): Scroll tracking
-		track_offset (float, optional): 0.0f:top, 0.5f:center, 1.0f:bottom
-		wrap (int, optional): Number of pixels from the start of the item until wrapping starts.
-		bullet (bool, optional): Places a bullet to the left of the text.
-		color (Union[List[int], Tuple[int, ...]], optional): Color of the text (rgba).
-		show_label (bool, optional): Displays the label to the right of the text.
-		id (Union[int, str], optional): (deprecated)
-	Returns:
-		Union[int, str]
-	"""
+        Args:
+                default_value (str, optional):
+                label (str, optional): Overrides 'name' as label.
+                user_data (Any, optional): User data for callbacks
+                use_internal_label (bool, optional): Use generated internal label instead of user specified (appends ### uuid).
+                tag (Union[int, str], optional): Unique id used to programmatically refer to the item.If label is unused this will be the label.
+                indent (int, optional): Offsets the widget to the right the specified number multiplied by the indent style.
+                parent (Union[int, str], optional): Parent to add this item to. (runtime adding)
+                before (Union[int, str], optional): This item will be displayed before the specified item in the parent.
+                source (Union[int, str], optional): Overrides 'id' as value storage key.
+                payload_type (str, optional): Sender string type must be the same as the target for the target to run the payload_callback.
+                drag_callback (Callable, optional): Registers a drag callback for drag and drop.
+                drop_callback (Callable, optional): Registers a drop callback for drag and drop.
+                show (bool, optional): Attempt to render widget.
+                pos (Union[List[int], Tuple[int, ...]], optional): Places the item relative to window coordinates, [0,0] is top left.
+                filter_key (str, optional): Used by filter widget.
+                tracked (bool, optional): Scroll tracking
+                track_offset (float, optional): 0.0f:top, 0.5f:center, 1.0f:bottom
+                wrap (int, optional): Number of pixels from the start of the item until wrapping starts.
+                bullet (bool, optional): Places a bullet to the left of the text.
+                color (Union[List[int], Tuple[int, ...]], optional): Color of the text (rgba).
+                show_label (bool, optional): Displays the label to the right of the text.
+                id (Union[int, str], optional): (deprecated)
+        Returns:
+                Union[int, str]
+        """
     dpg_text = dpg.add_text(default_value, label=label, user_data=user_data, use_internal_label=use_internal_label, tag=tag, indent=indent, parent=parent, before=before, source=source, payload_type=payload_type, drag_callback=drag_callback, drop_callback=drop_callback, show=show, pos=pos, filter_key=filter_key, tracked=tracked, track_offset=track_offset, wrap=wrap, bullet=bullet, color=color, show_label=show_label, **kwargs)
     dpg.bind_item_font(dpg_text,
                        font=font_attributes.Italic.get_font())
@@ -356,32 +357,32 @@ def add_text_italic(default_value: str = '', *, label: str = None, user_data: An
 def add_text_bold(default_value: str = '', *, label: str = None, user_data: Any = None, use_internal_label: bool = True, tag: Union[int, str] = 0, indent: int = -1, parent: Union[int, str] = 0, before: Union[int, str] = 0, source: Union[int, str] = 0, payload_type: str = '$$DPG_PAYLOAD', drag_callback: Callable = None, drop_callback: Callable = None, show: bool = True, pos: Union[List[int], Tuple[int, ...]] = [], filter_key: str = '', tracked: bool = False, track_offset: float = 0.5, wrap: int = -1, bullet: bool = False, color: Union[List[int], Tuple[int, ...]] = (-255, 0, 0, 255), show_label: bool = False, **kwargs) -> Union[int, str]:
     """	 Adds bold text. Text can have an optional label that will display to the right of the text.
 
-	Args:
-		default_value (str, optional):
-		label (str, optional): Overrides 'name' as label.
-		user_data (Any, optional): User data for callbacks
-		use_internal_label (bool, optional): Use generated internal label instead of user specified (appends ### uuid).
-		tag (Union[int, str], optional): Unique id used to programmatically refer to the item.If label is unused this will be the label.
-		indent (int, optional): Offsets the widget to the right the specified number multiplied by the indent style.
-		parent (Union[int, str], optional): Parent to add this item to. (runtime adding)
-		before (Union[int, str], optional): This item will be displayed before the specified item in the parent.
-		source (Union[int, str], optional): Overrides 'id' as value storage key.
-		payload_type (str, optional): Sender string type must be the same as the target for the target to run the payload_callback.
-		drag_callback (Callable, optional): Registers a drag callback for drag and drop.
-		drop_callback (Callable, optional): Registers a drop callback for drag and drop.
-		show (bool, optional): Attempt to render widget.
-		pos (Union[List[int], Tuple[int, ...]], optional): Places the item relative to window coordinates, [0,0] is top left.
-		filter_key (str, optional): Used by filter widget.
-		tracked (bool, optional): Scroll tracking
-		track_offset (float, optional): 0.0f:top, 0.5f:center, 1.0f:bottom
-		wrap (int, optional): Number of pixels from the start of the item until wrapping starts.
-		bullet (bool, optional): Places a bullet to the left of the text.
-		color (Union[List[int], Tuple[int, ...]], optional): Color of the text (rgba).
-		show_label (bool, optional): Displays the label to the right of the text.
-		id (Union[int, str], optional): (deprecated)
-	Returns:
-		Union[int, str]
-	"""
+        Args:
+                default_value (str, optional):
+                label (str, optional): Overrides 'name' as label.
+                user_data (Any, optional): User data for callbacks
+                use_internal_label (bool, optional): Use generated internal label instead of user specified (appends ### uuid).
+                tag (Union[int, str], optional): Unique id used to programmatically refer to the item.If label is unused this will be the label.
+                indent (int, optional): Offsets the widget to the right the specified number multiplied by the indent style.
+                parent (Union[int, str], optional): Parent to add this item to. (runtime adding)
+                before (Union[int, str], optional): This item will be displayed before the specified item in the parent.
+                source (Union[int, str], optional): Overrides 'id' as value storage key.
+                payload_type (str, optional): Sender string type must be the same as the target for the target to run the payload_callback.
+                drag_callback (Callable, optional): Registers a drag callback for drag and drop.
+                drop_callback (Callable, optional): Registers a drop callback for drag and drop.
+                show (bool, optional): Attempt to render widget.
+                pos (Union[List[int], Tuple[int, ...]], optional): Places the item relative to window coordinates, [0,0] is top left.
+                filter_key (str, optional): Used by filter widget.
+                tracked (bool, optional): Scroll tracking
+                track_offset (float, optional): 0.0f:top, 0.5f:center, 1.0f:bottom
+                wrap (int, optional): Number of pixels from the start of the item until wrapping starts.
+                bullet (bool, optional): Places a bullet to the left of the text.
+                color (Union[List[int], Tuple[int, ...]], optional): Color of the text (rgba).
+                show_label (bool, optional): Displays the label to the right of the text.
+                id (Union[int, str], optional): (deprecated)
+        Returns:
+                Union[int, str]
+        """
     dpg_text = dpg.add_text(default_value, label=label, user_data=user_data, use_internal_label=use_internal_label, tag=tag, indent=indent, parent=parent, before=before, source=source, payload_type=payload_type, drag_callback=drag_callback, drop_callback=drop_callback, show=show, pos=pos, filter_key=filter_key, tracked=tracked, track_offset=track_offset, wrap=wrap, bullet=bullet, color=color, show_label=show_label, **kwargs)
     dpg.bind_item_font(dpg_text,
                        font=font_attributes.Bold.get_font())
@@ -391,32 +392,32 @@ def add_text_bold(default_value: str = '', *, label: str = None, user_data: Any 
 def add_text_bold_italic(default_value: str = '', *, label: str = None, user_data: Any = None, use_internal_label: bool = True, tag: Union[int, str] = 0, indent: int = -1, parent: Union[int, str] = 0, before: Union[int, str] = 0, source: Union[int, str] = 0, payload_type: str = '$$DPG_PAYLOAD', drag_callback: Callable = None, drop_callback: Callable = None, show: bool = True, pos: Union[List[int], Tuple[int, ...]] = [], filter_key: str = '', tracked: bool = False, track_offset: float = 0.5, wrap: int = -1, bullet: bool = False, color: Union[List[int], Tuple[int, ...]] = (-255, 0, 0, 255), show_label: bool = False, **kwargs) -> Union[int, str]:
     """	 Adds bold italic text. Text can have an optional label that will display to the right of the text.
 
-	Args:
-		default_value (str, optional):
-		label (str, optional): Overrides 'name' as label.
-		user_data (Any, optional): User data for callbacks
-		use_internal_label (bool, optional): Use generated internal label instead of user specified (appends ### uuid).
-		tag (Union[int, str], optional): Unique id used to programmatically refer to the item.If label is unused this will be the label.
-		indent (int, optional): Offsets the widget to the right the specified number multiplied by the indent style.
-		parent (Union[int, str], optional): Parent to add this item to. (runtime adding)
-		before (Union[int, str], optional): This item will be displayed before the specified item in the parent.
-		source (Union[int, str], optional): Overrides 'id' as value storage key.
-		payload_type (str, optional): Sender string type must be the same as the target for the target to run the payload_callback.
-		drag_callback (Callable, optional): Registers a drag callback for drag and drop.
-		drop_callback (Callable, optional): Registers a drop callback for drag and drop.
-		show (bool, optional): Attempt to render widget.
-		pos (Union[List[int], Tuple[int, ...]], optional): Places the item relative to window coordinates, [0,0] is top left.
-		filter_key (str, optional): Used by filter widget.
-		tracked (bool, optional): Scroll tracking
-		track_offset (float, optional): 0.0f:top, 0.5f:center, 1.0f:bottom
-		wrap (int, optional): Number of pixels from the start of the item until wrapping starts.
-		bullet (bool, optional): Places a bullet to the left of the text.
-		color (Union[List[int], Tuple[int, ...]], optional): Color of the text (rgba).
-		show_label (bool, optional): Displays the label to the right of the text.
-		id (Union[int, str], optional): (deprecated)
-	Returns:
-		Union[int, str]
-	"""
+        Args:
+                default_value (str, optional):
+                label (str, optional): Overrides 'name' as label.
+                user_data (Any, optional): User data for callbacks
+                use_internal_label (bool, optional): Use generated internal label instead of user specified (appends ### uuid).
+                tag (Union[int, str], optional): Unique id used to programmatically refer to the item.If label is unused this will be the label.
+                indent (int, optional): Offsets the widget to the right the specified number multiplied by the indent style.
+                parent (Union[int, str], optional): Parent to add this item to. (runtime adding)
+                before (Union[int, str], optional): This item will be displayed before the specified item in the parent.
+                source (Union[int, str], optional): Overrides 'id' as value storage key.
+                payload_type (str, optional): Sender string type must be the same as the target for the target to run the payload_callback.
+                drag_callback (Callable, optional): Registers a drag callback for drag and drop.
+                drop_callback (Callable, optional): Registers a drop callback for drag and drop.
+                show (bool, optional): Attempt to render widget.
+                pos (Union[List[int], Tuple[int, ...]], optional): Places the item relative to window coordinates, [0,0] is top left.
+                filter_key (str, optional): Used by filter widget.
+                tracked (bool, optional): Scroll tracking
+                track_offset (float, optional): 0.0f:top, 0.5f:center, 1.0f:bottom
+                wrap (int, optional): Number of pixels from the start of the item until wrapping starts.
+                bullet (bool, optional): Places a bullet to the left of the text.
+                color (Union[List[int], Tuple[int, ...]], optional): Color of the text (rgba).
+                show_label (bool, optional): Displays the label to the right of the text.
+                id (Union[int, str], optional): (deprecated)
+        Returns:
+                Union[int, str]
+        """
     dpg_text = dpg.add_text(default_value, label=label, user_data=user_data, use_internal_label=use_internal_label, tag=tag, indent=indent, parent=parent, before=before, source=source, payload_type=payload_type, drag_callback=drag_callback, drop_callback=drop_callback, show=show, pos=pos, filter_key=filter_key, tracked=tracked, track_offset=track_offset, wrap=wrap, bullet=bullet, color=color, show_label=show_label, **kwargs)
     dpg.bind_item_font(dpg_text,
                        font=font_attributes.BoldItalic.get_font())

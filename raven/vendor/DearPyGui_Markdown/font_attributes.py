@@ -1,7 +1,8 @@
 import ast
 import os.path
+import traceback
 
-from .attribute_types import *
+from .attribute_types import Attribute, FontAttribute
 
 
 class Font(Attribute):
@@ -29,16 +30,20 @@ class Font(Attribute):
         self.color = color
 
 
-class Default(FontAttribute): ...
+class Default(FontAttribute):
+    ...
 
 
-class Bold(FontAttribute): ...
+class Bold(FontAttribute):
+    ...
 
 
-class Italic(FontAttribute): ...
+class Italic(FontAttribute):
+    ...
 
 
-class BoldItalic(FontAttribute): ...
+class BoldItalic(FontAttribute):
+    ...
 
 
 class H1(FontAttribute):

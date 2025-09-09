@@ -1,7 +1,7 @@
 import dearpygui.dearpygui as dpg
 
 from . import get_text_size
-from .attribute_types import CallInNextFrame
+from . import CallInNextFrame
 from .attribute_types import LineAttribute, AttributeConnector
 from .font_attributes import Default
 
@@ -36,37 +36,38 @@ class Blockquote(LineAttribute):
         return self.width
 
     def render(self, text_height: int | float, parent=0, attributes_group=0):
-        with dpg.group(parent=parent) as spacer_group:
-            dpg.add_spacer(width=self.get_width(), parent=spacer_group)
+        spacer_group = dpg.add_group(parent=parent)
+        dpg.add_spacer(width=self.get_width(), parent=spacer_group)
 
         self.self_post_render(text_height, spacer_group, parent=parent, attributes_group=attributes_group)
 
     @CallInNextFrame
     def self_post_render(self, text_height: int | float, spacer_group: int, parent=0, attributes_group=0):
-        group_width, group_height = dpg.get_item_rect_size(parent)
+        try:
+            group_width, group_height = dpg.get_item_rect_size(parent)
+            pos = dpg.get_item_pos(spacer_group)
+            x, y = pos
+            y += (group_height - text_height) / 2
+            if len(self.attribute_connector) != 0:
+                last_attribute = self.attribute_connector[-1]
+                last_drawlist_y = dpg.get_item_pos(last_attribute.drawlist_group)[1]
+                last_drawlist_y += dpg.get_item_rect_size(last_attribute.drawlist_group)[1]
+                extra_height = y - last_drawlist_y
+                y -= extra_height
+                text_height += extra_height
 
-        pos = dpg.get_item_pos(spacer_group)
+            self.drawlist_group = dpg.add_group(pos=[x, y], parent=attributes_group)
+            drawlist = dpg.add_drawlist(parent=self.drawlist_group, width=self.get_width(), height=text_height)
+            thickness = self.line_width
+            x_line = (self.get_width() / 2) - 1
+            y_line = text_height
+            dpg.draw_line([x_line, 0],
+                          [x_line, y_line],
+                          parent=drawlist, color=self.color, thickness=thickness)
 
-        x, y = pos
-        y += (group_height - text_height) / 2
-        if len(self.attribute_connector) != 0:
-            last_attribute = self.attribute_connector[-1]
-            last_drawlist_y = dpg.get_item_pos(last_attribute.drawlist_group)[1]
-            last_drawlist_y += dpg.get_item_rect_size(last_attribute.drawlist_group)[1]
-            extra_height = y - last_drawlist_y
-            y -= extra_height
-            text_height += extra_height
-
-        with dpg.group(pos=[x, y], parent=attributes_group) as self.drawlist_group:
-            with dpg.drawlist(parent=self.drawlist_group, width=self.get_width(), height=text_height) as drawlist:
-                thickness = self.line_width
-                x_line = (self.get_width() / 2) - 1
-                y_line = text_height
-                line = dpg.draw_line([x_line, 0],
-                                     [x_line, y_line],
-                                     parent=drawlist, color=self.color, thickness=thickness)
-
-        self.attribute_connector.append(self)
+            self.attribute_connector.append(self)
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return
 
 
 class List(LineAttribute):
@@ -132,10 +133,10 @@ class List(LineAttribute):
         return width
 
     def render(self, text_height: int | float, parent=0, attributes_group=0):
-        with dpg.group(parent=parent, horizontal=True) as spacer_group:
-            dpg.add_spacer(width=self.get_width() - self.get_task_width(), parent=spacer_group)
-            if self.task:
-                self.task_spacer = dpg.add_spacer(width=self.get_task_width(), parent=spacer_group)
+        spacer_group = dpg.add_group(parent=parent, horizontal=True)
+        dpg.add_spacer(width=self.get_width() - self.get_task_width(), parent=spacer_group)
+        if self.task:
+            self.task_spacer = dpg.add_spacer(width=self.get_task_width(), parent=spacer_group)
         self.text_height = text_height
         self.spacer_group = spacer_group
         self.attribute_connector.append(self)
@@ -157,55 +158,63 @@ class List(LineAttribute):
             dpg.add_spacer(width=get_text_size(' ' * 2, font=Default.get_font())[0], parent=self.spacer_group)
 
     def ordered_render(self, attributes_group=0):
-        text = f'{str(self.index)[-4::]}.  '
-        render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
-        x, y = dpg.get_item_pos(self.spacer_group)
-        y += (self.text_height - render_text_height) / 2
-        x += (self.get_width() - self.get_task_width()) - render_text_width
+        try:
+            text = f'{str(self.index)[-4::]}.  '
+            render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
+            x, y = dpg.get_item_pos(self.spacer_group)
 
-        dpg_text = dpg.add_text(text, pos=(x, y), parent=attributes_group)
-        dpg.bind_item_font(dpg_text, font=Default.get_font())
+            y += (self.text_height - render_text_height) / 2
+            x += (self.get_width() - self.get_task_width()) - render_text_width
+
+            dpg_text = dpg.add_text(text, pos=(x, y), parent=attributes_group)
+            dpg.bind_item_font(dpg_text, font=Default.get_font())
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return
 
     def unordered_render(self, attributes_group=0):
-        text = '0.  '
-        render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
-        x, y = dpg.get_item_pos(self.spacer_group)
-        y += (self.text_height - render_text_height) / 2
-        x += (self.get_width() - self.get_task_width()) - render_text_width
-        height = render_text_height / 2.5
-        width = height
-        y += (render_text_height - height) * 0.77
-        thickness = height / 7
-        with dpg.group(pos=(x, y), parent=attributes_group) as drawlist_group:
+        try:
+            text = '0.  '
+            render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
+            x, y = dpg.get_item_pos(self.spacer_group)
+
+            y += (self.text_height - render_text_height) / 2
+            x += (self.get_width() - self.get_task_width()) - render_text_width
+            height = render_text_height / 2.5
+            width = height
+            y += (render_text_height - height) * 0.77
+            thickness = height / 7
+            drawlist_group = dpg.add_group(pos=(x, y), parent=attributes_group)
             drawlist = dpg.add_drawlist(width=width, height=height, parent=drawlist_group)
             # dpg.draw_quad([0, 0], [width, 0],
             #               [width, height], [0, height],
             #               color=(255, 0, 0, 255), fill=(255, 0, 0, 255),
             #               parent=drawlist)
 
-        depth = self.depth - self.depth // 4 * 4
-        match depth:
-            case 1:
-                dpg.draw_circle([height / 2, width / 2],
-                                width / 2 - thickness / 2,
-                                parent=drawlist,
-                                thickness=thickness,
-                                fill=(255, 255, 255, 255))
-            case 2:
-                dpg.draw_circle([height / 2, width / 2],
-                                width / 2 - thickness / 2,
-                                parent=drawlist,
-                                thickness=thickness,
-                                fill=(0, 0, 0, 0))
-            case 3:
-                dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
-                              [width - thickness, height - thickness], [thickness, height - thickness],
-                              parent=drawlist,
-                              thickness=thickness,
-                              fill=(255, 255, 255, 255))
-            case _:
-                dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
-                              [width - thickness, height - thickness], [thickness, height - thickness],
-                              parent=drawlist,
-                              thickness=thickness,
-                              fill=(0, 0, 0, 0))
+            depth = self.depth - self.depth // 4 * 4
+            match depth:
+                case 1:
+                    dpg.draw_circle([height / 2, width / 2],
+                                    width / 2 - thickness / 2,
+                                    parent=drawlist,
+                                    thickness=thickness,
+                                    fill=(255, 255, 255, 255))
+                case 2:
+                    dpg.draw_circle([height / 2, width / 2],
+                                    width / 2 - thickness / 2,
+                                    parent=drawlist,
+                                    thickness=thickness,
+                                    fill=(0, 0, 0, 0))
+                case 3:
+                    dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
+                                  [width - thickness, height - thickness], [thickness, height - thickness],
+                                  parent=drawlist,
+                                  thickness=thickness,
+                                  fill=(255, 255, 255, 255))
+                case _:
+                    dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
+                                  [width - thickness, height - thickness], [thickness, height - thickness],
+                                  parent=drawlist,
+                                  thickness=thickness,
+                                  fill=(0, 0, 0, 0))
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return

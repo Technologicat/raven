@@ -1,6 +1,7 @@
 from . import get_text_size
-from .attribute_types import *
+from .attribute_types import Attribute, AttributeConnector, CallInNextFrame, HoverAttribute
 
+import dearpygui.dearpygui as dpg
 
 class Underline(Attribute):
     @staticmethod
@@ -8,17 +9,20 @@ class Underline(Attribute):
         '''
         :return: [drawlist, draw_line]
         '''
-        pos = dpg.get_item_pos(dpg_text_group)
-        x, y = pos
-        group_width, group_height = dpg.get_item_rect_size(dpg_text_group)
-        text_width, text_height = get_text_size(dpg.get_value(dpg_text), font=font)
-        y = y + (group_height - text_height) / 2
-        with dpg.group(pos=[x, y], parent=parent) as drawlist_group:
-            with dpg.drawlist(parent=drawlist_group, width=group_width, height=text_height) as drawlist:
-                thickness = text_height / 15
-                line_y = text_height - thickness + thickness / 5
-                line = dpg.draw_line([0, line_y], [group_width, line_y], parent=drawlist, color=color, thickness=thickness)
-        return drawlist, line
+        try:
+            pos = dpg.get_item_pos(dpg_text_group)
+            x, y = pos
+            group_width, group_height = dpg.get_item_rect_size(dpg_text_group)
+            text_width, text_height = get_text_size(dpg.get_value(dpg_text), font=font)
+            y = y + (group_height - text_height) / 2
+            drawlist_group = dpg.add_group(pos=[x, y], parent=parent)
+            drawlist = dpg.add_drawlist(parent=drawlist_group, width=group_width, height=text_height)
+            thickness = text_height / 15
+            line_y = text_height - thickness + thickness / 5
+            line = dpg.draw_line([0, line_y], [group_width, line_y], parent=drawlist, color=color, thickness=thickness)
+            return drawlist, line
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return None, None
 
 
 class Strike(Attribute):
@@ -27,17 +31,20 @@ class Strike(Attribute):
         '''
         :return: [drawlist, draw_line]
         '''
-        pos = dpg.get_item_pos(dpg_text_group)
-        x, y = pos
-        group_width, group_height = dpg.get_item_rect_size(dpg_text_group)
-        text_width, text_height = get_text_size(dpg.get_value(dpg_text), font=font)
-        y = y + (group_height - text_height) / 2
-        with dpg.group(pos=[x, y], parent=parent) as drawlist_group:
-            with dpg.drawlist(parent=drawlist_group, width=group_width, height=text_height) as drawlist:
-                thickness = text_height / 15
-                line_y = text_height / 2 + thickness / 2 + text_height / 20
-                line = dpg.draw_line([0, line_y], [group_width, line_y], parent=drawlist, color=color, thickness=thickness)
-        return drawlist, line
+        try:
+            pos = dpg.get_item_pos(dpg_text_group)
+            x, y = pos
+            group_width, group_height = dpg.get_item_rect_size(dpg_text_group)
+            text_width, text_height = get_text_size(dpg.get_value(dpg_text), font=font)
+            y = y + (group_height - text_height) / 2
+            drawlist_group = dpg.add_group(pos=[x, y], parent=parent)
+            drawlist = dpg.add_drawlist(parent=drawlist_group, width=group_width, height=text_height)
+            thickness = text_height / 15
+            line_y = text_height / 2 + thickness / 2 + text_height / 20
+            line = dpg.draw_line([0, line_y], [group_width, line_y], parent=drawlist, color=color, thickness=thickness)
+            return drawlist, line
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return None, None
 
 
 class Code(Attribute):
@@ -46,16 +53,19 @@ class Code(Attribute):
 
     @classmethod
     def render(cls, dpg_text_group: int):
-        width, height = dpg.get_item_rect_size(dpg_text_group)
-        pos = dpg.get_item_pos(dpg_text_group)
-        child = dpg.get_item_children(dpg_text_group, 1)[0]
-        group = dpg.add_group(pos=pos, before=child)
-        with dpg.drawlist(parent=group, width=width, height=height) as drawlist:
+        try:
+            width, height = dpg.get_item_rect_size(dpg_text_group)
+            pos = dpg.get_item_pos(dpg_text_group)
+            child = dpg.get_item_children(dpg_text_group, 1)[0]
+            group = dpg.add_group(pos=pos, before=child)
+            drawlist = dpg.add_drawlist(parent=group, width=width, height=height)
             dpg.draw_quad([0, 0], [width, 0],
                           [width, height], [0, height],
                           fill=cls.color,
                           color=cls.border_color,
                           parent=drawlist)
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return
 
 
 class Pre(Attribute):
@@ -70,50 +80,58 @@ class Pre(Attribute):
         self.attribute_connector.used_y = []
 
     def render(self, dpg_text_group: int):
-        self.dpg_text_group = dpg_text_group
-        self.width, self.height = dpg.get_item_rect_size(dpg_text_group)
-        pos = dpg.get_item_pos(dpg_text_group)
-        pos_end = (self.width + pos[0], pos[1] + self.height)
+        try:
+            self.width, self.height = dpg.get_item_rect_size(dpg_text_group)
+            pos = dpg.get_item_pos(dpg_text_group)
+            self.dpg_text_group = dpg_text_group
 
-        a_c = self.attribute_connector
-        if a_c.x0 is None:
-            a_c.x0, a_c.y0 = pos
-            a_c.x1, a_c.y1 = pos_end
+            pos_end = (self.width + pos[0], pos[1] + self.height)
 
-        if a_c.x0 > pos[0]:
-            a_c.x0 = pos[0]
-        if a_c.y0 > pos[1]:
-            a_c.y0 = pos[1]
-        if a_c.x1 < pos_end[0]:
-            a_c.x1 = pos_end[0]
-        if a_c.y1 < pos_end[1]:
-            a_c.y1 = pos_end[1]
+            a_c = self.attribute_connector
+            if a_c.x0 is None:
+                a_c.x0, a_c.y0 = pos
+                a_c.x1, a_c.y1 = pos_end
+
+            if a_c.x0 > pos[0]:
+                a_c.x0 = pos[0]
+            if a_c.y0 > pos[1]:
+                a_c.y0 = pos[1]
+            if a_c.x1 < pos_end[0]:
+                a_c.x1 = pos_end[0]
+            if a_c.y1 < pos_end[1]:
+                a_c.y1 = pos_end[1]
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return
 
     @CallInNextFrame
     def post_render(self, attributes_group=0):
-        width, height = dpg.get_item_rect_size(self.dpg_text_group)
-        pos = dpg.get_item_pos(self.dpg_text_group)
-        child = dpg.get_item_children(self.dpg_text_group, 1)[0]
-        group = dpg.add_group(pos=pos, before=child)
-        children = dpg.get_item_children(dpg.get_item_parent(self.dpg_text_group), 1)
-        a_c = self.attribute_connector
-        if children[-1] == self.dpg_text_group:
-            width = a_c.x1 - pos[0]
-            with dpg.group(parent=attributes_group, pos=(a_c.x0, a_c.y0)) as border_group:
+        try:
+            width, height = dpg.get_item_rect_size(self.dpg_text_group)
+            pos = dpg.get_item_pos(self.dpg_text_group)
+            child = dpg.get_item_children(self.dpg_text_group, 1)[0]
+            group = dpg.add_group(pos=pos, before=child)
+            children = dpg.get_item_children(dpg.get_item_parent(self.dpg_text_group), 1)
+
+            a_c = self.attribute_connector
+            if children[-1] == self.dpg_text_group:
+                width = a_c.x1 - pos[0]
+                border_group = dpg.add_group(parent=attributes_group, pos=(a_c.x0, a_c.y0))
                 border_width = a_c.x1 - a_c.x0
                 border_height = a_c.y1 - a_c.y0
-                with dpg.drawlist(parent=border_group, width=border_width, height=border_height) as border_drawlist:
-                    dpg.draw_quad([0, 0], [border_width, 0],
-                                  [border_width, border_height], [0, border_height],
-                                  color=self.border_color,
-                                  parent=border_drawlist)
+                border_drawlist = dpg.add_drawlist(parent=border_group, width=border_width, height=border_height)
+                dpg.draw_quad([0, 0], [border_width, 0],
+                              [border_width, border_height], [0, border_height],
+                              color=self.border_color,
+                              parent=border_drawlist)
 
-        with dpg.drawlist(parent=group, width=width, height=height) as drawlist:
+            drawlist = dpg.add_drawlist(parent=group, width=width, height=height)
             dpg.draw_quad([0, 0], [width, 0],
                           [width, height], [0, height],
                           fill=self.color,
                           color=self.color,
                           parent=drawlist)
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return
 
 
 class Url(HoverAttribute):
