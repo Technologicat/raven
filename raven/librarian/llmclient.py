@@ -343,8 +343,8 @@ def invoke(settings: env, history: List[Dict], on_progress=None) -> env:
         If provided, this is called for each chunk. It is expected to take two arguments; the signature is
         `on_progress(n_chunks, chunk_text)`. Here:
             `n_chunks`: int, how many chunks have been generated so far (for this invocation).
-                        This is useful if you want to e.g. print a progress symbol to the terminal every ten chunks.
-            `chunk_text` str, the actual text of the current chunk.
+                        This is useful for live UI updates.
+            `chunk_text` str, the text of the current chunk.
         Typically, at least with `oobabooga/text-generation-webui`, one chunk = one token.
 
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.

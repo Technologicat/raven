@@ -389,7 +389,7 @@ def scrub(llm_settings: env,
                      for thinking models.
 
     `markup`: used when `thoughts_mode='markup'`. Which markup kind to use, or `None` for no markup. One of:
-        "ansi": ANSI terminal color codes
+        "ansi": ANSI terminal color codes.
         "markdown": Markdown markup, with HTML tags for colors.
         `None` (the special value): no markup. (Same effect as setting `thoughts_mode='keep'`.)
 
