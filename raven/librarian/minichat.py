@@ -45,7 +45,7 @@ with timer() as tim:
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 print()
 
-def minimal_chat_client(backend_url):
+def minimal_chat_client(backend_url) -> None:
     """Minimal LLM chat client, for testing/debugging."""
 
     history_file = librarian_config.llmclient_userdata_dir / "history"      # user input history (readline)
@@ -58,7 +58,7 @@ def minimal_chat_client(backend_url):
     datastore = None  # initialized later, during app startup
 
     # Ugh for the presentation order, but this is needed in two places, starting immediately below.
-    def chat_show_model_info():
+    def chat_show_model_info() -> None:
         print(f"    {colorizer.colorize('Model', colorizer.Style.BRIGHT)}: {llm_settings.model}")
         print(f"    {colorizer.colorize('Character', colorizer.Style.BRIGHT)}: {llm_settings.char} [defined in this client]")
         print()
@@ -130,7 +130,7 @@ def minimal_chat_client(backend_url):
             pass
 
         # Set up autosave at exit.
-        def persist():
+        def persist() -> None:
             librarian_config.llmclient_userdata_dir.mkdir(parents=True, exist_ok=True)
 
             # Save readline history
@@ -142,7 +142,7 @@ def minimal_chat_client(backend_url):
             # There shouldn't be any, but this way we exercise these features, too.
             try:
                 new_chat_node_id = app_state["new_chat_HEAD"]
-                system_prompt_node_id = datastore.nodes[new_chat_node_id]["parent"]
+                system_prompt_node_id = datastore.get_parent(new_chat_node_id)
             except KeyError as exc:
                 logger.warning(f"During app shutdown: while pruning chat forest: {type(exc)}: {exc}")
             else:
@@ -155,7 +155,7 @@ def minimal_chat_client(backend_url):
 
         print(colorizer.colorize("Starting chat.", colorizer.Style.BRIGHT))
         print()
-        def chat_show_help():
+        def chat_show_help() -> None:
             print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
             print("    raven.librarian.minichat - Minimal LLM client for testing/debugging.")
             print()
@@ -187,8 +187,8 @@ def minimal_chat_client(backend_url):
                     "!model",
                     "!models",
                     "!speculate"]
-        def get_completions(candidates, text):
-            """Return matching completions for `text`.
+        def get_completions(candidates: List[str], text: str) -> List[str]:
+            """Return a list of matching completions for `text`.
 
             `candidates`: Every possible completion the system knows of, in the current context.
             `text`: Prefix text to complete. Can be the empty string, which matches all candidates.
@@ -209,7 +209,7 @@ def minimal_chat_client(backend_url):
             completions = [candidate for candidate, score in zip(candidates, scores) if score == max_score]
             return completions
         # https://docs.python.org/3/library/readline.html#readline-completion
-        def completer(text, state):  # completer for special commands
+        def completer(text: str, state: int) -> str:  # completer for special commands
             buffer_content = readline.get_line_buffer()  # context: text before the part being completed (up to last delim)
 
             # TODO: fix one more failure mode, e.g. "!help !<tab>"
@@ -218,7 +218,8 @@ def minimal_chat_client(backend_url):
             elif buffer_content.startswith("!docs"):  # in `!docs` command, expecting an argument?
                 candidates = ["True", "False"]
             elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
-                candidates = list(sorted(datastore.nodes.keys()))
+                with datastore.lock:
+                    candidates = list(sorted(datastore.nodes.keys()))
             elif buffer_content.startswith("!speculate"):  # in `!speculate` command, expecting an argument?
                 candidates = ["True", "False"]
             else:  # anything else -> no completions
@@ -251,7 +252,7 @@ def minimal_chat_client(backend_url):
         else:  # "Linux", "Windows"
             readline.parse_and_bind("tab: complete")
 
-        def chat_show_list_of_models():
+        def chat_show_list_of_models() -> None:
             available_models = llmclient.list_models(backend_url)
             print(colorizer.colorize("    Available models:", colorizer.Style.BRIGHT))
             for model_name in available_models:
@@ -411,12 +412,12 @@ def minimal_chat_client(backend_url):
             history = chatutil.linearize_chat(datastore, app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
             ai_message_number = len(history)
 
-            def on_llm_start():  # Called just before the LLM starts writing. The LLM will start once at the beginning of the AI's turn, and then once after each set of tool calls.
+            def on_llm_start() -> None:
                 nonlocal ai_message_number  # for documenting intent only
                 print(chatutil.format_message_number(ai_message_number, markup="ansi"))
 
             chars = 0
-            def on_llm_progress(n_chunks, chunk_text):  # Called while streaming the response from the LLM, typically once per generated token.
+            def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
                 nonlocal chars
                 chars += len(chunk_text)
                 if "\n" in chunk_text:  # one token at a time; should have either one linefeed or no linefeed
@@ -427,7 +428,7 @@ def minimal_chat_client(backend_url):
                 print(chunk_text, end="")
                 sys.stdout.flush()
 
-            def on_llm_done(node_id):  # Called after the LLM is done writing and the new chat node has been added to the chat datastore.
+            def on_llm_done(node_id: str) -> None:
                 nonlocal ai_message_number
 
                 app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
@@ -444,14 +445,14 @@ def minimal_chat_client(backend_url):
 
                 ai_message_number += 1
 
-            def on_docs_nomatch_done(node_id):  # Called instead of `on_llm_start`/`on_llm_progress`/`on_llm_done` if the LLM was bypassed (no docs match, speculate off), after the new chat node has been added to the chat datastore.
+            def on_docs_nomatch_done(node_id: str) -> None:
                 nomatch_message_node_payload = datastore.get_payload(node_id)
                 chat_print_message(message_number=ai_message_number,
                                    role="assistant",
                                    text=nomatch_message_node_payload["message"]["content"])
                 print()
 
-            def on_tool_done(node_id):  # Called *after* `on_llm_done`, once per tool call result, if there were tool calls, after the tool's response chat node has been added to the chat datastore.
+            def on_tool_done(node_id: str) -> None:
                 nonlocal ai_message_number
 
                 app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
@@ -498,7 +499,7 @@ def minimal_chat_client(backend_url):
         print(colorizer.colorize("Exiting chat.", colorizer.Style.BRIGHT))
         print()
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="""Minimal LLM chat client, for testing/debugging. You can use this for testing that Raven can connect to your LLM.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 

@@ -297,28 +297,29 @@ def upgrade_datastore(datastore: chattree.Forest, system_prompt_node_id: str) ->
     For example, the "retrieval" key stores the RAG query and its retrieval results,
     which is useful for collecting attributions in the chat client (as well as for debugging).
     """
-    # Get the names of system-level keys a chat node should have. Even in the old format (up to v0.2.2),
-    # no extra keys are ever created on the system prompt node, so we can use this node to get an
-    # up-to-date list (since `PersistentForest` auto-upgrades upon loading if the data format has changed).
-    system_keys = set(datastore.nodes[system_prompt_node_id].keys())
+    with datastore.lock:
+        # Get the names of system-level keys a chat node should have. Even in the old format (up to v0.2.2),
+        # no extra keys are ever created on the system prompt node, so we can use this node to get an
+        # up-to-date list (since `PersistentForest` auto-upgrades upon loading if the data format has changed).
+        system_keys = set(datastore.nodes[system_prompt_node_id].keys())
 
-    for node in datastore.nodes.values():
-        payload_revisions = node["data"]  # {revision_id: payload, ...}
+        for node in datastore.nodes.values():
+            payload_revisions = node["data"]  # {revision_id: payload, ...}
 
-        # v0.2.3: Upgrade payload format
-        for payload in payload_revisions.values():
-            if "message" not in payload:  # old format?
-                message = copy.copy(payload)
-                payload.clear()
-                payload["message"] = message
+            # v0.2.3: Upgrade payload format
+            for payload in payload_revisions.values():
+                if "message" not in payload:  # old format?
+                    message = copy.copy(payload)
+                    payload.clear()
+                    payload["message"] = message
 
-        # v0.2.3: Move any non-system keys on the node to under the revisioned data (one copy per revision; will become copies upon JSON saving anyway)
-        existing_keys = list(node.keys())
-        for key in existing_keys:
-            if key not in system_keys:
-                value = node.pop(key)
-                for payload in payload_revisions.values():
-                    payload[key] = copy.deepcopy(value)
+            # v0.2.3: Move any non-system keys on the node to under the revisioned data (one copy per revision; will become copies upon JSON saving anyway)
+            existing_keys = list(node.keys())
+            for key in existing_keys:
+                if key not in system_keys:
+                    value = node.pop(key)
+                    for payload in payload_revisions.values():
+                        payload[key] = copy.deepcopy(value)
 
 def factory_reset_datastore(datastore: chattree.Forest, llm_settings: env) -> str:
     """Reset `datastore` to its "factory-default" state.
@@ -333,14 +334,15 @@ def factory_reset_datastore(datastore: chattree.Forest, llm_settings: env) -> st
 
     You can obtain the `settings` object by first calling `setup`.
     """
-    datastore.purge()
-    root_node_id = datastore.create_node(payload={"message": create_initial_system_message(llm_settings)},
-                                         parent_id=None)
-    new_chat_node_id = datastore.create_node(payload={"message": create_chat_message(llm_settings,
-                                                                                     role="assistant",
-                                                                                     text=llm_settings.greeting)},
-                                             parent_id=root_node_id)
-    return new_chat_node_id
+    with datastore.lock:
+        datastore.purge()
+        root_node_id = datastore.create_node(payload={"message": create_initial_system_message(llm_settings)},
+                                             parent_id=None)
+        new_chat_node_id = datastore.create_node(payload={"message": create_chat_message(llm_settings,
+                                                                                         role="assistant",
+                                                                                         text=llm_settings.greeting)},
+                                                 parent_id=root_node_id)
+        return new_chat_node_id
 
 
 # --------------------------------------------------------------------------------

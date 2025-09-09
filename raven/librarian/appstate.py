@@ -39,20 +39,21 @@ def _scan_for_new_chat_head(datastore: chattree.Forest) -> str:
 
     This is needed if the app state file is missing or corrupted.
     """
-    root_node_ids = datastore.get_all_root_nodes()
-    if not root_node_ids:
-        raise ValueError("No system prompt nodes found in chat database, cannot proceed.")
-    if len(root_node_ids) > 1:
-        logger.warning("_scan_for_new_chat_head: Found more than one system prompt node in chat database, picking the first one.")
-    system_prompt_node_id = root_node_ids[0]
-    system_prompt_node = datastore.nodes[system_prompt_node_id]
-    n_new_chat_heads = len(system_prompt_node["children"])
-    if not n_new_chat_heads:
-        raise ValueError(f"System prompt node '{system_prompt_node_id}' has no AI greeting nodes attached to it, cannot proceed.")
-    if n_new_chat_heads > 1:
-        logger.warning(f"_scan_for_new_chat_head: Found more than one AI greeting node attached to system prompt node '{system_prompt_node_id}'; picking the first one, '{system_prompt_node['children'][0]}'.")
-    new_chat_node_id = system_prompt_node["children"][0]
-    return new_chat_node_id
+    with datastore.lock:
+        root_node_ids = datastore.get_all_root_nodes()
+        if not root_node_ids:
+            raise ValueError("No system prompt nodes found in chat database, cannot proceed.")
+        if len(root_node_ids) > 1:
+            logger.warning("_scan_for_new_chat_head: Found more than one system prompt node in chat database, picking the first one.")
+        system_prompt_node_id = root_node_ids[0]
+        system_prompt_node = datastore.nodes[system_prompt_node_id]
+        n_new_chat_heads = len(system_prompt_node["children"])
+        if not n_new_chat_heads:
+            raise ValueError(f"System prompt node '{system_prompt_node_id}' has no AI greeting nodes attached to it, cannot proceed.")
+        if n_new_chat_heads > 1:
+            logger.warning(f"_scan_for_new_chat_head: Found more than one AI greeting node attached to system prompt node '{system_prompt_node_id}'; picking the first one, '{system_prompt_node['children'][0]}'.")
+        new_chat_node_id = system_prompt_node["children"][0]
+        return new_chat_node_id
 
 # --------------------------------------------------------------------------------
 # API
@@ -117,11 +118,12 @@ def load(llm_settings: env,
 
     # Load datastore
     datastore = chattree.PersistentForest(datastore_file)  # This autoloads and auto-persists.
-    if datastore.nodes:
-        logger.info(f"load: Loaded chat datastore from '{orig_datastore_file}' (resolved to '{datastore_file}'). Found {len(datastore.nodes)} chat nodes in datastore.")
-    else:
-        logger.info("load: No chat nodes in datastore at '{orig_datastore_file}' (resolved to '{datastore_file}'). Creating new datastore, will be saved at app exit.")
-        _reset_datastore_and_update_state(llm_settings, datastore, state)
+    with datastore.lock:
+        if datastore.nodes:
+            logger.info(f"load: Loaded chat datastore from '{orig_datastore_file}' (resolved to '{datastore_file}'). Found {len(datastore.nodes)} chat nodes in datastore.")
+        else:
+            logger.info("load: No chat nodes in datastore at '{orig_datastore_file}' (resolved to '{datastore_file}'). Creating new datastore, will be saved at app exit.")
+            _reset_datastore_and_update_state(llm_settings, datastore, state)
 
     # Set any missing app state to defaults
     #
@@ -144,8 +146,7 @@ def load(llm_settings: env,
 
     # Refresh the system prompt in the datastore (to the one currently produced by `llmclient`)
     new_chat_node_id = state["new_chat_HEAD"]
-    new_chat_node = datastore.nodes[new_chat_node_id]
-    system_prompt_node_id = new_chat_node["parent"]
+    system_prompt_node_id = datastore.get_parent(new_chat_node_id)
     state["system_prompt_node_id"] = system_prompt_node_id  # remember it, the GUI chat client needs it
     old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
     datastore.add_revision(node_id=system_prompt_node_id,

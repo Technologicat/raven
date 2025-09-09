@@ -23,7 +23,7 @@ with timer() as tim:
     import sys
     import threading
     import traceback
-    from typing import List, Optional, Tuple, Union
+    from typing import Callable, Optional, Union
     import uuid
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -175,9 +175,21 @@ logger.info(f"RAG document store loaded in {tim.dt:0.6g}s.")
 # --------------------------------------------------------------------------------
 # Linear chat view (of current branch)
 
-def _scroll_chat_view_to_end():
+def _scroll_chat_view_to_end() -> None:
     max_y_scroll = dpg.get_y_scroll_max("chat_panel")
     dpg.set_y_scroll("chat_panel", max_y_scroll)
+
+def get_next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
+    siblings, node_index = datastore.get_siblings(node_id)
+    if siblings is None:
+        return None
+    if direction == "next":
+        if node_index < len(siblings) - 1:
+            return siblings[node_index + 1]
+    else:  # direction == "prev":
+        if node_index > 0:
+            return siblings[node_index - 1]
+    return None  # no sibling found
 
 def format_chat_message_for_clipboard(llm_settings: env,
                                       message_number: Optional[int],
@@ -243,7 +255,7 @@ def make_message_buttons(uuid: str,
     # dpg.add_spacer(tag=f"ai_message_buttons_spacer_{uuid}",
     #                parent=g)
 
-    def copy_message_to_clipboard():
+    def copy_message_to_clipboard() -> None:
         shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
         formatted_message = format_chat_message_for_clipboard(llm_settings=llmclient_settings,
                                                               message_number=None,
@@ -316,20 +328,21 @@ def make_message_buttons(uuid: str,
     c_end = '</font>'
     dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_branch_tooltip)
 
-    def make_navigate_to_prev_sibling(message_node_id):
-        def prev_sibling():
+    def make_navigate_to_prev_sibling(message_node_id: str) -> Callable:
+        def navigate_to_prev_sibling():
             node_id = get_next_or_prev_sibling(message_node_id, direction="prev")
             if node_id is not None:
                 build_linearized_chat(node_id)
                 dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
-        return prev_sibling
-    def make_navigate_to_next_sibling(message_node_id):
-        def next_sibling():
+        return navigate_to_prev_sibling
+
+    def make_navigate_to_next_sibling(message_node_id: str) -> Callable:
+        def navigate_to_next_sibling():
             node_id = get_next_or_prev_sibling(message_node_id, direction="next")
             if node_id is not None:
                 build_linearized_chat(node_id)
                 dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
-        return next_sibling
+        return navigate_to_next_sibling
 
     siblings, node_index = datastore.get_siblings(message_node_id)
     dpg.add_button(label=fa.ICON_ANGLE_LEFT,
@@ -363,7 +376,7 @@ class DisplayedChatMessage:
     callbacks = {}
 
     @classmethod
-    def run_callbacks(cls):
+    def run_callbacks(cls: type) -> None:
         with cls.class_lock:
             callbacks = list(cls.callbacks.items())
             for tag, function in callbacks:
@@ -543,19 +556,6 @@ def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
                                                              node_id=node_id))
     dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
 
-def get_next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
-    siblings, node_index = get_siblings(node_id)
-    if siblings is None:
-        return None
-
-    if direction == "next":
-        if node_index < len(siblings) - 1:
-            return siblings[node_index + 1]
-    else:  # direction == "prev":
-        if node_index > 0:
-            return siblings[node_index - 1]
-
-    return None  # no sibling found
 
 # --------------------------------------------------------------------------------
 # Set up the main window
@@ -809,7 +809,7 @@ dpg.show_viewport()
 #
 # We must defer loading the animator settings until after the GUI has been rendered at least once,
 # so that if there are any issues during loading, we can open a modal dialog. (We don't currently do that, though.)
-def _load_initial_animator_settings():
+def _load_initial_animator_settings() -> None:
     animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "settings", "animator.json")).expanduser().resolve()
 
     try:
@@ -836,7 +836,7 @@ def _load_initial_animator_settings():
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
 
-def _build_initial_chat_view(sender, app_data):
+def _build_initial_chat_view(sender, app_data) -> None:
     build_linearized_chat()
 dpg.set_frame_callback(11, _build_initial_chat_view)
 
@@ -855,5 +855,5 @@ logger.info("App render loop exited.")
 
 dpg.destroy_context()
 
-def main():  # TODO: we don't really need this; it's just for console_scripts.
+def main() -> None:  # TODO: we don't really need this; it's just for console_scripts.
     pass
