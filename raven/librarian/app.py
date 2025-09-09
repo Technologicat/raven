@@ -433,7 +433,6 @@ class DisplayedChatMessage:
         # dpg.delete_item(self.gui_text_group, children_only=True)  # clear old text
         dpg.delete_item(f"chat_message_text_{role}_{self.gui_uuid}")  # clear old text
         if text:  # don't bother if text is blank
-            # TODO: The MD renderer errors out (DPG: Item not found) if the text is updated very often - probably still rendering while the top-level widget gets deleted.
             chat_message_widget = dpg_markdown.add_text(colorized_message_text,
                                                         wrap=gui_config.chat_text_w,
                                                         parent=self.gui_text_group)
