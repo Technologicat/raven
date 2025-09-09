@@ -11,13 +11,14 @@ logger = logging.getLogger(__name__)
 
 import atexit
 import collections
+import contextlib
 import copy
 import io  # we occasionally need one of Jupiter's moons
 import json
 import pathlib
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 from unpythonic import gensym, partition
 
@@ -31,8 +32,15 @@ class Forest:
         Starting from any node, it is easy to produce a linearized branch up to that point,
         by walking up the parent chain.
 
-        NOTE: it is the caller's responsibility to keep a copy of important node IDs (such as root nodes);
+        NOTE: It is the caller's responsibility to keep a copy of important node IDs (such as root nodes);
         this class only provides the forest structure itself.
+
+        NOTE: This class provides various methods for creating, reading, updating and deleting the nodes in the tree.
+        If you need to do something that is not covered by the existing methods, the raw node storage can be accessed
+        via `datastore.nodes`, where `datastore` is your `Forest` instance. See storage format and thread-safety notes below.
+
+        The lock is a `threading.RLock`, so other functions from the same thread can still access the datastore
+        while it is already locked.
 
         For a persistent version, see `PersistentForest`.
 
@@ -50,6 +58,36 @@ class Forest:
                             "children": List[str]                    # [unique_id_of_child0, ...]
                            }
         }
+
+
+        **Thread safety**
+
+        If you access nodes manually, in order to be thread-safe, you should `with datastore.lock` the dynamic extent
+        where you do so, at least if you expect that relevant things might be changed by another thread.
+
+        For locking and grabbing a single node, there is a convenient context manager::
+
+            with datastore.node(node_id) as my_node:
+                ...
+
+        This gives you the requested node, while also locking the datastore for the dynamic extent of the `with`.
+
+        If you need lock-free manual access, EAFP to avoid TOCTTOU::
+
+            try:
+                my_node = datastore.nodes[node_id]
+            except KeyError:  # wasn't there
+                ...
+            else:  # you have the node now
+                ...
+
+        That is, atomize the check-and-get by just trying to grab a reference, instead of checking for presence separately.
+
+        Lock-free access is usually fine for a single node - though then there aren't any guarantees whether that node is
+        still in the datastore by the time you're done with it (vs. having been deleted in another thread).
+
+        If you want to walk links, it is advisable to lock the datastore first, just to be safe against any creations or deletions
+        that might affect the vicinity you are looking at.
         """
         self.nodes = {}
         self.lock = threading.RLock()
@@ -243,6 +281,76 @@ class Forest:
                     raise KeyError(f"Forest.get_payload: node '{node_id}' has no revision '{revision_id}'")
             assert str(revision_id) in node["data"]
             return node["data"][str(revision_id)]
+
+    # Return type: https://stackoverflow.com/questions/49733699/python-type-hints-and-context-managers
+    @contextlib.contextmanager
+    def node(self, node_id: str) -> Iterator[Dict]:
+        """Context manager: get the node `node_id` in a thread-safe manner, for direct access.
+
+        The datastore is locked for the dynamic extent of the context so that e.g. the payload revision
+        and any links to children are guaranteed to stay the same.
+        """
+        with self.lock:
+            if node_id not in self.nodes:
+                raise KeyError(f"Forest.node: no such node '{node_id}'")
+            yield self.nodes[node_id]
+
+    def get_parent(self, node_id: str) -> Optional[str]:
+        """Return the parent of `node_id`.
+
+        It may be `None` if `node_id` is a root node.
+        """
+        with self.lock:
+            if node_id not in self.nodes:
+                raise KeyError(f"Forest.get_parent: no such node '{node_id}'")
+            node = self.nodes[node_id]
+            parent = node["parent"]
+            return parent
+
+    def get_children(self, node_id: str) -> List[str]:
+        """Return a list of children of `node_id`.
+
+        That list may be empty, if `node_id` is a leaf node.
+        """
+        with self.lock:
+            if node_id not in self.nodes:
+                raise KeyError(f"Forest.get_children: no such node '{node_id}'")
+            node = self.nodes[node_id]
+            children = node["children"]
+            return children
+
+    def get_siblings(self, node_id: str) -> Tuple[Optional[List[str]], Optional[int]]:
+        """Return a list of siblings of `node_id`, including that node itself.
+
+        Returns the tuple `(siblings, node_index)`, where:
+            `siblings` is a list of node IDs,
+            `node_index` is the (0-based) index of `node_id` itself in the `siblings` list.
+
+        The sibling scan is performed via the parent node of `node_id`. If the parent is not found,
+        the return value is `(None, None)`. The return value is always arity-2 to support the pattern
+        `children, idx = datastore.get_siblings(node_id)` and then checking for `idx is None`.
+
+        A root node is defined as having no siblings. If you want all roots, use `get_all_root_nodes`.
+        """
+        with self.lock:
+            if node_id not in self.nodes:
+                raise KeyError(f"Forest.get_siblings: no such node '{node_id}'")
+            node = self.nodes[node_id]
+
+            parent_node_id = node["parent"]
+            if parent_node_id is None:  # root node?
+                return None, None
+
+            if parent_node_id not in self.nodes:
+                raise KeyError(f"Forest.get_siblings: node '{node_id}': its parent node '{parent_node_id}' does not exist.")
+            parent_node = self.nodes[parent_node_id]
+
+            siblings = parent_node["children"]  # including the node itself so we can get its index
+            try:
+                node_index = siblings.index(node_id)
+            except ValueError:
+                raise ValueError(f"Forest.get_siblings: node '{node_id}' is not in the children of its parent")
+            return siblings, node_index
 
     def copy_node(self, node_id: str, new_parent_id: Optional[str]) -> str:
         """Copy node `node_id`, copying also its contents.

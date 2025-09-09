@@ -330,8 +330,8 @@ def make_message_buttons(uuid: str,
                 build_linearized_chat(node_id)
                 dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
         return next_sibling
-    siblings, node_index = get_siblings(message_node_id)
 
+    siblings, node_index = datastore.get_siblings(message_node_id)
     dpg.add_button(label=fa.ICON_ANGLE_LEFT,
                    callback=make_navigate_to_prev_sibling(message_node_id),
                    enabled=(node_index is not None and node_index > 0),
@@ -542,37 +542,6 @@ def build_linearized_chat(head_node_id: Optional[str] = None) -> None:
             current_chat_history.append(DisplayedChatMessage(gui_parent="chat_group",
                                                              node_id=node_id))
     dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
-
-def get_siblings(node_id: str) -> Tuple[Optional[List[str]], Optional[int]]:  # TODO: move to `chattree`
-    """Return a list of siblings of `node_id`, including that node itself.
-
-    Returns the tuple `(siblings, node_index)`, where:
-        `siblings` is a list of node IDs,
-        `node_index` is the (0-based) index of `node_id` itself in the `siblings` list.
-
-    The sibling scan is performed via the parent node of `node_id`. If the parent is not found,
-    this function returns `(None, None)`.
-    """
-    with datastore.lock:
-        node = datastore.nodes[node_id]
-        parent_node_id = node["parent"]
-        if parent_node_id is None:  # root node?
-            return None, None  # TODO: use root scan (may need to cache)
-
-        parent_node = datastore.nodes[parent_node_id]
-        siblings = parent_node["children"]  # including the node itself so we can get its index
-        node_index = siblings.index(node_id)  # TODO: handle errors
-        return siblings, node_index
-
-def get_children(node_id: str) -> List[str]:  # TODO: move to `chattree`
-    """Return a list of children of `node_id`.
-
-    That list may be empty (if `node_id` is currently a leaf node).
-    """
-    with datastore.lock:
-        node = datastore.nodes[node_id]
-        children = node["children"]
-        return children
 
 def get_next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
     siblings, node_index = get_siblings(node_id)
