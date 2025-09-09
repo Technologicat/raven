@@ -672,8 +672,12 @@ def add_chat_message_to_linearized_chat_panel(node_id: str) -> DisplayedComplete
 # Scaffold to GUI integration
 
 def chat_round(user_message_text: str) -> None:  # message text comes from GUI
-    user_turn(text=user_message_text)
-    # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality.)
+    # Only add the user's message to the chat if the user entered any text.
+    if user_message_text:
+        user_turn(text=user_message_text)
+    else:
+        user_message_text is None  # send `None` as query to AI -> no docs search
+    # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
     ai_turn(docs_query=user_message_text)
 
 def user_turn(text: str) -> None:
