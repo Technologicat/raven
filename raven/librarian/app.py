@@ -858,8 +858,9 @@ with timer() as tim:
                               no_scroll_with_mouse=True):
             with dpg.group(horizontal=True):
                 def start_new_chat_callback() -> None:
-                    build_linearized_chat_panel(head_node_id=app_state["new_chat_HEAD"])
-                    # TODO: update app_state["HEAD"] to point to the new_chat_HEAD after we can actually chat with LLM
+                    new_chat_head_node_id = app_state["new_chat_HEAD"]
+                    app_state["HEAD"] = new_chat_head_node_id
+                    build_linearized_chat_panel(head_node_id=new_chat_head_node_id)
 
                 def copy_chatlog_to_clipboard_as_markdown_callback() -> None:
                     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
