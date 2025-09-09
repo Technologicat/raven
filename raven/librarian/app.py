@@ -430,8 +430,10 @@ class DisplayedChatMessage:
         #  - But first, `scaffold.ai_turn` shouldn't discard thought blocks
         #  - MD renderer doesn't support nested font tags, need to do something here
         colorized_message_text = f"<font color='{color}'>{text}</font>"
-        dpg.delete_item(self.gui_text_group, children_only=True)  # clear old text
+        # dpg.delete_item(self.gui_text_group, children_only=True)  # clear old text
+        dpg.delete_item(f"chat_message_text_{role}_{self.gui_uuid}")  # clear old text
         if text:  # don't bother if text is blank
+            # TODO: The MD renderer errors out (DPG: Item not found) if the text is updated very often - probably still rendering while the top-level widget gets deleted.
             chat_message_widget = dpg_markdown.add_text(colorized_message_text,
                                                         wrap=gui_config.chat_text_w,
                                                         parent=self.gui_text_group)
@@ -551,7 +553,8 @@ class DisplayedChatMessage:
                 node_id = get_next_or_prev_sibling(message_node_id, direction="prev")
                 if node_id is not None:
                     build_linearized_chat_panel(node_id)
-                    dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
+                    dpg.split_frame()
+                    _scroll_chat_view_to_end()
             return navigate_to_prev_sibling_callback
 
         def make_navigate_to_next_sibling(message_node_id: str) -> Callable:
@@ -559,7 +562,8 @@ class DisplayedChatMessage:
                 node_id = get_next_or_prev_sibling(message_node_id, direction="next")
                 if node_id is not None:
                     build_linearized_chat_panel(node_id)
-                    dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
+                    dpg.split_frame()
+                    _scroll_chat_view_to_end()
             return navigate_to_next_sibling_callback
 
         # Only messages attached to a datastore chat node can have siblings in the datastore
@@ -651,7 +655,8 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
             displayed_chat_message = DisplayedCompleteChatMessage(gui_parent="chat_group",
                                                                   node_id=node_id)
             current_chat_history.append(displayed_chat_message)
-    dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
+    dpg.split_frame()
+    _scroll_chat_view_to_end()
 
 
 def add_chat_message_to_linearized_chat_panel(node_id: str) -> DisplayedCompleteChatMessage:
@@ -660,7 +665,8 @@ def add_chat_message_to_linearized_chat_panel(node_id: str) -> DisplayedComplete
     displayed_chat_message = DisplayedCompleteChatMessage(gui_parent="chat_group",
                                                           node_id=node_id)
     current_chat_history.append(displayed_chat_message)
-    dpg.set_frame_callback(dpg.get_frame_count() + 10, _scroll_chat_view_to_end)
+    dpg.split_frame()
+    _scroll_chat_view_to_end()
 
 
 # --------------------------------------------------------------------------------
@@ -697,7 +703,26 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     text = io.StringIO()
     def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
         text.write(chunk_text)
-        streaming_chat_message.update_text(new_text=text.getvalue())  # TODO: every N tokens to reduce CPU usage from Markdown re-rendering?
+        # TODO: Update avatar state when LLM is writing.
+        #   - Split a few most recent lines of `text` to sentences (using the spaCy service on the server)
+        #     - We don't know whether the current last "sentence" as detected by spaCy is actually a complete sentence, since the LLM is still writing.
+        #     - Second-last sentence should always be complete (except for sentence-splitting glitches; maybe good enough).
+        #     - We can get the final sentence in `on_llm_done`, where we know that it's complete.
+        #   - When a new sentence is completed:
+        #     - When inside a thought block:
+        #         - Send the sentence to the sentiment classification model, update avatar emotion from result.
+        #     - When NOT inside a thought block:
+        #       - Append the English sentence to a deque for English->Finnish translation.
+        #         - Run the translation service in a background thread to avoid GUI hiccups.
+        #       - Monitor the translation deque. Once a translation completes, append the English-Finnish sentence pair to a deque for the TTS/subtitling system.
+        #         - Monitor this deque and TTS status in another background thread.
+        #         - When TTS is free, take the first item from the deque, start speaking, and display its subtitle.
+        #         - Simultaneously, send the sentence to the sentiment classification model, update avatar emotion from result.
+        #         - In the TTS stop event, remove the subtitle, and mark TTS as free.
+        if n_chunks % 10 == 0:
+            streaming_chat_message.update_text(new_text=text.getvalue())  # TODO: every N tokens to reduce CPU usage from Markdown re-rendering?
+            dpg.split_frame()
+            _scroll_chat_view_to_end()
         return llmclient.action_ack  # let the LLM keep generating (we could return `action_stop` to interrupt the LLM, keeping the content received so far)
 
     def on_llm_done(node_id: str) -> None:
@@ -1015,6 +1040,7 @@ dpg.set_frame_callback(2, _load_initial_animator_settings)
 def _build_initial_chat_view(sender, app_data) -> None:
     build_linearized_chat_panel()
 dpg.set_frame_callback(11, _build_initial_chat_view)
+dpg.set_frame_callback(21, _scroll_chat_view_to_end)  # for some reason, at app startup one `dpg.split_frame` after building the view isn't enough to let it settle
 
 logger.info("App render loop starting.")
 
