@@ -3649,7 +3649,7 @@ def _update_info_panel(*, task_env=None, env=None):
             # But even if we set the position to the `rect_min` of the old content group (so exactly on top),
             # it still sometimes gets it wrong (at least near the end of long content, when switching search on/off).
             #
-            # So it's better to just hide the old group, show the new one, and let DPG handle the laydataset.
+            # So it's better to just hide the old group, show the new one, and let DPG handle the layout.
             # When exactly one of the containers is shown, we have arranged for the new one to appear exactly
             # where the old one was. Then we can measure positions in the new data and everything works.
             #
