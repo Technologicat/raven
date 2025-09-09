@@ -722,8 +722,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         #         - When TTS is free, take the first item from the deque, start speaking, and display its subtitle.
         #         - Simultaneously, send the sentence to the sentiment classification model, update avatar emotion from result.
         #         - In the TTS stop event, remove the subtitle, and mark TTS as free.
-        if n_chunks % 10 == 0:
-            streaming_chat_message.update_text(new_text=text.getvalue())  # TODO: every N tokens to reduce CPU usage from Markdown re-rendering?
+        if n_chunks % 10 == 0:  # TODO: adjust interval to reduce CPU usage from Markdown re-rendering, especially for long responses
+            streaming_chat_message.update_text(new_text=text.getvalue())
             dpg.split_frame()
             _scroll_chat_view_to_end()
         return llmclient.action_ack  # let the LLM keep generating (we could return `action_stop` to interrupt the LLM, keeping the content received so far)
