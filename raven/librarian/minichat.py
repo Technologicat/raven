@@ -406,7 +406,7 @@ def minimal_chat_client(backend_url) -> None:
             return Values(action=action_proceed, text=user_message_text)
 
         def ai_turn(user_message_text: str) -> Values:
-            # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality.)
+            # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
             docs_query = user_message_text if app_state["docs_enabled"] else None
 
             history = chatutil.linearize_chat(datastore, app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
