@@ -1,7 +1,7 @@
 """Scaffolding for a multi-turn conversation with automatic RAG search and tool-calling."""
 
 __all__ = ["user_turn",
-           "ai_turn"]
+           "ai_turn", "action_ack", "action_stop"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +19,12 @@ from . import llmclient
 
 action_continue = sym("continue")  # continue this turn (e.g. when docs were searched and at least one match was found)
 action_done = sym("done")  # this turn (user/AI) is complete
+
+action_ack = llmclient.action_ack
+action_stop = llmclient.action_stop
+
+# --------------------------------------------------------------------------------
+# User's turn
 
 def user_turn(llm_settings: env,
               datastore: chattree.Forest,
@@ -43,6 +49,9 @@ def user_turn(llm_settings: env,
                                                  parent_id=head_node_id)
     return user_message_node_id
 
+
+# --------------------------------------------------------------------------------
+# AI's turn
 
 def _search_docs_with_bypass(llm_settings: env,
                              datastore: chattree.Forest,
@@ -168,6 +177,7 @@ def _perform_injects(llm_settings: env,
         history.append(message_to_inject)
 
 
+# TODO: `raven.librarian.scaffold.ai_turn`: implement continue mode, to continue an interrupted generation (or one that ran out of max output length)
 def ai_turn(llm_settings: env,
             datastore: chattree.Forest,
             retriever: hybridir.HybridIR,
@@ -175,6 +185,7 @@ def ai_turn(llm_settings: env,
             docs_query: Optional[str],  # if supplied, search the document database with this query and inject the results
             speculate: bool,  # if `False`, remind the LLM to respond using in-context information only
             markup: Optional[str],
+            on_prompt_ready: Optional[Callable],
             on_llm_start: Optional[Callable],
             on_llm_progress: Optional[Callable],
             on_llm_done: Optional[Callable],
@@ -217,34 +228,53 @@ def ai_turn(llm_settings: env,
         `None` (the special value): no markup, keep thought blocks as-is.
 
     We provide the following optional callbacks/events, which are useful for live UI updates.
-    The return value of the callbacks is ignored.
 
-    `on_llm_start`: 0-argument callable. Called just before the LLM starts writing.
-                    The LLM will start once at the beginning of the AI's turn,
-                    and then once after each set of tool calls.
+    `on_prompt_ready`: 1-argument callable, with argument `history: List[Dict]`. Debug/info hook.
+                       The return value is ignored.
 
-    `on_llm_progress`: 2-argument callable, with arguments `(n_chunks, chunk_text)`.
+                       Called after the LLM context has been completely prepared, before sending it to the LLM.
+
+                       This is the modified history, after including document search results and temporary injects.
+                       Each element of the list is a chat message in the format accepted by the LLM backend,
+                       with "role" and "content" fields.
+
+    `on_llm_start`: 0-argument callable. Called just before we call `llmclient.invoke` and the LLM starts
+                    streaming a response.
+                    The return value is ignored.
+
+                    The LLM will start once at the beginning of the AI's turn, and then once after each set
+                    of tool calls.
+
+    `on_llm_progress`: 2-argument callable, with arguments `(n_chunks: int, chunk_text: str)`.
                        Called while streaming the response from the LLM, typically once per generated token.
 
-           `n_chunks`: int, how many chunks have been generated so far (for this invocation).
-                       This is useful for live UI updates.
+           `n_chunks: int`: How many chunks have been generated so far, for this invocation.
+                            Useful for live UI updates.
 
-           `chunk_text` str, the text of the current chunk.
+           `chunk_text: str`: The text of the current chunk (typically a token).
 
-    `on_llm_done`: 1-argument callable, with argument `node_id`.
+           Return value: `action_ack` to let the LLM keep generating, `action_stop` to interrupt and finish forcibly.
+
+           If you interrupt the LLM by returning `action_stop`, normal finalization still takes place, and you'll get
+           a chat message populated with the content received so far. It is up to the caller what to do with that data.
+
+    `on_llm_done`: 1-argument callable, with argument `node_id: str`.
+                   The return value is ignored.
 
                    Called after the LLM is done writing and the new chat node has been added to the chat datastore.
 
                    The argument is the node ID of this new chat node.
 
-    `on_docs_nomatch_done`: 1-argument callable, with argument `node_id`.
+    `on_docs_nomatch_done`: 1-argument callable, with argument `node_id: str`.
+                            The return value is ignored.
 
                             Called instead of `on_llm_start`/`on_llm_progress`/`on_llm_done` if the LLM was bypassed,
                             after the new chat node has been added to the chat datastore.
 
                             The argument is the node ID of this new chat node.
 
-    `on_tool_done`: 1-argument callable, with argument `node_id`.
+    `on_tool_done`: 1-argument callable, with argument `node_id: str`.
+                    The return value is ignored.
 
                     Called *after* `on_llm_done`, once per tool call result, if there were tool calls, after the
                     tool's response chat node has been added to the chat datastore.
@@ -253,6 +283,7 @@ def ai_turn(llm_settings: env,
 
     Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
+    # Search document database if requested
     if docs_query is not None:
         docs_result = _search_docs_with_bypass(llm_settings=llm_settings,
                                                datastore=datastore,
@@ -273,11 +304,13 @@ def ai_turn(llm_settings: env,
         message_history = chatutil.linearize_chat(datastore=datastore,
                                                   node_id=head_node_id)
 
-        # Prepare the final LLM prompt, by including the temporary injects.
+        # Prepare the final LLM prompt, by including the temporary injects (the document search results, too).
         _perform_injects(llm_settings=llm_settings,
                          history=message_history,
                          speculate=speculate,
                          docs_matches=docs_matches)
+        if on_prompt_ready is not None:
+            on_prompt_ready(message_history)
 
         if on_llm_start is not None:
             on_llm_start()

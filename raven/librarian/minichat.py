@@ -427,6 +427,7 @@ def minimal_chat_client(backend_url) -> None:
                     chars = 0
                 print(chunk_text, end="")
                 sys.stdout.flush()
+                return llmclient.action_ack  # let the LLM keep generating (we could return `action_stop` to interrupt the LLM, keeping the content received so far)
 
             def on_llm_done(node_id: str) -> None:
                 nonlocal ai_message_number
@@ -472,6 +473,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 docs_query=docs_query,
                                                 speculate=app_state["speculate_enabled"],
                                                 markup="ansi",
+                                                on_prompt_ready=None,  # debug/info hook
                                                 on_llm_start=on_llm_start,
                                                 on_llm_progress=on_llm_progress,
                                                 on_llm_done=on_llm_done,
