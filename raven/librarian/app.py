@@ -101,6 +101,12 @@ with timer() as tim:
         w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve()))
         icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture")
 
+        w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "system.png")).expanduser().resolve()))
+        icon_system_texture = dpg.add_static_texture(w, h, data, tag="icon_system_texture")
+
+        w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "tool.png")).expanduser().resolve()))
+        icon_tool_texture = dpg.add_static_texture(w, h, data, tag="icon_tool_texture")
+
         w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "user.png")).expanduser().resolve()))
         icon_user_texture = dpg.add_static_texture(w, h, data, tag="icon_user_texture")
 
@@ -177,6 +183,8 @@ logger.info(f"RAG document store loaded in {tim.dt:0.6g}s.")
 # Linear chat view (of current branch)
 
 gui_role_icons = {"assistant": "icon_ai_texture",
+                  "system": "icon_system_texture",
+                  "tool": "icon_tool_texture",
                   "user": "icon_user_texture",
                   }
 role_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},

@@ -120,8 +120,8 @@ gui_config = env(  # ----------------------------------------
                  chat_color_ai_back=(45, 45, 48),
                  chat_color_user_front=colorspace.hex_to_rgb("#8e8e8eff"),
                  chat_color_user_back=(45, 45, 48),
-                 chat_color_system_front=colorspace.hex_to_rgb("#d59231ff"),
+                 chat_color_system_front=colorspace.hex_to_rgb("#45ab49ff"),
                  chat_color_system_back=(45, 45, 48),
-                 chat_color_tool_front=colorspace.hex_to_rgb("#45ab49ff"),
+                 chat_color_tool_front=colorspace.hex_to_rgb("#d59231ff"),
                  chat_color_tool_back=(45, 45, 48),
                 )

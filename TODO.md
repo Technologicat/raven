@@ -43,9 +43,7 @@
 - Librarian
   - First, build the minimal demo:
     - Draw assets:
-      - Make better chat icons for AI/user roles
-        - Make per-character AI chat icons
-      - Make chat icons for system, tool roles
+      - Make per-character AI chat icons
       - Finish the new app icon for Raven (small and large sizes)
     - Add feature: Switch chat (from all leaf nodes in datastore)
     - Improve live preview of LLM output
