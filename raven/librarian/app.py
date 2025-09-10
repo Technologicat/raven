@@ -22,6 +22,7 @@ with timer() as tim:
     import requests
     import sys
     import threading
+    import time
     import traceback
     from typing import Callable, Optional, Union
     import uuid
@@ -273,20 +274,27 @@ class DisplayedChatMessage:
         self.gui_container_group = dpg.add_group(tag=f"chat_item_container_group_{self.gui_uuid}",
                                                  parent=self.gui_parent)
         self.role = None  # populated by `build`
-        self.text = None  # populated by `build`
+        self.paragraphs = []  # [{"text": ..., "rendered": True}, ...]
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
 
+    def _get_text(self):
+        return "\n".join(paragraph["text"] for paragraph in self.paragraphs)
+    text = property(fget=_get_text,
+                    doc="Full text of this GUI chat message. Read-only.")
+
     def build(self,
               role: str,
-              text: str,
+              text: Optional[str],
               node_id: Optional[str]) -> None:
-        """Build the GUI widgets for this instance, thus rendering the chat message (and buttons and such) in the GUI."""
+        """Build the GUI widgets for this instance, thus rendering the chat message (and buttons and such) in the GUI.
+
+        The initial `text` may be `None` if you intend to add the text later.
+        """
         global gui_role_icons  # intent only
         global role_colors  # intent only
 
         self.role = role
-        self.text = text
         self.node_id = node_id
 
         # clear old GUI content (needed if rebuilding)
@@ -331,7 +339,8 @@ class DisplayedChatMessage:
         # render the actual text
         self.gui_text_group = dpg.add_group(tag=f"chat_message_text_container_group_{self.gui_uuid}",
                                             parent=text_vertical_layout_group)  # create another group to act as container so that we can update/replace just the text easily
-        self._render_text()
+        if text is not None:  # Add the first text (paragraph) if supplied.
+            self.add_paragraph(text)
 
         # Show LLM performance statistics if linked to a chat node, and the chat node has them
         if role == "assistant" and node_id is not None:
@@ -343,6 +352,11 @@ class DisplayedChatMessage:
                 dpg.add_text(f"[{n_tokens}t, {dt:0.2f}s, {speed:0.2f}t/s]",
                              color=(120, 120, 120),
                              parent=text_vertical_layout_group)
+
+        # If there is no datastore chat node attached to this message, it doesn't need the datastore control buttons.
+        # This makes the GUI look calmer while rendering a streaming message.
+        if node_id is None:
+            return
 
         # text area end spacer
         dpg.add_spacer(height=2,
@@ -421,33 +435,57 @@ class DisplayedChatMessage:
         #     dpg.set_frame_callback(dpg.get_frame_count() + 10,
         #                            type(self).run_callbacks)
 
-    def update_text(self, new_text: str) -> None:
-        """Update the chat message text shown in the GUI, without rebuilding anything else."""
-        self.text = new_text
+    def add_paragraph(self, text: str) -> None:
+        """Add a new paragraph of text to this widget."""
+        paragraph = {"text": text,
+                     "rendered": False}
+        self.paragraphs.append(paragraph)
+        self._render_text()
+
+    def replace_last_paragraph(self, text: str) -> None:  # TODO: Only last paragraph is replaceable for now, because it's easier for coding the GUI. :)
+        """Replace the last paragraph of text in this widget. If there are no paragraphs yet, create one automatically."""
+        if not self.paragraphs:
+            self.add_paragraph(text)
+            return
+        paragraph = self.paragraphs[-1]
+        if "widget" in paragraph:
+            dpg.delete_item(paragraph.pop("widget"))
+        paragraph["text"] = text
+        paragraph["rendered"] = False
         self._render_text()
 
     def _render_text(self) -> None:
-        """Internal method. Clear the text container and render current message text in the GUI."""
+        """Internal method. Render any pending new paragraphs. We assume new paragraphs are added only to the end."""
         if self.gui_text_group is None:
             assert False
+        # dpg.delete_item(self.gui_text_group, children_only=True)  # how to clear all old text if we ever need to
         role = self.role
-        text = self.text.strip()
         color = role_colors[role]["front"] if role in role_colors else "#ffffff"
-        # TODO: Handle thought blocks in GUI
-        #  - Use `chatutil.scrub` for auto-coloring
-        #  - But first, `scaffold.ai_turn` shouldn't discard thought blocks
-        #  - MD renderer doesn't support nested font tags, need to do something here
-        colorized_message_text = f"<font color='{color}'>{text}</font>"
-        # dpg.delete_item(self.gui_text_group, children_only=True)  # clear old text
-        dpg.delete_item(f"chat_message_text_{role}_{self.gui_uuid}")  # clear old text
-        if text:  # don't bother if text is blank
-            chat_message_widget = dpg_markdown.add_text(colorized_message_text,
-                                                        wrap=gui_config.chat_text_w,
-                                                        parent=self.gui_text_group)
-            dpg.set_item_alias(chat_message_widget, f"chat_message_text_{role}_{self.gui_uuid}")
+        for idx, paragraph in enumerate(self.paragraphs):
+            if paragraph["rendered"]:
+                continue
+            assert "widget" not in paragraph  # a paragraph that hasn't been rendered has no GUI text widget associated with it
+            text = paragraph["text"].strip()
+            if text:  # don't bother if text is blank
+                # TODO: Handle thought blocks properly in GUI. For now, we just replace the tags with something that doesn't look like HTML to avoid confusing the Markdown renderer (which drops unknown tags).
+                #  - Use `chatutil.scrub` for auto-coloring
+                #  - But first, `scaffold.ai_turn` shouldn't discard thought blocks (as long as it does, we only get thoughts while streaming)
+                #  - MD renderer doesn't support nested font tags, need to do something here
+                #  - A thought block may span multiple paragraphs, so need to track thought-block state while rendering
+                text = text.replace("<tool_call>", "**>>>Tool call>>>**")
+                text = text.replace("</tool_call>", "**<<<Tool call<<<**")
+                text = text.replace("<think>", "**>>>Thinking>>>**")
+                text = text.replace("</think>", "**<<<Thinking<<<**")
+                colorized_text = f"<font color='{color}'>{text}</font>"
+                widget = dpg_markdown.add_text(colorized_text,
+                                               wrap=gui_config.chat_text_w,
+                                               parent=self.gui_text_group)
+                paragraph["widget"] = widget
+                dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")
+            paragraph["rendered"] = True
 
     def demolish(self) -> None:
-        """The opposite of `build`: delete the GUI widgets belonging to this instance.
+        """The opposite of `build`: delete all GUI widgets belonging to this instance.
 
         If you use `build_linearized_chat_panel`, it takes care of clearing all chat message GUI widgets automatically,
         and you do not need to call this.
@@ -457,7 +495,7 @@ class DisplayedChatMessage:
         The main use case is switching a streaming message to a completed one when the streaming is done.
         """
         self.role = None
-        self.text = None
+        self.paragraphs = []
         self.gui_text_group = None
         dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
 
@@ -662,7 +700,7 @@ class DisplayedStreamingChatMessage(DisplayedChatMessage):
 
     def build(self):
         super().build(role="assistant",  # TODO: parameterize this?
-                      text="",
+                      text=None,  # start with no text
                       node_id=None)
 
 
@@ -730,9 +768,16 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     def on_llm_start() -> None:
         nonlocal streaming_chat_message
         streaming_chat_message = DisplayedStreamingChatMessage(gui_parent="chat_group")
+        dpg.split_frame()
+        _scroll_chat_view_to_end()
 
     text = io.StringIO()
+    t0 = time.monotonic()
+    n_chunks0 = 0
     def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
+        nonlocal text
+        nonlocal t0
+        nonlocal n_chunks0
         text.write(chunk_text)
         # TODO: Update avatar state when LLM is writing.
         #   - Split a few most recent lines of `text` to sentences (using the spaCy service on the server)
@@ -750,8 +795,21 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         #         - When TTS is free, take the first item from the deque, start speaking, and display its subtitle.
         #         - Simultaneously, send the sentence to the sentiment classification model, update avatar emotion from result.
         #         - In the TTS stop event, remove the subtitle, and mark TTS as free.
-        if n_chunks % 10 == 0:  # TODO: adjust interval to reduce CPU usage from Markdown re-rendering, especially for long responses
-            streaming_chat_message.update_text(new_text=text.getvalue())
+        time_now = time.monotonic()
+        dt = time_now - t0  # seconds
+        dchunks = n_chunks - n_chunks0
+        if "\n" in chunk_text:  # start new paragraph?
+            streaming_chat_message.replace_last_paragraph(text.getvalue())
+            streaming_chat_message.add_paragraph("")
+            text = io.StringIO()
+            dpg.split_frame()
+            _scroll_chat_view_to_end()
+        # - update at least every 0.5 sec
+        # - update after every 10 chunks, but rate-limited (at least 0.1 sec must have passed since last update)
+        elif dt >= 0.5 or (dt >= 0.1 and dchunks >= 10):  # commit to last paragraph (will auto-create one the first time)
+            t0 = time_now
+            n_chunks0 = n_chunks
+            streaming_chat_message.replace_last_paragraph(text.getvalue())
             dpg.split_frame()
             _scroll_chat_view_to_end()
         return llmclient.action_ack  # let the LLM keep generating (we could return `action_stop` to interrupt the LLM, keeping the content received so far)
