@@ -157,6 +157,9 @@ class Url(HoverAttribute):
         self.dpg_text_objects.append(dpg_text)
         try:
             dpg.configure_item(dpg_text, color=self.color)
+            # Raven customization: show the linked URL as a tooltip
+            url_tooltip = dpg.add_tooltip(parent=dpg_text)
+            dpg.add_text(self.url, parent=url_tooltip)
         except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
             return
 
