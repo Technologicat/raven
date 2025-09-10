@@ -155,19 +155,28 @@ class Url(HoverAttribute):
         super().render()
         self.add_item_to_handler(dpg_text)
         self.dpg_text_objects.append(dpg_text)
-        dpg.configure_item(dpg_text, color=self.color)
+        try:
+            dpg.configure_item(dpg_text, color=self.color)
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return
 
     def hover(self):
-        for item in self.dpg_text_objects:
-            dpg.configure_item(item, color=self.hover_color)
-        for item in self.underline_objects:
-            dpg.configure_item(item, color=self.hover_color)
+        try:
+            for item in self.dpg_text_objects:
+                dpg.configure_item(item, color=self.hover_color)
+            for item in self.underline_objects:
+                dpg.configure_item(item, color=self.hover_color)
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return
 
     def unhover(self):
-        for item in self.dpg_text_objects:
-            dpg.configure_item(item, color=self.color)
-        for item in self.underline_objects:
-            dpg.configure_item(item, color=self.line_color)
+        try:
+            for item in self.dpg_text_objects:
+                dpg.configure_item(item, color=self.color)
+            for item in self.underline_objects:
+                dpg.configure_item(item, color=self.line_color)
+        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+            return
 
     def click(self, mouse_button):
         if mouse_button in [2, 0]:

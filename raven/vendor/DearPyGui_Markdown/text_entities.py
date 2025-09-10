@@ -123,7 +123,10 @@ class AttributeController(list[Attribute]):
             if strike_drawlist:  # Strike in self
                 url_attribute.add_item_to_handler(strike_drawlist)
                 url_attribute._objects.append(strike_line)
-                dpg.configure_item(strike_line, color=url_attribute.color)
+                try:
+                    dpg.configure_item(strike_line, color=url_attribute.color)
+                except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+                    pass
 
             if underline_drawlist:  # Underline in self
                 url_attribute.line_color = url_attribute.color
@@ -131,7 +134,10 @@ class AttributeController(list[Attribute]):
                 underline_drawlist, underline_line = Underline.render(dpg_text, dpg_text_group, font=font, parent=attributes_group)
 
             url_attribute.underline_objects.append(underline_line)
-            dpg.configure_item(underline_line, color=url_attribute.line_color)
+            try:
+                dpg.configure_item(underline_line, color=url_attribute.line_color)
+            except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+                pass
 
             url_attribute.render(dpg_text, font=font, parent=attributes_group)
 
