@@ -89,7 +89,7 @@ def websearch_wrapper(query: str,
         if markup == "ansi":
             text = colorizer.colorize(text, colorizer.Style.BRIGHT)
         elif markup == "markdown":
-            text = "**{text}**"
+            text = f"**{text}**"
         return text
 
     def format_link(url: str) -> str:
