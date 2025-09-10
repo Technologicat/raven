@@ -45,6 +45,8 @@
     - Draw assets:
       - Make per-character AI chat icons
       - Finish the new app icon for Raven (small and large sizes)
+    - Add hotkeys
+      - Separate hotkey mode while `chat_field` is focused
     - Add feature: Switch chat (from all leaf nodes in datastore)
     - Improve live preview of LLM output
       - Eliminate GUI flicker during live preview (needs double-buffering?)
@@ -67,6 +69,7 @@
     - Add feature: timestamped chat messages (when adding them to datastore; see `raven.librarian.scaffold`)
     - Add feature: save full prompt with each AI message (get it from the `on_prompt_ready` event of `raven.librarian.scaffold.ai_turn`)
       - Add a GUI button and window to show the full prompt (render as Markdown) and to copy it to clipboard
+    - Librarian config: avatar on/off, which character to load, Librarian-specific settings overrides
   - Later:
     - Avatar: add cel effect for internet access / tool use (data eyes)
     - Avatar: add digital glitch effect when switching chat branches (change postprocessor config on the fly)
@@ -77,8 +80,6 @@
     - Add feature: message editing (use chattree's revision system)
     - Add feature: search for chats (incremental fragment search for now)
     - Improve text entry: multiline input
-    - Add hotkeys
-      - Separate hotkey mode while `chat_field` is focused
     - Add chat graph editor (this is part of where the true power of Librarian will come from)
       - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_viewmodel.py#L206
       - how to get mouse position: https://github.com/hoffstadt/DearPyGui/issues/2164
