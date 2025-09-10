@@ -31,6 +31,8 @@ from typing import Dict, List, Optional
 
 import sseclient  # pip install sseclient-py
 
+from mcpyrate import colorizer
+
 from unpythonic import sym, timer
 from unpythonic.env import env
 
@@ -72,10 +74,45 @@ if os.path.exists(librarian_config.llm_api_key_file):  # TODO: test this (implem
 # --------------------------------------------------------------------------------
 # Websearch integration (requires `raven.server` to be running)
 
-def websearch_wrapper(query: str, engine: str = "duckduckgo", max_links: int = 10) -> str:
-    """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the results page."""
-    data = api.websearch_search(query, engine, max_links)
-    return data["results"]  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
+def websearch_wrapper(query: str,
+                      engine: str = "duckduckgo",
+                      max_links: int = 10) -> str:
+    """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the SERP (search engine results page)."""
+    # TODO: The ANSI coloring isn't useful in `websearch_wrapper`, because its output goes to the LLM. We should separate data/presentation if we want to do this. Currently, should always use markdown, which the LLM also understands.
+    markup = "markdown"
+    chatutil._yell_if_unsupported_markup(markup)
+
+    websearch_results = api.websearch_search(query, engine, max_links)  # -> {"results": preformatted_text, "data": structured_results}
+    structured_results = websearch_results["data"]
+
+    def highlight(text: str) -> str:
+        if markup == "ansi":
+            text = colorizer.colorize(text, colorizer.Style.BRIGHT)
+        elif markup == "markdown":
+            text = "**{text}**"
+        return text
+
+    def format_link(url: str) -> str:
+        if markup == "ansi":
+            url = colorizer.colorize(url, colorizer.Style.BRIGHT, colorizer.Fore.BLUE)
+        elif markup == "markdown":
+            url = f"[{url}]({url})"
+        return url
+
+    # See also `raven.server.modules.websearch`, which has a version of this without markup.
+    def format_result(result: dict) -> str:
+        if "title" in result and "link" in result:
+            heading = f"{highlight('Web result from')}: {format_link(result['link'])}\n{highlight(result['title'])}"
+        elif "title" in result:
+            heading = highlight(result["title"])
+        elif "link" in result:
+            heading = f"{highlight('Web result from')}: {format_link(result['link'])}"
+        else:
+            return f"{result['text']}\n"
+        return f"{heading}\n\n{result['text']}\n"
+
+    formatted_text = "\n\n".join(format_result(result) for result in structured_results)
+    return formatted_text  # TODO: our LLM scaffolding doesn't currently accept anything else but preformatted text
 
 # --------------------------------------------------------------------------------
 # Utilities
@@ -89,7 +126,9 @@ def list_models(backend_url: str) -> List[str]:
     return [model_name for model_name in sorted(payload["model_names"], key=lambda s: s.lower())]
 
 def setup(backend_url: str) -> env:
-    """Connect to LLM at `backend_url`, and return an `env` object (a fancy namespace) populated with the following fields:
+    """Connect to LLM at `backend_url`.
+
+    Return an `env` object (a fancy namespace) populated with the following fields:
 
         `user`: Name of user's character.
         `char`: Name of AI assistant.

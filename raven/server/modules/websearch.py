@@ -253,6 +253,7 @@ def format_results(texts: List[str],
         for result, title in zip(results, titles):
             result["title"] = title
 
+    # See also `raven.librarian.llmclient`, which has a version of this with markup.
     def format_result(result: dict) -> str:
         if "title" in result and "link" in result:
             heading = f"Web result from: {result['link']}\n{result['title']}"
