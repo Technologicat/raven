@@ -209,7 +209,7 @@ def get_attr_by_selector(selector: str, attr: str) -> List[str]:
             collected.append(el.get_attribute(attr))
     return collected
 
-def debug_dump():
+def debug_dump() -> None:
     """Dump the page from the web driver to an HTML file, for debugging."""
     with open(dump_filename, "w", encoding='utf-8') as html_file:
         html_file.write(driver.page_source)
@@ -253,7 +253,7 @@ def format_results(texts: List[str],
         for result, title in zip(results, titles):
             result["title"] = title
 
-    def format_result(result):
+    def format_result(result: dict) -> str:
         if "title" in result and "link" in result:
             heading = f"Web result from: {result['link']}\n{result['title']}"
         elif "title" in result:
