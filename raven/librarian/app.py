@@ -502,6 +502,7 @@ class DisplayedChatMessage:
                                              tag=f"message_copy_to_clipboard_button_{self.gui_uuid}",
                                              parent=g)
         dpg.bind_item_font(f"message_copy_to_clipboard_button_{self.gui_uuid}", themes_and_fonts.icon_font_solid)  # tag
+        dpg.bind_item_theme(f"message_copy_to_clipboard_button_{self.gui_uuid}", "disablable_button_theme")  # tag
         copy_message_tooltip = dpg.add_tooltip(f"message_copy_to_clipboard_button_{self.gui_uuid}")  # tag
         copy_message_tooltip_text = dpg.add_text("Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID", parent=copy_message_tooltip)
 
@@ -522,10 +523,12 @@ class DisplayedChatMessage:
 
         dpg.add_button(label=fa.ICON_PENCIL,
                        callback=lambda: None,  # TODO
+                       enabled=False,
                        width=gui_config.toolbutton_w,
                        tag=f"chat_edit_button_{self.gui_uuid}",
                        parent=g)
         dpg.bind_item_font(f"chat_edit_button_{self.gui_uuid}", themes_and_fonts.icon_font_solid)  # tag
+        dpg.bind_item_theme(f"chat_edit_button_{self.gui_uuid}", "disablable_button_theme")  # tag
         edit_tooltip = dpg.add_tooltip(f"chat_edit_button_{self.gui_uuid}")  # tag
         dpg.add_text("Edit (revise)", parent=edit_tooltip)
 
@@ -862,6 +865,7 @@ with timer() as tim:
                                        width=gui_config.toolbutton_w,
                                        tag="chat_send_button")
                         dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag  # TODO: make this change into a cancel button while the LLM is writing.
+                        dpg.bind_item_theme("chat_send_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_send_button"):  # tag
                             dpg.add_text("Send to AI")
 
@@ -952,9 +956,11 @@ with timer() as tim:
 
                 dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
                                callback=lambda: None,  # TODO
+                               enabled=False,
                                width=gui_config.toolbutton_w,
                                tag="chat_open_graph_button")
                 dpg.bind_item_font("chat_open_graph_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_theme("chat_open_graph_button", "disablable_button_theme")  # tag
                 open_graph_tooltip = dpg.add_tooltip("chat_open_graph_button")  # tag
                 dpg.add_text("Open graph view", parent=open_graph_tooltip)
 
@@ -963,6 +969,7 @@ with timer() as tim:
                                                   width=gui_config.toolbutton_w,
                                                   tag="chat_copy_to_clipboard_button")
                 dpg.bind_item_font("chat_copy_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_theme("chat_copy_to_clipboard_button", "disablable_button_theme")  # tag
                 copy_chat_tooltip = dpg.add_tooltip("chat_copy_to_clipboard_button")  # tag
                 copy_chat_tooltip_text = dpg.add_text("Copy this conversation to clipboard\n    no modifier: as-is\n    with Shift: include message node IDs", parent=copy_chat_tooltip)
 
