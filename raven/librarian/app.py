@@ -490,11 +490,15 @@ class DisplayedChatMessage:
             self.add_paragraph(text)
             return
         paragraph = self.paragraphs[-1]
-        if "widget" in paragraph:
-            dpg.delete_item(paragraph.pop("widget"))
-        paragraph["text"] = text
-        paragraph["rendered"] = False
-        self._render_text()
+        # The mutex guarantees this section runs in the same frame.
+        #     https://github.com/hoffstadt/DearPyGui/discussions/1002
+        with dpg.mutex():
+            if "widget" in paragraph:
+                dpg.delete_item(paragraph.pop("widget"))
+            paragraph["text"] = text
+            paragraph["rendered"] = False
+            self._render_text()
+        dpg.split_frame()  # ...and anything after this point runs in another frame.
 
     def _render_text(self) -> None:
         """Internal method. Render any pending new paragraphs. We assume new paragraphs are added only to the end."""
