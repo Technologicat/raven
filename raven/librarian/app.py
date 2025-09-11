@@ -206,6 +206,10 @@ def _scroll_chat_view_to_end(max_wait_frames: int = 50) -> None:
     NOTE: When called from the main thread, `max_wait_frames` must be 0, as any
           attempt to wait would hang the main thread's explicit render loop.
 
+          This also has the effect of not printing the current frame number,
+          because `dpg.get_frame_count()` would need the render thread mutex:
+              https://github.com/hoffstadt/DearPyGui/issues/2366
+
           When called from any other thread (also event handlers), waiting is fine.
     """
     max_y_scroll = dpg.get_y_scroll_max("chat_panel")
@@ -216,7 +220,8 @@ def _scroll_chat_view_to_end(max_wait_frames: int = 50) -> None:
         max_y_scroll = dpg.get_y_scroll_max("chat_panel")
     plural_s = "s" if elapsed_frames != 1 else ""
     waited_str = f" (after waiting for {elapsed_frames} frame{plural_s})" if elapsed_frames > 0 else " (no waiting was needed)"
-    logger.info(f"_scroll_chat_view_to_end: frame {dpg.get_frame_count()}{waited_str}: max_y_scroll = {max_y_scroll}")
+    frames_str = f" frame {dpg.get_frame_count()}" if max_wait_frames > 0 else ""
+    logger.info(f"_scroll_chat_view_to_end:{frames_str}{waited_str}: max_y_scroll = {max_y_scroll}")
     dpg.set_y_scroll("chat_panel", max_y_scroll)
 
 def get_next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
