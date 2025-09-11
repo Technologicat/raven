@@ -134,9 +134,15 @@ class DPGAvatarRenderer:
                                                    tag="paused_text",
                                                    parent=gui_parent)
 
-    def configure_fps_counter(self, show: bool) -> None:
-        """Show or hide the FPS counter."""
+    def configure_fps_counter(self, show: Optional[bool]) -> None:
+        """Show or hide the FPS counter.
+
+        If `show is None`, toggle the state.
+        """
         try:
+            if show is None:
+                show = not dpg.is_item_visible(self.fps_text_gui_widget)
+
             if show:
                 dpg.show_item(self.fps_text_gui_widget)
             else:
