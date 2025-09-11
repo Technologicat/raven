@@ -4293,6 +4293,15 @@ def hotkeys_callback(sender, app_data):
             selection_redo()
         elif key == dpg.mvKey_C:
             copy_current_entry_to_clipboard()
+        # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
+        elif key == dpg.mvKey_M:
+            dpg.show_metrics()
+        elif key == dpg.mvKey_R:
+            dpg.show_item_registry()
+        elif key == dpg.mvKey_T:
+            dpg.show_font_manager()
+        elif key == dpg.mvKey_L:
+            dpg.show_style_editor()
     # Ctrl+...
     elif ctrl_pressed:
         if key == dpg.mvKey_F:
@@ -4309,15 +4318,6 @@ def hotkeys_callback(sender, app_data):
             scroll_info_panel_to_prev_cluster()
         elif key == dpg.mvKey_U:
             scroll_info_panel_to_top_of_current_cluster()
-        # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + M, R, T, L)
-        elif key == dpg.mvKey_M:
-            dpg.show_metrics()
-        elif key == dpg.mvKey_R:
-            dpg.show_item_registry()
-        elif key == dpg.mvKey_T:
-            dpg.show_font_manager()
-        elif key == dpg.mvKey_L:
-            dpg.show_style_editor()
     # Bare key
     #
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
