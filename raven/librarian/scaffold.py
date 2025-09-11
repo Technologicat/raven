@@ -317,7 +317,7 @@ def ai_turn(llm_settings: env,
         out = llmclient.invoke(llm_settings, message_history, on_llm_progress)  # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
 
         # Clean up the LLM's reply (heuristically). This version goes into the chat history.
-        # TODO: Keep the thought blocks; strip them only when sending the history to the LLM.
+        # TODO: Keep the thought blocks; strip them only when sending the history to the LLM. (If we even need to strip it then; don't the recent chat templates inside the models already do that?)
         out.data["content"] = chatutil.scrub(llm_settings,
                                              out.data["content"],
                                              thoughts_mode="discard",
