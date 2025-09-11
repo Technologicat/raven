@@ -1174,7 +1174,7 @@ def librarian_hotkeys_callback(sender, app_data):
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         if key == dpg.mvKey_M:
             dpg.show_metrics()
-            dpg_avatar_renderer.configure_fps_counter(show=None)
+            dpg_avatar_renderer.configure_fps_counter(show=None)  # `None` = toggle
         elif key == dpg.mvKey_R:
             dpg.show_item_registry()
         elif key == dpg.mvKey_T:
