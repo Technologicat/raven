@@ -1051,6 +1051,9 @@ class PostprocessorSettingsEditorGUI:
                           start_callback=start_nonlipsync_speaking,
                           stop_callback=stop_nonlipsync_speaking)
 
+# --------------------------------------------------------------------------------
+# App window (viewport) resizing
+
 def toggle_fullscreen():
     dpg.toggle_viewport_fullscreen()
     resize_gui()  # see below
@@ -1072,8 +1075,10 @@ def _resize_gui():
     gui_instance._resize_gui()
 dpg.set_viewport_resize_callback(_resize_gui)
 
+# --------------------------------------------------------------------------------
 # Hotkey support
-choice_map = None   # DPG tag or ID -> (choice_strings, callback)
+
+combobox_choice_map = None   # DPG tag or ID -> (choice_strings, callback)
 def avatar_settings_editor_hotkeys_callback(sender, app_data):
     if gui_instance is None:
         return
@@ -1124,10 +1129,10 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
             toggle_fullscreen()
         else:
             # {widget_tag_or_id: list_of_choices}
-            global choice_map
-            if choice_map is None:  # build on first use
-                choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
-                              gui_instance.voice_choice: (gui_instance.voice_names, None)}
+            global combobox_choice_map
+            if combobox_choice_map is None:  # build on first use (now that `gui_instance` is available)
+                combobox_choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
+                                       gui_instance.voice_choice: (gui_instance.voice_names, None)}
             def browse(choice_widget, data):
                 choices, callback = data
                 index = choices.index(dpg.get_value(choice_widget))
@@ -1146,13 +1151,15 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
                     if callback is not None:
                         callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
             focused_item = dpg.get_focused_item()
-            if focused_item in choice_map.keys():
-                browse(focused_item, choice_map[focused_item])
+            if focused_item in combobox_choice_map.keys():
+                browse(focused_item, combobox_choice_map[focused_item])
 with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="avatar_settings_editor_hotkeys_handler", callback=avatar_settings_editor_hotkeys_callback)
 
 # --------------------------------------------------------------------------------
-# Main program
+# Start the app
+
+logger.info("App bootup...")
 
 if api.raven_server_available():
     print(f"{Fore.GREEN}{Style.BRIGHT}Connected to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL}")
@@ -1185,6 +1192,7 @@ def app_shutdown() -> None:
 
     Currently, we release server-side resources here.
     """
+    logger.info("App exiting.")
     if avatar_instance_id is not None:
         try:
             api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
