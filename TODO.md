@@ -71,6 +71,8 @@
       - Add a GUI button and window to show the full prompt (render as Markdown) and to copy it to clipboard
     - Librarian config: avatar on/off, which character to load, Librarian-specific settings overrides
   - Later:
+    - Help card, like in Raven-visualizer
+    - Ctrl+F find in current chat history, with highlighting
     - Avatar: add cel effect for internet access / tool use (data eyes)
     - Avatar: add digital glitch effect when switching chat branches (change postprocessor config on the fly)
     - Avatar: eliminate stutter while receiving LLM response
