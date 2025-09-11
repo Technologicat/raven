@@ -1265,6 +1265,16 @@ def pose_editor_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_S:
             show_save_all_emotions_dialog()
 
+        # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
+        if key == dpg.mvKey_M:
+            dpg.show_metrics()
+        elif key == dpg.mvKey_R:
+            dpg.show_item_registry()
+        elif key == dpg.mvKey_T:
+            dpg.show_font_manager()
+        elif key == dpg.mvKey_L:
+            dpg.show_style_editor()
+
     # Ctrl+...
     elif ctrl_pressed:
         if key == dpg.mvKey_O:
