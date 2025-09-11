@@ -4218,8 +4218,8 @@ def mouse_release_callback(sender, app_data):
 def hotkeys_callback(sender, app_data):
     """Handle hotkeys."""
     key = app_data  # for documentation only
-    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
 
     # NOTE: If you update this, to make the hotkeys discoverable, update also:
     #  - The tooltips wherever the GUI elements are created or updated (search for e.g. "[F9]", may appear in multiple places)
