@@ -71,9 +71,18 @@
       - Add a GUI button and window to show the full prompt (render as Markdown) and to copy it to clipboard
     - Librarian config: avatar on/off, which character to load, Librarian-specific settings overrides
   - Later:
+    - Robustness: temporarily disable the relevant buttons while the AI is writing
+      - Per-message buttons can be then re-enabled correctly by checking whether the relevant action has a callback for that specific displayed chat message (need to store button DPG IDs or tags, too)
     - Help card, like in Raven-visualizer
     - Ctrl+F find in current chat history, with highlighting
     - Avatar: add cel effect for internet access / tool use (data eyes)
+      - Per-character cels
+      - Enable/disable - where does the on/off switch belong, logically? Probably in the animator settings?
+      - Auto-animate, but control by a single morph (similarly to the eye-waver effect)
+          - Purely programmatic, no slider in pose editor
+          - Override that morph when starting to access data, remove the override when data access is done
+      - The `on_tools_start` event in `raven.librarian.scaffold.ai_turn` can trigger the start the data eyes effect
+      - The last `on_tool_done` event can trigger the end of the data eyes effect (must count them; always exactly one per completed call regardless of success/failure), or add an `on_tools_done` event.
     - Avatar: add digital glitch effect when switching chat branches (change postprocessor config on the fly)
     - Avatar: eliminate stutter while receiving LLM response
     - Avatar on/off toggle (for low VRAM)
