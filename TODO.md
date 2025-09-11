@@ -42,14 +42,9 @@
 
 - Librarian
   - First, build the minimal demo:
-    - Draw assets:
-      - Make per-character AI chat icons
-      - Finish the new app icon for Raven (small and large sizes)
-    - Add hotkeys
-      - Separate hotkey mode while `chat_field` is focused
-    - Add feature: Switch chat (from all leaf nodes in datastore)
+    - Avatar: Background image, like in avatar settings editor
+    - Librarian config: avatar on/off, which character to load, Librarian-specific settings overrides
     - Improve live preview of LLM output
-      - Eliminate GUI flicker during live preview (needs double-buffering?)
       - Thought block detection
         - Store the thought blocks in the chat datastore, too, so that we can render them (`raven.librarian.scaffold.ai_turn` currently discards them)
       - Sentence splitting
@@ -58,7 +53,11 @@
         - TTS audio output toggle icons: `ICON_COMMENT`, `ICON_COMMENT_SLASH`
       - Add GUI element to display captions (large font) on top of the avatar video
       - Avatar emotion update from final message
-    - Add feature: Regenerate (reroll) LLM response
+    - Draw assets:
+      - Make per-character AI chat icons
+      - Finish the new app icon for Raven (small and large sizes)
+  - Later:
+    - Add feature: Switch chat (from all leaf nodes in datastore)
     - Add feature: Interrupt AI generation (backend exists now; `return action_stop` from the `on_llm_progress` callback to interrupt the LLM)
     - Add feature: Continue AI generation in current HEAD node (creating a new revision?)
     - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
@@ -69,8 +68,6 @@
     - Add feature: timestamped chat messages (when adding them to datastore; see `raven.librarian.scaffold`)
     - Add feature: save full prompt with each AI message (get it from the `on_prompt_ready` event of `raven.librarian.scaffold.ai_turn`)
       - Add a GUI button and window to show the full prompt (render as Markdown) and to copy it to clipboard
-    - Librarian config: avatar on/off, which character to load, Librarian-specific settings overrides
-  - Later:
     - Robustness: temporarily disable the relevant buttons while the AI is writing
       - Per-message buttons can be then re-enabled correctly by checking whether the relevant action has a callback for that specific displayed chat message (need to store button DPG IDs or tags, too)
     - Help card, like in Raven-visualizer
