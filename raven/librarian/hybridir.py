@@ -851,7 +851,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         # For delayed commit (commit when new/modified files stop appearing in quick succession)
         self._status_box = box()
         self._lock = threading.RLock()
-        def commit(task_env):
+        def commit(task_env: envcls) -> None:
             assert task_env is not None
             logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Entered.")
             if task_env.cancelled:
@@ -905,7 +905,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         abspath = p.expanduser().resolve()
         document_id = self._document_id_from_path(abspath)
         if kind == "add":
-            def scheduled_add(task_env):
+            def scheduled_add(task_env: envcls) -> None:
                 logger.debug(f"HybridIRFileSystemEventHandler.scheduled_add: file '{path}': ingesting file content.")
                 content = self._read(abspath)
                 if content is None:
@@ -919,7 +919,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             return scheduled_add
 
         elif kind == "update":
-            def scheduled_update(task_env):
+            def scheduled_update(task_env: envcls) -> None:
                 logger.debug(f"HybridIRFileSystemEventHandler.scheduled_update: file '{path}': ingesting file content.")
                 content = self._read(abspath)
                 if content is None:
@@ -934,7 +934,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             return scheduled_update
 
         elif kind == "delete":
-            def scheduled_delete(task_env):
+            def scheduled_delete(task_env: envcls) -> None:
                 logger.debug(f"HybridIRFileSystemEventHandler.scheduled_delete: file '{path}': deleting from search indices.")
                 self.retriever.delete(document_id)
 
