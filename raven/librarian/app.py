@@ -194,8 +194,29 @@ role_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gu
                "user": {"front": gui_config.chat_color_user_front, "back": gui_config.chat_color_user_back},
                }
 
-def _scroll_chat_view_to_end() -> None:
+def _scroll_chat_view_to_end(max_wait_frames: int = 50) -> None:
+    """Scroll chat view to end.
+
+    `max_wait_frames`: If `max_wait_frames > 0`, wait at most for that may frames
+                       for the chat panel to get a nonzero `max_y_scroll`.
+
+                       Some waiting is usually needed at least at app startup
+                       before the GUI settles.
+
+    NOTE: When called from the main thread, `max_wait_frames` must be 0, as any
+          attempt to wait would hang the main thread's explicit render loop.
+
+          When called from any other thread (also event handlers), waiting is fine.
+    """
     max_y_scroll = dpg.get_y_scroll_max("chat_panel")
+    for elapsed_frames in range(max_wait_frames):
+        if max_y_scroll > 0:
+            break
+        dpg.split_frame()
+        max_y_scroll = dpg.get_y_scroll_max("chat_panel")
+    plural_s = "s" if elapsed_frames != 1 else ""
+    waited_str = f" (after waiting for {elapsed_frames} frame{plural_s})" if elapsed_frames > 0 else " (no waiting was needed)"
+    logger.info(f"_scroll_chat_view_to_end: frame {dpg.get_frame_count()}{waited_str}: max_y_scroll = {max_y_scroll}")
     dpg.set_y_scroll("chat_panel", max_y_scroll)
 
 def get_next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[str]:
@@ -643,8 +664,6 @@ class DisplayedChatMessage:
                 node_id = get_next_or_prev_sibling(message_node_id, direction="prev")
                 if node_id is not None:
                     build_linearized_chat_panel(node_id)
-                    dpg.split_frame()
-                    _scroll_chat_view_to_end()
             return navigate_to_prev_sibling_callback
 
         def make_navigate_to_next_sibling(message_node_id: str) -> Callable:
@@ -652,8 +671,6 @@ class DisplayedChatMessage:
                 node_id = get_next_or_prev_sibling(message_node_id, direction="next")
                 if node_id is not None:
                     build_linearized_chat_panel(node_id)
-                    dpg.split_frame()
-                    _scroll_chat_view_to_end()
             return navigate_to_next_sibling_callback
 
         # Only messages attached to a datastore chat node can have siblings in the datastore
@@ -738,6 +755,19 @@ class DisplayedStreamingChatMessage(DisplayedChatMessage):
                       node_id=None)
 
 
+def add_complete_chat_message_to_linearized_chat_panel(node_id: str,
+                                                       scroll_to_end: bool = True) -> DisplayedCompleteChatMessage:
+    """Append the given chat node to the end of the linearized chat view in the GUI."""
+    global current_chat_history  # intent only; we write, but we don't replace the list itself.
+    with current_chat_history_lock:
+        displayed_chat_message = DisplayedCompleteChatMessage(gui_parent="chat_group",
+                                                              node_id=node_id)
+        current_chat_history.append(displayed_chat_message)
+    if scroll_to_end:
+        dpg.split_frame()
+        _scroll_chat_view_to_end()
+
+
 def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
     """Build the linearized chat view in the GUI, linearizing up from `head_node_id`.
 
@@ -751,19 +781,8 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
         current_chat_history.clear()
         dpg.delete_item("chat_group", children_only=True)  # clear old content from GUI
         for node_id in node_id_history:
-            displayed_chat_message = DisplayedCompleteChatMessage(gui_parent="chat_group",
-                                                                  node_id=node_id)
-            current_chat_history.append(displayed_chat_message)
-    dpg.split_frame()
-    _scroll_chat_view_to_end()
-
-
-def add_chat_message_to_linearized_chat_panel(node_id: str) -> DisplayedCompleteChatMessage:
-    """Append the given chat node to the end of the linearized chat view in the GUI."""
-    global current_chat_history  # intent only; we write, but we don't replace the list itself.
-    displayed_chat_message = DisplayedCompleteChatMessage(gui_parent="chat_group",
-                                                          node_id=node_id)
-    current_chat_history.append(displayed_chat_message)
+            add_complete_chat_message_to_linearized_chat_panel(node_id=node_id,
+                                                               scroll_to_end=False)  # we scroll just once, when donw
     dpg.split_frame()
     _scroll_chat_view_to_end()
 
@@ -787,7 +806,7 @@ def user_turn(text: str) -> None:
                                           head_node_id=app_state["HEAD"],
                                           user_message_text=text)
     app_state["HEAD"] = new_head_node_id  # as soon as possible, so that not affected by any errors during GUI building
-    add_chat_message_to_linearized_chat_panel(new_head_node_id)
+    add_complete_chat_message_to_linearized_chat_panel(new_head_node_id)
 
 def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     docs_query = docs_query if app_state["docs_enabled"] else None
@@ -851,16 +870,16 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     def on_llm_done(node_id: str) -> None:
         app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
         delete_streaming_chat_message()
-        add_chat_message_to_linearized_chat_panel(node_id)
+        add_complete_chat_message_to_linearized_chat_panel(node_id)
 
     def on_docs_nomatch_done(node_id: str) -> None:
         delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
-        add_chat_message_to_linearized_chat_panel(node_id)
+        add_complete_chat_message_to_linearized_chat_panel(node_id)
 
     def on_tool_done(node_id: str) -> None:
         app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
         delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
-        add_chat_message_to_linearized_chat_panel(node_id)
+        add_complete_chat_message_to_linearized_chat_panel(node_id)
 
     new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
                                         datastore=datastore,
@@ -1351,8 +1370,7 @@ dpg.set_frame_callback(2, _load_initial_animator_settings)
 
 def _build_initial_chat_view(sender, app_data) -> None:
     build_linearized_chat_panel()
-dpg.set_frame_callback(11, _build_initial_chat_view)
-dpg.set_frame_callback(21, _scroll_chat_view_to_end)  # for some reason, at app startup one `dpg.split_frame` after building the view isn't enough to let it settle
+dpg.set_frame_callback(3, _build_initial_chat_view)
 
 logger.info("App render loop starting.")
 
