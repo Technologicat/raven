@@ -800,110 +800,147 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
 # Scaffold to GUI integration
 
 def chat_round(user_message_text: str) -> None:  # message text comes from GUI
-    # Only add the user's message to the chat if the user entered any text.
-    if user_message_text:
-        user_turn(text=user_message_text)
-    else:
-        user_message_text is None  # send `None` as query to AI -> no docs search
-    # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
-    ai_turn(docs_query=user_message_text)
+    """Run a chat round (user and AI).
+
+    This spawns a background task to avoid hanging GUI event handlers,
+    since the typical use case is to call `chat_round` from a GUI event handler.
+    """
+    def run_chat_round(task_env: env) -> None:
+        if task_env.cancelled:  # while the task was in the queue
+            return
+
+        # Only add the user's message to the chat if the user entered any text.
+        if user_message_text:
+            user_turn(text=user_message_text)
+        else:
+            user_message_text is None  # send `None` as query to AI -> no docs search
+
+        if task_env.cancelled:  # during user turn
+            return
+
+        # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
+        ai_turn(docs_query=user_message_text)
+    task_manager.submit(run_chat_round, env())
 
 def user_turn(text: str) -> None:
     """Add the user's message to the chat, and append it to the linearized chat view in the GUI."""
-    new_head_node_id = scaffold.user_turn(llm_settings=llm_settings,
-                                          datastore=datastore,
-                                          head_node_id=app_state["HEAD"],
-                                          user_message_text=text)
-    app_state["HEAD"] = new_head_node_id  # as soon as possible, so that not affected by any errors during GUI building
-    add_complete_chat_message_to_linearized_chat_panel(new_head_node_id)
+    def run_user_turn(task_env: env) -> None:
+        if task_env.cancelled:  # while the task was in the queue
+            return
+
+        new_head_node_id = scaffold.user_turn(llm_settings=llm_settings,
+                                              datastore=datastore,
+                                              head_node_id=app_state["HEAD"],
+                                              user_message_text=text)
+        app_state["HEAD"] = new_head_node_id  # as soon as possible, so that not affected by any errors during GUI building
+        add_complete_chat_message_to_linearized_chat_panel(new_head_node_id)
+    task_manager.submit(run_user_turn, env())
 
 def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
+    """Run the AI's response part of a chat round.
+
+    This spawns a background task to avoid hanging GUI event handlers,
+    since the reroll GUI event handler calls `ai_turn` directly.
+    """
     docs_query = docs_query if app_state["docs_enabled"] else None
 
-    streaming_chat_message = None
-    def delete_streaming_chat_message():  # for replacing with completed message
-        nonlocal streaming_chat_message
-        if streaming_chat_message is not None:
-            streaming_chat_message.demolish()
-            streaming_chat_message = None
+    def run_ai_turn(task_env: env) -> None:
+        if task_env.cancelled:  # while the task was in the queue
+            return
 
-    def on_llm_start() -> None:
-        nonlocal streaming_chat_message
-        streaming_chat_message = DisplayedStreamingChatMessage(gui_parent="chat_group")
-        dpg.split_frame()
-        _scroll_chat_view_to_end()
+        streaming_chat_message = None
+        def delete_streaming_chat_message():  # for replacing with completed message
+            nonlocal streaming_chat_message
+            if streaming_chat_message is not None:
+                streaming_chat_message.demolish()
+                streaming_chat_message = None
 
-    text = io.StringIO()
-    t0 = time.monotonic()
-    n_chunks0 = 0
-    def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
-        nonlocal text
-        nonlocal t0
-        nonlocal n_chunks0
-        text.write(chunk_text)
-        # TODO: Update avatar state when LLM is writing.
-        #   - Split a few most recent lines of `text` to sentences (using the spaCy service on the server)
-        #     - We don't know whether the current last "sentence" as detected by spaCy is actually a complete sentence, since the LLM is still writing.
-        #     - Second-last sentence should always be complete (except for sentence-splitting glitches; maybe good enough).
-        #     - We can get the final sentence in `on_llm_done`, where we know that it's complete.
-        #   - When a new sentence is completed:
-        #     - When inside a thought block:
-        #         - Send the sentence to the sentiment classification model, update avatar emotion from result.
-        #     - When NOT inside a thought block:
-        #       - Append the English sentence to a deque for English->Finnish translation.
-        #         - Run the translation service in a background thread to avoid GUI hiccups.
-        #       - Monitor the translation deque. Once a translation completes, append the English-Finnish sentence pair to a deque for the TTS/subtitling system.
-        #         - Monitor this deque and TTS status in another background thread.
-        #         - When TTS is free, take the first item from the deque, start speaking, and display its subtitle.
-        #         - Simultaneously, send the sentence to the sentiment classification model, update avatar emotion from result.
-        #         - In the TTS stop event, remove the subtitle, and mark TTS as free.
-        time_now = time.monotonic()
-        dt = time_now - t0  # seconds
-        dchunks = n_chunks - n_chunks0
-        if "\n" in chunk_text:  # start new paragraph?
-            streaming_chat_message.replace_last_paragraph(text.getvalue())
-            streaming_chat_message.add_paragraph("")
-            text = io.StringIO()
+        def on_llm_start() -> None:
+            nonlocal streaming_chat_message
+            streaming_chat_message = DisplayedStreamingChatMessage(gui_parent="chat_group")
             dpg.split_frame()
             _scroll_chat_view_to_end()
-        # - update at least every 0.5 sec
-        # - update after every 10 chunks, but rate-limited (at least 0.1 sec must have passed since last update)
-        elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit to last paragraph (will auto-create one the first time)
-            t0 = time_now
-            n_chunks0 = n_chunks
-            streaming_chat_message.replace_last_paragraph(text.getvalue())
-            dpg.split_frame()
-            _scroll_chat_view_to_end()
-        return llmclient.action_ack  # let the LLM keep generating (we could return `action_stop` to interrupt the LLM, keeping the content received so far)
 
-    def on_llm_done(node_id: str) -> None:
-        app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
-        delete_streaming_chat_message()
-        add_complete_chat_message_to_linearized_chat_panel(node_id)
+        text = io.StringIO()
+        t0 = time.monotonic()
+        n_chunks0 = 0
+        def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
+            nonlocal text
+            nonlocal t0
+            nonlocal n_chunks0
+            text.write(chunk_text)
+            # TODO: Update avatar state when LLM is writing.
+            #   - Split a few most recent lines of `text` to sentences (using the spaCy service on the server)
+            #     - We don't know whether the current last "sentence" as detected by spaCy is actually a complete sentence, since the LLM is still writing.
+            #     - Second-last sentence should always be complete (except for sentence-splitting glitches; maybe good enough).
+            #     - We can get the final sentence in `on_llm_done`, where we know that it's complete.
+            #   - When a new sentence is completed:
+            #     - When inside a thought block:
+            #         - Send the sentence to the sentiment classification model, update avatar emotion from result.
+            #     - When NOT inside a thought block:
+            #       - Append the English sentence to a deque for English->Finnish translation.
+            #         - Run the translation service in a background thread to avoid GUI hiccups.
+            #       - Monitor the translation deque. Once a translation completes, append the English-Finnish sentence pair to a deque for the TTS/subtitling system.
+            #         - Monitor this deque and TTS status in another background thread.
+            #         - When TTS is free, take the first item from the deque, start speaking, and display its subtitle.
+            #         - Simultaneously, send the sentence to the sentiment classification model, update avatar emotion from result.
+            #         - In the TTS stop event, remove the subtitle, and mark TTS as free.
+            time_now = time.monotonic()
+            dt = time_now - t0  # seconds
+            dchunks = n_chunks - n_chunks0
+            if "\n" in chunk_text:  # start new paragraph?
+                streaming_chat_message.replace_last_paragraph(text.getvalue())
+                streaming_chat_message.add_paragraph("")
+                text = io.StringIO()
+                dpg.split_frame()
+                _scroll_chat_view_to_end()
+            # - update at least every 0.5 sec
+            # - update after every 10 chunks, but rate-limited (at least 0.1 sec must have passed since last update)
+            elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit to last paragraph (will auto-create one the first time)
+                t0 = time_now
+                n_chunks0 = n_chunks
+                streaming_chat_message.replace_last_paragraph(text.getvalue())
+                dpg.split_frame()
+                _scroll_chat_view_to_end()
 
-    def on_docs_nomatch_done(node_id: str) -> None:
-        delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
-        add_complete_chat_message_to_linearized_chat_panel(node_id)
+            # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
+            # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
+            if task_env.cancelled:
+                return llmclient.action_stop
 
-    def on_tool_done(node_id: str) -> None:
-        app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
-        delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
-        add_complete_chat_message_to_linearized_chat_panel(node_id)
+            # Otherwise, let the LLM keep generating (if it wants to).
+            return llmclient.action_ack
 
-    new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
-                                        datastore=datastore,
-                                        retriever=retriever,
-                                        head_node_id=app_state["HEAD"],
-                                        docs_query=docs_query,
-                                        speculate=app_state["speculate_enabled"],
-                                        markup="markdown",
-                                        on_prompt_ready=None,  # debug/info hook
-                                        on_llm_start=on_llm_start,
-                                        on_llm_progress=on_llm_progress,
-                                        on_llm_done=on_llm_done,
-                                        on_docs_nomatch_done=on_docs_nomatch_done,
-                                        on_tool_done=on_tool_done)
-    app_state["HEAD"] = new_head_node_id
+        def on_llm_done(node_id: str) -> None:
+            app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
+            delete_streaming_chat_message()
+            add_complete_chat_message_to_linearized_chat_panel(node_id)
+
+        def on_docs_nomatch_done(node_id: str) -> None:
+            delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
+            add_complete_chat_message_to_linearized_chat_panel(node_id)
+
+        def on_tool_done(node_id: str) -> None:
+            app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
+            delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
+            add_complete_chat_message_to_linearized_chat_panel(node_id)
+
+        new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
+                                            datastore=datastore,
+                                            retriever=retriever,
+                                            head_node_id=app_state["HEAD"],
+                                            docs_query=docs_query,
+                                            speculate=app_state["speculate_enabled"],
+                                            markup="markdown",
+                                            on_prompt_ready=None,  # debug/info hook
+                                            on_llm_start=on_llm_start,
+                                            on_llm_progress=on_llm_progress,
+                                            on_llm_done=on_llm_done,
+                                            on_docs_nomatch_done=on_docs_nomatch_done,
+                                            on_tools_start=None,
+                                            on_tool_done=on_tool_done)
+        app_state["HEAD"] = new_head_node_id
+    task_manager.submit(run_ai_turn, env())
 
 # --------------------------------------------------------------------------------
 # Set up the main window
