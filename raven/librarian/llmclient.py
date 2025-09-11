@@ -567,6 +567,23 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
                                  status: str,
                                  toolcall_id: Optional[str],
                                  dt: Optional[float]) -> None:
+        """Add a tool response record to `tool_response_records`.
+
+        The record is an `unpythonic.env.env` with the following attributes:
+
+            `data`: dict: chat message object, with `role="tool"`, and `content=text`.
+
+            `status`: str: Values "success" or "error" are recommended.
+
+            `toolcall_id`: Optional[str]: ID of this tool call (can be matched against the `id` in the `tool_calls` list
+                           of the AI chat message that spawned this call).
+
+                           The ID should be included whenever it was present in the tool call request record.
+
+            `dt`: Optional[float]: Duration of this tool call, in seconds. Recommended to be included whenever
+                                   the request was valid enough to actually proceed to call the function
+                                   (so that the call timing can be measured).
+        """
         tool_response_message = chatutil.create_chat_message(llm_settings=settings,
                                                              role="tool",
                                                              text=text,
