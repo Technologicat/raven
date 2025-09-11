@@ -213,7 +213,8 @@ def get_next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[
 def format_chat_message_for_clipboard(llm_settings: env,
                                       message_number: Optional[int],
                                       message_role: str,
-                                      message_text: str) -> str:
+                                      message_text: str,
+                                      add_heading: bool) -> str:
     """Format a chat message for copying to clipboard, by adding a metadata header as Markdown.
 
     As a preprocessing step, the role name is stripped from the beginning of each line in `message_text`.
@@ -230,20 +231,34 @@ def format_chat_message_for_clipboard(llm_settings: env,
     `message_text`: The text content of the chat message to format.
                     The content is pasted into the output as-is.
 
+    `add_heading`: Whether to include the message number and role's character name
+                   in the final output.
+
+                   Example. If `add_heading` is `True`, then both::
+
+                       Lorem ipsum.
+
+                   and::
+
+                       Aria: Lorem ipsum.
+
+                   become::
+
+                       *[#42]* **Aria**: Lorem ipsum.
+
+                   If `add_heading` is `False`, then both become just::
+
+                       Lorem ipsum.
+
     Returns the formatted message.
-
-    Example::
-
-        Lorem ipsum.
-
-    becomes:
-
-        *[#42]* **Aria**: Lorem ipsum.
     """
-    message_heading = chatutil.format_message_heading(llm_settings=llm_settings,
-                                                      message_number=message_number,
-                                                      role=message_role,
-                                                      markup="markdown")
+    if add_heading:
+        message_heading = chatutil.format_message_heading(llm_settings=llm_settings,
+                                                          message_number=message_number,
+                                                          role=message_role,
+                                                          markup="markdown")
+    else:
+        message_heading = ""
     message_text = chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings,
                                                                 role=message_role,
                                                                 text=message_text)
@@ -277,6 +292,7 @@ class DisplayedChatMessage:
         self.paragraphs = []  # [{"text": ..., "rendered": True}, ...]
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
+        self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
 
     def _get_text(self):
         return "\n".join(paragraph["text"] for paragraph in self.paragraphs)
@@ -497,6 +513,7 @@ class DisplayedChatMessage:
         self.role = None
         self.paragraphs = []
         self.gui_text_group = None
+        self.gui_button_callbacks = {}  # deleting GUI items, so clear the stashed callbacks too.
         dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
 
     def build_buttons(self,
@@ -520,10 +537,13 @@ class DisplayedChatMessage:
 
         def copy_message_to_clipboard_callback() -> None:
             shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+            # Note we only add the role name when we include also the node ID.
+            # Omitting the name in regular mode improves convenience for copy-pasting an existing question into the chat field.
             formatted_message = format_chat_message_for_clipboard(llm_settings=llm_settings,
                                                                   message_number=None,  # a single message copied to clipboard does not need a sequential number
                                                                   message_role=role,
-                                                                  message_text=text)
+                                                                  message_text=text,
+                                                                  add_heading=shift_pressed)
             header = f"*Node ID*: `{node_id}`\n\n" if shift_pressed else ""  # yes, it'll say `None` when not available, which is exactly what we want.
             mode = "with node ID" if shift_pressed else "as-is"
             dpg.set_clipboard_text(f"{header}{formatted_message}\n")
@@ -534,6 +554,7 @@ class DisplayedChatMessage:
                                                                  target_text=copy_message_tooltip_text,
                                                                  original_theme=themes_and_fonts.global_theme,
                                                                  duration=gui_config.acknowledgment_duration))
+        self.gui_button_callbacks["copy"] = copy_message_to_clipboard_callback
         copy_message_button = dpg.add_button(label=fa.ICON_COPY,
                                              callback=copy_message_to_clipboard_callback,
                                              width=gui_config.toolbutton_w,
@@ -563,16 +584,19 @@ class DisplayedChatMessage:
 
                 # Generate new AI message
                 ai_turn(docs_query=user_message_text)
+            reroll_enabled = (node_id is not None and node_id != app_state["new_chat_HEAD"])  # The AI's initial greeting can't be rerolled
+            if reroll_enabled:
+                self.gui_button_callbacks["reroll"] = reroll_latest_message_callback  # stash it so we can call it from the hotkey handler
             dpg.add_button(label=fa.ICON_RECYCLE,
                            callback=reroll_latest_message_callback,
-                           enabled=(node_id is not None and node_id != app_state["new_chat_HEAD"]),  # The AI's initial greeting can't be rerolled
+                           enabled=reroll_enabled,
                            width=gui_config.toolbutton_w,
                            tag=f"message_reroll_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_reroll_button_{self.gui_uuid}", themes_and_fonts.icon_font_solid)  # tag
             dpg.bind_item_theme(f"message_reroll_button_{self.gui_uuid}", "disablable_button_theme")  # tag
             reroll_tooltip = dpg.add_tooltip(f"message_reroll_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Reroll AI response (create new sibling)", parent=reroll_tooltip)
+            dpg.add_text("Reroll AI response (create new sibling) [Ctrl+R]", parent=reroll_tooltip)
         else:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
@@ -599,9 +623,10 @@ class DisplayedChatMessage:
         dpg.add_text("Branch from this node", parent=new_branch_tooltip)
 
         # NOTE: We disallow deleting the system prompt and the AI's initial greeting, as well as any message that is not linked to a chat node in the datastore.
+        delete_enabled = (node_id is not None and node_id not in (app_state["system_prompt_node_id"], app_state["new_chat_HEAD"]))
         dpg.add_button(label=fa.ICON_TRASH_CAN,
                        callback=lambda: None,  # TODO
-                       enabled=(node_id is not None and node_id not in (app_state["system_prompt_node_id"], app_state["new_chat_HEAD"])),
+                       enabled=False,  # TODO: use `delete_enabled` once delete is implemented
                        width=gui_config.toolbutton_w,
                        tag=f"message_delete_branch_button_{self.gui_uuid}",
                        parent=g)
@@ -634,27 +659,36 @@ class DisplayedChatMessage:
         # Only messages attached to a datastore chat node can have siblings in the datastore
         if node_id is not None:
             siblings, node_index = datastore.get_siblings(node_id)
+            prev_enabled = (node_index is not None and node_index > 0)
+            next_enabled = (node_index is not None and node_index < len(siblings) - 1)
+            navigate_to_prev_sibling_callback = make_navigate_to_prev_sibling(node_id)
+            navigate_to_next_sibling_callback = make_navigate_to_next_sibling(node_id)
+            if prev_enabled:
+                self.gui_button_callbacks["prev"] = navigate_to_prev_sibling_callback
+            if next_enabled:
+                self.gui_button_callbacks["next"] = navigate_to_next_sibling_callback
+
             dpg.add_button(label=fa.ICON_ANGLE_LEFT,
-                           callback=make_navigate_to_prev_sibling(node_id),
-                           enabled=(node_index is not None and node_index > 0),
+                           callback=navigate_to_prev_sibling_callback,
+                           enabled=prev_enabled,
                            width=gui_config.toolbutton_w,
                            tag=f"message_prev_branch_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_prev_branch_button_{self.gui_uuid}", themes_and_fonts.icon_font_solid)  # tag
             dpg.bind_item_theme(f"message_prev_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
             prev_branch_tooltip = dpg.add_tooltip(f"message_prev_branch_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Switch to previous sibling", parent=prev_branch_tooltip)
+            dpg.add_text("Switch to previous sibling [Ctrl+Left]", parent=prev_branch_tooltip)
 
             dpg.add_button(label=fa.ICON_ANGLE_RIGHT,
-                           callback=make_navigate_to_next_sibling(node_id),
-                           enabled=(node_index is not None and node_index < len(siblings) - 1),
+                           callback=navigate_to_next_sibling_callback,
+                           enabled=next_enabled,
                            width=gui_config.toolbutton_w,
                            tag=f"message_next_branch_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_next_branch_button_{self.gui_uuid}", themes_and_fonts.icon_font_solid)  # tag
             dpg.bind_item_theme(f"message_next_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
             next_branch_tooltip = dpg.add_tooltip(f"message_next_branch_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Switch to next sibling", parent=next_branch_tooltip)
+            dpg.add_text("Switch to next sibling [Ctrl+Right]", parent=next_branch_tooltip)
 
             if siblings is not None:
                 dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
@@ -933,7 +967,7 @@ with timer() as tim:
                             chat_round(user_message_text)
                         dpg.add_input_text(tag="chat_field",
                                            default_value="",
-                                           hint="[ask the AI questions here]",
+                                           hint="[ask the AI questions here] [Ctrl+Space to focus]",
                                            width=gui_config.chat_panel_w - gui_config.toolbutton_w - 8)
                         dpg.add_button(label=fa.ICON_PAPER_PLANE,
                                        callback=send_message_to_ai_callback,
@@ -942,7 +976,7 @@ with timer() as tim:
                         dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag  # TODO: make this change into a cancel button while the LLM is writing.
                         dpg.bind_item_theme("chat_send_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_send_button"):  # tag
-                            dpg.add_text("Send to AI")
+                            dpg.add_text("Send to AI [Enter]")
 
             with dpg.group():
                 with dpg.child_window(tag="avatar_panel",
@@ -990,6 +1024,14 @@ with timer() as tim:
                     new_chat_head_node_id = app_state["new_chat_HEAD"]
                     app_state["HEAD"] = new_chat_head_node_id
                     build_linearized_chat_panel(head_node_id=new_chat_head_node_id)
+                    dpg.focus_item("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
+                    # Acknowledge the action in the GUI.
+                    gui_animation.animator.add(gui_animation.ButtonFlash(message="New chat started!",
+                                                                         target_button=new_chat_button,
+                                                                         target_tooltip=new_chat_tooltip,
+                                                                         target_text=new_chat_tooltip_text,
+                                                                         original_theme=themes_and_fonts.global_theme,
+                                                                         duration=gui_config.acknowledgment_duration))
 
                 def copy_chatlog_to_clipboard_as_markdown_callback() -> None:
                     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
@@ -1007,7 +1049,8 @@ with timer() as tim:
                             formatted_message = format_chat_message_for_clipboard(llm_settings=llm_settings,
                                                                                   message_number=message_number,
                                                                                   message_role=message_role,
-                                                                                  message_text=message_text)
+                                                                                  message_text=message_text,
+                                                                                  add_heading=True)  # In the full chatlog, the message numbers and role names are important, so always include them.
                             header = f"- *Node ID*: `{displayed_chat_message.node_id}`\n\n" if shift_pressed else ""
                             text.write(f"{header}{formatted_message}\n\n{'-' * 80}\n\n")
                     dpg.set_clipboard_text(text.getvalue())
@@ -1020,14 +1063,14 @@ with timer() as tim:
                                                                          original_theme=themes_and_fonts.global_theme,
                                                                          duration=gui_config.acknowledgment_duration))
 
-                dpg.add_button(label=fa.ICON_FILE,
-                               callback=start_new_chat_callback,
-                               width=gui_config.toolbutton_w,
-                               tag="chat_new_button")
+                new_chat_button = dpg.add_button(label=fa.ICON_FILE,
+                                                 callback=start_new_chat_callback,
+                                                 width=gui_config.toolbutton_w,
+                                                 tag="chat_new_button")
                 dpg.bind_item_font("chat_new_button", themes_and_fonts.icon_font_solid)  # tag
                 dpg.bind_item_theme("chat_new_button", "disablable_button_theme")  # tag
-                reroll_tooltip = dpg.add_tooltip("chat_new_button")  # tag
-                dpg.add_text("Start new chat", parent=reroll_tooltip)
+                new_chat_tooltip = dpg.add_tooltip("chat_new_button")  # tag
+                new_chat_tooltip_text = dpg.add_text("Start new chat [Ctrl+N]", parent=new_chat_tooltip)
 
                 dpg.add_button(label=fa.ICON_DIAGRAM_PROJECT,
                                callback=lambda: None,  # TODO
@@ -1046,7 +1089,7 @@ with timer() as tim:
                 dpg.bind_item_font("chat_copy_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
                 dpg.bind_item_theme("chat_copy_to_clipboard_button", "disablable_button_theme")  # tag
                 copy_chat_tooltip = dpg.add_tooltip("chat_copy_to_clipboard_button")  # tag
-                copy_chat_tooltip_text = dpg.add_text("Copy this conversation to clipboard\n    no modifier: as-is\n    with Shift: include message node IDs", parent=copy_chat_tooltip)
+                copy_chat_tooltip_text = dpg.add_text("Copy this conversation to clipboard [F8]\n    no modifier: as-is\n    with Shift: include message node IDs", parent=copy_chat_tooltip)
 
                 n_below_chat_buttons = 3
                 avatar_panel_left = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8)
@@ -1062,6 +1105,167 @@ with timer() as tim:
 
 def update_animations():
     gui_animation.animator.render_frame()
+
+# --------------------------------------------------------------------------------
+# TODO: App window (viewport) resizing
+
+# def toggle_fullscreen():
+#     dpg.toggle_viewport_fullscreen()
+#     resize_gui()  # see below
+#
+# def resize_gui():
+#     """Wait for the viewport size to actually change, then resize dynamically sized GUI elements.
+#
+#     This is handy for toggling fullscreen, because the size changes at the next frame at the earliest.
+#     For the viewport resize callback, that one fires (*almost* always?) after the size has already changed.
+#     """
+#     logger.debug("resize_gui: Entered. Waiting for viewport size change.")
+#     if guiutils.wait_for_resize(gui_instance.window):
+#         _resize_gui()
+#     logger.debug("resize_gui: Done.")
+#
+# def _resize_gui():
+#     if gui_instance is None:
+#         return
+#     gui_instance._resize_gui()
+# dpg.set_viewport_resize_callback(_resize_gui)
+
+# --------------------------------------------------------------------------------
+# Hotkey support
+
+choice_map = None   # DPG tag or ID -> (choice_strings, callback)
+def librarian_hotkeys_callback(sender, app_data):
+    # # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
+    # if is_any_modal_window_visible():
+    #     return
+
+    key = app_data
+    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+
+    # ------------------------------------------------------------
+    # Helpers for operating on the most recent chat message
+
+    def get_last_message() -> Optional[DisplayedChatMessage]:
+        global current_chat_history  # for documenting the intent only
+        if not current_chat_history:
+            return None
+        displayed_message = current_chat_history[-1]
+        return displayed_message
+
+    def fire_event_if_exists(action: str) -> None:
+        displayed_message = get_last_message()
+        if displayed_message is None:
+            return
+        if action in displayed_message.gui_button_callbacks:
+            displayed_message.gui_button_callbacks[action]()
+
+    # ------------------------------------------------------------
+
+    # NOTE: If you update this, to make the hotkeys discoverable, update also:
+    #  - The tooltips wherever the GUI elements are created or updated (search for e.g. "[F9]", may appear in multiple places)
+    #  - The help window
+
+    # Hotkeys for main window, while no modal window is shown
+    if key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
+        copy_chatlog_to_clipboard_as_markdown_callback()
+    # Ctrl+Shift+...
+    if ctrl_pressed and shift_pressed:
+        # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
+        if key == dpg.mvKey_M:
+            dpg.show_metrics()
+        elif key == dpg.mvKey_R:
+            dpg.show_item_registry()
+        elif key == dpg.mvKey_T:
+            dpg.show_font_manager()
+        elif key == dpg.mvKey_L:
+            dpg.show_style_editor()
+    # Ctrl+...
+    elif ctrl_pressed:
+        if key == dpg.mvKey_Spacebar:
+            dpg.focus_item("chat_field")  # tag
+        elif key == dpg.mvKey_R:
+            fire_event_if_exists("reroll")
+        elif key == dpg.mvKey_Left:
+            fire_event_if_exists("prev")
+        elif key == dpg.mvKey_Right:
+            fire_event_if_exists("next")
+        elif key == dpg.mvKey_N:
+            start_new_chat_callback()
+    # Bare key
+    #
+    # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
+    else:
+        if dpg.is_item_focused("chat_field"):
+            if key == dpg.mvKey_Return:  # tag  # regardless of modifier state
+                send_message_to_ai_callback()
+                dpg.focus_item("chat_field")  # tag
+
+    # # Ctrl+Shift+...
+    # if ctrl_pressed and shift_pressed:
+    #     if key == dpg.mvKey_E:  # emotions
+    #         show_open_json_dialog()
+    #     elif key == dpg.mvKey_A:  # load animator settings
+    #         show_open_animator_settings_dialog()
+    #     elif key == dpg.mvKey_S:  # save animator settings
+    #         show_save_animator_settings_dialog()
+    #
+    # # Ctrl+...
+    # elif ctrl_pressed:
+    #     if key == dpg.mvKey_O:
+    #         show_open_input_image_dialog()
+    #     elif key == dpg.mvKey_R:
+    #         gui_instance.on_reload_input_image(sender, app_data)
+    #     elif key == dpg.mvKey_B:
+    #         show_open_backdrop_image_dialog()
+    #     elif key == dpg.mvKey_T:
+    #         gui_instance.toggle_talking()
+    #     elif key == dpg.mvKey_P:
+    #         gui_instance.toggle_animator_paused()
+    #     elif key == dpg.mvKey_E:
+    #         dpg.focus_item(gui_instance.emotion_choice)
+    #     elif key == dpg.mvKey_V:
+    #         dpg.focus_item(gui_instance.voice_choice)
+    #     elif key == dpg.mvKey_S:
+    #         if not gui_instance.speaking:
+    #             gui_instance.on_start_speaking(sender, app_data)
+    #         else:
+    #             gui_instance.on_stop_speaking(sender, app_data)
+    #
+    # # Bare key
+    # #
+    # # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
+    # else:
+    #     if key == dpg.mvKey_F11:
+    #         toggle_fullscreen()
+    #     else:
+    #         # {widget_tag_or_id: list_of_choices}
+    #         global choice_map
+    #         if choice_map is None:  # build on first use
+    #             choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
+    #                           gui_instance.voice_choice: (gui_instance.voice_names, None)}
+    #         def browse(choice_widget, data):
+    #             choices, callback = data
+    #             index = choices.index(dpg.get_value(choice_widget))
+    #             if key == dpg.mvKey_Down:
+    #                 new_index = min(index + 1, len(choices) - 1)
+    #             elif key == dpg.mvKey_Up:
+    #                 new_index = max(index - 1, 0)
+    #             elif key == dpg.mvKey_Home:
+    #                 new_index = 0
+    #             elif key == dpg.mvKey_End:
+    #                 new_index = len(choices) - 1
+    #             else:
+    #                 new_index = None
+    #             if new_index is not None:
+    #                 dpg.set_value(choice_widget, choices[new_index])
+    #                 if callback is not None:
+    #                     callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
+    #         focused_item = dpg.get_focused_item()
+    #         if focused_item in choice_map.keys():
+    #             browse(focused_item, choice_map[focused_item])
+with dpg.handler_registry(tag="librarian_handler_registry"):  # global (whole viewport)
+    dpg.add_key_press_handler(tag="librarian_hotkeys_handler", callback=librarian_hotkeys_callback)
 
 # --------------------------------------------------------------------------------
 # Set up app exit cleanup
