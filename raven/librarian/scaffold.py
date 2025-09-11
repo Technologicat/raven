@@ -190,6 +190,7 @@ def ai_turn(llm_settings: env,
             on_llm_progress: Optional[Callable],
             on_llm_done: Optional[Callable],
             on_docs_nomatch_done: Optional[Callable],
+            on_tools_start: Optional[Callable],
             on_tool_done: Optional[Callable]) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
@@ -273,6 +274,20 @@ def ai_turn(llm_settings: env,
 
                             The argument is the node ID of this new chat node.
 
+    `on_tools_start`: 1-argument callable, with argument `tool_calls: List[Dict]`, containing the raw tool call requests
+                      in the OpenAI format.
+
+                      Called just before processing the tool calls.
+
+                      The return value is ignored.
+
+                      This is called ONLY IF there is at least one tool call in the LLM's response.
+
+                      This is meant as an optional UI hook to show that tool calls will be processed next.
+
+                      Each completed tool call (regardless of whether success or failure) then triggers
+                      one `on_tool_done` event.
+
     `on_tool_done`: 1-argument callable, with argument `node_id: str`.
                     The return value is ignored.
 
@@ -347,10 +362,14 @@ def ai_turn(llm_settings: env,
         #
         # Each response goes into its own message, with `role="tool"`.
         #
+        have_tool_calls = (out.data["tool_calls"] is not None and len(out.data["tool_calls"]))
+        if have_tool_calls and on_tools_start is not None:
+            on_tools_start(out.data["tool_calls"])
+
         tool_response_records = llmclient.perform_tool_calls(llm_settings, message=out.data)
 
         # When there are no more tool calls, the LLM is done replying.
-        # Each tool call produces exactly one response, so we may as well check this from the number of responses.
+        # Each tool call produces exactly one response.
         if not tool_response_records:
             break
 
