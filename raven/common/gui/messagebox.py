@@ -68,6 +68,9 @@ def modal_dialog(window_title: str,
     `cancel_button`: When Esc is pressed, or the window is closed by clicking on the "X", this value is returned.
     `callback`: CPS due to how DPG works. `modal_dialog` itself returns immediately; put the stuff you want to run
                 (if any) after the modal closes into your `callback`.
+                The callback is expected to take one argument: the "return value" from the modal dialog,
+                i.e. the label of the button that was chosen.
+                The return value of the callback itself is ignored.
     `centering_reference_window`: DPG tag or ID of parent window to center the dialog on.
     """
     _init()
