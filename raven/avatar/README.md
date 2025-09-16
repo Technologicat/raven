@@ -101,12 +101,13 @@ Where to find the relevant files:
 - The server side implementation: [`raven.server.modules.avatar`](../server/modules/avatar.py)
 - The server side web API endpoints: [`raven.server.app`](../server/app.py) (**start here** when developing your own **JavaScript** apps)
 - Python bindings for the web API: [`raven.client.api`](../client/api.py) (**start here** when developing your own **Python** apps)
+- DPG GUI driver: [`raven.client.avatar_renderer`](../client/avatar_renderer.py)
 - The GUI apps: [`raven.avatar.pose_editor.app`](../avatar/pose_editor/app.py), [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py)
 - Assets: [`raven/avatar/assets/`](../avatar/assets/)
 
 Assets include character images (512x512 PNG RGBA), extra cels (512x512 PNG RGBA), backdrop images (any resolution and format), emotion templates (JSON), and animator settings (JSON).
 
-Backdrops are applied at the client side in [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py). If you want to do that in your own client, currently you'll have to implement something similar, i.e. render and optionally postprocess a background texture, then blit the video texture on top of it.
+Backdrops are applied at the client side in [`raven.client.avatar_renderer`](../client/avatar_renderer.py). This works by rendering and optionally postprocessing a background texture, then blitting the video texture on top of it. See [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py) for a usage example.
 
 The upscaler is powered by the PyTorch port of [Anime4K](https://github.com/bloc97/Anime4K/). Rudimentary RGBA support and documentation were added; see the [vendored code](../vendor/anime4k/anime4k.py) and the [upscaler](../common/video/upscaler.py).
 

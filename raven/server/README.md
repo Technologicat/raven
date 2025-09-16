@@ -411,7 +411,7 @@ AI-animated anime avatar for your LLM.
 
 This lives in a separate module, [`raven.client.avatar_renderer`](../client/avatar_renderer.py). It is part of the API, but not imported automatically.
 
-- `DPGAvatarRenderer`: Receive the avatar video stream, and render it in a DearPyGui (DPG) image widget.
+- `DPGAvatarRenderer`: Receive the avatar video stream, and render it in a DearPyGui (DPG) image widget. Optionally render a backdrop image (blur filter available) behind the avatar.
   - This also serves as a starting point for porting the avatar's GUI driver to other GUI toolkits and to other programming languages.
   - Instantiate `DPGAvatarRenderer`, then configure it, then `start` it. See docstrings for details. See usage example in [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py).
 

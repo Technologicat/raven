@@ -38,11 +38,7 @@ with timer() as tim:
     import traceback
     from typing import Optional, Union
 
-    import PIL.Image
-
     from colorama import Fore, Style, init as colorama_init
-
-    import numpy as np
 
     colorama_init()
 
@@ -369,13 +365,6 @@ class PostprocessorSettingsEditorGUI:
 
         self.current_input_image_path = None  # for the Refresh (reload current character) feature
 
-        self.backdrop_texture = None  # The raw texture object
-        self.backdrop_texture_id_counter = 0
-        self.backdrop_image = None  # PIL image
-        self.last_backdrop_image = None
-        self.last_backdrop_blur = True
-        self.last_window_size = (None, None)
-
         self.talking_animation_running = False  # simple mouth randomizing animation
         self.speaking = False  # TTS
         self.animator_settings = None  # not loaded yet
@@ -391,9 +380,6 @@ class PostprocessorSettingsEditorGUI:
                 with dpg.child_window(width=1024, height=viewport_height - 16,
                                       border=False, no_scrollbar=True, no_scroll_with_mouse=True,
                                       tag="avatar_child_window"):
-                    dpg.add_drawlist(tag="backdrop_drawlist", width=1024, height=1024, pos=(0, 0))  # for backdrop image
-                    # dpg.add_spacer(width=1024, height=0)  # keep the group at the image's width even when the image is hidden
-
                     self.dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="avatar_settings_editor_textures",
                                                                  gui_parent="avatar_child_window",
                                                                  avatar_x_center=512,
@@ -646,10 +632,7 @@ class PostprocessorSettingsEditorGUI:
 
     def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]) -> None:
         """Load a backdrop image. To clear the background, use `filename=None`."""
-        if filename is not None:
-            self.backdrop_image = PIL.Image.open(filename)
-        else:
-            self.backdrop_image = None
+        self.dpg_avatar_renderer.load_backdrop_image(filename=filename)
         self._resize_gui()  # render the new backdrop
 
     def _resize_gui(self) -> None:
@@ -661,68 +644,15 @@ class PostprocessorSettingsEditorGUI:
         if w == 0 or h == 0:  # no meaningful main window size yet?
             return
 
-        self.dpg_avatar_renderer.reposition(new_y_bottom=h)
-
         try:
             dpg.set_item_height("avatar_child_window", h - 16)
         except SystemError:  # main window or live image widget does not exist
             pass
 
-        new_blur_state = dpg.get_value("backdrop_blur_checkbox")
-
-        old_w, old_h = self.last_window_size
-        old_blur_state = self.last_backdrop_blur
-        old_texture_id = self.backdrop_texture_id_counter
-        if self.backdrop_image is not None and (self.backdrop_image != self.last_backdrop_image or w != old_w or h != old_h or new_blur_state != old_blur_state):
-            new_texture_id = old_texture_id + 1
-
-            image_w, image_h = self.backdrop_image.size
-
-            # TODO: Consider changing the backdrop region so that if we have enough space in the window for all the controls, it could take more than 1024 pixels of width.
-            # TODO: If the backdrop image is small and/or has a wild aspect ratio, would be more efficient to cut first, then scale.
-            #
-            # Scale image, preserving aspect ratio, to cover the whole backdrop region (1024 x h)
-            # https://stackoverflow.com/questions/1373035/how-do-i-scale-one-rectangle-to-the-maximum-size-possible-within-another-rectang
-            scale = max(1024 / image_w, h / image_h)  # max(dst.w / src.w, dst.h / src.h)
-            pil_image = self.backdrop_image.resize((int(scale * image_w), int(scale * image_h)),
-                                                   resample=PIL.Image.LANCZOS)
-            # Then cut the part we need
-            pil_image = pil_image.crop(box=(0, 0, 1024, h))  # (left, upper, right, lower), in pixels
-
-            image_rgba = pil_image.convert("RGBA")
-            image_rgba = np.asarray(image_rgba, dtype=np.float32) / 255
-
-            if new_blur_state:
-                image_rgba = api.imagefx_process_array(image_rgba,
-                                                       filters=[["analog_lowres", {"sigma": 3.0}],  # maximum sigma is 3.0 due to convolution kernel size
-                                                                ["analog_lowres", {"sigma": 3.0}],  # how to blur more: unrolled loop
-                                                                ["analog_lowres", {"sigma": 3.0}],
-                                                                ["analog_lowres", {"sigma": 3.0}],
-                                                                ["analog_lowres", {"sigma": 3.0}]]
-                                                       )
-
-            raw_data = image_rgba.ravel()
-
-            logger.info(f"_resize_gui: Creating new GUI item backdrop_texture_{new_texture_id}")
-            self.backdrop_texture = dpg.add_raw_texture(width=1024,
-                                                        height=h,
-                                                        default_value=raw_data,
-                                                        format=dpg.mvFormat_Float_rgba,
-                                                        tag=f"backdrop_texture_{new_texture_id}",
-                                                        parent="avatar_settings_editor_textures")
-            self.backdrop_texture_id_counter += 1
-            dpg.delete_item("backdrop_drawlist", children_only=True)  # delete old draw items
-            dpg.configure_item("backdrop_drawlist", width=1024, height=h)
-            dpg.draw_image(f"backdrop_texture_{new_texture_id}", (0, 0), (1024, h), uv_min=(0, 0), uv_max=(1, 1), parent="backdrop_drawlist")
-            guiutils.maybe_delete_item(f"backdrop_texture_{old_texture_id}")
-        elif self.backdrop_image is None:
-            dpg.delete_item("backdrop_drawlist", children_only=True)  # delete old draw items
-            dpg.configure_item("backdrop_drawlist", width=1024, height=h)
-            guiutils.maybe_delete_item(f"backdrop_texture_{old_texture_id}")
-
-        self.last_backdrop_image = self.backdrop_image
-        self.last_window_size = (w, h)
-        self.last_backdrop_blur = new_blur_state
+        self.dpg_avatar_renderer.reposition(new_y_bottom=h)
+        self.dpg_avatar_renderer.configure_backdrop(new_width=1024,
+                                                    new_height=h,
+                                                    new_blur_state=dpg.get_value("backdrop_blur_checkbox"))
 
     def _iscolor(self, value) -> bool:
         """Return whether `value` is likely an RGB or RGBA color in float or uint8 format."""

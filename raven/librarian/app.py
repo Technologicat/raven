@@ -1411,6 +1411,10 @@ def _load_initial_animator_settings() -> None:
     animator_settings.update(librarian_specific_animator_settings)
 
     api.avatar_load_animator_settings(avatar_instance_id, animator_settings)  # send settings to server
+    dpg_avatar_renderer.load_backdrop_image(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve())
+    dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 40,  # account for borders
+                                           new_height=avatar_panel_h - 60,
+                                           new_blur_state=True)
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
 

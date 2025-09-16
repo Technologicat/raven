@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 import io
 import os
+import pathlib
 import platform
 import qoi
 import time
@@ -111,6 +112,18 @@ class DPGAvatarRenderer:
         self.live_image_widget = None  # GUI widget the texture renders to
         self.last_image_rgba = None  # For rescaling last received frame on upscaler size change before we get new data
 
+        self.backdrop_image = None  # PIL image
+        self.backdrop_texture = None  # raw texture
+        self.backdrop_texture_id_counter = 0
+        self.backdrop_width = None
+        self.backdrop_height = None
+        self.backdrop_blur_state = None  # whether to blur background (by calling Raven-server's `imagefx` module)
+        # tracking for backdrop's previous state so that `configure_backdrop` knows whether it needs to do anything
+        self.backdrop_old_image = None
+        self.backdrop_old_width = None
+        self.backdrop_old_height = None
+        self.backdrop_old_blur_state = None
+
         self.avatar_instance_id = None  # initialized at `start`
         self.animator_running = False
         self.image_size = None  # initialized at first call of `configure_live_texture`
@@ -119,6 +132,8 @@ class DPGAvatarRenderer:
 
         self.fps_statistics = RunningAverage()
         self.frame_size_statistics = RunningAverage()
+
+        self.backdrop_drawlist_gui_widget = dpg.add_drawlist(tag="avatar_backdrop_drawlist", width=1024, height=1024, pos=(0, 0))  # for backdrop image (bottommost GUI item in z-order)
 
         # For displaying current video FPS arriving from the server
         self.fps_text_gui_widget = dpg.add_text("FPS counter will appear here",
@@ -151,6 +166,92 @@ class DPGAvatarRenderer:
             pass
         except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
             pass
+
+    def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]):
+        """Load a backdrop image. To clear the background (no image), use `filename=None`.
+
+        The backdrop change takes effect upon the next call to `configure_backdrop`, which see.
+        """
+        if filename is not None:
+            self.backdrop_image = PIL.Image.open(filename)
+        else:
+            self.backdrop_image = None
+
+    def configure_backdrop(self,
+                           new_width: int,
+                           new_height: int,
+                           new_blur_state: bool) -> None:
+        """Configure the size and blur state of the current backdrop image.
+
+        The backdrop always starts at the upper left corner of the GUI parent widget.
+
+        If the size of the loaded backdrop image does not match `new_width x new_height`,
+        the image is rescaled with Lanczos on CPU, and then cropped to fit the aspect ratio
+        `new_width / new_height`.
+
+        This method has no effect when no backdrop image is loaded. Call `load_backdrop_image` first!
+
+        NOTE: This needs to wait for a frame to eliminate GUI flicker when the texture is replaced.
+              Thus, this method CANNOT be called from the main thread that runs the render loop
+              (doing so will hang the app).
+
+              Calling from any other thread (including GUI event handlers) is fine.
+        """
+        old_width = self.backdrop_old_width
+        old_height = self.backdrop_old_height
+        old_blur_state = self.backdrop_old_blur_state
+        old_texture_id = self.backdrop_texture_id_counter
+        if self.backdrop_image is not None and (self.backdrop_image != self.backdrop_old_image or new_width != old_width or new_height != old_height or new_blur_state != old_blur_state):
+            new_texture_id = old_texture_id + 1
+
+            image_width, image_height = self.backdrop_image.size
+
+            # TODO: If the backdrop image is small and/or has a wild aspect ratio, would be more efficient to cut first, then scale.
+            #
+            # Scale image, preserving aspect ratio, to cover the whole backdrop region (1024 x h)
+            # https://stackoverflow.com/questions/1373035/how-do-i-scale-one-rectangle-to-the-maximum-size-possible-within-another-rectang
+            scale = max(new_width / image_width, new_height / image_height)  # max(dst.w / src.w, dst.h / src.h)
+            pil_image = self.backdrop_image.resize((int(scale * image_width), int(scale * image_height)),
+                                                   resample=PIL.Image.LANCZOS)
+            # Then cut the part we need
+            pil_image = pil_image.crop(box=(0, 0, new_width, new_height))  # (left, upper, right, lower), in pixels
+
+            image_rgba = pil_image.convert("RGBA")
+            image_rgba = np.asarray(image_rgba, dtype=np.float32) / 255
+
+            if new_blur_state:
+                image_rgba = api.imagefx_process_array(image_rgba,
+                                                       filters=[["analog_lowres", {"sigma": 3.0}],  # maximum sigma is 3.0 due to convolution kernel size
+                                                                ["analog_lowres", {"sigma": 3.0}],  # how to blur more: unrolled loop
+                                                                ["analog_lowres", {"sigma": 3.0}],
+                                                                ["analog_lowres", {"sigma": 3.0}],
+                                                                ["analog_lowres", {"sigma": 3.0}]]
+                                                       )
+
+            raw_data = image_rgba.ravel()
+
+            logger.info(f"DPGAvatarRenderer.configure_backdrop: Creating new GUI item avatar_backdrop_texture_{new_texture_id}")
+            self.backdrop_texture = dpg.add_raw_texture(width=new_width,
+                                                        height=new_height,
+                                                        default_value=raw_data,
+                                                        format=dpg.mvFormat_Float_rgba,
+                                                        tag=f"avatar_backdrop_texture_{new_texture_id}",
+                                                        parent=self.texture_registry)
+            self.backdrop_texture_id_counter += 1
+            dpg.split_frame()  # For some reason, waiting for a frame here eliminates flicker when the background image is replaced.
+            dpg.delete_item("avatar_backdrop_drawlist", children_only=True)  # delete old draw items
+            dpg.configure_item("avatar_backdrop_drawlist", width=new_width, height=new_height)
+            dpg.draw_image(f"avatar_backdrop_texture_{new_texture_id}", (0, 0), (new_width, new_height), uv_min=(0, 0), uv_max=(1, 1), parent="avatar_backdrop_drawlist")
+            guiutils.maybe_delete_item(f"avatar_backdrop_texture_{old_texture_id}")
+        elif self.backdrop_image is None:  # clear backdrop?
+            dpg.delete_item("avatar_backdrop_drawlist", children_only=True)  # delete old draw items
+            dpg.configure_item("avatar_backdrop_drawlist", width=new_width, height=new_height)
+            guiutils.maybe_delete_item(f"avatar_backdrop_texture_{old_texture_id}")
+
+        self.backdrop_old_image = self.backdrop_image
+        self.backdrop_old_width = new_width
+        self.backdrop_old_height = new_height
+        self.backdrop_old_blur_state = new_blur_state
 
     def configure_live_texture(self, new_image_size: int) -> None:
         """Set up (or re-set-up) the texture and image widgets for rendering the video stream of the live AI avatar.
@@ -229,6 +330,10 @@ class DPGAvatarRenderer:
         self.avatar_x_center = new_x_center if new_x_center is not None else self.avatar_x_center
         self.avatar_y_bottom = new_y_bottom if new_y_bottom is not None else self.avatar_y_bottom
         logger.info(f"DPGAvatarRenderer.reposition: Updating position to x_center = {self.avatar_x_center}, y_bottom = {self.avatar_y_bottom}")
+
+        x0, y0 = guiutils.get_widget_pos(self.gui_parent)
+        w, h = guiutils.get_widget_size(self.gui_parent)
+        logger.info(f"DPGAvatarRenderer.reposition: Gui parent is at ({x0}, {y0}), and has size {w}x{h}")
 
         x_left = self.avatar_x_center - (self.image_size // 2)
         y_top = self.avatar_y_bottom - self.image_size
