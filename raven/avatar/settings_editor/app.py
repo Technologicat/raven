@@ -49,6 +49,7 @@ with timer() as tim:
 
     import dearpygui.dearpygui as dpg
 
+    from ...vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
     from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
     from ...common import bgtask
@@ -396,14 +397,29 @@ class PostprocessorSettingsEditorGUI:
 
                     with dpg.group(horizontal=True):
                         dpg.add_button(label="Load character [Ctrl+O]", width=self.button_width - 67, callback=show_open_input_image_dialog, tag="open_image_button")
+                        dpg.add_tooltip("open_image_button", tag="open_image_tooltip")  # tag
+                        dpg.add_text("Load a character image (512x512 RGBA PNG)", parent="open_image_tooltip")  # tag
+
                         dpg.add_button(label="Refresh [Ctrl+R]", width=59, callback=self.on_reload_input_image, tag="reload_image_button")
+                        dpg.add_tooltip("reload_image_button", tag="reload_image_tooltip")  # tag
+                        dpg.add_text("Refresh the current character image from disk", parent="reload_image_tooltip")  # tag
                     with dpg.group(horizontal=True):
                         def reset_backdrop():
                             self.load_backdrop_image(None)
                         dpg.add_button(label="X", callback=reset_backdrop, tag="backdrop_reset_button")
+                        dpg.add_tooltip("backdrop_reset_button", tag="backdrop_reset_tooltip")  # tag
+                        dpg.add_text("Clear the backdrop image (use empty background)", parent="backdrop_reset_tooltip")  # tag
+
                         dpg.add_button(label="Load backdrop [Ctrl+B]", width=self.button_width - 92, callback=show_open_backdrop_image_dialog, tag="open_backdrop_button")
+                        dpg.add_tooltip("open_backdrop_button", tag="open_backdrop_tooltip")  # tag
+                        dpg.add_text("Load an image to use as the backdrop", parent="open_backdrop_tooltip")  # tag
+
                         dpg.add_checkbox(label="Blur", default_value=True, callback=self._resize_gui, tag="backdrop_blur_checkbox")
+                        dpg.add_tooltip("backdrop_blur_checkbox", tag="backdrop_blur_tooltip")  # tag
+                        dpg.add_text("Blur the backdrop image", parent="backdrop_blur_tooltip")  # tag
                     dpg.add_button(label="Load emotion templates [Ctrl+Shift+E]", width=self.button_width, callback=show_open_json_dialog, tag="open_json_button")
+                    dpg.add_tooltip("open_json_button", tag="open_json_tooltip")  # tag
+                    dpg.add_text("Load emotion templates JSON file\n(format as in raven/avatar/assets/emotions/_defaults.json)", parent="open_json_tooltip")  # tag
                     dpg.add_text("[Use raven.avatar.editor to edit templates.]", color=(140, 140, 140))
 
                     # Main animator settings
@@ -413,24 +429,44 @@ class PostprocessorSettingsEditorGUI:
                             dpg.set_value("target_fps_slider", 25)
                             self.on_gui_settings_change(None, None)
                         dpg.add_button(label="X", callback=reset_target_fps, tag="target_fps_reset_button")
+                        dpg.add_tooltip("target_fps_reset_button", tag="target_fps_reset_tooltip")  # tag
+                        dpg.add_text("Reset the animator's target FPS to default", parent="target_fps_reset_tooltip")  # tag
+
                         dpg.add_slider_int(label="FPS", default_value=25, min_value=10, max_value=60, clamped=True, width=self.button_width - 80,
                                            callback=self.on_gui_settings_change, tag="target_fps_slider")
+                        dpg.add_tooltip("target_fps_slider", tag="target_fps_tooltip")  # tag
+                        dpg.add_text("Set the animator's target FPS\n(will attempt to render and send at this rate)", parent="target_fps_tooltip")  # tag
                     with dpg.group(horizontal=True):
                         def reset_pose_interpolator_step():
                             dpg.set_value("pose_interpolator_step_slider", 3)
                             self.on_gui_settings_change(None, None)
                         dpg.add_button(label="X", callback=reset_pose_interpolator_step, tag="pose_interpolator_step_reset_button")
+                        dpg.add_tooltip("pose_interpolator_step_reset_button", tag="pose_interpolator_step_reset_tooltip")  # tag
+                        dpg.add_text("Reset the animator's pose interpolator step to default", parent="pose_interpolator_step_reset_tooltip")  # tag
+
                         dpg.add_slider_int(label="Speed", default_value=3, min_value=1, max_value=9, clamped=True, width=self.button_width - 80,
                                            callback=self.on_gui_settings_change, tag="pose_interpolator_step_slider")
+                        dpg.add_tooltip("pose_interpolator_step_slider", tag="pose_interpolator_step_tooltip")  # tag
+                        dpg.add_text("Set the animator's pose interpolator step (larger = faster)", parent="pose_interpolator_step_tooltip")  # tag
                     dpg.add_button(label="Pause [Ctrl+P]", width=self.button_width, callback=self.toggle_animator_paused, tag="pause_resume_button")
+                    dpg.add_tooltip("pause_resume_button", tag="pause_resume_tooltip")  # tag
+                    dpg.add_text("Pause or resume the avatar\n(no render resources used while paused)", parent="pause_resume_tooltip")  # tag
+
                     dpg.add_button(label="Load settings [Ctrl+Shift+A]", width=self.button_width, callback=show_open_animator_settings_dialog, tag="open_animator_settings_button")
+                    dpg.add_tooltip("open_animator_settings_button", tag="open_animator_settings_tooltip")  # tag
+                    dpg.add_text("Load an animator settings file\n(the file contains everything that is configured in this app)", parent="open_animator_settings_tooltip")  # tag
+
                     dpg.add_button(label="Save settings [Ctrl+Shift+S]", width=self.button_width, callback=show_save_animator_settings_dialog, tag="save_animator_settings_button")
+                    dpg.add_tooltip("save_animator_settings_button", tag="save_animator_settings_tooltip")  # tag
+                    dpg.add_text("Save your work\n(the file will contain everything that is configured in this app)", parent="save_animator_settings_tooltip")  # tag
                     dpg.add_spacer(height=8)
 
                     # Upscaler settings
                     dpg.add_text("Upscaler [Ctrl+click to set a numeric value]")
                     dpg.add_slider_int(label="x 0.1x", default_value=int(10 * self.upscale), min_value=10, max_value=20, clamped=True, width=self.button_width - 64,
                                        callback=self.on_upscaler_settings_change, tag="upscale_slider")
+                    dpg.add_tooltip("upscale_slider", tag="upscale_tooltip")  # tag
+                    dpg.add_text("Set upscale factor for avatar video stream", parent="upscale_tooltip")  # tag
                     self.upscale_presets = ["A", "B", "C"]
                     with dpg.group(horizontal=True):
                         dpg.add_combo(items=self.upscale_presets,
@@ -438,6 +474,8 @@ class PostprocessorSettingsEditorGUI:
                                       width=self.button_width - 64,
                                       callback=self.on_upscaler_settings_change,
                                       tag="upscale_preset_choice")
+                        dpg.add_tooltip("upscale_preset_choice", tag="upscale_preset_tooltip")  # tag
+                        dpg.add_text("Choose Anime4K preset\n    A = optimized to remove blur, resampling artifacts, smearing\n    B = optimized to remove ringing/aliasing\n    C = optimized for images with no degradation", parent="upscale_preset_tooltip")  # tag
                         dpg.add_text("Preset")
                     with dpg.group(horizontal=True):
                         self.upscale_qualities = ["low", "high"]
@@ -446,6 +484,8 @@ class PostprocessorSettingsEditorGUI:
                                       width=self.button_width - 64,
                                       callback=self.on_upscaler_settings_change,
                                       tag="upscale_quality_choice")
+                        dpg.add_tooltip("upscale_quality_choice", tag="upscale_quality_tooltip")  # tag
+                        dpg.add_text("Choose upscale quality/speed tradeoff", parent="upscale_quality_tooltip")  # tag
                         dpg.add_text("Quality")
                     dpg.add_text("[Presets as in Anime4K.]", color=(140, 140, 140))
 
@@ -466,20 +506,33 @@ class PostprocessorSettingsEditorGUI:
                     self.emotion_choice = dpg.add_combo(items=self.emotion_names,
                                                         default_value=self.emotion_names[0],
                                                         width=self.button_width,
-                                                        callback=self.on_send_emotion)
+                                                        callback=self.on_send_emotion,
+                                                        tag="emotion_choice")
+                    dpg.add_tooltip("emotion_choice", tag="emotion_tooltip")  # tag
+                    dpg.add_text("Set the character's emotion\n(Ctrl+E; then Up, Down, Home, End to jump)", parent="emotion_tooltip")  # tag
                     self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
+
                     dpg.add_checkbox(label="Animefx", default_value=True, callback=self.on_gui_settings_change, tag="animefx_checkbox")  # animefx: emotion change triggered anime effects
+                    dpg.add_tooltip("animefx_checkbox", tag="animefx_tooltip")  # tag
+                    dpg.add_text("Enable/disable hovering anime effects such as sweatdrops and exclamation marks", parent="animefx_tooltip")  # tag
                     dpg.add_spacer(height=2)
 
                     dpg.add_text("Talking animation (generic, non-lipsync)")
                     dpg.add_button(label="Start [Ctrl+T]", width=self.button_width, callback=self.toggle_talking, tag="start_stop_talking_button")
+                    dpg.add_tooltip("start_stop_talking_button", tag="start_stop_talking_tooltip")  # tag
+                    dpg.add_text("Start/stop generic no-audio talking animation (randomized mouth)", parent="start_stop_talking_tooltip")  # tag
                     with dpg.group(horizontal=True):
                         def reset_talking_fps():
                             dpg.set_value("talking_fps_slider", 12)
                             self.on_gui_settings_change(None, None)
                         dpg.add_button(label="X", callback=reset_talking_fps, tag="talking_fps_reset_button")
+                        dpg.add_tooltip("talking_fps_reset_button", tag="talking_fps_reset_tooltip")  # tag
+                        dpg.add_text("Reset the animator's FPS for the generic no-audio talking animation to default", parent="talking_fps_reset_tooltip")  # tag
+
                         dpg.add_slider_int(label="Talk FPS", default_value=12, min_value=6, max_value=24, clamped=True, width=self.button_width - 86,
                                            callback=self.on_gui_settings_change, tag="talking_fps_slider")
+                    dpg.add_tooltip("talking_fps_slider", tag="talking_fps_tooltip")  # tag
+                    dpg.add_text("Set the animator's FPS for the generic no-audio talking animation (how often to re-randomize mouth)", parent="talking_fps_tooltip")  # tag
                     dpg.add_spacer(height=2)
 
                     # AI speech synthesizer
@@ -497,14 +550,28 @@ class PostprocessorSettingsEditorGUI:
                     dpg.add_text(heading_label)
                     self.voice_choice = dpg.add_combo(items=self.voice_names,
                                                       default_value=self.voice_names[0],
-                                                      width=self.button_width)
+                                                      width=self.button_width,
+                                                      tag="voice_choice")
+                    dpg.add_tooltip("voice_choice", tag="voice_tooltip")  # tag
+                    dpg.add_text("Choose the TTS voice\n(Ctrl+V; then Up, Down, Home, End to jump)", parent="voice_tooltip")  # tag
                     with dpg.group(horizontal=True):
                         dpg.add_text("Speed")
                         dpg.add_button(label="X", tag="speak_speed_reset_button", callback=lambda: dpg.set_value("speak_speed_slider", 10))
+                        dpg.add_tooltip("speak_speed_reset_button", tag="speak_speed_reset_tooltip")  # tag
+                        dpg.add_text("Reset the TTS audio speed to default", parent="speak_speed_reset_tooltip")  # tag
+
                         dpg.add_slider_int(label="x 0.1x", default_value=10, min_value=5, max_value=20, clamped=True, width=self.button_width - 122,
                                            tag="speak_speed_slider")
+                        dpg.add_tooltip("speak_speed_slider", tag="speak_speed_tooltip")  # tag
+                        dpg.add_text("Set the TTS audio speed\n(too high may cause skipped words)", parent="speak_speed_tooltip")  # tag
                     dpg.add_checkbox(label="Lipsync [adjust video timing below]", default_value=True, tag="speak_lipsync_checkbox")
+                    dpg.add_tooltip("speak_lipsync_checkbox", tag="speak_lipsync_tooltip")  # tag
+                    dpg.add_text("When the TTS is speaking, lipsync the avatar's mouth to the speech", parent="speak_lipsync_tooltip")  # tag
+
                     dpg.add_slider_int(label="x 0.1 s", default_value=-6, min_value=-20, max_value=20, clamped=True, width=self.button_width - 64, tag="speak_video_offset")
+                    dpg.add_tooltip("speak_video_offset", tag="speak_video_tooltip")  # tag
+                    dpg.add_text("Adjust AV offset for lipsync playback\n(positive value = shift video later w.r.t the audio)", parent="speak_video_tooltip")  # tag
+
                     dpg.add_spacer(height=4)
                     dpg.add_input_text(default_value="",
                                        hint="[Enter text to speak]",
@@ -512,6 +579,8 @@ class PostprocessorSettingsEditorGUI:
                                        tag="speak_input_text")
                     dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_start_speaking, enabled=tts_alive, tag="speak_button")
                     dpg.bind_item_theme("speak_button", "disablable_button_theme")
+                    dpg.add_tooltip("speak_button", tag="speak_tooltip")  # tag
+                    dpg.add_text("Speak the entered text", parent="speak_tooltip")  # tag
 
                 # Postprocessor settings editor
                 #
