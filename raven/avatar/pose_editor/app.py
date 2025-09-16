@@ -739,7 +739,8 @@ class PoseEditorGUI:
                 self.emotion_choice = dpg.add_combo(items=self.emotion_names,
                                                     default_value=self.emotion_names[0],
                                                     width=self.image_size - 16,
-                                                    callback=self.update_output)
+                                                    callback=self.update_output,
+                                                    tag="emotion_choice")
 
             with dpg.group():
                 self.load_image_button = dpg.add_button(label="Load character [Ctrl+O]",
@@ -848,7 +849,8 @@ class PoseEditorGUI:
                 self.output_index_choice = dpg.add_combo(items=self.output_index_choice_items,
                                                          default_value=self.output_index_choice_items[0],
                                                          width=self.image_size - 16,
-                                                         callback=self.update_output)
+                                                         callback=self.update_output,
+                                                         tag="output_index_choice")
 
             with dpg.group():
                 self.save_image_button = dpg.add_button(label="Save posed image and emotion [Ctrl+S]",
@@ -1246,7 +1248,7 @@ class PoseEditorGUI:
             logger.info(f"Saved emotion file '{json_file_path}'")
 
 # Hotkey support
-choice_map = None
+combobox_choice_map = None   # DPG tag or ID -> (choice_strings, callback)
 def pose_editor_hotkeys_callback(sender, app_data):
     if gui_instance is None:
         return
@@ -1291,12 +1293,12 @@ def pose_editor_hotkeys_callback(sender, app_data):
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
     else:
         # {widget_tag_or_id: list_of_choices}
-        global choice_map
-        if choice_map is None:  # build on first use
-            choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, lambda sender, app_data: gui_instance.update_output()),
-                          gui_instance.output_index_choice: (gui_instance.output_index_choice_items, lambda sender, app_data: gui_instance.update_output())}
+        global combobox_choice_map
+        if combobox_choice_map is None:  # build on first use
+            combobox_choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, lambda sender, app_data: gui_instance.update_output()),
+                                   gui_instance.output_index_choice: (gui_instance.output_index_choice_items, lambda sender, app_data: gui_instance.update_output())}
             for panel in gui_instance.morph_control_panels.values():
-                choice_map[panel.choice] = (panel.param_group_names, panel.on_choice_updated)
+                combobox_choice_map[panel.choice] = (panel.param_group_names, panel.on_choice_updated)
         def browse(choice_widget, data):
             choices, callback = data
             index = choices.index(dpg.get_value(choice_widget))
@@ -1315,8 +1317,9 @@ def pose_editor_hotkeys_callback(sender, app_data):
                 if callback is not None:
                     callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
         focused_item = dpg.get_focused_item()
-        if focused_item in choice_map.keys():
-            browse(focused_item, choice_map[focused_item])
+        focused_item = dpg.get_item_alias(focused_item)
+        if focused_item in combobox_choice_map.keys():
+            browse(focused_item, combobox_choice_map[focused_item])
 
 with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="pose_editor_hotkeys_handler", callback=pose_editor_hotkeys_callback)

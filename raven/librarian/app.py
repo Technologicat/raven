@@ -1198,7 +1198,7 @@ def update_animations():
 # --------------------------------------------------------------------------------
 # Hotkey support
 
-choice_map = None   # DPG tag or ID -> (choice_strings, callback)
+combobox_choice_map = None   # DPG tag or ID -> (choice_strings, callback)
 def librarian_hotkeys_callback(sender, app_data):
     # # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
     # if is_any_modal_window_visible():
@@ -1306,10 +1306,10 @@ def librarian_hotkeys_callback(sender, app_data):
     #         toggle_fullscreen()
     #     else:
     #         # {widget_tag_or_id: list_of_choices}
-    #         global choice_map
-    #         if choice_map is None:  # build on first use
-    #             choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
-    #                           gui_instance.voice_choice: (gui_instance.voice_names, None)}
+    #         global combobox_choice_map
+    #         if combobox_choice_map is None:  # build on first use
+    #             combobox_choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
+    #                                    gui_instance.voice_choice: (gui_instance.voice_names, None)}
     #         def browse(choice_widget, data):
     #             choices, callback = data
     #             index = choices.index(dpg.get_value(choice_widget))
@@ -1328,8 +1328,9 @@ def librarian_hotkeys_callback(sender, app_data):
     #                 if callback is not None:
     #                     callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
     #         focused_item = dpg.get_focused_item()
-    #         if focused_item in choice_map.keys():
-    #             browse(focused_item, choice_map[focused_item])
+    #         focused_item = dpg.get_item_alias(focused_item)
+    #         if focused_item in combobox_choice_map.keys():
+    #             browse(focused_item, combobox_choice_map[focused_item])
 with dpg.handler_registry(tag="librarian_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="librarian_hotkeys_handler", callback=librarian_hotkeys_callback)
 

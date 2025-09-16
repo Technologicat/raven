@@ -1167,6 +1167,7 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
                     if callback is not None:
                         callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
             focused_item = dpg.get_focused_item()
+            focused_item = dpg.get_item_alias(focused_item)
             if focused_item in combobox_choice_map.keys():
                 browse(focused_item, combobox_choice_map[focused_item])
 with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # global (whole viewport)
