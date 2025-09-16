@@ -54,8 +54,8 @@ def tts_list_voices() -> List[str]:
 def tts_speak(voice: str,
               text: str,
               speed: float = 1.0,
-              start_callback: Optional[Callable] = None,
-              stop_callback: Optional[Callable] = None) -> None:
+              on_start: Optional[Callable] = None,
+              on_stop: Optional[Callable] = None) -> None:
     """Using the speech synthesizer, speak `text` using `voice`.
 
     To get the list of available voices, call `tts_list_voices`.
@@ -63,8 +63,8 @@ def tts_speak(voice: str,
     `speed`: For each voice, 1.0 is the default speed the voice is designed to speak at.
              Raising this too high may cause skipped words.
 
-    If `start_callback` is provided, call it when the TTS starts speaking.
-    If `stop_callback` is provided, call it when the TTS has stopped speaking.
+    If `on_start` is provided, call it when the TTS starts speaking. No arguments. Return value is ignored.
+    If `on_stop` is provided, call it when the TTS has stopped speaking. No arguments. Return value is ignored.
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak: The `raven.client.api` module must be initialized before using the API.")
@@ -121,20 +121,20 @@ def tts_speak(voice: str,
         # pygame.mixer.music.load(stream_response.raw)  # can't do this at least with mp3 since the raw stream doesn't support seeking.
 
         logger.info("tts_speak.speak: starting playback")
-        if start_callback is not None:
+        if on_start is not None:
             try:
-                start_callback()
+                on_start()
             except Exception as exc:
                 logger.error(f"tts_speak.speak: in start callback: {type(exc)}: {exc}")
                 traceback.print_exc()
         pygame.mixer.music.play()
 
-        if stop_callback is not None:
+        if on_stop is not None:
             while pygame.mixer.music.get_busy():
                 time.sleep(0.01)
             logger.info("tts_speak.speak: playback finished")
             try:
-                stop_callback()
+                on_stop()
             except Exception as exc:
                 logger.error(f"tts_speak.speak: in stop callback: {type(exc)}: {exc}")
                 traceback.print_exc()
@@ -147,8 +147,9 @@ def tts_speak_lipsynced(instance_id: str,
                         text: str,
                         speed: float = 1.0,
                         video_offset: float = 0.0,
-                        start_callback: Optional[Callable] = None,
-                        stop_callback: Optional[Callable] = None) -> None:
+                        on_audio_ready: Optional[Callable] = None,
+                        on_start: Optional[Callable] = None,
+                        on_stop: Optional[Callable] = None) -> None:
     """Like `tts_speak`, but with lipsync for the avatar.
 
     Using the speech synthesizer, speak `text` using `voice`.
@@ -165,8 +166,12 @@ def tts_speak_lipsynced(instance_id: str,
         - Positive values: Use if the video is early. Shifts video later with respect to the audio.
         - Negative values: Use if the video is late. Shifts video earlier with respect to the audio.
 
-    If `start_callback` is provided, call it when the TTS starts speaking.
-    If `stop_callback` is provided, call it when the TTS has stopped speaking.
+    If `on_audio_ready` is provided, call it after TTS synthesis is complete, before playback starts.
+    It is expected to take one argument, `audio_data: bytes`, containing the speech audio in MP3 format.
+    Return value is ignored.
+
+    If `on_start` is provided, call it when the TTS starts speaking. No arguments. Return value is ignored.
+    If `on_stop` is provided, call it when the TTS has stopped speaking. No arguments. Return value is ignored.
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak_lipsynced: The `raven.client.api` module must be initialized before using the API.")
@@ -360,10 +365,10 @@ def tts_speak_lipsynced(instance_id: str,
                 pass
         logger.info(f"tts_speak_lipsynced.speak: getting audio: done in {tim.dt:0.6g}s.")
 
-        # # DEBUG - dump response to audio file
-        # audio_buffer.seek(0)
-        # with open("temp.mp3", "wb") as audio_file:
-        #     audio_file.write(audio_buffer.getvalue())
+        # Send TTS speech audio data (mp3) to caller if they want it
+        if on_audio_ready is not None:
+            audio_buffer.seek(0)
+            on_audio_ready(audio_buffer.getvalue())
 
         if util.api_config.tts_server_type == "kokoro":
             # Wait until phonemization background task completes (usually it completes faster than audio, so likely completed already)
@@ -488,9 +493,9 @@ def tts_speak_lipsynced(instance_id: str,
                 api.avatar_set_overrides(instance_id, overrides)
 
         logger.info("tts_speak_lipsynced.speak: starting playback")
-        if start_callback is not None:
+        if on_start is not None:
             try:
-                start_callback()
+                on_start()
             except Exception as exc:
                 logger.error(f"tts_speak_lipsynced.speak: in start callback: {type(exc)}: {exc}")
                 traceback.print_exc()
@@ -504,9 +509,9 @@ def tts_speak_lipsynced(instance_id: str,
         finally:
             logger.info("tts_speak_lipsynced.speak: playback finished")
 
-            if stop_callback is not None:
+            if on_stop is not None:
                 try:
-                    stop_callback()
+                    on_stop()
                 except Exception as exc:
                     logger.error(f"tts_speak_lipsynced.speak: in stop callback: {type(exc)}: {exc}")
                     traceback.print_exc()
