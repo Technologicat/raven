@@ -572,10 +572,19 @@ class PostprocessorSettingsEditorGUI:
                                        hint="[Enter text to speak]",
                                        width=self.button_width,
                                        tag="speak_input_text")
-                    dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width, callback=self.on_start_speaking, enabled=tts_alive, tag="speak_button")
-                    dpg.bind_item_theme("speak_button", "disablable_button_theme")
-                    dpg.add_tooltip("speak_button", tag="speak_tooltip")  # tag
-                    dpg.add_text("Speak the entered text", parent="speak_tooltip")  # tag
+                    with dpg.group(horizontal=True):
+                        # We use DPG's `user_data` feature to pass the information which speak button was clicked.
+                        # Fixed button width is important here because the dynamic start/stop labels have different text extents.
+                        dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width - 36, callback=self.on_start_speaking, user_data="speak", enabled=tts_alive, tag="speak_button")  # TODO: DRY the GUI labels
+                        dpg.bind_item_theme("speak_button", "disablable_button_theme")  # tag
+                        dpg.add_tooltip("speak_button", tag="speak_tooltip")  # tag
+                        self.speak_tooltip_text = dpg.add_text("Speak the entered text", parent="speak_tooltip")  # tag  # TODO: DRY the GUI labels
+
+                        dpg.add_button(label=fa.ICON_CIRCLE, width=28, callback=self.on_start_speaking, user_data="speak_and_record", enabled=tts_alive, tag="speak_and_record_button")
+                        dpg.bind_item_font("speak_and_record_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("speak_and_record_button", "disablable_red_button_theme")  # tag
+                        dpg.add_tooltip("speak_and_record_button", tag="speak_and_record_tooltip")  # tag
+                        self.speak_and_record_tooltip_text = dpg.add_text("Speak and record the entered text (.mp3 + .png sequence)", parent="speak_and_record_tooltip")  # tag  # TODO: DRY the GUI labels
 
                 # Postprocessor settings editor
                 #
@@ -999,31 +1008,57 @@ class PostprocessorSettingsEditorGUI:
         """Toggle the avatar's talking state (simple randomized mouth animation)."""
         if not self.talking_animation_running:
             api.avatar_start_talking(avatar_instance_id)
-            dpg.set_item_label("start_stop_talking_button", "Stop [Ctrl+T]")
+            dpg.set_item_label("start_stop_talking_button", "Stop [Ctrl+T]")  # tag
         else:
             api.avatar_stop_talking(avatar_instance_id)
-            dpg.set_item_label("start_stop_talking_button", "Start [Ctrl+T]")
+            dpg.set_item_label("start_stop_talking_button", "Start [Ctrl+T]")  # tag
         self.talking_animation_running = not self.talking_animation_running
 
     def toggle_animator_paused(self) -> None:
         """Pause or resume the animation. Pausing when the avatar won't be visible (e.g. minimized window) saves resources as new frames are not computed."""
         if self.dpg_avatar_renderer.animator_running:
             self.dpg_avatar_renderer.pause(action="pause")
-            dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")
+            dpg.set_item_label("pause_resume_button", "Resume [Ctrl+P]")  # tag
         else:
             self.dpg_avatar_renderer.pause(action="resume")
-            dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")
+            dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")  # tag
 
-    def on_stop_speaking(self, sender, app_data) -> None:
+    def on_stop_speaking(self, sender, app_data, user_data) -> None:  # `user_data`: one of "speak" or "speak_and_record", identifies which button was clicked
         api.tts_stop()
-        dpg.set_item_label("speak_button", "Start speaking [Ctrl+S]")
-        dpg.set_item_callback("speak_button", self.on_start_speaking)
+
+        dpg.set_item_label("speak_button", "Speak [Ctrl+S]")  # TODO: DRY the GUI labels  # tag
+        dpg.set_value(self.speak_tooltip_text, "Speak the entered text")  # TODO: DRY the GUI labels
+        dpg.set_item_callback("speak_button", self.on_start_speaking)  # tag
+
+        dpg.set_item_label("speak_and_record_button", fa.ICON_CIRCLE)  # tag
+        dpg.set_value(self.speak_and_record_tooltip_text, "Speak and record the entered text (.mp3 + .png sequence)")  # TODO: DRY the GUI labels
+        dpg.set_item_callback("speak_and_record_button", self.on_start_speaking)  # tag  # TODO: DRY the GUI labels
+        dpg.enable_item("speak_and_record_button")  # tag
+
         self.speaking = False
 
-    def on_start_speaking(self, sender, app_data) -> None:
+    def on_start_speaking(self, sender, app_data, user_data) -> None:  # `user_data`: one of "speak" or "speak_and_record", identifies which button was clicked
         self.speaking = True
-        dpg.set_item_label("speak_button", "Stop speaking [Ctrl+S]")
-        dpg.set_item_callback("speak_button", self.on_stop_speaking)
+
+        dpg.set_item_label("speak_button", "Stop speaking [Ctrl+S]")  # tag  # TODO: DRY the GUI labels
+        dpg.set_value(self.speak_tooltip_text, "Stop the speech synthesizer and speech animation")  # TODO: DRY the GUI labels
+        dpg.set_item_callback("speak_button", self.on_stop_speaking)  # tag
+
+        dpg.set_item_label("speak_and_record_button", fa.ICON_SQUARE)  # tag
+        dpg.set_value(self.speak_and_record_tooltip_text, "Stop recording")  # TODO: DRY the GUI labels
+        dpg.set_item_callback("speak_and_record_button", self.on_stop_speaking)  # tag  # TODO: DRY the GUI labels
+        if user_data == "speak":  # When just speaking, disable the stop-recording button for UX clarity
+            dpg.disable_item("speak_and_record_button")  # tag
+
+        if user_data == "speak_and_record":
+            def on_audio_ready(audio_data: bytes) -> None:
+                filename = "avatar_speech.mp3"
+                logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_audio_ready: Saving TTS speech audio to '{filename}'")
+                with open(filename, "wb") as audio_file:
+                    audio_file.write(audio_data)
+                logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_audio_ready: TTS speech audio saved to '{filename}'")
+        else:
+            on_audio_ready = None
 
         selected_voice = dpg.get_value(self.voice_choice)
         text = dpg.get_value("speak_input_text")
@@ -1036,26 +1071,28 @@ class PostprocessorSettingsEditorGUI:
             # text = "Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts."
             text = 'The failure of any experiment to detect motion through the aether led Hendrik Lorentz, starting in eighteen ninety two, to develop a theory of electrodynamics based on an immobile luminiferous aether, physical length contraction, and a "local time" in which Maxwell\'s equations retain their form in all inertial frames of reference.'
         if dpg.get_value("speak_lipsync_checkbox"):
-            def stop_lipsync_speaking():
-                self.on_stop_speaking(None, None)  # stop the TTS and update the GUI
+            def on_stop_lipsync_speaking():
+                self.on_stop_speaking(None, None, user_data)  # stop the TTS and update the GUI
             api.tts_speak_lipsynced(instance_id=avatar_instance_id,
                                     voice=selected_voice,
                                     text=text,
                                     speed=dpg.get_value("speak_speed_slider") / 10,
                                     video_offset=dpg.get_value("speak_video_offset") / 10,
-                                    start_callback=None,  # no start callback needed, the TTS client will start lipsyncing once the audio starts.
-                                    stop_callback=stop_lipsync_speaking)
+                                    on_audio_ready=on_audio_ready,
+                                    on_start=None,  # no start callback needed, the TTS client will start lipsyncing once the audio starts.
+                                    on_stop=on_stop_lipsync_speaking)
         else:
-            def start_nonlipsync_speaking():
+            def on_start_nonlipsync_speaking():
                 api.avatar_start_talking(avatar_instance_id)
-            def stop_nonlipsync_speaking():
+            def on_stop_nonlipsync_speaking():
                 api.avatar_stop_talking(avatar_instance_id)
-                self.on_stop_speaking(None, None)  # stop the TTS and update the GUI
+                self.on_stop_speaking(None, None, user_data)  # update the GUI
             api.tts_speak(voice=selected_voice,
                           text=text,
                           speed=dpg.get_value("speak_speed_slider") / 10,
-                          start_callback=start_nonlipsync_speaking,
-                          stop_callback=stop_nonlipsync_speaking)
+                          on_audio_ready=on_audio_ready,
+                          on_start=on_start_nonlipsync_speaking,
+                          on_stop=on_stop_nonlipsync_speaking)
 
 # --------------------------------------------------------------------------------
 # App window (viewport) resizing
@@ -1133,9 +1170,9 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
             dpg.focus_item(gui_instance.voice_choice)
         elif key == dpg.mvKey_S:
             if not gui_instance.speaking:
-                gui_instance.on_start_speaking(sender, app_data)
+                gui_instance.on_start_speaking(sender, app_data, "speak")  # emulate clicking the "Speak / Stop speaking" button (as opposed to the record/stop button)
             else:
-                gui_instance.on_stop_speaking(sender, app_data)
+                gui_instance.on_stop_speaking(sender, app_data, "speak")  # emulate clicking the "Speak / Stop speaking" button (as opposed to the record/stop button)
 
     # Bare key
     #
