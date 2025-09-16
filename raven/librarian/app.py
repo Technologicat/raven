@@ -1407,14 +1407,16 @@ def _load_initial_animator_settings() -> None:
                                             "target_fps": 20,
                                             "upscale": upscale,
                                             "upscale_preset": "C",
-                                            "upscale_quality": "high"}
+                                            "upscale_quality": "high",
+                                            "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve()),
+                                            "backdrop_blur": True}
     animator_settings.update(librarian_specific_animator_settings)
 
     api.avatar_load_animator_settings(avatar_instance_id, animator_settings)  # send settings to server
-    dpg_avatar_renderer.load_backdrop_image(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve())
-    dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 40,  # account for borders
+    dpg_avatar_renderer.load_backdrop_image(animator_settings["backdrop_path"])
+    dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 40,  # account for borders (TODO: This is empirical. Why this exact amount?)
                                            new_height=avatar_panel_h - 60,
-                                           new_blur_state=True)
+                                           new_blur_state=animator_settings["backdrop_blur"])
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
 

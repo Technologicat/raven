@@ -803,6 +803,14 @@ class Animator:
             self.upscale_preset = None
             self.upscale_quality = None
 
+        # The backdrop image is applied at the client end.
+        # We just have the settings in the default config so that the server won't complain upon loading an animator settings file that contains them. This is also to document them.
+        # Here, we pop them just to keep the settings dictionary clean (as seen by the rest of this animator), since they're not used by this animator.
+        if "backdrop_path" in settings:
+            settings.pop("backdrop_path")
+        if "backdrop_blur" in settings:
+            settings.pop("backdrop_blur")
+
         # The rest of the settings we can just store in an attribute, and let the animation drivers read them from there.
         self._settings = settings
 

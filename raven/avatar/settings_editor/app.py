@@ -633,6 +633,7 @@ class PostprocessorSettingsEditorGUI:
     def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]) -> None:
         """Load a backdrop image. To clear the background, use `filename=None`."""
         self.dpg_avatar_renderer.load_backdrop_image(filename=filename)
+        self.animator_settings["backdrop_path"] = str(filename) if filename is not None else ""  # update the path in the animator settings, JSONifying it.
         self._resize_gui()  # render the new backdrop
 
     def _resize_gui(self) -> None:
@@ -867,9 +868,15 @@ class PostprocessorSettingsEditorGUI:
             if "animefx_enabled" in animator_settings:
                 dpg.set_value("animefx_checkbox", animator_settings["animefx_enabled"])
 
+            backdrop_path = animator_settings.get("backdrop_path", "")  # Default to no backdrop image if the file doesn't have this key.
+            self.dpg_avatar_renderer.load_backdrop_image(backdrop_path)  # this internally un-JSONifies `""` to `None` if needed
+            if "backdrop_blur" in animator_settings:
+                dpg.set_value("backdrop_blur_checkbox", animator_settings["backdrop_blur"])
+
             # Make sure these fields exist (in case they didn't yet).
             # They're not mandatory (any missing keys are always auto-populated from server defaults),
             # but they're something `PostprocessorSettingsEditorGUI` tracks, so we should sync our state to the server.
+            # IMPORTANT: Take the default values from the same place where they sent to above.
             custom_animator_settings = {"format": self.comm_format,
                                         "target_fps": dpg.get_value("target_fps_slider"),
                                         "talking_fps": dpg.get_value("talking_fps_slider"),
@@ -877,11 +884,16 @@ class PostprocessorSettingsEditorGUI:
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
                                         "upscale_quality": self.upscale_quality,
-                                        "animefx_enabled": dpg.get_value("animefx_checkbox")}
+                                        "animefx_enabled": dpg.get_value("animefx_checkbox"),
+                                        "backdrop_path": backdrop_path,
+                                        "backdrop_blur": dpg.get_value("backdrop_blur_checkbox")}
             animator_settings.update(custom_animator_settings)
 
             # Send to server
             api.avatar_load_animator_settings(avatar_instance_id, animator_settings)
+
+            # Make sure the possibly updated backdrop applies
+            self._resize_gui()
 
             # ...and only if that is successful, remember the settings.
             self.animator_settings = animator_settings

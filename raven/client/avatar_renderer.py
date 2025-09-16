@@ -112,12 +112,13 @@ class DPGAvatarRenderer:
         self.live_image_widget = None  # GUI widget the texture renders to
         self.last_image_rgba = None  # For rescaling last received frame on upscaler size change before we get new data
 
+        self.backdrop_path = None  # The path to the loaded backdrop image (`Optional[Union[str, pathlib.Path]]`); a client can get it here if they need to
         self.backdrop_image = None  # PIL image
         self.backdrop_texture = None  # raw texture
         self.backdrop_texture_id_counter = 0
         self.backdrop_width = None
         self.backdrop_height = None
-        self.backdrop_blur_state = None  # whether to blur background (by calling Raven-server's `imagefx` module)
+        self.backdrop_blur_state = None  # whether to blur background (by calling Raven-server's `imagefx` module); a client can get it here if they need to
         # tracking for backdrop's previous state so that `configure_backdrop` knows whether it needs to do anything
         self.backdrop_old_image = None
         self.backdrop_old_width = None
@@ -170,12 +171,19 @@ class DPGAvatarRenderer:
     def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]):
         """Load a backdrop image. To clear the background (no image), use `filename=None`.
 
+        We special-case also the empty string to mean the same as `None`, to ease JSON saving/loading of animator settings.
+
         The backdrop change takes effect upon the next call to `configure_backdrop`, which see.
         """
+        if filename == "":  # map empty string to `None`, for data coming from JSON settings files
+            filename = None
+
         if filename is not None:
             self.backdrop_image = PIL.Image.open(filename)
+            self.backdrop_path = filename
         else:
             self.backdrop_image = None
+            self.backdrop_path = None
 
     def configure_backdrop(self,
                            new_width: int,
@@ -247,6 +255,7 @@ class DPGAvatarRenderer:
             dpg.delete_item("avatar_backdrop_drawlist", children_only=True)  # delete old draw items
             dpg.configure_item("avatar_backdrop_drawlist", width=new_width, height=new_height)
             guiutils.maybe_delete_item(f"avatar_backdrop_texture_{old_texture_id}")
+        self.backdrop_blur_state = new_blur_state  # save it for clients
 
         self.backdrop_old_image = self.backdrop_image
         self.backdrop_old_width = new_width

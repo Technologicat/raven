@@ -298,6 +298,12 @@ animator_defaults = {
     # "Intense emotion" eye-waver animation settings.
     "eye_waver_fps": 12.0,  # cel animation framerate. Special value 0.0 disables the animation.
 
+    # Backdrop image. Applied at the client side.
+    #
+    # Path can be absolute or relative path. Relative means relative to CWD when you start a client app. The avatar settings editor always saves an absolute path; but feel free to edit the JSON file.
+    "backdrop_path": "",  # path to backdrop image (`str`), empty string for no backdrop.
+    "backdrop_blur": True,  # whether to blur the backdrop image.
+
     # animefx: anime-style emotional reaction effects that hover *around* the character.
     #
     # All of these effects are optional. Effects are rendered in the order listed below. The ordering matters only if an emotion has multiple effects assigned to it.
