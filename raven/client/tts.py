@@ -58,6 +58,11 @@ def tts_speak(voice: str,
               stop_callback: Optional[Callable] = None) -> None:
     """Using the speech synthesizer, speak `text` using `voice`.
 
+    To get the list of available voices, call `tts_list_voices`.
+
+    `speed`: For each voice, 1.0 is the default speed the voice is designed to speak at.
+             Raising this too high may cause skipped words.
+
     If `start_callback` is provided, call it when the TTS starts speaking.
     If `stop_callback` is provided, call it when the TTS has stopped speaking.
     """
@@ -146,15 +151,22 @@ def tts_speak_lipsynced(instance_id: str,
                         stop_callback: Optional[Callable] = None) -> None:
     """Like `tts_speak`, but with lipsync for the avatar.
 
+    Using the speech synthesizer, speak `text` using `voice`.
+
+    To get the list of available voices, call `tts_list_voices`.
+
     `instance_id`: The avatar instance ID you got from `raven.client.api.avatar_load`.
                    Which avatar instance to lipsync.
+
+    `speed`: For each voice, 1.0 is the default speed the voice is designed to speak at.
+             Raising this too high may cause skipped words.
 
     `video_offset`: seconds, for adjusting lipsync animation.
         - Positive values: Use if the video is early. Shifts video later with respect to the audio.
         - Negative values: Use if the video is late. Shifts video earlier with respect to the audio.
 
-    See:
-        https://github.com/remsky/Kokoro-FastAPI
+    If `start_callback` is provided, call it when the TTS starts speaking.
+    If `stop_callback` is provided, call it when the TTS has stopped speaking.
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak_lipsynced: The `raven.client.api` module must be initialized before using the API.")
