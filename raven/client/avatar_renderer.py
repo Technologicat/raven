@@ -8,6 +8,11 @@ and blits the live video into a DPG texture.
 The texture is attached to a DPG image widget, thus rendering the live video in the GUI.
 """
 
+# nice to have (maybe later):
+#
+# TODO: robustness: don't crash if the server suddenly goes down
+# TODO: support non-square avatar video stream (after server-side crop filter); should get image width/height per-frame from video stream and monitor for changes
+
 __all__ = ["DPGAvatarRenderer"]
 
 import logging
