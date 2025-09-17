@@ -1217,8 +1217,11 @@ with timer() as tim:
                     dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * source_image_size))
 
                     subtitle_y0 = avatar_panel_h - 4 * themes_and_fonts.font_size  # TODO: fix ravioli, this is a global variable; should probably have subtitle offset (from bottom) in config
-                    dpg.add_text("", pos=(16, subtitle_y0),
-                                     wrap=avatar_panel_w - 40, tag="avatar_subtitle")
+                    dpg.add_text("",
+                                 pos=(16, subtitle_y0),
+                                 color=(255, 255, 0),  # bright yellow
+                                 wrap=avatar_panel_w - 48,
+                                 tag="avatar_subtitle")
                     dpg.bind_item_font("avatar_subtitle", subtitle_font)  # tag
 
                 with dpg.child_window(tag="mode_toggle_controls",
@@ -1570,7 +1573,7 @@ def _load_initial_animator_settings() -> None:
                                             "upscale": upscale,
                                             "upscale_preset": "C",
                                             "upscale_quality": "low",
-                                            "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve()),
+                                            "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "cyberspace.png")).expanduser().resolve()),
                                             "backdrop_blur": True}
     animator_settings.update(librarian_specific_animator_settings)
 
