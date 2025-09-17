@@ -1310,26 +1310,29 @@ gui_instance.dpg_avatar_renderer.start(avatar_instance_id,  # ...and start displ
 
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
+    logger.info("gui_shutdown: entered")
     api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
-    task_manager.clear(wait=True)  # wait until background tasks actually exit
+    task_manager.clear(wait=True)  # Wait until background tasks actually exit.
     gui_animation.animator.clear()
     global gui_instance
     gui_instance = None
+    logger.info("gui_shutdown: done")
 dpg.set_exit_callback(gui_shutdown)
 
 def app_shutdown() -> None:
     """App exit: gracefully shut down parts that don't need DPG.
 
-    This is guaranteed to run even if DPG shutdown never completes gracefully.
+    This is guaranteed to run even if DPG shutdown never completes gracefully, as long as it doesn't hang the main thread.
 
     Currently, we release server-side resources here.
     """
-    logger.info("App exiting.")
+    logger.info("app_shutdown: entered")
     if avatar_instance_id is not None:
         try:
             api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
         except requests.exceptions.ConnectionError:  # server has gone bye-bye
             pass
+    logger.info("app_shutdown: done")
 atexit.register(app_shutdown)
 
 dpg.set_primary_window(gui_instance.window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").

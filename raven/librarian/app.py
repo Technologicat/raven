@@ -868,6 +868,11 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             nonlocal text
             nonlocal t0
             nonlocal n_chunks0
+            # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
+            # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
+            if task_env.cancelled or not gui_alive:  # TODO: EAFP to avoid TOCTTOU
+                logger.info("ai_turn.on_llm_progress: Cancelled, stopping generation.")
+                return llmclient.action_stop
             text.write(chunk_text)
             # TODO: Update avatar state when LLM is writing.
             #   - Split a few most recent lines of `text` to sentences (using the spaCy service on the server)
@@ -903,27 +908,25 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 dpg.split_frame()
                 _scroll_chat_view_to_end()
 
-            # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
-            # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
-            if task_env.cancelled:
-                return llmclient.action_stop
-
-            # Otherwise, let the LLM keep generating (if it wants to).
+            # Let the LLM keep generating (if it wants to).
             return llmclient.action_ack
 
         def on_llm_done(node_id: str) -> None:
             app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
-            delete_streaming_chat_message()
-            add_complete_chat_message_to_linearized_chat_panel(node_id)
+            if gui_alive:
+                delete_streaming_chat_message()
+                add_complete_chat_message_to_linearized_chat_panel(node_id)
 
         def on_docs_nomatch_done(node_id: str) -> None:
-            delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
-            add_complete_chat_message_to_linearized_chat_panel(node_id)
+            if gui_alive:
+                delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
+                add_complete_chat_message_to_linearized_chat_panel(node_id)
 
         def on_tool_done(node_id: str) -> None:
             app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
-            delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
-            add_complete_chat_message_to_linearized_chat_panel(node_id)
+            if gui_alive:
+                delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
+                add_complete_chat_message_to_linearized_chat_panel(node_id)
 
         new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
                                             datastore=datastore,
@@ -1356,28 +1359,35 @@ avatar_instance_id = api.avatar_load(_avatar_image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 api.avatar_start(avatar_instance_id)
 dpg_avatar_renderer.start(avatar_instance_id)
+gui_alive = True  # Global flag for app shutdown, for background tasks to detect if GUI teardown has started (so that updating GUI elements is no longer safe).
 
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
+    global gui_alive
     # api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.  TODO: enable after we enable TTS in Raven-librarian
-    task_manager.clear(wait=True)  # wait until background tasks actually exit
+    logger.info("gui_shutdown: entered")
+    gui_alive = False  # Tell background tasks that GUI teardown is in progress (shutting down - trying to update GUI elements may hang the app).
+    task_manager.clear(wait=True)  # Wait until background tasks actually exit.
     gui_animation.animator.clear()
     # global gui_instance  # TODO: maybe we need to encapsulate the main GUi into a class? Or maybe not?
     # gui_instance = None
+    logger.info("gui_shutdown: done")
 dpg.set_exit_callback(gui_shutdown)
 
 def app_shutdown() -> None:
     """App exit: gracefully shut down parts that don't need DPG.
 
-    This is guaranteed to run even if DPG shutdown never completes gracefully.
+    This is guaranteed to run even if DPG shutdown never completes gracefully, as long as it doesn't hang the main thread.
 
     Currently, we release server-side resources here.
     """
+    logger.info("app_shutdown: entered")
     if avatar_instance_id is not None:
         try:
             api.avatar_unload(avatar_instance_id)  # delete the instance so the server can release the resources
         except requests.exceptions.ConnectionError:  # server has gone bye-bye
             pass
+    logger.info("app_shutdown: done")
 atexit.register(app_shutdown)
 
 dpg.set_primary_window(main_window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").

@@ -4369,10 +4369,11 @@ dpg.bind_item_handler_registry("plot", registry)  # tag
 # NOTE: In DPG 1.x, if the info panel is updating while the app shuts down, DPG's exit callback doesn't actually trigger, and DPG segfaults.
 #   - At least it's not `update_animations`, the same happens also even if we disable that.
 #   - Maybe it's because `_update_info_panel` renders GUI stuff from a background thread? Trying to create GUI items while the app shuts down?
-def clean_up_at_exit():
-    logger.info("App exiting.")
+def gui_shutdown():
+    logger.info("gui_shutdown: entered")
     reset_app_state(_update_gui=False)  # Exiting, GUI might no longer exist when this is called.
-dpg.set_exit_callback(clean_up_at_exit)
+    logger.info("gui_shutdown: done")
+dpg.set_exit_callback(gui_shutdown)
 
 # --------------------------------------------------------------------------------
 # Start the app
