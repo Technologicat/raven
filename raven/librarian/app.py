@@ -13,6 +13,7 @@ logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
     import atexit
+    import collections
     import concurrent.futures
     import io
     import json
@@ -864,19 +865,44 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             dpg.split_frame()
             _scroll_chat_view_to_end()
 
-        text = io.StringIO()
-        t0 = time.monotonic()
-        n_chunks0 = 0
+        task_env.text = io.StringIO()  # incoming, in-progress paragraph
+        task_env.t0 = time.monotonic()  # timestamp of last GUI update
+        task_env.n_chunks0 = 0  # chunks received since last GUI update
+        task_env.inside_think_block = False
+        task_env.emotion_update_interval = 5
+        task_env.recent_paragraphs = collections.deque([""] * 20)
+        task_env.emotion_update_calls = 0
+        task_env.blacklisted_emotions = ["desire", "love"]  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
         def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
-            nonlocal text
-            nonlocal t0
-            nonlocal n_chunks0
             # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
             # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
             if task_env.cancelled or not gui_alive:  # TODO: EAFP to avoid TOCTTOU
-                logger.info("ai_turn.on_llm_progress: Cancelled, stopping generation.")
+                logger.info("ai_turn.run_ai_turn.on_llm_progress: Cancelled, stopping generation.")
                 return llmclient.action_stop
-            text.write(chunk_text)
+
+            # Detect think block state (TODO: improve; very rudimentary and brittle for now)
+            if "<think>" in chunk_text:
+                task_env.inside_think_block = True
+                logger.info("ai_turn.run_ai_turn.on_llm_progress: AI entered thinking state.")
+            elif "</think>" in chunk_text:
+                logger.info("ai_turn.run_ai_turn.on_llm_progress: AI exited thinking state.")
+                task_env.inside_think_block = False
+
+            def update_avatar_emotion(new_paragraph):
+                task_env.recent_paragraphs.append(new_paragraph)
+                task_env.recent_paragraphs.popleft()
+                if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
+                    text = "".join(task_env.recent_paragraphs)
+                    detected_emotions = api.classify("".join(task_env.recent_paragraphs))  # -> `{emotion0: score0, ...}`, sorted by score, descending
+                    filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in task_env.blacklisted_emotions]
+                    winning_emotion = filtered_emotions[0]
+                    logger.info(f"ai_turn.run_ai_turn.on_llm_progress.update_avatar_emotion: updating to '{winning_emotion}' (analyzed from {len(text)} characters of recent text)")
+                    logger.debug(text)
+                    api.avatar_set_emotion(instance_id=avatar_instance_id,
+                                           emotion_name=winning_emotion)
+                    logger.info("ai_turn.run_ai_turn.on_llm_progress.update_avatar_emotion: done")
+                task_env.emotion_update_calls += 1
+
             # TODO: Update avatar state when LLM is writing.
             #   - Split a few most recent lines of `text` to sentences (using the spaCy service on the server)
             #     - We don't know whether the current last "sentence" as detected by spaCy is actually a complete sentence, since the LLM is still writing.
@@ -893,21 +919,26 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             #         - When TTS is free, take the first item from the deque, start speaking, and display its subtitle.
             #         - Simultaneously, send the sentence to the sentiment classification model, update avatar emotion from result.
             #         - In the TTS stop event, remove the subtitle, and mark TTS as free.
+            task_env.text.write(chunk_text)
             time_now = time.monotonic()
-            dt = time_now - t0  # seconds
-            dchunks = n_chunks - n_chunks0
+            dt = time_now - task_env.t0  # seconds since last GUI update
+            dchunks = n_chunks - task_env.n_chunks0  # chunks since last GUI update
             if "\n" in chunk_text:  # start new paragraph?
-                streaming_chat_message.replace_last_paragraph(text.getvalue())
+                task_env.t0 = time_now
+                task_env.n_chunks0 = n_chunks
+                paragraph_text = task_env.text.getvalue()
+                update_avatar_emotion(paragraph_text)
+                streaming_chat_message.replace_last_paragraph(paragraph_text)
                 streaming_chat_message.add_paragraph("")
-                text = io.StringIO()
+                task_env.text = io.StringIO()
                 dpg.split_frame()
                 _scroll_chat_view_to_end()
             # - update at least every 0.5 sec
             # - update after every 10 chunks, but rate-limited (at least 0.1 sec must have passed since last update)
             elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit to last paragraph
-                t0 = time_now
-                n_chunks0 = n_chunks
-                streaming_chat_message.replace_last_paragraph(text.getvalue())  # at first paragraph, will auto-create it if not created yet
+                task_env.t0 = time_now
+                task_env.n_chunks0 = n_chunks
+                streaming_chat_message.replace_last_paragraph(task_env.text.getvalue())  # at first paragraph, will auto-create it if not created yet
                 dpg.split_frame()
                 _scroll_chat_view_to_end()
 
