@@ -1408,7 +1408,7 @@ def _load_initial_animator_settings() -> None:
                                             "target_fps": 20,
                                             "upscale": upscale,
                                             "upscale_preset": "C",
-                                            "upscale_quality": "high",
+                                            "upscale_quality": "low",
                                             "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve()),
                                             "backdrop_blur": True}
     animator_settings.update(librarian_specific_animator_settings)
