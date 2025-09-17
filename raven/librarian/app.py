@@ -1087,6 +1087,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
 
         def on_done(node_id: str) -> None:
             app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
+            task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
             if gui_alive:
                 # Avatar speech and subtitling
                 logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
@@ -1117,6 +1118,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
 
         def on_tool_done(node_id: str) -> None:
             app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
+            task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
             if gui_alive:
                 delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
                 add_complete_chat_message_to_linearized_chat_panel(node_id)
