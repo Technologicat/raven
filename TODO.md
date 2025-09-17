@@ -42,14 +42,14 @@
 
 - Librarian
   - First, build the minimal demo:
-    - Strip Markdown before TTS/subtitling
     - Librarian config: avatar on/off, which character to load, Librarian-specific settings overrides
     - Improve live preview of LLM output
       - Store the thought blocks in the chat datastore, too, so that we can render them (`raven.librarian.scaffold.ai_turn` currently discards them)
       - TTS audio output toggle icons: `ICON_COMMENT`, `ICON_COMMENT_SLASH`
       - Add feature: "Speak again" button
       - Add feature: "Stop speaking" button
-    - Draw assets:
+      - Add feature: subtitles on/off
+  - Draw assets:
       - Make per-character AI chat icons
       - Finish the new app icon for Raven (small and large sizes)
   - Fix:
