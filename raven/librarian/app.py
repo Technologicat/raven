@@ -20,6 +20,7 @@ with timer() as tim:
     import os
     import pathlib
     import platform
+    import queue
     import requests
     import sys
     import threading
@@ -97,6 +98,10 @@ with timer() as tim:
     dpg.create_context()
 
     themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
+    subtitle_font_key, subtitle_font = guiutils.load_extra_font(themes_and_fonts=themes_and_fonts,
+                                                                font_size=48,
+                                                                font_basename="OpenSans",
+                                                                variant="Regular")
 
     # Initialize textures.
     with dpg.texture_registry(tag="librarian_app_textures"):
@@ -801,6 +806,76 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
 
 
 # --------------------------------------------------------------------------------
+# Avatar TTS speech and subtitling system, used by scaffold to GUI integration below
+
+# TODO: This takes two slots in the thread pool for the whole duration of the app. Consider the implications.
+
+avatar_preprocess_queue = queue.Queue()  # for subtitling: [sentence0, ...]
+avatar_output_queue = queue.Queue()  # for TTS and subtitling: [(sentence0, translation0), ...]
+
+def avatar_preprocess_task(task_env: env) -> None:
+    """AI translator client, for producing subtitles."""
+    while True:
+        if task_env.cancelled:
+            break
+        try:
+            sentence = avatar_preprocess_queue.get(block=False)
+        except queue.Empty:
+            time.sleep(0.5)
+            continue
+        else:
+            subtitle = api.translate_translate(sentence, source_lang="en", target_lang="fi")  # TODO: make the languages configurable; make the whole TTS auto-subtitling feature optional
+            logger.info(f"avatar_preprocess_task: sentence: {sentence}")
+            logger.info(f"avatar_preprocess_task: subtitle: {subtitle}")
+            avatar_output_queue.put((sentence, subtitle))
+task_manager.submit(avatar_preprocess_task, env())
+
+# TODO: add a feature to flush the translation and output queues (needed when the AI is interrupted by the user)
+def avatar_speak_task(task_env: env) -> None:
+    """TTS, with avatar lipsync and subtitles (from AI translator)."""
+    task_env.lock = threading.RLock()
+    task_env.speaking = False
+    while True:
+        if task_env.cancelled:
+            break
+        with task_env.lock:
+            if task_env.speaking:  # wait until TTS is free (previous speech ended)
+                time.sleep(0.1)
+                continue
+        try:
+            sentence, translated_sentence = avatar_output_queue.get(block=False)
+        except queue.Empty:  # wait until we have a sentence to speak
+            time.sleep(0.5)
+            continue
+        else:
+            with task_env.lock:
+                task_env.speaking = True
+                def on_start_lipsync_speaking():
+                    if translated_sentence is not None:
+                        dpg.set_value("avatar_subtitle", translated_sentence)  # tag
+                        dpg.show_item("avatar_subtitle")  # tag
+
+                        # position subtitle at bottom
+                        dpg.split_frame()
+                        w, h = guiutils.get_widget_size("avatar_subtitle")
+                        dpg.set_item_pos("avatar_subtitle", (16, subtitle_y0 - h))
+
+                def on_stop_lipsync_speaking():
+                    dpg.hide_item("avatar_subtitle")  # tag
+                    with task_env.lock:
+                        task_env.speaking = False
+                logger.info("avatar_speak_task: starting TTS")
+                api.tts_speak_lipsynced(instance_id=avatar_instance_id,
+                                        voice="af_nova",  # TODO: make the voice configurable
+                                        text=sentence,
+                                        speed=1.0,  # TODO: make the speed configurable
+                                        video_offset=-0.6,  # TODO: make the AV offset configurable
+                                        on_audio_ready=None,
+                                        on_start=on_start_lipsync_speaking,
+                                        on_stop=on_stop_lipsync_speaking)
+task_manager.submit(avatar_speak_task, env())
+
+# --------------------------------------------------------------------------------
 # Scaffold to GUI integration
 
 def chat_round(user_message_text: str) -> None:  # message text comes from GUI
@@ -870,9 +945,43 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         task_env.n_chunks0 = 0  # chunks received since last GUI update
         task_env.inside_think_block = False
         task_env.emotion_update_interval = 5  # how many complete paragraphs (newline-separated text snippets) to wait between emotion updates (NOTE: Qwen3 likes using newlines liberally)
-        task_env.recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap, to stabilize the detection
+        task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap, to stabilize the detection
         task_env.emotion_update_calls = 0
-        task_env.blacklisted_emotions = ["desire", "love"]  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
+        task_env.emotion_blacklist = ["desire", "love"]  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
+
+        def _update_avatar_emotion(new_paragraph):
+            task_env.emotion_recent_paragraphs.append(new_paragraph)
+            task_env.emotion_recent_paragraphs.popleft()
+            if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
+                text = "".join(task_env.emotion_recent_paragraphs)
+                detected_emotions = api.classify("".join(task_env.emotion_recent_paragraphs))  # -> `{emotion0: score0, ...}`, sorted by score, descending
+                filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in task_env.emotion_blacklist]
+                winning_emotion = filtered_emotions[0]
+                logger.info(f"ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion: updating to '{winning_emotion}' (analyzed from {len(text)} characters of recent text)")
+                logger.debug(text)
+                api.avatar_set_emotion(instance_id=avatar_instance_id,
+                                       emotion_name=winning_emotion)
+                logger.info("ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion: done")
+            task_env.emotion_update_calls += 1
+
+        def _add_to_avatar_preprocess_queue(new_paragraph):
+            logger.info(f"ai_turn.run_ai_turn.on_llm_progress._add_to_avatar_preprocess_queue: analyzing '{new_paragraph}'")
+            for line in new_paragraph.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+
+                docs = api.natlang_analyze(line,
+                                           pipes=["tok2vec", "parser", "senter"])
+                assert len(docs) == 1
+                doc = docs[0]
+                sentences = list(doc.sents)
+                logger.info(f"ai_turn.run_ai_turn.on_llm_progress._add_to_avatar_preprocess_queue: detected {len(sentences)} sentences on this line.")
+                for sentence in sentences:
+                    sentence = str(sentence)  # from spaCy rich internal format
+                    avatar_preprocess_queue.put(sentence)
+            logger.info("ai_turn.run_ai_turn.on_llm_progress._add_to_avatar_preprocess_queue: done.")
+
         def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
             # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
             # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
@@ -887,21 +996,6 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             elif "</think>" in chunk_text:
                 logger.info("ai_turn.run_ai_turn.on_llm_progress: AI exited thinking state.")
                 task_env.inside_think_block = False
-
-            def update_avatar_emotion(new_paragraph):
-                task_env.recent_paragraphs.append(new_paragraph)
-                task_env.recent_paragraphs.popleft()
-                if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
-                    text = "".join(task_env.recent_paragraphs)
-                    detected_emotions = api.classify("".join(task_env.recent_paragraphs))  # -> `{emotion0: score0, ...}`, sorted by score, descending
-                    filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in task_env.blacklisted_emotions]
-                    winning_emotion = filtered_emotions[0]
-                    logger.info(f"ai_turn.run_ai_turn.on_llm_progress.update_avatar_emotion: updating to '{winning_emotion}' (analyzed from {len(text)} characters of recent text)")
-                    logger.debug(text)
-                    api.avatar_set_emotion(instance_id=avatar_instance_id,
-                                           emotion_name=winning_emotion)
-                    logger.info("ai_turn.run_ai_turn.on_llm_progress.update_avatar_emotion: done")
-                task_env.emotion_update_calls += 1
 
             # TODO: Update avatar state when LLM is writing.
             #   - Split a few most recent lines of `text` to sentences (using the spaCy service on the server)
@@ -927,7 +1021,9 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 task_env.t0 = time_now
                 task_env.n_chunks0 = n_chunks
                 paragraph_text = task_env.text.getvalue()
-                update_avatar_emotion(paragraph_text)
+                _update_avatar_emotion(paragraph_text)
+                # if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
+                #     _add_to_avatar_preprocess_queue(paragraph_text)
                 streaming_chat_message.replace_last_paragraph(paragraph_text)
                 streaming_chat_message.add_paragraph("")
                 task_env.text = io.StringIO()
@@ -948,6 +1044,17 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         def on_llm_done(node_id: str) -> None:
             app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
             if gui_alive:
+                # Avatar speech and subtitling
+                node_payload = datastore.get_payload(node_id)
+                message = node_payload["message"]
+                message_role = message["role"]
+                message_text = message["content"]
+                message_text = chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings,
+                                                                            role=message_role,
+                                                                            text=message_text)
+                _add_to_avatar_preprocess_queue(message_text)
+
+                # Update linearized chat view
                 delete_streaming_chat_message()
                 add_complete_chat_message_to_linearized_chat_panel(node_id)
 
@@ -1090,7 +1197,7 @@ with timer() as tim:
                     #
                     # The size of the avatar panel is not available at startup, until the GUI is rendered at least once.
                     avatar_panel_w = (gui_config.main_window_w - gui_config.chat_panel_w - 16)
-                    avatar_panel_h = (gui_config.main_window_h - gui_config.ai_warning_h - 16 - 6)
+                    avatar_panel_h = (gui_config.main_window_h - gui_config.ai_warning_h - 16 - 6)  # TODO: wrong? Fix this (affects backdrop image size, "avatar_subtitle" position)
                     dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="librarian_app_textures",
                                                             gui_parent="avatar_panel",
                                                             avatar_x_center=(avatar_panel_w // 2),
@@ -1103,6 +1210,11 @@ with timer() as tim:
                     source_image_size = 512  # THA3 engine
                     upscale = 1.5
                     dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * source_image_size))
+
+                    subtitle_y0 = avatar_panel_h - 4 * themes_and_fonts.font_size
+                    dpg.add_text("", pos=(16, subtitle_y0),
+                                     wrap=avatar_panel_w - 40, tag="avatar_subtitle")
+                    dpg.bind_item_font("avatar_subtitle", subtitle_font)  # tag
 
                 with dpg.child_window(tag="mode_toggle_controls",
                                       width=-1,
