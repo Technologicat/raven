@@ -86,10 +86,9 @@ avatar_instance_id = None
 
 dpg.create_context()
 
-font_size = 20
-themes_and_fonts = guiutils.bootup(font_size=font_size)
+themes_and_fonts = guiutils.bootup(font_size=20)
 
-with dpg.theme(tag="my_pulsating_red_theme"):
+with dpg.theme(tag="my_pulsating_red_text_theme"):
     with dpg.theme_component(dpg.mvAll):
         pulsating_red_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # dummy color; animated by `update_animations`
 
@@ -387,7 +386,7 @@ class AvatarVideoRecorder:
             self.frame_no += 1
 video_recorder = AvatarVideoRecorder()
 
-class RecordingIndicatorPulsatingGlow(gui_animation.Animation):  # adapted and simplified from `raven.visualizer.app.PlotterPulsatingGlow`
+class RedPulsatingTextGlow(gui_animation.Animation):  # adapted and simplified from `raven.visualizer.app.PlotterPulsatingGlow`
     def __init__(self, cycle_duration):
         """Cyclic animation to pulsate the REC symbol."""
         super().__init__()
@@ -420,7 +419,7 @@ class RecordingIndicatorPulsatingGlow(gui_animation.Animation):  # adapted and s
         dpg.set_value(pulsating_red_color, (255, 96, 96, alpha))  # color-matching the rec button, "disablable_red_button_theme"
 
         return gui_animation.action_continue
-recording_indicator_glow = RecordingIndicatorPulsatingGlow(cycle_duration=2.0)
+red_pulsating_text_glow = RedPulsatingTextGlow(cycle_duration=2.0)
 
 # --------------------------------------------------------------------------------
 # GUI controls
@@ -479,7 +478,7 @@ class PostprocessorSettingsEditorGUI:
                     with dpg.group(pos=(8, 32), show=False, horizontal=True) as self.recording_indicator_group:
                         dpg.add_text(fa.ICON_CIRCLE, tag="recording_symbol")  # color-matching the rec button, "disablable_red_button_theme"
                         dpg.bind_item_font("recording_symbol", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("recording_symbol", "my_pulsating_red_theme")  # tag
+                        dpg.bind_item_theme("recording_symbol", "my_pulsating_red_text_theme")  # tag
                         dpg.add_text("REC", tag="recording_text")
 
                 with dpg.child_window(width=self.button_width + 16, autosize_y=True):
@@ -1164,7 +1163,7 @@ class PostprocessorSettingsEditorGUI:
             dpg.disable_item("speak_and_record_button")  # tag
 
         if mode == "speak_and_record":
-            recording_indicator_glow.reset()  # start animation from beginning (i.e. start new pulsating cycle now)
+            red_pulsating_text_glow.reset()  # start animation from beginning (i.e. start new pulsating cycle now)
             dpg.show_item(self.recording_indicator_group)
             def on_audio_ready(audio_data: bytes) -> None:
                 """Save the TTS speech audio file to disk."""
@@ -1437,7 +1436,7 @@ def update_animations():
     #         dpg.disable_item(gui_instance.voice_choice)
     #         dpg.disable_item("speak_button")
 
-gui_animation.animator.add(recording_indicator_glow)
+gui_animation.animator.add(red_pulsating_text_glow)
 
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.

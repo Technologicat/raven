@@ -2503,7 +2503,7 @@ def info_panel_find_next_or_prev_item(widgets, *, _next=True, kluge=True, extra_
 
     _, y0_content = get_info_panel_content_area_start_pos()  # The "current match" is positioned at the top of the content area.
     if kluge:  # In the position check, optionally reject the item too near the top of the content area (to look for the next/previous one, not the one currently at the top).
-        kluge = (+1 if _next else -1) * gui_config.font_size  # Pixels. We arbitrarily use one line of text as a guideline.
+        kluge = (+1 if _next else -1) * themes_and_fonts.font_size  # Pixels. We arbitrarily use one line of text as a guideline.
     else:
         kluge = 0
     def is_completely_below_top_of_content_area(widget):
@@ -3892,7 +3892,7 @@ def make_help_window():
             with dpg.group(tag="hotkeys_help_group"):
                 # Header
                 dpg_markdown.add_text(f"{c_dim}[Press Esc to close. For a handy reference, screenshot this!]{c_end}")
-                dpg.add_spacer(width=1, height=gui_config.font_size // 2)
+                dpg.add_spacer(width=1, height=themes_and_fonts.font_size // 2)
 
                 # Table of hotkeys. Render the specified layout.
                 with dpg.table(header_row=True, borders_innerV=True, sortable=False):
@@ -3919,7 +3919,7 @@ def make_help_window():
                                     dpg.add_text(help_entry.action, wrap=0, color=help_dim_color)
 
                                 dpg.add_text(help_entry.notes, wrap=0, color=help_dim_color)
-                dpg.add_spacer(width=1, height=gui_config.font_size)
+                dpg.add_spacer(width=1, height=themes_and_fonts.font_size)
 
                 # Legend for table
                 dpg_markdown.add_text(f"{c_hed}**Terminology**{c_end}")
@@ -3930,7 +3930,7 @@ def make_help_window():
                     with dpg.group(horizontal=False):
                         dpg_markdown.add_text(f"- {c_txt}**Selection set**: The selected items, glowing {c_end}{c_selection}**cyan**{c_end}{c_txt} in the plotter. As many are loaded into the info panel as reasonably fit.{c_end}")
                         dpg_markdown.add_text(f"- {c_txt}**Search result set**: The items matching the current search, glowing {c_end}{c_search}**red**{c_end}{c_txt} in the plotter.{c_end}")
-                dpg.add_spacer(width=1, height=gui_config.font_size)
+                dpg.add_spacer(width=1, height=themes_and_fonts.font_size)
 
                 # Additional general help
                 dpg_markdown.add_text(f"{c_hed}**How search works**{c_end}")
