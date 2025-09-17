@@ -417,8 +417,10 @@ class DPGAvatarRenderer:
 
         `avatar_instance_id`: Avatar instance to receive. You get this from `raven.client.api.avatar_load`.
 
-        There is currently no function to stop receiving. You can just close the session (`raven.client.api.avatar_unload`);
-        the background task then shuts down gracefully.
+        To stop receiving, but keep the avatar session open, call the `stop` method.
+
+        You can also just close the avatar session (`raven.client.api.avatar_unload`) if you don't need it anymore.
+        Either way, the receiver background task then shuts down gracefully.
         """
         if self._task_env is not None:
             raise RuntimeError("DPGAvatarRenderer.start: already running, cannot start again. If you need to connect to a different avatar session, `stop` first.")
