@@ -101,7 +101,7 @@ with timer() as tim:
     subtitle_font_key, subtitle_font = guiutils.load_extra_font(themes_and_fonts=themes_and_fonts,
                                                                 font_size=48,
                                                                 font_basename="OpenSans",
-                                                                variant="Regular")
+                                                                variant="Bold")
 
     # Initialize textures.
     with dpg.texture_registry(tag="librarian_app_textures"):
