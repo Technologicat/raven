@@ -6,6 +6,8 @@ This allows easily integrating the avatar to your DPG GUI apps.
 and blits the live video into a DPG texture.
 
 The texture is attached to a DPG image widget, thus rendering the live video in the GUI.
+
+This also supports setting an optional backdrop image, shown behind the avatar. Backdrop blurring is available.
 """
 
 # nice to have (maybe later):
