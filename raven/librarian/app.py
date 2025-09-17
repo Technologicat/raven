@@ -840,6 +840,7 @@ def avatar_speak_task(task_env: env) -> None:
     """TTS, with avatar lipsync and subtitles (from AI translator)."""
     task_env.lock = threading.RLock()
     task_env.speaking = False
+    task_env.t0 = time.time_ns()
     while True:
         if task_env.cancelled:
             break
@@ -850,34 +851,44 @@ def avatar_speak_task(task_env: env) -> None:
         try:
             sentence, translated_sentence = avatar_output_queue.get(block=False)
         except queue.Empty:  # wait until we have a sentence to speak
+            time_now = time.time_ns()
+            dt = (time_now - task_env.t0) / 10**9
+            if not task_env.speaking and dt > 3.0:  # reset emotion after a few seconds of idle time (after the TTS has stopped speaking)
+                task_env.t0 = time_now
+                logger.info("avatar_speak_task: updating emotion to 'neutral' (default)")
+                api.avatar_set_emotion(instance_id=avatar_instance_id,
+                                       emotion_name="neutral")
             time.sleep(0.2)
             continue
         else:
             with task_env.lock:
                 task_env.speaking = True
-                def on_start_lipsync_speaking():
-                    if translated_sentence is not None:
-                        dpg.set_value("avatar_subtitle", translated_sentence)  # tag
-                        dpg.show_item("avatar_subtitle")  # tag
 
-                        # position subtitle at bottom
-                        dpg.split_frame()
-                        w, h = guiutils.get_widget_size("avatar_subtitle")
-                        dpg.set_item_pos("avatar_subtitle", (16, subtitle_y0 - h))
+            def on_start_lipsync_speaking():
+                if translated_sentence is not None:
+                    dpg.set_value("avatar_subtitle", translated_sentence)  # tag
+                    dpg.show_item("avatar_subtitle")  # tag
 
-                def on_stop_lipsync_speaking():
-                    dpg.hide_item("avatar_subtitle")  # tag
-                    with task_env.lock:
-                        task_env.speaking = False
-                logger.info("avatar_speak_task: starting TTS")
-                api.tts_speak_lipsynced(instance_id=avatar_instance_id,
-                                        voice="af_nova",  # TODO: make the voice configurable
-                                        text=sentence,
-                                        speed=1.0,  # TODO: make the speed configurable
-                                        video_offset=-0.6,  # TODO: make the AV offset configurable
-                                        on_audio_ready=None,
-                                        on_start=on_start_lipsync_speaking,
-                                        on_stop=on_stop_lipsync_speaking)
+                    # position subtitle at bottom
+                    dpg.split_frame()
+                    w, h = guiutils.get_widget_size("avatar_subtitle")
+                    dpg.set_item_pos("avatar_subtitle", (32, subtitle_y0 - h))
+
+            def on_stop_lipsync_speaking():
+                dpg.hide_item("avatar_subtitle")  # tag
+                with task_env.lock:
+                    task_env.t0 = time.time_ns()  # delay the emotion reset
+                    task_env.speaking = False
+
+            logger.info("avatar_speak_task: starting TTS")
+            api.tts_speak_lipsynced(instance_id=avatar_instance_id,
+                                    voice="af_nova",  # TODO: make the voice configurable
+                                    text=sentence,
+                                    speed=1.0,  # TODO: make the speed configurable
+                                    video_offset=-0.6,  # TODO: make the AV offset configurable
+                                    on_audio_ready=None,
+                                    on_start=on_start_lipsync_speaking,
+                                    on_stop=on_stop_lipsync_speaking)
 task_manager.submit(avatar_speak_task, env())
 
 # --------------------------------------------------------------------------------
@@ -962,7 +973,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 detected_emotions = api.classify("".join(task_env.emotion_recent_paragraphs))  # -> `{emotion0: score0, ...}`, sorted by score, descending
                 filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in task_env.emotion_blacklist]
                 winning_emotion = filtered_emotions[0]
-                logger.info(f"ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion: updating to '{winning_emotion}' (analyzed from {len(text)} characters of recent text)")
+                logger.info(f"ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion: updating emotion to '{winning_emotion}' (analyzed from {len(text)} characters of recent text)")
                 logger.debug(text)
                 api.avatar_set_emotion(instance_id=avatar_instance_id,
                                        emotion_name=winning_emotion)
@@ -1046,10 +1057,11 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             # Let the LLM keep generating (if it wants to).
             return llmclient.action_ack
 
-        def on_llm_done(node_id: str) -> None:
+        def on_done(node_id: str) -> None:
             app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
             if gui_alive:
                 # Avatar speech and subtitling
+                logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
                 node_payload = datastore.get_payload(node_id)
                 message = node_payload["message"]
                 message_role = message["role"]
@@ -1057,16 +1069,24 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 message_text = chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings,
                                                                             role=message_role,
                                                                             text=message_text)
-                _add_to_avatar_preprocess_queue(message_text)
+                if not message_text.strip().startswith("<tool_call>"):  # don't speak and subtitle tool call invocations generated by the LLM
+                    _add_to_avatar_preprocess_queue(message_text)
+
+                # Update avatar emotion one last time, from the final message text
+                detected_emotions = api.classify(message_text)
+                filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in task_env.emotion_blacklist]
+                winning_emotion = filtered_emotions[0]
+                logger.info(f"ai_turn.run_ai_turn.on_done: updating emotion to '{winning_emotion}' (analyzed from final message content)")
+                api.avatar_set_emotion(instance_id=avatar_instance_id,
+                                       emotion_name=winning_emotion)
+                logger.info("ai_turn.run_ai_turn.on_done: emotion updated")
 
                 # Update linearized chat view
-                delete_streaming_chat_message()
+                logger.info("ai_turn.run_ai_turn.on_done: updating chat view with final message")
+                delete_streaming_chat_message()  # if we are called by docs nomatch, the in-progress message shouldn't exist in the GUI; then this doesn't matter.
                 add_complete_chat_message_to_linearized_chat_panel(node_id)
 
-        def on_docs_nomatch_done(node_id: str) -> None:
-            if gui_alive:
-                delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
-                add_complete_chat_message_to_linearized_chat_panel(node_id)
+                logger.info("ai_turn.run_ai_turn.on_done: all done.")
 
         def on_tool_done(node_id: str) -> None:
             app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
@@ -1084,8 +1104,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                                             on_prompt_ready=None,  # debug/info hook
                                             on_llm_start=on_llm_start,
                                             on_llm_progress=on_llm_progress,
-                                            on_llm_done=on_llm_done,
-                                            on_docs_nomatch_done=on_docs_nomatch_done,
+                                            on_llm_done=on_done,
+                                            on_docs_nomatch_done=on_done,
                                             on_tools_start=None,
                                             on_tool_done=on_tool_done)
         app_state["HEAD"] = new_head_node_id
@@ -1218,9 +1238,9 @@ with timer() as tim:
 
                     subtitle_y0 = avatar_panel_h - 4 * themes_and_fonts.font_size  # TODO: fix ravioli, this is a global variable; should probably have subtitle offset (from bottom) in config
                     dpg.add_text("",
-                                 pos=(16, subtitle_y0),
+                                 pos=(32, subtitle_y0),
                                  color=(255, 255, 0),  # bright yellow
-                                 wrap=avatar_panel_w - 48,
+                                 wrap=avatar_panel_w - 64,
                                  tag="avatar_subtitle")
                     dpg.bind_item_font("avatar_subtitle", subtitle_font)  # tag
 
