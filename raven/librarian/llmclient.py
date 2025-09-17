@@ -154,6 +154,8 @@ def setup(backend_url: str) -> env:
     payload = response.json()
     model = payload["model_name"]
 
+    weekday_and_date = chatutil.format_chatlog_date_now()
+
     # ----------------------------------------
     # System prompt and character card
 
@@ -189,6 +191,8 @@ def setup(backend_url: str) -> env:
     The knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context as well as web search results may be newer.
 
     You are running on a private, local system.
+
+    The current date is {weekday_and_date}.
 
     **Interaction tips**
 

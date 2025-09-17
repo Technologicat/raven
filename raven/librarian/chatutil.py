@@ -3,7 +3,8 @@
 __all__ = ["format_message_number",
            "format_persona",
            "format_message_heading",
-           "format_chat_datetime_now", "format_chatlog_datetime_now",
+           "format_chat_datetime_now",
+           "format_chatlog_datetime_now", "format_chatlog_date_now",
            "format_reminder_to_focus_on_latest_input",
            "format_reminder_to_use_information_from_context_only",
            "create_chat_message",
@@ -132,6 +133,13 @@ def format_chatlog_datetime_now() -> str:
     date = now.date().isoformat()
     isotime = now.time().replace(microsecond=0).isoformat()
     return f"{weekday} {date} {isotime}"
+
+def format_chatlog_date_now() -> str:
+    """Return the current date and weekday in a human-readable format."""
+    now = datetime.datetime.now()
+    weekday = _weekdays[now.weekday()]
+    date = now.date().isoformat()
+    return f"{weekday} {date}"
 
 def format_reminder_to_focus_on_latest_input() -> str:
     """Return the text content of a system message that reminds the LLM to focus on the user's latest input.
