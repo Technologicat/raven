@@ -3,7 +3,7 @@
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["bootup",
+__all__ = ["get_font_path", "bootup",
            "maybe_delete_item", "has_child_items",
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos", "is_mouse_inside_widget",
            "recenter_window",
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 import os
 import pathlib
-from typing import Union
+from typing import Optional, Tuple, Union
 
 from unpythonic.env import env
 
@@ -30,7 +30,33 @@ from .. import numutils
 
 from . import fontsetup
 
-def bootup(font_size: int, font_basename: str = "OpenSans"):
+def get_font_path(font_basename: str = "OpenSans",
+                  variant: Optional[str] = "Regular") -> pathlib.Path:
+    """Get the path of a TTF font installed with Raven.
+
+    `font_basename`: The part of the TTF filename before the font variant and the file extension.
+                     For example, the basename of "OpenSans-Regular.ttf" is "OpenSans".
+
+    `variant`: Usually one of "Regular", "Bold", "Italic", or "BoldItalic".
+
+               FontAwesome icon fonts are an exception; for them, put the full filename into
+               `font_basename` (including the ".ttf" file extension) and use `variant=None`.
+               Then, this will just prepend the Raven fonts path to the filename.
+
+    Returns the path to the font file as a `pathlib.Path`.
+    """
+    if variant is None:
+        variant_str = ""
+        ext = ""  # icon font names include the file extension
+    else:
+        variant_str = f"-{variant}"  # e.g. "OpenSans-Regular"
+        ext = ".ttf"
+    filename = f"{font_basename}{variant_str}{ext}"
+    logger.info(f"get_font_path: basename '{font_basename}', variant '{variant}' -> '{filename}'")
+    return pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", filename)).expanduser().resolve()
+
+def bootup(font_size: int,
+           font_basename: str = "OpenSans") -> env:
     """Perform GUI initialization common to the Raven constellation of apps.
 
     Must be called *after* `dpg.create_context()`, but *before* `dpg.create_viewport(...)`.
@@ -122,17 +148,17 @@ def bootup(font_size: int, font_basename: str = "OpenSans"):
     with dpg.font_registry() as the_font_registry:
         # Change the default font to something that looks clean and has good on-screen readability.
         # https://fonts.google.com/specimen/Open+Sans
-        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", f"{font_basename}-Regular.ttf")).expanduser().resolve(),
+        with dpg.font(get_font_path(font_basename, variant="Regular"),
                       font_size) as default_font:
             fontsetup.setup_font_ranges()
         dpg.bind_font(default_font)
 
         # FontAwesome 6 for symbols (toolbar button icons etc.).
         # We bind this font to individual GUI widgets as needed.
-        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", fa.FONT_ICON_FILE_NAME_FAR)).expanduser().resolve(),
+        with dpg.font(get_font_path(fa.FONT_ICON_FILE_NAME_FAR, variant=None),
                       font_size) as icon_font_regular:
             dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
-        with dpg.font(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", fa.FONT_ICON_FILE_NAME_FAS)).expanduser().resolve(),
+        with dpg.font(get_font_path(fa.FONT_ICON_FILE_NAME_FAS, variant=None),
                       font_size) as icon_font_solid:
             dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
 
@@ -141,10 +167,10 @@ def bootup(font_size: int, font_basename: str = "OpenSans"):
     dpg_markdown.set_font_registry(the_font_registry)
     dpg_markdown.set_add_font_function(fontsetup.markdown_add_font_callback)
     dpg_markdown.set_font(font_size=font_size,
-                          default=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", f"{font_basename}-Regular.ttf")).expanduser().resolve(),
-                          bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", f"{font_basename}-Bold.ttf")).expanduser().resolve(),
-                          italic=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", f"{font_basename}-Italic.ttf")).expanduser().resolve(),
-                          italic_bold=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", f"{font_basename}-BoldItalic.ttf")).expanduser().resolve())
+                          default=get_font_path(font_basename, variant="Regular"),
+                          bold=get_font_path(font_basename, variant="Bold"),
+                          italic=get_font_path(font_basename, variant="Italic"),
+                          italic_bold=get_font_path(font_basename, variant="BoldItalic"))
 
     # Modify global theme
     with dpg.theme() as global_theme:
@@ -188,7 +214,10 @@ def bootup(font_size: int, font_basename: str = "OpenSans"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
 
-    out = env(icon_font_regular=icon_font_regular,
+    out = env(font_size=font_size,  # for introspection
+              font_basename=font_basename,  # for introspection
+              font_registry=the_font_registry,  # for the app to be able to add more fonts while running
+              icon_font_regular=icon_font_regular,
               icon_font_solid=icon_font_solid,
               global_theme=global_theme,
               my_no_spacing_theme=my_no_spacing_theme,
@@ -196,7 +225,47 @@ def bootup(font_size: int, font_basename: str = "OpenSans"):
               disablable_red_button_theme=disablable_red_button_theme)
     return out
 
-def maybe_delete_item(item):
+def load_extra_font(themes_and_fonts: env,
+                    font_size: int,
+                    font_basename: str,
+                    variant: Optional[str]) -> Union[str, int]:
+    """Load another (non-default) font.
+
+    `themes_and_fonts`: obtain this from `bootup`; the font will be cached here.
+    `font_size`: in pixels, as in DPG functions that handle fonts.
+    `font_basename`: passed to `get_font_path`, which see.
+    `variant`: passed to `get_font_path`, which see.
+
+    Returns the tuple `(key, id)`, where:
+
+      - `key` is the name of the font.
+              Get the ID as `themes_and_fonts[key]`.
+
+              Key depends on all of `font_basename`, `variant` (if applicable),
+              and `font_size`.
+
+      - `id` is DPG ID of the loaded font. For convenience,
+             so you don't have to fish it out of `themes_and_fonts`.
+
+    If the font is already loaded (same variant, at the same size),
+    the cached font is returned.
+    """
+    if variant is None:
+        variant_str = ""
+    else:
+        variant_str = f"_{variant}"  # e.g. "OpenSans-Regular"
+    key = f"{font_basename}{variant_str}_{font_size}"
+
+    if key not in themes_and_fonts:
+        with dpg.font(get_font_path(font_basename, variant="Regular"),
+                      font_size,
+                      parent=themes_and_fonts.font_registry) as new_font:
+            fontsetup.setup_font_ranges()
+        themes_and_fonts[key] = new_font
+
+    return key, themes_and_fonts[key]
+
+def maybe_delete_item(item: Union[str, int]) -> None:
     """Delete `item` (DPG ID or tag), if it exists. If not, the error is ignored."""
     logger.info(f"maybe_delete_item: Deleting old GUI item '{item}', if it exists.")
     try:
