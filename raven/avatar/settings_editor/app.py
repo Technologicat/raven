@@ -30,6 +30,7 @@ with timer() as tim:
     import platform
     import requests
     import sys
+    import threading
     import traceback
     from typing import Optional, Union
 
@@ -51,6 +52,7 @@ with timer() as tim:
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import messagebox
     from ...common.gui import utils as guiutils
+    from ...common import utils as common_utils
 
     from ...client import api  # convenient Python functions that abstract away the web API
     from ...client import config as client_config
@@ -333,6 +335,54 @@ def is_save_animator_settings_dialog_visible():
     return dpg.is_item_visible("save_animator_settings_dialog")  # tag
 
 # --------------------------------------------------------------------------------
+# Avatar video recording
+
+recording_output_dir = "rec"  # path relative to CWD
+
+class AvatarVideoRecorder:
+    """A small helper for dumping avatar video frames to disk as image files, in whatever format sent by server.
+
+    The audio file is recorded separately, see the `on_audio_ready` event of the TTS.
+    """
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.output_dir = recording_output_dir
+        self.basename = "frame"
+        self._reset()
+
+    def _reset(self):
+        with self.lock:
+            self.frame_no = 0
+            self.recording = False
+
+    def start(self):
+        """Start recording video frames to disk. Frames will be numbered starting from 00000."""
+        logger.info(f"AvatarVideoRecorder.start: starting recording video frames to '{self.basename}_xxxxx.ext'.")
+        with self.lock:
+            self._reset()
+            common_utils.create_directory(self.output_dir)
+            self.recording = True
+
+    def stop(self):
+        """Stop recording video frames to disk."""
+        logger.info(f"AvatarVideoRecorder.start: stopping recording ({self.frame_no} video frames recorded).")
+        with self.lock:
+            self._reset()
+
+    # This runs for each received frame, but no-ops when recording is not active.
+    def _on_frame_received(self, timestamp: int, mimetype: str, image_data: bytes) -> None:
+        with self.lock:
+            if not self.recording:
+                return
+            logger.info(f"AvatarVideoRecorder._on_frame_received: recording video frame: sequence number {self.frame_no}, time {timestamp}, mimetype {mimetype}.")
+            _, ext = mimetype.split("/")  # e.g. "image/qoi" -> ["image", "qoi"]
+            filename = os.path.join(self.output_dir, f"{self.basename}_{self.frame_no:05d}.{ext}")
+            with open(filename, "wb") as image_file:
+                image_file.write(image_data)
+            self.frame_no += 1
+video_recorder = AvatarVideoRecorder()
+
+# --------------------------------------------------------------------------------
 # GUI controls
 
 def is_any_modal_window_visible():
@@ -584,7 +634,8 @@ class PostprocessorSettingsEditorGUI:
                         dpg.bind_item_font("speak_and_record_button", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("speak_and_record_button", "disablable_red_button_theme")  # tag
                         dpg.add_tooltip("speak_and_record_button", tag="speak_and_record_tooltip")  # tag
-                        self.speak_and_record_tooltip_text = dpg.add_text("Speak and record the entered text (.mp3 + .png sequence)", parent="speak_and_record_tooltip")  # tag  # TODO: DRY the GUI labels
+                        self.speak_and_record_tooltip_text = dpg.add_text(f"Speak and record the entered text (.mp3 + .{self.comm_format.lower()} sequence)",  # TODO: DRY the GUI labels
+                                                                          parent="speak_and_record_tooltip")  # tag
 
                 # Postprocessor settings editor
                 #
@@ -1023,21 +1074,36 @@ class PostprocessorSettingsEditorGUI:
             self.dpg_avatar_renderer.pause(action="resume")
             dpg.set_item_label("pause_resume_button", "Pause [Ctrl+P]")  # tag
 
-    def on_stop_speaking(self, sender, app_data, user_data) -> None:  # `user_data`: one of "speak" or "speak_and_record", identifies which button was clicked
+    def on_stop_speaking(self, sender, app_data, user_data) -> None:
+        """DPG GUI event handler: stop speaking (and recording, if active).
+
+        `user_data`: One of "speak" or "speak_and_record", identifies which button was clicked.
+                     Set the appropriate value as the `user_data` of your button when you create it.
+        """
+        # mode = user_data
+
         api.tts_stop()
+        video_recorder.stop()  # If it wasn't recording, this is a no-op.
 
         dpg.set_item_label("speak_button", "Speak [Ctrl+S]")  # TODO: DRY the GUI labels  # tag
         dpg.set_value(self.speak_tooltip_text, "Speak the entered text")  # TODO: DRY the GUI labels
         dpg.set_item_callback("speak_button", self.on_start_speaking)  # tag
 
         dpg.set_item_label("speak_and_record_button", fa.ICON_CIRCLE)  # tag
-        dpg.set_value(self.speak_and_record_tooltip_text, "Speak and record the entered text (.mp3 + .png sequence)")  # TODO: DRY the GUI labels
+        dpg.set_value(self.speak_and_record_tooltip_text, f"Speak and record the entered text (.mp3 + .{self.comm_format.lower()} sequence)")  # TODO: DRY the GUI labels
         dpg.set_item_callback("speak_and_record_button", self.on_start_speaking)  # tag  # TODO: DRY the GUI labels
         dpg.enable_item("speak_and_record_button")  # tag
 
         self.speaking = False
 
-    def on_start_speaking(self, sender, app_data, user_data) -> None:  # `user_data`: one of "speak" or "speak_and_record", identifies which button was clicked
+    def on_start_speaking(self, sender, app_data, user_data) -> None:
+        """DPG GUI event handler: start speaking (and optionally recording).
+
+        `user_data`: One of "speak" or "speak_and_record", identifies which button was clicked.
+                     Set the appropriate value as the `user_data` of your button when you create it.
+        """
+        mode = user_data
+
         self.speaking = True
 
         dpg.set_item_label("speak_button", "Stop speaking [Ctrl+S]")  # tag  # TODO: DRY the GUI labels
@@ -1047,12 +1113,14 @@ class PostprocessorSettingsEditorGUI:
         dpg.set_item_label("speak_and_record_button", fa.ICON_SQUARE)  # tag
         dpg.set_value(self.speak_and_record_tooltip_text, "Stop recording")  # TODO: DRY the GUI labels
         dpg.set_item_callback("speak_and_record_button", self.on_stop_speaking)  # tag  # TODO: DRY the GUI labels
-        if user_data == "speak":  # When just speaking, disable the stop-recording button for UX clarity
+        if mode == "speak":  # When just speaking, disable the stop-recording button for UX clarity (does not make sense to stop recording, since we're not recording)
             dpg.disable_item("speak_and_record_button")  # tag
 
-        if user_data == "speak_and_record":
+        if mode == "speak_and_record":
             def on_audio_ready(audio_data: bytes) -> None:
-                filename = "avatar_speech.mp3"
+                """Save the TTS speech audio file to disk."""
+                filename = os.path.join(recording_output_dir, "audio.mp3")
+                common_utils.create_directory(recording_output_dir)
                 logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_audio_ready: Saving TTS speech audio to '{filename}'")
                 with open(filename, "wb") as audio_file:
                     audio_file.write(audio_data)
@@ -1061,6 +1129,8 @@ class PostprocessorSettingsEditorGUI:
             on_audio_ready = None
 
         selected_voice = dpg.get_value(self.voice_choice)
+
+        # Get text entered by user, and if none, use a default text.
         text = dpg.get_value("speak_input_text")
         if text == "":
             # text = "Testing the AI speech synthesizer."
@@ -1070,23 +1140,30 @@ class PostprocessorSettingsEditorGUI:
             # text = "Sharon Apple is a computer-generated virtual idol and a central character in the Macross Plus franchise, created by Shoji Kawamori."
             # text = "Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts."
             text = 'The failure of any experiment to detect motion through the aether led Hendrik Lorentz, starting in eighteen ninety two, to develop a theory of electrodynamics based on an immobile luminiferous aether, physical length contraction, and a "local time" in which Maxwell\'s equations retain their form in all inertial frames of reference.'
+
+        # Start the TTS, also setting up event handlers.
         if dpg.get_value("speak_lipsync_checkbox"):
+            def on_start_lipsync_speaking():
+                if mode == "speak_and_record":
+                    video_recorder.start()
             def on_stop_lipsync_speaking():
-                self.on_stop_speaking(None, None, user_data)  # stop the TTS and update the GUI
+                self.on_stop_speaking(None, None, user_data)  # update the GUI, stop recording (if active); pass on our `user_data` as-is
             api.tts_speak_lipsynced(instance_id=avatar_instance_id,
                                     voice=selected_voice,
                                     text=text,
                                     speed=dpg.get_value("speak_speed_slider") / 10,
                                     video_offset=dpg.get_value("speak_video_offset") / 10,
                                     on_audio_ready=on_audio_ready,
-                                    on_start=None,  # no start callback needed, the TTS client will start lipsyncing once the audio starts.
+                                    on_start=on_start_lipsync_speaking,
                                     on_stop=on_stop_lipsync_speaking)
         else:
             def on_start_nonlipsync_speaking():
+                if mode == "speak_and_record":
+                    video_recorder.start()
                 api.avatar_start_talking(avatar_instance_id)
             def on_stop_nonlipsync_speaking():
                 api.avatar_stop_talking(avatar_instance_id)
-                self.on_stop_speaking(None, None, user_data)  # update the GUI
+                self.on_stop_speaking(None, None, user_data)  # update the GUI, stop recording (if active); pass on our `user_data` as-is
             api.tts_speak(voice=selected_voice,
                           text=text,
                           speed=dpg.get_value("speak_speed_slider") / 10,
@@ -1228,7 +1305,8 @@ api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> 
 gui_instance = PostprocessorSettingsEditorGUI()  # will load animator settings into the GUI, as well as send them to the avatar instance.
 gui_instance.current_input_image_path = _startup_input_image_path  # so that the Refresh button works
 api.avatar_start(avatar_instance_id)  # start the avatar rendering on the server...
-gui_instance.dpg_avatar_renderer.start(avatar_instance_id)  # ...and start displaying the live video on the client
+gui_instance.dpg_avatar_renderer.start(avatar_instance_id,  # ...and start displaying the live video on the client
+                                       on_frame_received=video_recorder._on_frame_received)
 
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""

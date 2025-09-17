@@ -26,9 +26,10 @@ import os
 import pathlib
 import platform
 import qoi
+import threading
 import time
 import traceback
-from typing import Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 
 import PIL.Image
 
@@ -58,22 +59,26 @@ class ResultFeedReader:
         """Helper class for `DPGAvatarRenderer`."""
         self.avatar_instance_id = avatar_instance_id
         self.gen = None
+        self.lock = threading.RLock()
 
     def start(self) -> None:
-        if self.gen is None:
-            self.gen = api.avatar_result_feed(self.avatar_instance_id)
-
-    def is_running(self) -> bool:
-        return self.gen is not None
-
-    def get_frame(self) -> Tuple[Optional[str], bytes]:
-        """-> (received_mimetype, payload)"""
-        return next(self.gen)  # next-gen lol
+        with self.lock:
+            if self.gen is None:
+                self.gen = api.avatar_result_feed(self.avatar_instance_id)
 
     def stop(self) -> None:
-        if self.gen is not None:
-            self.gen.close()
-            self.gen = None
+        with self.lock:
+            if self.gen is not None:
+                self.gen.close()
+                self.gen = None
+
+    def get_frame(self) -> Tuple[Optional[str], bytes]:
+        """-> (received_mimetype, payload)
+
+        If not running, raises `TypeError`.
+        """
+        with self.lock:
+            return next(self.gen)  # next-gen lol
 
 # --------------------------------------------------------------------------------
 # API
@@ -412,15 +417,60 @@ class DPGAvatarRenderer:
         logger.info(f"DPGAvatarRenderer.pause (avatar instance '{self.avatar_instance_id}', action '{action}'): success")
 
     def start(self,
-              avatar_instance_id: str) -> None:
+              avatar_instance_id: str,
+              on_frame_received: Optional[Callable] = None,
+              on_frame_decoded: Optional[Callable] = None) -> None:
         """Start receiving the live video stream.
 
         `avatar_instance_id`: Avatar instance to receive. You get this from `raven.client.api.avatar_load`.
 
-        To stop receiving, but keep the avatar session open, call the `stop` method.
+        `on_frame_received`: Called when a video frame arrives from the server.
 
-        You can also just close the avatar session (`raven.client.api.avatar_unload`) if you don't need it anymore.
-        Either way, the receiver background task then shuts down gracefully.
+                             It is expected to take three arguments: `(timestamp: int, mimetype: str, image_data: bytes)`.
+                             The return value is ignored.
+
+                             The `timestamp` is the frame start time, in nanoseconds since epoch
+                             (as returned by `time.time_ns()`).
+
+                             The `image_data` is in the file format sent by the server.
+                             The mimetype (e.g. `"image/qoi"` or `"image/png`) is included for convenience.
+
+                             This event is useful e.g. for avatar video recording since the binary data
+                             can simply be dumped into an image file (one file per frame).
+
+        `on_frame_decoded`: Called when a video frame has been decoded.
+
+                            It is expected to take two arguments `(timestamp: int, image: np.array)`.
+                            The return value is ignored.
+
+                            The `timestamp` is the frame start time, in nanoseconds since epoch
+                            (as returned by `time.time_ns()`).
+
+                            The array has dtype `np.uint8` and shape `[h, w, c]`, with 4 channels (RGBA).
+
+                            NOTE: If you need the data in `[c, h, w]` format, the fast recipe is::
+
+                                image = image.reshape(h * w, c).transpose().reshape(c, h, w)
+
+                            This event is useful if you need an easily readable copy of video frame data,
+                            e.g. for a proper video encoder.
+
+        To stop receiving, but keep the avatar session open, call the `stop` method.
+        To stop receiving AND close the avatar session, just call `raven.client.api.avatar_unload`.
+        Either way, the receiver task then shuts down gracefully.
+
+        **Notes**:
+
+        For any given frame, the timestamps of `on_frame_received` and `on_frame_decoded`
+        are guaranteed to match. The time is stamped once per frame, just before `on_frame_received`.
+
+        Keep in mind that your event handlers run in the receiver thread, so they need to be fast
+        in order to avoid video stutter. If you need to do something slow (even just occasionally slow),
+        put the data into a `queue.Queue` in your event handler, and consume the queue in a separate
+        background thread. Do note the implication that if the processing (on average) takes longer
+        than one video frame, the queue will pile up.
+
+        The time elapsed in the event handlers is included when calculating the FPS counter.
         """
         if self._task_env is not None:
             raise RuntimeError("DPGAvatarRenderer.start: already running, cannot start again. If you need to connect to a different avatar session, `stop` first.")
@@ -454,8 +504,6 @@ class DPGAvatarRenderer:
                                   text)
                 except SystemError:  # DPG widget does not exist (can happen at app shutdown)
                     pass
-                except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
-                    pass
 
             reader = ResultFeedReader(avatar_instance_id)
             reader.start()
@@ -464,20 +512,23 @@ class DPGAvatarRenderer:
                     frame_start_time = time.time_ns()  # for FPS measurement
 
                     # sync `ResultFeedReader` state from `animator_running` state
-                    if not self.animator_running and reader.is_running():
+                    if not self.animator_running:
                         reader.stop()
                         maybe_set_fps_counter(describe_performance(None, None, None))
-                    elif self.animator_running and not reader.is_running():
+                    elif self.animator_running:
                         reader.start()
 
-                    if reader.is_running():
+                    try:  # EAFP to avoid TOCTTOU
                         mimetype, image_data = reader.get_frame()
-                        self.frame_size_statistics.add_datapoint(len(image_data))
-
-                    # If our `ResultFeedReader` isn't running, there's nothing to do at the moment.
-                    if not reader.is_running():
+                    except TypeError:  # `reader.gen is None`
+                        # If our `ResultFeedReader` isn't running, there's nothing to do at the moment.
                         time.sleep(0.04)   # 1/25 s
                         continue
+                    else:
+                        self.frame_size_statistics.add_datapoint(len(image_data))
+                        timestamp = time.time_ns()
+                        if on_frame_received is not None:
+                            on_frame_received(timestamp, mimetype, image_data)
 
                     try:  # EAFP to avoid TOCTTOU
                         # Before blitting, make sure the texture is of the expected size. When an upscale change is underway, it will be temporarily of the wrong size.
@@ -512,7 +563,11 @@ class DPGAvatarRenderer:
                             pil_image = pil_image.resize((expected_w, expected_h),
                                                          resample=PIL.Image.LANCZOS)
                         image_rgba = np.asarray(pil_image.convert("RGBA"))
-                    self.last_image_rgba = image_rgba  # for reducing flicker when upscaler settings change
+                    self.last_image_rgba = image_rgba  # for reducing flicker when upscaler settings change (to be able to initialize the new texture from the latest received video frame, by rescaling it)
+                    if on_frame_decoded is not None:
+                        on_frame_decoded(timestamp, image_rgba)
+
+                    # Blit the new frame
                     image_rgba = np.array(image_rgba, dtype=np.float32) / 255
                     raw_data = image_rgba.ravel()  # shape [h, w, c] -> linearly indexed
                     try:  # EAFP to avoid TOCTTOU
@@ -546,7 +601,7 @@ class DPGAvatarRenderer:
         logger.info(f"DPGAvatarRenderer.start: Submitting background task to task manager for avatar instance '{avatar_instance_id}'.")
         self._task_env = envcls()
         self.task_manager.submit(update_live_texture, self._task_env)
-        self.animator_running = True  # start in animator running state
+        self.animator_running = True  # automatically enter animator running state when `start` is called
         dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")  # and show the image  # tag
 
     def stop(self):
