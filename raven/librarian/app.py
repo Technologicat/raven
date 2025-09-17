@@ -608,28 +608,39 @@ class DisplayedChatMessage:
 
         # Only AI messages can be rerolled
         if role == "assistant":
-            def reroll_latest_message_callback():
+            def reroll_message_callback():
                 global current_chat_history  # for documenting the intent only
 
-                # Handle the RAG query: find the latest user message
+                # Find this AI message in the chat history
+                for k, displayed_message in enumerate(reversed(current_chat_history)):
+                    if displayed_message.node_id == node_id:
+                        break
+                # `k` is now how many messages must be popped from the end to reach this one
+                assert k < len(current_chat_history) - 3  # should have at least the system prompt, the AI's initial greeting, and the user's first message remaining
+                # Rewind the linearized chat history in the GUI
+                for _ in range(k):
+                    old_displayed_message = current_chat_history.pop(-1)
+                    old_displayed_message.demolish()
+
+                # Handle the RAG query: find the latest user message (above this AI message)
                 user_message_text = None
-                for displayed_message in reversed(current_chat_history):
+                for displayed_message in reversed(current_chat_history):  # ...what's remaining of the history, anyway
                     if displayed_message.role == "user":
                         user_message_text = displayed_message.text
                         break
 
-                # Remove latest AI message from GUI
-                app_state["HEAD"] = datastore.get_parent(app_state["HEAD"])
-                old_displayed_message = current_chat_history.pop(-1)
+                # Remove the AI message from GUI
+                app_state["HEAD"] = datastore.get_parent(node_id)
+                old_displayed_message = current_chat_history.pop(-1)  # once more, with feeling!
                 old_displayed_message.demolish()
 
                 # Generate new AI message
                 ai_turn(docs_query=user_message_text)
             reroll_enabled = (node_id is not None and node_id != app_state["new_chat_HEAD"])  # The AI's initial greeting can't be rerolled
             if reroll_enabled:
-                self.gui_button_callbacks["reroll"] = reroll_latest_message_callback  # stash it so we can call it from the hotkey handler
+                self.gui_button_callbacks["reroll"] = reroll_message_callback  # stash it so we can call it from the hotkey handler
             dpg.add_button(label=fa.ICON_RECYCLE,
-                           callback=reroll_latest_message_callback,
+                           callback=reroll_message_callback,
                            enabled=reroll_enabled,
                            width=gui_config.toolbutton_w,
                            tag=f"message_reroll_button_{self.gui_uuid}",
