@@ -413,14 +413,6 @@ class RecordingIndicatorPulsatingGlow(gui_animation.Animation):  # adapted and s
             self.reset()
         cycle_pos = cycle_pos - float(int(cycle_pos))  # fractional part; raw position in animation cycle
 
-        # We pulsate the search results and selected items at opposite phases to make both easy
-        # to see when they overlap. We use colors that make the highlights stand out from the
-        # Viridis colormap used for plotting the data.
-        #
-        # For how to do this in DPG, see e.g. https://github.com/hoffstadt/DearPyGui/issues/1512
-        # Basically, bind a custom theme to the GUI widgets that need to have their color animated,
-        # and then edit the theme's colors per-frame (just before render).
-        #
         # Convert animation cycle position to animation control channel value.
         # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
         animation_pos = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
