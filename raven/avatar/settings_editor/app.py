@@ -415,11 +415,12 @@ class RecordingIndicatorPulsatingGlow(gui_animation.Animation):  # adapted and s
 
         # Convert animation cycle position to animation control channel value.
         # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
-        animation_pos = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
+        animation_pos = math.cos(cycle_pos * math.pi)**2  # 1 ... 0 ... 1, smoothly, with slow start and end, fast middle
         alpha = self._compute_alpha(animation_pos)
         dpg.set_value(pulsating_red_color, (255, 96, 96, alpha))  # color-matching the rec button, "disablable_red_button_theme"
 
         return gui_animation.action_continue
+recording_indicator_glow = RecordingIndicatorPulsatingGlow(cycle_duration=2.0)
 
 # --------------------------------------------------------------------------------
 # GUI controls
@@ -1163,6 +1164,7 @@ class PostprocessorSettingsEditorGUI:
             dpg.disable_item("speak_and_record_button")  # tag
 
         if mode == "speak_and_record":
+            recording_indicator_glow.reset()  # start animation from beginning (i.e. start new pulsating cycle now)
             dpg.show_item(self.recording_indicator_group)
             def on_audio_ready(audio_data: bytes) -> None:
                 """Save the TTS speech audio file to disk."""
@@ -1435,7 +1437,7 @@ def update_animations():
     #         dpg.disable_item(gui_instance.voice_choice)
     #         dpg.disable_item("speak_button")
 
-gui_animation.animator.add(RecordingIndicatorPulsatingGlow(cycle_duration=2.0))
+gui_animation.animator.add(recording_indicator_glow)
 
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
