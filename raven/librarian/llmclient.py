@@ -456,7 +456,7 @@ def invoke(settings: env, history: List[Dict], on_progress=None) -> env:
         stop_generating()
         raise
     except requests.exceptions.ChunkedEncodingError as exc:
-        logger.error(f"Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
+        logger.error(f"invoke: Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
         logger.error(f"{type(exc)}: {exc}")
         raise
     llm_output_text = llm_output_text.getvalue()
