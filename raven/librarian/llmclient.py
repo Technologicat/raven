@@ -441,17 +441,19 @@ def invoke(settings: env, history: List[Dict], on_progress=None) -> env:
                 last_few_chunks.popleft()
                 recent_text = "".join(last_few_chunks)  # Note start-of-word LLM tokens begin with a space.
                 stop = [stopping_string in recent_text for stopping_string in settings.stopping_strings]  # check which stopping strings match (if any)
-                if any(stop):
+
+                action = action_ack
+                if on_progress is not None:
+                    action = on_progress(n_chunks, chunk)
+
+                if any(stop):  # should stop due to a stopping string?
                     stop_generating()
                     stopped = True
                     break
-
-                if on_progress is not None:
-                    action = on_progress(n_chunks, chunk)
-                    if action is action_stop:  # did the callback tell us to interrupt the LLM generation?
-                        stop_generating()
-                        interrupted = True
-                        break
+                if action is action_stop:  # did the callback tell us to interrupt the LLM generation?
+                    stop_generating()
+                    interrupted = True
+                    break
     except KeyboardInterrupt:  # on Ctrl+C, stop generating, and let the exception propagate
         stop_generating()
         raise
