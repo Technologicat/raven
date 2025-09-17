@@ -8,17 +8,19 @@ Usage::
   python wos2bib.py input1.txt ... inputn.txt >output.bib
 """
 
-import argparse
 import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+from .. import __version__
+
+import argparse
 
 from unpythonic import timer
 
 import bibtexparser
 from bibtexparser.model import Entry, Field
 import wosfile
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 ptmap = {"J": "article",
          "B": "book"}  # TODO: "S" (series), "P" (patent)
@@ -35,6 +37,7 @@ def bibtex_escape(s: str):
 def main():
     parser = argparse.ArgumentParser(description="""Convert Web of Science plain text export (.wos/.txt) to BibTeX.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="bib", help="Web of Science (WOS) plain text file(s) to parse")
     opts = parser.parse_args()
 

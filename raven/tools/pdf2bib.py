@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 for handler in logging.root.handlers:
     handler.addFilter(logging.Filter(__name__))
 
+from .. import __version__
+
 import argparse
 import collections
 from functools import partial
@@ -820,6 +822,7 @@ def main():
     parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
     parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="output_dir", help="directory to move done files into (optional; allows easily continuing later)")
     parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing PDF file(s) to import (will be scanned recursively)")
+    parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     opts = parser.parse_args()
 
     if opts.input_dir is None:
