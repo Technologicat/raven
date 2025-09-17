@@ -25,6 +25,7 @@ with timer() as tim:
     import concurrent.futures
     import copy
     import json
+    import math
     import os
     import pathlib
     import platform
@@ -87,6 +88,10 @@ dpg.create_context()
 
 font_size = 20
 themes_and_fonts = guiutils.bootup(font_size=font_size)
+
+with dpg.theme(tag="my_pulsating_red_theme"):
+    with dpg.theme_component(dpg.mvAll):
+        pulsating_red_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # dummy color; animated by `update_animations`
 
 viewport_width = 1900
 viewport_height = 980
@@ -382,6 +387,48 @@ class AvatarVideoRecorder:
             self.frame_no += 1
 video_recorder = AvatarVideoRecorder()
 
+class RecordingIndicatorPulsatingGlow(gui_animation.Animation):  # adapted and simplified from `raven.visualizer.app.PlotterPulsatingGlow`
+    def __init__(self, cycle_duration):
+        """Cyclic animation to pulsate the REC symbol."""
+        super().__init__()
+        self.cycle_duration = cycle_duration
+
+    @classmethod
+    def _compute_alpha(cls, x):
+        """Compute translucency.
+
+        `x`: float, [0, 1]. The animation control channel. More means brighter.
+
+        Returns the `alpha` value (int, [0, 255]).
+        """
+        a_base = 64
+        a_add = 255 - a_base
+        alpha = a_base + int(a_add * x)
+        return alpha
+
+    def render_frame(self, t):
+        dt = (t - self.t0) / 10**9  # seconds since t0
+        cycle_pos = dt / self.cycle_duration  # number of cycles since t0
+        if cycle_pos > 1.0:  # prevent loss of accuracy in long sessions
+            self.reset()
+        cycle_pos = cycle_pos - float(int(cycle_pos))  # fractional part; raw position in animation cycle
+
+        # We pulsate the search results and selected items at opposite phases to make both easy
+        # to see when they overlap. We use colors that make the highlights stand out from the
+        # Viridis colormap used for plotting the data.
+        #
+        # For how to do this in DPG, see e.g. https://github.com/hoffstadt/DearPyGui/issues/1512
+        # Basically, bind a custom theme to the GUI widgets that need to have their color animated,
+        # and then edit the theme's colors per-frame (just before render).
+        #
+        # Convert animation cycle position to animation control channel value.
+        # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
+        animation_pos = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
+        alpha = self._compute_alpha(animation_pos)
+        dpg.set_value(pulsating_red_color, (255, 96, 96, alpha))  # color-matching the rec button, "disablable_red_button_theme"
+
+        return gui_animation.action_continue
+
 # --------------------------------------------------------------------------------
 # GUI controls
 
@@ -435,6 +482,12 @@ class PostprocessorSettingsEditorGUI:
                     image_size = int(self.upscale * self.source_image_size)
                     self.dpg_avatar_renderer.configure_live_texture(image_size)
                     self.dpg_avatar_renderer.configure_fps_counter(show=True)
+
+                    with dpg.group(pos=(8, 32), show=False, horizontal=True) as self.recording_indicator_group:
+                        dpg.add_text(fa.ICON_CIRCLE, tag="recording_symbol")  # color-matching the rec button, "disablable_red_button_theme"
+                        dpg.bind_item_font("recording_symbol", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("recording_symbol", "my_pulsating_red_theme")  # tag
+                        dpg.add_text("REC", tag="recording_text")
 
                 with dpg.child_window(width=self.button_width + 16, autosize_y=True):
                     dpg.add_button(label="Fullscreen/windowed [F11]", width=self.button_width, callback=toggle_fullscreen, tag="fullscreen_button")
@@ -1083,7 +1136,8 @@ class PostprocessorSettingsEditorGUI:
         # mode = user_data
 
         api.tts_stop()
-        video_recorder.stop()  # If it wasn't recording, this is a no-op.
+        video_recorder.stop()  # If not recording, this is a no-op.
+        dpg.hide_item(self.recording_indicator_group)  # If not recording, this is a no-op.
 
         dpg.set_item_label("speak_button", "Speak [Ctrl+S]")  # TODO: DRY the GUI labels  # tag
         dpg.set_value(self.speak_tooltip_text, "Speak the entered text")  # TODO: DRY the GUI labels
@@ -1117,6 +1171,7 @@ class PostprocessorSettingsEditorGUI:
             dpg.disable_item("speak_and_record_button")  # tag
 
         if mode == "speak_and_record":
+            dpg.show_item(self.recording_indicator_group)
             def on_audio_ready(audio_data: bytes) -> None:
                 """Save the TTS speech audio file to disk."""
                 filename = os.path.join(recording_output_dir, "audio.mp3")
@@ -1387,6 +1442,8 @@ def update_animations():
     #     else:
     #         dpg.disable_item(gui_instance.voice_choice)
     #         dpg.disable_item("speak_button")
+
+gui_animation.animator.add(RecordingIndicatorPulsatingGlow(cycle_duration=2.0))
 
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
