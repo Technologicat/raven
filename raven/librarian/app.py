@@ -1041,22 +1041,6 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 logger.info("ai_turn.run_ai_turn.on_llm_progress: AI exited thinking state.")
                 task_env.inside_think_block = False
 
-            # TODO: Update avatar state when LLM is writing.
-            #   - Split a few most recent lines of `text` to sentences (using the spaCy service on the server)
-            #     - We don't know whether the current last "sentence" as detected by spaCy is actually a complete sentence, since the LLM is still writing.
-            #     - Second-last sentence should always be complete (except for sentence-splitting glitches; maybe good enough).
-            #     - We can get the final sentence in `on_llm_done`, where we know that it's complete.
-            #   - When a new sentence is completed:
-            #     - When inside a thought block:
-            #         - Send the sentence to the sentiment classification model, update avatar emotion from result.
-            #     - When NOT inside a thought block:
-            #       - Append the English sentence to a deque for English->Finnish translation.
-            #         - Run the translation service in a background thread to avoid GUI hiccups.
-            #       - Monitor the translation deque. Once a translation completes, append the English-Finnish sentence pair to a deque for the TTS/subtitling system.
-            #         - Monitor this deque and TTS status in another background thread.
-            #         - When TTS is free, take the first item from the deque, start speaking, and display its subtitle.
-            #         - Simultaneously, send the sentence to the sentiment classification model, update avatar emotion from result.
-            #         - In the TTS stop event, remove the subtitle, and mark TTS as free.
             task_env.text.write(chunk_text)
             time_now = time.monotonic()
             dt = time_now - task_env.t0  # seconds since last GUI update
