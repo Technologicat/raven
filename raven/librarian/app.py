@@ -826,7 +826,7 @@ def avatar_preprocess_task(task_env: env) -> None:
         try:
             sentence = avatar_preprocess_queue.get(block=False)
         except queue.Empty:
-            time.sleep(0.5)
+            time.sleep(0.2)
             continue
         else:
             subtitle = api.translate_translate(sentence, source_lang="en", target_lang="fi")  # TODO: make the languages configurable; make the whole TTS auto-subtitling feature optional
@@ -850,7 +850,7 @@ def avatar_speak_task(task_env: env) -> None:
         try:
             sentence, translated_sentence = avatar_output_queue.get(block=False)
         except queue.Empty:  # wait until we have a sentence to speak
-            time.sleep(0.5)
+            time.sleep(0.2)
             continue
         else:
             with task_env.lock:
