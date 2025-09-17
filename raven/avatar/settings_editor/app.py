@@ -357,7 +357,7 @@ class AvatarVideoRecorder:
 
     def start(self):
         """Start recording video frames to disk. Frames will be numbered starting from 00000."""
-        logger.info(f"AvatarVideoRecorder.start: starting recording video frames to '{self.basename}_xxxxx.ext'.")
+        logger.info(f"AvatarVideoRecorder.start: starting recording video frames to directory '{self.output_dir}'.")
         with self.lock:
             self._reset()
             common_utils.create_directory(self.output_dir)
@@ -374,9 +374,9 @@ class AvatarVideoRecorder:
         with self.lock:
             if not self.recording:
                 return
-            logger.info(f"AvatarVideoRecorder._on_frame_received: recording video frame: sequence number {self.frame_no}, time {timestamp}, mimetype {mimetype}.")
             _, ext = mimetype.split("/")  # e.g. "image/qoi" -> ["image", "qoi"]
             filename = os.path.join(self.output_dir, f"{self.basename}_{self.frame_no:05d}.{ext}")
+            logger.info(f"AvatarVideoRecorder._on_frame_received: recording video frame to '{filename}': time {timestamp}, mimetype {mimetype}.")
             with open(filename, "wb") as image_file:
                 image_file.write(image_data)
             self.frame_no += 1
