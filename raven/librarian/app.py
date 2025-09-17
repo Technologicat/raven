@@ -896,10 +896,10 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 _scroll_chat_view_to_end()
             # - update at least every 0.5 sec
             # - update after every 10 chunks, but rate-limited (at least 0.1 sec must have passed since last update)
-            elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit to last paragraph (will auto-create one the first time)
+            elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit to last paragraph
                 t0 = time_now
                 n_chunks0 = n_chunks
-                streaming_chat_message.replace_last_paragraph(text.getvalue())
+                streaming_chat_message.replace_last_paragraph(text.getvalue())  # at first paragraph, will auto-create it if not created yet
                 dpg.split_frame()
                 _scroll_chat_view_to_end()
 
