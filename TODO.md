@@ -42,20 +42,20 @@
 
 - Librarian
   - First, build the minimal demo:
-    - Avatar: Background image, like in avatar settings editor
+    - Strip Markdown before TTS/subtitling
     - Librarian config: avatar on/off, which character to load, Librarian-specific settings overrides
     - Improve live preview of LLM output
-      - Thought block detection
-        - Store the thought blocks in the chat datastore, too, so that we can render them (`raven.librarian.scaffold.ai_turn` currently discards them)
-      - Sentence splitting
-       - Avatar emotion update during live preview (also during thinking)
-      - Call the lipsynced TTS and the English->Finnish translation and captioning system when we get a complete sentence
-        - TTS audio output toggle icons: `ICON_COMMENT`, `ICON_COMMENT_SLASH`
-      - Add GUI element to display captions (large font) on top of the avatar video
-      - Avatar emotion update from final message
+      - Store the thought blocks in the chat datastore, too, so that we can render them (`raven.librarian.scaffold.ai_turn` currently discards them)
+      - TTS audio output toggle icons: `ICON_COMMENT`, `ICON_COMMENT_SLASH`
+      - Add feature: "Speak again" button
+      - Add feature: "Stop speaking" button
     - Draw assets:
       - Make per-character AI chat icons
       - Finish the new app icon for Raven (small and large sizes)
+  - Fix:
+    - Lipsync: sometimes getting `None` timestamps from TTS?
+    - Lipsync: sometimes getting empty phonemes list from TTS? Is this for punctuation tokens only?
+    - `None` is JSONable (as `null`?), remove the JSON hack for the backdrop image path
   - Later:
     - Add feature: Switch chat (from all leaf nodes in datastore)
     - Add feature: Interrupt AI generation (backend exists now; `return action_stop` from the `on_llm_progress` callback to interrupt the LLM)
