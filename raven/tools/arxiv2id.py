@@ -46,7 +46,7 @@ def main():
     parser = argparse.ArgumentParser(description="""List identifiers of arXiv papers in the specified directory. The papers are assumed to be PDF files with the arXiv identifier (yymm.xxxxx) somewhere in the filename. Only unique identifiers are returned (even if duplicated under different filenames, as long as the identifier is the same).""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing arXiv PDF file(s).")
-    parser.add_argument("-V", "--verbose", dest="verbose", action="store_true", default=False, help="Print also the filename for each match, for debugging your collection ('where did that 3904.36424' come from, it's not the year 2039 yet?).")
+    parser.add_argument("-V", "--verbose", dest="verbose", action="store_true", default=False, help="Print also the filename for each match, for debugging your collection ('where did that 3904.36424 come from, it is not the year 2039 yet?).")
     opts = parser.parse_args()
 
     if opts.input_dir is None:
