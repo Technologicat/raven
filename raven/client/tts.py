@@ -69,6 +69,10 @@ def tts_speak(voice: str,
     if not util.api_initialized:
         raise RuntimeError("tts_speak: The `raven.client.api` module must be initialized before using the API.")
     if util.api_config.tts_server_type is None:
+        logger.info("tts_speak: TTS server type missing from API config. Canceled.")
+        return
+    if not text.strip():
+        logger.info("tts_speak_lipsynced: Ignoring blank `text`. Canceled.")
         return
     headers = copy.copy(util.api_config.tts_default_headers)
     headers["Content-Type"] = "application/json"
@@ -117,7 +121,11 @@ def tts_speak(voice: str,
         audio_buffer.seek(0)
         if pygame.mixer.music.get_busy():
             pygame.mixer.music.stop()
-        pygame.mixer.music.load(audio_buffer)
+        try:
+            pygame.mixer.music.load(audio_buffer)
+        except pygame.error as exc:
+            logger.error(f"tts_speak.speak: failed to load audio into mixer, reason {type(exc)}: {exc}")
+            return
         # pygame.mixer.music.load(stream_response.raw)  # can't do this at least with mp3 since the raw stream doesn't support seeking.
 
         logger.info("tts_speak.speak: starting playback")
@@ -176,6 +184,10 @@ def tts_speak_lipsynced(instance_id: str,
     if not util.api_initialized:
         raise RuntimeError("tts_speak_lipsynced: The `raven.client.api` module must be initialized before using the API.")
     if util.api_config.tts_server_type is None:
+        logger.info("tts_speak_lipsynced: TTS server type missing from API config. Canceled.")
+        return
+    if not text.strip():
+        logger.info("tts_speak_lipsynced: Ignoring blank `text`. Canceled.")
         return
     headers = copy.copy(util.api_config.tts_default_headers)
     headers["Content-Type"] = "application/json"
@@ -326,6 +338,24 @@ def tts_speak_lipsynced(instance_id: str,
                     last_start_time = record["start_time"]
             return out
 
+        def finalize():
+            if on_stop is not None:
+                try:
+                    on_stop()
+                except Exception as exc:
+                    logger.error(f"tts_speak_lipsynced.speak: in stop callback: {type(exc)}: {exc}")
+                    traceback.print_exc()
+
+            # TTS is exiting, so stop lipsyncing.
+            #
+            # NOTE: During app shutdown, we also get here if the avatar instance was deleted
+            # (so an `api.avatar_set_overrides` call raised, because the avatar instance was not found).
+            # So at this point, we shouldn't trust that it's still there.
+            try:
+                api.avatar_set_overrides(instance_id, {})
+            except Exception:
+                pass
+
         # Get audio and word timestamps
         with timer() as tim:
             if util.api_config.tts_server_type == "kokoro":
@@ -358,6 +388,7 @@ def tts_speak_lipsynced(instance_id: str,
             try:
                 while True:
                     if task_env.cancelled:
+                        finalize()
                         return
                     chunk = next(it)
                     audio_buffer.write(chunk)
@@ -406,6 +437,12 @@ def tts_speak_lipsynced(instance_id: str,
         for record in timestamps:
             logger.info(f"    {record}")  # DEBUG once more, with feeling! (show timestamps, with phoneme data)
 
+        if not timestamps:
+            logger.info("tts_speak_lipsynced.speak: empty phoneme list. Canceled. The text was:")
+            logger.info(text)
+            finalize()
+            return
+
         # Transform data into phoneme stream with interpolated timestamps
         def get_timestamp_for_phoneme(t0, t1, phonemes, idx):
             """Given word start/end times `t0` and `t1`, linearly interpolate the start/end times for a phoneme in the word."""
@@ -450,7 +487,12 @@ def tts_speak_lipsynced(instance_id: str,
         audio_buffer.seek(0)
         if pygame.mixer.music.get_busy():
             pygame.mixer.music.stop()
-        pygame.mixer.music.load(audio_buffer)
+        try:
+            pygame.mixer.music.load(audio_buffer)
+        except pygame.error as exc:
+            logger.error(f"tts_speak_lipsynced.speak: failed to load audio into mixer, reason {type(exc)}: {exc}")
+            finalize()
+            return
 
         def apply_lipsync_at_audio_time(t):
             # Sanity check: don't do anything before the first phoneme.
@@ -508,23 +550,7 @@ def tts_speak_lipsynced(instance_id: str,
                 time.sleep(0.01)
         finally:
             logger.info("tts_speak_lipsynced.speak: playback finished")
-
-            if on_stop is not None:
-                try:
-                    on_stop()
-                except Exception as exc:
-                    logger.error(f"tts_speak_lipsynced.speak: in stop callback: {type(exc)}: {exc}")
-                    traceback.print_exc()
-
-            # TTS is exiting, so stop lipsyncing.
-            #
-            # NOTE: During app shutdown, we also get here if the avatar instance was deleted
-            # (so an `api.avatar_set_overrides` call raised, because the avatar instance was not found).
-            # So at this point, we shouldn't trust that it's still there.
-            try:
-                api.avatar_set_overrides(instance_id, {})
-            except Exception:
-                pass
+            finalize()
 
     util.api_config.task_manager.submit(speak, envcls())
 
