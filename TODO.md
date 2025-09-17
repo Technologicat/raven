@@ -49,6 +49,7 @@
       - Add feature: "Speak again" button
       - Add feature: "Stop speaking" button
       - Add feature: subtitles on/off
+      - Subtitle color: Yellow or white?
   - Draw assets:
       - Make per-character AI chat icons
       - Finish the new app icon for Raven (small and large sizes)
