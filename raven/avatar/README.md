@@ -56,7 +56,7 @@ Lipsync was always possible with THA3, but *Talkinghead* never used the feature,
 
 *Raven-avatar* itself provides the following GUI apps:
 
-- `raven-avatar-settings-editor`: Test your characters and edit postprocessor settings.
+- `raven-avatar-settings-editor`: Test your characters and edit postprocessor settings. Record lipsynced TTS speech (audio + image sequence).
   - New, original to *Raven-avatar*.
   - :exclamation: Make sure that `raven-server` is running first before you start `raven-avatar-settings-editor`. :exclamation:
 
@@ -64,6 +64,52 @@ Lipsync was always possible with THA3, but *Talkinghead* never used the feature,
   - Based on the THA3 pose editor in the final version of *Talkinghead* (which itself was based on the THA3 offline demo app), but ported to DearPyGUI and extended.
   - Standalone, i.e. does not need `raven-server`.
   - Run with `--help` to see command-line options.
+
+**Lipsynced speech recording**
+
+*Added in v0.2.3.*
+
+Upon pressing the red **REC** button in `raven-avatar-settings-editor`, the avatar speaks the text entered by the user in the speech text field, and both the audio and the avatar video are recorded. If lipsync is enabled in the GUI, the speech is lipsynced.
+
+The recording is saved under the `rec/` subfolder of the folder where `raven-avatar-settings-editor` was started from. The folder is created automatically if missing, but **NOT** cleared automatically - so make sure to rename or delete it before making a new recording.
+
+The audio is saved in MP3 format.
+
+The video is saved as a sequence of QOI (Quite OK Image) images.
+
+The video frames are saved to disk as they arrive live from the server; so the video framerate will be approximately the animator target FPS set in the GUI. Due to system timings, there may be small variation in the actual framerate. What you see in the live FPS overlay in the GUI is what you get.
+
+The video frames are saved at the avatar's output resolution, after upscaling and postprocessing. The video frames include the alpha channel. Hence, if the translucency postprocessing effect is enabled, the character will be translucent also in the recorded video.
+
+Currently, the backdrop image is omitted from the video recording. This is a technical limitation of the current video capture mechanism.
+
+The video frames are numbered with five digits. At 25 FPS, this is enough for 400 seconds (6 min 40 sec).
+
+The recording path and filenames are currently hardcoded. This might or might not change in a future version.
+
+To get the recorded video frames into a format readable by other software, we provide a `raven-qoi2png` command-line conversion tool.
+
+Usage is e.g.:
+
+```bash
+raven-qoi2png rec/*.qoi
+```
+
+The converter will take each input file, and save a PNG with the same basename, into the same folder. If you want to see what it is doing:
+
+```bash
+raven-qoi2png --verbose rec/*.qoi
+```
+
+or just an uppercase `-V` instead of `--verbose`.
+
+The converter has been tested on Linux for now. It does not parse shellglobs; it expects the shell to give it a list of individual filenames.
+
+On my machine, encoding one 1024x1024 frame into PNG takes about 0.2 seconds.
+
+The image sequence and audio can then be loaded into a video editor app for AV syncing, and further processing such as compositing.
+
+**Emotion templates**
 
 Note that by default, the avatar loads its emotion templates from [`raven/avatar/assets/emotions/`](../avatar/assets/emotions/). If you want to change these default templates, you can save your modified emotion in this folder (overwriting the old one).
 

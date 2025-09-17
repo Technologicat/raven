@@ -60,7 +60,7 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app:
   - **Features**:
     - One static input image into realtime video (THA3 engine).
     - Talking custom anime character with 28 emotional expressions.
-    - Lipsync to *Raven-server*'s TTS.
+    - Lipsync to *Raven-server*'s TTS. Record lipsynced speech (audio + image sequence).
     - Realtime Anime4K upscaler.
     - Realtime video postprocessor with visual effects such as [bloom](https://en.wikipedia.org/wiki/Bloom_(shader_effect)), [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration), or [scanlines](https://en.wikipedia.org/wiki/Scan_line).
     - Web API to receive avatar video stream and to control the avatar.
