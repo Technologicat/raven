@@ -438,7 +438,7 @@ def tts_speak_lipsynced(instance_id: str,
             logger.info(f"    {record}")  # DEBUG once more, with feeling! (show timestamps, with phoneme data)
 
         if not timestamps:
-            logger.info("tts_speak_lipsynced.speak: empty phoneme list. Canceled. The text was:")
+            logger.info("tts_speak_lipsynced.speak: TTS did not generate any phonemes. Canceled. The text was:")
             logger.info(text)
             finalize()
             return
@@ -456,6 +456,12 @@ def tts_speak_lipsynced(instance_id: str,
         phoneme_stream = []  # [(phoneme0, morph0, t_start, t_end), ...]
         for record in timestamps:
             phonemes = record["phonemes"]
+            if not phonemes:
+                logger.warning(f"tts_speak_lipsynced.speak: TTS returned empty phonemes for word '{record['word']}'. Skipping this word.")
+                continue
+            if record["start_time"] is None or record["end_time"] is None:
+                logger.warning(f"tts_speak_lipsynced.speak: TTS missing timestamps for word '{record['word']}', cannot compute phoneme timings. Skipping this word.")
+                continue
             for idx, phoneme in enumerate(phonemes):  # mˈaɪnd -> m, ˈ, a, ɪ, n, d
                 t_start, t_end = get_timestamp_for_phoneme(record["start_time"], record["end_time"], phonemes, idx)
                 if phoneme in phoneme_to_morph:  # accept only phonemes we know about
