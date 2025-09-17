@@ -204,14 +204,14 @@ def maybe_delete_item(item):
     except SystemError:  # does not exist
         pass
 
-def has_child_items(widget):
+def has_child_items(widget: Union[str, int]) -> bool:
     """Return whether `widget` (DPG tag or ID) has child items in any of its slots."""
     for slot in range(4):
         if len(dpg.get_item_children(widget, slot=slot)):
             return True
     return False
 
-def get_widget_pos(widget):
+def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
     """Return `widget`'s (DPG tag or ID) position `(x0, y0)`, in viewport coordinates.
 
     This papers over the fact that most items support `dpg.get_item_rect_min`,
@@ -223,7 +223,7 @@ def get_widget_pos(widget):
         x0, y0 = dpg.get_item_pos(widget)
     return x0, y0
 
-def get_widget_size(widget):
+def get_widget_size(widget: Union[str, int]) -> Tuple[int, int]:
     """Return `widget`'s (DPG tag or ID) on-screen size `(width, height)`, in pixels.
 
     This papers over the fact that most items support `dpg.get_item_rect_size`,
@@ -237,7 +237,8 @@ def get_widget_size(widget):
         h = config["height"]
     return w, h
 
-def get_widget_relative_pos(widget, reference):
+def get_widget_relative_pos(widget: Union[str, int],
+                            reference: Union[str, int]) -> Tuple[int, int]:
     """Return `widget`'s (DPG tag or ID) position, measured relative to the `reference` widget (DPG tag or ID).
 
     This is handy when you need child window coordinates (use the child window as `reference`).
@@ -248,7 +249,7 @@ def get_widget_relative_pos(widget, reference):
     y0_local = y0 - y0_c
     return x0_local, y0_local
 
-def is_mouse_inside_widget(widget):
+def is_mouse_inside_widget(widget: Union[str, int]) -> bool:
     """Return whether the mouse cursor is inside `widget` (DPG ID or tag)."""
     x0, y0 = get_widget_pos(widget)
     w, h = get_widget_size(widget)
@@ -257,7 +258,8 @@ def is_mouse_inside_widget(widget):
         return False
     return True
 
-def wait_for_resize(widget, wait_frames_max=10):
+def wait_for_resize(widget: Union[str, int],
+                    wait_frames_max: int = 10) -> bool:
     """Wait (calling `dpg.split_frame()`) until the on-screen size of `widget` (DPG tag or ID) changes.
 
     If `wait_frames_max` frames have elapsed without the size changing, return.
@@ -278,7 +280,7 @@ def wait_for_resize(widget, wait_frames_max=10):
         logger.debug(f"wait_for_resize: timeout ({wait_frames_max} frames) when waiting for resize of DPG widget {widget}")
     return False
 
-def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, int]):
+def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, int]) -> None:
     """Reposition `thewindow` (DPG ID or tag), if visible, so that it is centered on `reference_window`.
 
     To center on viewport, pass your maximized main window as `reference_window`.
@@ -314,13 +316,18 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
                      (max(0, (reference_window_w - w) // 2),
                       max(0, (reference_window_h - h) // 2)))
 
-def compute_tooltip_position_scalar(*, algorithm, cursor_pos, tooltip_size, viewport_size, offset=20):
+def compute_tooltip_position_scalar(*,
+                                    algorithm: str,
+                                    cursor_pos: int,
+                                    tooltip_size: int,
+                                    viewport_size: int,
+                                    offset: int = 20) -> int:
     """Compute x or y position for a tooltip. (Either one of them; hence "scalar".)
 
     This positions the tooltip elegantly, trying to keep it completely within the DPG viewport area.
     This is mostly useful for tooltips triggered by custom code, such as for a scatterplot dataset in a plotter.
 
-    `algorithm`: str, one of "snap", "snap_old", "smooth".
+    `algorithm`: one of "snap", "snap_old", "smooth".
                  "snap": Right/bottom side if the tooltip fits there, else left/top side.
                  "snap_old": Right/bottom side when the cursor is at the left/top side of viewport, else left/top side.
                  "smooth": Cursor at left edge -> right/bottom side; cursor at right edge -> left/top side; in between,
@@ -328,9 +335,9 @@ def compute_tooltip_position_scalar(*, algorithm, cursor_pos, tooltip_size, view
 
                  If unsure, try "snap" for the x coordinate, and "smooth" for the y coordinate; usually looks good.
 
-    `cursor_pos`: tuple `(x, y)`, mouse cursor position, in viewport coordinates.
-    `tooltip_size`: tuple `(width, height)`, size of the tooltip window, in pixels.
-    `viewport_size`: tuple `(width, height)`, size of the DPG viewport (or equivalently, primary window), in pixels.
+    `cursor_pos`: mouse cursor position (x or y) depending on which axis you are computing, in viewport coordinates.
+    `tooltip_size`: width or height (depending on axis) of the tooltip window, in pixels.
+    `viewport_size`: width or height (depending on axis), size of the DPG viewport (or equivalently, primary window), in pixels.
     `offset`: int. This allows positioning the tooltip a bit off from `cursor_pos`, so that the mouse cursor won't
               immediately hover over it when the tooltip is shown.
 
@@ -392,7 +399,9 @@ def compute_tooltip_position_scalar(*, algorithm, cursor_pos, tooltip_size, view
 
         return pos
 
-def get_pixels_per_plotter_data_unit(plot_widget, xaxis, yaxis):
+def get_pixels_per_plotter_data_unit(plot_widget: Union[str, int],
+                                     xaxis: Union[str, int],
+                                     yaxis: Union[str, int]) -> Tuple[int, int]:
     """Estimate pixels per DPG plotter data unit, for conversion between viewport space and data space.
 
     `plot_widget`: dpg tag or ID, the plotter widget (`dpg.plot`).
