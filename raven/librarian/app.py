@@ -810,11 +810,16 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
 
 # TODO: This takes two slots in the thread pool for the whole duration of the app. Consider the implications.
 
+# TODO: fix ravioli (is this the correct place to define these?)
+
 avatar_preprocess_queue = queue.Queue()  # for subtitling: [sentence0, ...]
 avatar_output_queue = queue.Queue()  # for TTS and subtitling: [(sentence0, translation0), ...]
 
 def avatar_preprocess_task(task_env: env) -> None:
-    """AI translator client, for producing subtitles."""
+    """Preprocess sentences for TTS output (AI speech synthesizer).
+
+    Currently this runs an AI translator, for producing subtitles.
+    """
     while True:
         if task_env.cancelled:
             break
@@ -1211,7 +1216,7 @@ with timer() as tim:
                     upscale = 1.5
                     dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * source_image_size))
 
-                    subtitle_y0 = avatar_panel_h - 4 * themes_and_fonts.font_size
+                    subtitle_y0 = avatar_panel_h - 4 * themes_and_fonts.font_size  # TODO: fix ravioli, this is a global variable; should probably have subtitle offset (from bottom) in config
                     dpg.add_text("", pos=(16, subtitle_y0),
                                      wrap=avatar_panel_w - 40, tag="avatar_subtitle")
                     dpg.bind_item_font("avatar_subtitle", subtitle_font)  # tag
