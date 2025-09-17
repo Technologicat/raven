@@ -869,8 +869,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         task_env.t0 = time.monotonic()  # timestamp of last GUI update
         task_env.n_chunks0 = 0  # chunks received since last GUI update
         task_env.inside_think_block = False
-        task_env.emotion_update_interval = 5
-        task_env.recent_paragraphs = collections.deque([""] * 20)
+        task_env.emotion_update_interval = 5  # how many complete paragraphs (newline-separated text snippets) to wait between emotion updates (NOTE: Qwen3 likes using newlines liberally)
+        task_env.recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap, to stabilize the detection
         task_env.emotion_update_calls = 0
         task_env.blacklisted_emotions = ["desire", "love"]  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
         def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
@@ -935,7 +935,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 _scroll_chat_view_to_end()
             # - update at least every 0.5 sec
             # - update after every 10 chunks, but rate-limited (at least 0.1 sec must have passed since last update)
-            elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit to last paragraph
+            elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit changes to in-progress last paragraph
                 task_env.t0 = time_now
                 task_env.n_chunks0 = n_chunks
                 streaming_chat_message.replace_last_paragraph(task_env.text.getvalue())  # at first paragraph, will auto-create it if not created yet
