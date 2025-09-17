@@ -257,7 +257,8 @@ def load_extra_font(themes_and_fonts: env,
     key = f"{font_basename}{variant_str}_{font_size}"
 
     if key not in themes_and_fonts:
-        with dpg.font(get_font_path(font_basename, variant="Regular"),
+        logger.info(f"load_extra_font: Loading and caching font {key}.")
+        with dpg.font(get_font_path(font_basename, variant=variant),
                       font_size,
                       parent=themes_and_fonts.font_registry) as new_font:
             fontsetup.setup_font_ranges()
