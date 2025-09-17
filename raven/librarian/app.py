@@ -967,7 +967,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         task_env.emotion_update_calls = 0
         task_env.emotion_blacklist = ["desire", "love"]  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
 
-        def _update_avatar_emotion(new_paragraph):
+        def _update_avatar_emotion(new_paragraph: str) -> None:
             task_env.emotion_recent_paragraphs.append(new_paragraph)
             task_env.emotion_recent_paragraphs.popleft()
             if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
