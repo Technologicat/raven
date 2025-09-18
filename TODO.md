@@ -57,6 +57,10 @@
     - Add feature: Interrupt AI generation (backend exists now; `return action_stop` from the `on_llm_progress` callback to interrupt the LLM)
     - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
     - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens occasionally with the last word in a sentence.
+    - Queue the TTS audio generation separately, this could run while the previous parts are being spoken.
+      - Would help in CPU TTS setups. Since speech is slow, there's several seconds of wall time during each snippet during which we can render the next one.
+      - Needs new API functions: one to prepare TTS (compute audio and phonemes), and another to invoke the TTS (and lipsync driver) on this pre-prepared data.
+      - The current `tts_speak_lipsynced` (and `tts_speak`) could then be refactored to internally use this implementation.
   - Draw assets:
       - Make per-character AI chat icons
       - Finish the new app icon for Raven (small and large sizes)
@@ -65,9 +69,8 @@
     - `None` is JSONable (as `null`?), remove the JSON hack for the backdrop image path
   - Document:
     - Write Raven-Librarian user manual
-    - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management.
+    - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Later:
-    - Queue the TTS audio generation separately, this could run while the previous parts are being spoken.
     - Improve user text entry: multiline input
     - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
     - Add feature: Avatar on/off (for low VRAM)
