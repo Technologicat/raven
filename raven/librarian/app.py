@@ -909,9 +909,10 @@ def avatar_speak_task(task_env: env) -> None:
         if task_env.cancelled:
             break
         with task_env.lock:
-            if task_env.speaking:  # wait until TTS is free (previous speech ended)
-                time.sleep(0.1)
-                continue
+            speaking = task_env.speaking  # we must release the lock as soon as possible (so that `on_stop_lipsync_speaking` can lock it, if it happens to be run), so get the state into a temporary variable.
+        if speaking:  # wait until TTS is free (previous speech ended)
+            time.sleep(0.1)
+            continue
         try:
             sentence, translated_sentence = avatar_output_queue.get(block=False)
         except queue.Empty:  # wait until we have a sentence to speak
