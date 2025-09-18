@@ -347,6 +347,9 @@ class ButtonFlash(Animation):
         dpg.set_value(self.highlight_hovered_color, (R, G, B))
         dpg.set_value(self.highlight_active_color, (R, G, B))
         dpg.set_value(self.highlight_popupbg_color, (R, G, B))
+        dpg.set_value(self.highlight_disabled_button_color, (R, G, B))
+        dpg.set_value(self.highlight_disabled_hovered_color, (R, G, B))
+        dpg.set_value(self.highlight_disabled_active_color, (R, G, B))
 
         return action_continue
 
@@ -382,6 +385,13 @@ class ButtonFlash(Animation):
                         self.highlight_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color)
                         # tooltip
                         self.highlight_popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, self.flash_color)
+                    # Button in disabled state (see also "disablable_button_theme" in `raven.common.gui.utils`)
+                    disabled_color = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
+                    with dpg.theme_component(dpg.mvButton, enabled_state=False):
+                        dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
+                        self.highlight_disabled_button_color = dpg.add_theme_color(dpg.mvThemeCol_Button, self.flash_color, category=dpg.mvThemeCat_Core)
+                        self.highlight_disabled_hovered_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.flash_color, category=dpg.mvThemeCat_Core)
+                        self.highlight_disabled_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color, category=dpg.mvThemeCat_Core)
                 type(self).id_counter += 1
 
                 dpg.bind_item_theme(self.target_button, self.theme)
