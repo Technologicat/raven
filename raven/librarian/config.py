@@ -163,6 +163,8 @@ avatar_voice = "af_nova"  # See `raven-avatar-settings-editor`.
 avatar_voice_speed = 1.0  # Nominal = 1.0. Too high causes skipped words. If you want to change it, find a good value with `raven-avatar-settings-editor`.
 avatar_video_offset = -0.6  # TTS AV sync setting, seconds. Positive = shift video later w.r.t. audio. Find a good value for your system with `raven-avatar-settings-editor`.
 
+avatar_emotion_blacklist = ["desire", "love"]  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
+
 # Since we're running also other stuff simultaneously, these settings have been optimized to be slightly friendlier on a laptop's internal dGPU than the defaults of `raven-avatar-settings-editor`.
 avatar_animator_settings_overrides = {"format": "QOI",
                                       "target_fps": 20,
