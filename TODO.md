@@ -61,7 +61,7 @@
       - Needs new API functions: one to prepare TTS (compute audio and phonemes), and another to invoke the TTS (and lipsync driver) on this pre-prepared data.
       - The current `tts_speak_lipsynced` (and `tts_speak`) could then be refactored to internally use this implementation.
   - Draw assets:
-      - Make per-character AI chat icons
+      - Make per-character AI chat icons (just jury-rig `raven/icons/ai.png` for minimal demo, fix later)
       - Finish the new app icon for Raven (small and large sizes)
   - Fix:
     - Lipsync: sometimes getting empty phonemes list from TTS? Is this for punctuation tokens only?
