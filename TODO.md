@@ -54,22 +54,23 @@
 
 - Librarian
   - For minimal demo:
-    - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
-    - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens occasionally with the last word in a sentence.
+    - `None` is JSONable (as `null`?), remove the JSON hack for the backdrop image path.
     - Queue the TTS audio generation separately, this could run while the previous parts are being spoken.
       - Would help in CPU TTS setups. Since speech is slow, there's several seconds of wall time during each snippet during which we can render the next one.
       - Needs new API functions: one to prepare TTS (compute audio and phonemes), and another to invoke the TTS (and lipsync driver) on this pre-prepared data.
+        - We can LRU cache, say, 100 speech audio files and the corresponding phoneme data (to better support the "speak again" feature on CPU). Shouldn't take more than a couple dozen MB of RAM.
       - The current `tts_speak_lipsynced` (and `tts_speak`) could then be refactored to internally use this implementation.
   - Draw assets:
       - Make per-character AI chat icons (just jury-rig `raven/icons/ai.png` for minimal demo, fix later)
       - Finish the new app icon for Raven (small and large sizes)
   - Fix:
-    - Lipsync: sometimes getting empty phonemes list from TTS? Is this for punctuation tokens only?
-    - `None` is JSONable (as `null`?), remove the JSON hack for the backdrop image path
+    - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens occasionally with the last word in a sentence.
+    - Lipsync: sometimes getting empty phonemes list from TTS? Is this for punctuation tokens only? Investigate.
   - Document:
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Later:
+    - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
     - Improve user text entry: multiline input
     - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
     - Add feature: Avatar on/off (for low VRAM)
