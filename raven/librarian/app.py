@@ -1812,7 +1812,7 @@ dpg.set_exit_callback(gui_shutdown)
 def app_shutdown() -> None:
     """App exit: gracefully shut down parts that don't need DPG.
 
-    This is guaranteed to run even if DPG shutdown never completes gracefully, as long as it doesn't hang the main thread.
+    This is guaranteed to run even if DPG shutdown never completes gracefully, as long as it doesn't hang the main thread, or segfault the process.
 
     Currently, we release server-side resources here.
     """
