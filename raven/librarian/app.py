@@ -1058,6 +1058,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 task_env.t0 = time_now
                 task_env.n_chunks0 = n_chunks
                 paragraph_text = task_env.text.getvalue()
+                # NOTE: The last paragraph of the AI's reply - for thinking models, commonly the final response - often never gets a "\n", and must be handled in `on_done`.
                 _update_avatar_emotion_from_incoming_text(paragraph_text)
                 # if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
                 #     avatar_add_text_to_preprocess_queue(paragraph_text)
