@@ -21,7 +21,7 @@ import re
 import requests
 import time
 import traceback
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 import urllib.parse
 
 import pygame  # for audio (text to speech) support
@@ -290,11 +290,11 @@ def tts_speak_lipsynced(instance_id: str,
     if util.api_config.tts_server_type == "kokoro":
         # Phonemize and word-level timestamping treat underscores differently: phonemize treats them as spaces,
         # whereas word-level timestamping doesn't (no word split at underscore). Better to remove them.
-        def prefilter(text):
+        def prefilter(text: str) -> str:
             return text.replace("_", " ")
         text = prefilter(text)
 
-        def get_phonemes(task_env) -> None:
+        def get_phonemes(task_env: envcls) -> None:
             with timer() as tim:
                 logger.info("tts_speak_lipsynced.get_phonemes: starting")
                 # Language codes:
@@ -329,10 +329,10 @@ def tts_speak_lipsynced(instance_id: str,
 
     def speak(task_env) -> None:
         logger.info("tts_speak_lipsynced.speak: starting")
-        def isword(s):
+        def isword(s: str) -> bool:
             return len(s) > 1 or s.isalnum()
 
-        def clean_timestamps(timestamps):
+        def clean_timestamps(timestamps: List[Dict]) -> List[Dict]:
             """Remove consecutive duplicate timestamps (some versions of Kokoro-FastAPI produce those) and any timestamps for punctuation."""
             out = []
             last_start_time = None
@@ -342,7 +342,7 @@ def tts_speak_lipsynced(instance_id: str,
                     last_start_time = record["start_time"]
             return out
 
-        def finalize():
+        def finalize() -> None:
             if on_stop is not None:
                 try:
                     on_stop()
@@ -448,7 +448,7 @@ def tts_speak_lipsynced(instance_id: str,
             return
 
         # Transform data into phoneme stream with interpolated timestamps
-        def get_timestamp_for_phoneme(t0, t1, phonemes, idx):
+        def get_timestamp_for_phoneme(t0: float, t1: float, phonemes: str, idx: int) -> Tuple[float, float]:
             """Given word start/end times `t0` and `t1`, linearly interpolate the start/end times for a phoneme in the word."""
             L = len(phonemes)
             rel_start = idx / L
@@ -504,7 +504,7 @@ def tts_speak_lipsynced(instance_id: str,
             finalize()
             return
 
-        def apply_lipsync_at_audio_time(t):
+        def apply_lipsync_at_audio_time(t: float) -> None:
             # Sanity check: don't do anything before the first phoneme.
             if t < phoneme_start_times[0]:
                 return
@@ -567,7 +567,7 @@ def tts_speak_lipsynced(instance_id: str,
 
     util.api_config.task_manager.submit(speak, envcls())
 
-def tts_stop():
+def tts_stop() -> None:
     """Stop the speech synthesizer."""
     if not util.api_initialized:
         raise RuntimeError("tts_stop: The `raven.client.api` module must be initialized before using the API.")
