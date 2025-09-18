@@ -68,6 +68,7 @@
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management.
   - Later:
+    - Queue the TTS audio generation separately, this could run while the previous parts are being spoken.
     - Improve user text entry: multiline input
     - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
     - Add feature: Avatar on/off (for low VRAM)
