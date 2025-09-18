@@ -1050,6 +1050,7 @@ def avatar_speak_task(task_env: env) -> None:
             global subtitle_bottom_y0  # intent only
             logger.info(f"avatar_speak_task.process_item.on_start_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS starting to speak.")
             if gui_alive:
+                # Show subtitle if any
                 if subtitle is not None:
                     dpg.set_value("avatar_subtitle", subtitle)  # tag
                     dpg.show_item("avatar_subtitle")  # tag
@@ -1064,6 +1065,8 @@ def avatar_speak_task(task_env: env) -> None:
                     dpg.set_item_pos("avatar_subtitle", (gui_config.subtitle_x0,
                                                          subtitle_bottom_y0 - h))
                     dpg.split_frame()
+
+                # Allow the user to cancel the TTS
                 dpg.enable_item("chat_stop_speech_button")  # tag
 
         def on_stop_lipsync_speaking():
