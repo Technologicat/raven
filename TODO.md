@@ -49,7 +49,6 @@
       - Add feature: "Speak again" button
       - Add feature: "Stop speaking" button
       - Add feature: subtitles on/off
-      - Subtitle color: Yellow or white?
   - Draw assets:
       - Make per-character AI chat icons
       - Finish the new app icon for Raven (small and large sizes)
@@ -100,9 +99,6 @@
       - The apps could talk to each other over the network? For example, *Raven-visualizer* could send its selection data to *Raven-server*, from which *Raven-librarian* could query the document names to enable.
 
   - Add a lockfile so that `raven-minichat` and `raven-librarian` can't be running at the same time (to prevent losing changes made in one of the apps)
-  - Store in AI message metadata: model name, number of tokens, average generation speed (tokens/s)
-  - Finnish (or other language) captioning for TTS output
-    - Speak and caption one sentence at a time, chain the end callbacks, with an optional exit flag to terminate the chain (so the user can cancel it in the GUI).
   - RAG: list the chunk full-IDs in retrieval metadata for combined contiguous chunks?
   - minichat: when are retrieval results `null` in the chat datastore (`data.json`)? Did these come from an old bug that does not exist any more? Could fix while migrating, replacing each null with an empty list.
   - LLM context compaction
