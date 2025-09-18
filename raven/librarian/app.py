@@ -953,7 +953,8 @@ def avatar_speak_task(task_env: env) -> None:
 
             def on_stop_lipsync_speaking():
                 logger.info(f"avatar_speak_task.on_stop_lipsync_speaking: sentence 0x{id(sentence):x}: TTS finished.")
-                dpg.hide_item("avatar_subtitle")  # tag
+                if gui_alive:  # Be careful - the user might have closed the app while the TTS was speaking.
+                    dpg.hide_item("avatar_subtitle")  # tag
                 with task_env.lock:
                     task_env.t0 = time.time_ns()  # delay the emotion reset
                     # Set the state flag very last, because these events are called from a different thread (the TTS client's background task),
