@@ -1201,7 +1201,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
                 # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
                 if task_env.cancelled or not gui_alive:  # TODO: EAFP to avoid TOCTTOU
-                    logger.info("ai_turn.run_ai_turn.on_llm_progress: Cancelled, stopping generation.")
+                    reason = "Cancelled" if task_env.cancelled else "App is shutting down"
+                    logger.info(f"ai_turn.run_ai_turn.on_llm_progress: {reason}, stopping text generation.")
                     return llmclient.action_stop
 
                 # Detect think block state (TODO: improve; very rudimentary and brittle for now)
