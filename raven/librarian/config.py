@@ -138,7 +138,7 @@ gui_config = env(  # ----------------------------------------
                  subtitle_color=(255, 255, 0),  # bright yellow
                  # Subtitle x-offset from left edge of content area of avatar panel
                  subtitle_x0=24,  # pixels
-                 # Subtitle y-offset from bottom edge of content area of avatar panel
+                 # Subtitle extra y-offset from bottom edge of content area of avatar panel
                  subtitle_y0=0,  # pixels, negative = up
                  # Margin at right edge of avatar panel when wrapping subtitle text
                  subtitle_text_wrap_margin=24,  # pixels
