@@ -1574,7 +1574,7 @@ with timer() as tim:
                 dpg.bind_item_font("chat_stop_generation_button", themes_and_fonts.icon_font_solid)  # tag
                 dpg.bind_item_theme("chat_stop_generation_button", "disablable_button_theme")  # tag
                 stop_generation_tooltip = dpg.add_tooltip("chat_stop_generation_button")  # tag
-                stop_generation_tooltip_text = dpg.add_text("Interrupt the AI [Ctrl+G]", parent=stop_generation_tooltip)
+                stop_generation_tooltip_text = dpg.add_text("Interrupt the AI [Ctrl+G]\nThis stops the AI when it is writing.", parent=stop_generation_tooltip)
 
                 stop_speech_button = dpg.add_button(label=fa.ICON_COMMENT_SLASH,
                                                     callback=stop_speech_callback,
