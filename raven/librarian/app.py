@@ -752,14 +752,6 @@ class DisplayedChatMessage:
                 if node_id is not None:
                     app_state["HEAD"] = node_id
                     build_linearized_chat_panel()
-                    # Update avatar emotion from the message text
-                    message_role, message_text = get_node_message_text_without_role(node_id)
-                    if message_role == "assistant":
-                        winning_emotion = avatar_get_emotion(message_text)
-                        logger.info(f"navigate_to_prev_sibling_callback: updating emotion to '{winning_emotion}' (analyzed from message content)")
-                        api.avatar_set_emotion(instance_id=avatar_instance_id,
-                                               emotion_name=winning_emotion)
-                        logger.info("navigate_to_prev_sibling_callback: emotion updated")
             return navigate_to_prev_sibling_callback
 
         def make_navigate_to_next_sibling(message_node_id: str) -> Callable:
@@ -768,14 +760,6 @@ class DisplayedChatMessage:
                 if node_id is not None:
                     app_state["HEAD"] = node_id
                     build_linearized_chat_panel()
-                    # Update avatar emotion from the message text
-                    message_role, message_text = get_node_message_text_without_role(node_id)
-                    if message_role == "assistant":
-                        winning_emotion = avatar_get_emotion(message_text)
-                        logger.info(f"navigate_to_next_sibling_callback: updating emotion to '{winning_emotion}' (analyzed from message content)")
-                        api.avatar_set_emotion(instance_id=avatar_instance_id,
-                                               emotion_name=winning_emotion)
-                        logger.info("navigate_to_next_sibling_callback: emotion updated")
             return navigate_to_next_sibling_callback
 
         # Only messages attached to a datastore chat node can have siblings in the datastore
@@ -870,7 +854,11 @@ def add_complete_chat_message_to_linearized_chat_panel(node_id: str,
 def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
     """Build the linearized chat view in the GUI, linearizing up from `head_node_id`.
 
-    As a side effect, update the global `current_chat_history`.
+    As side effects:
+
+      - Update the global `current_chat_history`.
+      - If `head_node_id` is an AI message, update the avatar's emotion from that
+        (using the node's current payload revision).
     """
     global current_chat_history  # intent only; we write, but we don't replace the list itself.
     if head_node_id is None:  # use current HEAD from app_state?
@@ -882,6 +870,11 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
         for node_id in node_id_history:
             add_complete_chat_message_to_linearized_chat_panel(node_id=node_id,
                                                                scroll_to_end=False)  # we scroll just once, when done
+    # Update avatar emotion from the message text
+    message_role, message_text = get_node_message_text_without_role(head_node_id)
+    if message_role == "assistant":
+        logger.info("build_linearized_chat_panel: linearized chat view new HEAD node is an AI message; updating avatar emotion from message content")
+        avatar_update_emotion_from_text(message_text)
     dpg.split_frame()
     _scroll_chat_view_to_end()
 
