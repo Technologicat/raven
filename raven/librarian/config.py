@@ -97,7 +97,7 @@ gui_config = env(  # ----------------------------------------
                  main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
                  ai_warning_h=42,
                  chat_controls_h=42,
-                 chat_panel_w=(1920 // 2),
+                 chat_panel_w=(1920 // 2),  # net width 960 -> gross width with borders = this + 2 * 8 = 976
                  chat_text_w=(1920 // 2 - 100),
                  # help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
                  # toolbar_inner_w=36,  # Width of the content area of the "Tools" toolbar.
@@ -124,4 +124,22 @@ gui_config = env(  # ----------------------------------------
                  chat_color_system_back=(45, 45, 48),
                  chat_color_tool_front=colorspace.hex_to_rgb("#d59231ff"),
                  chat_color_tool_back=(45, 45, 48),
+                 # ----------------------------------------
+                 # Avatar TTS speech subtitling / closed-captioning
+                 #
+                 # Raven-server must have the `translate` module configured for the given language pair.
+                 # Use `translator_target_lang=None` to disable the AI translator; doing so makes subtitles into English closed captions (CC).
+                 translator_source_lang="en",
+                 translator_target_lang="fi",
+                 # See the TTF files in `raven/fonts/`.
+                 subtitle_font_basename="OpenSans",
+                 subtitle_font_variant="Bold",
+                 subtitle_font_size=48,  # pixels
+                 subtitle_color=(255, 255, 0),  # bright yellow
+                 # Subtitle x-offset from left edge of content area of avatar panel
+                 subtitle_x0=24,  # pixels
+                 # Subtitle y-offset from bottom edge of content area of avatar panel
+                 subtitle_y0=0,  # pixels, negative = up
+                 # Margin at right edge of avatar panel when wrapping subtitle text
+                 subtitle_text_wrap_margin=24,  # pixels
                 )

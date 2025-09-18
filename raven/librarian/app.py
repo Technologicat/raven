@@ -101,9 +101,9 @@ with timer() as tim:
 
     themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
     subtitle_font_key, subtitle_font = guiutils.load_extra_font(themes_and_fonts=themes_and_fonts,
-                                                                font_size=48,
-                                                                font_basename="OpenSans",
-                                                                variant="Bold")
+                                                                font_size=gui_config.subtitle_font_size,
+                                                                font_basename=gui_config.subtitle_font_basename,
+                                                                variant=gui_config.subtitle_font_variant)
 
     # Initialize textures.
     with dpg.texture_registry(tag="librarian_app_textures"):
@@ -887,7 +887,13 @@ def avatar_preprocess_task(task_env: env) -> None:
             time.sleep(0.2)
             continue
         else:
-            subtitle = api.translate_translate(sentence, source_lang="en", target_lang="fi")  # TODO: make the languages configurable; make the whole TTS auto-subtitling feature optional
+            # TODO: add a feature to disable subtitling altogether
+            if gui_config.translator_target_lang is not None:
+                subtitle = api.translate_translate(sentence,
+                                                   source_lang=gui_config.translator_source_lang,
+                                                   target_lang=gui_config.translator_target_lang)
+            else:  # No translation -> English closed captions (CC)
+                subtitle = sentence
             logger.info(f"avatar_preprocess_task: sentence: {sentence}")
             logger.info(f"avatar_preprocess_task: subtitle: {subtitle}")
             avatar_output_queue.put((sentence, subtitle))
@@ -923,6 +929,7 @@ def avatar_speak_task(task_env: env) -> None:
                 task_env.speaking = True
 
             def on_start_lipsync_speaking():
+                global subtitle_bottom_y0  # intent only
                 if translated_sentence is not None:
                     dpg.set_value("avatar_subtitle", translated_sentence)  # tag
                     dpg.show_item("avatar_subtitle")  # tag
@@ -930,7 +937,8 @@ def avatar_speak_task(task_env: env) -> None:
                     # position subtitle at bottom
                     dpg.split_frame()
                     w, h = guiutils.get_widget_size("avatar_subtitle")
-                    dpg.set_item_pos("avatar_subtitle", (32, subtitle_y0 - h))
+                    dpg.set_item_pos("avatar_subtitle", (gui_config.subtitle_x0,
+                                                         subtitle_bottom_y0 - h))
 
             def on_stop_lipsync_speaking():
                 dpg.hide_item("avatar_subtitle")  # tag
@@ -1241,13 +1249,14 @@ with timer() as tim:
                                       no_scroll_with_mouse=True):
                     # We all love magic numbers!
                     #
-                    # The size of the avatar panel is not available at startup, until the GUI is rendered at least once.
-                    avatar_panel_w = (gui_config.main_window_w - gui_config.chat_panel_w - 16)
-                    avatar_panel_h = (gui_config.main_window_h - gui_config.ai_warning_h - 16 - 6)  # TODO: wrong? Fix this (affects backdrop image size, "avatar_subtitle" position)
+                    # The size of the avatar panel is not available at startup, until the GUI is rendered at least once,
+                    # so we must compute the initial size.
+                    avatar_panel_w = (gui_config.main_window_w - (gui_config.chat_panel_w + 16) - 3 * 8)  # the 3 * 8 are the outer borders outside the panels (between panel and window edge, and between the panels)
+                    avatar_panel_h = chat_panel_h
                     dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="librarian_app_textures",
                                                             gui_parent="avatar_panel",
                                                             avatar_x_center=(avatar_panel_w // 2),
-                                                            avatar_y_bottom=avatar_panel_h,
+                                                            avatar_y_bottom=avatar_panel_h - 8,
                                                             paused_text="[No video]",
                                                             task_manager=task_manager)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
@@ -1257,11 +1266,13 @@ with timer() as tim:
                     upscale = 1.5
                     dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * source_image_size))
 
-                    subtitle_y0 = avatar_panel_h - 4 * themes_and_fonts.font_size  # TODO: fix ravioli, this is a global variable; should probably have subtitle offset (from bottom) in config
+                    global subtitle_bottom_y0
+                    subtitle_bottom_y0 = (avatar_panel_h - 24) + gui_config.subtitle_y0
                     dpg.add_text("",
-                                 pos=(32, subtitle_y0),
-                                 color=(255, 255, 0),  # bright yellow
-                                 wrap=avatar_panel_w - 64,
+                                 pos=(gui_config.subtitle_x0,
+                                      subtitle_bottom_y0),  # Position doesn't really matter; the text is empty for now, and will be re-positioned when subtitles are generated.
+                                 color=gui_config.subtitle_color,
+                                 wrap=(avatar_panel_w - 16) - gui_config.subtitle_x0 - gui_config.subtitle_text_wrap_margin,
                                  tag="avatar_subtitle")
                     dpg.bind_item_font("avatar_subtitle", subtitle_font)  # tag
 
@@ -1620,8 +1631,8 @@ def _load_initial_animator_settings() -> None:
 
     api.avatar_load_animator_settings(avatar_instance_id, animator_settings)  # send settings to server
     dpg_avatar_renderer.load_backdrop_image(animator_settings["backdrop_path"])
-    dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 40,  # account for borders (TODO: This is empirical. Why this exact amount?)
-                                           new_height=avatar_panel_h - 60,
+    dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 16,
+                                           new_height=avatar_panel_h - 16,
                                            new_blur_state=animator_settings["backdrop_blur"])
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
