@@ -19,10 +19,12 @@ import concurrent.futures
 import os
 import pathlib
 import requests
+import traceback
 from typing import Optional, Union
 
 import pygame  # for audio (text to speech) support
 
+from unpythonic import equip_with_traceback
 from unpythonic.env import env as envcls
 
 from ..common import bgtask
@@ -55,6 +57,14 @@ def initialize_api(raven_server_url: str,
     `tts_server_type=None`.
     """
     global api_initialized
+
+    # HACK: Here it is very useful to know where the call came from, to debug mysterious extra initializations (since only the settings sent the first time will take).
+    dummy_exc = Exception()
+    dummy_exc = equip_with_traceback(dummy_exc, stacklevel=2)  # 2 = ignore `equip_with_traceback` itself, and its caller, i.e. us
+    tb = traceback.extract_tb(dummy_exc.__traceback__)
+    top_frame = tb[-1]
+    called_from = f"{top_frame[0]}:{top_frame[1]}"  # e.g. "/home/xxx/foo.py:52"
+    logger.info(f"initialize_api: called from: {called_from}")
 
     if api_initialized:  # initialize only once
         logger.info("initialize_api: `raven.client.api` is already initialized. Using existing initialization.")
