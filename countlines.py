@@ -9,7 +9,7 @@ import re
 from operator import itemgetter
 
 def listpy(path):
-    return list(sorted(filename for filename in os.listdir(path) if filename.endswith(".py")))
+    return list(sorted(filename for filename in os.listdir(path) if filename.endswith(".py") and not filename.startswith(".")))
 
 def count_sloc(code, *, blanks, docstrings, comments):
     """blanks et al.: include this item?"""
@@ -42,8 +42,6 @@ def report(paths):
         filenames = listpy(path)
         results = []
         for filename in filenames:
-            if filename.startswith("."):  # hidden file, ignore
-                continue
             with open(os.path.join(path, filename), "rt", encoding="utf-8") as f:
                 content = f.read()
             code = count_sloc(content, blanks=False, docstrings=False, comments=False)
