@@ -35,32 +35,48 @@
   - Zip the avatar characters, for ease of use
     - Include all extra cels in the zip, as well as optional animator/postprocessor settings, and optional emotion templates
     - Implement zip loading on server side, add a new web API endpoint
+  - `summarize`: add LLM summarization mode, with a configurable prompt. Allow using a separate small LLM for speed.
+
+- Avatar
+  - Update assets for all characters (add at least eye-waver effect, maybe other cel-blending cels too)
+  - Add "data eyes" cel effect that Librarian can use for thinking / internet access / tool use
+    - Per-character cels
+    - Enable/disable - where does the on/off switch belong, logically? Probably in the animator settings?
+    - Auto-animate, but control by a single morph (similarly to the eye-waver effect)
+        - Purely programmatic, no slider in pose editor
+        - Override that morph when starting to access data, remove the override when data access is done
+    - The `on_tools_start` event in `raven.librarian.scaffold.ai_turn` can trigger the start the data eyes effect
+    - The last `on_tool_done` event can trigger the end of the data eyes effect (must count them; always exactly one per completed call regardless of success/failure), or add an `on_tools_done` event.
 
 - Visualizer
   - Keep the app state in top-level containers, and pass these in/out explicitly. More FP and facilitates adding unit tests later.
   - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
 
 - Librarian
-  - First, build the minimal demo:
-    - Librarian config: avatar on/off, which character to load, Librarian-specific settings overrides
-    - Improve live preview of LLM output
-      - Store the thought blocks in the chat datastore, too, so that we can render them (`raven.librarian.scaffold.ai_turn` currently discards them)
-      - TTS audio output toggle icons: `ICON_COMMENT`, `ICON_COMMENT_SLASH`
-      - Add feature: "Speak again" button
-      - Add feature: "Stop speaking" button
-      - Add feature: subtitles on/off
+  - For minimal demo:
+    - Add feature: Interrupt AI generation (backend exists now; `return action_stop` from the `on_llm_progress` callback to interrupt the LLM)
+    - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
+    - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens occasionally with the last word in a sentence.
+    - Fix jumpy subtitling text (try rendering offscreen once to get size first, then move to final position?)
   - Draw assets:
       - Make per-character AI chat icons
       - Finish the new app icon for Raven (small and large sizes)
   - Fix:
-    - Lipsync: sometimes getting `None` timestamps from TTS?
     - Lipsync: sometimes getting empty phonemes list from TTS? Is this for punctuation tokens only?
     - `None` is JSONable (as `null`?), remove the JSON hack for the backdrop image path
+  - Document:
+    - Write Raven-Librarian user manual
+    - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management.
   - Later:
-    - Add feature: Switch chat (from all leaf nodes in datastore)
-    - Add feature: Interrupt AI generation (backend exists now; `return action_stop` from the `on_llm_progress` callback to interrupt the LLM)
-    - Add feature: Continue AI generation in current HEAD node (creating a new revision?)
+    - Improve user text entry: multiline input
     - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
+    - Add feature: Avatar on/off (for low VRAM)
+      - What to put in the right panel when avatar is off? Chat graph editor?
+    - Add feature: Avatar idle off (10 sec)
+    - Add feature: Switch chat (from all leaf nodes in datastore)
+    - Add feature: Avatar: optional digital glitch effect when switching chat branches (change postprocessor config on the fly)
+    - Improve live preview of LLM output
+      - Store the thought blocks in the chat datastore, too, so that we can render them (`raven.librarian.scaffold.ai_turn` currently discards them)
     - Add websearch toggle? (Need to regenerate system prompt with/without tools)
     - Add GUI dynamic resizing on window size change
     - Improve chat panel
@@ -69,25 +85,18 @@
     - Add feature: save full prompt with each AI message (get it from the `on_prompt_ready` event of `raven.librarian.scaffold.ai_turn`)
       - Add a GUI button and window to show the full prompt (render as Markdown) and to copy it to clipboard
     - Robustness: temporarily disable the relevant buttons while the AI is writing
-      - Per-message buttons can be then re-enabled correctly by checking whether the relevant action has a callback for that specific displayed chat message (need to store button DPG IDs or tags, too)
-    - Help card, like in Raven-visualizer
-    - Ctrl+F find in current chat history, with highlighting
-    - Avatar: add cel effect for internet access / tool use (data eyes)
-      - Per-character cels
-      - Enable/disable - where does the on/off switch belong, logically? Probably in the animator settings?
-      - Auto-animate, but control by a single morph (similarly to the eye-waver effect)
-          - Purely programmatic, no slider in pose editor
-          - Override that morph when starting to access data, remove the override when data access is done
-      - The `on_tools_start` event in `raven.librarian.scaffold.ai_turn` can trigger the start the data eyes effect
-      - The last `on_tool_done` event can trigger the end of the data eyes effect (must count them; always exactly one per completed call regardless of success/failure), or add an `on_tools_done` event.
-    - Avatar: add digital glitch effect when switching chat branches (change postprocessor config on the fly)
-    - Avatar: eliminate stutter while receiving LLM response
-    - Avatar on/off toggle (for low VRAM)
-      - What to put in the right panel when avatar is off? Chat graph editor?
+      - Per-message buttons can be then re-enabled correctly by checking whether the relevant action has a callback stashed for that specific displayed chat message (need to stash button DPG IDs or tags, too)
+    - Add feature: Help card, like in Raven-visualizer
+    - Add feature: Ctrl+F find in current chat history, with highlighting
+    - Add feature: search for chats (incremental fragment search for now)
+    - Avatar: do more to eliminate stutter while receiving LLM response
+      - Is the audio buffer size fine now, or do we need a larger one to eliminate xruns? See `raven.client.util`.
+      - How to keep avatar video rendering smooth under high system load?
+    - Avatar: vector emotions
+      - Blend several emotions by classification values.
+      - Boost neutral by (1 - sum(others)), or something. Think about normalization.
     - Add feature: collapsible thought blocks
     - Add feature: message editing (use chattree's revision system)
-    - Add feature: search for chats (incremental fragment search for now)
-    - Improve text entry: multiline input
     - Add chat graph editor (this is part of where the true power of Librarian will come from)
       - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_viewmodel.py#L206
       - how to get mouse position: https://github.com/hoffstadt/DearPyGui/issues/2164
@@ -99,6 +108,7 @@
       - The apps could talk to each other over the network? For example, *Raven-visualizer* could send its selection data to *Raven-server*, from which *Raven-librarian* could query the document names to enable.
 
   - Add a lockfile so that `raven-minichat` and `raven-librarian` can't be running at the same time (to prevent losing changes made in one of the apps)
+
   - RAG: list the chunk full-IDs in retrieval metadata for combined contiguous chunks?
   - minichat: when are retrieval results `null` in the chat datastore (`data.json`)? Did these come from an old bug that does not exist any more? Could fix while migrating, replacing each null with an empty list.
   - LLM context compaction
