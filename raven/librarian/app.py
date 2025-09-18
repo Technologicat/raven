@@ -1046,10 +1046,10 @@ def avatar_speak_task(task_env: env) -> None:
 
         logger.info(f"avatar_speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: submitting TTS task.")
         api.tts_speak_lipsynced(instance_id=avatar_instance_id,
-                                voice="af_nova",  # TODO: make the voice configurable
+                                voice=librarian_config.avatar_voice,
                                 text=sentence,
-                                speed=1.0,  # TODO: make the speed configurable
-                                video_offset=-0.6,  # TODO: make the AV offset configurable
+                                speed=librarian_config.avatar_voice_speed,
+                                video_offset=librarian_config.avatar_video_offset,
                                 on_audio_ready=None,
                                 on_start=on_start_lipsync_speaking,
                                 on_stop=on_stop_lipsync_speaking)
@@ -1387,11 +1387,7 @@ with timer() as tim:
                                                             paused_text="[No video]",
                                                             task_manager=task_manager)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
-                    global source_image_size
-                    global upscale
-                    source_image_size = 512  # THA3 engine
-                    upscale = 1.5
-                    dpg_avatar_renderer.configure_live_texture(new_image_size=int(upscale * source_image_size))
+                    dpg_avatar_renderer.configure_live_texture(new_image_size=int(librarian_config.avatar_animator_settings_overrides["upscale"] * librarian_config.avatar_source_image_size))
 
                     global subtitle_bottom_y0
                     subtitle_bottom_y0 = (avatar_panel_h - 24) + gui_config.subtitle_y0
@@ -1423,7 +1419,7 @@ with timer() as tim:
 
                         dpg.add_checkbox(label="Speculation", default_value=app_state["speculate_enabled"], callback=toggle_speculate_enabled, tag="speculate_enabled_checkbox")
                         dpg.add_tooltip("speculate_enabled_checkbox", tag="speculate_enabled_tooltip")  # tag
-                        dpg.add_text("ON: Let the AI freely use its internal knowledge in the response.\nOFF: Remind AI to use information from context only.\nOFF, and documents ON: As above, plus skip AI generation if no match in document database.", parent="speculate_enabled_tooltip")  # tag
+                        dpg.add_text("ON: Let AI freely use its internal knowledge.\nOFF: Remind AI to use information from context only.\nOFF, and documents ON: As above, plus skip AI generation if no match in document database.", parent="speculate_enabled_tooltip")  # tag
 
                         dpg.add_checkbox(label="Speech", default_value=app_state["avatar_speech_enabled"], callback=toggle_speech_enabled, tag="speech_enabled_checkbox")
                         dpg.add_tooltip("speech_enabled_checkbox", tag="speech_enabled_tooltip")  # tag
@@ -1733,8 +1729,7 @@ dpg.set_exit_callback(clean_up_at_exit)
 
 logger.info("App bootup...")
 
-_avatar_image_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "characters", "other", "aria1.png")).expanduser().resolve()
-avatar_instance_id = api.avatar_load(_avatar_image_path)
+avatar_instance_id = api.avatar_load(librarian_config.avatar_image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 api.avatar_start(avatar_instance_id)
 dpg_avatar_renderer.start(avatar_instance_id)
@@ -1793,14 +1788,7 @@ def _load_initial_animator_settings() -> None:
         traceback.print_exc()
         sys.exit(255)
 
-    librarian_specific_animator_settings = {"format": "QOI",
-                                            "target_fps": 20,
-                                            "upscale": upscale,
-                                            "upscale_preset": "C",
-                                            "upscale_quality": "low",
-                                            "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "cyberspace.png")).expanduser().resolve()),
-                                            "backdrop_blur": True}
-    animator_settings.update(librarian_specific_animator_settings)
+    animator_settings.update(librarian_config.avatar_animator_settings_overrides)
 
     api.avatar_load_animator_settings(avatar_instance_id, animator_settings)  # send settings to server
     dpg_avatar_renderer.load_backdrop_image(animator_settings["backdrop_path"])
