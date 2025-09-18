@@ -750,14 +750,16 @@ class DisplayedChatMessage:
             def navigate_to_prev_sibling_callback():
                 node_id = get_next_or_prev_sibling(message_node_id, direction="prev")
                 if node_id is not None:
-                    build_linearized_chat_panel(node_id)
+                    app_state["HEAD"] = node_id
+                    build_linearized_chat_panel()
             return navigate_to_prev_sibling_callback
 
         def make_navigate_to_next_sibling(message_node_id: str) -> Callable:
             def navigate_to_next_sibling_callback():
                 node_id = get_next_or_prev_sibling(message_node_id, direction="next")
                 if node_id is not None:
-                    build_linearized_chat_panel(node_id)
+                    app_state["HEAD"] = node_id
+                    build_linearized_chat_panel()
             return navigate_to_next_sibling_callback
 
         # Only messages attached to a datastore chat node can have siblings in the datastore
