@@ -1111,6 +1111,11 @@ def chat_round(user_message_text: str) -> None:  # message text comes from GUI
 
     This spawns a background task to avoid hanging GUI event handlers,
     since the typical use case is to call `chat_round` from a GUI event handler.
+
+    By sending empty `user_message_text`, it is possible to have the AI generate
+    another message without the user writing in between.
+
+    The RAG query is taken from the latest available user message.
     """
     def run_chat_round(task_env: env) -> None:
         if task_env.cancelled:  # while the task was in the queue
@@ -1119,14 +1124,18 @@ def chat_round(user_message_text: str) -> None:  # message text comes from GUI
         # Only add the user's message to the chat if the user entered any text.
         if user_message_text:
             user_turn(text=user_message_text)
+            # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
+            docs_query = user_message_text
         else:
-            user_message_text is None  # send `None` as query to AI -> no docs search
-
+            # Handle the RAG query: find the latest existing user message
+            docs_query = None  # if no user message, send `None` as query to AI -> no docs search
+            for displayed_message in reversed(current_chat_history):
+                if displayed_message.role == "user":
+                    docs_query = displayed_message.text
+                    break
         if task_env.cancelled:  # during user turn
             return
-
-        # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
-        ai_turn(docs_query=user_message_text)
+        ai_turn(docs_query=docs_query)
     task_manager.submit(run_chat_round, env())
 
 def user_turn(text: str) -> None:
