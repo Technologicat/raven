@@ -33,7 +33,7 @@ class TaskManager:
         `ThreadPoolExecutor` in all of them.
 
         This is useful when the underlying data changes so that completing an old, running GUI update task
-        no longer makes sense. Raven uses this for handling annotation tooltip and info panel updates.
+        no longer makes sense. Raven-visualizer uses this for handling annotation tooltip and info panel updates.
 
         See also our friend function `make_managed_task`.
 
@@ -184,6 +184,8 @@ class TaskManager:
         `pop`: bool, whether to remove the task from `self.tasks`.
                Default is `True`, which is almost always the right thing to do.
                The option is provided mainly for internal use by `clear`.
+
+        Raises `ValueError` if no task with `task_name` was found.
         """
         logger.info(f"TaskManager.cancel: instance '{self.name}': cancelling task '{task_name}'.")
         with self.lock:
