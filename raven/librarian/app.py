@@ -1198,11 +1198,12 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             task_env.text = io.StringIO()  # incoming, in-progress paragraph
             task_env.t0 = time.monotonic()  # timestamp of last GUI update
             task_env.n_chunks0 = 0  # chunks received since last GUI update
+
             task_env.inside_think_block = False
+
             task_env.emotion_update_interval = 5  # how many complete paragraphs (newline-separated text snippets) to wait between emotion updates (NOTE: Qwen3 likes using newlines liberally)
             task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap, to stabilize the detection
             task_env.emotion_update_calls = 0
-
             def _update_avatar_emotion_from_incoming_text(new_paragraph: str) -> None:
                 task_env.emotion_recent_paragraphs.append(new_paragraph)
                 task_env.emotion_recent_paragraphs.popleft()
