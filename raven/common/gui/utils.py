@@ -216,7 +216,7 @@ def bootup(font_size: int,
 
     out = env(font_size=font_size,  # for introspection
               font_basename=font_basename,  # for introspection
-              font_registry=the_font_registry,  # for the app to be able to add more fonts while running
+              font_registry=the_font_registry,  # for the app to be able to add more fonts while running (`load_extra_font`)
               icon_font_regular=icon_font_regular,
               icon_font_solid=icon_font_solid,
               global_theme=global_theme,
