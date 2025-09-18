@@ -890,7 +890,7 @@ def avatar_preprocess_task(task_env: env) -> None:
             time.sleep(0.2)
             continue
         else:
-            if app_state["avatar_subtitles"]:
+            if app_state["avatar_subtitles_enabled"]:
                 logger.info(f"avatar_preprocess_task: sentence 0x{id(sentence):x}: processing")
                 if gui_config.translator_target_lang is not None:
                     subtitle = api.translate_translate(sentence,
@@ -1085,8 +1085,9 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 paragraph_text = task_env.text.getvalue()
                 # NOTE: The last paragraph of the AI's reply - for thinking models, commonly the final response - often never gets a "\n", and must be handled in `on_done`.
                 _update_avatar_emotion_from_incoming_text(paragraph_text)
-                # if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
-                #     avatar_add_text_to_preprocess_queue(paragraph_text)
+                # if app_state["avatar_speech_enabled"]:  # If TTS enabled, send complete paragraph to TTS preprocess queue
+                #     if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
+                #         avatar_add_text_to_preprocess_queue(paragraph_text)
                 streaming_chat_message.replace_last_paragraph(paragraph_text)
                 streaming_chat_message.add_paragraph("")
                 task_env.text = io.StringIO()
@@ -1117,7 +1118,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 message_text = chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings,
                                                                             role=message_role,
                                                                             text=message_text)
-                avatar_add_text_to_preprocess_queue(message_text)
+                if app_state["avatar_speech_enabled"]:  # If TTS enabled, send final message text to TTS preprocess queue
+                    avatar_add_text_to_preprocess_queue(message_text)
 
                 # Update avatar emotion one last time, from the final message text
                 winning_emotion = avatar_get_emotion(message_text)
@@ -1303,23 +1305,29 @@ with timer() as tim:
                             app_state["docs_enabled"] = not app_state["docs_enabled"]
                         def toggle_speculate_enabled():
                             app_state["speculate_enabled"] = not app_state["speculate_enabled"]
+                        def toggle_speech_enabled():
+                            app_state["avatar_speech_enabled"] = not app_state["avatar_speech_enabled"]
                         def toggle_subtitles_enabled():
-                            app_state["avatar_subtitles"] = not app_state["avatar_subtitles"]
-                        dpg.add_checkbox(label="Autosearch documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
+                            app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
+                        dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
-                        dpg.add_text("Before responding, search document database for relevant information", parent="docs_enabled_tooltip")  # tag
+                        dpg.add_text("Before responding, search document database for relevant information.", parent="docs_enabled_tooltip")  # tag
 
-                        dpg.add_checkbox(label="AI speculation", default_value=app_state["speculate_enabled"], callback=toggle_speculate_enabled, tag="speculate_enabled_checkbox")
+                        dpg.add_checkbox(label="Speculation", default_value=app_state["speculate_enabled"], callback=toggle_speculate_enabled, tag="speculate_enabled_checkbox")
                         dpg.add_tooltip("speculate_enabled_checkbox", tag="speculate_enabled_tooltip")  # tag
-                        dpg.add_text("ON: Let the AI freely use its internal knowledge in the response.\nOFF: Remind AI to use information from context only.\nOFF, and autosearch ON: As above, plus skip AI generation if no match in document database.", parent="speculate_enabled_tooltip")  # tag
+                        dpg.add_text("ON: Let the AI freely use its internal knowledge in the response.\nOFF: Remind AI to use information from context only.\nOFF, and documents ON: As above, plus skip AI generation if no match in document database.", parent="speculate_enabled_tooltip")  # tag
 
-                        dpg.add_checkbox(label="Subtitles", default_value=app_state["avatar_subtitles"], callback=toggle_subtitles_enabled, tag="avatar_subtitles_checkbox")
+                        dpg.add_checkbox(label="Speech", default_value=app_state["avatar_speech_enabled"], callback=toggle_speech_enabled, tag="speech_enabled_checkbox")
+                        dpg.add_tooltip("speech_enabled_checkbox", tag="speech_enabled_tooltip")  # tag
+                        dpg.add_text("Have the avatar speak the final response (TTS, text to speech).", parent="speech_enabled_tooltip")  # tag
+
+                        dpg.add_checkbox(label="Subtitles", default_value=app_state["avatar_subtitles_enabled"], callback=toggle_subtitles_enabled, tag="avatar_subtitles_checkbox")
                         dpg.add_tooltip("avatar_subtitles_checkbox", tag="subtitles_enabled_tooltip")  # tag
                         if gui_config.translator_target_lang is not None:
                             subtitle_explanation_str = f"Subtitle the avatar's speech (language: {gui_config.translator_target_lang.upper()})."
                         else:
                             subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
-                        dpg.add_text(f"{subtitle_explanation_str}\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
+                        dpg.add_text(f"{subtitle_explanation_str}\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
 
         with dpg.child_window(tag="chat_ai_warning",
                               height=gui_config.ai_warning_h,

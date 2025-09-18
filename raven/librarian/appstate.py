@@ -144,8 +144,12 @@ def load(llm_settings: env,
         state["speculate_enabled"] = False
         logger.info(f"load: Missing key 'speculate_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['speculate_enabled']}'")
 
-    if "avatar_subtitles" not in state:
-        state["avatar_subtitles"] = True
+    if "avatar_speech_enabled" not in state:
+        state["avatar_speech_enabled"] = True
+        logger.info(f"load: Missing key 'avatar_speech_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['avatar_speech_enabled']}'")
+
+    if "avatar_subtitles_enabled" not in state:
+        state["avatar_subtitles_enabled"] = True
         logger.info(f"load: Missing key 'avatar_subtitles' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['avatar_subtitles']}'")
 
     # Refresh the system prompt in the datastore (to the one currently produced by `llmclient`)
