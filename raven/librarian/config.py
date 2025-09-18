@@ -127,10 +127,15 @@ gui_config = env(  # ----------------------------------------
                  # ----------------------------------------
                  # Avatar TTS speech subtitling / closed-captioning
                  #
-                 # Raven-server must have the `translate` module configured for the given language pair.
-                 # Use `translator_target_lang=None` to disable the AI translator; doing so makes subtitles into English closed captions (CC).
+                 # These settings are used when the "Subtitles" GUI toggle is enabled.
+                 #
+                 # For AI translation, the `translate` module of Raven-server must have a model loaded for the given language pair.
+                 # See the server config, which by default is at `raven.server.config`.
+                 #
+                 # Use `translator_target_lang=None` to disable the AI translator and closed-caption (CC) the speech instead.
                  translator_source_lang="en",
-                 translator_target_lang="fi",
+                 translator_target_lang="fi",  # Finnish
+                 # translator_target_lang=None,  # English closed-captioning (CC)
                  # See the TTF files in `raven/fonts/`.
                  subtitle_font_basename="OpenSans",
                  subtitle_font_variant="Bold",

@@ -876,10 +876,13 @@ def avatar_add_text_to_preprocess_queue(text: str) -> None:
 def avatar_preprocess_task(task_env: env) -> None:
     """Preprocess sentences for TTS output (AI speech synthesizer).
 
+    The sentences are read from the preprocess queue, and outputs are written to the output queue.
+
     Currently this runs an AI translator, for producing subtitles.
+    If the target language is set as `None`, this produces English closed captions (CC) instead.
     """
     while True:
-        if task_env.cancelled:
+        if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
             break
         try:
             sentence = avatar_preprocess_queue.get(block=False)
@@ -887,15 +890,20 @@ def avatar_preprocess_task(task_env: env) -> None:
             time.sleep(0.2)
             continue
         else:
-            # TODO: add a feature to disable subtitling altogether
-            if gui_config.translator_target_lang is not None:
-                subtitle = api.translate_translate(sentence,
-                                                   source_lang=gui_config.translator_source_lang,
-                                                   target_lang=gui_config.translator_target_lang)
-            else:  # No translation -> English closed captions (CC)
-                subtitle = sentence
-            logger.info(f"avatar_preprocess_task: sentence: {sentence}")
-            logger.info(f"avatar_preprocess_task: subtitle: {subtitle}")
+            if app_state["avatar_subtitles"]:
+                logger.info(f"avatar_preprocess_task: sentence 0x{id(sentence):x}: processing")
+                if gui_config.translator_target_lang is not None:
+                    subtitle = api.translate_translate(sentence,
+                                                       source_lang=gui_config.translator_source_lang,
+                                                       target_lang=gui_config.translator_target_lang)
+                else:  # No translation -> English closed captions (CC)
+                    subtitle = sentence
+                logger.info(f"avatar_preprocess_task: sentence 0x{id(sentence):x}: original: {sentence}")
+                logger.info(f"avatar_preprocess_task: sentence 0x{id(sentence):x}: subtitle: {subtitle}")
+            else:
+                logger.info(f"avatar_preprocess_task: sentence 0x{id(sentence):x}: original: {sentence}")
+                logger.info(f"avatar_preprocess_task: sentence 0x{id(sentence):x}: subtitler is off.")
+                subtitle = None
             avatar_output_queue.put((sentence, subtitle))
 task_manager.submit(avatar_preprocess_task, env())
 
@@ -906,7 +914,7 @@ def avatar_speak_task(task_env: env) -> None:
     task_env.speaking = False
     task_env.t0 = time.time_ns()
     while True:
-        if task_env.cancelled:
+        if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
             break
         with task_env.lock:
             speaking = task_env.speaking  # we must release the lock as soon as possible (so that `on_stop_lipsync_speaking` can lock it, if it happens to be run), so get the state into a temporary variable.
@@ -914,25 +922,27 @@ def avatar_speak_task(task_env: env) -> None:
             time.sleep(0.1)
             continue
         try:
-            sentence, translated_sentence = avatar_output_queue.get(block=False)
+            sentence, subtitle = avatar_output_queue.get(block=False)
         except queue.Empty:  # wait until we have a sentence to speak
             time_now = time.time_ns()
             dt = (time_now - task_env.t0) / 10**9
             if not task_env.speaking and dt > 3.0:  # reset emotion after a few seconds of idle time (after the TTS has stopped speaking)
                 task_env.t0 = time_now
-                logger.info("avatar_speak_task: updating emotion to 'neutral' (default)")
+                logger.info("avatar_speak_task: updating emotion to 'neutral' (default idle state)")
                 api.avatar_set_emotion(instance_id=avatar_instance_id,
                                        emotion_name="neutral")
             time.sleep(0.2)
             continue
         else:
+            logger.info(f"avatar_speak_task: sentence 0x{id(sentence):x}: processing")
             with task_env.lock:
                 task_env.speaking = True
 
             def on_start_lipsync_speaking():
                 global subtitle_bottom_y0  # intent only
-                if translated_sentence is not None:
-                    dpg.set_value("avatar_subtitle", translated_sentence)  # tag
+                logger.info(f"avatar_speak_task.on_stop_lipsync_speaking: sentence 0x{id(sentence):x}: TTS starting to speak.")
+                if subtitle is not None:
+                    dpg.set_value("avatar_subtitle", subtitle)  # tag
                     dpg.show_item("avatar_subtitle")  # tag
 
                     # position subtitle at bottom
@@ -942,12 +952,15 @@ def avatar_speak_task(task_env: env) -> None:
                                                          subtitle_bottom_y0 - h))
 
             def on_stop_lipsync_speaking():
+                logger.info(f"avatar_speak_task.on_stop_lipsync_speaking: sentence 0x{id(sentence):x}: TTS finished.")
                 dpg.hide_item("avatar_subtitle")  # tag
                 with task_env.lock:
                     task_env.t0 = time.time_ns()  # delay the emotion reset
+                    # Set the state flag very last, because these events are called from a different thread (the TTS client's background task),
+                    # and our `avatar_speak_task` thread starts processing the next item in the queue immediately when it detects this flag.
                     task_env.speaking = False
 
-            logger.info("avatar_speak_task: starting TTS")
+            logger.info(f"avatar_speak_task: sentence 0x{id(sentence):x}: submitting TTS task.")
             api.tts_speak_lipsynced(instance_id=avatar_instance_id,
                                     voice="af_nova",  # TODO: make the voice configurable
                                     text=sentence,
@@ -956,6 +969,7 @@ def avatar_speak_task(task_env: env) -> None:
                                     on_audio_ready=None,
                                     on_start=on_start_lipsync_speaking,
                                     on_stop=on_stop_lipsync_speaking)
+            logger.info(f"avatar_speak_task: sentence 0x{id(sentence):x}: TTS task submitted.")
 task_manager.submit(avatar_speak_task, env())
 
 # --------------------------------------------------------------------------------
@@ -1055,9 +1069,11 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             if "<think>" in chunk_text:
                 task_env.inside_think_block = True
                 logger.info("ai_turn.run_ai_turn.on_llm_progress: AI entered thinking state.")
+                # chunk_text = f'<font color="{gui_config.chat_color_think_front}">{chunk_text}'  # TODO: currently doesn't work, because the GUI chat message does its own role-coloring.
             elif "</think>" in chunk_text:
                 logger.info("ai_turn.run_ai_turn.on_llm_progress: AI exited thinking state.")
                 task_env.inside_think_block = False
+                # chunk_text = f"{chunk_text}</font>"  # TODO: currently doesn't work, because the GUI chat message does its own role-coloring.
 
             task_env.text.write(chunk_text)
             time_now = time.monotonic()
@@ -1287,8 +1303,23 @@ with timer() as tim:
                             app_state["docs_enabled"] = not app_state["docs_enabled"]
                         def toggle_speculate_enabled():
                             app_state["speculate_enabled"] = not app_state["speculate_enabled"]
+                        def toggle_subtitles_enabled():
+                            app_state["avatar_subtitles"] = not app_state["avatar_subtitles"]
                         dpg.add_checkbox(label="Autosearch documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
+                        dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
+                        dpg.add_text("Before responding, search document database for relevant information", parent="docs_enabled_tooltip")  # tag
+
                         dpg.add_checkbox(label="AI speculation", default_value=app_state["speculate_enabled"], callback=toggle_speculate_enabled, tag="speculate_enabled_checkbox")
+                        dpg.add_tooltip("speculate_enabled_checkbox", tag="speculate_enabled_tooltip")  # tag
+                        dpg.add_text("ON: Let the AI freely use its internal knowledge in the response.\nOFF: Remind AI to use information from context only.\nOFF, and autosearch ON: As above, plus skip AI generation if no match in document database.", parent="speculate_enabled_tooltip")  # tag
+
+                        dpg.add_checkbox(label="Subtitles", default_value=app_state["avatar_subtitles"], callback=toggle_subtitles_enabled, tag="avatar_subtitles_checkbox")
+                        dpg.add_tooltip("avatar_subtitles_checkbox", tag="subtitles_enabled_tooltip")  # tag
+                        if gui_config.translator_target_lang is not None:
+                            subtitle_explanation_str = f"Subtitle the avatar's speech (language: {gui_config.translator_target_lang.upper()})."
+                        else:
+                            subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
+                        dpg.add_text(f"{subtitle_explanation_str}\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
 
         with dpg.child_window(tag="chat_ai_warning",
                               height=gui_config.ai_warning_h,

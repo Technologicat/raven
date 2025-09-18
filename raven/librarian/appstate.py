@@ -144,6 +144,10 @@ def load(llm_settings: env,
         state["speculate_enabled"] = False
         logger.info(f"load: Missing key 'speculate_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['speculate_enabled']}'")
 
+    if "avatar_subtitles" not in state:
+        state["avatar_subtitles"] = True
+        logger.info(f"load: Missing key 'avatar_subtitles' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['avatar_subtitles']}'")
+
     # Refresh the system prompt in the datastore (to the one currently produced by `llmclient`)
     new_chat_node_id = state["new_chat_HEAD"]
     system_prompt_node_id = datastore.get_parent(new_chat_node_id)
