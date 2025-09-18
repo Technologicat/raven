@@ -876,6 +876,8 @@ avatar_output_queue = queue.Queue()  # for TTS and subtitling: [(sentence0, tran
 avatar_emotion_blacklist = ["desire", "love"]  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
 
 def avatar_get_emotion(text: str) -> str:
+    if not text:
+        return "neutral"
     detected_emotions = api.classify(text)  # -> `{emotion0: score0, ...}`, sorted by score, descending
     filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in avatar_emotion_blacklist]
     winning_emotion = filtered_emotions[0]
