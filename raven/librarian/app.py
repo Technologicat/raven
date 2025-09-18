@@ -865,7 +865,7 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
         dpg.delete_item("chat_group", children_only=True)  # clear old content from GUI
         for node_id in node_id_history:
             add_complete_chat_message_to_linearized_chat_panel(node_id=node_id,
-                                                               scroll_to_end=False)  # we scroll just once, when donw
+                                                               scroll_to_end=False)  # we scroll just once, when done
     dpg.split_frame()
     _scroll_chat_view_to_end()
 
