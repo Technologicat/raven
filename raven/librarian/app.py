@@ -1747,7 +1747,7 @@ def gui_shutdown() -> None:
     global gui_alive
     api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
-    gui_alive = False  # Tell background tasks that GUI teardown is in progress (shutting down - trying to update GUI elements may hang the app).
+    gui_alive = False  # Tell background tasks that GUI teardown is in progress (app is shutting down, so trying to update GUI elements may hang the app).
     task_manager.clear(wait=True)  # Wait until background tasks actually exit.
     gui_animation.animator.clear()
     # global gui_instance  # TODO: maybe we need to encapsulate the main GUi into a class? Or maybe not?
