@@ -1478,7 +1478,7 @@ with timer() as tim:
                 def start_new_chat_callback() -> None:
                     new_chat_head_node_id = app_state["new_chat_HEAD"]
                     app_state["HEAD"] = new_chat_head_node_id
-                    build_linearized_chat_panel(head_node_id=new_chat_head_node_id)
+                    build_linearized_chat_panel()
                     dpg.focus_item("chat_field")  # tag  # Focus the chat field for convenience, since the whole point of a new chat is to immediately start a new conversation.
                     # Acknowledge the action in the GUI.
                     gui_animation.animator.add(gui_animation.ButtonFlash(message="New chat started!",
