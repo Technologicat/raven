@@ -1028,11 +1028,16 @@ def avatar_speak_task(task_env: env) -> None:
                 dpg.set_value("avatar_subtitle", subtitle)  # tag
                 dpg.show_item("avatar_subtitle")  # tag
 
-                # position subtitle at bottom
+                # position subtitle offscreen to measure size
+                dpg.set_item_pos("avatar_subtitle", (gui_config.main_window_w,
+                                                     gui_config.main_window_h))
                 dpg.split_frame()
                 w, h = guiutils.get_widget_size("avatar_subtitle")
+
+                # position subtitle at bottom
                 dpg.set_item_pos("avatar_subtitle", (gui_config.subtitle_x0,
                                                      subtitle_bottom_y0 - h))
+                dpg.split_frame()
 
         def on_stop_lipsync_speaking():
             logger.info(f"avatar_speak_task.process_item.on_stop_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS finished.")
