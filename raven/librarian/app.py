@@ -1610,7 +1610,7 @@ gui_alive = True  # Global flag for app shutdown, for background tasks to detect
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
     global gui_alive
-    # api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.  TODO: enable after we enable TTS in Raven-librarian
+    api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
     gui_alive = False  # Tell background tasks that GUI teardown is in progress (shutting down - trying to update GUI elements may hang the app).
     task_manager.clear(wait=True)  # Wait until background tasks actually exit.
