@@ -91,7 +91,7 @@ def _search_docs_with_bypass(llm_settings: env,
 
     # First line of defense (against hallucinations): docs on, no matches for given query, speculate off -> bypass LLM
     if not docs_results and not speculate:
-        nomatch_text = "No matches in knowledge base. Please try another query."
+        nomatch_text = "No matches in document database. Please try another query."
         nomatch_message_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(llm_settings=llm_settings,
                                                                                                           role="assistant",
                                                                                                           text=nomatch_text)},
