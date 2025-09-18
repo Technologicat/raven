@@ -15,6 +15,7 @@ with timer() as tim:
     import atexit
     import collections
     import concurrent.futures
+    import functools
     import io
     import json
     import os
@@ -889,14 +890,39 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
 avatar_preprocess_queue = queue.Queue()  # for subtitling: [sentence0, ...]
 avatar_output_queue = queue.Queue()  # for TTS and subtitling: [(sentence0, translation0), ...]
 
+avatar_emotion_autoreset_t0 = time.time_ns()  # emotion autoreset is handled by `avatar_speak_task`
 
-def avatar_get_emotion(text: str) -> str:
-    if not text:
+def avatar_update_emotion_from_text(text: str) -> str:
+    """Update the emotion for the AI avatar from `text`, and reset the emotion autoreset (return-to-neutral) timer.
+
+    The analysis results are LRU cached (cache size 128) to facilitate running also on CPU setups, where the analysis can be slow,
+    so that switching back and forth between the same AI messages won't cause slowdowns.
+
+    For convenience, return the name of the emotion.
+    """
+    global avatar_emotion_autoreset_t0
+    try:
+        emotion = _avatar_get_emotion_from_text(text)
+        logger.info(f"avatar_update_emotion_from_text: updating emotion to '{emotion}'")
+        api.avatar_set_emotion(instance_id=avatar_instance_id,
+                               emotion_name=emotion)
+        logger.info("avatar_update_emotion_from_text: emotion updated")
+        return emotion
+    finally:
+        # Reset the timer last. If running on CPU, the emotion analysis may be slow.
+        avatar_emotion_autoreset_t0 = time.time_ns()
+
+@functools.lru_cache(maxsize=128)
+def _avatar_get_emotion_from_text(text: str) -> str:
+    try:
+        if not text:
+            return "neutral"
+        detected_emotions = api.classify(text)  # -> `{emotion0: score0, ...}`, sorted by score, descending
+        filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in librarian_config.avatar_emotion_blacklist]
+        winning_emotion = filtered_emotions[0]
+        return winning_emotion
+    except Exception:
         return "neutral"
-    detected_emotions = api.classify(text)  # -> `{emotion0: score0, ...}`, sorted by score, descending
-    filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in librarian_config.avatar_emotion_blacklist]
-    winning_emotion = filtered_emotions[0]
-    return winning_emotion
 
 avatar_preprocess_task_name = None  # running preprocess task, so that we can cancel it and start a new one when the TTS is stopped
 def avatar_stop_speech() -> None:
@@ -1031,6 +1057,8 @@ avatar_preprocess_task_name = task_manager.submit(avatar_preprocess_task, env())
 
 def avatar_speak_task(task_env: env) -> None:
     """TTS, with avatar lipsync and subtitles (from AI translator)."""
+    global avatar_emotion_autoreset_t0
+
     logger.info(f"avatar_speak_task: instance {task_env.task_name}: TTS queue processor starting")
 
     def process_item(sentence, subtitle):
@@ -1064,13 +1092,14 @@ def avatar_speak_task(task_env: env) -> None:
 
         def on_stop_lipsync_speaking():
             global gui_alive  # intent only
+            global avatar_emotion_autoreset_t0
             logger.info(f"avatar_speak_task.process_item.on_stop_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS finished.")
             if gui_alive:  # Be careful - the user might have closed the app while the TTS was speaking.
                 dpg.hide_item("avatar_subtitle")  # tag
                 dpg.disable_item("chat_stop_speech_button")  # tag
             with task_env.lock:
-                task_env.t0 = time.time_ns()  # delay the emotion reset
-                # Set the state flag very last, because these events are called from a different thread (the TTS client's background task),
+                avatar_emotion_autoreset_t0 = time.time_ns()  # reset the emotion autoreset timer, so that the last emotion (from `on_done` or sibling switching at an AI message) stays for a couple more seconds once speaking ends.
+                # Set the speaking state flag very last, because these events are called from a different thread (the TTS client's background task),
                 # and our `avatar_speak_task` thread starts processing the next item in the queue immediately when it detects this flag.
                 task_env.speaking = False
 
@@ -1087,7 +1116,6 @@ def avatar_speak_task(task_env: env) -> None:
 
     task_env.lock = threading.RLock()
     task_env.speaking = False
-    task_env.t0 = time.time_ns()
     try:
         while True:
             if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
@@ -1101,10 +1129,10 @@ def avatar_speak_task(task_env: env) -> None:
                 sentence, subtitle = avatar_output_queue.get(block=False)
             except queue.Empty:  # wait until we have a sentence to speak
                 time_now = time.time_ns()
-                dt = (time_now - task_env.t0) / 10**9
-                if not task_env.speaking and dt > 3.0:  # reset emotion after a few seconds of idle time (after the TTS has stopped speaking)
-                    task_env.t0 = time_now
-                    logger.info(f"avatar_speak_task: instance {task_env.task_name}: updating emotion to 'neutral' (default idle state)")
+                dt = (time_now - avatar_emotion_autoreset_t0) / 10**9
+                if not task_env.speaking and dt > librarian_config.avatar_emotion_autoreset_interval:  # reset emotion after a few seconds of idle time (when the TTS is not speaking)
+                    avatar_emotion_autoreset_t0 = time_now
+                    logger.info(f"avatar_speak_task: instance {task_env.task_name}: avatar idle for at least {librarian_config.avatar_emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
                     api.avatar_set_emotion(instance_id=avatar_instance_id,
                                            emotion_name="neutral")
                 time.sleep(0.2)
@@ -1209,12 +1237,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 task_env.emotion_recent_paragraphs.popleft()
                 if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
                     text = "".join(task_env.emotion_recent_paragraphs)
-                    winning_emotion = avatar_get_emotion(text)
-                    logger.info(f"ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion_from_incoming_text: updating emotion to '{winning_emotion}' (analyzed from {len(text)} characters of recent text)")
-                    logger.debug(text)
-                    api.avatar_set_emotion(instance_id=avatar_instance_id,
-                                           emotion_name=winning_emotion)
-                    logger.info("ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion_from_incoming_text: done")
+                    logger.info(f"ai_turn.run_ai_turn._update_avatar_emotion_from_incoming_text: updating emotion from {len(text)} characters of recent text")
+                    avatar_update_emotion_from_text(text)
                 task_env.emotion_update_calls += 1
 
             def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
@@ -1281,11 +1305,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                         avatar_add_text_to_preprocess_queue(message_text)
 
                     # Update avatar emotion one last time, from the final message text
-                    winning_emotion = avatar_get_emotion(message_text)
-                    logger.info(f"ai_turn.run_ai_turn.on_done: updating emotion to '{winning_emotion}' (analyzed from final message content)")
-                    api.avatar_set_emotion(instance_id=avatar_instance_id,
-                                           emotion_name=winning_emotion)
-                    logger.info("ai_turn.run_ai_turn.on_done: emotion updated")
+                    logger.info("ai_turn.run_ai_turn.on_done: updating emotion from final message content")
+                    avatar_update_emotion_from_text(message_text)
 
                     # Update linearized chat view
                     logger.info("ai_turn.run_ai_turn.on_done: updating chat view with final message")
