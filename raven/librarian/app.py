@@ -573,9 +573,11 @@ class DisplayedChatMessage:
         If you use `build_linearized_chat_panel`, it takes care of clearing all chat message GUI widgets automatically,
         and you do not need to call this.
 
-        If you are editing the linearized chat view directly, this should be called before deleting the instance.
+        If you are editing the linearized chat view directly, this should be called before deleting
+        the `DisplayedChatMessage` instance.
 
-        The main use case is switching a streaming message to a completed one when the streaming is done.
+        The main use case is switching a streaming message to a completed one when the streaming is done,
+        without regenerating the whole linearized chat view.
         """
         self.role = None
         self.paragraphs = []
