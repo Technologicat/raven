@@ -440,7 +440,7 @@ class DisplayedChatMessage:
         buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
-        n_message_buttons = 7
+        n_message_buttons = 8
         dpg.add_spacer(width=gui_config.chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 32 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
@@ -623,9 +623,9 @@ class DisplayedChatMessage:
                                              width=gui_config.toolbutton_w,
                                              tag=f"message_copy_to_clipboard_button_{self.gui_uuid}",
                                              parent=g)
-        dpg.bind_item_font(f"message_copy_to_clipboard_button_{self.gui_uuid}", themes_and_fonts.icon_font_solid)  # tag
-        dpg.bind_item_theme(f"message_copy_to_clipboard_button_{self.gui_uuid}", "disablable_button_theme")  # tag
-        copy_message_tooltip = dpg.add_tooltip(f"message_copy_to_clipboard_button_{self.gui_uuid}")  # tag
+        dpg.bind_item_font(copy_message_button, themes_and_fonts.icon_font_solid)
+        dpg.bind_item_theme(copy_message_button, "disablable_button_theme")  # tag
+        copy_message_tooltip = dpg.add_tooltip(copy_message_button)
         copy_message_tooltip_text = dpg.add_text("Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID", parent=copy_message_tooltip)
 
         # Only AI messages can be rerolled
@@ -671,6 +671,31 @@ class DisplayedChatMessage:
             dpg.bind_item_theme(f"message_reroll_button_{self.gui_uuid}", "disablable_button_theme")  # tag
             reroll_tooltip = dpg.add_tooltip(f"message_reroll_button_{self.gui_uuid}")  # tag
             dpg.add_text("Reroll AI response (create new sibling) [Ctrl+R]", parent=reroll_tooltip)
+        else:
+            dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
+
+        if role == "assistant":
+            def speak_message_callback():
+                if app_state["avatar_speech_enabled"]:
+                    unused_message_role, message_text = get_node_message_text_without_role(node_id)
+                    avatar_add_text_to_preprocess_queue(message_text)
+                    # Acknowledge the action in the GUI.
+                    gui_animation.animator.add(gui_animation.ButtonFlash(message="Sent to avatar!",
+                                                                         target_button=speak_message_button,
+                                                                         target_tooltip=speak_message_tooltip,
+                                                                         target_text=speak_message_tooltip_text,
+                                                                         original_theme=themes_and_fonts.global_theme,
+                                                                         duration=gui_config.acknowledgment_duration))
+            speak_message_button = dpg.add_button(label=fa.ICON_COMMENT,
+                                                  callback=speak_message_callback,
+                                                  enabled=(role == "assistant"),
+                                                  width=gui_config.toolbutton_w,
+                                                  tag=f"chat_speak_button_{self.gui_uuid}",
+                                                  parent=g)
+            dpg.bind_item_font(speak_message_button, themes_and_fonts.icon_font_solid)
+            dpg.bind_item_theme(speak_message_button, "disablable_button_theme")  # tag
+            speak_message_tooltip = dpg.add_tooltip(speak_message_button)
+            speak_message_tooltip_text = dpg.add_text("Have the avatar speak this message", parent=speak_message_tooltip)
         else:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
