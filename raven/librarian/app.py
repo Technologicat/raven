@@ -1302,7 +1302,11 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     ai_turn_task_manager.submit(run_ai_turn, env())
 
 def stop_ai_turn() -> None:
-    """Stop ongoing text generation by the AI."""
+    """Interrupt the AI, i.e. stop ongoing text generation.
+
+    Useful to have in case you see the AI has misunderstood your question,
+    so that there's no need to wait for a complete response.
+    """
     if gui_alive:
         dpg.disable_item("chat_stop_generation_button")  # tag
     # Cancelling all background tasks from the AI turn specific task manager stops the task (co-operatively, so it shuts down gracefully).
