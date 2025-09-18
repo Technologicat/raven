@@ -140,6 +140,9 @@ def tts_speak(voice: str,
         if on_stop is not None:
             while pygame.mixer.music.get_busy():
                 time.sleep(0.01)
+                # NOTE: At this point, we don't take cancellations from `task_env.cancelled`; but the client can explicitly call `tts_stop`,
+                # which stops the audio, thus exiting the loop. We are likely running on a different thread pool than the main app, anyway,
+                # unless the main thread pool was passed to `raven.client.api.initialize` (implemented in `raven.client.util.initialize_api`).
             logger.info("tts_speak.speak: playback finished")
             try:
                 on_stop()
@@ -554,6 +557,9 @@ def tts_speak_lipsynced(instance_id: str,
                 t = pygame.mixer.music.get_pos() / 1000 - latency - video_offset
                 apply_lipsync_at_audio_time(t)  # lipsync
                 time.sleep(0.01)
+                # NOTE: At this point, we don't take cancellations from `task_env.cancelled`; but the client can explicitly call `tts_stop`,
+                # which stops the audio, thus exiting the loop. We are likely running on a different thread pool than the main app, anyway,
+                # unless the main thread pool was passed to `raven.client.api.initialize` (implemented in `raven.client.util.initialize_api`).
         finally:
             logger.info("tts_speak_lipsynced.speak: playback finished")
             finalize()
