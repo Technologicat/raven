@@ -71,7 +71,7 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # ----------------------------------------
 # Module bootup
 
-bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
+bg = concurrent.futures.ThreadPoolExecutor()
 task_manager = bgtask.TaskManager(name="librarian",
                                   mode="concurrent",
                                   executor=bg)
