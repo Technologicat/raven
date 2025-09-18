@@ -54,7 +54,6 @@
 
 - Librarian
   - For minimal demo:
-    - Add feature: Interrupt AI generation (backend exists now; `return action_stop` from the `on_llm_progress` callback to interrupt the LLM)
     - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
     - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens occasionally with the last word in a sentence.
     - Queue the TTS audio generation separately, this could run while the previous parts are being spoken.

@@ -72,9 +72,12 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # Module bootup
 
 bg = concurrent.futures.ThreadPoolExecutor()
-task_manager = bgtask.TaskManager(name="librarian",
+task_manager = bgtask.TaskManager(name="librarian",  # for most tasks
                                   mode="concurrent",
                                   executor=bg)
+ai_turn_task_manager = bgtask.TaskManager(name="librarian_ai_turn",  # for running the AI's turn, specifically (so that we can easily cancel just that one task when needed)
+                                          mode="concurrent",
+                                          executor=bg)  # same thread poool
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
                tts_server_type=client_config.tts_server_type,
@@ -1024,27 +1027,32 @@ def avatar_speak_task(task_env: env) -> None:
             task_env.speaking = True
 
         def on_start_lipsync_speaking():
+            global gui_alive  # intent only
             global subtitle_bottom_y0  # intent only
             logger.info(f"avatar_speak_task.process_item.on_start_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS starting to speak.")
-            if subtitle is not None:
-                dpg.set_value("avatar_subtitle", subtitle)  # tag
-                dpg.show_item("avatar_subtitle")  # tag
+            if gui_alive:
+                if subtitle is not None:
+                    dpg.set_value("avatar_subtitle", subtitle)  # tag
+                    dpg.show_item("avatar_subtitle")  # tag
 
-                # position subtitle offscreen to measure size
-                dpg.set_item_pos("avatar_subtitle", (gui_config.main_window_w,
-                                                     gui_config.main_window_h))
-                dpg.split_frame()
-                w, h = guiutils.get_widget_size("avatar_subtitle")
+                    # position subtitle offscreen to measure size
+                    dpg.set_item_pos("avatar_subtitle", (gui_config.main_window_w,
+                                                         gui_config.main_window_h))
+                    dpg.split_frame()
+                    w, h = guiutils.get_widget_size("avatar_subtitle")
 
-                # position subtitle at bottom
-                dpg.set_item_pos("avatar_subtitle", (gui_config.subtitle_x0,
-                                                     subtitle_bottom_y0 - h))
-                dpg.split_frame()
+                    # position subtitle at bottom
+                    dpg.set_item_pos("avatar_subtitle", (gui_config.subtitle_x0,
+                                                         subtitle_bottom_y0 - h))
+                    dpg.split_frame()
+                dpg.enable_item("chat_stop_speech_button")  # tag
 
         def on_stop_lipsync_speaking():
+            global gui_alive  # intent only
             logger.info(f"avatar_speak_task.process_item.on_stop_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS finished.")
             if gui_alive:  # Be careful - the user might have closed the app while the TTS was speaking.
                 dpg.hide_item("avatar_subtitle")  # tag
+                dpg.disable_item("chat_stop_speech_button")  # tag
             with task_env.lock:
                 task_env.t0 = time.time_ns()  # delay the emotion reset
                 # Set the state flag very last, because these events are called from a different thread (the TTS client's background task),
@@ -1141,138 +1149,160 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     docs_query = docs_query if app_state["docs_enabled"] else None
 
     def run_ai_turn(task_env: env) -> None:
+        global gui_alive  # intent only
+
         if task_env.cancelled:  # while the task was in the queue
             return
 
-        streaming_chat_message = None
-        def delete_streaming_chat_message():  # for replacing with completed message
-            nonlocal streaming_chat_message
-            if streaming_chat_message is not None:
-                streaming_chat_message.demolish()
-                streaming_chat_message = None
+        if gui_alive:
+            dpg.enable_item("chat_stop_generation_button")  # tag
 
-        def on_llm_start() -> None:
-            nonlocal streaming_chat_message
-            streaming_chat_message = DisplayedStreamingChatMessage(gui_parent="chat_group")
-            dpg.split_frame()
-            _scroll_chat_view_to_end()
+        try:
+            streaming_chat_message = None
+            def delete_streaming_chat_message():  # for replacing with completed message
+                nonlocal streaming_chat_message
+                if streaming_chat_message is not None:
+                    streaming_chat_message.demolish()
+                    streaming_chat_message = None
 
-        task_env.text = io.StringIO()  # incoming, in-progress paragraph
-        task_env.t0 = time.monotonic()  # timestamp of last GUI update
-        task_env.n_chunks0 = 0  # chunks received since last GUI update
-        task_env.inside_think_block = False
-        task_env.emotion_update_interval = 5  # how many complete paragraphs (newline-separated text snippets) to wait between emotion updates (NOTE: Qwen3 likes using newlines liberally)
-        task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap, to stabilize the detection
-        task_env.emotion_update_calls = 0
-
-        def _update_avatar_emotion_from_incoming_text(new_paragraph: str) -> None:
-            task_env.emotion_recent_paragraphs.append(new_paragraph)
-            task_env.emotion_recent_paragraphs.popleft()
-            if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
-                text = "".join(task_env.emotion_recent_paragraphs)
-                winning_emotion = avatar_get_emotion(text)
-                logger.info(f"ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion_from_incoming_text: updating emotion to '{winning_emotion}' (analyzed from {len(text)} characters of recent text)")
-                logger.debug(text)
-                api.avatar_set_emotion(instance_id=avatar_instance_id,
-                                       emotion_name=winning_emotion)
-                logger.info("ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion_from_incoming_text: done")
-            task_env.emotion_update_calls += 1
-
-        def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
-            # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
-            # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
-            if task_env.cancelled or not gui_alive:  # TODO: EAFP to avoid TOCTTOU
-                logger.info("ai_turn.run_ai_turn.on_llm_progress: Cancelled, stopping generation.")
-                return llmclient.action_stop
-
-            # Detect think block state (TODO: improve; very rudimentary and brittle for now)
-            if "<think>" in chunk_text:
-                task_env.inside_think_block = True
-                logger.info("ai_turn.run_ai_turn.on_llm_progress: AI entered thinking state.")
-                # chunk_text = f'<font color="{gui_config.chat_color_think_front}">{chunk_text}'  # TODO: currently doesn't work, because the GUI chat message does its own role-coloring.
-            elif "</think>" in chunk_text:
-                logger.info("ai_turn.run_ai_turn.on_llm_progress: AI exited thinking state.")
-                task_env.inside_think_block = False
-                # chunk_text = f"{chunk_text}</font>"  # TODO: currently doesn't work, because the GUI chat message does its own role-coloring.
-
-            task_env.text.write(chunk_text)
-            time_now = time.monotonic()
-            dt = time_now - task_env.t0  # seconds since last GUI update
-            dchunks = n_chunks - task_env.n_chunks0  # chunks since last GUI update
-            if "\n" in chunk_text:  # start new paragraph?
-                task_env.t0 = time_now
-                task_env.n_chunks0 = n_chunks
-                paragraph_text = task_env.text.getvalue()
-                # NOTE: The last paragraph of the AI's reply - for thinking models, commonly the final response - often never gets a "\n", and must be handled in `on_done`.
-                _update_avatar_emotion_from_incoming_text(paragraph_text)
-                # if app_state["avatar_speech_enabled"]:  # If TTS enabled, send complete paragraph to TTS preprocess queue
-                #     if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
-                #         avatar_add_text_to_preprocess_queue(paragraph_text)
-                streaming_chat_message.replace_last_paragraph(paragraph_text)
-                streaming_chat_message.add_paragraph("")
-                task_env.text = io.StringIO()
-                dpg.split_frame()
-                _scroll_chat_view_to_end()
-            # - update at least every 0.5 sec
-            # - update after every 10 chunks, but rate-limited (at least 0.1 sec must have passed since last update)
-            elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit changes to in-progress last paragraph
-                task_env.t0 = time_now
-                task_env.n_chunks0 = n_chunks
-                streaming_chat_message.replace_last_paragraph(task_env.text.getvalue())  # at first paragraph, will auto-create it if not created yet
+            def on_llm_start() -> None:
+                nonlocal streaming_chat_message
+                streaming_chat_message = DisplayedStreamingChatMessage(gui_parent="chat_group")
                 dpg.split_frame()
                 _scroll_chat_view_to_end()
 
-            # Let the LLM keep generating (if it wants to).
-            return llmclient.action_ack
+            task_env.text = io.StringIO()  # incoming, in-progress paragraph
+            task_env.t0 = time.monotonic()  # timestamp of last GUI update
+            task_env.n_chunks0 = 0  # chunks received since last GUI update
+            task_env.inside_think_block = False
+            task_env.emotion_update_interval = 5  # how many complete paragraphs (newline-separated text snippets) to wait between emotion updates (NOTE: Qwen3 likes using newlines liberally)
+            task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap, to stabilize the detection
+            task_env.emotion_update_calls = 0
 
-        def on_done(node_id: str) -> None:
-            app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
-            task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
+            def _update_avatar_emotion_from_incoming_text(new_paragraph: str) -> None:
+                task_env.emotion_recent_paragraphs.append(new_paragraph)
+                task_env.emotion_recent_paragraphs.popleft()
+                if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
+                    text = "".join(task_env.emotion_recent_paragraphs)
+                    winning_emotion = avatar_get_emotion(text)
+                    logger.info(f"ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion_from_incoming_text: updating emotion to '{winning_emotion}' (analyzed from {len(text)} characters of recent text)")
+                    logger.debug(text)
+                    api.avatar_set_emotion(instance_id=avatar_instance_id,
+                                           emotion_name=winning_emotion)
+                    logger.info("ai_turn.run_ai_turn.on_llm_progress._update_avatar_emotion_from_incoming_text: done")
+                task_env.emotion_update_calls += 1
+
+            def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
+                global gui_alive  # intent only
+
+                # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
+                # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
+                if task_env.cancelled or not gui_alive:  # TODO: EAFP to avoid TOCTTOU
+                    logger.info("ai_turn.run_ai_turn.on_llm_progress: Cancelled, stopping generation.")
+                    return llmclient.action_stop
+
+                # Detect think block state (TODO: improve; very rudimentary and brittle for now)
+                if "<think>" in chunk_text:
+                    task_env.inside_think_block = True
+                    logger.info("ai_turn.run_ai_turn.on_llm_progress: AI entered thinking state.")
+                    # chunk_text = f'<font color="{gui_config.chat_color_think_front}">{chunk_text}'  # TODO: currently doesn't work, because the GUI chat message does its own role-coloring.
+                elif "</think>" in chunk_text:
+                    logger.info("ai_turn.run_ai_turn.on_llm_progress: AI exited thinking state.")
+                    task_env.inside_think_block = False
+                    # chunk_text = f"{chunk_text}</font>"  # TODO: currently doesn't work, because the GUI chat message does its own role-coloring.
+
+                task_env.text.write(chunk_text)
+                time_now = time.monotonic()
+                dt = time_now - task_env.t0  # seconds since last GUI update
+                dchunks = n_chunks - task_env.n_chunks0  # chunks since last GUI update
+                if "\n" in chunk_text:  # start new paragraph?
+                    task_env.t0 = time_now
+                    task_env.n_chunks0 = n_chunks
+                    paragraph_text = task_env.text.getvalue()
+                    # NOTE: The last paragraph of the AI's reply - for thinking models, commonly the final response - often never gets a "\n", and must be handled in `on_done`.
+                    _update_avatar_emotion_from_incoming_text(paragraph_text)
+                    # if app_state["avatar_speech_enabled"]:  # If TTS enabled, send complete paragraph to TTS preprocess queue
+                    #     if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
+                    #         avatar_add_text_to_preprocess_queue(paragraph_text)
+                    streaming_chat_message.replace_last_paragraph(paragraph_text)
+                    streaming_chat_message.add_paragraph("")
+                    task_env.text = io.StringIO()
+                    dpg.split_frame()
+                    _scroll_chat_view_to_end()
+                # - update at least every 0.5 sec
+                # - update after every 10 chunks, but rate-limited (at least 0.1 sec must have passed since last update)
+                elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit changes to in-progress last paragraph
+                    task_env.t0 = time_now
+                    task_env.n_chunks0 = n_chunks
+                    streaming_chat_message.replace_last_paragraph(task_env.text.getvalue())  # at first paragraph, will auto-create it if not created yet
+                    dpg.split_frame()
+                    _scroll_chat_view_to_end()
+
+                # Let the LLM keep generating (if it wants to).
+                return llmclient.action_ack
+
+            def on_done(node_id: str) -> None:
+                global gui_alive  # intent only
+
+                app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
+                task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
+                if gui_alive:
+                    unused_message_role, message_text = get_node_message_text_without_role(node_id)
+
+                    # Avatar speech and subtitling
+                    logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
+                    if app_state["avatar_speech_enabled"]:  # If TTS enabled, send final message text to TTS preprocess queue
+                        avatar_add_text_to_preprocess_queue(message_text)
+
+                    # Update avatar emotion one last time, from the final message text
+                    winning_emotion = avatar_get_emotion(message_text)
+                    logger.info(f"ai_turn.run_ai_turn.on_done: updating emotion to '{winning_emotion}' (analyzed from final message content)")
+                    api.avatar_set_emotion(instance_id=avatar_instance_id,
+                                           emotion_name=winning_emotion)
+                    logger.info("ai_turn.run_ai_turn.on_done: emotion updated")
+
+                    # Update linearized chat view
+                    logger.info("ai_turn.run_ai_turn.on_done: updating chat view with final message")
+                    delete_streaming_chat_message()  # if we are called by docs nomatch, the in-progress message shouldn't exist in the GUI; then this doesn't matter.
+                    add_complete_chat_message_to_linearized_chat_panel(node_id)
+
+                    logger.info("ai_turn.run_ai_turn.on_done: all done.")
+
+            def on_tool_done(node_id: str) -> None:
+                global gui_alive  # intent only
+
+                app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
+                task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
+                if gui_alive:
+                    delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
+                    add_complete_chat_message_to_linearized_chat_panel(node_id)
+
+            new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
+                                                datastore=datastore,
+                                                retriever=retriever,
+                                                head_node_id=app_state["HEAD"],
+                                                docs_query=docs_query,
+                                                speculate=app_state["speculate_enabled"],
+                                                markup="markdown",
+                                                on_prompt_ready=None,  # debug/info hook
+                                                on_llm_start=on_llm_start,
+                                                on_llm_progress=on_llm_progress,
+                                                on_llm_done=on_done,
+                                                on_docs_nomatch_done=on_done,
+                                                on_tools_start=None,
+                                                on_tool_done=on_tool_done)
+            app_state["HEAD"] = new_head_node_id
+        finally:
             if gui_alive:
-                unused_message_role, message_text = get_node_message_text_without_role(node_id)
+                dpg.disable_item("chat_stop_generation_button")  # tag
+    ai_turn_task_manager.submit(run_ai_turn, env())
 
-                # Avatar speech and subtitling
-                logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
-                if app_state["avatar_speech_enabled"]:  # If TTS enabled, send final message text to TTS preprocess queue
-                    avatar_add_text_to_preprocess_queue(message_text)
-
-                # Update avatar emotion one last time, from the final message text
-                winning_emotion = avatar_get_emotion(message_text)
-                logger.info(f"ai_turn.run_ai_turn.on_done: updating emotion to '{winning_emotion}' (analyzed from final message content)")
-                api.avatar_set_emotion(instance_id=avatar_instance_id,
-                                       emotion_name=winning_emotion)
-                logger.info("ai_turn.run_ai_turn.on_done: emotion updated")
-
-                # Update linearized chat view
-                logger.info("ai_turn.run_ai_turn.on_done: updating chat view with final message")
-                delete_streaming_chat_message()  # if we are called by docs nomatch, the in-progress message shouldn't exist in the GUI; then this doesn't matter.
-                add_complete_chat_message_to_linearized_chat_panel(node_id)
-
-                logger.info("ai_turn.run_ai_turn.on_done: all done.")
-
-        def on_tool_done(node_id: str) -> None:
-            app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
-            task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
-            if gui_alive:
-                delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
-                add_complete_chat_message_to_linearized_chat_panel(node_id)
-
-        new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
-                                            datastore=datastore,
-                                            retriever=retriever,
-                                            head_node_id=app_state["HEAD"],
-                                            docs_query=docs_query,
-                                            speculate=app_state["speculate_enabled"],
-                                            markup="markdown",
-                                            on_prompt_ready=None,  # debug/info hook
-                                            on_llm_start=on_llm_start,
-                                            on_llm_progress=on_llm_progress,
-                                            on_llm_done=on_done,
-                                            on_docs_nomatch_done=on_done,
-                                            on_tools_start=None,
-                                            on_tool_done=on_tool_done)
-        app_state["HEAD"] = new_head_node_id
-    task_manager.submit(run_ai_turn, env())
+def stop_ai_turn() -> None:
+    """Stop ongoing text generation by the AI."""
+    if gui_alive:
+        dpg.disable_item("chat_stop_generation_button")  # tag
+    # Cancelling all background tasks from the AI turn specific task manager stops the task (co-operatively, so it shuts down gracefully).
+    ai_turn_task_manager.clear()
 
 # --------------------------------------------------------------------------------
 # Set up the main window
@@ -1488,6 +1518,16 @@ with timer() as tim:
                                                                          original_theme=themes_and_fonts.global_theme,
                                                                          duration=gui_config.acknowledgment_duration))
 
+                def stop_generation_callback() -> None:
+                    stop_ai_turn()
+                    # Acknowledge the action in the GUI.
+                    gui_animation.animator.add(gui_animation.ButtonFlash(message="Interrupted!",
+                                                                         target_button=stop_generation_button,
+                                                                         target_tooltip=stop_generation_tooltip,
+                                                                         target_text=stop_generation_tooltip_text,
+                                                                         original_theme=themes_and_fonts.global_theme,
+                                                                         duration=gui_config.acknowledgment_duration))
+
                 def stop_speech_callback() -> None:
                     avatar_stop_speech()
                     # Acknowledge the action in the GUI.
@@ -1526,8 +1566,19 @@ with timer() as tim:
                 copy_chat_tooltip = dpg.add_tooltip("chat_copy_to_clipboard_button")  # tag
                 copy_chat_tooltip_text = dpg.add_text("Copy this conversation to clipboard [F8]\n    no modifier: as-is\n    with Shift: include message node IDs", parent=copy_chat_tooltip)
 
+                stop_generation_button = dpg.add_button(label=fa.ICON_SQUARE,
+                                                        callback=stop_generation_callback,
+                                                        enabled=False,
+                                                        width=gui_config.toolbutton_w,
+                                                        tag="chat_stop_generation_button")
+                dpg.bind_item_font("chat_stop_generation_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_theme("chat_stop_generation_button", "disablable_button_theme")  # tag
+                stop_generation_tooltip = dpg.add_tooltip("chat_stop_generation_button")  # tag
+                stop_generation_tooltip_text = dpg.add_text("Interrupt the AI [Ctrl+G]", parent=stop_generation_tooltip)
+
                 stop_speech_button = dpg.add_button(label=fa.ICON_COMMENT_SLASH,
                                                     callback=stop_speech_callback,
+                                                    enabled=False,
                                                     width=gui_config.toolbutton_w,
                                                     tag="chat_stop_speech_button")
                 dpg.bind_item_font("chat_stop_speech_button", themes_and_fonts.icon_font_solid)  # tag
@@ -1535,7 +1586,7 @@ with timer() as tim:
                 stop_speech_tooltip = dpg.add_tooltip("chat_stop_speech_button")  # tag
                 stop_speech_tooltip_text = dpg.add_text("Stop speaking [Ctrl+S]", parent=stop_speech_tooltip)
 
-                n_below_chat_buttons = 4
+                n_below_chat_buttons = 5
                 avatar_panel_left = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8)
                 dpg.add_spacer(width=avatar_panel_left + 60)
 
@@ -1642,6 +1693,9 @@ def librarian_hotkeys_callback(sender, app_data):
                 stop_speech_callback()
             else:
                 fire_event_if_exists("speak")
+        elif key == dpg.mvKey_G:
+            if dpg.is_item_enabled("chat_stop_generation_button"):  # tag
+                stop_generation_callback()
 
     # Bare key
     #
