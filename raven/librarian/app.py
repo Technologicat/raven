@@ -298,6 +298,28 @@ def format_chat_message_for_clipboard(llm_settings: env,
                                                                 text=message_text)
     return f"{message_heading}{message_text}"
 
+def get_node_message_text_without_role(node_id: str) -> str:
+    """Format a chat message from `node_id` in the datastore, by stripping the role name from the front.
+
+    This is useful e.g. for displaying the message text in the linearized chat view,
+    or for sending the message into TTS preprocessing (`avatar_add_text_to_preprocess_queue`).
+
+    Returns the tuple `(message_role, message_text)`, where:
+
+        `message_role`: One of the roles supported by `raven.librarian.llmclient`.
+                        Typically, one of "assistant", "system", "tool", or "user".
+
+        `message_text`: The text content of the chat message with the role name stripped,
+                        at the node's current payload revision.
+    """
+    node_payload = datastore.get_payload(node_id)  # auto-selects latest revision  TODO: later (chat editing), we need to set the revision to load
+    message = node_payload["message"]
+    message_role = message["role"]
+    message_text = message["content"]
+    message_text = chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings,
+                                                                role=message_role,
+                                                                text=message_text)
+    return message_role, message_text
 
 class DisplayedChatMessage:
     class_lock = threading.RLock()
@@ -761,13 +783,7 @@ class DisplayedCompleteChatMessage(DisplayedChatMessage):
 
     def build(self) -> None:
         """Build (or rebuild) the GUI widgets for this chat message."""
-        node_payload = datastore.get_payload(self.node_id)  # auto-selects latest revision  TODO: later (chat editing), we need to set the revision to load
-        message = node_payload["message"]
-        message_role = message["role"]
-        message_text = message["content"]
-        message_text = chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings,
-                                                                    role=message_role,
-                                                                    text=message_text)
+        message_role, message_text = get_node_message_text_without_role(self.node_id)  # TODO: later (chat editing), we need to set the revision to load
         super().build(role=message_role,
                       text=message_text,
                       node_id=self.node_id)
@@ -1110,15 +1126,10 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
             task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
             if gui_alive:
+                unused_message_role, message_text = get_node_message_text_without_role(node_id)
+
                 # Avatar speech and subtitling
                 logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
-                node_payload = datastore.get_payload(node_id)
-                message = node_payload["message"]
-                message_role = message["role"]
-                message_text = message["content"]
-                message_text = chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings,
-                                                                            role=message_role,
-                                                                            text=message_text)
                 if app_state["avatar_speech_enabled"]:  # If TTS enabled, send final message text to TTS preprocess queue
                     avatar_add_text_to_preprocess_queue(message_text)
 
