@@ -752,6 +752,14 @@ class DisplayedChatMessage:
                 if node_id is not None:
                     app_state["HEAD"] = node_id
                     build_linearized_chat_panel()
+                    # Update avatar emotion from the message text
+                    message_role, message_text = get_node_message_text_without_role(node_id)
+                    if message_role == "assistant":
+                        winning_emotion = avatar_get_emotion(message_text)
+                        logger.info(f"navigate_to_prev_sibling_callback: updating emotion to '{winning_emotion}' (analyzed from message content)")
+                        api.avatar_set_emotion(instance_id=avatar_instance_id,
+                                               emotion_name=winning_emotion)
+                        logger.info("navigate_to_prev_sibling_callback: emotion updated")
             return navigate_to_prev_sibling_callback
 
         def make_navigate_to_next_sibling(message_node_id: str) -> Callable:
@@ -760,6 +768,14 @@ class DisplayedChatMessage:
                 if node_id is not None:
                     app_state["HEAD"] = node_id
                     build_linearized_chat_panel()
+                    # Update avatar emotion from the message text
+                    message_role, message_text = get_node_message_text_without_role(node_id)
+                    if message_role == "assistant":
+                        winning_emotion = avatar_get_emotion(message_text)
+                        logger.info(f"navigate_to_next_sibling_callback: updating emotion to '{winning_emotion}' (analyzed from message content)")
+                        api.avatar_set_emotion(instance_id=avatar_instance_id,
+                                               emotion_name=winning_emotion)
+                        logger.info("navigate_to_next_sibling_callback: emotion updated")
             return navigate_to_next_sibling_callback
 
         # Only messages attached to a datastore chat node can have siblings in the datastore
