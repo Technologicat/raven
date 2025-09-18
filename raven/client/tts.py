@@ -6,7 +6,8 @@ This module coordinates lipsync between the TTS and the avatar, and implements t
 __all__ = ["tts_list_voices",
            "tts_speak",
            "tts_speak_lipsynced",
-           "tts_stop"]
+           "tts_stop",
+           "tts_speaking"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -574,3 +575,13 @@ def tts_stop():
         return
     logger.info("tts_stop: stopping audio")
     pygame.mixer.music.stop()
+
+def tts_speaking() -> bool:
+    """Query whether the speech synthesizer is speaking."""
+    if not util.api_initialized:
+        raise RuntimeError("tts_stop: The `raven.client.api` module must be initialized before using the API.")
+    if util.api_config.tts_server_type is None:
+        return
+    is_speaking = pygame.mixer.music.get_busy()
+    logger.info(f"tts_speaking: is audio playing: {is_speaking}")
+    return is_speaking
