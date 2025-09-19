@@ -54,11 +54,8 @@
 
 - Librarian
   - For minimal demo:
-    - Queue the TTS audio generation separately, this could run while the previous parts are being spoken.
-      - Would help in CPU TTS setups. Since speech is slow, there's several seconds of wall time during each snippet during which we can render the next one.
-      - Needs new API functions: one to prepare TTS (compute audio and phonemes), and another to invoke the TTS (and lipsync driver) on this pre-prepared data.
-        - We can LRU cache, say, 100 speech audio files and the corresponding phoneme data (to better support the "speak again" feature on CPU). Shouldn't take more than a couple dozen MB of RAM.
-      - The current `tts_speak_lipsynced` (and `tts_speak`) could then be refactored to internally use this implementation.
+    - Use separate task manager for the TTS preprocessor to power-cycle it more easily
+    - Refactor avatar TTS speech and subtitling system into separate module
   - Draw assets:
       - Make per-character AI chat icons (just jury-rig `raven/icons/ai.png` for minimal demo, fix later)
       - Finish the new app icon for Raven (small and large sizes)

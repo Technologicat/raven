@@ -28,7 +28,7 @@ with timer() as tim:
     import threading
     import time
     import traceback
-    from typing import Callable, Optional, Union
+    from typing import Callable, List, Optional, Union
     import uuid
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -950,15 +950,25 @@ def avatar_stop_speech() -> None:
     logger.info("avatar_stop_speech: all done.")
 
 def avatar_add_text_to_preprocess_queue(text: str) -> None:
-    """Add a complete piece of text to the preprocess queue for TTS.
+    """Add a complete piece of text to the preprocess queue for TTS."""
+    logger.info("avatar_add_text_to_preprocess_queue.add_to_preprocess_queue_task: adding text to TTS preprocess queue.")
+    avatar_preprocess_queue.put(text)
 
-    """
-    def add_to_preprocess_queue_task(task_env: env) -> None:
-        if task_env.cancelled:
-            return
-        logger.info("avatar_add_text_to_preprocess_queue.add_to_preprocess_queue_task: adding text to TTS preprocess queue.")
-        avatar_preprocess_queue.put(text)
-    task_manager.submit(add_to_preprocess_queue_task, env(text=text))
+# For CPU-friendliness, LRU-cache the AI-heavy parts (for the "speak again" feature).
+@functools.lru_cache(maxsize=128)
+def _translate_sentence(sentence: str) -> str:
+    """Internal helper for subtitle translation with LRU caching."""
+    subtitle = api.translate_translate(sentence,
+                                       source_lang=gui_config.translator_source_lang,
+                                       target_lang=gui_config.translator_target_lang)
+    return subtitle
+
+@functools.lru_cache(maxsize=128)
+def _natlang_analyze(line: str) -> List[List["spacy.tokens.token.Token"]]:  # noqa: F821: we don't want to import (torch and) spaCy just for one type annotation.
+    """Internal helper for natural-language translation with LRU caching."""
+    docs = api.natlang_analyze(line,
+                               pipes=["tok2vec", "parser", "senter"])
+    return docs
 
 def avatar_preprocess_task(task_env: env) -> None:
     """Preprocess text for TTS output (AI speech synthesizer) from the TTS preprocess queue.
@@ -1008,8 +1018,7 @@ def avatar_preprocess_task(task_env: env) -> None:
             if not line:
                 continue
 
-            docs = api.natlang_analyze(line,
-                                       pipes=["tok2vec", "parser", "senter"])
+            docs = _natlang_analyze(line)
             assert len(docs) == 1
             doc = docs[0]
             sentences = list(doc.sents)
@@ -1026,9 +1035,7 @@ def avatar_preprocess_task(task_env: env) -> None:
 
                 if app_state["avatar_subtitles_enabled"]:
                     if gui_config.translator_target_lang is not None:  # Call the AI translator on Raven-server
-                        subtitle = api.translate_translate(sentence,
-                                                           source_lang=gui_config.translator_source_lang,
-                                                           target_lang=gui_config.translator_target_lang)
+                        subtitle = _translate_sentence(sentence)
                     else:  # No translation -> English closed captions (CC)
                         subtitle = sentence
                     logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): original: {sentence}")
@@ -1038,24 +1045,42 @@ def avatar_preprocess_task(task_env: env) -> None:
                     logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): subtitler is off.")
                     subtitle = None
 
+                if task_env.cancelled:
+                    return
+
+                # Precompute TTS audio and phoneme data.
+                # We have plenty of wall time to precompute more, even when running the TTS on CPU, while the first sentence is being spoken.
+                logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): precomputing TTS audio and phoneme data")
+                prep = api.tts_prepare(text=sentence,
+                                       voice=librarian_config.avatar_config.voice,
+                                       speed=librarian_config.avatar_config.voice_speed)
+                if prep is None:
+                    logger.warning(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): error during precomputing, skipping sentence")
+                    continue
+
                 logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): processing done")
                 if task_env.cancelled:
                     return
 
-                avatar_output_queue.put((sentence, subtitle))
+                avatar_output_queue.put((sentence, subtitle, prep))
 
     # background task main loop
     try:
         while True:
             if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
                 break
+
             try:
                 text = avatar_preprocess_queue.get(block=False)
             except queue.Empty:
                 time.sleep(0.2)
                 continue
-            else:
+
+            try:
                 process_item(text)
+            except Exception as exc:
+                logger.error(f"avatar_preprocess_task: {type(exc)}: {exc}")
+                traceback.print_exc()
     finally:
         logger.info(f"avatar_preprocess_task: instance {task_env.task_name}: TTS preprocessor exiting")
 avatar_preprocess_task_name = task_manager.submit(avatar_preprocess_task, env())
@@ -1066,7 +1091,7 @@ def avatar_speak_task(task_env: env) -> None:
 
     logger.info(f"avatar_speak_task: instance {task_env.task_name}: TTS queue processor starting")
 
-    def process_item(sentence, subtitle):
+    def process_item(sentence, subtitle, prep):
         logger.info(f"avatar_speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: starting processing")
         with task_env.lock:
             task_env.speaking = True
@@ -1110,13 +1135,14 @@ def avatar_speak_task(task_env: env) -> None:
 
         logger.info(f"avatar_speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: submitting TTS task.")
         api.tts_speak_lipsynced(instance_id=avatar_instance_id,
-                                voice=librarian_config.avatar_config.voice,
-                                text=sentence,
-                                speed=librarian_config.avatar_config.voice_speed,
+                                voice="ignored_due_to_prep",
+                                text="ignored_due_to_prep",
+                                speed=1.0,  # ignored due to prep
                                 video_offset=librarian_config.avatar_config.video_offset,
                                 on_audio_ready=None,
                                 on_start=on_start_lipsync_speaking,
-                                on_stop=on_stop_lipsync_speaking)
+                                on_stop=on_stop_lipsync_speaking,
+                                prep=prep)
         logger.info(f"avatar_speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: processing done")
 
     task_env.lock = threading.RLock()
@@ -1131,7 +1157,7 @@ def avatar_speak_task(task_env: env) -> None:
                 time.sleep(0.1)
                 continue
             try:
-                sentence, subtitle = avatar_output_queue.get(block=False)
+                sentence, subtitle, prep = avatar_output_queue.get(block=False)
             except queue.Empty:  # wait until we have a sentence to speak
                 time_now = time.time_ns()
                 dt = (time_now - avatar_emotion_autoreset_t0) / 10**9
@@ -1143,7 +1169,7 @@ def avatar_speak_task(task_env: env) -> None:
                 time.sleep(0.2)
                 continue
             else:
-                process_item(sentence, subtitle)
+                process_item(sentence, subtitle, prep)
     finally:
         logger.info(f"avatar_speak_task: instance {task_env.task_name}: TTS queue processor exiting")
 task_manager.submit(avatar_speak_task, env())

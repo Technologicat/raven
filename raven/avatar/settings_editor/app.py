@@ -1198,8 +1198,8 @@ class PostprocessorSettingsEditorGUI:
             def on_stop_lipsync_speaking():
                 self.on_stop_speaking(None, None, user_data)  # update the GUI, stop recording (if active); pass on our `user_data` as-is
             api.tts_speak_lipsynced(instance_id=avatar_instance_id,
-                                    voice=selected_voice,
                                     text=text,
+                                    voice=selected_voice,
                                     speed=dpg.get_value("speak_speed_slider") / 10,
                                     video_offset=dpg.get_value("speak_video_offset") / 10,
                                     on_audio_ready=on_audio_ready,
@@ -1213,8 +1213,8 @@ class PostprocessorSettingsEditorGUI:
             def on_stop_nonlipsync_speaking():
                 api.avatar_stop_talking(avatar_instance_id)
                 self.on_stop_speaking(None, None, user_data)  # update the GUI, stop recording (if active); pass on our `user_data` as-is
-            api.tts_speak(voice=selected_voice,
-                          text=text,
+            api.tts_speak(text=text,
+                          voice=selected_voice,
                           speed=dpg.get_value("speak_speed_slider") / 10,
                           on_audio_ready=on_audio_ready,
                           on_start=on_start_nonlipsync_speaking,

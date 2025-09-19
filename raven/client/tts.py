@@ -155,8 +155,8 @@ def tts_list_voices() -> List[str]:
     return output_data["voices"]
 
 @functools.lru_cache(maxsize=128)
-def tts_prepare(voice: str,
-                text: str,
+def tts_prepare(text: str,
+                voice: str,
                 speed: float = 1.0,
                 get_metadata: bool = True) -> Optional[Dict[str, Any]]:
     """Using the speech synthesizer, precompute TTS speech audio for `text` using `voice`.
@@ -187,10 +187,10 @@ def tts_prepare(voice: str,
     if not util.api_initialized:
         raise RuntimeError("tts_prepare: The `raven.client.api` module must be initialized before using the API.")
     if util.api_config.tts_server_type is None:
-        logger.info("tts_prepare: TTS server type missing from API config. Canceled.")
+        logger.info("tts_prepare: TTS server type missing from API config. Cancelled.")
         return None
     if not text.strip():
-        logger.info("tts_prepare: Ignoring blank `text`. Canceled.")
+        logger.info("tts_prepare: Ignoring blank `text`. Cancelled.")
         return None
     headers = copy.copy(util.api_config.tts_default_headers)
     headers["Content-Type"] = "application/json"
@@ -325,7 +325,7 @@ def tts_prepare(voice: str,
                 #
                 # Consolidate data for convenience
                 if len(phonemes_task_env.phonemess) != len(timestamps):  # should have exactly one phoneme sequence for each word
-                    logger.error(f"tts_prepare: Metadata was requested, but the number of phoneme sequences ({len(phonemes_task_env.phonemess)}) does not match number of words ({len(timestamps)}). Can't process phonemes. Canceled.")
+                    logger.error(f"tts_prepare: Metadata was requested, but the number of phoneme sequences ({len(phonemes_task_env.phonemess)}) does not match number of words ({len(timestamps)}). Can't process phonemes. Cancelled.")
                     for record in timestamps:
                         print(record)  # DEBUG, show timestamped words
                     print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
@@ -351,7 +351,7 @@ def tts_prepare(voice: str,
                 logger.info(f"    {record}")  # DEBUG once more, with feeling! (show timestamps, with phoneme data)
 
             if not timestamps:
-                logger.info("tts_prepare: Metadata was requested, but the TTS did not generate any phonemes. Canceled. The text was:")
+                logger.info("tts_prepare: Metadata was requested, but the TTS did not generate any phonemes. Cancelled. The text was:")
                 logger.info(text)
                 return None
 
@@ -360,12 +360,13 @@ def tts_prepare(voice: str,
 
     return result
 
-def tts_speak(voice: str,
-              text: str,
+def tts_speak(text: str,
+              voice: str,
               speed: float = 1.0,
               on_audio_ready: Optional[Callable] = None,
               on_start: Optional[Callable] = None,
-              on_stop: Optional[Callable] = None) -> None:
+              on_stop: Optional[Callable] = None,
+              prep: Optional[Dict[str, Any]] = None) -> None:
     """Using the speech synthesizer, speak `text` using `voice`.
 
     To get the list of available voices, call `tts_list_voices`.
@@ -379,22 +380,32 @@ def tts_speak(voice: str,
 
     If `on_start` is provided, call it when the TTS starts speaking. No arguments. Return value is ignored.
     If `on_stop` is provided, call it when the TTS has stopped speaking. No arguments. Return value is ignored.
+
+    **Advanced mode**
+
+    If `prep` is provided, ignore `voice`, `text`, and `speed`, and load preprocessed TTS audio from `prep`.
+    To get a `prep`, use `tts_prepare`. This allows precomputing TTS for more sentences while a previous one
+    is still being spoken.
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak: The `raven.client.api` module must be initialized before using the API.")
     if util.api_config.tts_server_type is None:
-        logger.info("tts_speak: TTS server type missing from API config. Canceled.")
+        logger.info("tts_speak: TTS server type missing from API config. Cancelled.")
         return
     headers = copy.copy(util.api_config.tts_default_headers)
     headers["Content-Type"] = "application/json"
 
     # We run this in the background
     def speak(task_env) -> None:
-        logger.info("tts_speak.speak: getting audio")
-        prep = tts_prepare(voice, text, speed, get_metadata=False)
         if prep is None:
-            logger.info("tts_speak.speak: got `None` from `tts_prepare`. Canceled.")
-        audio_bytes = prep["audio_bytes"]
+            logger.info("tts_speak.speak: getting audio")
+            final_prep = tts_prepare(voice, text, speed, get_metadata=False)
+            if final_prep is None:
+                logger.info("tts_speak.speak: got `None` from `tts_prepare`. Cancelled.")
+        else:
+            logger.info("tts_speak.speak: using precomputed audio")
+            final_prep = prep
+        audio_bytes = final_prep["audio_bytes"]
 
         # Send TTS speech audio data (mp3) to caller if they want it
         if on_audio_ready is not None:
@@ -439,13 +450,14 @@ def tts_speak(voice: str,
     util.api_config.task_manager.submit(speak, envcls())
 
 def tts_speak_lipsynced(instance_id: str,
-                        voice: str,
                         text: str,
+                        voice: str,
                         speed: float = 1.0,
                         video_offset: float = 0.0,
                         on_audio_ready: Optional[Callable] = None,
                         on_start: Optional[Callable] = None,
-                        on_stop: Optional[Callable] = None) -> None:
+                        on_stop: Optional[Callable] = None,
+                        prep: Optional[Dict[str, Any]] = None) -> None:
     """Like `tts_speak`, but with lipsync for the avatar.
 
     Using the speech synthesizer, speak `text` using `voice`.
@@ -468,20 +480,30 @@ def tts_speak_lipsynced(instance_id: str,
 
     If `on_start` is provided, call it when the TTS starts speaking. No arguments. Return value is ignored.
     If `on_stop` is provided, call it when the TTS has stopped speaking. No arguments. Return value is ignored.
+
+    **Advanced mode**
+
+    If `prep` is provided, ignore `voice`, `text`, and `speed`, and load preprocessed TTS audio and phonemes
+    from `prep`. To get a `prep`, use `tts_prepare`. This allows precomputing TTS for more sentences while a
+    previous one is still being spoken.
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak_lipsynced: The `raven.client.api` module must be initialized before using the API.")
     if util.api_config.tts_server_type is None:
-        logger.info("tts_speak_lipsynced: TTS server type missing from API config. Canceled.")
+        logger.info("tts_speak_lipsynced: TTS server type missing from API config. Cancelled.")
         return None
 
     def speak(task_env: envcls) -> None:
-        logger.info("tts_speak_lipsynced.speak: getting audio and phonemes")
-        prep = tts_prepare(voice, text, speed, get_metadata=True)
         if prep is None:
-            logger.info("tts_speak_lipsynced.speak: got `None` from `tts_prepare`. Canceled.")
-        audio_bytes = prep["audio_bytes"]
-        timestamps = prep["timestamps"]
+            logger.info("tts_speak_lipsynced.speak: getting audio and phonemes")
+            final_prep = tts_prepare(voice, text, speed, get_metadata=True)
+            if final_prep is None:
+                logger.info("tts_speak_lipsynced.speak: got `None` from `tts_prepare`. Cancelled.")
+        else:
+            logger.info("tts_speak_lipsynced.speak: using precomputed audio and phonemes")
+            final_prep = prep
+        audio_bytes = final_prep["audio_bytes"]
+        timestamps = final_prep["timestamps"]
 
         # Send TTS speech audio data (mp3) to caller if they want it
         if on_audio_ready is not None:
