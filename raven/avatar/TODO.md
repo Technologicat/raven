@@ -11,8 +11,6 @@ Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM f
 
 ### Documentation
 
-- Update README, document all web API endpoints.
-
 - Polish up the documentation:
   - Add pictures to README.
     - Screenshot of the pose editor (`raven.avatar.pose_editor.app`). Anything else we should say about it?
