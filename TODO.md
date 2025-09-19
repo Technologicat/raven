@@ -54,7 +54,6 @@
 
 - Librarian
   - For minimal demo:
-    - Use separate task manager for the TTS preprocessor to power-cycle it more easily
     - Refactor avatar TTS speech and subtitling system into separate module
   - Draw assets:
       - Make per-character AI chat icons (just jury-rig `raven/icons/ai.png` for minimal demo, fix later)

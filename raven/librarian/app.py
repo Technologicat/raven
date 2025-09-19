@@ -77,6 +77,9 @@ bg = concurrent.futures.ThreadPoolExecutor()
 task_manager = bgtask.TaskManager(name="librarian",  # for most tasks
                                   mode="concurrent",
                                   executor=bg)
+avatar_preprocess_task_manager = bgtask.TaskManager(name="librarian_avatar_preprocess",  # for running avatar TTS preprocessing (so that we can easily power-cycle the TTS preprocessor when needed)
+                                                    mode="concurrent",
+                                                    executor=bg)
 ai_turn_task_manager = bgtask.TaskManager(name="librarian_ai_turn",  # for running the AI's turn, specifically (so that we can easily cancel just that one task when needed)
                                           mode="concurrent",
                                           executor=bg)  # same thread poool
@@ -925,22 +928,16 @@ def _avatar_get_emotion_from_text(text: str) -> str:
     except Exception:
         return "neutral"
 
-avatar_preprocess_task_name = None  # running preprocess task, so that we can cancel it and start a new one when the TTS is stopped
 def avatar_stop_speech() -> None:
     """Stop the TTS, clearing also all speech pending in the queues."""
-    global avatar_preprocess_task_name
     logger.info("avatar_stop_speech: entered.")
     # Clear preprocess queue, so that no new preprocess jobs start.
     logger.info("avatar_stop_speech: clearing TTS preprocess queue.")
     slurp(avatar_preprocess_queue)
     # Power-cycle the TTS preprocessor, to cancel the current job.
     logger.info("avatar_stop_speech: power-cycling TTS preprocessor.")
-    try:
-        task_manager.cancel(avatar_preprocess_task_name)
-        avatar_preprocess_task_name = None
-    except ValueError:  # did not exist
-        pass  # it's fine
-    avatar_preprocess_task_name = task_manager.submit(avatar_preprocess_task, env())
+    avatar_preprocess_task_manager.clear()
+    avatar_preprocess_task_manager.submit(avatar_preprocess_task, env())
     # Then clear the output queue, so that no new speak jobs start.
     logger.info("avatar_stop_speech: clearing TTS output queue.")
     slurp(avatar_output_queue)
@@ -1004,13 +1001,20 @@ def avatar_preprocess_task(task_env: env) -> None:
             return
         # Now we actually have some text that is worth sending to the TTS and to the translation/subtitling system.
 
+        def check_exit_and_print_reason() -> bool:  # True: exit, False: keep running
+            if task_env.cancelled or not gui_alive:
+                reason = "Cancelled" if task_env.cancelled else "App is shutting down"
+                logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: {reason}, exiting.")
+                return True
+            return False
+
         # Break into lines, and break each line into sentences.
         # TODO: This relies on the fact that LLMs don't insert newlines except as paragraph breaks.
         lines = text.split("\n")
         plural_s = "s" if len(lines) != 1 else ""
         logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: detected {len(lines)} line{plural_s}.")
         for lineno, line in enumerate(lines, start=1):
-            if task_env.cancelled:
+            if check_exit_and_print_reason():
                 return
 
             line = strip_emoji(line)
@@ -1026,7 +1030,7 @@ def avatar_preprocess_task(task_env: env) -> None:
             logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}: detected {len(sentences)} sentence{plural_s} on this line.")
 
             for sentenceno, sentence in enumerate(sentences, start=1):
-                if task_env.cancelled:
+                if check_exit_and_print_reason():
                     return
 
                 sentence = str(sentence)  # from spaCy rich internal format
@@ -1045,7 +1049,7 @@ def avatar_preprocess_task(task_env: env) -> None:
                     logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): subtitler is off.")
                     subtitle = None
 
-                if task_env.cancelled:
+                if check_exit_and_print_reason():
                     return
 
                 # Precompute TTS audio and phoneme data.
@@ -1059,7 +1063,7 @@ def avatar_preprocess_task(task_env: env) -> None:
                     continue
 
                 logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): processing done")
-                if task_env.cancelled:
+                if check_exit_and_print_reason():  # IMPORTANT: don't queue the result if cancelled
                     return
 
                 avatar_output_queue.put((sentence, subtitle, prep))
@@ -1067,8 +1071,8 @@ def avatar_preprocess_task(task_env: env) -> None:
     # background task main loop
     try:
         while True:
-            if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
-                break
+            if task_env.cancelled or not gui_alive:  # co-operative shutdown (e.g. app exit)
+                return
 
             try:
                 text = avatar_preprocess_queue.get(block=False)
@@ -1082,8 +1086,8 @@ def avatar_preprocess_task(task_env: env) -> None:
                 logger.error(f"avatar_preprocess_task: {type(exc)}: {exc}")
                 traceback.print_exc()
     finally:
-        logger.info(f"avatar_preprocess_task: instance {task_env.task_name}: TTS preprocessor exiting")
-avatar_preprocess_task_name = task_manager.submit(avatar_preprocess_task, env())
+        reason = "Cancelled" if task_env.cancelled else "App is shutting down"
+        logger.info(f"avatar_preprocess_task: instance {task_env.task_name}: {reason}, TTS preprocessor exiting.")
 
 def avatar_speak_task(task_env: env) -> None:
     """TTS, with avatar lipsync and subtitles (from AI translator)."""
@@ -1172,7 +1176,6 @@ def avatar_speak_task(task_env: env) -> None:
                 process_item(sentence, subtitle, prep)
     finally:
         logger.info(f"avatar_speak_task: instance {task_env.task_name}: TTS queue processor exiting")
-task_manager.submit(avatar_speak_task, env())
 
 # --------------------------------------------------------------------------------
 # Scaffold to GUI integration
@@ -1885,6 +1888,7 @@ def gui_shutdown() -> None:
     logger.info("gui_shutdown: entered")
     # Tell background tasks that GUI teardown is in progress (app is shutting down, so trying to update GUI elements may hang the app).
     # This also tells `run_ai_turn` to exit, so we don't need to clear the `ai_turn_task_manager`.
+    # Same for `avatar_preprocess_task` in the `avatar_preprocess_task_manager`.
     gui_alive = False
     task_manager.clear(wait=True)  # Wait until background tasks actually exit.
     gui_animation.animator.clear()
@@ -1908,6 +1912,10 @@ def app_shutdown() -> None:
             pass
     logger.info("app_shutdown: done")
 atexit.register(app_shutdown)
+
+# Start background tasks for the avatar TTS/subtitling subsystem (must do this after `gui_alive` is set)
+avatar_preprocess_task_manager.submit(avatar_preprocess_task, env())
+task_manager.submit(avatar_speak_task, env())
 
 dpg.set_primary_window(main_window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)
