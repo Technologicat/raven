@@ -183,13 +183,8 @@ class DPGAvatarRenderer:
     def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]):
         """Load a backdrop image. To clear the background (no image), use `filename=None`.
 
-        We special-case also the empty string to mean the same as `None`, to ease JSON saving/loading of animator settings.
-
         The backdrop change takes effect upon the next call to `configure_backdrop`, which see.
         """
-        if filename == "":  # map empty string to `None`, for data coming from JSON settings files
-            filename = None
-
         if filename is not None:
             self.backdrop_image = PIL.Image.open(filename)
             self.backdrop_path = filename

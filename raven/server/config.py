@@ -301,7 +301,7 @@ animator_defaults = {
     # Backdrop image. Applied at the client side.
     #
     # Path can be absolute or relative path. Relative means relative to CWD when you start a client app. The avatar settings editor always saves an absolute path; but feel free to edit the JSON file.
-    "backdrop_path": "",  # path to backdrop image (`str`), empty string for no backdrop.
+    "backdrop_path": None,  # path to backdrop image (`str`), or `None` for no backdrop.
     "backdrop_blur": True,  # whether to blur the backdrop image. The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.
 
     # animefx: anime-style emotional reaction effects that hover *around* the character.

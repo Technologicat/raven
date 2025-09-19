@@ -802,7 +802,7 @@ class PostprocessorSettingsEditorGUI:
     def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]) -> None:
         """Load a backdrop image. To clear the background, use `filename=None`."""
         self.dpg_avatar_renderer.load_backdrop_image(filename=filename)
-        self.animator_settings["backdrop_path"] = str(filename) if filename is not None else ""  # update the path in the animator settings, JSONifying it.
+        self.animator_settings["backdrop_path"] = str(filename) if filename is not None else None  # update the path in the animator settings
         self._resize_gui()  # render the new backdrop
 
     def _resize_gui(self) -> None:
@@ -1037,8 +1037,8 @@ class PostprocessorSettingsEditorGUI:
             if "animefx_enabled" in animator_settings:
                 dpg.set_value("animefx_checkbox", animator_settings["animefx_enabled"])
 
-            backdrop_path = animator_settings.get("backdrop_path", "")  # Default to no backdrop image if the file doesn't have this key.
-            self.dpg_avatar_renderer.load_backdrop_image(backdrop_path)  # this internally un-JSONifies `""` to `None` if needed
+            backdrop_path = animator_settings.get("backdrop_path", None)  # Default to no backdrop image if the file doesn't have this key.
+            self.dpg_avatar_renderer.load_backdrop_image(backdrop_path)
             if "backdrop_blur" in animator_settings:
                 dpg.set_value("backdrop_blur_checkbox", animator_settings["backdrop_blur"])
 

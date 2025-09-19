@@ -54,7 +54,6 @@
 
 - Librarian
   - For minimal demo:
-    - `None` is JSONable (as `null`?), remove the JSON hack for the backdrop image path.
     - Queue the TTS audio generation separately, this could run while the previous parts are being spoken.
       - Would help in CPU TTS setups. Since speech is slow, there's several seconds of wall time during each snippet during which we can render the next one.
       - Needs new API functions: one to prepare TTS (compute audio and phonemes), and another to invoke the TTS (and lipsync driver) on this pre-prepared data.
