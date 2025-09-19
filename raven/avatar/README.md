@@ -115,9 +115,9 @@ Note that by default, the avatar loads its emotion templates from [`raven/avatar
 
 In case you need to go back to factory default emotion templates, the pose editor has a factory reset command-line option, which can do this. (This cannot be undone.)
 
-**Future plans** (08/2025)
+**Future plans** (09/2025)
 
-The avatar will visually represent the AI character in the GUI of `raven-librarian`, our upcoming scientific LLM frontend. The AI character's emotional state will be automatically determined from a piece of text (or thought) most recently written by the LLM, via the `classification` module of *Raven-server*. This is the same approach that was used by *Talkinghead*.
+The avatar visually represents the LLM in the GUI of `raven-librarian`, our scientific LLM frontend under development. The AI character's emotional state is automatically determined from a piece of text (or thought) most recently written by the LLM, via the `classify` module of *Raven-server*. This is the same approach that was used by *Talkinghead*.
 
 *Talkinghead* support has been discontinued in *SillyTavern*. It would be interesting to introduce *Raven-avatar* as an upgraded replacement, but at the moment, there are no development resources to write a JS client for the avatar. If interested, much of the porting should be straightforward; see [#2](https://github.com/Technologicat/raven/issues/2).
 

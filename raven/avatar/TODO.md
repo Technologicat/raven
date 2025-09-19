@@ -4,7 +4,7 @@
 
 As of June 2025.
 
-Talkinghead has become *Raven-avatar*, in preparation for Raven's upcoming LLM frontend *Raven-librarian*, which will support an AI-animated avatar for the AI.
+Talkinghead has become *Raven-avatar*, for Raven's LLM frontend *Raven-librarian*, which supports an AI-animated avatar for the AI.
 
 
 ## High priority

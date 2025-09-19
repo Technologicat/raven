@@ -98,7 +98,7 @@ Most of the server functions are stateless; the only exception is *Raven-avatar*
 
 For the speech synthesizer, we provide two web API endpoints: an OpenAI compatible one, and a custom one. The custom endpoint provides word timestamps and per-word phoneme data, which is needed for lipsyncing the avatar. The actual lipsync driver lives on the client side, in the [Python bindings](#python-bindings-easy-client-api), because the speech audio playback is done on the client side, too.
 
-Historically, *Raven-server* began as a continuation of the discontinued *SillyTavern-extras*. One important reason was to keep the avatar technology alive; it is a promising, unique experiment that no other project seems to have followed up on. But also, a web API server for various specialized NLP functionality happened to be exactly what *Raven-visualizer* and the upcoming *Raven-librarian* needed. The server has since been extended in various ways: the avatar has several new features, the built-in TTS is new, and several new NLP modules have been added.
+Historically, *Raven-server* began as a continuation of the discontinued *SillyTavern-extras*. One important reason was to keep the avatar technology alive; it is a promising, unique experiment that no other project seems to have followed up on. But also, a web API server for various specialized NLP functionality happened to be exactly what *Raven-visualizer* and *Raven-librarian* needed. The server has since been extended in various ways: the avatar has several new features, the built-in TTS is new, and several new NLP modules have been added.
 
 
 # Command-line options
@@ -189,7 +189,7 @@ We provide the following server modules:
   - :exclamation: *`espeak-ng` is **not** a Python package, but a separate command-line app; how to install it depends on your OS.* :exclamation:
   - :exclamation: *In a Debian-based Linux (such as Ubuntu or Mint), `sudo apt install espeak-ng`. This is the **only** part of installing Raven that needs admin privileges.* :exclamation:
   - :exclamation: *Raven only ever calls `espeak-ng` from its `tts` module, and only for those inputs for which the TTS's built-in [Misaki](https://github.com/hexgrad/misaki) phonemizer fails.* :exclamation:
-- `websearch`: A local [SERP](https://en.wikipedia.org/wiki/Search_engine_results_page) processor, used by the `websearch` tool of *Raven-minichat* (and will be similarly used by the upcoming *Raven-librarian*).
+- `websearch`: A local [SERP](https://en.wikipedia.org/wiki/Search_engine_results_page) processor, used by the `websearch` tool of *Raven-librarian*.
   - Continuation of the `websearch` module of *SillyTavern-Extras*, with improvements ported from the newer extension [SillyTavern-WebSearch-Selenium](https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium).
   - We also provide a custom web API endpoint that returns structured search results (to easily keep each link with the corresponding search result).
 
