@@ -53,10 +53,48 @@ from ..common.gui import utils as guiutils
 
 from . import config as librarian_config
 
-avatar_input_queue = queue.Queue()  # for TTS preprocessing and subtitle generation: [text0, ...]
-avatar_output_queue = queue.Queue()  # for TTS and subtitle output: [(sentence0, translation0, prep0), ...]
+# --------------------------------------------------------------------------------
+
+avatar_input_queue = queue.Queue()  # for TTS input preprocessing and subtitle generation: [text0, ...]
+avatar_output_queue = queue.Queue()  # for TTS and subtitle playback: [(sentence0, translation0, prep0), ...]
 
 avatar_emotion_autoreset_t0 = time.time_ns()  # emotion autoreset is handled by `speak_task`
+
+# --------------------------------------------------------------------------------
+# For CPU-friendliness, LRU-cache all AI-heavy parts (for the "speak again" feature).
+#
+# NOTE: `raven.client.tts.tts_prepare` also LRU caches its results internally.
+
+@functools.lru_cache(maxsize=128)
+def _avatar_get_emotion_from_text(text: str) -> str:
+    """Internal helper for computing avatar's emotion from text."""
+    try:
+        if not text:
+            return "neutral"
+        detected_emotions = api.classify(text)  # -> `{emotion0: score0, ...}`, sorted by score, descending
+        filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in librarian_config.avatar_config.emotion_blacklist]
+        winning_emotion = filtered_emotions[0]
+        return winning_emotion
+    except Exception:
+        return "neutral"
+
+@functools.lru_cache(maxsize=128)
+def _translate_sentence(sentence: str) -> str:
+    """Internal helper for subtitle translation with LRU caching."""
+    subtitle = api.translate_translate(sentence,
+                                       source_lang=avatar_controller_config.translator_source_lang,
+                                       target_lang=avatar_controller_config.translator_target_lang)
+    return subtitle
+
+@functools.lru_cache(maxsize=128)
+def _natlang_analyze(line: str) -> List[List["spacy.tokens.token.Token"]]:  # noqa: F821: we don't want to import (torch and) spaCy just for one type annotation.
+    """Internal helper for natural-language translation with LRU caching."""
+    docs = api.natlang_analyze(line,
+                               pipes=["tok2vec", "parser", "senter"])
+    return docs
+
+# --------------------------------------------------------------------------------
+# API
 
 avatar_controller_initialized = False
 avatar_controller_config = env()
@@ -194,68 +232,45 @@ def update_emotion_from_text(text: str) -> str:
         # Reset the timer last. If running on CPU, the emotion analysis may be slow.
         avatar_emotion_autoreset_t0 = time.time_ns()
 
-@functools.lru_cache(maxsize=128)
-def _avatar_get_emotion_from_text(text: str) -> str:
-    try:
-        if not text:
-            return "neutral"
-        detected_emotions = api.classify(text)  # -> `{emotion0: score0, ...}`, sorted by score, descending
-        filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in librarian_config.avatar_config.emotion_blacklist]
-        winning_emotion = filtered_emotions[0]
-        return winning_emotion
-    except Exception:
-        return "neutral"
+def send_text_to_tts(text: str) -> None:
+    """Send a complete piece of text into the TTS queue."""
+    logger.info("send_text_to_tts: adding text to TTS queue.")
+    avatar_input_queue.put(text)
 
 def stop_tts() -> None:
     """Stop the TTS, clearing also all speech pending in the queues."""
     logger.info("stop_tts: entered.")
-    # Clear preprocess queue, so that no new preprocess jobs start.
-    logger.info("stop_tts: clearing TTS preprocess queue.")
+    # Clear TTS input preprocess queue, so that no new preprocess jobs start.
+    logger.info("stop_tts: clearing TTS input preprocess queue.")
     slurp(avatar_input_queue)
-    # Power-cycle the TTS preprocessor, to cancel the current job.
-    logger.info("stop_tts: power-cycling TTS preprocessor.")
+    # Power-cycle the TTS input preprocessor, to cancel the current job.
+    logger.info("stop_tts: power-cycling TTS input preprocessor.")
     avatar_controller_config.input_queue_task_manager.clear()
     avatar_controller_config.input_queue_task_manager.submit(preprocess_task, env())
     # Then clear the output queue, so that no new speak jobs start.
-    logger.info("stop_tts: clearing TTS output queue.")
+    logger.info("stop_tts: clearing TTS playback queue.")
     slurp(avatar_output_queue)
     # Then stop the TTS - the current TTS task will end, and `speak_task` will then notice that the output queue is empty.
     logger.info("stop_tts: stopping TTS.")
     api.tts_stop()
     logger.info("stop_tts: all done.")
 
-def send_text_to_tts(text: str) -> None:
-    """Add a complete piece of text to the preprocess queue for TTS."""
-    logger.info("send_text_to_tts: adding text to TTS queue.")
-    avatar_input_queue.put(text)
-
-# For CPU-friendliness, LRU-cache the AI-heavy parts (for the "speak again" feature).
-@functools.lru_cache(maxsize=128)
-def _translate_sentence(sentence: str) -> str:
-    """Internal helper for subtitle translation with LRU caching."""
-    subtitle = api.translate_translate(sentence,
-                                       source_lang=avatar_controller_config.translator_source_lang,
-                                       target_lang=avatar_controller_config.translator_target_lang)
-    return subtitle
-
-@functools.lru_cache(maxsize=128)
-def _natlang_analyze(line: str) -> List[List["spacy.tokens.token.Token"]]:  # noqa: F821: we don't want to import (torch and) spaCy just for one type annotation.
-    """Internal helper for natural-language translation with LRU caching."""
-    docs = api.natlang_analyze(line,
-                               pipes=["tok2vec", "parser", "senter"])
-    return docs
+# --------------------------------------------------------------------------------
+# Background task: TTS input preprocessor
 
 def preprocess_task(task_env: env) -> None:
-    """Preprocess text for TTS output (AI speech synthesizer) from the TTS preprocess queue.
+    """Preprocess text for TTS (AI speech synthesizer) from the TTS input preprocess queue.
 
     The text should be a whole chat message (without the role name), or at least a complete paragraph.
 
     The text is cleaned, and then split into sentences. Depending on Librarian settings (see `raven.librarian.config`),
     each sentence may be translated for subtitling, closed-captioned (CC) as-is, or the subtitler may be skipped.
 
-    The resulting clean sentence and its possible subtitle are added to the TTS output queue.
+    Finally, the TTS audio and phonemes are precomputed.
+
+    The resulting clean sentence, its possible subtitle, and the precomputed data, are added to the TTS playback queue.
     """
-    logger.info(f"preprocess_task: instance {task_env.task_name}: TTS preprocessor starting")
+    logger.info(f"preprocess_task: instance {task_env.task_name}: TTS input preprocessor starting")
 
     def strip_emoji(text: str) -> str:
         return emoji.get_emoji_regexp().sub(r"", text)
@@ -280,20 +295,13 @@ def preprocess_task(task_env: env) -> None:
             return
         # Now we actually have some text that is worth sending to the TTS and to the translation/subtitling system.
 
-        def check_exit_and_print_reason() -> bool:  # True: exit, False: keep running
-            if task_env.cancelled or not avatar_controller_config.gui_alive:
-                reason = "Cancelled" if task_env.cancelled else "App is shutting down"
-                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: {reason}, exiting.")
-                return True
-            return False
-
         # Break into lines, and break each line into sentences.
         # TODO: This relies on the fact that LLMs don't insert newlines except as paragraph breaks.
         lines = text.split("\n")
         plural_s = "s" if len(lines) != 1 else ""
         logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: detected {len(lines)} line{plural_s}.")
         for lineno, line in enumerate(lines, start=1):
-            if check_exit_and_print_reason():
+            if task_env.cancelled:
                 return
 
             line = line.strip()
@@ -308,7 +316,7 @@ def preprocess_task(task_env: env) -> None:
             logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}: detected {len(sentences)} sentence{plural_s} on this line.")
 
             for sentenceno, sentence in enumerate(sentences, start=1):
-                if check_exit_and_print_reason():
+                if task_env.cancelled:
                     return
 
                 sentence = str(sentence)  # from spaCy rich internal format
@@ -327,7 +335,7 @@ def preprocess_task(task_env: env) -> None:
                     logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): subtitler is off.")
                     subtitle = None
 
-                if check_exit_and_print_reason():
+                if task_env.cancelled:
                     return
 
                 # Precompute TTS audio and phoneme data.
@@ -341,7 +349,7 @@ def preprocess_task(task_env: env) -> None:
                     continue
 
                 logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): processing done")
-                if check_exit_and_print_reason():  # IMPORTANT: don't queue the result if cancelled
+                if task_env.cancelled:  # IMPORTANT: don't queue the result if cancelled
                     return
 
                 avatar_output_queue.put((sentence, subtitle, prep))
@@ -349,7 +357,7 @@ def preprocess_task(task_env: env) -> None:
     # background task main loop
     try:
         while True:
-            if task_env.cancelled or not avatar_controller_config.gui_alive:  # co-operative shutdown (e.g. app exit)
+            if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
                 return
 
             try:
@@ -361,11 +369,13 @@ def preprocess_task(task_env: env) -> None:
             try:
                 process_item(text)
             except Exception as exc:
-                logger.error(f"preprocess_task: {type(exc)}: {exc}")
+                logger.error(f"preprocess_task: during `process_item`: {type(exc)}: {exc}")
                 traceback.print_exc()
     finally:
-        reason = "Cancelled" if task_env.cancelled else "App is shutting down"
-        logger.info(f"preprocess_task: instance {task_env.task_name}: {reason}, TTS preprocessor exiting.")
+        logger.info(f"preprocess_task: instance {task_env.task_name}: TTS input preprocessor exiting")
+
+# --------------------------------------------------------------------------------
+# Background task: TTS playback controller
 
 def speak_task(task_env: env) -> None:
     """TTS, with avatar lipsync and subtitles (from AI translator)."""
@@ -431,7 +441,7 @@ def speak_task(task_env: env) -> None:
     try:
         while True:
             if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
-                break
+                return
             with task_env.lock:
                 speaking = task_env.speaking  # we must release the lock as soon as possible (so that `on_stop_lipsync_speaking` can lock it, if it happens to be run), so get the state into a temporary variable.
             if speaking:  # wait until TTS is free (previous speech ended)
@@ -449,7 +459,11 @@ def speak_task(task_env: env) -> None:
                                            emotion_name="neutral")
                 time.sleep(0.2)
                 continue
-            else:
+
+            try:
                 process_item(sentence, subtitle, prep)
+            except Exception as exc:
+                logger.error(f"speak_task: during `process_item`: {type(exc)}: {exc}")
+                traceback.print_exc()
     finally:
         logger.info(f"speak_task: instance {task_env.task_name}: TTS playback controller exiting")
