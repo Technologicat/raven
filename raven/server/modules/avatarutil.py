@@ -23,7 +23,7 @@ import torch
 
 from ...vendor.tha3.util import torch_linear_to_srgb, numpy_srgb_to_linear, resize_PIL_image, extract_PIL_image_from_filelike
 
-# The keys for a pose in the emotion JSON files.
+# The keys for a pose in the emotion JSON files. These match the THA3 morph names.
 posedict_keys = ["eyebrow_troubled_left_index", "eyebrow_troubled_right_index",
                  "eyebrow_angry_left_index", "eyebrow_angry_right_index",
                  "eyebrow_lowered_left_index", "eyebrow_lowered_right_index",
