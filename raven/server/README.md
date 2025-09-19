@@ -467,6 +467,7 @@ This lives in a separate module, [`raven.client.avatar_renderer`](../client/avat
 The TTS subsystem is a client-server architecture, with some features implemented on the client side. Particularly, the lipsync driver and all audio playback are in the client. The role of the server is to generate the actual TTS audio, the word-level timestamps, and the word-level phonemes.
 
 - `tts_list_voices`: Get a list of all voice names supported by the TTS.
+- `tts_prepare`: Advanced mode: precompute TTS audio and optionally phonemes. The precomputed data can then be handed to `tts_speak` or `tts_speak_lipsynced`.
 - `tts_speak`: Speak text using the TTS. No lipsync.
 - `tts_speak_lipsynced`: Speak text using the TTS. Lipsync the specified avatar session to the speech audio.
 - `tts_stop`: Stop speaking. Useful for canceling while speech in progress. (Will in any case stop automatically when the speech audio ends.) No-op if not speaking.
