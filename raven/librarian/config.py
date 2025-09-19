@@ -164,7 +164,7 @@ avatar_voice_speed = 1.0  # Nominal = 1.0. Too high causes skipped words. If you
 avatar_video_offset = -0.6  # TTS AV sync setting, seconds. Positive = shift video later w.r.t. audio. Find a good value for your system with `raven-avatar-settings-editor`.
 
 avatar_emotion_blacklist = ["desire", "love"]  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
-avatar_emotion_autoreset_interval = 3.0  # seconds; if the avatar is not speaking, and has been idle for at least this long since the last time the emotion was analyzed, emotion returns to "neutral".
+avatar_emotion_autoreset_interval = 3.0  # seconds; if the avatar is not speaking, and has been idle for at least this long since the last time the emotion was updated, emotion returns to "neutral".
 
 # Since we're running also other stuff simultaneously, these settings have been optimized to be slightly friendlier on a laptop's internal dGPU than the defaults of `raven-avatar-settings-editor`.
 avatar_animator_settings_overrides = {"format": "QOI",
