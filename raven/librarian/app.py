@@ -15,20 +15,17 @@ with timer() as tim:
     import atexit
     import collections
     import concurrent.futures
-    import emoji
-    import functools
     import io
     import json
     import os
     import pathlib
     import platform
-    import queue
     import requests
     import sys
     import threading
     import time
     import traceback
-    from typing import Callable, List, Optional, Union
+    from typing import Callable, Optional, Union
     import uuid
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -36,13 +33,10 @@ with timer() as tim:
     if platform.system().upper() == "LINUX":
         os.environ["__GLVND_DISALLOW_PATCHING"] = "1"
 
-    import strip_markdown
-
     import dearpygui.dearpygui as dpg
 
     from mcpyrate import colorizer
 
-    from unpythonic import slurp
     from unpythonic.env import env
 
     # Vendored libraries
@@ -60,6 +54,7 @@ with timer() as tim:
     from ..common.gui import utils as guiutils
 
     from . import appstate
+    from . import avatar_controller
     from . import chatutil
     from . import config as librarian_config
     # from . import chattree
@@ -77,9 +72,6 @@ bg = concurrent.futures.ThreadPoolExecutor()
 task_manager = bgtask.TaskManager(name="librarian",  # for most tasks
                                   mode="concurrent",
                                   executor=bg)
-avatar_preprocess_task_manager = bgtask.TaskManager(name="librarian_avatar_preprocess",  # for running avatar TTS preprocessing (so that we can easily power-cycle the TTS preprocessor when needed)
-                                                    mode="concurrent",
-                                                    executor=bg)
 ai_turn_task_manager = bgtask.TaskManager(name="librarian_ai_turn",  # for running the AI's turn, specifically (so that we can easily cancel just that one task when needed)
                                           mode="concurrent",
                                           executor=bg)  # same thread poool
@@ -689,7 +681,7 @@ class DisplayedChatMessage:
             def speak_message_callback():
                 if app_state["avatar_speech_enabled"]:
                     unused_message_role, message_text = get_node_message_text_without_role(node_id)
-                    avatar_add_text_to_preprocess_queue(message_text)
+                    avatar_controller.send_text_to_tts(message_text)
                     # Acknowledge the action in the GUI.
                     gui_animation.animator.add(gui_animation.ButtonFlash(message="Sent to avatar!",
                                                                          target_button=speak_message_button,
@@ -879,303 +871,10 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
     message_role, message_text = get_node_message_text_without_role(head_node_id)
     if message_role == "assistant":
         logger.info("build_linearized_chat_panel: linearized chat view new HEAD node is an AI message; updating avatar emotion from message content")
-        avatar_update_emotion_from_text(message_text)
+        avatar_controller.update_emotion_from_text(message_text)
     dpg.split_frame()
     _scroll_chat_view_to_end()
 
-
-# --------------------------------------------------------------------------------
-# Avatar TTS speech and subtitling system, used by scaffold to GUI integration below
-
-# TODO: This takes two slots in the thread pool for the whole duration of the app. Consider the implications.
-
-# TODO: fix ravioli (is this the correct place to define these?)
-
-avatar_preprocess_queue = queue.Queue()  # for subtitling: [sentence0, ...]
-avatar_output_queue = queue.Queue()  # for TTS and subtitling: [(sentence0, translation0), ...]
-
-avatar_emotion_autoreset_t0 = time.time_ns()  # emotion autoreset is handled by `avatar_speak_task`
-
-def avatar_update_emotion_from_text(text: str) -> str:
-    """Update the emotion for the AI avatar from `text`, and reset the emotion autoreset (return-to-neutral) timer.
-
-    The analysis results are LRU cached (cache size 128) to facilitate running also on CPU setups, where the analysis can be slow,
-    so that switching back and forth between the same AI messages won't cause slowdowns.
-
-    For convenience, return the name of the emotion.
-    """
-    global avatar_emotion_autoreset_t0
-    try:
-        emotion = _avatar_get_emotion_from_text(text)
-        logger.info(f"avatar_update_emotion_from_text: updating emotion to '{emotion}'")
-        api.avatar_set_emotion(instance_id=avatar_instance_id,
-                               emotion_name=emotion)
-        logger.info("avatar_update_emotion_from_text: emotion updated")
-        return emotion
-    finally:
-        # Reset the timer last. If running on CPU, the emotion analysis may be slow.
-        avatar_emotion_autoreset_t0 = time.time_ns()
-
-@functools.lru_cache(maxsize=128)
-def _avatar_get_emotion_from_text(text: str) -> str:
-    try:
-        if not text:
-            return "neutral"
-        detected_emotions = api.classify(text)  # -> `{emotion0: score0, ...}`, sorted by score, descending
-        filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in librarian_config.avatar_config.emotion_blacklist]
-        winning_emotion = filtered_emotions[0]
-        return winning_emotion
-    except Exception:
-        return "neutral"
-
-def avatar_stop_speech() -> None:
-    """Stop the TTS, clearing also all speech pending in the queues."""
-    logger.info("avatar_stop_speech: entered.")
-    # Clear preprocess queue, so that no new preprocess jobs start.
-    logger.info("avatar_stop_speech: clearing TTS preprocess queue.")
-    slurp(avatar_preprocess_queue)
-    # Power-cycle the TTS preprocessor, to cancel the current job.
-    logger.info("avatar_stop_speech: power-cycling TTS preprocessor.")
-    avatar_preprocess_task_manager.clear()
-    avatar_preprocess_task_manager.submit(avatar_preprocess_task, env())
-    # Then clear the output queue, so that no new speak jobs start.
-    logger.info("avatar_stop_speech: clearing TTS output queue.")
-    slurp(avatar_output_queue)
-    # Then stop the TTS - the current TTS task will end, and `avatar_speak_task` will then notice that the output queue is empty.
-    logger.info("avatar_stop_speech: stopping TTS.")
-    api.tts_stop()
-    logger.info("avatar_stop_speech: all done.")
-
-def avatar_add_text_to_preprocess_queue(text: str) -> None:
-    """Add a complete piece of text to the preprocess queue for TTS."""
-    logger.info("avatar_add_text_to_preprocess_queue.add_to_preprocess_queue_task: adding text to TTS preprocess queue.")
-    avatar_preprocess_queue.put(text)
-
-# For CPU-friendliness, LRU-cache the AI-heavy parts (for the "speak again" feature).
-@functools.lru_cache(maxsize=128)
-def _translate_sentence(sentence: str) -> str:
-    """Internal helper for subtitle translation with LRU caching."""
-    subtitle = api.translate_translate(sentence,
-                                       source_lang=gui_config.translator_source_lang,
-                                       target_lang=gui_config.translator_target_lang)
-    return subtitle
-
-@functools.lru_cache(maxsize=128)
-def _natlang_analyze(line: str) -> List[List["spacy.tokens.token.Token"]]:  # noqa: F821: we don't want to import (torch and) spaCy just for one type annotation.
-    """Internal helper for natural-language translation with LRU caching."""
-    docs = api.natlang_analyze(line,
-                               pipes=["tok2vec", "parser", "senter"])
-    return docs
-
-def avatar_preprocess_task(task_env: env) -> None:
-    """Preprocess text for TTS output (AI speech synthesizer) from the TTS preprocess queue.
-
-    The text should be a whole chat message (without the role name), or at least a complete paragraph.
-
-    The text is cleaned, and then split into sentences. Depending on Librarian settings (see `raven.librarian.config`),
-    each sentence may be translated for subtitling, closed-captioned (CC) as-is, or the subtitler may be skipped.
-
-    The resulting clean sentence and its possible subtitle are added to the TTS output queue.
-    """
-    logger.info(f"avatar_preprocess_task: instance {task_env.task_name}: TTS preprocessor starting")
-
-    def strip_emoji(text: str) -> str:
-        return emoji.get_emoji_regexp().sub(r"", text)
-
-    def process_item(text: str) -> None:
-        logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: analyzing '{text}'")
-        text = text.strip()
-        if not text:
-            logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is empty after pre-stripping leading/trailing whitespace. Skipping.")
-            return
-        if text.startswith("<tool_call>"):  # don't speak and subtitle tool call invocations generated by the LLM
-            logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is a tool call invocation. Skipping.")
-            return
-        text = strip_markdown.strip_markdown(text)  # remove formatting for TTS and subtitling
-        text = strip_emoji(text)
-        if text is None:
-            logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is `None` after stripping markdown and emoji. Skipping .")
-            return
-        text = text.strip()  # once more, with feeling!
-        if not text:
-            logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is empty after post-stripping leading/trailing whitespace. Skipping.")
-            return
-        # Now we actually have some text that is worth sending to the TTS and to the translation/subtitling system.
-
-        def check_exit_and_print_reason() -> bool:  # True: exit, False: keep running
-            if task_env.cancelled or not gui_alive:
-                reason = "Cancelled" if task_env.cancelled else "App is shutting down"
-                logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: {reason}, exiting.")
-                return True
-            return False
-
-        # Break into lines, and break each line into sentences.
-        # TODO: This relies on the fact that LLMs don't insert newlines except as paragraph breaks.
-        lines = text.split("\n")
-        plural_s = "s" if len(lines) != 1 else ""
-        logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: detected {len(lines)} line{plural_s}.")
-        for lineno, line in enumerate(lines, start=1):
-            if check_exit_and_print_reason():
-                return
-
-            line = line.strip()
-            if not line:
-                continue
-
-            docs = _natlang_analyze(line)
-            assert len(docs) == 1
-            doc = docs[0]
-            sentences = list(doc.sents)
-            plural_s = "s" if len(sentences) != 1 else ""
-            logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}: detected {len(sentences)} sentence{plural_s} on this line.")
-
-            for sentenceno, sentence in enumerate(sentences, start=1):
-                if check_exit_and_print_reason():
-                    return
-
-                sentence = str(sentence)  # from spaCy rich internal format
-
-                logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): starting processing")
-
-                if app_state["avatar_subtitles_enabled"]:
-                    if gui_config.translator_target_lang is not None:  # Call the AI translator on Raven-server
-                        subtitle = _translate_sentence(sentence)
-                    else:  # No translation -> English closed captions (CC)
-                        subtitle = sentence
-                    logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): original: {sentence}")
-                    logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): subtitle: {subtitle}")
-                else:
-                    logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): original: {sentence}")
-                    logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): subtitler is off.")
-                    subtitle = None
-
-                if check_exit_and_print_reason():
-                    return
-
-                # Precompute TTS audio and phoneme data.
-                # We have plenty of wall time to precompute more, even when running the TTS on CPU, while the first sentence is being spoken.
-                logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): precomputing TTS audio and phoneme data")
-                prep = api.tts_prepare(text=sentence,
-                                       voice=librarian_config.avatar_config.voice,
-                                       speed=librarian_config.avatar_config.voice_speed)
-                if prep is None:
-                    logger.warning(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): error during precomputing, skipping sentence")
-                    continue
-
-                logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): processing done")
-                if check_exit_and_print_reason():  # IMPORTANT: don't queue the result if cancelled
-                    return
-
-                avatar_output_queue.put((sentence, subtitle, prep))
-
-    # background task main loop
-    try:
-        while True:
-            if task_env.cancelled or not gui_alive:  # co-operative shutdown (e.g. app exit)
-                return
-
-            try:
-                text = avatar_preprocess_queue.get(block=False)
-            except queue.Empty:
-                time.sleep(0.2)
-                continue
-
-            try:
-                process_item(text)
-            except Exception as exc:
-                logger.error(f"avatar_preprocess_task: {type(exc)}: {exc}")
-                traceback.print_exc()
-    finally:
-        reason = "Cancelled" if task_env.cancelled else "App is shutting down"
-        logger.info(f"avatar_preprocess_task: instance {task_env.task_name}: {reason}, TTS preprocessor exiting.")
-
-def avatar_speak_task(task_env: env) -> None:
-    """TTS, with avatar lipsync and subtitles (from AI translator)."""
-    global avatar_emotion_autoreset_t0
-
-    logger.info(f"avatar_speak_task: instance {task_env.task_name}: TTS queue processor starting")
-
-    def process_item(sentence, subtitle, prep):
-        logger.info(f"avatar_speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: starting processing")
-        with task_env.lock:
-            task_env.speaking = True
-
-        def on_start_lipsync_speaking():
-            global gui_alive  # intent only
-            global subtitle_bottom_y0  # intent only
-            logger.info(f"avatar_speak_task.process_item.on_start_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS starting to speak.")
-            if gui_alive:
-                # Show subtitle if any
-                if subtitle is not None:
-                    dpg.set_value("avatar_subtitle", subtitle)  # tag
-                    dpg.show_item("avatar_subtitle")  # tag
-
-                    # position subtitle offscreen to measure size
-                    dpg.set_item_pos("avatar_subtitle", (gui_config.main_window_w,
-                                                         gui_config.main_window_h))
-                    dpg.split_frame()
-                    w, h = guiutils.get_widget_size("avatar_subtitle")
-
-                    # position subtitle at bottom
-                    dpg.set_item_pos("avatar_subtitle", (gui_config.subtitle_x0,
-                                                         subtitle_bottom_y0 - h))
-                    dpg.split_frame()
-
-                # Allow the user to cancel the TTS
-                dpg.enable_item("chat_stop_speech_button")  # tag
-
-        def on_stop_lipsync_speaking():
-            global gui_alive  # intent only
-            global avatar_emotion_autoreset_t0
-            logger.info(f"avatar_speak_task.process_item.on_stop_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS finished.")
-            if gui_alive:  # Be careful - the user might have closed the app while the TTS was speaking.
-                dpg.hide_item("avatar_subtitle")  # tag
-                dpg.disable_item("chat_stop_speech_button")  # tag
-            with task_env.lock:
-                avatar_emotion_autoreset_t0 = time.time_ns()  # reset the emotion autoreset timer, so that the last emotion (from `on_done` or sibling switching at an AI message) stays for a couple more seconds once speaking ends.
-                # Set the speaking state flag very last, because these events are called from a different thread (the TTS client's background task),
-                # and our `avatar_speak_task` thread starts processing the next item in the queue immediately when it detects this flag.
-                task_env.speaking = False
-
-        logger.info(f"avatar_speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: submitting TTS task.")
-        api.tts_speak_lipsynced(instance_id=avatar_instance_id,
-                                voice="ignored_due_to_prep",
-                                text="ignored_due_to_prep",
-                                speed=1.0,  # ignored due to prep
-                                video_offset=librarian_config.avatar_config.video_offset,
-                                on_audio_ready=None,
-                                on_start=on_start_lipsync_speaking,
-                                on_stop=on_stop_lipsync_speaking,
-                                prep=prep)
-        logger.info(f"avatar_speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: processing done")
-
-    task_env.lock = threading.RLock()
-    task_env.speaking = False
-    try:
-        while True:
-            if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
-                break
-            with task_env.lock:
-                speaking = task_env.speaking  # we must release the lock as soon as possible (so that `on_stop_lipsync_speaking` can lock it, if it happens to be run), so get the state into a temporary variable.
-            if speaking:  # wait until TTS is free (previous speech ended)
-                time.sleep(0.1)
-                continue
-            try:
-                sentence, subtitle, prep = avatar_output_queue.get(block=False)
-            except queue.Empty:  # wait until we have a sentence to speak
-                time_now = time.time_ns()
-                dt = (time_now - avatar_emotion_autoreset_t0) / 10**9
-                if not task_env.speaking and dt > librarian_config.avatar_config.emotion_autoreset_interval:  # reset emotion after a few seconds of idle time (when the TTS is not speaking)
-                    avatar_emotion_autoreset_t0 = time_now
-                    logger.info(f"avatar_speak_task: instance {task_env.task_name}: avatar idle for at least {librarian_config.avatar_config.emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
-                    api.avatar_set_emotion(instance_id=avatar_instance_id,
-                                           emotion_name="neutral")
-                time.sleep(0.2)
-                continue
-            else:
-                process_item(sentence, subtitle, prep)
-    finally:
-        logger.info(f"avatar_speak_task: instance {task_env.task_name}: TTS queue processor exiting")
 
 # --------------------------------------------------------------------------------
 # Scaffold to GUI integration
@@ -1272,7 +971,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
                     text = "".join(task_env.emotion_recent_paragraphs)
                     logger.info(f"ai_turn.run_ai_turn._update_avatar_emotion_from_incoming_text: updating emotion from {len(text)} characters of recent text")
-                    avatar_update_emotion_from_text(text)
+                    avatar_controller.update_emotion_from_text(text)
                 task_env.emotion_update_calls += 1
 
             def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
@@ -1336,11 +1035,11 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     # Avatar speech and subtitling
                     logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
                     if app_state["avatar_speech_enabled"]:  # If TTS enabled, send final message text to TTS preprocess queue
-                        avatar_add_text_to_preprocess_queue(message_text)
+                        avatar_controller.send_text_to_tts(message_text)
 
                     # Update avatar emotion one last time, from the final message text
                     logger.info("ai_turn.run_ai_turn.on_done: updating emotion from final message content")
-                    avatar_update_emotion_from_text(message_text)
+                    avatar_controller.update_emotion_from_text(message_text)
 
                     # Update linearized chat view
                     logger.info("ai_turn.run_ai_turn.on_done: updating chat view with final message")
@@ -1518,8 +1217,8 @@ with timer() as tim:
                                       subtitle_bottom_y0),  # Position doesn't really matter; the text is empty for now, and will be re-positioned when subtitles are generated.
                                  color=gui_config.subtitle_color,
                                  wrap=(avatar_panel_w - 16) - gui_config.subtitle_x0 - gui_config.subtitle_text_wrap_margin,
-                                 tag="avatar_subtitle")
-                    dpg.bind_item_font("avatar_subtitle", subtitle_font)  # tag
+                                 tag="avatar_subtitle_text")
+                    dpg.bind_item_font("avatar_subtitle_text", subtitle_font)  # tag
 
                 with dpg.child_window(tag="mode_toggle_controls",
                                       width=-1,
@@ -1535,6 +1234,7 @@ with timer() as tim:
                             app_state["avatar_speech_enabled"] = not app_state["avatar_speech_enabled"]
                         def toggle_subtitles_enabled():
                             app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
+                            avatar_controller.configure_subtitles(enable=app_state["avatar_subtitles_enabled"])
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
                         dpg.add_text("Before responding, search document database for relevant information.", parent="docs_enabled_tooltip")  # tag
@@ -1614,7 +1314,7 @@ with timer() as tim:
                                                                          duration=gui_config.acknowledgment_duration))
 
                 def stop_speech_callback() -> None:
-                    avatar_stop_speech()
+                    avatar_controller.stop_tts()
                     # Acknowledge the action in the GUI.
                     gui_animation.animator.add(gui_animation.ButtonFlash(message="Stopped speaking!",
                                                                          target_button=stop_speech_button,
@@ -1879,8 +1579,19 @@ avatar_instance_id = api.avatar_load(librarian_config.avatar_config.image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 api.avatar_start(avatar_instance_id)
 dpg_avatar_renderer.start(avatar_instance_id)
-gui_alive = True  # Global flag for app shutdown, for background tasks to detect if GUI teardown has started (so that updating GUI elements is no longer safe).
+avatar_controller.initialize(avatar_instance_id=avatar_instance_id,
+                             stop_tts_button_gui_widget="chat_stop_speech_button",  # tag
+                             subtitles_enabled=app_state["avatar_subtitles_enabled"],
+                             subtitle_text_gui_widget="avatar_subtitle_text",
+                             subtitle_left_x0=gui_config.subtitle_x0,
+                             subtitle_bottom_y0=subtitle_bottom_y0,
+                             translator_source_lang=gui_config.translator_source_lang,
+                             translator_target_lang=gui_config.translator_target_lang,
+                             main_window_w=gui_config.main_window_w,
+                             main_window_h=gui_config.main_window_h,
+                             executor=bg)  # use the same thread pool as our main task manager
 
+gui_alive = True  # Global flag for app shutdown, for background tasks in our main task manager to detect if GUI teardown has started (so that updating GUI elements is no longer safe).
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
     global gui_alive
@@ -1891,6 +1602,7 @@ def gui_shutdown() -> None:
     # Same for `avatar_preprocess_task` in the `avatar_preprocess_task_manager`.
     gui_alive = False
     task_manager.clear(wait=True)  # Wait until background tasks actually exit.
+    avatar_controller.shutdown()
     gui_animation.animator.clear()
     # global gui_instance  # TODO: maybe we need to encapsulate the main GUi into a class? Or maybe not?
     # gui_instance = None
@@ -1912,10 +1624,6 @@ def app_shutdown() -> None:
             pass
     logger.info("app_shutdown: done")
 atexit.register(app_shutdown)
-
-# Start background tasks for the avatar TTS/subtitling subsystem (must do this after `gui_alive` is set)
-avatar_preprocess_task_manager.submit(avatar_preprocess_task, env())
-task_manager.submit(avatar_speak_task, env())
 
 dpg.set_primary_window(main_window, True)  # Make this DPG "window" occupy the whole OS window (DPG "viewport").
 dpg.set_viewport_vsync(True)
