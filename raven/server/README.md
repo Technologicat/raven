@@ -27,6 +27,8 @@
 - [Python bindings (easy client API)](#python-bindings-easy-client-api)
     - [General](#general)
     - [Raven-avatar client](#raven-avatar-client)
+        - [DPG GUI driver](#dpg-gui-driver)
+        - [TTS and subtitling controller](#tts-and-subtitling-controller)
     - [Text sentiment classification](#text-sentiment-classification)
     - [Semantic embeddings](#semantic-embeddings)
     - [Image processing](#image-processing)
@@ -407,13 +409,30 @@ AI-animated anime avatar for your LLM.
 - `avatar_get_available_filters`: Get list of available image filters in the postprocessor.
   - The same image filters are also exposed to the `imagefx` module. This is the only API function to get the list.
 
-**DPG GUI driver for avatar**
+### DPG GUI driver
 
 This lives in a separate module, [`raven.client.avatar_renderer`](../client/avatar_renderer.py). It is part of the API, but not imported automatically.
 
 - `DPGAvatarRenderer`: Receive the avatar video stream, and render it in a DearPyGui (DPG) image widget. Optionally render a backdrop image (blur filter available) behind the avatar.
   - This also serves as a starting point for porting the avatar's GUI driver to other GUI toolkits and to other programming languages.
   - Instantiate `DPGAvatarRenderer`, then configure it, then `start` it. See docstrings for details. See usage example in [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py).
+
+### TTS and subtitling controller
+
+This lives in a separate module, [`raven.client.avatar_controller`](../client/avatar_controller.py). It is part of the API, but not imported automatically.
+
+This adds lipsynced TTS to the avatar, as well as optional subtitles. The subtitles can be either auto-translated (via Raven-server's `translate` module), or shown as-is as closed captions (CC) in the input language.
+
+This module has a light DPG dependency, for rendering the optional subtitles, and optionally enabling/disabling the TTS stop button automatically.
+
+- `initialize`: Initialize and configure the module, and start background tasks.
+  - Must be called first, and only after `dpg.create_context`.
+- `shutdown`: Prepare module for GUI teardown and stop background tasks.
+- `configure_subtitles`: Enable/disable subtitles while the module is running.
+- `update_emotion_from_text`: Update the avatar's emotion from given text, using the `classify` module on Raven-server.
+- `send_text_to_tts`: Send text into the TTS queue.
+- `stop_tts`: Clear the TTS queue and stop the TTS.
+
 
 ## Text sentiment classification
 
