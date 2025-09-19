@@ -53,8 +53,6 @@
   - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
 
 - Librarian
-  - For minimal demo:
-    - Refactor avatar TTS speech and subtitling system into separate module
   - Draw assets:
       - Make per-character AI chat icons (just jury-rig `raven/icons/ai.png` for minimal demo, fix later)
       - Finish the new app icon for Raven (small and large sizes)
