@@ -992,8 +992,9 @@ def avatar_preprocess_task(task_env: env) -> None:
             logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is a tool call invocation. Skipping.")
             return
         text = strip_markdown.strip_markdown(text)  # remove formatting for TTS and subtitling
+        text = strip_emoji(text)
         if text is None:
-            logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is `None` after stripping markdown. Skipping .")
+            logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is `None` after stripping markdown and emoji. Skipping .")
             return
         text = text.strip()  # once more, with feeling!
         if not text:
@@ -1017,7 +1018,6 @@ def avatar_preprocess_task(task_env: env) -> None:
             if check_exit_and_print_reason():
                 return
 
-            line = strip_emoji(line)
             line = line.strip()
             if not line:
                 continue
