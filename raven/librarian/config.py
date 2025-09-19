@@ -155,22 +155,19 @@ gui_config = env(  # ----------------------------------------
 # --------------------------------------------------------------------------------
 # The AI's avatar character in the Raven-librarian GUI.
 
-avatar_source_image_size = 512  # THA3 engine hardcoded input image size (512x512); this and "upscale" below are used for determining the pixel-perfect texture size for the client.
-
-avatar_image_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "characters", "other", "aria1.png")).expanduser().resolve()
-
-avatar_voice = "af_nova"  # See `raven-avatar-settings-editor`.
-avatar_voice_speed = 1.0  # Nominal = 1.0. Too high causes skipped words. If you want to change it, find a good value with `raven-avatar-settings-editor`.
-avatar_video_offset = -0.6  # TTS AV sync setting, seconds. Positive = shift video later w.r.t. audio. Find a good value for your system with `raven-avatar-settings-editor`.
-
-avatar_emotion_blacklist = ["desire", "love"]  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
-avatar_emotion_autoreset_interval = 3.0  # seconds; if the avatar is not speaking, and has been idle for at least this long since the last time the emotion was updated, emotion returns to "neutral".
-
-# Since we're running also other stuff simultaneously, these settings have been optimized to be slightly friendlier on a laptop's internal dGPU than the defaults of `raven-avatar-settings-editor`.
-avatar_animator_settings_overrides = {"format": "QOI",
-                                      "target_fps": 20,
-                                      "upscale": 1.5,
-                                      "upscale_preset": "C",
-                                      "upscale_quality": "low",
-                                      "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "cyberspace.png")).expanduser().resolve()),
-                                      "backdrop_blur": True}  # The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.
+avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image size (512x512); this and "upscale" below are used for determining the pixel-perfect texture size for the client.
+                    image_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "characters", "other", "aria1.png")).expanduser().resolve(),
+                    voice="af_nova",  # See `raven-avatar-settings-editor`.
+                    voice_speed=1.0,  # Nominal = 1.0. Too high causes skipped words. If you want to change it, find a good value with `raven-avatar-settings-editor`.
+                    video_offset=-0.6,  # TTS AV sync setting, seconds. Positive = shift video later w.r.t. audio. Find a good value for your system with `raven-avatar-settings-editor`.
+                    emotion_blacklist=["desire", "love"],  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
+                    emotion_autoreset_interval=3.0,  # seconds; if the avatar is not speaking, and has been idle for at least this long since the last time the emotion was updated, emotion returns to "neutral".
+                    # Since we're running also other stuff simultaneously, these settings have been optimized to be slightly friendlier on a laptop's internal dGPU than the defaults of `raven-avatar-settings-editor`.
+                    animator_settings_overrides={"format": "QOI",
+                                                 "target_fps": 20,
+                                                 "upscale": 1.5,
+                                                 "upscale_preset": "C",
+                                                 "upscale_quality": "low",
+                                                 "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "cyberspace.png")).expanduser().resolve()),
+                                                 "backdrop_blur": True},  # The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.
+                    )

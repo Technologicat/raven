@@ -918,7 +918,7 @@ def _avatar_get_emotion_from_text(text: str) -> str:
         if not text:
             return "neutral"
         detected_emotions = api.classify(text)  # -> `{emotion0: score0, ...}`, sorted by score, descending
-        filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in librarian_config.avatar_emotion_blacklist]
+        filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in librarian_config.avatar_config.emotion_blacklist]
         winning_emotion = filtered_emotions[0]
         return winning_emotion
     except Exception:
@@ -1105,10 +1105,10 @@ def avatar_speak_task(task_env: env) -> None:
 
         logger.info(f"avatar_speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: submitting TTS task.")
         api.tts_speak_lipsynced(instance_id=avatar_instance_id,
-                                voice=librarian_config.avatar_voice,
+                                voice=librarian_config.avatar_config.voice,
                                 text=sentence,
-                                speed=librarian_config.avatar_voice_speed,
-                                video_offset=librarian_config.avatar_video_offset,
+                                speed=librarian_config.avatar_config.voice_speed,
+                                video_offset=librarian_config.avatar_config.video_offset,
                                 on_audio_ready=None,
                                 on_start=on_start_lipsync_speaking,
                                 on_stop=on_stop_lipsync_speaking)
@@ -1130,9 +1130,9 @@ def avatar_speak_task(task_env: env) -> None:
             except queue.Empty:  # wait until we have a sentence to speak
                 time_now = time.time_ns()
                 dt = (time_now - avatar_emotion_autoreset_t0) / 10**9
-                if not task_env.speaking and dt > librarian_config.avatar_emotion_autoreset_interval:  # reset emotion after a few seconds of idle time (when the TTS is not speaking)
+                if not task_env.speaking and dt > librarian_config.avatar_config.emotion_autoreset_interval:  # reset emotion after a few seconds of idle time (when the TTS is not speaking)
                     avatar_emotion_autoreset_t0 = time_now
-                    logger.info(f"avatar_speak_task: instance {task_env.task_name}: avatar idle for at least {librarian_config.avatar_emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
+                    logger.info(f"avatar_speak_task: instance {task_env.task_name}: avatar idle for at least {librarian_config.avatar_config.emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
                     api.avatar_set_emotion(instance_id=avatar_instance_id,
                                            emotion_name="neutral")
                 time.sleep(0.2)
@@ -1475,7 +1475,7 @@ with timer() as tim:
                                                             paused_text="[No video]",
                                                             task_manager=task_manager)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
-                    dpg_avatar_renderer.configure_live_texture(new_image_size=int(librarian_config.avatar_animator_settings_overrides["upscale"] * librarian_config.avatar_source_image_size))
+                    dpg_avatar_renderer.configure_live_texture(new_image_size=int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * librarian_config.avatar_config.source_image_size))
 
                     global subtitle_bottom_y0
                     subtitle_bottom_y0 = (avatar_panel_h - 24) + gui_config.subtitle_y0
@@ -1841,7 +1841,7 @@ dpg.set_exit_callback(clean_up_at_exit)
 
 logger.info("App bootup...")
 
-avatar_instance_id = api.avatar_load(librarian_config.avatar_image_path)
+avatar_instance_id = api.avatar_load(librarian_config.avatar_config.image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 api.avatar_start(avatar_instance_id)
 dpg_avatar_renderer.start(avatar_instance_id)
@@ -1902,7 +1902,7 @@ def _load_initial_animator_settings() -> None:
         traceback.print_exc()
         sys.exit(255)
 
-    animator_settings.update(librarian_config.avatar_animator_settings_overrides)
+    animator_settings.update(librarian_config.avatar_config.animator_settings_overrides)
 
     api.avatar_load_animator_settings(avatar_instance_id, animator_settings)  # send settings to server
     dpg_avatar_renderer.load_backdrop_image(animator_settings["backdrop_path"])
