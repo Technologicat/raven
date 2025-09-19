@@ -15,6 +15,7 @@ with timer() as tim:
     import atexit
     import collections
     import concurrent.futures
+    import emoji
     import functools
     import io
     import json
@@ -971,6 +972,9 @@ def avatar_preprocess_task(task_env: env) -> None:
     """
     logger.info(f"avatar_preprocess_task: instance {task_env.task_name}: TTS preprocessor starting")
 
+    def strip_emoji(text: str) -> str:
+        return emoji.get_emoji_regexp().sub(r"", text)
+
     def process_item(text: str) -> None:
         logger.info(f"avatar_preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: analyzing '{text}'")
         text = text.strip()
@@ -999,6 +1003,7 @@ def avatar_preprocess_task(task_env: env) -> None:
             if task_env.cancelled:
                 return
 
+            line = strip_emoji(line)
             line = line.strip()
             if not line:
                 continue
