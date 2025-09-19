@@ -45,6 +45,7 @@ with timer() as tim:
     # from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
     from ..client import api  # Raven-server support
+    from ..client import avatar_controller
     from ..client.avatar_renderer import DPGAvatarRenderer
     from ..client import config as client_config
 
@@ -54,7 +55,6 @@ with timer() as tim:
     from ..common.gui import utils as guiutils
 
     from . import appstate
-    from . import avatar_controller
     from . import chatutil
     from . import config as librarian_config
     # from . import chattree
@@ -1580,9 +1580,14 @@ api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> 
 api.avatar_start(avatar_instance_id)
 dpg_avatar_renderer.start(avatar_instance_id)
 avatar_controller.initialize(avatar_instance_id=avatar_instance_id,
+                             voice=librarian_config.avatar_config.voice,
+                             voice_speed=librarian_config.avatar_config.voice_speed,
+                             video_offset=librarian_config.avatar_config.video_offset,
+                             emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
+                             emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
                              stop_tts_button_gui_widget="chat_stop_speech_button",  # tag
                              subtitles_enabled=app_state["avatar_subtitles_enabled"],
-                             subtitle_text_gui_widget="avatar_subtitle_text",
+                             subtitle_text_gui_widget="avatar_subtitle_text",  # tag
                              subtitle_left_x0=gui_config.subtitle_x0,
                              subtitle_bottom_y0=subtitle_bottom_y0,
                              translator_source_lang=gui_config.translator_source_lang,

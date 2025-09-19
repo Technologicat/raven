@@ -1,6 +1,8 @@
 """DPG GUI driver for Raven-avatar.
 
-This allows easily integrating the avatar to your DPG GUI apps.
+Contrast `avatar_controller`, which is concerned with orchestrating TTS and subtitling.
+
+This blits the avatar video into a DPG GUI, thus facilitating easy integration of the avatar to your DPG GUI apps.
 
 `DPGAvatarRenderer` connects to a given avatar instance running on Raven-server (using `raven.client.api`),
 and blits the live video into a DPG texture.

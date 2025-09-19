@@ -16,8 +16,6 @@ That second background task also takes care of auto-resetting the avatar's emoti
 for at least a few seconds after the TTS has finished speaking.
 """
 
-# TODO: This still reads some settings from `raven.librarian.config`; these might be better handled as parameters to `initialize` to facilitate reusability in other apps.
-
 __all__ = ["initialize",
            "shutdown",
            "configure_subtitles",
@@ -45,20 +43,18 @@ import dearpygui.dearpygui as dpg
 from unpythonic import equip_with_traceback, slurp
 from unpythonic.env import env
 
-from ..client import api  # Raven-server support
-
 from ..common import bgtask
 
 from ..common.gui import utils as guiutils
 
-from . import config as librarian_config
+from . import api  # Raven-server support
 
 # --------------------------------------------------------------------------------
 
-avatar_input_queue = queue.Queue()  # for TTS input preprocessing and subtitle generation: [text0, ...]
-avatar_output_queue = queue.Queue()  # for TTS and subtitle playback: [(sentence0, translation0, prep0), ...]
+tts_input_queue = queue.Queue()  # for TTS input preprocessing and subtitle generation: [text0, ...]
+tts_output_queue = queue.Queue()  # for TTS and subtitle playback: [(sentence0, translation0, prep0), ...]
 
-avatar_emotion_autoreset_t0 = time.time_ns()  # emotion autoreset is handled by `speak_task`
+emotion_autoreset_t0 = time.time_ns()  # emotion autoreset is handled by `speak_task`
 
 # --------------------------------------------------------------------------------
 # For CPU-friendliness, LRU-cache all AI-heavy parts (for the "speak again" feature).
@@ -72,7 +68,7 @@ def _avatar_get_emotion_from_text(text: str) -> str:
         if not text:
             return "neutral"
         detected_emotions = api.classify(text)  # -> `{emotion0: score0, ...}`, sorted by score, descending
-        filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in librarian_config.avatar_config.emotion_blacklist]
+        filtered_emotions = [emotion_name for emotion_name in detected_emotions.keys() if emotion_name not in avatar_controller_config.emotion_blacklist]
         winning_emotion = filtered_emotions[0]
         return winning_emotion
     except Exception:
@@ -99,21 +95,46 @@ def _natlang_analyze(line: str) -> List[List["spacy.tokens.token.Token"]]:  # no
 avatar_controller_initialized = False
 avatar_controller_config = env()
 def initialize(avatar_instance_id: str,
-                stop_tts_button_gui_widget: Optional[Union[str, int]],
-                subtitles_enabled: bool,
-                subtitle_text_gui_widget: Union[str, int],
-                subtitle_left_x0: int,
-                subtitle_bottom_y0: int,
-                translator_source_lang: str,
-                translator_target_lang: Optional[str],
-                main_window_w: int,
-                main_window_h: int,
-                executor: Optional = None) -> None:
+               voice: str,
+               voice_speed: float,
+               video_offset: float,
+               emotion_autoreset_interval: Optional[float],
+               emotion_blacklist: List[str],
+               stop_tts_button_gui_widget: Optional[Union[str, int]],
+               subtitles_enabled: bool,
+               subtitle_text_gui_widget: Union[str, int],
+               subtitle_left_x0: int,
+               subtitle_bottom_y0: int,
+               translator_source_lang: str,
+               translator_target_lang: Optional[str],
+               main_window_w: int,
+               main_window_h: int,
+               executor: Optional = None) -> None:
     """Avatar TTS (text to speech) and subtitling system controller.
 
     Call **after** your app's GUI is alive.
 
     `avatar_instance_id`: Avatar instance to control. You get this from `raven.client.api.avatar_load`.
+
+    `emotion_autoreset_interval`: seconds. This controller resets the avatar's emotion back to "neutral"
+                                  after a few seconds of idle time (when the TTS is not speaking).
+
+                                  Set to `None` to disable.
+
+    `emotion_blacklist`: Prevent the avatar from entering any of the listed emotions.
+                         In `update_emotion_from_text`, the most matching non-blacklisted emotion wins.
+
+                         Can be useful if the emotion detector is misbehaving.
+
+    `voice`: TTS voice name. To get the list of available voices, call `raven.client.api.tts_list_voices`,
+             or use the `raven-avatar-settings-editor` GUI app.
+
+    `voice_speed`: For each voice, 1.0 is the default speed the voice is designed to speak at.
+                   Raising this too high may cause skipped words.
+
+    `video_offset`: seconds, for adjusting lipsync animation.
+        - Positive values: Use if the video is early. Shifts video later with respect to the audio.
+        - Negative values: Use if the video is late. Shifts video earlier with respect to the audio.
 
     `stop_tts_button_gui_widget`: DPG tag or ID of the DPG button widget that will call `stop_tts`
                                   if clicked. Used for automatically enabling/disabling the button
@@ -178,6 +199,11 @@ def initialize(avatar_instance_id: str,
                                                                             executor=executor)
 
     avatar_controller_config.avatar_instance_id = avatar_instance_id
+    avatar_controller_config.voice = voice
+    avatar_controller_config.voice_speed = voice_speed
+    avatar_controller_config.video_offset = video_offset
+    avatar_controller_config.emotion_autoreset_interval = emotion_autoreset_interval
+    avatar_controller_config.emotion_blacklist = emotion_blacklist
     avatar_controller_config.stop_tts_button_gui_widget = stop_tts_button_gui_widget
     avatar_controller_config.subtitles_enabled = subtitles_enabled
     avatar_controller_config.subtitle_text_gui_widget = subtitle_text_gui_widget
@@ -220,7 +246,7 @@ def update_emotion_from_text(text: str) -> str:
 
     For convenience, return the name of the emotion.
     """
-    global avatar_emotion_autoreset_t0
+    global emotion_autoreset_t0
     try:
         emotion = _avatar_get_emotion_from_text(text)
         logger.info(f"update_emotion_from_text: updating emotion to '{emotion}'")
@@ -230,26 +256,26 @@ def update_emotion_from_text(text: str) -> str:
         return emotion
     finally:
         # Reset the timer last. If running on CPU, the emotion analysis may be slow.
-        avatar_emotion_autoreset_t0 = time.time_ns()
+        emotion_autoreset_t0 = time.time_ns()
 
 def send_text_to_tts(text: str) -> None:
     """Send a complete piece of text into the TTS queue."""
     logger.info("send_text_to_tts: adding text to TTS queue.")
-    avatar_input_queue.put(text)
+    tts_input_queue.put(text)
 
 def stop_tts() -> None:
     """Stop the TTS, clearing also all speech pending in the queues."""
     logger.info("stop_tts: entered.")
     # Clear TTS input preprocess queue, so that no new preprocess jobs start.
     logger.info("stop_tts: clearing TTS input preprocess queue.")
-    slurp(avatar_input_queue)
+    slurp(tts_input_queue)
     # Power-cycle the TTS input preprocessor, to cancel the current job.
     logger.info("stop_tts: power-cycling TTS input preprocessor.")
     avatar_controller_config.input_queue_task_manager.clear()
     avatar_controller_config.input_queue_task_manager.submit(preprocess_task, env())
     # Then clear the output queue, so that no new speak jobs start.
     logger.info("stop_tts: clearing TTS playback queue.")
-    slurp(avatar_output_queue)
+    slurp(tts_output_queue)
     # Then stop the TTS - the current TTS task will end, and `speak_task` will then notice that the output queue is empty.
     logger.info("stop_tts: stopping TTS.")
     api.tts_stop()
@@ -342,8 +368,8 @@ def preprocess_task(task_env: env) -> None:
                 # We have plenty of wall time to precompute more, even when running the TTS on CPU, while the first sentence is being spoken.
                 logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): precomputing TTS audio and phoneme data")
                 prep = api.tts_prepare(text=sentence,
-                                       voice=librarian_config.avatar_config.voice,
-                                       speed=librarian_config.avatar_config.voice_speed)
+                                       voice=avatar_controller_config.voice,
+                                       speed=avatar_controller_config.voice_speed)
                 if prep is None:
                     logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): error during precomputing, skipping sentence")
                     continue
@@ -352,7 +378,7 @@ def preprocess_task(task_env: env) -> None:
                 if task_env.cancelled:  # IMPORTANT: don't queue the result if cancelled
                     return
 
-                avatar_output_queue.put((sentence, subtitle, prep))
+                tts_output_queue.put((sentence, subtitle, prep))
 
     # background task main loop
     try:
@@ -361,7 +387,7 @@ def preprocess_task(task_env: env) -> None:
                 return
 
             try:
-                text = avatar_input_queue.get(block=False)
+                text = tts_input_queue.get(block=False)
             except queue.Empty:
                 time.sleep(0.2)
                 continue
@@ -379,7 +405,7 @@ def preprocess_task(task_env: env) -> None:
 
 def speak_task(task_env: env) -> None:
     """TTS, with avatar lipsync and subtitles (from AI translator)."""
-    global avatar_emotion_autoreset_t0
+    global emotion_autoreset_t0
 
     logger.info(f"speak_task: instance {task_env.task_name}: TTS playback controller starting")
 
@@ -412,14 +438,14 @@ def speak_task(task_env: env) -> None:
                     dpg.enable_item(avatar_controller_config.stop_tts_button_gui_widget)
 
         def on_stop_lipsync_speaking():
-            global avatar_emotion_autoreset_t0
+            global emotion_autoreset_t0
             logger.info(f"speak_task.process_item.on_stop_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS finished.")
             if avatar_controller_config.gui_alive:  # Be careful - the user might have closed the app while the TTS was speaking.
                 dpg.hide_item(avatar_controller_config.subtitle_text_gui_widget)
                 if avatar_controller_config.stop_tts_button_gui_widget is not None:
                     dpg.disable_item(avatar_controller_config.stop_tts_button_gui_widget)
             with task_env.lock:
-                avatar_emotion_autoreset_t0 = time.time_ns()  # reset the emotion autoreset timer, so that the last emotion (from `on_done` or sibling switching at an AI message) stays for a couple more seconds once speaking ends.
+                emotion_autoreset_t0 = time.time_ns()  # reset the emotion autoreset timer, so that the last emotion (from `on_done` or sibling switching at an AI message) stays for a couple more seconds once speaking ends.
                 # Set the speaking state flag very last, because these events are called from a different thread (the TTS client's background task),
                 # and our `speak_task` thread starts processing the next item in the queue immediately when it detects this flag.
                 task_env.speaking = False
@@ -429,7 +455,7 @@ def speak_task(task_env: env) -> None:
                                 voice="ignored_due_to_prep",
                                 text="ignored_due_to_prep",
                                 speed=1.0,  # ignored due to prep
-                                video_offset=librarian_config.avatar_config.video_offset,
+                                video_offset=avatar_controller_config.video_offset,
                                 on_audio_ready=None,
                                 on_start=on_start_lipsync_speaking,
                                 on_stop=on_stop_lipsync_speaking,
@@ -448,15 +474,16 @@ def speak_task(task_env: env) -> None:
                 time.sleep(0.1)
                 continue
             try:
-                sentence, subtitle, prep = avatar_output_queue.get(block=False)
+                sentence, subtitle, prep = tts_output_queue.get(block=False)
             except queue.Empty:  # wait until we have a sentence to speak
-                time_now = time.time_ns()
-                dt = (time_now - avatar_emotion_autoreset_t0) / 10**9
-                if not task_env.speaking and dt > librarian_config.avatar_config.emotion_autoreset_interval:  # reset emotion after a few seconds of idle time (when the TTS is not speaking)
-                    avatar_emotion_autoreset_t0 = time_now
-                    logger.info(f"speak_task: instance {task_env.task_name}: avatar idle for at least {librarian_config.avatar_config.emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
-                    api.avatar_set_emotion(instance_id=avatar_controller_config.avatar_instance_id,
-                                           emotion_name="neutral")
+                if avatar_controller_config.emotion_autoreset_interval is not None:  # if the feature is enabled, reset emotion after a few seconds of idle time (when the TTS is not speaking)
+                    time_now = time.time_ns()
+                    dt = (time_now - emotion_autoreset_t0) / 10**9
+                    if not task_env.speaking and dt > avatar_controller_config.emotion_autoreset_interval:
+                        emotion_autoreset_t0 = time_now
+                        logger.info(f"speak_task: instance {task_env.task_name}: avatar idle for at least {avatar_controller_config.emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
+                        api.avatar_set_emotion(instance_id=avatar_controller_config.avatar_instance_id,
+                                               emotion_name="neutral")
                 time.sleep(0.2)
                 continue
 
