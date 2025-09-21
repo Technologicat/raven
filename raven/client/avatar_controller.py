@@ -371,7 +371,7 @@ def preprocess_task(task_env: env) -> None:
             return
         text = strip_markdown.strip_markdown(text)  # remove formatting for TTS and subtitling
         if text is None:
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is `None` after stripping markdown. Skipping .")
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is `None` after stripping markdown. Skipping.")
             return
         text = strip_emoji(text)
         text = text.strip()  # once more, with feeling!
