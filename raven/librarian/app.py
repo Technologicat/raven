@@ -50,7 +50,6 @@ with timer() as tim:
     from ..client import config as client_config
 
     from ..common import bgtask
-    from ..common import numutils
 
     from ..common.gui import animation as gui_animation
     from ..common.gui import utils as guiutils
@@ -878,46 +877,6 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
 
 
 # --------------------------------------------------------------------------------
-# Integration with avatar's "data eyes" effect (LLM tool access indicator)
-
-# We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the "data1" cel blend; hence the TTS can still override the mouth morphs simultaneously.
-
-class DataEyesFadeOut(gui_animation.Animation):
-    def __init__(self, duration: float):
-        """Animation to fade out the avatar data eyes effect.
-
-        `duration`: Fade duration, seconds.
-        """
-        super().__init__()
-        self.duration = duration
-
-    def render_frame(self, t):
-        dt = (t - self.t0) / 10**9  # seconds since t0
-        animation_pos = dt / self.duration
-        if animation_pos >= 1.0:
-            api.avatar_modify_overrides(avatar_instance_id, action="unset", overrides={"data1": 0.0})  # Values are ignored by the "unset" action, which removes the overrides.
-            return gui_animation.action_finish
-
-        r = numutils.clamp(animation_pos)
-        r = numutils.nonanalytic_smooth_transition(r)
-        api.avatar_modify_overrides(avatar_instance_id, action="set", overrides={"data1": 1.0 - r})
-
-        return gui_animation.action_continue
-
-_data_eyes_fadeout = None
-def _avatar_enable_data_eyes() -> None:
-    global _data_eyes_fadeout
-    if _data_eyes_fadeout is not None:  # cancel fadeout animation if any (no-op if it's no longer running)
-        gui_animation.animator.cancel(_data_eyes_fadeout)
-    api.avatar_modify_overrides(avatar_instance_id, action="set", overrides={"data1": 1.0})
-
-def _avatar_disable_data_eyes() -> None:
-    global _data_eyes_fadeout
-    if _data_eyes_fadeout is not None:  # cancel previous instance if any (no-op if it's no longer running)
-        gui_animation.animator.cancel(_data_eyes_fadeout)
-    _data_eyes_fadeout = gui_animation.animator.add(DataEyesFadeOut(duration=librarian_config.avatar_config.data_eyes_fadeout_duration))
-
-# --------------------------------------------------------------------------------
 # Scaffold to GUI integration
 
 def chat_round(user_message_text: str) -> None:  # message text comes from GUI
@@ -992,10 +951,10 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     streaming_chat_message = None
 
             def on_docs_start() -> None:
-                _avatar_enable_data_eyes()
+                avatar_controller.start_data_eyes()
 
             def on_docs_done(matches: List[Dict]) -> None:
-                _avatar_disable_data_eyes()
+                avatar_controller.stop_data_eyes()
 
             def on_llm_start() -> None:
                 nonlocal streaming_chat_message
@@ -1096,7 +1055,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     logger.info("ai_turn.run_ai_turn.on_done: all done.")
 
             def on_tools_start(tool_calls: List[Dict]) -> None:
-                _avatar_enable_data_eyes()
+                avatar_controller.start_data_eyes()
 
             def on_tool_done(node_id: str) -> None:
                 global gui_alive  # intent only
@@ -1108,7 +1067,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     add_complete_chat_message_to_linearized_chat_panel(node_id)
 
             def on_tools_done() -> None:
-                _avatar_disable_data_eyes()
+                avatar_controller.stop_data_eyes()
 
             new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
                                                 datastore=datastore,
@@ -1131,7 +1090,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         finally:
             if gui_alive:
                 dpg.disable_item("chat_stop_generation_button")  # tag
-            _avatar_disable_data_eyes()  # make sure the data eyes effect ends
+            avatar_controller.stop_data_eyes()  # make sure the data eyes effect ends
     ai_turn_task_manager.submit(run_ai_turn, env())
 
 def stop_ai_turn() -> None:
@@ -1434,9 +1393,9 @@ with timer() as tim:
                 #     global _testing_data_eyes_enabled
                 #     _testing_data_eyes_enabled = not _testing_data_eyes_enabled
                 #     if _testing_data_eyes_enabled:
-                #         _avatar_enable_data_eyes()
+                #         avatar_controller.start_data_eyes()
                 #     else:
-                #         _avatar_disable_data_eyes()
+                #         avatar_controller.stop_data_eyes()
                 # testing_button = dpg.add_button(label=fa.ICON_VOLCANO,
                 #                                 callback=testing_callback,
                 #                                 width=gui_config.toolbutton_w,
@@ -1658,6 +1617,7 @@ avatar_controller.initialize(avatar_instance_id=avatar_instance_id,
                              voice=librarian_config.avatar_config.voice,
                              voice_speed=librarian_config.avatar_config.voice_speed,
                              video_offset=librarian_config.avatar_config.video_offset,
+                             data_eyes_fadeout_duration=librarian_config.avatar_config.data_eyes_fadeout_duration,
                              emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
                              emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
                              stop_tts_button_gui_widget="chat_stop_speech_button",  # tag

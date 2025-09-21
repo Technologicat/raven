@@ -1,5 +1,7 @@
 """Avatar TTS (text to speech) and subtitling system controller.
 
+Also starts/stops the avatar's "data eyes" effect (LLM tool access indicator).
+
 Contrast `avatar_renderer`, which is concerned with blitting the avatar video into the GUI.
 
 This takes in text to be spoken by the TTS and optionally subtitled.
@@ -21,7 +23,8 @@ __all__ = ["initialize",
            "configure_subtitles",
            "update_emotion_from_text",
            "send_text_to_tts",
-           "stop_tts"]
+           "stop_tts",
+           "start_data_eyes", "stop_data_eyes"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +47,9 @@ from unpythonic import equip_with_traceback, slurp
 from unpythonic.env import env
 
 from ..common import bgtask
+from ..common import numutils
 
+from ..common.gui import animation as gui_animation
 from ..common.gui import utils as guiutils
 
 from . import api  # Raven-server support
@@ -100,6 +105,7 @@ def initialize(avatar_instance_id: str,
                video_offset: float,
                emotion_autoreset_interval: Optional[float],
                emotion_blacklist: List[str],
+               data_eyes_fadeout_duration: float,
                stop_tts_button_gui_widget: Optional[Union[str, int]],
                subtitles_enabled: bool,
                subtitle_text_gui_widget: Union[str, int],
@@ -125,6 +131,13 @@ def initialize(avatar_instance_id: str,
                          In `update_emotion_from_text`, the most matching non-blacklisted emotion wins.
 
                          Can be useful if the emotion detector is misbehaving.
+
+    `data_eyes_fadeout_duration`: seconds; how long it takes for the "data eyes" effect
+                                  (LLM tool access indicator) to fade out when `stop_data_eyes`
+                                  is called.
+
+                                  Calling `start_data_eyes` always sets the effect to full strength
+                                  instantly.
 
     `voice`: TTS voice name. To get the list of available voices, call `raven.client.api.tts_list_voices`,
              or use the `raven-avatar-settings-editor` GUI app.
@@ -204,6 +217,7 @@ def initialize(avatar_instance_id: str,
     avatar_controller_config.video_offset = video_offset
     avatar_controller_config.emotion_autoreset_interval = emotion_autoreset_interval
     avatar_controller_config.emotion_blacklist = emotion_blacklist
+    avatar_controller_config.data_eyes_fadeout_duration = data_eyes_fadeout_duration
     avatar_controller_config.stop_tts_button_gui_widget = stop_tts_button_gui_widget
     avatar_controller_config.subtitles_enabled = subtitles_enabled
     avatar_controller_config.subtitle_text_gui_widget = subtitle_text_gui_widget
@@ -280,6 +294,51 @@ def stop_tts() -> None:
     logger.info("stop_tts: stopping TTS.")
     api.tts_stop()
     logger.info("stop_tts: all done.")
+
+# --------------------------------------------------------------------------------
+# Integration with avatar's "data eyes" effect (LLM tool access indicator)
+
+# We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the "data1" cel blend; hence the TTS can still override the mouth morphs simultaneously.
+
+class DataEyesFadeOut(gui_animation.Animation):
+    def __init__(self, duration: float):
+        """Animation to fade out the avatar data eyes effect.
+
+        `duration`: Fade duration, seconds.
+        """
+        super().__init__()
+        self.duration = duration
+
+    def render_frame(self, t):
+        dt = (t - self.t0) / 10**9  # seconds since t0
+        animation_pos = dt / self.duration
+        if animation_pos >= 1.0:
+            api.avatar_modify_overrides(avatar_controller_config.avatar_instance_id, action="unset", overrides={"data1": 0.0})  # Values are ignored by the "unset" action, which removes the overrides.
+            return gui_animation.action_finish
+
+        r = numutils.clamp(animation_pos)
+        r = numutils.nonanalytic_smooth_transition(r)
+        api.avatar_modify_overrides(avatar_controller_config.avatar_instance_id, action="set", overrides={"data1": 1.0 - r})
+
+        return gui_animation.action_continue
+
+_data_eyes_fadeout_animation = None
+def start_data_eyes() -> None:
+    """Start the scifi "data eyes" effect (LLM tool access indicator), if the current character supports it."""
+    global _data_eyes_fadeout_animation
+    if _data_eyes_fadeout_animation is not None:  # cancel latest fadeout animation if any (no-op if it's no longer running)
+        gui_animation.animator.cancel(_data_eyes_fadeout_animation)
+    api.avatar_modify_overrides(avatar_controller_config.avatar_instance_id, action="set", overrides={"data1": 1.0})
+
+def stop_data_eyes() -> None:
+    """Stop the scifi "data eyes" effect (LLM tool access indicator), if the current character supports it.
+
+    The effect fades out as configured in `initialize`.
+    """
+    global _data_eyes_fadeout_animation
+    if _data_eyes_fadeout_animation is not None:  # cancel latest previous instance if any (no-op if it's no longer running)
+        gui_animation.animator.cancel(_data_eyes_fadeout_animation)
+    _data_eyes_fadeout_animation = gui_animation.animator.add(DataEyesFadeOut(duration=avatar_controller_config.data_eyes_fadeout_duration))
 
 # --------------------------------------------------------------------------------
 # Background task: TTS input preprocessor
