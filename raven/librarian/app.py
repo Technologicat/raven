@@ -50,6 +50,7 @@ with timer() as tim:
     from ..client import config as client_config
 
     from ..common import bgtask
+    from ..common import numutils
 
     from ..common.gui import animation as gui_animation
     from ..common.gui import utils as guiutils
@@ -877,6 +878,46 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
 
 
 # --------------------------------------------------------------------------------
+# Integration with avatar's "data eyes" effect (LLM tool access indicator)
+
+# We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the "data1" cel blend; hence the TTS can still override the mouth morphs simultaneously.
+
+class DataEyesFadeOut(gui_animation.Animation):
+    def __init__(self, duration: float):
+        """Animation to fade out the avatar data eyes effect.
+
+        `duration`: Fade duration, seconds.
+        """
+        super().__init__()
+        self.duration = duration
+
+    def render_frame(self, t):
+        dt = (t - self.t0) / 10**9  # seconds since t0
+        animation_pos = dt / self.duration
+        if animation_pos >= 1.0:
+            api.avatar_modify_overrides(avatar_instance_id, action="unset", overrides={"data1": 0.0})  # Values are ignored by the "unset" action, which removes the overrides.
+            return gui_animation.action_finish
+
+        r = numutils.clamp(animation_pos)
+        r = numutils.nonanalytic_smooth_transition(r)
+        api.avatar_modify_overrides(avatar_instance_id, action="set", overrides={"data1": 1.0 - r})
+
+        return gui_animation.action_continue
+
+_data_eyes_fadeout = None
+def _avatar_enable_data_eyes() -> None:
+    global _data_eyes_fadeout
+    if _data_eyes_fadeout is not None:  # cancel fadeout animation if any (no-op if it's no longer running)
+        gui_animation.animator.cancel(_data_eyes_fadeout)
+    api.avatar_modify_overrides(avatar_instance_id, action="set", overrides={"data1": 1.0})
+
+def _avatar_disable_data_eyes() -> None:
+    global _data_eyes_fadeout
+    if _data_eyes_fadeout is not None:  # cancel previous instance if any (no-op if it's no longer running)
+        gui_animation.animator.cancel(_data_eyes_fadeout)
+    _data_eyes_fadeout = gui_animation.animator.add(DataEyesFadeOut(duration=librarian_config.avatar_config.data_eyes_fadeout_duration))
+
+# --------------------------------------------------------------------------------
 # Scaffold to GUI integration
 
 def chat_round(user_message_text: str) -> None:  # message text comes from GUI
@@ -924,12 +965,6 @@ def user_turn(text: str) -> None:
         app_state["HEAD"] = new_head_node_id  # as soon as possible, so that not affected by any errors during GUI building
         add_complete_chat_message_to_linearized_chat_panel(new_head_node_id)
     task_manager.submit(run_user_turn, env())
-
-# We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the "data1" cel blend; hence the TTS can still override the mouth morphs simultaneously.
-def _avatar_enable_data_eyes() -> None:
-    api.avatar_modify_overrides(avatar_instance_id, action="set", overrides={"data1": 1.0})
-def _avatar_disable_data_eyes() -> None:
-    api.avatar_modify_overrides(avatar_instance_id, action="unset", overrides={"data1": 0.0})  # Values are ignored by the "unset" action, which removes the overrides.
 
 def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     """Run the AI's response part of a chat round.
@@ -1409,7 +1444,7 @@ with timer() as tim:
                 # dpg.bind_item_font("chat_testing_button", themes_and_fonts.icon_font_solid)  # tag
                 # dpg.bind_item_theme("chat_testing_button", "disablable_button_theme")  # tag
                 # testing_tooltip = dpg.add_tooltip("chat_testing_button")  # tag
-                # testing_tooltip_text = dpg.add_text("Developer button for testing purposes", parent=testing_tooltip)
+                # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
 
                 n_below_chat_buttons = 5
                 avatar_panel_left = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8)
