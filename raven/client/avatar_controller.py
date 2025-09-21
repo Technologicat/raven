@@ -370,13 +370,13 @@ def preprocess_task(task_env: env) -> None:
             logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is a tool call invocation. Skipping.")
             return
         text = strip_markdown.strip_markdown(text)  # remove formatting for TTS and subtitling
-        text = strip_emoji(text)
         if text is None:
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is `None` after stripping markdown and emoji. Skipping .")
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is `None` after stripping markdown. Skipping .")
             return
+        text = strip_emoji(text)
         text = text.strip()  # once more, with feeling!
         if not text:
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is empty after post-stripping leading/trailing whitespace. Skipping.")
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is empty after post-stripping emoji and leading/trailing whitespace. Skipping.")
             return
         # Now we actually have some text that is worth sending to the TTS and to the translation/subtitling system.
 
