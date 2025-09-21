@@ -951,10 +951,14 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     streaming_chat_message = None
 
             def on_docs_start() -> None:
-                avatar_controller.start_data_eyes()
+                global gui_alive  # intent only
+                if gui_alive:
+                    avatar_controller.start_data_eyes()
 
             def on_docs_done(matches: List[Dict]) -> None:
-                avatar_controller.stop_data_eyes()
+                global gui_alive  # intent only
+                if gui_alive:
+                    avatar_controller.stop_data_eyes()
 
             def on_llm_start() -> None:
                 nonlocal streaming_chat_message
@@ -1055,7 +1059,9 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     logger.info("ai_turn.run_ai_turn.on_done: all done.")
 
             def on_tools_start(tool_calls: List[Dict]) -> None:
-                avatar_controller.start_data_eyes()
+                global gui_alive  # intent only
+                if gui_alive:
+                    avatar_controller.start_data_eyes()
 
             def on_tool_done(node_id: str) -> None:
                 global gui_alive  # intent only
@@ -1067,7 +1073,9 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     add_complete_chat_message_to_linearized_chat_panel(node_id)
 
             def on_tools_done() -> None:
-                avatar_controller.stop_data_eyes()
+                global gui_alive  # intent only
+                if gui_alive:
+                    avatar_controller.stop_data_eyes()
 
             new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
                                                 datastore=datastore,
