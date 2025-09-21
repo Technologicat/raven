@@ -94,7 +94,7 @@ print(f"THA3 is installed at '{str(talkinghead_path)}'")
 sys.path.append(str(talkinghead_path))
 
 # See also `supported_cels` in `raven.server.modules.avatarutil`.
-# Note the "data1", "data2", and "data3" cels (LLM tool access indicator) have no GUI control here; they are controlled only programmatically in the live avatar.
+# Note the "data1", "data2", "data3" and "data4" cels (LLM tool access indicator) have no GUI control here; they are controlled only programmatically in the live avatar.
 # The "waver2" cel has no GUI control here; "waver1" sets the effect strength.
 gui_cel_blending_layout = ["blush1",
                            "blush2",
@@ -917,10 +917,13 @@ class PoseEditorGUI:
 
             # Load all supported cels into the stack, but set the blend strengths to zero.
             # The live animator needs all cels to be present in the emotion template, even "waver2"
-            # and "data1", "data2", "data3", which aren't directly settable in the GUI. The "waver2"
-            # cel is used as part of the eye-waver animation, with the animation strength controlled
-            # by the "waver1" slider in the GUI. The "data*" cels are only controlled programmatically
-            # by client software (particularly Raven-librarian).
+            # and "data1", "data2", "data3", "data4", which aren't directly settable in the GUI.
+            #
+            # The "waver2" cel is used as part of the eye-waver animation, with the animation strength
+            # controlled by the "waver1" slider in the GUI.
+            #
+            # The "data*" cels are only controlled programmatically by client software (particularly Raven-librarian).
+            # The "data1" cel blend sets the animation strength.
             self.celstack.clear()
             for celname in avatarutil.supported_cels:
                 self.celstack.append((celname, 0.0))

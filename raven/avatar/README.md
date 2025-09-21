@@ -193,7 +193,7 @@ The cel subsystem is powered by two kinds of extra cels (512x512 PNG RGBA images
     - `shadow1.png`: shadow covering upper half of face; typically represents shock or disgust
     - `sweat[123].png`: three levels of sweatdrops (on the character's skin directly, not the hovering anime sweatdrop; for that, see `fx_sweatdrop[123].png` and `fx_smallsweatdrop[123].png` instead)
     - `tears[123].png`: three levels of tears
-    - `data[123].png`: scifi "data eyes" effect (LLM tool access indicator), up to three frames.
+    - `data[1234].png`: scifi "data eyes" effect (LLM tool access indicator), up to four frames.
     - `waver[12].png`: the "intense emotion" anime eye-waver effect, exactly two frames.
   - The "data eyes" effect has **up to** three cels, but no sliders in the pose editor.
     - This effect is independent of emotions, and controlled only programmatically, via `raven.client.api.avatar_modify_overrides`.
@@ -203,6 +203,7 @@ The cel subsystem is powered by two kinds of extra cels (512x512 PNG RGBA images
       - `"data1"` only: static effect.
       - `"data1"` and `"data2"`: two-frame animation, useful e.g. for an effect where scanlines appear in the eyes.
       - `"data1"`, `"data2"` and `"data3"`: three-frame animation, useful e.g. for an effect where a spinning indicator appears in the eyes.
+      - `"data1"`, `"data2"`, `"data3"` and `"data4"`: four-frame animation, useful e.g. for a looping scrolling effect.
   - The eye-waver effect has **exactly** two cels, but only one slider in the pose editor.
     - The `"waver1"` cel blend controls the strength of the effect (from 0.0 = off to 1.0 = full opacity).
     - The slider in the pose editor sets the strength of the effect (for the specific emotion being edited).

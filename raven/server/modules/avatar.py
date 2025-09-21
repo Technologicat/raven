@@ -645,6 +645,7 @@ class Animator:
         self.breathing_epoch = t0
         self.waver_epoch = t0
         self.data_eyes_epoch = t0
+        self.data_eyes_celnames = []
 
         self.animefx_epochs = {}
 
@@ -857,12 +858,12 @@ class Animator:
             self.torch_cels = {celname: _load(cel_filelike) for celname, cel_filelike in cel_filelikes.items()}  # add-on cels, if any
 
             # Count how many cels this character has for the variable-length "data eyes" effect
-            self._data_eyes_celnames = []
-            for celname in ("data1", "data2", "data3"):
+            self.data_eyes_celnames = []
+            for celname in ("data1", "data2", "data3", "data4"):
                 if celname not in cel_filelikes:
                     break
-                self._data_eyes_celnames.append(celname)
-            logger.info(f"load_image: This character has {len(self._data_eyes_celnames)} cels for the scifi 'data eyes' effect.")
+                self.data_eyes_celnames.append(celname)
+            logger.info(f"load_image: This character has {len(self.data_eyes_celnames)} cels for the scifi 'data eyes' effect.")
         except Exception as exc:
             self.source_image = None
             self.torch_cels = {}
@@ -1224,7 +1225,7 @@ class Animator:
         return new_pose
 
     def animate_data_eyes(self, strength: float, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
-        """Scifi "data eyes" cel animation driver. This effect is used during LLM tool access.
+        """Scifi "data eyes" cel animation driver. This effect is used by Raven-librarian during LLM tool access.
 
         `strength` is the cel opacity, range [0, 1].
 
@@ -1234,10 +1235,10 @@ class Animator:
         if DATA_EYES_FPS == 0.0:  # effect disabled?
             new_celstack = copy.copy(celstack)
             return new_celstack
-        self.data_eyes_epoch, new_celstack = compositor.animate_cel_cycle(cycle_duration=(len(self._data_eyes_celnames) / DATA_EYES_FPS),  # len = number of cels, i.e. cycle length in frames
+        self.data_eyes_epoch, new_celstack = compositor.animate_cel_cycle(cycle_duration=(len(self.data_eyes_celnames) / DATA_EYES_FPS),  # len = number of cels, i.e. cycle length in frames
                                                                           epoch=self.data_eyes_epoch,
                                                                           strength=strength,
-                                                                          cels=self._data_eyes_celnames,
+                                                                          cels=self.data_eyes_celnames,
                                                                           celstack=celstack)
         return new_celstack
 

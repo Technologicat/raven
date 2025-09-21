@@ -925,6 +925,12 @@ def user_turn(text: str) -> None:
         add_complete_chat_message_to_linearized_chat_panel(new_head_node_id)
     task_manager.submit(run_user_turn, env())
 
+# We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the "data1" cel blend; hence the TTS can still override the mouth morphs simultaneously.
+def _avatar_enable_data_eyes() -> None:
+    api.avatar_modify_overrides(avatar_instance_id, action="set", overrides={"data1": 1.0})
+def _avatar_disable_data_eyes() -> None:
+    api.avatar_modify_overrides(avatar_instance_id, action="unset", overrides={"data1": 0.0})  # Values are ignored by the "unset" action, which removes the overrides.
+
 def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     """Run the AI's response part of a chat round.
 
@@ -950,17 +956,11 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     streaming_chat_message.demolish()
                     streaming_chat_message = None
 
-            # We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the "data1" cel blend; hence the TTS can still override the mouth morphs simultaneously.
-            def enable_data_eyes() -> None:
-                api.avatar_modify_overrides(avatar_instance_id, action="set", overrides={"data1": 1.0})
-            def disable_data_eyes() -> None:
-                api.avatar_modify_overrides(avatar_instance_id, action="unset", overrides={"data1": 0.0})  # Values are ignored by the "unset" action, which removes the overrides.
-
             def on_docs_start() -> None:
-                enable_data_eyes()
+                _avatar_enable_data_eyes()
 
             def on_docs_done(matches: List[Dict]) -> None:
-                disable_data_eyes()
+                _avatar_disable_data_eyes()
 
             def on_llm_start() -> None:
                 nonlocal streaming_chat_message
@@ -1061,7 +1061,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     logger.info("ai_turn.run_ai_turn.on_done: all done.")
 
             def on_tools_start(tool_calls: List[Dict]) -> None:
-                enable_data_eyes()
+                _avatar_enable_data_eyes()
 
             def on_tool_done(node_id: str) -> None:
                 global gui_alive  # intent only
@@ -1073,7 +1073,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     add_complete_chat_message_to_linearized_chat_panel(node_id)
 
             def on_tools_done() -> None:
-                disable_data_eyes()
+                _avatar_disable_data_eyes()
 
             new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
                                                 datastore=datastore,
@@ -1096,7 +1096,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         finally:
             if gui_alive:
                 dpg.disable_item("chat_stop_generation_button")  # tag
-            disable_data_eyes()  # make sure the override goes away
+            _avatar_disable_data_eyes()  # make sure the data eyes effect ends
     ai_turn_task_manager.submit(run_ai_turn, env())
 
 def stop_ai_turn() -> None:
@@ -1392,6 +1392,24 @@ with timer() as tim:
                 dpg.bind_item_theme("chat_stop_speech_button", "disablable_button_theme")  # tag
                 stop_speech_tooltip = dpg.add_tooltip("chat_stop_speech_button")  # tag
                 stop_speech_tooltip_text = dpg.add_text("Stop speaking [Ctrl+S]", parent=stop_speech_tooltip)
+
+                # # DEBUG / TESTING button
+                # _testing_data_eyes_enabled = False
+                # def testing_callback() -> None:
+                #     global _testing_data_eyes_enabled
+                #     _testing_data_eyes_enabled = not _testing_data_eyes_enabled
+                #     if _testing_data_eyes_enabled:
+                #         _avatar_enable_data_eyes()
+                #     else:
+                #         _avatar_disable_data_eyes()
+                # testing_button = dpg.add_button(label=fa.ICON_VOLCANO,
+                #                                 callback=testing_callback,
+                #                                 width=gui_config.toolbutton_w,
+                #                                 tag="chat_testing_button")
+                # dpg.bind_item_font("chat_testing_button", themes_and_fonts.icon_font_solid)  # tag
+                # dpg.bind_item_theme("chat_testing_button", "disablable_button_theme")  # tag
+                # testing_tooltip = dpg.add_tooltip("chat_testing_button")  # tag
+                # testing_tooltip_text = dpg.add_text("Developer button for testing purposes", parent=testing_tooltip)
 
                 n_below_chat_buttons = 5
                 avatar_panel_left = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8)
