@@ -169,5 +169,6 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
                                                  "upscale_preset": "C",
                                                  "upscale_quality": "low",
                                                  "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "cyberspace.png")).expanduser().resolve()),
-                                                 "backdrop_blur": True},  # The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.
+                                                 "backdrop_blur": True,  # The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.
+                                                 }
                     )
