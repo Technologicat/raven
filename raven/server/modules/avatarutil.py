@@ -201,7 +201,7 @@ def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
         dirs.clear()  # don't recurse
 
         # Character-specific cels (first priority)
-        for filename in files:
+        for filename in sorted(files):
             if filename.endswith(ext):
                 if filename.startswith(f"{stem}_"):
                     base, _ = os.path.splitext(filename)  # "example_blush.png" -> "example_blush"
@@ -213,7 +213,7 @@ def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
                         logger.warning(f"scan_addon_cels: Ignoring unsupported cel '{celname}' for '{image_file_name}'. Supported cels are: {supported_cels} (plus any fx_* cels)")
 
         # Generic animefx cels (fallback)
-        for filename in files:
+        for filename in sorted(files):
             if filename.startswith("fx_") and filename.endswith(ext):  # fallback to generic cels for animefx only
                 celname, _ = os.path.splitext(filename)  # "fx_notice1.png" -> "fx_notice1", ".png"
                 if celname not in cels_filenames:  # fallback only if no character-specific cel
