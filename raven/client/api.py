@@ -37,7 +37,7 @@ __all__ = ["initialize",
            "avatar_start", "avatar_stop",
            "avatar_start_talking", "avatar_stop_talking",  # generic animation for no-audio environments; see also `tts_speak_lipsynced`
            "avatar_set_emotion",
-           "avatar_set_overrides",
+           "avatar_set_overrides", "avatar_modify_overrides",
            "avatar_result_feed",  # this reads the AI avatar video stream
            "avatar_get_available_filters",  # shared between "avatar" and "imagefx" modules
            "classify_labels", "classify",
@@ -285,6 +285,17 @@ def avatar_set_overrides(instance_id: str, overrides: Dict[str, float]) -> None:
     data = {"instance_id": instance_id,
             "overrides": overrides}
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/set_overrides", json=data, headers=headers)
+    util.yell_on_error(response)
+
+def avatar_modify_overrides(instance_id: str, action: str, overrides: Dict[str, float]) -> None:
+    if not util.api_initialized:
+        raise RuntimeError("avatar_modify_overrides: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id,
+            "action": action,
+            "overrides": overrides}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/modify_overrides", json=data, headers=headers)
     util.yell_on_error(response)
 
 def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], bytes], None, None]:

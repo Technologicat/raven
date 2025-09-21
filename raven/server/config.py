@@ -295,6 +295,9 @@ animator_defaults = {
     # Breathing animation settings.
     "breathing_cycle_duration": 4.0,  # seconds, for a full breathing cycle.
 
+    # Scifi "data eyes" (LLM tool access indicator) animation settings.
+    "data_eyes_fps": 12.0,  # cel animation framerate. Special value 0.0 disables the animation.
+
     # "Intense emotion" eye-waver animation settings.
     "eye_waver_fps": 12.0,  # cel animation framerate. Special value 0.0 disables the animation.
 

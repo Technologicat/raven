@@ -39,14 +39,6 @@
 
 - Avatar
   - Update assets for all characters (add at least eye-waver effect, maybe other cel-blending cels too)
-  - Add "data eyes" cel effect that Librarian can use for thinking / internet access / tool use
-    - Per-character cels
-    - Enable/disable - where does the on/off switch belong, logically? Probably in the animator settings?
-    - Auto-animate, but control by a single morph (similarly to the eye-waver effect)
-        - Purely programmatic, no slider in pose editor
-        - Override that morph when starting to access data, remove the override when data access is done
-    - The `on_tools_start` event in `raven.librarian.scaffold.ai_turn` can trigger the start the data eyes effect
-    - The last `on_tool_done` event can trigger the end of the data eyes effect (must count them; always exactly one per completed call regardless of success/failure), or add an `on_tools_done` event.
 
 - Visualizer
   - Keep the app state in top-level containers, and pass these in/out explicitly. More FP and facilitates adding unit tests later.

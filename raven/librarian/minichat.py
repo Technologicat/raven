@@ -446,7 +446,7 @@ def minimal_chat_client(backend_url) -> None:
 
                 ai_message_number += 1
 
-            def on_docs_nomatch_done(node_id: str) -> None:
+            def on_nomatch_done(node_id: str) -> None:
                 nomatch_message_node_payload = datastore.get_payload(node_id)
                 chat_print_message(message_number=ai_message_number,
                                    role="assistant",
@@ -473,13 +473,16 @@ def minimal_chat_client(backend_url) -> None:
                                                 docs_query=docs_query,
                                                 speculate=app_state["speculate_enabled"],
                                                 markup="ansi",
+                                                on_docs_start=None,
+                                                on_docs_done=None,
                                                 on_prompt_ready=None,  # debug/info hook
                                                 on_llm_start=on_llm_start,
                                                 on_llm_progress=on_llm_progress,
                                                 on_llm_done=on_llm_done,
-                                                on_docs_nomatch_done=on_docs_nomatch_done,
+                                                on_nomatch_done=on_nomatch_done,
                                                 on_tools_start=None,
-                                                on_tool_done=on_tool_done)
+                                                on_tool_done=on_tool_done,
+                                                on_tools_done=None)
             app_state["HEAD"] = new_head_node_id
             return Values(action=action_proceed)
 

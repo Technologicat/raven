@@ -25,7 +25,7 @@ with timer() as tim:
     import threading
     import time
     import traceback
-    from typing import Callable, Optional, Union
+    from typing import Callable, Dict, List, Optional, Union
     import uuid
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -950,6 +950,18 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     streaming_chat_message.demolish()
                     streaming_chat_message = None
 
+            # We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the "data1" cel blend; hence the TTS can still override the mouth morphs simultaneously.
+            def enable_data_eyes() -> None:
+                api.avatar_modify_overrides(avatar_instance_id, action="set", overrides={"data1": 1.0})
+            def disable_data_eyes() -> None:
+                api.avatar_modify_overrides(avatar_instance_id, action="unset", overrides={"data1": 0.0})  # Values are ignored by the "unset" action, which removes the overrides.
+
+            def on_docs_start() -> None:
+                enable_data_eyes()
+
+            def on_docs_done(matches: List[Dict]) -> None:
+                disable_data_eyes()
+
             def on_llm_start() -> None:
                 nonlocal streaming_chat_message
                 streaming_chat_message = DisplayedStreamingChatMessage(gui_parent="chat_group")
@@ -1024,7 +1036,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 # Let the LLM keep generating (if it wants to).
                 return llmclient.action_ack
 
-            def on_done(node_id: str) -> None:
+            def on_done(node_id: str) -> None:   # Regardless of whether an LLM-written message, or the canned "no matches in document database" message.
                 global gui_alive  # intent only
 
                 app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
@@ -1048,6 +1060,9 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
 
                     logger.info("ai_turn.run_ai_turn.on_done: all done.")
 
+            def on_tools_start(tool_calls: List[Dict]) -> None:
+                enable_data_eyes()
+
             def on_tool_done(node_id: str) -> None:
                 global gui_alive  # intent only
 
@@ -1057,6 +1072,9 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     delete_streaming_chat_message()  # it shouldn't exist when this triggers, but robustness.
                     add_complete_chat_message_to_linearized_chat_panel(node_id)
 
+            def on_tools_done() -> None:
+                disable_data_eyes()
+
             new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
                                                 datastore=datastore,
                                                 retriever=retriever,
@@ -1064,17 +1082,21 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                                                 docs_query=docs_query,
                                                 speculate=app_state["speculate_enabled"],
                                                 markup="markdown",
+                                                on_docs_start=on_docs_start,
+                                                on_docs_done=on_docs_done,
                                                 on_prompt_ready=None,  # debug/info hook
                                                 on_llm_start=on_llm_start,
                                                 on_llm_progress=on_llm_progress,
                                                 on_llm_done=on_done,
-                                                on_docs_nomatch_done=on_done,
-                                                on_tools_start=None,
-                                                on_tool_done=on_tool_done)
+                                                on_nomatch_done=on_done,
+                                                on_tools_start=on_tools_start,
+                                                on_tool_done=on_tool_done,
+                                                on_tools_done=on_tools_done)
             app_state["HEAD"] = new_head_node_id
         finally:
             if gui_alive:
                 dpg.disable_item("chat_stop_generation_button")  # tag
+            disable_data_eyes()  # make sure the override goes away
     ai_turn_task_manager.submit(run_ai_turn, env())
 
 def stop_ai_turn() -> None:

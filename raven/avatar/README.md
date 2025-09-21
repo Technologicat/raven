@@ -193,9 +193,21 @@ The cel subsystem is powered by two kinds of extra cels (512x512 PNG RGBA images
     - `shadow1.png`: shadow covering upper half of face; typically represents shock or disgust
     - `sweat[123].png`: three levels of sweatdrops (on the character's skin directly, not the hovering anime sweatdrop; for that, see `fx_sweatdrop[123].png` and `fx_smallsweatdrop[123].png` instead)
     - `tears[123].png`: three levels of tears
-    - `waver[12].png`: the "intense emotion" anime eye-waver effect, two frames.
-  - The eye-waver effect has two cels, but only one slider in the pose editor. The animator cycles the two cels automatically in the live avatar. The slider in the pose editor sets the strength of the effect (for the specific emotion being edited).
-  - The blending is standard alpha blending. In the pose editor, a value of 1000 means the cel is fully opaque, and 0 means fully transparent (i.e. off).
+    - `data[123].png`: scifi "data eyes" effect (LLM tool access indicator), up to three frames.
+    - `waver[12].png`: the "intense emotion" anime eye-waver effect, exactly two frames.
+  - The "data eyes" effect has **up to** three cels, but no sliders in the pose editor.
+    - This effect is independent of emotions, and controlled only programmatically, via `raven.client.api.avatar_modify_overrides`.
+    - The `"data1"` cel blend controls the strength of the effect (from 0.0 = off to 1.0 = full opacity).
+    - When the effect has nonzero strength, the animator cycles the cels automatically in the live avatar.
+    - Valid configurations are:
+      - `"data1"` only: static effect.
+      - `"data1"` and `"data2"`: two-frame animation, useful e.g. for an effect where scanlines appear in the eyes.
+      - `"data1"`, `"data2"` and `"data3"`: three-frame animation, useful e.g. for an effect where a spinning indicator appears in the eyes.
+  - The eye-waver effect has **exactly** two cels, but only one slider in the pose editor.
+    - The `"waver1"` cel blend controls the strength of the effect (from 0.0 = off to 1.0 = full opacity).
+    - The slider in the pose editor sets the strength of the effect (for the specific emotion being edited).
+    - When the effect has nonzero strength, the animator cycles the two cels automatically in the live avatar.
+  - The blending is standard alpha blending. In the pose editor, a value of 1000 means the cel is fully opaque, and 0 means fully transparent (i.e. off). In the JSON files, the range is from 0.0 to 1.0.
 - **Animefx** cels: rendered *around* the character, after posing.
   - Usually a global set of animefx cels works for all characters.
   - Default animefx cels have filenames beginning with `fx_`. They are used by default by all characters in the same directory.

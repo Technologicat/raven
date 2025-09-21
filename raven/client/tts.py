@@ -578,24 +578,27 @@ def tts_speak_lipsynced(instance_id: str,
                 logger.error(f"tts_speak_lipsynced.speak: failed to load audio into mixer, reason {type(exc)}: {exc}")
                 return
 
+            # All mouth morphs. These are what we will override while lipsyncing.
+            # We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the mouth morphs, so that other parts of the client can override other morphs or cel blends simultaneously if needed.
+            mouth_morph_overrides = {
+                "mouth_aaa_index": 0.0,
+                "mouth_eee_index": 0.0,
+                "mouth_iii_index": 0.0,
+                "mouth_ooo_index": 0.0,
+                "mouth_uuu_index": 0.0,
+                "mouth_delta": 0.0,
+            }
+
             def apply_lipsync_at_audio_time(t: float) -> None:
                 # Sanity check: don't do anything before the first phoneme.
                 if t < phoneme_start_times[0]:
                     return
 
-                # Mouth morphs
-                overrides = {
-                    "mouth_aaa_index": 0.0,
-                    "mouth_eee_index": 0.0,
-                    "mouth_iii_index": 0.0,
-                    "mouth_ooo_index": 0.0,
-                    "mouth_uuu_index": 0.0,
-                    "mouth_delta": 0.0,
-                }
+                overrides = copy.copy(mouth_morph_overrides)
 
                 # Close the mouth if the last phoneme has ended (but the audio stream is still running, likely with silence at the end).
                 if t > phoneme_end_times[-1]:
-                    api.avatar_set_overrides(instance_id, overrides)
+                    api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
                     return
 
                 # Find position in phoneme stream
@@ -607,16 +610,16 @@ def tts_speak_lipsynced(instance_id: str,
 
                 # Set mouth position
                 if morph == "!close_mouth":
-                    api.avatar_set_overrides(instance_id, overrides)  # set all mouth morphs to zero -> close mouth
+                    api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)  # set all mouth morphs to zero -> close mouth
                 elif morph == "!keep":
                     pass  # keep previous mouth position
                 elif morph == "!maybe_close_mouth":  # close mouth only if the pause is at least half a second, else act like "!keep".
                     phoneme_length = phoneme_end_times[idx] - phoneme_start_times[idx]
                     if phoneme_length >= 0.5:
-                        api.avatar_set_overrides(instance_id, overrides)
+                        api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
                 else:  # activate one mouth morph, set others to zero
                     overrides[morph] = 1.0
-                    api.avatar_set_overrides(instance_id, overrides)
+                    api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
 
             logger.info("tts_speak_lipsynced.speak: starting playback")
             if on_start is not None:
@@ -647,10 +650,10 @@ def tts_speak_lipsynced(instance_id: str,
             # TTS is exiting, so stop lipsyncing.
             #
             # NOTE: During app shutdown, we also get here if the avatar instance was deleted
-            # (so an `api.avatar_set_overrides` call raised, because the avatar instance was not found).
+            # (so an `api.avatar_modify_overrides` call raised, because the avatar instance was not found).
             # So at this point, we shouldn't trust that it's still there.
             try:
-                api.avatar_set_overrides(instance_id, {})
+                api.avatar_modify_overrides(instance_id, action="unset", overrides=mouth_morph_overrides)  # Values are ignored by the "unset" action, which removes the overrides.
             except Exception:
                 pass
 

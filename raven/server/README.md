@@ -55,6 +55,7 @@
         - [POST "/api/avatar/stop_talking"](#post-apiavatarstop_talking)
         - [POST "/api/avatar/set_emotion"](#post-apiavatarset_emotion)
         - [POST "/api/avatar/set_overrides"](#post-apiavatarset_overrides)
+        - [POST "/api/avatar/modify_overrides"](#post-apiavatarmodify_overrides)
         - [GET "/api/avatar/result_feed"](#get-apiavatarresult_feed)
         - [GET "/api/avatar/get_available_filters"](#get-apiavatarget_available_filters)
     - [Text sentiment classification](#text-sentiment-classification-1)
@@ -393,8 +394,10 @@ AI-animated anime avatar for your LLM.
 - `avatar_start_talking`: Start a generic talking animation (randomized mouth) for no-audio environments. See also `tts_speak_lipsynced`.
 - `avatar_stop_talking`: Stop the generic talking animation.
 - `avatar_set_emotion`: Set the avatar character's current emotion.
-- `avatar_set_overrides`: Manually control specific morphs (including cel blends, except animefx).
+- `avatar_set_overrides`: Manually control specific morphs (including cel blends, except animefx). Sets the full override state at once.
+- `avatar_modify_overrides`: Manually selectively control specific morphs (including cel blends, except animefx). Modifies the override state, facilitating fine-grained control of different morphs or cel blends across the client application.
   - Used by the lipsync driver to control the character's mouth based on timestamped phoneme data.
+  - Used by the Raven-librarian GUI to indicate LLM tool access with the "data eyes" effect.
 - `avatar_result_feed`: Receive the video feed of the avatar, as a `multipart/x-mixed-replace` stream of images.
   - Image format and desired framerate are set in the animator settings.
   - The server will try hard to keep the desired framerate.
@@ -752,6 +755,28 @@ No outputs.
 
 There is no getter, by design. If the override state is meaningful to you,
 keep a copy in your frontend, and sync that to the server.
+
+
+### POST "/api/avatar/modify_overrides"
+
+Selectively directly control the animator's morphs from the client side.
+
+Only the listed overrides are modified.
+
+Otherwise works like `/api/avatar/set_overrides`, which see.
+
+Input is JSON::
+
+    {"instance_id": "some_important_string",
+     "action": "set",
+     "overrides": {"morph0": value0,
+                   ...}
+    }
+
+Here `action` is one of "set", "unset":
+
+- `"set"`: set the listed overrides to the given value.
+- `"unset"`: remove listed overrides (values ignored). No error even if the override was already removed.
 
 
 ### GET "/api/avatar/result_feed"

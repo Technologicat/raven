@@ -17,7 +17,7 @@ __all__ = ["init_module", "is_available",
            "start", "stop",
            "start_talking", "stop_talking",
            "set_emotion",
-           "set_overrides",
+           "set_overrides", "modify_overrides",
            "result_feed"]
 
 import atexit
@@ -432,6 +432,28 @@ def set_overrides(instance_id: str, overrides: Dict[str, Any]) -> str:
     animator = _avatar_instances[instance_id]["animator"]
     animator.set_overrides(overrides)
 
+def modify_overrides(instance_id: str, action: str, overrides: Dict[str, Any]) -> str:
+    """Selectively set manual overrides for morphs and/or cel blends.
+
+    Only the listed overrides are modified.
+
+    Otherwise works like `set_overrides`, which see.
+
+    `action`: one of "set", "unset".
+        "set": set the listed overrides to the given value.
+        "unset": remove listed overrides (values ignored). No error even if the override was already removed.
+    """
+    if not module_initialized:
+        raise RuntimeError("modify_overrides: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"modify_overrides: no such avatar instance '{instance_id}'")
+        raise ValueError(f"modify_overrides: no such avatar instance '{instance_id}'")
+
+    logger.debug("modify_overrides: applying overrides")  # too spammy as info (when lipsyncing)
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.modify_overrides(action, overrides)
+
 # There are three tasks we must do each frame:
 #
 #   1) Render an animation frame
@@ -622,6 +644,7 @@ class Animator:
         t0 = time.time_ns()
         self.breathing_epoch = t0
         self.waver_epoch = t0
+        self.data_eyes_epoch = t0
 
         self.animefx_epochs = {}
 
@@ -832,6 +855,14 @@ class Animator:
             logger.info(f"load_image: Loading character image with {len(cel_filelikes)} add-on cel{plural_s}.{cels_str}")
             self.source_image = _load(filelike)  # base image
             self.torch_cels = {celname: _load(cel_filelike) for celname, cel_filelike in cel_filelikes.items()}  # add-on cels, if any
+
+            # Count how many cels this character has for the variable-length "data eyes" effect
+            self._data_eyes_celnames = []
+            for celname in ("data1", "data2", "data3"):
+                if celname not in cel_filelikes:
+                    break
+                self._data_eyes_celnames.append(celname)
+            logger.info(f"load_image: This character has {len(self._data_eyes_celnames)} cels for the scifi 'data eyes' effect.")
         except Exception as exc:
             self.source_image = None
             self.torch_cels = {}
@@ -1021,6 +1052,40 @@ class Animator:
         logger.debug("set_overrides: data is valid, applying.")
         self.animation_key_overrides = overrides  # atomic replace
 
+    def modify_overrides(self, action: str, overrides: Dict[str, float]) -> None:
+        """Selectively set manual overrides for morphs and/or cel blends.
+
+        `action`: one of "set", "unset".
+            "set": set the listed overrides to the given value.
+            "unset": remove listed overrides (values ignored). No error even if the override was already removed.
+
+        See `set_overrides`.
+        """
+        logger.debug(f"modify_overrides: got data {overrides}")  # too spammy as info (when lipsyncing)
+        # Validate
+        if action not in ("set", "unset"):
+            logger.error(f"modify_overrides: unknown action '{action}', rejecting overrides. Valid: 'set', 'unset'.")
+            raise ValueError(f"Unknown action '{action}', rejecting overrides. Valid: 'set', 'unset'.")
+        for key in overrides:
+            if key not in avatarutil.posedict_key_to_index and key not in avatarutil.supported_cels:
+                logger.error(f"modify_overrides: unknown animation key '{key}', rejecting overrides")
+                raise ValueError(f"Unknown animation key '{key}'; see `raven.server.modules.avatarutil` for available morph and cel blend keys.")
+        # Save
+        logger.debug("modify_overrides: data is valid, applying.")
+        if action == "set":
+            current_overrides = copy.copy(self.animation_key_overrides)
+            for key, value in overrides.items():
+                current_overrides[key] = value
+            self.animation_key_overrides = current_overrides  # atomic replace
+        else:  # action == "unset":
+            current_overrides = copy.copy(self.animation_key_overrides)
+            for key in overrides.keys():
+                try:
+                    current_overrides.pop(key)
+                except KeyError:  # didn't exist
+                    pass  # it's fine
+            self.animation_key_overrides = current_overrides  # atomic replace
+
     def apply_overrides(self, pose: List[float], celstack: List[Tuple[str, float]]) -> (List[float], List[Tuple[str, float]]):
         """Apply any manual overrides currently in effect.
 
@@ -1157,6 +1222,24 @@ class Animator:
         idx = avatarutil.posedict_key_to_index["breathing_index"]
         new_pose[idx] = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         return new_pose
+
+    def animate_data_eyes(self, strength: float, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+        """Scifi "data eyes" cel animation driver. This effect is used during LLM tool access.
+
+        `strength` is the cel opacity, range [0, 1].
+
+        Returns the modified celstack.
+        """
+        DATA_EYES_FPS = self._settings["data_eyes_fps"]  # frames per second, cel cycle speed
+        if DATA_EYES_FPS == 0.0:  # effect disabled?
+            new_celstack = copy.copy(celstack)
+            return new_celstack
+        self.data_eyes_epoch, new_celstack = compositor.animate_cel_cycle(cycle_duration=(len(self._data_eyes_celnames) / DATA_EYES_FPS),  # len = number of cels, i.e. cycle length in frames
+                                                                          epoch=self.data_eyes_epoch,
+                                                                          strength=strength,
+                                                                          cels=self._data_eyes_celnames,
+                                                                          celstack=celstack)
+        return new_celstack
 
     def animate_eye_waver(self, strength: float, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """Eye-waver (anime style "intense emotion") cel animation driver.
@@ -1491,6 +1574,12 @@ class Animator:
         current_cel_strengths = [v for k, v in self.current_celstack]  # TODO: fix unnecessary data conversion back and forth
         current_cel_strengths = self.interpolate(current_cel_strengths, target_cel_strengths)
         self.current_celstack = [(k, v) for (k, _), v in zip(self.current_celstack, current_cel_strengths)]
+
+        # Apply scifi "data eyes" effect (LLM tool access indicator)
+        data1_idx = compositor.get_cel_index_in_stack("data1", target_celstack)  # "data1" cel blend controls the "data eyes" effect strength
+        if data1_idx != -1:  # found?
+            _, strength = target_celstack[data1_idx]
+            self.current_celstack = self.animate_data_eyes(strength, self.current_celstack)
 
         # Apply eye-waver effect (anime-style "intense emotion")
         waver1_idx = compositor.get_cel_index_in_stack("waver1", target_celstack)  # "waver1" in the emotion controls the eye-waver effect strength

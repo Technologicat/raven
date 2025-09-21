@@ -185,13 +185,16 @@ def ai_turn(llm_settings: env,
             docs_query: Optional[str],  # if supplied, search the document database with this query and inject the results
             speculate: bool,  # if `False`, remind the LLM to respond using in-context information only
             markup: Optional[str],
+            on_docs_start: Optional[Callable],
+            on_docs_done: Optional[Callable],
             on_prompt_ready: Optional[Callable],
             on_llm_start: Optional[Callable],
             on_llm_progress: Optional[Callable],
             on_llm_done: Optional[Callable],
-            on_docs_nomatch_done: Optional[Callable],
+            on_nomatch_done: Optional[Callable],
             on_tools_start: Optional[Callable],
-            on_tool_done: Optional[Callable]) -> str:
+            on_tool_done: Optional[Callable],
+            on_tools_done: Optional[Callable]) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
 
     This continues the current branch with as many chat nodes as needed: one for each LLM response, and one for each tool call.
@@ -230,6 +233,29 @@ def ai_turn(llm_settings: env,
 
     We provide the following optional callbacks/events, which are useful for live UI updates.
 
+    `on_docs_start`: 0-argument callable.
+                     The return value is ignored.
+
+                     Called just before searching the document database. Meant as an optional UI hook
+                     to show that the document database search (RAG) is starting.
+
+                     Only called if `docs_query is not None`.
+
+    `on_docs_done`: 1-argument callable, with argument `matches: List[Dict]`. For the exact format,
+                    see `raven.librarian.hybridir.HybridIR.query`; this is the return value from that.
+                    Note that `matches` may be empty.
+
+                    The return value of the event is ignored.
+
+                    Called just after searching the document database. Meant as an optional UI hook
+                    to show that the document database search (RAG) is completed.
+
+                    Only called if `docs_query is not None`.
+
+                     NOTE: The role of `on_docs_done` differs from that of `on_nomatch_done`:
+                       - `on_docs_done` signals that the documents database search has completed.
+                       - `on_nomatch_done` signals that the whole AI turn has completed due to the no-match LLM bypass.
+
     `on_prompt_ready`: 1-argument callable, with argument `history: List[Dict]`. Debug/info hook.
                        The return value is ignored.
 
@@ -263,16 +289,22 @@ def ai_turn(llm_settings: env,
                    The return value is ignored.
 
                    Called after the LLM is done writing and the new chat node has been added to the chat datastore.
+                   If there are tool calls in the LLM response, this is called before the tool calls are processed
+                   (and before `on_tools_start`).
 
                    The argument is the node ID of this new chat node.
 
-    `on_docs_nomatch_done`: 1-argument callable, with argument `node_id: str`.
-                            The return value is ignored.
+    `on_nomatch_done`: 1-argument callable, with argument `node_id: str`.
+                       The return value is ignored.
 
-                            Called instead of `on_llm_start`/`on_llm_progress`/`on_llm_done` if the LLM was bypassed,
-                            after the new chat node has been added to the chat datastore.
+                       Called instead of `on_llm_start`/`on_llm_progress`/`on_llm_done` if the LLM was bypassed,
+                       after the new chat node has been added to the chat datastore.
 
-                            The argument is the node ID of this new chat node.
+                       The argument is the node ID of this new chat node.
+
+                       NOTE: The role of `on_nomatch_done` differs from that of `on_docs_done`:
+                         - `on_docs_done` signals that the documents database search has completed.
+                         - `on_nomatch_done` signals that the whole AI turn has completed due to the no-match LLM bypass.
 
     `on_tools_start`: 1-argument callable, with argument `tool_calls: List[Dict]`, containing the raw tool call requests
                       in the OpenAI format.
@@ -288,6 +320,8 @@ def ai_turn(llm_settings: env,
                       Each completed tool call (regardless of whether success or failure) then triggers
                       one `on_tool_done` event.
 
+                      After *all* tool calls have completed, the `on_tools_done` (note plural) event triggers.
+
     `on_tool_done`: 1-argument callable, with argument `node_id: str`.
                     The return value is ignored.
 
@@ -296,26 +330,42 @@ def ai_turn(llm_settings: env,
 
                     The argument is the node ID of this new chat node.
 
+    `on_tools_done`: 0-argument callable.
+                     The return value is ignored.
+
+                     Called just after the last tool call has completed.
+
+                     This is called ONLY IF there is at least one tool call in the LLM's response.
+
+                     This is meant as an optional UI hook to show that tool calls have finished processing.
+
     Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
     # Search document database if requested
     if docs_query is not None:
+        if on_docs_start is not None:
+            on_docs_start()
         docs_result = _search_docs_with_bypass(llm_settings=llm_settings,
                                                datastore=datastore,
                                                retriever=retriever,
                                                head_node_id=head_node_id,
                                                speculate=speculate,
                                                query=docs_query)
-        if docs_result["action"] is action_done:  # bypass triggered, we have a response chat node already
+        if docs_result["action"] is action_done:  # no-match bypass triggered, we have a response chat node already
             head_node_id = docs_result["new_head_node_id"]
-            if on_docs_nomatch_done is not None:
-                on_docs_nomatch_done(head_node_id)
+            if on_docs_done is not None:
+                on_docs_done([])  # no matches
+            if on_nomatch_done is not None:
+                on_nomatch_done(head_node_id)
             return head_node_id
-        docs_matches = docs_result["matches"]
+        else:
+            docs_matches = docs_result["matches"]
+            if on_docs_done is not None:
+                on_docs_done(docs_matches)
     else:
         docs_matches = []
 
-    while True:
+    while True:  # LLM agent loop - interleave LLM responses, tool calls and tool call results, until the LLM is done (no more tool calls).
         message_history = chatutil.linearize_chat(datastore=datastore,
                                                   node_id=head_node_id)
 
@@ -364,29 +414,32 @@ def ai_turn(llm_settings: env,
         # Each response goes into its own message, with `role="tool"`.
         #
         have_tool_calls = (out.data["tool_calls"] is not None and len(out.data["tool_calls"]))
-        if have_tool_calls and on_tools_start is not None:
-            on_tools_start(out.data["tool_calls"])
+        if have_tool_calls:
+            if on_tools_start is not None:
+                on_tools_start(out.data["tool_calls"])
 
-        tool_response_records = llmclient.perform_tool_calls(llm_settings, message=out.data)
+            # Each tool call produces exactly one response.
+            tool_response_records = llmclient.perform_tool_calls(llm_settings, message=out.data)  # no-op if the message contains no tool calls
 
-        # When there are no more tool calls, the LLM is done replying.
-        # Each tool call produces exactly one response.
-        if not tool_response_records:
+            # Add the tool response messages to the chat.
+            for tool_response_record in tool_response_records:
+                payload = {"message": tool_response_record.data,
+                           "generation_metadata": {"status": tool_response_record.status}}  # status is "success" or "error"
+                if "toolcall_id" in tool_response_record:
+                    payload["generation_metadata"]["toolcall_id"] = tool_response_record.toolcall_id
+                if "dt" in tool_response_record:
+                    payload["generation_metadata"]["dt"] = tool_response_record.dt
+                tool_response_message_node_id = datastore.create_node(payload=payload,
+                                                                      parent_id=head_node_id)
+                head_node_id = tool_response_message_node_id
+
+                if on_tool_done is not None:
+                    on_tool_done(head_node_id)
+
+            if have_tool_calls and on_tools_done is not None:
+                on_tools_done()
+        else:
+            # When there are no more tool calls, the LLM is done replying.
             break
-
-        # Add the tool response messages (if any) to the chat.
-        for tool_response_record in tool_response_records:
-            payload = {"message": tool_response_record.data,
-                       "generation_metadata": {"status": tool_response_record.status}}  # status is "success" or "error"
-            if "toolcall_id" in tool_response_record:
-                payload["generation_metadata"]["toolcall_id"] = tool_response_record.toolcall_id
-            if "dt" in tool_response_record:
-                payload["generation_metadata"]["dt"] = tool_response_record.dt
-            tool_response_message_node_id = datastore.create_node(payload=payload,
-                                                                  parent_id=head_node_id)
-            head_node_id = tool_response_message_node_id
-
-            if on_tool_done is not None:
-                on_tool_done(head_node_id)
 
     return head_node_id

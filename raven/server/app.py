@@ -518,6 +518,39 @@ def api_avatar_set_overrides():
     avatar.set_overrides(instance_id, overrides)
     return "OK"
 
+@app.route("/api/avatar/modify_overrides", methods=["POST"])
+def api_avatar_modify_overrides():
+    """Selectively directly control the animator's morphs from the client side.
+
+    Only the listed overrides are modified.
+
+    Otherwise works like `api_avatar_set_overrides`, which see.
+
+    Input is JSON::
+
+        {"instance_id": "some_important_string",
+         "action": "set",
+         "overrides": {"morph0": value0,
+                       ...}
+        }
+
+    `action`: one of "set", "unset".
+        "set": set the listed overrides to the given value.
+        "unset": remove listed overrides (values ignored). No error even if the override was already removed.
+    """
+    if not avatar.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_modify_overrides: "instance_id" is required')
+
+    instance_id = data["instance_id"]
+    action = data.get("action", "set")
+    overrides = data.get("overrides", {})
+    avatar.modify_overrides(instance_id, action, overrides)
+    return "OK"
+
 @app.route("/api/avatar/result_feed")
 def api_avatar_result_feed():
     """Video output.

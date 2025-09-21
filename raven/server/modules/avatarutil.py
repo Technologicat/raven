@@ -93,6 +93,7 @@ supported_cels = [
     "shadow1",  # darkened upper half of face representing shock; can be used e.g. for an anime-style fear or disgust expression.
     "sweat1", "sweat2", "sweat3",  # sweatdrops
     "tears1", "tears2", "tears3",  # outer eye corners, inner eye corners, whole lower edge of eye.
+    "data1", "data2", "data3",   # scifi "data eyes"; optional, up to 3 cels. Controlled only programmatically, via `raven.client.api.avatar_set_overrides`. The "data1" cel blend controls the strength.
     "waver1", "waver2",  # "intense emotion" eye-wavering effect. In `raven.avatar.pose_editor.app`, the "waver1" slider controls the strength.
 ]
 

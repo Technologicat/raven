@@ -58,6 +58,9 @@
             "tears1": 1.0,
             "tears2": 0.0,
             "tears3": 0.0,
+            "data1": 0.0,
+            "data2": 0.0,
+            "data3": 0.0,
             "waver1": 0.0,
             "waver2": 0.0
         }
