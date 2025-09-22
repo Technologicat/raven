@@ -664,7 +664,7 @@ class HybridIR:
         logger.info(f"HybridIR.query: entered. Searching for {k} best match{plural_s} for '{query}'")
 
         # Prepare anything we can before locking the datastore
-        internal_k = min(alpha * k,
+        internal_k = min(int(alpha * k),
                          len(self._keyword_retriever.corpus))  # `bm25s` library requires `k ≤ corpus size`
         if include_documents is None:
             keyword_k = internal_k
