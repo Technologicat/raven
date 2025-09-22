@@ -1499,7 +1499,7 @@ def librarian_hotkeys_callback(sender, app_data):
     if key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
         copy_chatlog_to_clipboard_as_markdown_callback()
     # Ctrl+Shift+...
-    if ctrl_pressed and shift_pressed:
+    elif ctrl_pressed and shift_pressed:
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         if key == dpg.mvKey_M:
             dpg.show_metrics()
