@@ -27,7 +27,7 @@ import json
 import os
 import requests
 from textwrap import dedent
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import sseclient  # pip install sseclient-py
 
@@ -527,13 +527,38 @@ def invoke(settings: env, history: List[Dict], on_progress=None) -> env:
 # --------------------------------------------------------------------------------
 # For tool-using LLMs: tool-calling
 
-def perform_tool_calls(settings: env, message: Dict) -> List[env]:
+def perform_tool_calls(settings: env,
+                       message: Dict,
+                       on_call_start: Optional[Callable],
+                       on_call_done: Optional[Callable]) -> List[env]:
     """Perform tool calls as requested in `message["tool_calls"]`.
 
     Returns a list of chat payloads (where each message's `role="tool"`) containing the tool outputs,
     one for each tool call.
 
-    If the `tool_calls` field of the message is missing or if it is empty, return the empty list.
+    If the "tool_calls" field of `message` is missing or if it is empty, return the empty list.
+
+    `on_call_start`: 3-argument callable: `(toolcall_id: str, function_name: str, arguments: Dict[str, Any])`.
+
+                     The return value of the event is ignored.
+
+                     Called just before a tool call starts.
+
+                     Only called if the request record was valid and it was possible to determine
+                     the tool name and the arguments.
+
+    `on_call_done`: 4-argument callable: `(toolcall_id: str, function_name: str, status: str, text: str)`.
+
+                    `status` is "success" or "error".
+
+                    `text` is the tool output (upon success), or the error message (upon error).
+
+                    The return value of the event is ignored.
+
+                    Called just after a tool call has completed.
+
+                    In error cases that never got so far as to call the tool, `on_call_done`
+                    may be called with no corresponding `on_call_start`, to report the error.
 
     Each returned `env` has the following attributes:
 
@@ -588,12 +613,13 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
 
             `status`: str: Values "success" or "error" are recommended.
 
-            `toolcall_id`: Optional[str]: ID of this tool call (can be matched against the `id` in the `tool_calls` list
-                           of the AI chat message that spawned this call).
+            `toolcall_id`: Optional[str]: ID of this tool call (can be matched against the `id` in the
+                           `tool_calls` list of the AI chat message that spawned this call).
 
                            The ID should be included whenever it was present in the tool call request record.
 
-            `function_name`: Optional[str]: Which tool was called (or at least attempted).
+            `function_name`: Optional[str]: Which tool was called (or at least attempted),
+                             if the call got that far. If it didn't, this is `None`.
 
             `dt`: Optional[float]: Duration of this tool call, in seconds. Recommended to be included whenever
                                    the request was valid enough to actually proceed to call the function
@@ -612,6 +638,11 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
         if dt is not None:
             record.dt = dt
         tool_response_records.append(record)
+        if on_call_done is not None:
+            try:
+                on_call_done(toolcall_id, function_name, status, text)
+            except Exception as exc:
+                logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': ignoring exception from event handler `on_call_done`: {type(exc)}: {exc}")
 
     for request_record in tool_calls:
         toolcall_id = request_record["id"] if "id" in request_record else None
@@ -658,6 +689,11 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
             kwargs = {}
 
         # TODO: websearch return format: for the chat history, need only the preformatted text, but for the eventual GUI, would be nice to have the links separately. Could use a new metadata field in the chat datastore for this.
+        try:
+            if on_call_start is not None:
+                on_call_start(toolcall_id, function_name, kwargs)
+        except Exception as exc:
+            logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': ignoring exception from event handler `on_call_start`: {type(exc)}: {exc}")
         try:
             with timer() as tim:
                 tool_output_text = function(**kwargs)

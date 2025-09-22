@@ -198,6 +198,8 @@ def ai_turn(llm_settings: env,
             on_llm_done: Optional[Callable],
             on_nomatch_done: Optional[Callable],
             on_tools_start: Optional[Callable],
+            on_call_lowlevel_start: Optional[Callable],
+            on_call_lowlevel_done: Optional[Callable],
             on_tool_done: Optional[Callable],
             on_tools_done: Optional[Callable]) -> str:
     """AI's turn: LLM generation interleaved with tool responses, until there are no tool calls in the LLM's latest reply.
@@ -275,7 +277,7 @@ def ai_turn(llm_settings: env,
                        with "role" and "content" fields.
 
     `on_llm_start`: 0-argument callable. Called just before we call `llmclient.invoke` and the LLM starts
-                    streaming a response.
+                    parsing the prompt, and eventually streaming a response.
                     The return value is ignored.
 
                     The LLM will start once at the beginning of the AI's turn, and then once after each set
@@ -330,6 +332,22 @@ def ai_turn(llm_settings: env,
                       one `on_tool_done` event.
 
                       After *all* tool calls have completed, the `on_tools_done` (note plural) event triggers.
+
+    `on_call_lowlevel_start`: Called when a tool call has been successfully parsed and the
+                              tool is about to be invoked.
+
+                              Main use case is to turn on tool-specific GUI indicators.
+
+                              See `llmclient.perform_tool_calls` for details.
+
+    `on_call_lowlevel_done`: Called when a tool call is completed, or when it has failed.
+
+                             Called also for a broken tool call request record, without a corresponding
+                             `on_call_start`, in order to report the error.
+
+                             Main use case is to turn off tool-specific GUI indicators.
+
+                             See `llmclient.perform_tool_calls` for details.
 
     `on_tool_done`: 1-argument callable, with argument `node_id: str`.
                     The return value is ignored.
@@ -429,7 +447,11 @@ def ai_turn(llm_settings: env,
                 on_tools_start(out.data["tool_calls"])
 
             # Each tool call produces exactly one response.
-            tool_response_records = llmclient.perform_tool_calls(llm_settings, message=out.data)  # no-op if the message contains no tool calls
+            # This will no-op if the message contains no tool calls.
+            tool_response_records = llmclient.perform_tool_calls(llm_settings,
+                                                                 message=out.data,
+                                                                 on_call_start=on_call_lowlevel_start,
+                                                                 on_call_done=on_call_lowlevel_done)
 
             # Add the tool response messages to the chat.
             for tool_response_record in tool_response_records:
