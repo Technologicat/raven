@@ -437,6 +437,8 @@ def ai_turn(llm_settings: env,
                            "generation_metadata": {"status": tool_response_record.status}}  # status is "success" or "error"
                 if "toolcall_id" in tool_response_record:
                     payload["generation_metadata"]["toolcall_id"] = tool_response_record.toolcall_id
+                if "function_name" in tool_response_record:
+                    payload["generation_metadata"]["function_name"] = tool_response_record.function_name
                 if "dt" in tool_response_record:
                     payload["generation_metadata"]["dt"] = tool_response_record.dt
                 tool_response_message_node_id = datastore.create_node(payload=payload,

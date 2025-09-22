@@ -578,6 +578,7 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
     def add_tool_response_record(text: str, *,
                                  status: str,
                                  toolcall_id: Optional[str],
+                                 function_name: Optional[str],
                                  dt: Optional[float]) -> None:
         """Add a tool response record to `tool_response_records`.
 
@@ -592,6 +593,8 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
 
                            The ID should be included whenever it was present in the tool call request record.
 
+            `function_name`: Optional[str]: Which tool was called (or at least attempted).
+
             `dt`: Optional[float]: Duration of this tool call, in seconds. Recommended to be included whenever
                                    the request was valid enough to actually proceed to call the function
                                    (so that the call timing can be measured).
@@ -604,6 +607,8 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
                      status=status)
         if toolcall_id is not None:
             record.toolcall_id = toolcall_id
+        if function_name is not None:
+            record.function_name = function_name
         if dt is not None:
             record.dt = dt
         tool_response_records.append(record)
@@ -636,7 +641,7 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
             function = settings.tool_entrypoints[function_name]
         except KeyError:
             logger.warning(f"perform_tool_calls: {toolcall_id}: unknown function '{function_name}'.")
-            add_tool_response_record(f"Tool call failed. Function not found: '{function_name}'.", status="error", toolcall_id=toolcall_id)
+            add_tool_response_record(f"Tool call failed. Function not found: '{function_name}'.", status="error", toolcall_id=toolcall_id, function_name=function_name)
             continue
 
         if "arguments" in function_record:
@@ -644,7 +649,7 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
                 kwargs = json.loads(function_record["arguments"])
             except Exception as exc:
                 logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': failed to parse JSON for arguments: {type(exc)}: {exc}")
-                add_tool_response_record(f"Tool call failed. When calling '{function_name}', failed to parse the request's JSON for the function arguments.", status="error", toolcall_id=toolcall_id)
+                add_tool_response_record(f"Tool call failed. When calling '{function_name}', failed to parse the request's JSON for the function arguments.", status="error", toolcall_id=toolcall_id, function_name=function_name)
                 continue
             else:
                 logger.debug(f"perform_tool_calls: {toolcall_id}: calling '{function_name}' with arguments {kwargs}.")
@@ -658,9 +663,9 @@ def perform_tool_calls(settings: env, message: Dict) -> List[env]:
                 tool_output_text = function(**kwargs)
         except Exception as exc:
             logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': exited with exception {type(exc)}: {exc}")
-            add_tool_response_record(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", toolcall_id=toolcall_id, dt=tim.dt)
+            add_tool_response_record(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", toolcall_id=toolcall_id, function_name=function_name, dt=tim.dt)
         else:  # success!
             logger.debug(f"perform_tool_calls: {toolcall_id}: Function '{function_name}' returned successfully.")
-            add_tool_response_record(tool_output_text, status="success", toolcall_id=toolcall_id, dt=tim.dt)
+            add_tool_response_record(tool_output_text, status="success", toolcall_id=toolcall_id, function_name=function_name, dt=tim.dt)
 
     return tool_response_records
