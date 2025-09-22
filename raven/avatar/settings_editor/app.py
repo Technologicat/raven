@@ -25,7 +25,6 @@ with timer() as tim:
     import concurrent.futures
     import copy
     import json
-    import math
     import os
     import pathlib
     import platform
@@ -88,9 +87,13 @@ dpg.create_context()
 
 themes_and_fonts = guiutils.bootup(font_size=20)
 
+# animation for REC indicator (cyclic, runs in the background)
 with dpg.theme(tag="my_pulsating_red_text_theme"):
     with dpg.theme_component(dpg.mvAll):
-        pulsating_red_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # dummy color; animated by `update_animations`
+        pulsating_red_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # color-matching the rec button, "disablable_red_button_theme"
+    pulsating_red_text_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
+                                                           theme_color_widget=pulsating_red_color)
+    gui_animation.animator.add(pulsating_red_text_glow)
 
 viewport_width = 1900
 viewport_height = 980
@@ -386,41 +389,6 @@ class AvatarVideoRecorder:
             self.frame_no += 1
 video_recorder = AvatarVideoRecorder()
 
-class RedPulsatingTextGlow(gui_animation.Animation):  # adapted and simplified from `raven.visualizer.app.PlotterPulsatingGlow`
-    def __init__(self, cycle_duration):
-        """Cyclic animation to pulsate the REC symbol."""
-        super().__init__()
-        self.cycle_duration = cycle_duration
-
-    @classmethod
-    def _compute_alpha(cls, x):
-        """Compute translucency.
-
-        `x`: float, [0, 1]. The animation control channel. More means brighter.
-
-        Returns the `alpha` value (int, [0, 255]).
-        """
-        a_base = 64
-        a_add = 255 - a_base
-        alpha = a_base + int(a_add * x)
-        return alpha
-
-    def render_frame(self, t):
-        dt = (t - self.t0) / 10**9  # seconds since t0
-        cycle_pos = dt / self.cycle_duration  # number of cycles since t0
-        if cycle_pos > 1.0:  # prevent loss of accuracy in long sessions
-            self.reset()
-        cycle_pos = cycle_pos - float(int(cycle_pos))  # fractional part; raw position in animation cycle
-
-        # Convert animation cycle position to animation control channel value.
-        # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
-        animation_pos = math.cos(cycle_pos * math.pi)**2  # 1 ... 0 ... 1, smoothly, with slow start and end, fast middle
-        alpha = self._compute_alpha(animation_pos)
-        dpg.set_value(pulsating_red_color, (255, 96, 96, alpha))  # color-matching the rec button, "disablable_red_button_theme"
-
-        return gui_animation.action_continue
-red_pulsating_text_glow = RedPulsatingTextGlow(cycle_duration=2.0)
-
 # --------------------------------------------------------------------------------
 # GUI controls
 
@@ -476,7 +444,7 @@ class PostprocessorSettingsEditorGUI:
                     self.dpg_avatar_renderer.configure_fps_counter(show=True)
 
                     with dpg.group(pos=(8, 32), show=False, horizontal=True) as self.recording_indicator_group:
-                        dpg.add_text(fa.ICON_CIRCLE, tag="recording_symbol")  # color-matching the rec button, "disablable_red_button_theme"
+                        dpg.add_text(fa.ICON_CIRCLE, tag="recording_symbol")
                         dpg.bind_item_font("recording_symbol", themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("recording_symbol", "my_pulsating_red_text_theme")  # tag
                         dpg.add_text("REC", tag="recording_text")
@@ -1163,7 +1131,7 @@ class PostprocessorSettingsEditorGUI:
             dpg.disable_item("speak_and_record_button")  # tag
 
         if mode == "speak_and_record":
-            red_pulsating_text_glow.reset()  # start animation from beginning (i.e. start new pulsating cycle now)
+            pulsating_red_text_glow.reset()  # start new pulsation cycle
             dpg.show_item(self.recording_indicator_group)
             def on_audio_ready(audio_data: bytes) -> None:
                 """Save the TTS speech audio file to disk."""
@@ -1436,8 +1404,6 @@ def update_animations():
     #     else:
     #         dpg.disable_item(gui_instance.voice_choice)
     #         dpg.disable_item("speak_button")
-
-gui_animation.animator.add(red_pulsating_text_glow)
 
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
