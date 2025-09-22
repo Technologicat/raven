@@ -36,7 +36,7 @@ import queue
 import threading
 import time
 import traceback
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 import emoji
 import strip_markdown
@@ -60,6 +60,7 @@ tts_input_queue = queue.Queue()  # for TTS input preprocessing and subtitle gene
 tts_output_queue = queue.Queue()  # for TTS and subtitle playback: [(sentence0, translation0, prep0), ...]
 
 emotion_autoreset_t0 = time.time_ns()  # emotion autoreset is handled by `speak_task`
+tts_idle_check_t0 = time.time_ns()
 
 # --------------------------------------------------------------------------------
 # For CPU-friendliness, LRU-cache all AI-heavy parts (for the "speak again" feature).
@@ -107,6 +108,8 @@ def initialize(avatar_instance_id: str,
                emotion_blacklist: List[str],
                data_eyes_fadeout_duration: float,
                stop_tts_button_gui_widget: Optional[Union[str, int]],
+               on_tts_idle: Optional[Callable],
+               tts_idle_check_interval: Optional[float],
                subtitles_enabled: bool,
                subtitle_text_gui_widget: Union[str, int],
                subtitle_left_x0: int,
@@ -154,6 +157,20 @@ def initialize(avatar_instance_id: str,
                                   depending on the TTS state (speaking / not speaking).
 
                                   Set this to `None` to disable the feature.
+
+    `on_tts_idle`: 0-argument callable. Called periodically when the TTS is not speaking.
+                   The return value is ignored.
+
+                   This can be used to trigger additional GUI actions when the avatar stops speaking.
+
+                   Note, however, that this will be called again every `tts_idle_check_interval`
+                   as long as the avatar is not speaking, so the actions should be idempotent
+                   (i.e. have no further effect if called more than once).
+
+    `tts_idle_check_interval`: seconds. How often to check whether TTS has become idle,
+                               and trigger `on_tts_idle` if it has.
+
+                               Set to `None` to disable.
 
     `subtitles_enabled`: Whether subtitles are initially enabled when the module starts.
                          To change the status later, just write to
@@ -220,6 +237,8 @@ def initialize(avatar_instance_id: str,
     avatar_controller_config.emotion_blacklist = emotion_blacklist
     avatar_controller_config.data_eyes_fadeout_duration = data_eyes_fadeout_duration
     avatar_controller_config.stop_tts_button_gui_widget = stop_tts_button_gui_widget
+    avatar_controller_config.on_tts_idle = on_tts_idle
+    avatar_controller_config.tts_idle_check_interval = tts_idle_check_interval
     avatar_controller_config.subtitles_enabled = subtitles_enabled
     avatar_controller_config.subtitle_text_gui_widget = subtitle_text_gui_widget
     avatar_controller_config.subtitle_left_x0 = subtitle_left_x0
@@ -459,6 +478,7 @@ def preprocess_task(task_env: env) -> None:
 def speak_task(task_env: env) -> None:
     """TTS, with avatar lipsync and subtitles (from AI translator)."""
     global emotion_autoreset_t0
+    global tts_idle_check_t0
 
     logger.info(f"speak_task: instance {task_env.task_name}: TTS playback controller starting")
 
@@ -529,14 +549,20 @@ def speak_task(task_env: env) -> None:
             try:
                 sentence, subtitle, prep = tts_output_queue.get(block=False)
             except queue.Empty:  # wait until we have a sentence to speak
+                time_now = time.time_ns()
                 if avatar_controller_config.emotion_autoreset_interval is not None:  # if the feature is enabled, reset emotion after a few seconds of idle time (when the TTS is not speaking)
-                    time_now = time.time_ns()
                     dt = (time_now - emotion_autoreset_t0) / 10**9
                     if not task_env.speaking and dt > avatar_controller_config.emotion_autoreset_interval:
                         emotion_autoreset_t0 = time_now
                         logger.info(f"speak_task: instance {task_env.task_name}: avatar idle for at least {avatar_controller_config.emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
                         api.avatar_set_emotion(instance_id=avatar_controller_config.avatar_instance_id,
                                                emotion_name="neutral")
+                if avatar_controller_config.tts_idle_check_interval is not None:  # trigger the TTS idle event if relevant now (if configured)
+                    dt = (time_now - tts_idle_check_t0) / 10**9
+                    if not task_env.speaking and dt > avatar_controller_config.tts_idle_check_interval:
+                        tts_idle_check_t0 = time_now
+                        if avatar_controller_config.on_tts_idle is not None:
+                            avatar_controller_config.on_tts_idle()
                 time.sleep(0.2)
                 continue
 
