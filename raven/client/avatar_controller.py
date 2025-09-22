@@ -23,7 +23,8 @@ __all__ = ["initialize",
            "update_emotion_from_text",
            "send_text_to_tts",
            "stop_tts",
-           "start_data_eyes", "stop_data_eyes"]
+           "start_data_eyes", "stop_data_eyes",
+           "avatar_controller_config"]  # global configuration object; write into this to change settings on the fly (e.g. subtitles enabled/disabled)
 
 import logging
 logging.basicConfig(level=logging.INFO)
