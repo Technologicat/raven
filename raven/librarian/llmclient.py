@@ -178,6 +178,8 @@ def setup(backend_url: str) -> env:
     # TODO: "If unsure" and similar tricks tend to not work for 8B models. At LLaMA 3.1 70B and better, it should work, but running that requires at least 2x24GB VRAM.
     # TODO: Query the context size from the backend if possible. No, doesn't seem to be possible. https://github.com/oobabooga/text-generation-webui/discussions/5317
     #
+    # TODO: Move the system prompt/character card to `raven.librarian.config`. Document the available variables.
+    #
     character_card = dedent(f"""
     Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).
 
@@ -264,6 +266,8 @@ def setup(backend_url: str) -> env:
         character_card = f"{character_card}\n\n{tools_info}"
 
     # Generation settings for the LLM backend.
+    #
+    # TODO: Move the generation settings to `raven.librarian.config`.
     #
     # For the sampler settings, below are some sensible defaults.
     # But for best results, prefer using the values recommended in your LLM's model card, if known.
