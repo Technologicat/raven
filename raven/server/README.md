@@ -431,7 +431,6 @@ This module has a light DPG dependency, for rendering the optional subtitles, an
 - `initialize`: Initialize and configure the module, and start background tasks.
   - Must be called first, and only after `dpg.create_context`.
 - `shutdown`: Prepare module for GUI teardown and stop background tasks.
-- `configure_subtitles`: Enable/disable subtitles while the module is running.
 - `update_emotion_from_text`: Update the avatar's emotion from given text, using the `classify` module on Raven-server.
 - `send_text_to_tts`: Send text into the TTS queue.
 - `stop_tts`: Clear the TTS queue and stop the TTS.

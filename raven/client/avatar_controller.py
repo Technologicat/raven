@@ -20,7 +20,6 @@ for at least a few seconds after the TTS has finished speaking.
 
 __all__ = ["initialize",
            "shutdown",
-           "configure_subtitles",
            "update_emotion_from_text",
            "send_text_to_tts",
            "stop_tts",
@@ -156,7 +155,8 @@ def initialize(avatar_instance_id: str,
                                   Set this to `None` to disable the feature.
 
     `subtitles_enabled`: Whether subtitles are initially enabled when the module starts.
-                         Call `configure_subtitles` to enable/disable later.
+                         To change the status later, just write to
+                         `avatar_controller_config.subtitles_enabled: bool`.
 
     `subtitle_text_gui_widget`: DPG tag or ID of the DPG text widget to send the subtitle text to.
                                 The widget can start hidden - we will show/hide it automatically.
@@ -244,13 +244,6 @@ def shutdown() -> None:
     avatar_controller_config.gui_alive = False  # shutting down, GUI updates no longer safe
     avatar_controller_config.input_queue_task_manager.clear(wait=True)
     avatar_controller_config.output_queue_task_manager.clear(wait=True)
-
-def configure_subtitles(enable: bool) -> None:
-    """Enable or disable subtitles.
-
-    Should be called when the relevant part of the app state changes.
-    """
-    avatar_controller_config.subtitles_enabled = enable
 
 def update_emotion_from_text(text: str) -> str:
     """Update the emotion for the AI avatar from `text`, and reset the emotion autoreset (return-to-neutral) timer.

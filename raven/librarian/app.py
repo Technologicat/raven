@@ -1258,7 +1258,7 @@ with timer() as tim:
                             app_state["avatar_speech_enabled"] = not app_state["avatar_speech_enabled"]
                         def toggle_subtitles_enabled():
                             app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
-                            avatar_controller.configure_subtitles(enable=app_state["avatar_subtitles_enabled"])
+                            avatar_controller.avatar_controller_config.subtitles_enabled = app_state["avatar_subtitles_enabled"]
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
                         dpg.add_text("Before responding, search document database for relevant information.", parent="docs_enabled_tooltip")  # tag
