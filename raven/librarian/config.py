@@ -162,7 +162,7 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
                     video_offset=-0.6,  # TTS AV sync setting, seconds. Positive = shift video later w.r.t. audio. Find a good value for your system with `raven-avatar-settings-editor`.
                     emotion_blacklist=["desire", "love"],  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
                     emotion_autoreset_interval=3.0,  # seconds; if the avatar is not speaking, and has been idle for at least this long since the last time the emotion was updated, emotion returns to "neutral".
-                    data_eyes_fadeout_duration=0.5,  # seconds; how long it takes for the "data eyes" effect (LLM tool access indicator) to fade out when the status ends.
+                    data_eyes_fadeout_duration=0.75,  # seconds; how long it takes for the "data eyes" effect (LLM tool access indicator) to fade out when the status ends.
                     # Since we're running also other stuff simultaneously, these settings have been optimized to be slightly friendlier on a laptop's internal dGPU than the defaults of `raven-avatar-settings-editor`.
                     animator_settings_overrides={"format": "QOI",
                                                  "target_fps": 20,
