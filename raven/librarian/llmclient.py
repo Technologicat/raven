@@ -225,6 +225,7 @@ def setup(backend_url: str) -> env:
     greeting = "How can I help you today?"
 
     # Tools (functions) to make available to the AI for tool-calling (for models that support that - as of May 2025, at least Qwen 2 or later do).
+    # These tools can be called by the LLM; see function `ai_turn` in `raven.librarian.scaffold`.
     tools = [
         {"type": "function",
          "function": {"name": "websearch",
