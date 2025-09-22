@@ -75,14 +75,15 @@ if os.path.exists(librarian_config.llm_api_key_file):  # TODO: test this (implem
 # Websearch integration (requires `raven.server` to be running)
 
 def websearch_wrapper(query: str,
-                      engine: str = "duckduckgo",
-                      max_links: int = 10) -> str:
+                      engine: str = "duckduckgo") -> str:
     """Perform a websearch, using Raven-server to handle the interaction with the search engine and the parsing of the SERP (search engine results page)."""
     # TODO: The ANSI coloring isn't useful in `websearch_wrapper`, because its output goes to the LLM. We should separate data/presentation if we want to do this. Currently, should always use markdown, which the LLM also understands.
     markup = "markdown"
     chatutil._yell_if_unsupported_markup(markup)
 
-    websearch_results = api.websearch_search(query, engine, max_links)  # -> {"results": preformatted_text, "data": structured_results}
+    websearch_results = api.websearch_search(query,
+                                             engine,
+                                             librarian_config.web_num_results)  # -> {"results": preformatted_text, "data": structured_results}
     structured_results = websearch_results["data"]
 
     def highlight(text: str) -> str:

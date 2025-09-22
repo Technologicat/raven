@@ -25,6 +25,7 @@ llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 llm_backend_url = "http://127.0.0.1:5000"
 llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
 
+# --------------------------------------------------------------------------------
 # Tool-calling
 
 # Tool-calling requires instructions for the model, as part of its system prompt.
@@ -44,6 +45,9 @@ llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it 
 #
 # llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
 llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
+
+# How many web search results to return, when the LLM uses the websearch tool.
+web_num_results = 10
 
 # --------------------------------------------------------------------------------
 # Document database (retrieval-augmented generation, RAG)
