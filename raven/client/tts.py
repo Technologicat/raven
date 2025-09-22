@@ -399,7 +399,7 @@ def tts_speak(text: str,
     def speak(task_env) -> None:
         if prep is None:
             logger.info("tts_speak.speak: getting audio")
-            final_prep = tts_prepare(voice, text, speed, get_metadata=False)
+            final_prep = tts_prepare(text, voice, speed, get_metadata=False)
             if final_prep is None:
                 logger.info("tts_speak.speak: got `None` from `tts_prepare`. Cancelled.")
         else:
@@ -496,7 +496,7 @@ def tts_speak_lipsynced(instance_id: str,
     def speak(task_env: envcls) -> None:
         if prep is None:
             logger.info("tts_speak_lipsynced.speak: getting audio and phonemes")
-            final_prep = tts_prepare(voice, text, speed, get_metadata=True)
+            final_prep = tts_prepare(text, voice, speed, get_metadata=True)
             if final_prep is None:
                 logger.info("tts_speak_lipsynced.speak: got `None` from `tts_prepare`. Cancelled.")
         else:
