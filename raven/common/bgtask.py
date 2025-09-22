@@ -7,6 +7,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
+import concurrent.futures
 import threading
 import time
 import traceback
@@ -151,10 +152,14 @@ class TaskManager:
         logger.debug(f"TaskManager._done_callback: instance '{self.name}': task list now: {self.tasks}.")
 
         # Avoid silently swallowing exceptions from background tasks
-        exc = future.exception()  # the future exited already, so we don't need to set a timeout
-        if exc is not None:
-            logger.error(f"TaskManager._done_callback: instance '{self.name}': future '{future}' exited with exception {type(exc)}: {exc}")
-            traceback.print_exc()
+        try:
+            exc = future.exception()  # the future exited already, so we don't need to set a timeout
+        except concurrent.futures.CancelledError:
+            pass
+        else:
+            if exc is not None:
+                logger.error(f"TaskManager._done_callback: instance '{self.name}': future '{future}' exited with exception {type(exc)}: {exc}")
+                traceback.print_exc()
 
         with self.lock:
             task_name = self._find_task_by_future(future)
