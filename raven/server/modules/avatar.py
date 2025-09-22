@@ -863,7 +863,8 @@ class Animator:
                 if celname not in cel_filelikes:
                     break
                 self.data_eyes_celnames.append(celname)
-            logger.info(f"load_image: This character has {len(self.data_eyes_celnames)} cels for the scifi 'data eyes' effect.")
+            plural_s = "s" if len(self.data_eyes_celnames) != 1 else ""
+            logger.info(f"load_image: This character has {len(self.data_eyes_celnames)} cel{plural_s} for the scifi 'data eyes' effect.")
         except Exception as exc:
             self.source_image = None
             self.torch_cels = {}
