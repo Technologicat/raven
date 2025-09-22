@@ -108,10 +108,10 @@ def minimal_chat_client(backend_url) -> None:
                                                     db_dir=db_dir,
                                                     embedding_model_name=librarian_config.qa_embedding_model)
         docs_enabled_str = "ON" if app_state["docs_enabled"] else "OFF"
-        colorful_rag_status = colorizer.colorize(f"RAG (retrieval-augmented generation) autosearch is currently {docs_enabled_str}.",
+        colorful_rag_status = colorizer.colorize(f"Document database (retrieval-augmented generation, RAG) is currently {docs_enabled_str}.",
                                                  colorizer.Style.BRIGHT)
         print(f"{colorful_rag_status} Toggle with the `!docs` command.")
-        print(f"    RAG document store is at '{str(librarian_config.llm_docs_dir)}' (put your plain-text documents here).")
+        print(f"    Its document store is at '{str(librarian_config.llm_docs_dir)}' (put your plain-text documents here).")
         # The retriever's `documents` attribute must be locked before accessing.
         with retriever.datastore_lock:
             plural_s = "s" if len(retriever.documents) != 1 else ""
@@ -161,7 +161,7 @@ def minimal_chat_client(backend_url) -> None:
             print()
             print("    Special commands (tab-completion available):")
             print("        !clear                  - Start new chat")
-            print(f"        !docs [True|False]      - RAG autosearch on/off/toggle (currently {app_state['docs_enabled']}; document store at '{str(librarian_config.llm_docs_dir)}')")
+            print(f"        !docs [True|False]      - Document database on/off/toggle (currently {app_state['docs_enabled']}; document store at '{str(librarian_config.llm_docs_dir)}')")
             print(f"        !speculate [True|False] - LLM speculate on/off/toggle (currently {app_state['speculate_enabled']}); used only if docs is True.")
             print("                                  If speculate is False, try to use only RAG results to answer.")
             print("                                  If speculate is True, let the LLM respond however it wants.")
@@ -327,7 +327,7 @@ def minimal_chat_client(backend_url) -> None:
                     print()
                     return Values(action=action_next_round)
                 docs_enabled_str = "ON" if app_state["docs_enabled"] else "OFF"
-                print(f"RAG autosearch is now {docs_enabled_str}.")
+                print(f"Document database is now {docs_enabled_str}.")
                 print()
                 return Values(action=action_next_round)
             elif user_message_text == "!dump":
