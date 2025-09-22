@@ -25,7 +25,7 @@ with timer() as tim:
     import threading
     import time
     import traceback
-    from typing import Callable, Dict, List, Optional, Union
+    from typing import Any, Callable, Dict, List, Optional, Tuple, Union
     import uuid
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -105,6 +105,14 @@ with timer() as tim:
                                                                 font_size=gui_config.subtitle_font_size,
                                                                 font_basename=gui_config.subtitle_font_basename,
                                                                 variant=gui_config.subtitle_font_variant)
+
+    # animation for document database and web access indicators (cyclic, runs in the background)
+    with dpg.theme(tag="my_pulsating_gray_text_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            pulsating_gray_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (180, 180, 180))
+    pulsating_gray_text_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
+                                                            theme_color_widget=pulsating_gray_color)
+    gui_animation.animator.add(pulsating_gray_text_glow)
 
     # Initialize textures.
     with dpg.texture_registry(tag="librarian_app_textures"):
@@ -954,10 +962,13 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 global gui_alive  # intent only
                 if gui_alive:
                     avatar_controller.start_data_eyes()
+                    pulsating_gray_text_glow.reset()  # start new pulsation cycle
+                    dpg.show_item(docs_indicator_group)
 
             def on_docs_done(matches: List[Dict]) -> None:
                 global gui_alive  # intent only
                 if gui_alive:
+                    dpg.hide_item(docs_indicator_group)
                     avatar_controller.stop_data_eyes()
 
             def on_llm_start() -> None:
@@ -1058,10 +1069,30 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
 
                     logger.info("ai_turn.run_ai_turn.on_done: all done.")
 
+            def _parse_toolcall(request_record: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+                """Given a tool call request record in OpenAI format, return tool call ID and function name."""
+                toolcall_id = request_record["id"] if "id" in request_record else None
+                function_name = None
+                if "type" in request_record and request_record["type"] == "function":
+                    if "function" in request_record:
+                        function_record = request_record["function"]
+                        if "name" in function_record:
+                            function_name = function_record["name"]
+                return toolcall_id, function_name
+
             def on_tools_start(tool_calls: List[Dict]) -> None:
                 global gui_alive  # intent only
                 if gui_alive:
                     avatar_controller.start_data_eyes()
+
+                    # HACK: If websearch is present *anywhere* among the tool calls in this message,
+                    #       light up the web access indicator for the whole tool call processing step.
+                    #       Often there is just one tool call, so it's fine.
+                    ids_and_names = [_parse_toolcall(request_record) for request_record in tool_calls]
+                    names = [name for _id, name in ids_and_names]
+                    if "websearch" in names:
+                        pulsating_gray_text_glow.reset()  # start new pulsation cycle
+                        dpg.show_item(web_indicator_group)
 
             def on_tool_done(node_id: str) -> None:
                 global gui_alive  # intent only
@@ -1075,6 +1106,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             def on_tools_done() -> None:
                 global gui_alive  # intent only
                 if gui_alive:
+                    dpg.hide_item(web_indicator_group)
                     avatar_controller.stop_data_eyes()
 
             new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
@@ -1234,6 +1266,18 @@ with timer() as tim:
                                                             task_manager=task_manager)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
                     dpg_avatar_renderer.configure_live_texture(new_image_size=int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * librarian_config.avatar_config.source_image_size))
+
+                    with dpg.group(pos=(16, 16), show=False, horizontal=True) as docs_indicator_group:
+                        dpg.add_text(fa.ICON_DATABASE, tag="docs_access_symbol")
+                        dpg.bind_item_font("docs_access_symbol", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("docs_access_symbol", "my_pulsating_gray_text_theme")  # tag
+                        dpg.add_text("DOCS", tag="docs_access_text")
+
+                    with dpg.group(pos=(16, 16), show=False, horizontal=True) as web_indicator_group:
+                        dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
+                        dpg.bind_item_font("web_access_symbol", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
+                        dpg.add_text("WEB", tag="web_access_text")
 
                     global subtitle_bottom_y0
                     subtitle_bottom_y0 = (avatar_panel_h - 24) + gui_config.subtitle_y0
