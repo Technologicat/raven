@@ -1404,6 +1404,13 @@ with timer() as tim:
                 #         avatar_controller.start_data_eyes()
                 #     else:
                 #         avatar_controller.stop_data_eyes()
+                #     # Acknowledge the action in the GUI.
+                #     gui_animation.animator.add(gui_animation.ButtonFlash(message="Ran the action being tested!",
+                #                                                          target_button=testing_button,
+                #                                                          target_tooltip=testing_tooltip,
+                #                                                          target_text=testing_tooltip_text,
+                #                                                          original_theme=themes_and_fonts.global_theme,
+                #                                                          duration=gui_config.acknowledgment_duration))
                 # testing_button = dpg.add_button(label=fa.ICON_VOLCANO,
                 #                                 callback=testing_callback,
                 #                                 width=gui_config.toolbutton_w,
