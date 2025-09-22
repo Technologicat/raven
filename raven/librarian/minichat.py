@@ -471,6 +471,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 retriever=retriever,
                                                 head_node_id=app_state["HEAD"],
                                                 docs_query=docs_query,
+                                                docs_num_results=librarian_config.docs_num_results,
                                                 speculate=app_state["speculate_enabled"],
                                                 markup="ansi",
                                                 on_docs_start=None,

@@ -1082,6 +1082,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                                                 retriever=retriever,
                                                 head_node_id=app_state["HEAD"],
                                                 docs_query=docs_query,
+                                                docs_num_results=librarian_config.docs_num_results,
                                                 speculate=app_state["speculate_enabled"],
                                                 markup="markdown",
                                                 on_docs_start=on_docs_start,

@@ -59,7 +59,7 @@ def _search_docs_with_bypass(llm_settings: env,
                              head_node_id: str,
                              speculate: bool,
                              query: str,
-                             k: int = 10) -> Values:
+                             k: Optional[int] = None) -> Values:
     """Helper for `ai_turn`. Search the document database (`retriever`) for `query`, returning `k` best matches.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -83,8 +83,12 @@ def _search_docs_with_bypass(llm_settings: env,
     `k`: Return up to this many best matches. Note that there is an internal threshold, which automatically drops
          any very low-quality semantic matches.
 
+         The default `None` means `k=10`.
+
     If there are no matches, add a no-match message to the chat log (to be shown instead of the AI's reply).
     """
+    if k is None:
+        k = 10
     docs_results = retriever.query(query,
                                    k=k,
                                    return_extra_info=False)
@@ -182,8 +186,9 @@ def ai_turn(llm_settings: env,
             datastore: chattree.Forest,
             retriever: hybridir.HybridIR,
             head_node_id: str,
-            docs_query: Optional[str],  # if supplied, search the document database with this query and inject the results
-            speculate: bool,  # if `False`, remind the LLM to respond using in-context information only
+            docs_query: Optional[str],
+            docs_num_results: Optional[int],
+            speculate: bool,
             markup: Optional[str],
             on_docs_start: Optional[Callable],
             on_docs_done: Optional[Callable],
@@ -207,14 +212,18 @@ def ai_turn(llm_settings: env,
 
     `head_node_id`: Current HEAD node of the chat. Used as the parent for the no-match message, if needed.
 
-    `query`: Optional query string to search with in the document database.
+    `docs_query`: Optional query string to search with in the document database.
 
-             If supplied, `retriever` is queried, and the search results are injected into the context
-             before sending the context to the LLM.
+                  If supplied, `retriever` is queried, and the search results are injected into the context
+                  before sending the context to the LLM.
 
-             If `None`, no search is performed.
+                  If `None`, no search is performed.
 
-    `speculate`: Used only if `query` is supplied.
+    `docs_num_results`: How many `docs_query` results to return, at most. Used only if `docs_query` is supplied.
+
+                        If not supplied, use the default of `_search_docs_with_bypass`, which see.
+
+    `speculate`: Used only if `docs_query` is supplied.
 
                  If `False`:
 
@@ -350,7 +359,8 @@ def ai_turn(llm_settings: env,
                                                retriever=retriever,
                                                head_node_id=head_node_id,
                                                speculate=speculate,
-                                               query=docs_query)
+                                               query=docs_query,
+                                               k=docs_num_results)
         if docs_result["action"] is action_done:  # no-match bypass triggered, we have a response chat node already
             head_node_id = docs_result["new_head_node_id"]
             if on_docs_done is not None:

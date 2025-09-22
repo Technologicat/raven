@@ -25,10 +25,49 @@ llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 llm_backend_url = "http://127.0.0.1:5000"
 llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
 
-llm_line_wrap_width = 160  # `llmclient`; for text wrapping in live update
+# Tool-calling
 
-# RAG / IR
+# Tool-calling requires instructions for the model, as part of its system prompt.
+# Typically the instructions state that tools are available, and include a dynamically
+# generated list of available functions and their call signatures.
+#
+# Newer models, e.g. QwQ-32B as well as Qwen3, include a template for these instructions
+# in their built-in prompt template. In this case, the LLM backend builds the instructions
+# automatically, based on data sent by the LLM client (see `tools` in `llmclient.setup`).
+#
+# However, there exist LLMs that are capable of tool-calling, but have no instruction template
+# for that. E.g. the DeepSeek-R1-Distill-Qwen-7B model is like this.
+#
+# Hence this setting:
+#   - If `True`, our system prompt builder generates the tool-calling instructions. (For older models.)
+#   - If `False`, we just send the data, and let the LLM backend build the instructions. (For newer models.)
+#
+# llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
+llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
 
+# --------------------------------------------------------------------------------
+# Document database (retrieval-augmented generation, RAG)
+
+# Raven-librarian and Raven-minichat: When searching the document database, up to how many best matches to return.
+#
+# Low-quality semantic matches are dropped, and adjacent result chunks are combined, so you may get fewer results
+# especially if there are few documents in the database, or if the database does not talk about the queried topic.
+docs_num_results = 10
+
+# Magic directory: put your RAG documents here (plain text for now).
+# Add/modify/delete a file in this directory to trigger a document database index auto-update in Librarian and Minichat.
+llm_docs_dir = llmclient_userdata_dir / "documents"
+
+# Whether to scan also subdirectories of `llm_docs_dir` (TODO: doesn't yet work properly, need to mod doc IDs)
+llm_docs_dir_recursive = False
+
+# Where to store the search indices for the RAG database (machine-readable).
+llm_database_dir = llmclient_userdata_dir / "rag_index"
+
+# Where to store the search indices for the `HybridIR` API usage example / demo (raven.librarian.tests.test_hybridir)
+hybridir_demo_save_dir = global_config.toplevel_userdata_dir / "hybridir_demo"
+
+# Device settings for running vector embeddings and spaCy NLP locally, in the client process. (TODO: the backend may want to provide this mode too, but we should prefer the server here)
 devices = {
     "embeddings": {"device_string": "cuda:0",
                    "dtype": torch.float16},
@@ -58,38 +97,10 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 #
 qa_embedding_model = "sentence-transformers/multi-qa-mpnet-base-cos-v1"
 
-# Magic directory: put your RAG documents here (plain text for now).
-# Add/modify/delete a file in this directory to trigger a RAG index auto-update in the LLM client.
-llm_docs_dir = llmclient_userdata_dir / "documents"
+# --------------------------------------------------------------------------------
+# Raven-minichat TUI (text UI, command-line application)
 
-# Whether to scan also subdirectories of `llm_docs_dir` (TODO: doesn't yet work properly, need to mod doc IDs)
-llm_docs_dir_recursive = False
-
-# Where to store the search indices for the RAG database (machine-readable).
-llm_database_dir = llmclient_userdata_dir / "rag_index"
-
-# Where to store the search indices for the `HybridIR` API usage example / demo
-hybridir_demo_save_dir = global_config.toplevel_userdata_dir / "hybridir_demo"
-
-# Tool-calling
-
-# Tool-calling requires instructions for the model, as part of its system prompt.
-# Typically the instructions state that tools are available, and include a dynamically
-# generated list of available functions and their call signatures.
-#
-# Newer models, e.g. QwQ-32B as well as Qwen3, include a template for these instructions
-# in their built-in prompt template. In this case, the LLM backend builds the instructions
-# automatically, based on data sent by the LLM client (see `tools` in `llmclient.setup`).
-#
-# However, there exist LLMs that are capable of tool-calling, but have no instruction template
-# for that. E.g. the DeepSeek-R1-Distill-Qwen-7B model is like this.
-#
-# Hence this setting:
-#   - If `True`, our system prompt builder generates the tool-calling instructions. (For older models.)
-#   - If `False`, we just send the data, and let the LLM backend build the instructions. (For newer models.)
-#
-# llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
-llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
+llm_line_wrap_width = 160  # Raven-minichat: text wrapping in live update.
 
 # --------------------------------------------------------------------------------
 # Raven-librarian GUI
