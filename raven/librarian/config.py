@@ -56,7 +56,7 @@ web_num_results = 10
 #
 # Low-quality semantic matches are dropped, and adjacent result chunks are combined, so you may get fewer results
 # especially if there are few documents in the database, or if the database does not talk about the queried topic.
-docs_num_results = 10
+docs_num_results = 20
 
 # Magic directory: put your RAG documents here (plain text for now).
 # Add/modify/delete a file in this directory to trigger a document database index auto-update in Librarian and Minichat.
