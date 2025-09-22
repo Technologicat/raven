@@ -1155,6 +1155,10 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             if gui_alive:
                 dpg.disable_item("chat_stop_generation_button")  # tag
                 avatar_controller.stop_data_eyes()  # make sure the data eyes effect ends (unless app shutting down, in which case we shouldn't start new GUI animations)
+                # Also make sure that the processing indicators hide
+                dpg.hide_item(docs_indicator_group)
+                dpg.hide_item(web_indicator_group)
+                dpg.hide_item(llm_indicator_group)
     ai_turn_task_manager.submit(run_ai_turn, env())
 
 def stop_ai_turn() -> None:
