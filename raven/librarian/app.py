@@ -972,10 +972,15 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     avatar_controller.stop_data_eyes()
 
             def on_llm_start() -> None:
-                nonlocal streaming_chat_message
-                streaming_chat_message = DisplayedStreamingChatMessage(gui_parent="chat_group")
-                dpg.split_frame()
-                _scroll_chat_view_to_end()
+                global gui_alive  # intent only
+                if gui_alive:
+                    nonlocal streaming_chat_message
+                    streaming_chat_message = DisplayedStreamingChatMessage(gui_parent="chat_group")
+                    dpg.split_frame()
+                    _scroll_chat_view_to_end()
+
+                    pulsating_gray_text_glow.reset()  # start new pulsation cycle
+                    dpg.show_item(llm_indicator_group)  # show prompt processing indicator
 
             task_env.text = io.StringIO()  # incoming, in-progress paragraph
             task_env.t0 = time.monotonic()  # timestamp of last GUI update
@@ -997,6 +1002,9 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
 
             def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
                 global gui_alive  # intent only
+
+                if gui_alive and chunk_text:  # avoid triggering on the initial empty chunk (ACK)
+                    dpg.hide_item(llm_indicator_group)  # hide prompt processing indicator
 
                 # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
                 # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
@@ -1281,6 +1289,12 @@ with timer() as tim:
                                                             task_manager=task_manager)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
                     dpg_avatar_renderer.configure_live_texture(new_image_size=int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * librarian_config.avatar_config.source_image_size))
+
+                    with dpg.group(pos=(16, 16), show=False, horizontal=True) as llm_indicator_group:
+                        dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")
+                        dpg.bind_item_font("llm_prompt_process_symbol", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("llm_prompt_process_symbol", "my_pulsating_gray_text_theme")  # tag
+                        dpg.add_text("SYSTEM", tag="llm_prompt_process_text")
 
                     with dpg.group(pos=(16, 16), show=False, horizontal=True) as docs_indicator_group:
                         dpg.add_text(fa.ICON_DATABASE, tag="docs_access_symbol")
