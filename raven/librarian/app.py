@@ -1347,6 +1347,10 @@ with timer() as tim:
                                                                          original_theme=themes_and_fonts.global_theme,
                                                                          duration=gui_config.acknowledgment_duration))
 
+                def toggle_fullscreen():
+                    dpg.toggle_viewport_fullscreen()
+                    # resize_gui()  # TODO: resiable GUI
+
                 new_chat_button = dpg.add_button(label=fa.ICON_FILE,
                                                  callback=start_new_chat_callback,
                                                  width=gui_config.toolbutton_w,
@@ -1395,6 +1399,15 @@ with timer() as tim:
                 stop_speech_tooltip = dpg.add_tooltip("chat_stop_speech_button")  # tag
                 stop_speech_tooltip_text = dpg.add_text("Stop speaking [Ctrl+S]", parent=stop_speech_tooltip)
 
+                dpg.add_button(label=fa.ICON_EXPAND,
+                               callback=toggle_fullscreen,
+                               width=gui_config.toolbutton_w,
+                               tag="fullscreen_button")
+                dpg.bind_item_font("fullscreen_button", themes_and_fonts.icon_font_solid)  # tag
+                with dpg.tooltip("fullscreen_button", tag="fullscreen_tooltip"):  # tag
+                    dpg.add_text("Toggle fullscreen [F11]",
+                                 tag="fullscreen_tooltip_text")
+
                 # # DEBUG / TESTING button
                 # _testing_data_eyes_enabled = False
                 # def testing_callback() -> None:
@@ -1420,7 +1433,7 @@ with timer() as tim:
                 # testing_tooltip = dpg.add_tooltip("chat_testing_button")  # tag
                 # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
 
-                n_below_chat_buttons = 5
+                n_below_chat_buttons = 6
                 avatar_panel_left = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8)
                 dpg.add_spacer(width=avatar_panel_left + 60)
 
@@ -1494,6 +1507,12 @@ def librarian_hotkeys_callback(sender, app_data):
     # NOTE: If you update this, to make the hotkeys discoverable, update also:
     #  - The tooltips wherever the GUI elements are created or updated (search for e.g. "[F9]", may appear in multiple places)
     #  - The help window
+
+    # Hotkeys that are always available, regardless of any dialogs (even if modal)
+    if key == dpg.mvKey_F11:  # de facto standard hotkey for toggle fullscreen
+        toggle_fullscreen()
+    # elif some_modal_window_visible():
+    #     ...
 
     # Hotkeys for main window, while no modal window is shown
     if key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
