@@ -3,7 +3,7 @@
 __all__ = ["Animator", "animator",  # controller and its global instance (need only one per app)
            "Animation", "Overlay",  # base classes
            "Dimmer",  # overlays
-           "ButtonFlash", "SmoothScrolling",  # animations
+           "ButtonFlash", "SmoothScrolling", "PulsatingColor",  # animations
            "ScrollEndFlasher",  # animated overlay
            "action_continue", "action_finish", "action_cancel"]  # return values for `render_frame`
 
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 import math
 import threading
 import time
+from typing import Callable, Optional, Tuple, Union
 
 from unpythonic import sym
 
@@ -34,21 +35,25 @@ class Animator:
 
         Raven's customized render loop calls our `render_frame` once per frame,
         to update any animations that are running.
+
+        Use the global `animator` instance from this module; don't create your own.
         """
         self.animations = []
         self.animation_list_lock = threading.RLock()
 
-    def add(self, animation):
+    def add(self, animation: "Animation") -> "Animation":
         """Register a new `Animation` instance, so that our `render_frame` will call its `render_frame` method.
 
         Its start time `animation.t0` is set automatically to the current time as returned by `time.time_ns()`.
+
+        For convenience, returns `animation`.
         """
         with self.animation_list_lock:
             animation.reset()  # set the animation start time
             self.animations.append(animation)
         return animation
 
-    def cancel(self, animation, finalize=True):
+    def cancel(self, animation: "Animation", finalize: bool = True) -> "Animation":
         """Terminate a running `Animation` instance.
 
         `animation`: One of the animations registered using `add`.
@@ -61,6 +66,8 @@ class Animator:
 
         Note that when an animation finishes normally, it is automatically removed. This is meant for
         immediately stopping and removing an animation that has not finished yet.
+
+        For convenience, returns `animation`.
         """
         with self.animation_list_lock:
             if finalize:
@@ -71,7 +78,7 @@ class Animator:
                 logger.debug(f"Animator.cancel: specified {animation} is not in the animation registry (maybe already finished?), skipping removal.")
         return animation
 
-    def render_frame(self):
+    def render_frame(self) -> None:
         """Render one frame of each registered animation, in the order they were registered.
 
         Each animation whose `render_frame` returns `action_finish` is considered finished.
@@ -79,6 +86,12 @@ class Animator:
 
         After all registered animations have had a frame rendered, the animation registry is updated
         to remove any animations that are no longer running.
+
+        This should be called in your DPG render loop::
+
+            while dpg.is_dearpygui_running():
+                animator.render_frame()
+                dpg.render_dearpygui_frame()
         """
         with self.animation_list_lock:
             time_now = time.time_ns()
@@ -96,7 +109,7 @@ class Animator:
             self.animations.clear()
             self.animations.extend(running_animations)
 
-    def clear(self):
+    def clear(self) -> None:
         """Terminate all registered animations and clear the list of registered animations.
 
         To terminate a specific animation (by object instance), see `cancel`.
@@ -109,7 +122,7 @@ animator = Animator()
 
 class Animation:
     def __init__(self):
-        """Base class for Raven's animations.
+        """Base class for Raven's GUI animations.
 
         An `Animation` can be added to an `Animator`.
         """
@@ -118,7 +131,7 @@ class Animation:
         # `t0` should be pretty much the only attribute defined in the base class.
         self.reset()
 
-    def reset(self):
+    def reset(self) -> None:
         """Semantically: (re-)start the animation from the beginning.
 
         Technically, in this base class: Set the animation start time `self.t0` to the current time,
@@ -126,10 +139,10 @@ class Animation:
         """
         self.t0 = time.time_ns()
 
-    def render_frame(self, t):
+    def render_frame(self, t: int) -> sym:
         """Override this in a derived class to render one frame of your animation.
 
-        `t`: int; time at start of current frame as returned by `time.time_ns()`.
+        `t`: time at start of current frame as returned by `time.time_ns()`.
 
         The animation start time is available in `self.t0`.
 
@@ -148,14 +161,14 @@ class Animation:
         """
         return action_finish
 
-    def finish(self):
+    def finish(self) -> None:
         """Override this in a derived class, if you need to clean up any state for your animation when it finishes normally."""
 
 # --------------------------------------------------------------------------------
 # Overlay window support
 
 class Overlay:
-    def __init__(self, target, tag):
+    def __init__(self, target: Union[str, int], tag: str):
         """Base class for Raven's overlay windows (currently the dimmer, and the scroll end animation).
 
         `target`: DPG ID or tag. The child window for which to build the overlay.
@@ -172,7 +185,7 @@ class Overlay:
 # Overlays
 
 class Dimmer(Overlay):
-    def __init__(self, target, tag, color=(0, 0, 0, 128), rounding=8):
+    def __init__(self, target: Union[str, int], tag: str, color: Tuple = (0, 0, 0, 128), rounding: int = 8):
         """Dimmer for a child window. Can be used e.g. to indicate that the window is updating.
 
         `target`: DPG ID or tag. The child window for which to build the overlay.
@@ -186,10 +199,10 @@ class Dimmer(Overlay):
         self.color = color
         self.rounding = rounding
 
-    def build(self, rebuild=False):
+    def build(self, rebuild: bool = False) -> None:
         # Ensure stuff we depend on is initialized before we try to create this
         if dpg.get_frame_count() < 10:
-            return None
+            return
 
         with self.overlay_update_lock:  # This prevents a crash upon hammering F11 (toggle fullscreen) while the info panel is updating (causing lots of rebuilds)
             if not rebuild and (self.window is not None):  # Avoid unnecessary rebuilding
@@ -235,7 +248,7 @@ class Dimmer(Overlay):
                                    rounding=self.rounding,
                                    parent=self.drawlist)
 
-    def show(self):
+    def show(self) -> None:
         """Dim the target window (e.g. to show that it is updating)."""
         self.build()
         try:  # EAFP to avoid TOCTTOU
@@ -243,7 +256,7 @@ class Dimmer(Overlay):
         except SystemError:  # does not exist
             pass
 
-    def hide(self):
+    def hide(self) -> None:
         """Un-dim the target window."""
         try:  # EAFP to avoid TOCTTOU
             dpg.hide_item(self.window)
@@ -272,7 +285,15 @@ class ButtonFlash(Animation):
     instances = {}  # DPG tag or ID (of `target_button`) -> animation instance
 
     # TODO: We could also customize `__new__` to return the existing instance, see `unpythpnic.symbol.sym`.
-    def __init__(self, message, target_button, target_tooltip, target_text, original_theme, duration, flash_color=(96, 128, 96), text_color=(180, 255, 180)):
+    def __init__(self,
+                 message: str,
+                 target_button: Union[str, int],
+                 target_tooltip: Union[str, int],
+                 target_text: Union[str, int],
+                 original_theme: Union[str, int],
+                 duration: float,
+                 flash_color: Tuple = (96, 128, 96),
+                 text_color: Tuple = (180, 255, 180)):
         """Animation to flash a button (and its tooltip, if visible) to draw the user's attention.
 
         This is useful to let the user know that pressing the button actually took,
@@ -297,7 +318,7 @@ class ButtonFlash(Animation):
                        The text can be inside the tooltip (when `target_tooltip is not None`),
                        but is really completely independent of `target_button` and `target_tooltip`.
 
-        `original_theme`: DPG tag or ID, the theme to restore when the flashing ends.
+        `original_theme`: DPG tag or ID, the theme to restore to the tooltip when the flashing ends.
                           Mandatory when `target_tooltip is not None`, and only used in that case.
 
         `duration`: float, animation duration in seconds.
@@ -325,7 +346,7 @@ class ButtonFlash(Animation):
 
         self.start()
 
-    def render_frame(self, t):
+    def render_frame(self, t: int) -> sym:
         if not self.reified:  # ghost mode
             return action_cancel
 
@@ -353,7 +374,7 @@ class ButtonFlash(Animation):
 
         return action_continue
 
-    def start(self):
+    def start(self) -> None:
         """Internal method, called automatically by constructor.
 
         Manages de-duplication (when added to the same GUI element as an existing animation of this type)
@@ -405,7 +426,8 @@ class ButtonFlash(Animation):
                 type(self).instances[self.target_button] = self
                 self.reified = True  # This is the instance that animates `self.target_button`.
 
-    def finish(self):
+    def finish(self) -> None:
+        """Clean up resources upon the end of the animation."""
         with self.instance_lock:
             dpg.bind_item_theme(self.target_button, "disablable_button_theme")  # tag
             if self.target_tooltip is not None:
@@ -426,7 +448,13 @@ class SmoothScrolling(Animation):
     class_lock = threading.RLock()
     instances = {}  # DPG tag or ID (of `target_child_window`) -> animation instance
 
-    def __init__(self, target_child_window, target_y_scroll, smooth=True, smooth_step=0.8, flasher=None, finish_callback=None):
+    def __init__(self,
+                 target_child_window: Union[str, int],
+                 target_y_scroll: int,
+                 smooth: bool = True,
+                 smooth_step: float = 0.8,
+                 flasher: Optional["ScrollEndFlasher"] = None,
+                 finish_callback: Optional[Callable] = None):
         """Scroll a child window, optionally smoothly.
 
         Each GUI element (determined by `target_child_window`) can only have one `SmoothScrolling`
@@ -477,7 +505,7 @@ class SmoothScrolling(Animation):
 
         self.start()
 
-    def render_frame(self, t):
+    def render_frame(self, t: int) -> sym:
         if not self.reified:  # ghost mode
             return action_cancel
 
@@ -575,7 +603,7 @@ class SmoothScrolling(Animation):
 
         return action
 
-    def start(self):
+    def start(self) -> None:
         """Internal method, called automatically by constructor.
 
         Manages de-duplication (when added to the same GUI element as an existing animation of this type).
@@ -596,7 +624,8 @@ class SmoothScrolling(Animation):
                 type(self).instances[self.target_child_window] = self
                 self.reified = True  # This is the instance that animates `self.target_child_window`.
 
-    def finish(self):
+    def finish(self) -> None:
+        """Call the optional finish callback if present, and clean up resources upon the end of the animation."""
         with type(self).class_lock:
             if self.finish_callback is not None:
                 self.finish_callback()
@@ -748,13 +777,79 @@ class SmoothScrolling(Animation):
 #
 # ---8<---8<---8<---
 
+class PulsatingColor(Animation):
+    def __init__(self,
+                 cycle_duration: float,
+                 theme_color_widget: Union[str, int]):
+        """A simple cyclic animation to pulsate a color by varying its alpha.
+
+        `cycle_duration`: seconds, for one complete cycle.
+                          A cycle starts and ends with full alpha (fully opaque).
+
+        `theme_color_widget`: DPG tag or ID of the theme color to pulsate.
+                              This is parameterized so you can create your own and
+                              attach it to any theme component you want.
+
+        Example::
+
+            with dpg.theme(tag="my_pulsating_red_text_theme"):
+                with dpg.theme_component(dpg.mvAll):
+                    pulsating_red_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+
+            pulsating_red_animation = PulsatingColor(cycle_duration=2.0,
+                                                     theme_color_widget=pulsating_red_color)
+            animator.add(pulsating_red_animation)
+
+        This animation, once created, runs continuously in the background.
+        To reset the pulsation sequence, call the `reset` method.
+        """
+        super().__init__()
+        self.cycle_duration = cycle_duration
+        self.theme_color_widget = theme_color_widget
+        self.rgb = dpg.get_value(theme_color_widget)[:3]  # get the initial RGB color
+
+    @classmethod
+    def _compute_alpha(cls, x: float) -> int:
+        """Compute translucency.
+
+        `x`: float, [0, 1]. The animation control channel. More means brighter.
+
+        Returns the `alpha` value (int, [0, 255]).
+        """
+        a_base = 64
+        a_add = 255 - a_base
+        alpha = a_base + int(a_add * x)
+        return alpha
+
+    def render_frame(self, t: int) -> sym:
+        dt = (t - self.t0) / 10**9  # seconds since t0
+        cycle_pos = dt / self.cycle_duration  # number of cycles since t0
+        if cycle_pos > 1.0:  # prevent loss of accuracy in long sessions
+            self.reset()
+        cycle_pos = cycle_pos - float(int(cycle_pos))  # fractional part; raw position in animation cycle
+
+        # Convert animation cycle position to animation control channel value.
+        # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
+        animation_pos = math.cos(cycle_pos * math.pi)**2  # 1 ... 0 ... 1, smoothly, with slow start and end, fast middle
+        alpha = self._compute_alpha(animation_pos)
+        dpg.set_value(self.theme_color_widget, (*self.rgb, alpha))
+
+        return action_continue
+
 # --------------------------------------------------------------------------------
 # Animated overlay
 
 # Inherit from `Overlay` first, so that `super().__init__(...)` passes its arguments where we want it to.
 # Then the `super().__init__()` call inside `Overlay.__init__` will initialize the `Animation` part.
 class ScrollEndFlasher(Overlay, Animation):
-    def __init__(self, *, target, tag, duration, font, text_top, text_bottom, custom_finish_pred=None):
+    def __init__(self, *,
+                 target: Union[str, int],
+                 tag: str,
+                 duration: float,
+                 font: Union[str, int],
+                 text_top: str,
+                 text_bottom: str,
+                 custom_finish_pred: Optional[Callable] = None):
         """Flasher to indicate when the end of a scrollable area has been reached.
 
         `target`: DPG ID or tag. The child window for which to build the overlay.
@@ -785,7 +880,7 @@ class ScrollEndFlasher(Overlay, Animation):
         self.animation_running = False
         self.where = None  # the kind of the currently running animation: "top", "bottom", or "both"
 
-    def show_by_position(self, target_y_scroll):
+    def show_by_position(self, target_y_scroll: int) -> Optional[str]:
         """Like `show`, but determine position automatically.
 
         `target_y_scroll`: int, target scroll position, in scrollbar coordinates of `self.target`.
@@ -824,7 +919,7 @@ class ScrollEndFlasher(Overlay, Animation):
 
         return where
 
-    def show(self, where):
+    def show(self, where: str) -> None:
         """Dispatch the animation.
 
         This indicates in the GUI that the target child window cannot scroll any further
@@ -843,17 +938,17 @@ class ScrollEndFlasher(Overlay, Animation):
         self.where = where
         animator.add(self)
 
-    def hide(self):
+    def hide(self) -> None:
         """Hide the overlay immediately. Called automatically by `finish` when the animation ends."""
         if self.window_top is not None:
             dpg.hide_item(self.window_top)
         if self.window_bottom is not None:
             dpg.hide_item(self.window_bottom)
 
-    def render_frame(self, t):
+    def render_frame(self, t: int) -> sym:
         """Called automatically by `Animator`."""
         if dpg.get_frame_count() < 10:
-            return None
+            return action_continue
 
         dt = (t - self.t0) / 10**9  # seconds since t0
         animation_pos = dt / self.duration
@@ -955,11 +1050,8 @@ class ScrollEndFlasher(Overlay, Animation):
 
         return action_continue
 
-    def finish(self):
-        """Animation finish callback for `Animator`.
-
-        Called when the animation finishes normally.
-        """
+    def finish(self) -> None:
+        """Clean up upon the end of the animation."""
         self.animation_running = False
         self.where = None
         self.hide()
