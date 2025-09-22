@@ -435,6 +435,8 @@ This module has a light DPG dependency, for rendering the optional subtitles, an
 - `update_emotion_from_text`: Update the avatar's emotion from given text, using the `classify` module on Raven-server.
 - `send_text_to_tts`: Send text into the TTS queue.
 - `stop_tts`: Clear the TTS queue and stop the TTS.
+- `start_data_eyes`: Enter the "data eyes" state. The animation will start instantly. While in data eyes state, further calls no-op.
+- `stop_data_eyes`: Exit the "data eyes" state. The animation will fade out. Each call will start the fadeout from the beginning.
 
 
 ## Text sentiment classification
