@@ -195,7 +195,7 @@ The cel subsystem is powered by two kinds of extra cels (512x512 PNG RGBA images
     - `tears[123].png`: three levels of tears
     - `data[1234].png`: scifi "data eyes" effect (LLM tool access indicator), up to four frames.
     - `waver[12].png`: the "intense emotion" anime eye-waver effect, exactly two frames.
-  - The "data eyes" effect has **up to** three cels, but no sliders in the pose editor.
+  - The "data eyes" effect has **up to** four cels, but no sliders in the pose editor.
     - This effect is independent of emotions, and controlled only programmatically, via `raven.client.api.avatar_modify_overrides`.
     - The `"data1"` cel blend controls the strength of the effect (from 0.0 = off to 1.0 = full opacity).
     - When the effect has nonzero strength, the animator cycles the cels automatically in the live avatar.
