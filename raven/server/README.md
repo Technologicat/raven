@@ -426,6 +426,10 @@ This lives in a separate module, [`raven.client.avatar_controller`](../client/av
 
 This adds lipsynced TTS to the avatar, as well as optional subtitles. The subtitles can be either auto-translated (via Raven-server's `translate` module), or shown as-is as closed captions (CC) in the input language.
 
+The TTS is handled once sentence at a time. More sentences are precomputed from the module's TTS queue while the first one is being spoken, thus minimizing latency (for the second and further sentences) even if the TTS model is running on CPU.
+
+This module also controls the avatar's "data eyes" effect (LLM tool access indicator).
+
 This module has a light DPG dependency, for rendering the optional subtitles, and optionally enabling/disabling the TTS stop button automatically.
 
 - `initialize`: Initialize and configure the module, and start background tasks.
