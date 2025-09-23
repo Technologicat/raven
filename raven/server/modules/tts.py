@@ -146,6 +146,8 @@ def text_to_speech(voice: str,
 
               All the audio is in any case generated in one go; this just streams the result
               over the network transport.
+
+              If `stream=False`, the response includes a "Content-Length" header, in bytes.
     """
     # Side effect: validate `format` argument
     audio_encoder = StreamingAudioWriter(format=format,
@@ -197,5 +199,7 @@ def text_to_speech(voice: str,
             audio_buffer.write(audio_encoder.write_chunk(audio_chunk))
         audio_buffer.write(audio_encoder.write_chunk(finalize=True))
         audio_bytes = audio_buffer.getvalue()
+
+        output_headers["Content-Length"] = len(audio_bytes)
 
         return Response(audio_bytes, headers=output_headers)
