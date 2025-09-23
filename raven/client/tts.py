@@ -399,6 +399,9 @@ def tts_speak(text: str,
     If `prep` is provided, ignore `voice`, `text`, and `speed`, and load preprocessed TTS audio from `prep`.
     To get a `prep`, use `tts_prepare`. This allows precomputing TTS for more sentences while a previous one
     is still being spoken.
+
+    The `on_audio_ready` event is called also in advanced mode, with precomputed audio.
+    When we obtain the precomputed audio from `prep`, then `on_audio_ready` triggers.
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak: The `raven.client.api` module must be initialized before using the API.")
@@ -499,6 +502,9 @@ def tts_speak_lipsynced(instance_id: str,
     If `prep` is provided, ignore `voice`, `text`, and `speed`, and load preprocessed TTS audio and phonemes
     from `prep`. To get a `prep`, use `tts_prepare`. This allows precomputing TTS for more sentences while a
     previous one is still being spoken.
+
+    The `on_audio_ready` event is called also in advanced mode, with precomputed audio.
+    When we obtain the precomputed audio from `prep`, then `on_audio_ready` triggers.
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak_lipsynced: The `raven.client.api` module must be initialized before using the API.")
