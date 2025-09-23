@@ -271,7 +271,8 @@ def tts_prepare(text: str,
         # Get word-level timestamps from HTTP header
         if get_metadata:
             def isword(s: str) -> bool:
-                return len(s) > 1 or s.isalnum()
+                # Keep also the most common punctuation, used for closing the mouth.
+                return len(s) > 1 or s.isalnum() or s in ",.!?:;"
 
             def clean_timestamps(timestamps: List[Dict]) -> List[Dict]:
                 """Remove consecutive duplicate timestamps (some versions of Kokoro-FastAPI produce those) and any timestamps for punctuation."""
