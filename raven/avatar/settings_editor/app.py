@@ -344,7 +344,7 @@ def is_save_animator_settings_dialog_visible():
 # --------------------------------------------------------------------------------
 # Avatar video recording
 
-recording_output_dir = "rec"  # path relative to CWD
+recording_output_dir = pathlib.Path("rec").expanduser().resolve()  # path relative to CWD
 
 class AvatarVideoRecorder:
     """A small helper for dumping avatar video frames to disk as image files, in whatever format sent by server.
@@ -364,10 +364,10 @@ class AvatarVideoRecorder:
 
     def start(self):
         """Start recording video frames to disk. Frames will be numbered starting from 00000."""
-        logger.info(f"AvatarVideoRecorder.start: starting recording video frames to directory '{self.output_dir}'.")
+        logger.info(f"AvatarVideoRecorder.start: starting recording video frames to directory '{str(self.output_dir)}'.")
+        common_utils.create_directory(self.output_dir)
         with self.lock:
             self._reset()
-            common_utils.create_directory(self.output_dir)
             self.recording = True
 
     def stop(self):
@@ -382,7 +382,7 @@ class AvatarVideoRecorder:
             if not self.recording:
                 return
             _, ext = mimetype.split("/")  # e.g. "image/qoi" -> ["image", "qoi"]
-            filename = os.path.join(self.output_dir, f"{self.basename}_{self.frame_no:05d}.{ext}")
+            filename = os.path.join(str(self.output_dir), f"{self.basename}_{self.frame_no:05d}.{ext}")
             logger.info(f"AvatarVideoRecorder._on_frame_received: recording video frame to '{filename}': time {timestamp}, mimetype {mimetype}.")
             with open(filename, "wb") as image_file:
                 image_file.write(image_data)
@@ -1135,8 +1135,8 @@ class PostprocessorSettingsEditorGUI:
             dpg.show_item(self.recording_indicator_group)
             def on_audio_ready(audio_data: bytes) -> None:
                 """Save the TTS speech audio file to disk."""
-                filename = os.path.join(recording_output_dir, "audio.mp3")
                 common_utils.create_directory(recording_output_dir)
+                filename = os.path.join(str(recording_output_dir), "audio.mp3")
                 logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_audio_ready: Saving TTS speech audio to '{filename}'")
                 with open(filename, "wb") as audio_file:
                     audio_file.write(audio_data)
