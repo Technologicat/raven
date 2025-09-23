@@ -391,7 +391,7 @@ def invoke(settings: env, history: List[Dict], on_progress=None) -> env:
 
     `history`: List of chat messages, see `raven.librarian.chatutil.create_chat_message`.
 
-    `on_progress`: 2-argument callable, optional, with arguments `(n_chunks: int, chunk_text: str)`.
+    `on_progress`: 2-argument callable with arguments `(n_chunks: int, chunk_text: str)`.
                    Called while streaming the response from the LLM, typically once per generated token.
 
            `n_chunks: int`: How many chunks have been generated so far, for this invocation.
