@@ -37,7 +37,7 @@ import watchdog.observers
 
 import numpy as np
 
-from unpythonic import allsame, box, partition, uniqify
+from unpythonic import allsame, box, ETAEstimator, partition, uniqify
 from unpythonic.env import env as envcls
 
 # database
@@ -427,7 +427,9 @@ class HybridIR:
             # There is no "update" operation - to do that, first "delete", then "add".
             logger.info("HybridIR.commit: Applying pending changes.")
             errors_occurred = 0
-            for edit_kind, data in pending_edits:
+            eta_estimator = ETAEstimator(total=len(pending_edits), keep_last=50)
+            for edit_num, (edit_kind, data) in enumerate(pending_edits, start=1):
+                logger.info(f"HybridIR.commit: Applying change {edit_num} out of {len(pending_edits)}; {eta_estimator.formatted_eta}")
                 try:
                     if edit_kind == "add":
                         doc = data
@@ -461,6 +463,7 @@ class HybridIR:
                     errors_occurred += 1
                     logger.error(f"While applying changes: {type(exc)}: {exc}")
                     logger.info("Attempting to continue with remaining edits, if any.")
+                eta_estimator.tick()
 
             self._rebuild_keyword_search_index()
             self._save_datastore()
