@@ -311,7 +311,14 @@ def tts_prepare(text: str,
             pass
     audio_buffer.seek(0)
     result["audio_bytes"] = audio_buffer.getvalue()
-    logger.info(f"tts_prepare: got audio in {tim.dt:0.6g}s.")
+
+    if util.api_config.tts_server_type == "raven":
+        total_audio_duration = json.loads(stream_response.headers["x-audio-duration"])
+        audio_duration_str = f" (duration {total_audio_duration:0.6g} seconds)"
+    else:
+        audio_duration_str = ""  # Kokoro-FastAPI doesn't send this information
+
+    logger.info(f"tts_prepare: got TTS audio{audio_duration_str} in {tim.dt:0.6g}s.")
 
     # Postprocess per-word phoneme data
     if get_metadata:
