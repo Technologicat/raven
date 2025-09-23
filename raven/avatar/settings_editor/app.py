@@ -372,7 +372,7 @@ class AvatarVideoRecorder:
 
     def stop(self):
         """Stop recording video frames to disk."""
-        logger.info(f"AvatarVideoRecorder.start: stopping recording ({self.frame_no} video frames recorded).")
+        logger.info(f"AvatarVideoRecorder.stop: stopping recording ({self.frame_no} video frames recorded).")
         with self.lock:
             self._reset()
 
