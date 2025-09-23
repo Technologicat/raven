@@ -55,6 +55,39 @@ def _scan_for_new_chat_head(datastore: chattree.Forest) -> str:
         new_chat_node_id = system_prompt_node["children"][0]
         return new_chat_node_id
 
+def _get_system_prompt_node_id(datastore: chattree.Forest,
+                               state: Dict) -> str:
+    """Return the chat node ID of the system prompt.
+
+    `llm_settings`: LLM client settings; this is the return value of `llmclient.setup`.
+
+    `datastore`: `chattree.PersistentForest` containing the chat database,
+
+    `state`: `dict` containing the app state (HEAD node, various persistent settings).
+    """
+    new_chat_node_id = state["new_chat_HEAD"]
+    system_prompt_node_id = datastore.get_parent(new_chat_node_id)
+    return system_prompt_node_id
+
+def _refresh_system_prompt(llm_settings: env,
+                           datastore: chattree.Forest,
+                           state: Dict) -> None:
+    """Refresh the system prompt in the datastore (to the one currently produced by `llmclient`).
+
+    A new revision is created on the system prompt node, and the previous revision is deleted.
+
+    `datastore`: `chattree.PersistentForest` containing the chat database,
+
+    `state`: `dict` containing the app state (HEAD node, various persistent settings).
+    """
+    system_prompt_node_id = _get_system_prompt_node_id(datastore, state)
+    state["system_prompt_node_id"] = system_prompt_node_id  # remember it, the GUI chat client needs it
+    old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
+    datastore.add_revision(node_id=system_prompt_node_id,
+                           payload={"message": chatutil.create_initial_system_message(llm_settings)})
+    datastore.delete_revision(node_id=system_prompt_node_id,
+                              revision_id=old_system_prompt_revision_id)
+
 # --------------------------------------------------------------------------------
 # API
 
@@ -153,18 +186,15 @@ def load(llm_settings: env,
         state["avatar_subtitles_enabled"] = True
         logger.info(f"load: Missing key 'avatar_subtitles' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['avatar_subtitles']}'")
 
-    # Refresh the system prompt in the datastore (to the one currently produced by `llmclient`)
-    new_chat_node_id = state["new_chat_HEAD"]
-    system_prompt_node_id = datastore.get_parent(new_chat_node_id)
-    state["system_prompt_node_id"] = system_prompt_node_id  # remember it, the GUI chat client needs it
-    old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
-    datastore.add_revision(node_id=system_prompt_node_id,
-                           payload={"message": chatutil.create_initial_system_message(llm_settings)})
-    datastore.delete_revision(node_id=system_prompt_node_id,
-                              revision_id=old_system_prompt_revision_id)
+    _refresh_system_prompt(llm_settings,
+                           datastore,
+                           state)
 
     # Migrate datastore (this updates only if needed)
-    chatutil.upgrade_datastore(datastore, system_prompt_node_id)  # v0.2.3+: data format change
+    # v0.2.3+: data format change
+    chatutil.upgrade_datastore(datastore,
+                               system_prompt_node_id=_get_system_prompt_node_id(datastore,
+                                                                                state))
 
     # Set up auto-persist for app state
     atexit.register(functools.partial(save,
