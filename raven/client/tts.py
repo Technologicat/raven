@@ -289,6 +289,13 @@ def tts_prepare(text: str,
             #
             # Raven-server also sends the metadata in the same header field.
             timestamps = json.loads(stream_response.headers["x-word-timestamps"])
+
+            # For Raven-server, the words are URL-encoded to ASCII with percent-escaped UTF-8, due to possible presence of exotic characters,
+            # due to HTTP limitations (can't send Unicode in HTTP headers).
+            if util.api_config.tts_server_type == "raven":
+                for timestamp in timestamps:
+                    timestamp["word"] = urllib.parse.unquote(timestamp["word"])
+
             timestamps = clean_timestamps(timestamps)
 
         # Stream the audio from the response body.
@@ -336,9 +343,7 @@ def tts_prepare(text: str,
             else:  # util.api_config.tts_server_type == "raven"
                 # For Raven-server, the timestamp metadata contains the phonemes too.
                 # But they're URL-encoded to ASCII with percent-escaped UTF-8, due to HTTP limitations (can't send Unicode in HTTP headers).
-                # Also the words are URL-encoded, just to be safe.
                 for timestamp in timestamps:
-                    timestamp["word"] = urllib.parse.unquote(timestamp["word"])
                     timestamp["phonemes"] = urllib.parse.unquote(timestamp["phonemes"])
 
             # Expand dipthongs to IPA notation.
