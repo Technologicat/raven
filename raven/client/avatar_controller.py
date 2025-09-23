@@ -111,7 +111,7 @@ def initialize(avatar_instance_id: str,
                on_tts_idle: Optional[Callable],
                tts_idle_check_interval: Optional[float],
                subtitles_enabled: bool,
-               subtitle_text_gui_widget: Union[str, int],
+               subtitle_text_gui_widget: Optional[Union[str, int]],
                subtitle_left_x0: int,
                subtitle_bottom_y0: int,
                translator_source_lang: str,
@@ -178,6 +178,9 @@ def initialize(avatar_instance_id: str,
 
     `subtitle_text_gui_widget`: DPG tag or ID of the DPG text widget to send the subtitle text to.
                                 The widget can start hidden - we will show/hide it automatically.
+
+                                If `subtitles_enabled=False` and you intend to keep it that way
+                                (i.e. don't intend to use subtitles), you can set this to `None`.
 
     `subtitle_left_x0`: Left edge of subtitle text, pixels. Used for re-positioning the text widget.
 
@@ -421,7 +424,7 @@ def preprocess_task(task_env: env) -> None:
 
                 logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): starting processing")
 
-                if avatar_controller_config.subtitles_enabled:
+                if avatar_controller_config.subtitles_enabled and avatar_controller_config.subtitle_text_gui_widget is not None:
                     if avatar_controller_config.translator_target_lang is not None:  # Call the AI translator on Raven-server
                         subtitle = _translate_sentence(sentence)
                     else:  # Subtitles but no translation -> English closed captions (CC)
@@ -491,7 +494,7 @@ def speak_task(task_env: env) -> None:
             logger.info(f"speak_task.process_item.on_start_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS starting to speak.")
             if avatar_controller_config.gui_alive:
                 # Show subtitle if any
-                if subtitle is not None:
+                if avatar_controller_config.subtitle_text_gui_widget is not None and subtitle is not None:
                     dpg.set_value(avatar_controller_config.subtitle_text_gui_widget, subtitle)
                     dpg.show_item(avatar_controller_config.subtitle_text_gui_widget)
 
@@ -514,7 +517,8 @@ def speak_task(task_env: env) -> None:
             global emotion_autoreset_t0
             logger.info(f"speak_task.process_item.on_stop_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS finished.")
             if avatar_controller_config.gui_alive:  # Be careful - the user might have closed the app while the TTS was speaking.
-                dpg.hide_item(avatar_controller_config.subtitle_text_gui_widget)
+                if avatar_controller_config.subtitle_text_gui_widget is not None:
+                    dpg.hide_item(avatar_controller_config.subtitle_text_gui_widget)
                 if avatar_controller_config.stop_tts_button_gui_widget is not None:
                     dpg.disable_item(avatar_controller_config.stop_tts_button_gui_widget)
             with task_env.lock:
