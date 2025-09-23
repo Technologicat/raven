@@ -745,14 +745,14 @@ class Animator:
         if settings is None:
             settings = {}
 
-        logger.info(f"load_animator_settings: user settings: {settings}")
+        logger.debug(f"load_animator_settings: user settings: {settings}")
 
         # Load server-side settings
         try:
             with open(animator_settings_path / "animator.json", "r") as json_file:
                 server_settings = json.load(json_file)
         except Exception as exc:
-            logger.info(f"load_animator_settings: skipping server settings, reason: {exc}")
+            logger.warning(f"load_animator_settings: skipping server settings, reason: {exc}")
             server_settings = {}
 
         # Let's define some helpers:
@@ -772,10 +772,14 @@ class Animator:
                     settings.pop(field)  # (safe; this is not the collection we are iterating over)
 
         def aggregate(settings: Dict[str, Any], fallback_settings: Dict[str, Any], fallback_context: str) -> None:  # DANGER: MUTATING FUNCTION
+            filled_fields = []
             for field, default_value in fallback_settings.items():
                 if field not in settings:
-                    logger.info(f"load_animator_settings: filling in '{field}' from {fallback_context}")
+                    filled_fields.append(field)
                     settings[field] = default_value
+            if filled_fields:  # less spammy logging: report everything at once
+                plural_s = "s" if len(filled_fields) != 1 else ""
+                logger.info(f"load_animator_settings: filling in field{plural_s} {filled_fields} from {fallback_context}")
 
         # Now our settings loading strategy is as simple as:
         settings = dict(settings)  # copy to avoid modifying the original, since we'll pop some stuff.
@@ -789,10 +793,10 @@ class Animator:
         aggregate(settings, fallback_settings=server_settings, fallback_context="server settings")  # first fill in from server-side settings
         aggregate(settings, fallback_settings=_server_config.animator_defaults, fallback_context="built-in defaults")  # then fill in from hardcoded defaults
 
-        logger.info(f"load_animator_settings: final settings (filled in as necessary): {settings}")
+        logger.debug(f"load_animator_settings: final settings (filled in as necessary): {settings}")
 
         # Some settings must be applied explicitly.
-        logger.debug(f"load_animator_settings: Setting new target FPS = {settings['target_fps']}")
+        logger.debug(f"load_animator_settings: Setting target FPS = {settings['target_fps']}")
         self.target_fps = settings.pop("target_fps")  # controls the network send rate.
 
         logger.debug(f"load_animator_settings: Setting output format = {settings['format']}")

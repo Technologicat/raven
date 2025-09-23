@@ -372,11 +372,12 @@ class AvatarVideoRecorder:
 
     def stop(self):
         """Stop recording video frames to disk."""
-        logger.info(f"AvatarVideoRecorder.stop: stopping recording ({self.frame_no} video frames recorded).")
         with self.lock:
+            if self.recording:
+                logger.info(f"AvatarVideoRecorder.stop: stopping recording ({self.frame_no} video frames recorded).")
             self._reset()
 
-    # This runs for each received frame, but no-ops when recording is not active.
+    # This runs for each received frame (attached in `dpg_avatar_renderer.start`), but no-ops when recording is not active.
     def _on_frame_received(self, timestamp: int, mimetype: str, image_data: bytes) -> None:
         with self.lock:
             if not self.recording:

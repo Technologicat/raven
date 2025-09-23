@@ -315,7 +315,7 @@ def tts_prepare(text: str,
 
     if util.api_config.tts_server_type == "raven":
         total_audio_duration = json.loads(stream_response.headers["x-audio-duration"])
-        audio_duration_str = f" (duration {total_audio_duration:0.6g} seconds)"
+        audio_duration_str = f" (duration {total_audio_duration:0.6g}s)"
     else:
         audio_duration_str = ""  # Kokoro-FastAPI doesn't send this information
 

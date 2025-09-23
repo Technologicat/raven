@@ -27,6 +27,8 @@ from flask import Response
 
 import numpy as np
 
+from unpythonic import timer
+
 from ...common.hfutil import maybe_install_models
 
 from ...vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
@@ -177,28 +179,29 @@ def text_to_speech(voice: str,
     def get_audio_duration(audio_numpy: np.array) -> float:
         """Get time duration of NumPy audio data, in seconds."""
         return len(audio_numpy) / sample_rate
-    for segment_num, result in enumerate(pipeline.generate_from_tokens(tokens=tokens,
-                                                                       voice=voice,
-                                                                       speed=speed),
-                                         start=1):
-        logger.info(f"text_to_speech: Processing TTS response segment {segment_num}")
-        if get_metadata:
-            if not result.tokens:
-                raise RuntimeError("text_to_speech: No tokens in result, don't know how to get metadata.")
-            for token in result.tokens:
-                if not all(hasattr(token, field) for field in ("text", "start_ts", "end_ts", "phonemes")):
-                    raise RuntimeError(f"text_to_speech: Token is missing at least one mandatory field ('text', 'start_ts', 'end_ts', 'phonemes'). Data: {token}")
-                metadata.append({"word": urllib.parse.quote(token.text, safe=""),
-                                 "phonemes": urllib.parse.quote(token.phonemes, safe=""),
-                                 "start_time": t0 + token.start_ts,
-                                 "end_time": t0 + token.end_ts})
-        audio_numpy = result.audio.cpu().numpy()
-        audio_numpy = np.array(audio_numpy * 32767.0, dtype=np.int16)  # float [-1, 1] -> s16
-        audios.append(audio_numpy)
-        t0 += get_audio_duration(audio_numpy)  # add duration of this audio segment, in seconds
+    with timer() as tim:
+        for segment_num, result in enumerate(pipeline.generate_from_tokens(tokens=tokens,
+                                                                           voice=voice,
+                                                                           speed=speed),
+                                             start=1):
+            logger.info(f"text_to_speech: Processing TTS response segment {segment_num}")
+            if get_metadata:
+                if not result.tokens:
+                    raise RuntimeError("text_to_speech: No tokens in result, don't know how to get metadata.")
+                for token in result.tokens:
+                    if not all(hasattr(token, field) for field in ("text", "start_ts", "end_ts", "phonemes")):
+                        raise RuntimeError(f"text_to_speech: Token is missing at least one mandatory field ('text', 'start_ts', 'end_ts', 'phonemes'). Data: {token}")
+                    metadata.append({"word": urllib.parse.quote(token.text, safe=""),
+                                     "phonemes": urllib.parse.quote(token.phonemes, safe=""),
+                                     "start_time": t0 + token.start_ts,
+                                     "end_time": t0 + token.end_ts})
+            audio_numpy = result.audio.cpu().numpy()
+            audio_numpy = np.array(audio_numpy * 32767.0, dtype=np.int16)  # float [-1, 1] -> s16
+            audios.append(audio_numpy)
+            t0 += get_audio_duration(audio_numpy)  # add duration of this audio segment, in seconds
     total_audio_duration = sum(get_audio_duration(audio_numpy) for audio_numpy in audios)
     plural_s = "s" if len(audios) != 1 else ""
-    logger.info(f"text_to_speech: Processing complete. Got {len(audios)} TTS response segment{plural_s}, with a total audio duration of {total_audio_duration:0.6g} seconds.")
+    logger.info(f"text_to_speech: Processing complete in {tim.dt:0.6g}s. Got {len(audios)} TTS response segment{plural_s}, with a total audio duration of {total_audio_duration:0.6g}s.")
 
     # Our output format is otherwise exactly like that of Kokoro-FastAPI's "/dev/captioned_speech" endpoint (June 2025),
     # but we include the phonemes too, for lipsyncing.
