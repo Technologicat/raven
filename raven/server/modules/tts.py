@@ -193,8 +193,8 @@ def text_to_speech(voice: str,
                         raise RuntimeError(f"text_to_speech: Token is missing at least one mandatory field ('text', 'start_ts', 'end_ts', 'phonemes'). Data: {token}")
                     metadata.append({"word": urllib.parse.quote(token.text, safe=""),
                                      "phonemes": urllib.parse.quote(token.phonemes, safe=""),
-                                     "start_time": t0 + token.start_ts,
-                                     "end_time": t0 + token.end_ts})
+                                     "start_time": (t0 + token.start_ts) if token.start_ts is not None else None,
+                                     "end_time": (t0 + token.end_ts) if token.end_ts is not None else None})
             audio_numpy = result.audio.cpu().numpy()
             audio_numpy = np.array(audio_numpy * 32767.0, dtype=np.int16)  # float [-1, 1] -> s16
             audios.append(audio_numpy)
