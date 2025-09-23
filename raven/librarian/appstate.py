@@ -74,8 +74,8 @@ def load(llm_settings: env,
                   Will be auto-persisted to the same path at app exit.
 
     Return value is the tuple `(datastore, state)`, where:
-        `datastore` is a `chattree.PersistentForest` containing the chat database,
-        `state` is a `dict` containing the settings.
+        `datastore`: `chattree.PersistentForest` containing the chat database,
+        `state`: `dict` containing the app state (HEAD node, various persistent settings).
 
     NOTE: Object identity is important - for the state auto-persist (at app exit)
           to work correctly, you should modify the original `state` dict in-place;
