@@ -689,7 +689,11 @@ class DisplayedChatMessage:
             def speak_message_callback():
                 if app_state["avatar_speech_enabled"]:
                     unused_message_role, message_text = get_node_message_text_without_role(node_id)
-                    avatar_controller.send_text_to_tts(message_text)
+                    avatar_controller.send_text_to_tts(message_text,
+                                                       voice=librarian_config.avatar_config.voice,
+                                                       voice_speed=librarian_config.avatar_config.voice_speed,
+                                                       video_offset=librarian_config.avatar_config.video_offset)
+
                     # Acknowledge the action in the GUI.
                     gui_animation.animator.add(gui_animation.ButtonFlash(message="Sent to avatar!",
                                                                          target_button=speak_message_button,
@@ -1064,7 +1068,10 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     # Avatar speech and subtitling
                     logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
                     if app_state["avatar_speech_enabled"]:  # If TTS enabled, send final message text to TTS preprocess queue
-                        avatar_controller.send_text_to_tts(message_text)
+                        avatar_controller.send_text_to_tts(message_text,
+                                                           voice=librarian_config.avatar_config.voice,
+                                                           voice_speed=librarian_config.avatar_config.voice_speed,
+                                                           video_offset=librarian_config.avatar_config.video_offset)
 
                     # Update avatar emotion one last time, from the final message text
                     logger.info("ai_turn.run_ai_turn.on_done: updating emotion from final message content")
@@ -1733,9 +1740,6 @@ api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> 
 api.avatar_start(avatar_instance_id)
 dpg_avatar_renderer.start(avatar_instance_id)
 avatar_controller.initialize(avatar_instance_id=avatar_instance_id,
-                             voice=librarian_config.avatar_config.voice,
-                             voice_speed=librarian_config.avatar_config.voice_speed,
-                             video_offset=librarian_config.avatar_config.video_offset,
                              data_eyes_fadeout_duration=librarian_config.avatar_config.data_eyes_fadeout_duration,
                              emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
                              emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
@@ -1756,7 +1760,7 @@ gui_alive = True  # Global flag for app shutdown, for background tasks in our ma
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
     global gui_alive
-    api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
+    avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
     # Tell background tasks that GUI teardown is in progress (app is shutting down, so trying to update GUI elements may hang the app).
     # This also tells `run_ai_turn` to exit, so we don't need to clear the `ai_turn_task_manager`.

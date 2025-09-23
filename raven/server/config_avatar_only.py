@@ -19,5 +19,6 @@ enabled_modules = {
                  "dtype": torch.float16},
     "imagefx": {"device_string": "cuda:0",
                 "dtype": torch.float16},
+    "natlang": {"device_string": "cuda:0"},  # this module has no dtype setting
     "tts": {"device_string": "cuda:0"},
 }

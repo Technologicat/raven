@@ -36,14 +36,14 @@ import queue
 import threading
 import time
 import traceback
-from typing import Callable, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import emoji
 import strip_markdown
 
 import dearpygui.dearpygui as dpg
 
-from unpythonic import equip_with_traceback, slurp
+from unpythonic import equip_with_traceback, gensym, slurp
 from unpythonic.env import env
 
 from ..common import bgtask
@@ -56,8 +56,8 @@ from . import api  # Raven-server support
 
 # --------------------------------------------------------------------------------
 
-tts_input_queue = queue.Queue()  # for TTS input preprocessing and subtitle generation: [text0, ...]
-tts_output_queue = queue.Queue()  # for TTS and subtitle playback: [(sentence0, translation0, prep0), ...]
+tts_input_queue = queue.Queue()  # for TTS input preprocessing and subtitle generation; see `send_text_to_tts`
+tts_output_queue = queue.Queue()  # for TTS and subtitle playback; see `preprocess_task`
 
 emotion_autoreset_t0 = time.time_ns()  # emotion autoreset is handled by `speak_task`
 tts_idle_check_t0 = time.time_ns()
@@ -101,9 +101,6 @@ def _natlang_analyze(line: str) -> List[List["spacy.tokens.token.Token"]]:  # no
 avatar_controller_initialized = False
 avatar_controller_config = env()
 def initialize(avatar_instance_id: str,
-               voice: str,
-               voice_speed: float,
-               video_offset: float,
                emotion_autoreset_interval: Optional[float],
                emotion_blacklist: List[str],
                data_eyes_fadeout_duration: float,
@@ -141,16 +138,6 @@ def initialize(avatar_instance_id: str,
 
                                   Calling `start_data_eyes` always sets the effect to full strength
                                   instantly.
-
-    `voice`: TTS voice name. To get the list of available voices, call `raven.client.api.tts_list_voices`,
-             or use the `raven-avatar-settings-editor` GUI app.
-
-    `voice_speed`: For each voice, 1.0 is the default speed the voice is designed to speak at.
-                   Raising this too high may cause skipped words.
-
-    `video_offset`: seconds, for adjusting lipsync animation.
-        - Positive values: Use if the video is early. Shifts video later with respect to the audio.
-        - Negative values: Use if the video is late. Shifts video earlier with respect to the audio.
 
     `stop_tts_button_gui_widget`: DPG tag or ID of the DPG button widget that will call `stop_tts`
                                   if clicked. Used for automatically enabling/disabling the button
@@ -218,24 +205,21 @@ def initialize(avatar_instance_id: str,
     logger.info(f"initialize: called from: {called_from}")
 
     if avatar_controller_initialized:  # initialize only once
-        logger.info("initialize: `raven.librarian.avatar_controller` is already initialized. Using existing initialization.")
+        logger.info("initialize: `raven.client.avatar_controller` is already initialized. Using existing initialization.")
         return
 
     if executor is None:
         executor = concurrent.futures.ThreadPoolExecutor()
     # Use separate task managers (but the same thread pool) so that we can easily power-cycle a component when needed.
     # TODO: This takes two slots in the thread pool for the whole duration of the app. Consider the implications.
-    avatar_controller_config.input_queue_task_manager = bgtask.TaskManager(name="librarian_avatar_input_queue",
+    avatar_controller_config.input_queue_task_manager = bgtask.TaskManager(name="avatar_controller_input_queue",
                                                                            mode="concurrent",
                                                                            executor=executor)
-    avatar_controller_config.output_queue_task_manager = bgtask.TaskManager(name="librarian_avatar_output_queue",
+    avatar_controller_config.output_queue_task_manager = bgtask.TaskManager(name="avatar_controller_output_queue",
                                                                             mode="concurrent",
                                                                             executor=executor)
 
     avatar_controller_config.avatar_instance_id = avatar_instance_id
-    avatar_controller_config.voice = voice
-    avatar_controller_config.voice_speed = voice_speed
-    avatar_controller_config.video_offset = video_offset
     avatar_controller_config.emotion_autoreset_interval = emotion_autoreset_interval
     avatar_controller_config.emotion_blacklist = emotion_blacklist
     avatar_controller_config.data_eyes_fadeout_duration = data_eyes_fadeout_duration
@@ -288,13 +272,87 @@ def update_emotion_from_text(text: str) -> str:
         # Reset the timer last. If running on CPU, the emotion analysis may be slow.
         emotion_autoreset_t0 = time.time_ns()
 
-def send_text_to_tts(text: str) -> None:
-    """Send a complete piece of text into the TTS queue."""
-    logger.info("send_text_to_tts: adding text to TTS queue.")
-    tts_input_queue.put(text)
+def send_text_to_tts(text: str,
+                     voice: str,
+                     voice_speed: float,
+                     video_offset: float,
+                     on_audio_ready: Optional[Callable] = None,
+                     on_start_speaking: Optional[Callable] = None,
+                     on_stop_speaking: Optional[Callable] = None,
+                     on_start_sentence: Optional[Callable] = None,
+                     on_stop_sentence: Optional[Callable] = None) -> str:
+    """Send a complete piece of text into the TTS queue.
+
+    Returns a batch UUID. This is used in the events to identify which call to `send_text_to_tts`
+    the triggered event refers to.
+
+    `voice`: TTS voice name. To get the list of available voices, call `raven.client.api.tts_list_voices`,
+             or use the `raven-avatar-settings-editor` GUI app.
+
+    `voice_speed`: For each voice, 1.0 is the default speed the voice is designed to speak at.
+                   Raising this too high may cause skipped words.
+
+    `video_offset`: seconds, for adjusting lipsync animation.
+        - Positive values: Use if the video is early. Shifts video later with respect to the audio.
+        - Negative values: Use if the video is late. Shifts video earlier with respect to the audio.
+
+    `on_audio_ready`: The TTS audio for a sentence is ready.
+                      Expected to take arguments:
+                          `(output_record: Dict[str, Any], audio_data: bytes)`.
+                      The return value is ignored.
+
+                      Useful for saving the audio to disk, pre-split into sentences.
+
+                      Because we precompute the TTS audio as soon as possible, `on_audio_ready`
+                      may trigger long before the sentence is actually spoken out loud.
+
+    `on_start_speaking`: The TTS is about to start speaking this batch.
+                         Expected to take one argument: `output_record: Dict[str, Any]`.
+                         The return value is ignored.
+
+    `on_stop_speaking`: The TTS is done speaking this batch.
+                        Expected to take one argument: `output_record: Dict[str, Any]`.
+                        The return value is ignored.
+
+    `on_start_sentence`: The TTS is about to start speaking a sentence.
+                         Expected to take one argument: `output_record: Dict[str, Any]`.
+                         The return value is ignored.
+
+                         Useful mainly if you are recording avatar video, so that your
+                         event handler can note down the video frame number and/or timestamp.
+
+    `on_stop_sentence`: The TTS is done speaking a sentence.
+                        Expected to take one argument: `output_record: Dict[str, Any]`.
+                        The return value is ignored.
+
+                        Useful mainly if you are recording avatar video, so that your
+                        event handler can note down the video frame number and/or timestamp.
+
+    For the content of `output_record`, the authoritative source is the source code of
+    `preprocess_task.process_item`, which generates them. Generally, you can identify
+    the batch and the sentence from there, and it also has a copy of most of the arguments
+    that you passed to `send_text_to_tts`. (`text` is named `batch_text`; and `on_audio_ready`
+    is missing, because it has already been handled by that point.)
+    """
+    batch_uuid = str(gensym("tts_job"))
+    logger.info("send_text_to_tts: adding text to TTS queue, batch {batch_uuid}.")
+    tts_input_queue.put({"batch_uuid": batch_uuid,
+                         "batch_text": text,
+                         "voice": voice,
+                         "voice_speed": voice_speed,
+                         "video_offset": video_offset,
+                         "on_audio_ready": on_audio_ready,
+                         "on_start_speaking": on_start_speaking,
+                         "on_stop_speaking": on_stop_speaking,
+                         "on_start_sentence": on_start_sentence,
+                         "on_stop_sentence": on_stop_sentence})
+    return batch_uuid
 
 def stop_tts() -> None:
-    """Stop the TTS, clearing also all speech pending in the queues."""
+    """Stop the TTS, clearing also all speech pending in the queues.
+
+    This triggers the `on_stop_speaking` event of the current batch.
+    """
     logger.info("stop_tts: entered.")
     # Clear TTS input preprocess queue, so that no new preprocess jobs start.
     logger.info("stop_tts: clearing TTS input preprocess queue.")
@@ -306,7 +364,12 @@ def stop_tts() -> None:
     # Then clear the output queue, so that no new speak jobs start.
     logger.info("stop_tts: clearing TTS playback queue.")
     slurp(tts_output_queue)
-    # Then stop the TTS - the current TTS task will end, and `speak_task` will then notice that the output queue is empty.
+    # Power-cycle the TTS playback controller, to cancel the current job.
+    logger.info("stop_tts: power-cycling TTS playback controller.")
+    avatar_controller_config.output_queue_task_manager.clear()
+    avatar_controller_config.output_queue_task_manager.submit(speak_task, env())
+    # We must still stop the TTS, to actually make the TTS playback task exit.
+    # The current TTS task will end, and the old controller will then exit.
     logger.info("stop_tts: stopping TTS.")
     api.tts_stop()
     logger.info("stop_tts: all done.")
@@ -364,7 +427,7 @@ def preprocess_task(task_env: env) -> None:
 
     The text should be a whole chat message (without the role name), or at least a complete paragraph.
 
-    The text is cleaned, and then split into sentences. Depending on Librarian settings (see `raven.librarian.config`),
+    The text is cleaned, and then split into sentences. Depending on settings passed to `initialize`,
     each sentence may be translated for subtitling, closed-captioned (CC) as-is, or the subtitler may be skipped.
 
     Finally, the TTS audio and phonemes are precomputed.
@@ -376,64 +439,71 @@ def preprocess_task(task_env: env) -> None:
     def strip_emoji(text: str) -> str:
         return emoji.get_emoji_regexp().sub(r"", text)
 
-    def process_item(text: str) -> None:
-        logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: analyzing '{text}'")
-        text = text.strip()
-        if not text:
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is empty after pre-stripping leading/trailing whitespace. Skipping.")
+    def process_item(input_record: Dict[str, Any]) -> None:
+        batch_uuid = input_record["batch_uuid"]
+        batch_text = input_record["batch_text"]
+        logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: analyzing '{batch_text}'")
+
+        batch_text = batch_text.strip()
+        if not batch_text:
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: Text is empty after pre-stripping leading/trailing whitespace. Skipping.")
             return
-        if text.startswith("<tool_call>"):  # don't speak and subtitle tool call invocations generated by the LLM
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is a tool call invocation. Skipping.")
+        if batch_text.startswith("<tool_call>"):  # don't speak and subtitle tool call invocations generated by the LLM
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: Text is a tool call invocation. Skipping.")
             return
-        text = strip_markdown.strip_markdown(text)  # remove formatting for TTS and subtitling
-        if text is None:
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is `None` after stripping markdown. Skipping.")
+        batch_text = strip_markdown.strip_markdown(batch_text)  # remove formatting for TTS and subtitling
+        if batch_text is None:
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: Text is `None` after stripping markdown. Skipping.")
             return
-        text = strip_emoji(text)
-        text = text.strip()  # once more, with feeling!
-        if not text:
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: Text is empty after post-stripping emoji and leading/trailing whitespace. Skipping.")
+        batch_text = strip_emoji(batch_text)
+        batch_text = batch_text.strip()  # once more, with feeling!
+        if not batch_text:
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: Text is empty after post-stripping emoji and leading/trailing whitespace. Skipping.")
             return
         # Now we actually have some text that is worth sending to the TTS and to the translation/subtitling system.
 
         # Break into lines, and break each line into sentences.
         # TODO: This relies on the fact that LLMs don't insert newlines except as paragraph breaks.
-        lines = text.split("\n")
+        lines = batch_text.split("\n")
         plural_s = "s" if len(lines) != 1 else ""
-        logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}: detected {len(lines)} line{plural_s}.")
+        logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: detected {len(lines)} line{plural_s}.")
+        lines = [line.strip() for line in lines if line.strip() != ""]  # This (vs. doing it on the fly) buys us that we know when we are processing the last item.
         for lineno, line in enumerate(lines, start=1):
             if task_env.cancelled:
                 return
 
-            line = line.strip()
-            if not line:
-                continue
+            is_first_line = (lineno == 1)
+            is_last_line = (lineno == len(lines))
 
             docs = _natlang_analyze(line)
             assert len(docs) == 1
             doc = docs[0]
             sentences = list(doc.sents)
             plural_s = "s" if len(sentences) != 1 else ""
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}: detected {len(sentences)} sentence{plural_s} on this line.")
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}: detected {len(sentences)} sentence{plural_s} on this line.")
 
+            sentences = [str(sentence) for sentence in sentences]  # from spaCy rich internal format
+            sentences = [sentence.strip() for sentence in sentences if sentence.strip() != ""]  # Same here - now we know when we're processing the last item.
             for sentenceno, sentence in enumerate(sentences, start=1):
                 if task_env.cancelled:
                     return
 
-                sentence = str(sentence)  # from spaCy rich internal format
+                sentence_uuid = str(gensym("tts_sentence"))
+                is_first_sentence = (sentenceno == 1)
+                is_last_sentence = (sentenceno == len(sentences))
 
-                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): starting processing")
+                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): starting processing")
 
                 if avatar_controller_config.subtitles_enabled and avatar_controller_config.subtitle_text_gui_widget is not None:
-                    if avatar_controller_config.translator_target_lang is not None:  # Call the AI translator on Raven-server
+                    if avatar_controller_config.translator_source_lang is not None and avatar_controller_config.translator_target_lang is not None:  # Call the AI translator on Raven-server
                         subtitle = _translate_sentence(sentence)
                     else:  # Subtitles but no translation -> English closed captions (CC)
                         subtitle = sentence
-                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): original: {sentence}")
-                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): subtitle: {subtitle}")
+                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): original: {sentence}")
+                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): subtitle: {subtitle}")
                 else:
-                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): original: {sentence}")
-                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): subtitler is off.")
+                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): original: {sentence}")
+                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): subtitler is off.")
                     subtitle = None
 
                 if task_env.cancelled:
@@ -441,34 +511,61 @@ def preprocess_task(task_env: env) -> None:
 
                 # Precompute TTS audio and phoneme data.
                 # We have plenty of wall time to precompute more, even when running the TTS on CPU, while the first sentence is being spoken.
-                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): precomputing TTS audio and phoneme data")
+                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): precomputing TTS audio and phoneme data")
                 prep = api.tts_prepare(text=sentence,
-                                       voice=avatar_controller_config.voice,
-                                       speed=avatar_controller_config.voice_speed)
+                                       voice=input_record["voice"],
+                                       speed=input_record["voice_speed"],
+                                       get_metadata=True)
                 if prep is None:
-                    logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): error during precomputing, skipping sentence")
+                    logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): error during precomputing, skipping sentence")
                     continue
 
-                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: text 0x{id(text)}, line {lineno}, sentence {sentenceno} (0x{id(sentence):x}): processing done")
-                if task_env.cancelled:  # IMPORTANT: don't queue the result if cancelled
+                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): processing done")
+                if task_env.cancelled:  # IMPORTANT: don't queue the result (and trigger event) if cancelled
                     return
 
-                tts_output_queue.put((sentence, subtitle, prep))
+                # The first part is for introspection/logging/debug; the second part is needed when speaking.
+                output_record = {"batch_uuid": input_record["batch_uuid"],
+                                 "batch_text": input_record["batch_text"],
+                                 "voice": input_record["voice"],
+                                 "voice_speed": input_record["voice_speed"],
+                                 "line_number": lineno,
+                                 "lines_count": len(lines),
+                                 "sentence_number_on_line": sentenceno,
+                                 "sentences_count_on_line": len(sentences),
+                                 "sentence_uuid": sentence_uuid,
+                                 "sentence": sentence,
+                                 # ----------------------------------------
+                                 "subtitle": subtitle,
+                                 "prep": prep,
+                                 "is_first_sentence_in_batch": (is_first_line and is_first_sentence),
+                                 "is_last_sentence_in_batch": (is_last_line and is_last_sentence),
+                                 "video_offset": input_record["video_offset"],  # needed when actually speaking
+                                 "on_start_speaking": input_record["on_start_speaking"],
+                                 "on_stop_speaking": input_record["on_stop_speaking"],
+                                 "on_start_sentence": input_record["on_start_sentence"],
+                                 "on_stop_sentence": input_record["on_stop_sentence"]}
+
+                if (on_audio_ready := input_record["on_audio_ready"]) is not None:
+                    audio_bytes = prep["audio_bytes"]
+                    on_audio_ready(output_record, audio_bytes)
+
+                tts_output_queue.put(output_record)
 
     # background task main loop
     try:
         while True:
-            if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
+            if task_env.cancelled:  # co-operative shutdown
                 return
 
             try:
-                text = tts_input_queue.get(block=False)
+                input_record = tts_input_queue.get(block=False)
             except queue.Empty:
                 time.sleep(0.2)
                 continue
 
             try:
-                process_item(text)
+                process_item(input_record)
             except Exception as exc:
                 logger.error(f"preprocess_task: during `process_item`: {type(exc)}: {exc}")
                 traceback.print_exc()
@@ -485,13 +582,21 @@ def speak_task(task_env: env) -> None:
 
     logger.info(f"speak_task: instance {task_env.task_name}: TTS playback controller starting")
 
-    def process_item(sentence, subtitle, prep):
-        logger.info(f"speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: starting processing")
+    def process_item(output_record: Dict[str, Any]) -> None:
+        batch_uuid = output_record["batch_uuid"]
+        sentence_uuid = output_record["sentence_uuid"]
+        # sentence = output_record["sentence"]  # not actually used during speaking
+        subtitle = output_record["subtitle"]
+        logger.info(f"speak_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, sentence {sentence_uuid}: starting processing")
         with task_env.lock:
             task_env.speaking = True
 
-        def on_start_lipsync_speaking():
-            logger.info(f"speak_task.process_item.on_start_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS starting to speak.")
+        def speak_task_on_start_speaking():
+            logger.info(f"speak_task.process_item.speak_task_on_start_speaking: instance {task_env.task_name}: sentence {sentence_uuid}: TTS starting to speak.")
+            if output_record["is_first_sentence_in_batch"] and (custom_on_start_speaking := output_record["on_start_speaking"]) is not None:
+                custom_on_start_speaking(output_record)
+            if (custom_on_start_sentence := output_record["on_start_sentence"]) is not None:
+                custom_on_start_sentence(output_record)
             if avatar_controller_config.gui_alive:
                 # Show subtitle if any
                 if avatar_controller_config.subtitle_text_gui_widget is not None and subtitle is not None:
@@ -513,9 +618,14 @@ def speak_task(task_env: env) -> None:
                 if avatar_controller_config.stop_tts_button_gui_widget is not None:
                     dpg.enable_item(avatar_controller_config.stop_tts_button_gui_widget)
 
-        def on_stop_lipsync_speaking():
+        def speak_task_on_stop_speaking():
             global emotion_autoreset_t0
-            logger.info(f"speak_task.process_item.on_stop_lipsync_speaking: instance {task_env.task_name}: sentence 0x{id(sentence):x}: TTS finished.")
+            logger.info(f"speak_task.process_item.speak_task_on_stop_speaking: instance {task_env.task_name}: sentence {sentence_uuid}: TTS finished.")
+            if (custom_on_stop_sentence := output_record["on_stop_sentence"]) is not None:
+                custom_on_stop_sentence(output_record)
+            # The `task_env.cancelled` check catches the case where `speak_task` is being power-cycled. In that case, we must emit the `on_stop_speaking` event (if configured).
+            if (output_record["is_last_sentence_in_batch"] or task_env.cancelled) and (custom_on_stop_speaking := output_record["on_stop_speaking"]) is not None:
+                custom_on_stop_speaking(output_record)
             if avatar_controller_config.gui_alive:  # Be careful - the user might have closed the app while the TTS was speaking.
                 if avatar_controller_config.subtitle_text_gui_widget is not None:
                     dpg.hide_item(avatar_controller_config.subtitle_text_gui_widget)
@@ -527,31 +637,31 @@ def speak_task(task_env: env) -> None:
                 # and our `speak_task` thread starts processing the next item in the queue immediately when it detects this flag.
                 task_env.speaking = False
 
-        logger.info(f"speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: submitting TTS task.")
+        logger.info(f"speak_task.process_item: instance {task_env.task_name}: sentence {sentence_uuid}: submitting TTS task.")
         api.tts_speak_lipsynced(instance_id=avatar_controller_config.avatar_instance_id,
                                 voice="ignored_due_to_prep",
                                 text="ignored_due_to_prep",
                                 speed=1.0,  # ignored due to prep
-                                video_offset=avatar_controller_config.video_offset,
+                                video_offset=output_record["video_offset"],
                                 on_audio_ready=None,
-                                on_start=on_start_lipsync_speaking,
-                                on_stop=on_stop_lipsync_speaking,
-                                prep=prep)
-        logger.info(f"speak_task.process_item: instance {task_env.task_name}: sentence 0x{id(sentence):x}: processing done")
+                                on_start=speak_task_on_start_speaking,
+                                on_stop=speak_task_on_stop_speaking,
+                                prep=output_record["prep"])
+        logger.info(f"speak_task.process_item: instance {task_env.task_name}: sentence {sentence_uuid}: processing done")
 
     task_env.lock = threading.RLock()
     task_env.speaking = False
     try:
         while True:
-            if task_env.cancelled:  # co-operative shutdown (e.g. app exit)
+            if task_env.cancelled:  # co-operative shutdown
                 return
             with task_env.lock:
-                speaking = task_env.speaking  # we must release the lock as soon as possible (so that `on_stop_lipsync_speaking` can lock it, if it happens to be run), so get the state into a temporary variable.
+                speaking = task_env.speaking  # we must release the lock as soon as possible (so that `speak_task_on_stop_speaking` can lock it, if it happens to be run), so get the state into a temporary variable.
             if speaking:  # wait until TTS is free (previous speech ended)
                 time.sleep(0.1)
                 continue
             try:
-                sentence, subtitle, prep = tts_output_queue.get(block=False)
+                output_record = tts_output_queue.get(block=False)
             except queue.Empty:  # wait until we have a sentence to speak
                 time_now = time.time_ns()
                 if avatar_controller_config.emotion_autoreset_interval is not None:  # if the feature is enabled, reset emotion after a few seconds of idle time (when the TTS is not speaking)
@@ -571,7 +681,7 @@ def speak_task(task_env: env) -> None:
                 continue
 
             try:
-                process_item(sentence, subtitle, prep)
+                process_item(output_record)
             except Exception as exc:
                 logger.error(f"speak_task: during `process_item`: {type(exc)}: {exc}")
                 traceback.print_exc()

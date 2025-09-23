@@ -32,7 +32,7 @@ with timer() as tim:
     import sys
     import threading
     import traceback
-    from typing import Optional, Union
+    from typing import Any, Dict, Optional, Union
 
     from colorama import Fore, Style, init as colorama_init
 
@@ -56,6 +56,7 @@ with timer() as tim:
 
     from ...client import api  # convenient Python functions that abstract away the web API
     from ...client import config as client_config
+    from ...client import avatar_controller
     from ...client.avatar_renderer import DPGAvatarRenderer
 
     from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
@@ -571,9 +572,24 @@ class PostprocessorSettingsEditorGUI:
                     dpg.add_text("Set the character's emotion\n(Ctrl+E; then Up, Down, Home, End to jump)", parent="emotion_tooltip")  # tag
                     self.on_send_emotion(sender=self.emotion_choice, app_data=self.emotion_names[0])  # initial emotion upon app startup; should be "neutral"
 
-                    dpg.add_checkbox(label="Animefx", default_value=True, callback=self.on_gui_settings_change, tag="animefx_checkbox")  # animefx: emotion change triggered anime effects
-                    dpg.add_tooltip("animefx_checkbox", tag="animefx_tooltip")  # tag
-                    dpg.add_text("Enable/disable hovering anime effects such as sweatdrops and exclamation marks", parent="animefx_tooltip")  # tag
+                    with dpg.group(horizontal=True):
+                        dpg.add_checkbox(label="Animefx", default_value=True, callback=self.on_gui_settings_change, tag="animefx_checkbox")  # animefx: emotion change triggered anime effects
+                        dpg.add_tooltip("animefx_checkbox", tag="animefx_tooltip")  # tag
+                        dpg.add_text("Enable/disable hovering anime effects such as sweatdrops and exclamation marks", parent="animefx_tooltip")  # tag
+
+                        self._data_eyes_state = False
+                        def toggle_data_eyes():
+                            self._data_eyes_state = not self._data_eyes_state
+                            if self._data_eyes_state:
+                                avatar_controller.start_data_eyes()
+                                dpg.set_item_label("data_eyes_button", "Stop data eyes")  # tag  # TODO: DRY GUI labels
+                            else:
+                                avatar_controller.stop_data_eyes()
+                                dpg.set_item_label("data_eyes_button", "Start data eyes")  # tag  # TODO: DRY GUI labels
+
+                        dpg.add_button(label="Start data eyes", width=205, callback=toggle_data_eyes, tag="data_eyes_button")  # per-character "data eyes" effect
+                        dpg.add_tooltip("data_eyes_button", tag="data_eyes_tooltip")  # tag
+                        dpg.add_text("Enable/disable the character's 'data eyes' state", parent="data_eyes_tooltip")  # tag
                     dpg.add_spacer(height=2)
 
                     dpg.add_text("Talking animation (generic, non-lipsync)")
@@ -623,11 +639,9 @@ class PostprocessorSettingsEditorGUI:
                                            tag="speak_speed_slider")
                         dpg.add_tooltip("speak_speed_slider", tag="speak_speed_tooltip")  # tag
                         dpg.add_text("Set the TTS audio speed\n(too high may cause skipped words)", parent="speak_speed_tooltip")  # tag
-                    dpg.add_checkbox(label="Lipsync [adjust video timing below]", default_value=True, tag="speak_lipsync_checkbox")
-                    dpg.add_tooltip("speak_lipsync_checkbox", tag="speak_lipsync_tooltip")  # tag
-                    dpg.add_text("When the TTS is speaking, lipsync the avatar's mouth to the speech", parent="speak_lipsync_tooltip")  # tag
+                    dpg.add_text("Lipsynced TTS [adjust video timing below]", tag="speak_lipsync_text")
 
-                    dpg.add_slider_int(label="x 0.1 s", default_value=-6, min_value=-20, max_value=20, clamped=True, width=self.button_width - 64, tag="speak_video_offset")
+                    dpg.add_slider_int(label="x 0.1 s", default_value=-8, min_value=-20, max_value=20, clamped=True, width=self.button_width - 64, tag="speak_video_offset")
                     dpg.add_tooltip("speak_video_offset", tag="speak_video_tooltip")  # tag
                     dpg.add_text("Adjust AV offset for lipsync playback\n(positive value = shift video later w.r.t the audio)", parent="speak_video_tooltip")  # tag
 
@@ -1096,8 +1110,7 @@ class PostprocessorSettingsEditorGUI:
         """
         # mode = user_data
 
-        api.tts_stop()
-        video_recorder.stop()  # If not recording, this is a no-op.
+        avatar_controller.stop_tts()
         dpg.hide_item(self.recording_indicator_group)  # If not recording, this is a no-op.
 
         dpg.set_item_label("speak_button", "Speak [Ctrl+S]")  # TODO: DRY the GUI labels  # tag
@@ -1134,11 +1147,12 @@ class PostprocessorSettingsEditorGUI:
         if mode == "speak_and_record":
             pulsating_red_text_glow.reset()  # start new pulsation cycle
             dpg.show_item(self.recording_indicator_group)
-            def on_audio_ready(audio_data: bytes) -> None:
-                """Save the TTS speech audio file to disk."""
+
+            def on_audio_ready(output_record: Dict[str, Any], audio_data: bytes) -> None:
+                """Save the TTS speech audio file (for each sentence) to disk."""
                 common_utils.create_directory(recording_output_dir)
-                filename = os.path.join(str(recording_output_dir), "audio.mp3")
-                logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_audio_ready: Saving TTS speech audio to '{filename}'")
+                filename = os.path.join(str(recording_output_dir), f"line_{output_record['line_number']:05d}_sentence_{output_record['sentence_number_on_line']:05d}.mp3")
+                logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_audio_ready: Saving TTS speech audio to '{filename}' (sentence output_record['sentence_uuid']: '{output_record['sentence']}')")
                 with open(filename, "wb") as audio_file:
                     audio_file.write(audio_data)
                 logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_audio_ready: TTS speech audio saved to '{filename}'")
@@ -1159,35 +1173,58 @@ class PostprocessorSettingsEditorGUI:
             # text = "From approximately 10,000 BCE, the Neolithic Revolution initiated humanity’s shift from nomadic hunter-gatherer societies to settled agricultural communities. This was followed by the Bronze Age, spanning from roughly 3,300 to 1,200 BCE, which fostered the emergence of early cities and empires such as Sumer and Ancient Egypt. The Iron Age began around 1,200 BCE, driven by advancements in metallurgy and extending until approximately 500 BCE, enabling the rise of powerful civilizations like Persia and the Roman Republic. The Classical Era, from about 800 BCE to 500 CE, represented the zenith of Greek philosophy, Roman law, and widespread religious diffusion. The Medieval Period, lasting from 500 to 1,500 CE, witnessed the development of feudal systems in Europe alongside the Islamic Golden Age. The Early Modern Era, from 1,500 to 1,800 CE, brought the Age of Exploration, Enlightenment ideas, and the birth of modern nation-states. The Industrial Revolution commenced in the late 18th century, triggering mechanized manufacturing and urbanization. Finally, the Modern Era, starting in the early 19th century, continues to define today’s interconnected, digitized global society."
             text = 'The failure of any experiment to detect motion through the aether led Hendrik Lorentz, starting in eighteen ninety two, to develop a theory of electrodynamics based on an immobile luminiferous aether, physical length contraction, and a "local time" in which Maxwell\'s equations retain their form in all inertial frames of reference.'
 
-        # Start the TTS, also setting up event handlers.
-        if dpg.get_value("speak_lipsync_checkbox"):
-            def on_start_lipsync_speaking():
-                if mode == "speak_and_record":
-                    video_recorder.start()
-            def on_stop_lipsync_speaking():
-                self.on_stop_speaking(None, None, user_data)  # update the GUI, stop recording (if active); pass on our `user_data` as-is
-            api.tts_speak_lipsynced(instance_id=avatar_instance_id,
-                                    text=text,
-                                    voice=selected_voice,
-                                    speed=dpg.get_value("speak_speed_slider") / 10,
-                                    video_offset=dpg.get_value("speak_video_offset") / 10,
-                                    on_audio_ready=on_audio_ready,
-                                    on_start=on_start_lipsync_speaking,
-                                    on_stop=on_stop_lipsync_speaking)
-        else:
-            def on_start_nonlipsync_speaking():
-                if mode == "speak_and_record":
-                    video_recorder.start()
-                api.avatar_start_talking(avatar_instance_id)
-            def on_stop_nonlipsync_speaking():
-                api.avatar_stop_talking(avatar_instance_id)
-                self.on_stop_speaking(None, None, user_data)  # update the GUI, stop recording (if active); pass on our `user_data` as-is
-            api.tts_speak(text=text,
-                          voice=selected_voice,
-                          speed=dpg.get_value("speak_speed_slider") / 10,
-                          on_audio_ready=on_audio_ready,
-                          on_start=on_start_nonlipsync_speaking,
-                          on_stop=on_stop_nonlipsync_speaking)
+        # Queue up the TTS, also setting up event handlers.
+        #
+        def on_start_batch(output_record: Dict[str, Any]) -> None:
+            logger.info("on_start_batch: starting to speak")
+            if mode == "speak_and_record":
+                logger.info("PostprocessorSettingsEditorGUI.on_start_speaking.on_start_batch: mode is 'speak_and_record', starting video recorder")
+                video_recorder.start()
+        def on_stop_batch(output_record: Dict[str, Any]) -> None:
+            if video_recorder.recording:
+                video_recorder.stop()
+
+                # Save audio timing report
+                common_utils.create_directory(recording_output_dir)
+                filename = os.path.join(str(recording_output_dir), "audio_timing.txt")
+                logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_stop_batch: Saving audio timing report to '{filename}'")
+                with open(filename, "w") as timings_file:
+                    timings_file.write("Audio timing report\n")
+                    timings_file.write("===================\n\n")
+                    timings_file.write("<start video frame> - <end video frame> (<start time> - <end time>) (duration <duration>): line <line number>, sentence <sentence number>: 'spoken sentence'\n")
+                    timings_file.write(f"Times are in seconds, computed at {self.target_fps} FPS.\n\n")
+                    for (lineno, sentenceno, sentence), start_ts, end_ts in zip(sentences, batch_audio_start_timestamps, batch_audio_end_timestamps):
+                        timings_file.write(f"{start_ts:05d} - {end_ts:05d} ({start_ts / self.target_fps:0.2f}s - {end_ts / self.target_fps:0.2f}s) (duration {(end_ts - start_ts) / self.target_fps}s): line {lineno:05d}, sentence {sentenceno:05d}: '{sentence}'\n")
+
+            self.on_stop_speaking(None, None, user_data)  # update the GUI
+
+        # Sentence-level handlers to get TTS speech audio timing info
+        sentences = []
+        batch_audio_start_timestamps = []
+        batch_audio_end_timestamps = []
+        def on_start_sentence(output_record: Dict[str, Any]) -> None:
+            if video_recorder.recording:
+                frame_no = video_recorder.frame_no
+                logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_start_sentence: video frame {frame_no}: start of sentence {output_record['sentence_uuid']}: '{output_record['sentence']}'")
+                sentences.append((output_record['line_number'],
+                                  output_record['sentence_number_on_line'],
+                                  output_record['sentence']))
+                batch_audio_start_timestamps.append(frame_no)
+        def on_stop_sentence(output_record: Dict[str, Any]) -> None:
+            if video_recorder.recording:
+                frame_no = video_recorder.frame_no
+                logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_start_sentence: video frame {frame_no}: end of sentence {output_record['sentence_uuid']}: '{output_record['sentence']}'")
+                batch_audio_end_timestamps.append(frame_no)
+
+        avatar_controller.send_text_to_tts(text=text,
+                                           voice=selected_voice,
+                                           voice_speed=dpg.get_value("speak_speed_slider") / 10,
+                                           video_offset=dpg.get_value("speak_video_offset") / 10,
+                                           on_audio_ready=on_audio_ready,
+                                           on_start_speaking=on_start_batch,
+                                           on_stop_speaking=on_stop_batch,
+                                           on_start_sentence=on_start_sentence,
+                                           on_stop_sentence=on_stop_sentence)
 
 # --------------------------------------------------------------------------------
 # App window (viewport) resizing
@@ -1326,11 +1363,32 @@ api.avatar_start(avatar_instance_id)  # start the avatar rendering on the server
 gui_instance.dpg_avatar_renderer.start(avatar_instance_id,  # ...and start displaying the live video on the client
                                        on_frame_received=video_recorder._on_frame_received)
 
+# We don't use most of the features of the controller here (particularly the autotranslator and subtitler), but we want the sentence-splitting and precomputing TTS,
+# which gives much better lipsync and better latency than TTS'ing a long text in one go. The cost is producing a separate audio file for each sentence.
+# If there is just one sentence (as judged by the server's `natlang` module), it works as before.
+avatar_controller.initialize(avatar_instance_id=avatar_instance_id,
+                             data_eyes_fadeout_duration=0.75,
+                             emotion_autoreset_interval=None,
+                             emotion_blacklist=[],  # only used for `avatar_controller.update_emotion_from_text`
+                             stop_tts_button_gui_widget=None,  # We have no dedicated stop button, but two play/stop toggles (one with recording). We manage the state ourselves.
+                             on_tts_idle=None,
+                             tts_idle_check_interval=None,
+                             subtitles_enabled=False,
+                             subtitle_text_gui_widget=None,
+                             subtitle_left_x0=0,
+                             subtitle_bottom_y0=0,
+                             translator_source_lang=None,
+                             translator_target_lang=None,
+                             main_window_w=0,
+                             main_window_h=0,
+                             executor=bg)  # use the same thread pool as our main task manager
+
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
     logger.info("gui_shutdown: entered")
-    api.tts_stop()  # Stop the TTS speaking so that the speech background thread (if any) exits.
+    avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     task_manager.clear(wait=True)  # Wait until background tasks actually exit.
+    avatar_controller.shutdown()
     gui_animation.animator.clear()
     global gui_instance
     gui_instance = None
