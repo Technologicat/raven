@@ -58,6 +58,7 @@ def _scan_for_new_chat_head(datastore: chattree.Forest) -> str:
 # --------------------------------------------------------------------------------
 # API
 
+# TODO: Factory-resetting the datastore when "new_chat_HEAD" is missing is silly and dangerous. Fix this.
 def load(llm_settings: env,
          datastore_file: Union[str, pathlib.Path],
          state_file: Union[str, pathlib.Path]) -> Tuple[chattree.Forest, Dict]:
