@@ -148,10 +148,18 @@ def text_to_speech(voice: str,
               over the network transport.
 
               If `stream=False`, the response includes a "Content-Length" header, in bytes.
+
+    We always send one custom header, "x-audio-duration", which contains the duration
+    of the speech audio data, in seconds, before encoding into `format`.
+
+    Note that at least historically, some audio formats have had very long audio frames
+    (over 1 second), so depending on `format`, the encoded audio file may be slightly longer
+    than "x-audio-duration", end-padded with silence.
     """
     # Side effect: validate `format` argument
+    sample_rate = 24000  # Kokoro uses 24kHz sample rate
     audio_encoder = StreamingAudioWriter(format=format,
-                                         sample_rate=24000,  # Kokoro uses 24kHz sample rate
+                                         sample_rate=sample_rate,
                                          channels=1)
     _, tokens = pipeline.g2p(text)
     metadata = []
@@ -163,9 +171,17 @@ def text_to_speech(voice: str,
     if voice not in (voices := get_voices()):
         raise ValueError(f"Unknown voice '{voice}'; installed voices: {voices}")
 
-    for result in pipeline.generate_from_tokens(tokens=tokens,
-                                                voice=voice,
-                                                speed=speed):
+    # In multi-segment output, Kokoro returns timestamps relative to the start of the current segment.
+    # We want absolute timestamps for the whole audio, so keep track of the length of the completed segments.
+    t0 = 0.0
+    def get_audio_duration(audio_numpy: np.array) -> float:
+        """Get time duration of NumPy audio data, in seconds."""
+        return len(audio_numpy) / sample_rate
+    for segment_num, result in enumerate(pipeline.generate_from_tokens(tokens=tokens,
+                                                                       voice=voice,
+                                                                       speed=speed),
+                                         start=1):
+        logger.info(f"text_to_speech: Processing TTS response segment {segment_num}")
         if get_metadata:
             if not result.tokens:
                 raise RuntimeError("text_to_speech: No tokens in result, don't know how to get metadata.")
@@ -174,15 +190,20 @@ def text_to_speech(voice: str,
                     raise RuntimeError(f"text_to_speech: Token is missing at least one mandatory field ('text', 'start_ts', 'end_ts', 'phonemes'). Data: {token}")
                 metadata.append({"word": urllib.parse.quote(token.text, safe=""),
                                  "phonemes": urllib.parse.quote(token.phonemes, safe=""),
-                                 "start_time": token.start_ts,
-                                 "end_time": token.end_ts})
+                                 "start_time": t0 + token.start_ts,
+                                 "end_time": t0 + token.end_ts})
         audio_numpy = result.audio.cpu().numpy()
         audio_numpy = np.array(audio_numpy * 32767.0, dtype=np.int16)  # float [-1, 1] -> s16
         audios.append(audio_numpy)
+        t0 += get_audio_duration(audio_numpy)  # add duration of this audio segment, in seconds
+    total_audio_duration = sum(get_audio_duration(audio_numpy) for audio_numpy in audios)
+    plural_s = "s" if len(audios) != 1 else ""
+    logger.info(f"text_to_speech: Processing complete. Got {len(audios)} TTS response segment{plural_s}, with a total audio duration of {total_audio_duration:0.6g} seconds.")
 
     # Our output format is otherwise exactly like that of Kokoro-FastAPI's "/dev/captioned_speech" endpoint (June 2025),
     # but we include the phonemes too, for lipsyncing.
-    output_headers = {"Content-Type": f"audio/{format}"}
+    output_headers = {"Content-Type": f"audio/{format}",
+                      "x-audio-duration": total_audio_duration}  # seconds
     if get_metadata:
         output_headers["x-word-timestamps"] = json.dumps(metadata)
 
