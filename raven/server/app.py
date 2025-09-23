@@ -1503,11 +1503,11 @@ def init_server_modules():  # keep global namespace clean
                               spacy_device_string,
                               torch_dtype)
 
-    if server_config.enabled_modules.get("tts", None) is not None:
+    if (record := server_config.enabled_modules.get("tts", None)) is not None:
         device_string = record["device_string"]  # no configurable dtype
         tts.init_module(config_module_name, device_string)
 
-    if server_config.enabled_modules.get("websearch", None) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
+    if (record := server_config.enabled_modules.get("websearch", None)) is not None:  # no device/dtype settings; if a record exists (regardless of whether blank), this module is enabled.
         websearch.init_module(config_module_name)
 init_server_modules()
 
