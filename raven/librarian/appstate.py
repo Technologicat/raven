@@ -170,6 +170,10 @@ def load(llm_settings: env,
         state["HEAD"] = state["new_chat_HEAD"]
         logger.info(f"load: Missing key 'HEAD' in '{orig_state_file}' (resolved to '{state_file}'), resetting it to 'new_chat_HEAD'")
 
+    if "tools_enabled" not in state:
+        state["tools_enabled"] = True
+        logger.info(f"load: Missing key 'tools_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['tools_enabled']}'")
+
     if "docs_enabled" not in state:
         state["docs_enabled"] = True
         logger.info(f"load: Missing key 'docs_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['docs_enabled']}'")

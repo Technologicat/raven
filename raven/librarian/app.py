@@ -25,7 +25,7 @@ with timer() as tim:
     import threading
     import time
     import traceback
-    from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+    from typing import Any, Callable, Dict, List, Optional, Union
     import uuid
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -1134,6 +1134,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                                                 datastore=datastore,
                                                 retriever=retriever,
                                                 head_node_id=app_state["HEAD"],
+                                                tools_enabled=app_state["tools_enabled"],
                                                 docs_query=docs_query,
                                                 docs_num_results=librarian_config.docs_num_results,
                                                 speculate=app_state["speculate_enabled"],
@@ -1328,6 +1329,8 @@ with timer() as tim:
                                       no_scrollbar=True,
                                       no_scroll_with_mouse=True):
                     with dpg.group(horizontal=True):
+                        def toggle_tools_enabled():
+                            app_state["tools_enabled"] = not app_state["tools_enabled"]
                         def toggle_docs_enabled():
                             app_state["docs_enabled"] = not app_state["docs_enabled"]
                         def toggle_speculate_enabled():
@@ -1337,6 +1340,10 @@ with timer() as tim:
                         def toggle_subtitles_enabled():
                             app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
                             avatar_controller.avatar_controller_config.subtitles_enabled = app_state["avatar_subtitles_enabled"]
+                        dpg.add_checkbox(label="Tools", default_value=app_state["tools_enabled"], callback=toggle_tools_enabled, tag="tools_enabled_checkbox")
+                        dpg.add_tooltip("tools_enabled_checkbox", tag="tools_enabled_tooltip")  # tag
+                        dpg.add_text("Provide tools to the AI, such as web search.", parent="tools_enabled_tooltip")  # tag
+
                         dpg.add_checkbox(label="Documents", default_value=app_state["docs_enabled"], callback=toggle_docs_enabled, tag="docs_enabled_checkbox")
                         dpg.add_tooltip("docs_enabled_checkbox", tag="docs_enabled_tooltip")  # tag
                         dpg.add_text("Before responding, search document database for relevant information.", parent="docs_enabled_tooltip")  # tag

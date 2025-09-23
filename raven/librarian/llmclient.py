@@ -240,30 +240,36 @@ def setup(backend_url: str) -> env:
     ]
     tool_entrypoints = {"websearch": websearch_wrapper}
 
-    if librarian_config.llm_send_toolcall_instructions:
-        tools_json = "\n".join(json.dumps(tool) for tool in tools)
+    # Write tool-calling instructions for legacy models.
+    #
+    # This comes from the template built into QwQ-32B.
+    #
+    # Recent models (e.g. QwQ-32B, Qwen3) don't need this, because they have a tool-calling template built in.
+    # This is for slightly older models that support tool-calling but lack the built-in template,
+    # such as DeepSeek-R1-Distill-Qwen-7B.
+    #
+    # This template is automatically dynamically injected by `invoke` into the system prompt
+    # when the legacy mode is enabled (config flag `librarian_config.llm_send_toolcall_instructions`).
+    #
+    # `invoke` also automatically provides the "tools" field in the request or strips it,
+    # depending on whether tool-calling is enabled for that invocation.
+    #
+    tools_json = "\n".join(json.dumps(tool) for tool in tools)
+    legacy_tools_prompt = dedent(f"""
+    # Tools
 
-        # This comes from the template built into QwQ-32B.
-        #
-        # Note QwQ-32B and Qwen3 don't actually need this, because they have a template built in;
-        # this is for slightly older models that support tool-calling but lack the built-in template,
-        # such as DeepSeek-R1-Distill-Qwen-7B.
-        tools_info = dedent(f"""
-        # Tools
+    You may call one or more functions to assist with the user query.
 
-        You may call one or more functions to assist with the user query.
+    You are provided with function signatures within <tools></tools> XML tags:
+    <tools>
+    {tools_json}
+    </tools>
 
-        You are provided with function signatures within <tools></tools> XML tags:
-        <tools>
-        {tools_json}
-        </tools>
-
-        For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
-        <tool_call>
-        {{"name": <function-name>, "arguments": <args-json-object>}}
-        </tool_call>
-        """).strip()
-        character_card = f"{character_card}\n\n{tools_info}"
+    For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
+    <tool_call>
+    {{"name": <function-name>, "arguments": <args-json-object>}}
+    </tool_call>
+    """).strip()
 
     # Generation settings for the LLM backend.
     #
@@ -315,6 +321,7 @@ def setup(backend_url: str) -> env:
                    stopping_strings=stopping_strings,
                    greeting=greeting,
                    tools=tools,  # for inspection
+                   legacy_tools_prompt=legacy_tools_prompt,  # for old models (see `invoke`)
                    tool_entrypoints=tool_entrypoints,  # for our implementation to be able to call them
                    backend_url=backend_url,
                    request_data=request_data,
@@ -382,7 +389,10 @@ def token_count(settings: env, text: str) -> int:
 # --------------------------------------------------------------------------------
 # The most important function - call LLM, parse result
 
-def invoke(settings: env, history: List[Dict], on_progress=None) -> env:
+def invoke(settings: env,
+           history: List[Dict],
+           on_progress: Optional[Callable] = None,
+           tools_enabled: bool = True) -> env:
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
@@ -404,6 +414,9 @@ def invoke(settings: env, history: List[Dict], on_progress=None) -> env:
            If you interrupt the LLM by returning `action_stop`, normal finalization still takes place, and you'll get
            a chat message populated with the content received so far. It is up to the caller what to do with that data.
 
+    `tools_enabled`: Whether the LLM is allowed to use the tools available in `llmclient.setup`.
+                     This can be disabled e.g. to temporarily turn off websearch.
+
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.
 
     The returned `env` has the following attributes:
@@ -417,6 +430,21 @@ def invoke(settings: env, history: List[Dict], on_progress=None) -> env:
     """
     data = copy.deepcopy(settings.request_data)
     data["messages"] = history
+
+    if tools_enabled:
+        logger.info("llmclient.invoke: Tool calling is enabled. Providing tool specifications in request.")
+        # It's already there in the default `settings.request_data`, so we don't need to do anything.
+
+        # Dynamically inject toolcall instructions for legacy models.
+        if librarian_config.llm_send_toolcall_instructions:
+            logger.info("llmclient.invoke: Injecting toolcall instructions for legacy model.")
+            data["messages"][0] = copy.deepcopy(data["messages"][0])
+            system_prompt_instance = data["messages"][0]
+            system_prompt_instance["content"] = f"{system_prompt_instance['content']}\n\n{settings.legacy_tools_prompt}"
+    else:
+        logger.info("llmclient.invoke: Tool calling is disabled. Stripping tool specifications from request.")
+        data.pop("tools")  # Tools? What tools? (Pretend to LLM backend we don't have any -> no tool-calls.)
+
     stream_response = requests.post(f"{settings.backend_url}/v1/chat/completions", headers=headers, json=data, verify=False, stream=True)
 
     if stream_response.status_code != 200:  # not "200 OK"?

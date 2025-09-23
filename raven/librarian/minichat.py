@@ -102,6 +102,12 @@ def minimal_chat_client(backend_url) -> None:
         datastore, app_state = appstate.load(llm_settings, datastore_file, state_file)
         print()
 
+        # Inform user about tool-calling feature state
+        tools_enabled_str = "ON" if app_state["tools_enabled"] else "OFF"
+        colorful_tools_status = colorizer.colorize(f"Tool-calling is currently {tools_enabled_str}.",
+                                                   colorizer.Style.BRIGHT)
+        print(f"{colorful_tools_status} Toggle with the `!tools` command.")
+
         # Load RAG database (it will auto-persist at app exit).
         retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
                                                     recursive=librarian_config.llm_docs_dir_recursive,
@@ -161,6 +167,7 @@ def minimal_chat_client(backend_url) -> None:
             print()
             print("    Special commands (tab-completion available):")
             print("        !clear                  - Start new chat")
+            print(f"        !tools [True|False]     - Tool-calling on/off/toggle (currently {app_state['tools_enabled']})")
             print(f"        !docs [True|False]      - Document database on/off/toggle (currently {app_state['docs_enabled']}; document store at '{str(librarian_config.llm_docs_dir)}')")
             print(f"        !speculate [True|False] - LLM speculate on/off/toggle (currently {app_state['speculate_enabled']}); used only if docs is True.")
             print("                                  If speculate is False, try to use only RAG results to answer.")
@@ -186,7 +193,8 @@ def minimal_chat_client(backend_url) -> None:
                     "!history",
                     "!model",
                     "!models",
-                    "!speculate"]
+                    "!speculate",
+                    "!tools"]
         def get_completions(candidates: List[str], text: str) -> List[str]:
             """Return a list of matching completions for `text`.
 
@@ -221,6 +229,8 @@ def minimal_chat_client(backend_url) -> None:
                 with datastore.lock:
                     candidates = list(sorted(datastore.nodes.keys()))
             elif buffer_content.startswith("!speculate"):  # in `!speculate` command, expecting an argument?
+                candidates = ["True", "False"]
+            elif buffer_content.startswith("!tools"):  # in `!tools` command, expecting an argument?
                 candidates = ["True", "False"]
             else:  # anything else -> no completions
                 return None
@@ -392,6 +402,29 @@ def minimal_chat_client(backend_url) -> None:
                 print(f"LLM speculation is now {speculate_enabled_str}.")
                 print()
                 return Values(action=action_next_round)
+            elif user_message_text.startswith("!tools"):  # TODO: refactor
+                split_command_text = user_message_text.split()
+                nargs = len(split_command_text) - 1
+                if nargs == 0:
+                    app_state["tools_enabled"] = not app_state["tools_enabled"]
+                elif nargs == 1:
+                    arg = split_command_text[-1]
+                    if arg == "True":
+                        app_state["tools_enabled"] = True
+                    elif arg == "False":
+                        app_state["tools_enabled"] = False
+                    else:
+                        print(f"!tools: unrecognized argument '{arg}'; expected 'True' or 'False'.")
+                        print()
+                        return Values(action=action_next_round)
+                else:
+                    print("!tools: wrong number of arguments; expected at most one, 'True' or 'False'.")
+                    print()
+                    return Values(action=action_next_round)
+                tools_enabled_str = "ON" if app_state["tools_enabled"] else "OFF"
+                print(f"Tool-calling is now {tools_enabled_str}.")
+                print()
+                return Values(action=action_next_round)
             elif user_message_text.startswith("!") and len(user_message_text.split("\n")) == 1:
                 print(f"Unrecognized command '{user_message_text}'; use `!help` for available commands.")
                 return Values(action=action_next_round)
@@ -470,6 +503,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 datastore=datastore,
                                                 retriever=retriever,
                                                 head_node_id=app_state["HEAD"],
+                                                tools_enabled=app_state["tools_enabled"],
                                                 docs_query=docs_query,
                                                 docs_num_results=librarian_config.docs_num_results,
                                                 speculate=app_state["speculate_enabled"],

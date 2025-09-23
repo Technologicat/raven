@@ -182,10 +182,12 @@ def _perform_injects(llm_settings: env,
 
 
 # TODO: `raven.librarian.scaffold.ai_turn`: implement continue mode, to continue an interrupted generation (or one that ran out of max output length)
+# TODO: `tools_enabled` is a blunt hammer; maybe have also an optional tool name list for fine-grained control?
 def ai_turn(llm_settings: env,
             datastore: chattree.Forest,
             retriever: hybridir.HybridIR,
             head_node_id: str,
+            tools_enabled: bool,
             docs_query: Optional[str],
             docs_num_results: Optional[int],
             speculate: bool,
@@ -213,6 +215,9 @@ def ai_turn(llm_settings: env,
     `retriever`: A `raven.librarian.hybridir.HybridIR` retriever connected to the document database.
 
     `head_node_id`: Current HEAD node of the chat. Used as the parent for the no-match message, if needed.
+
+    `tools_enabled`: Whether the LLM is allowed to use the tools available in `llmclient.setup`.
+                     This can be disabled e.g. to temporarily turn off websearch.
 
     `docs_query`: Optional query string to search with in the document database.
 
@@ -413,7 +418,10 @@ def ai_turn(llm_settings: env,
 
         if on_llm_start is not None:
             on_llm_start()
-        out = llmclient.invoke(llm_settings, message_history, on_llm_progress)  # this handles `action_stop` from `on_llm_progress`
+        out = llmclient.invoke(settings=llm_settings,
+                               history=message_history,
+                               on_progress=on_llm_progress,  # this handles `action_stop` from `on_llm_progress`
+                               tools_enabled=tools_enabled)
         # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
 
         # Clean up the LLM's reply (heuristically). This version goes into the chat history.
