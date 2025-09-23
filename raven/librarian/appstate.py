@@ -13,7 +13,7 @@ import atexit
 import functools
 import json
 import pathlib
-from typing import Dict, Union
+from typing import Dict, Tuple, Union
 
 from unpythonic.env import env
 
@@ -60,7 +60,7 @@ def _scan_for_new_chat_head(datastore: chattree.Forest) -> str:
 
 def load(llm_settings: env,
          datastore_file: Union[str, pathlib.Path],
-         state_file: Union[str, pathlib.Path]) -> Dict:
+         state_file: Union[str, pathlib.Path]) -> Tuple[chattree.Forest, Dict]:
     """Load chat app state.
 
     `llm_settings`: LLM client settings; this is the return value of `llmclient.setup`.
