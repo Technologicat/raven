@@ -45,11 +45,15 @@
   - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
 
 - Librarian
-  - Draw assets:
-      - Make per-character AI chat icons (just jury-rig `raven/icons/ai.png` for minimal demo, fix later)
-      - Finish the new app icon for Raven (small and large sizes)
+  - Minimal demo:
+    - Draw assets:
+        - Make per-character AI chat icons (just jury-rig `raven/icons/ai.png` for minimal demo, fix later)
+        - Finish the new app icon for Raven (small and large sizes)
+    - Make video with OpenShot
+    - Set up system prompt for demo.
+    - Long subtitle splitter (we now have the audio length).
   - Fix:
-    - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens occasionally with the last word in a sentence.
+    - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens very occasionally with the last word in a sentence.
     - Lipsync: sometimes getting empty phonemes list from TTS? Is this for punctuation tokens only? Investigate.
   - Document:
     - Write Raven-Librarian user manual
