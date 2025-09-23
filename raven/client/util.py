@@ -33,7 +33,7 @@ api_initialized = False
 api_config = envcls(raven_default_headers={},
                     tts_default_headers={},
                     audio_frequency=44100,
-                    audio_buffer_size=1024)  # slightly larger than the default 512 to prevent xruns while the AI translator/subtitler is running simultaneously
+                    audio_buffer_size=2048)  # slightly larger than the default 512 to prevent xruns while the AI translator/subtitler is running simultaneously
 def initialize_api(raven_server_url: str,
                    raven_api_key_file: Optional[Union[pathlib.Path, str]],
                    tts_server_type: Optional[str],
