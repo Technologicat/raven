@@ -1,6 +1,6 @@
 """Chat app state saving/loading.
 
-This module is shared between `minichat` (command-line app) and `app` (GUI app).
+This module is shared between `minichat` (command-line app) and `app` (Raven-librarian GUI app).
 """
 
 __all__ = ["load", "save"]
