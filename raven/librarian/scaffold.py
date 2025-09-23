@@ -329,7 +329,7 @@ def ai_turn(llm_settings: env,
                       This is meant as an optional UI hook to show that tool calls will be processed next.
 
                       Each completed tool call (regardless of whether success or failure) then triggers
-                      one `on_tool_done` event.
+                      one `on_tool_done` event, in a postprocessing loop that creates the chat nodes.
 
                       After *all* tool calls have completed, the `on_tools_done` (note plural) event triggers.
 
@@ -338,24 +338,30 @@ def ai_turn(llm_settings: env,
 
                               Main use case is to turn on tool-specific GUI indicators.
 
-                              See `llmclient.perform_tool_calls` for details.
+                              See `llmclient.perform_tool_calls` for arguments.
 
     `on_call_lowlevel_done`: Called when a tool call is completed, or when it has failed.
 
-                             Called also for a broken tool call request record, without a corresponding
+                             Called also for broken tool call requests, without a corresponding
                              `on_call_start`, in order to report the error.
 
                              Main use case is to turn off tool-specific GUI indicators.
 
-                             See `llmclient.perform_tool_calls` for details.
+                             See `llmclient.perform_tool_calls` for arguments.
 
     `on_tool_done`: 1-argument callable, with argument `node_id: str`.
                     The return value is ignored.
 
-                    Called *after* `on_llm_done`, once per tool call result, if there were tool calls, after the
-                    tool's response chat node has been added to the chat datastore.
+                    Called *after* `on_llm_done`, once per tool call result, if there were tool calls,
+                    after the tool's response chat node has been added to the chat datastore.
 
                     The argument is the node ID of this new chat node.
+
+                    Note that all tools have already run when the first `on_tool_done` is called,
+                    because the chat nodes are created in a postprocessing loop.
+
+                    If you need an event that triggers when a tool is about to start or has just finished,
+                    use `on_call_lowlevel_start` and `on_call_lowlevel_done` instead.
 
     `on_tools_done`: 0-argument callable.
                      The return value is ignored.
