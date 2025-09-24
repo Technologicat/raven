@@ -219,7 +219,7 @@ def create_chat_message(llm_settings: env,
     `text`: The text content of the message.
 
     `add_persona`: If `True`, we prepend the persona of `role` to the text content,
-                   if `llm_settings.persona_names` has a name defined for that role.
+                   if `llm_settings.personas` has a name defined for that role.
 
                    E.g., if `role='assistant'`, format output as "AI: ...",
                    where "AI" is the persona.
@@ -239,8 +239,8 @@ def create_chat_message(llm_settings: env,
     if role not in ("user", "assistant", "system", "tool"):
         raise ValueError(f"Unknown role '{role}'; valid: one of 'user', 'assistant', 'system', 'tool'.")
 
-    if add_persona and llm_settings.persona_names[role] is not None:
-        content = f"{llm_settings.persona_names[role]}: {text}"  # e.g. "User: ..."
+    if add_persona and llm_settings.personas[role] is not None:
+        content = f"{llm_settings.personas[role]}: {text}"  # e.g. "User: ..."
     else:  # System and tool messages typically do not include a persona name in the text content.
         content = text
 
