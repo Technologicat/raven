@@ -332,7 +332,7 @@ def send_text_to_tts(text: str,
     `preprocess_task.process_item`, which generates them. Generally, you can identify
     the batch and the sentence from there, and it also has a copy of most of the arguments
     that you passed to `send_text_to_tts`. (`text` is named `batch_text`; and `on_audio_ready`
-    is missing, because it has already been handled by that point.)
+    is gone, because it has already been handled by that point.)
     """
     batch_uuid = str(gensym("tts_job"))
     logger.info("send_text_to_tts: adding text to TTS queue, batch {batch_uuid}.")
