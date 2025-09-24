@@ -19,7 +19,7 @@ import numpy as np
 
 from unpythonic import timer, uniqify
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="""Convert QOI (Quite OK Image) image file(s) to PNG.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="myimage.qoi", help="Image file(s) to convert")
