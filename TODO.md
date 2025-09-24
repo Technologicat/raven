@@ -50,8 +50,9 @@
         - Make per-character AI chat icons (just jury-rig `raven/icons/ai.png` for minimal demo, fix later)
         - Finish the new app icon for Raven (small and large sizes)
     - Make video with OpenShot
-    - Set up system prompt for demo.
+    - Set up system prompt (and character name) for demo.
     - Long subtitle splitter (we now have the audio length).
+    - Raven-burstbib: turn a BibTeX database into individual documents for Raven-librarian.
   - Fix:
     - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens very occasionally with the last word in a sentence.
     - Lipsync: sometimes getting empty phonemes list from TTS? Is this for punctuation tokens only? Investigate.
