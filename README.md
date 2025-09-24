@@ -237,6 +237,7 @@ Command                                Replacement
 raven-visualizer                  →    python -m raven.visualizer.app
 raven-importer                    →    python -m raven.visualizer.importer
 raven-arxiv2id                    →    python -m raven.tools.arxiv2id
+raven-burstbib                    →    python -m raven.tools.burstbib
 raven-wos2bib                     →    python -m raven.tools.wos2bib
 raven-pdf2bib                     →    python -m raven.tools.pdf2bib
 raven-server                      →    python -m raven.server.app
