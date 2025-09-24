@@ -480,7 +480,7 @@ def preprocess_task(task_env: env) -> None:
             doc = docs[0]
             sentences = list(doc.sents)
             plural_s = "s" if len(sentences) != 1 else ""
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}: detected {len(sentences)} sentence{plural_s} on this line.")
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}: detected {len(sentences)} sentence{plural_s} on this line.")
 
             sentences = [str(sentence) for sentence in sentences]  # from spaCy rich internal format
             sentences = [sentence.strip() for sentence in sentences if sentence.strip() != ""]  # Same here - now we know when we're processing the last item.
@@ -492,18 +492,18 @@ def preprocess_task(task_env: env) -> None:
                 is_first_sentence = (sentenceno == 1)
                 is_last_sentence = (sentenceno == len(sentences))
 
-                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): starting processing")
+                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): starting processing")
 
                 if avatar_controller_config.subtitles_enabled and avatar_controller_config.subtitle_text_gui_widget is not None:
                     if avatar_controller_config.translator_source_lang is not None and avatar_controller_config.translator_target_lang is not None:  # Call the AI translator on Raven-server
                         subtitle = _translate_sentence(sentence)
                     else:  # Subtitles but no translation -> English closed captions (CC)
                         subtitle = sentence
-                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): original: {sentence}")
-                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): subtitle: {subtitle}")
+                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): original: {sentence}")
+                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): subtitle: {subtitle}")
                 else:
-                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): original: {sentence}")
-                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): subtitler is off.")
+                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): original: {sentence}")
+                    logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): subtitler is off.")
                     subtitle = None
 
                 if task_env.cancelled:
@@ -511,16 +511,16 @@ def preprocess_task(task_env: env) -> None:
 
                 # Precompute TTS audio and phoneme data.
                 # We have plenty of wall time to precompute more, even when running the TTS on CPU, while the first sentence is being spoken.
-                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): precomputing TTS audio and phoneme data")
+                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): precomputing TTS audio and phoneme data")
                 prep = api.tts_prepare(text=sentence,
                                        voice=input_record["voice"],
                                        speed=input_record["voice_speed"],
                                        get_metadata=True)
                 if prep is None:
-                    logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): error during precomputing, skipping sentence")
+                    logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): error during precomputing, skipping sentence")
                     continue
 
-                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno}, sentence {sentenceno} ({sentence_uuid}): processing done")
+                logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): processing done")
                 if task_env.cancelled:  # IMPORTANT: don't queue the result (and trigger event) if cancelled
                     return
 
