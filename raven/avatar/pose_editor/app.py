@@ -56,6 +56,7 @@ with timer() as tim:
     import logging
     import os
     import pathlib
+    import platform
     import sys
     import threading
     import time
@@ -156,8 +157,15 @@ with dpg.theme() as global_theme:
         dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
 dpg.bind_theme(global_theme)  # set this theme as the default
 
+if platform.system().upper() == "WINDOWS":
+    icon_ext = "ico"
+else:
+    icon_ext = "png"
+
 # Viewport size depends on the image size, so it needs to be tuned after `PoseEditorGUI` initializes
 dpg.create_viewport(title="Raven-avatar pose editor",
+                    small_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_128_notext.{icon_ext}")).expanduser().resolve()),
+                    large_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_256.{icon_ext}")).expanduser().resolve()),
                     width=1600,
                     height=1000)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()

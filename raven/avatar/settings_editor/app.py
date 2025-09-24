@@ -96,9 +96,16 @@ with dpg.theme(tag="my_pulsating_red_text_theme"):
                                                            theme_color_widget=pulsating_red_color)
     gui_animation.animator.add(pulsating_red_text_glow)
 
+if platform.system().upper() == "WINDOWS":
+    icon_ext = "ico"
+else:
+    icon_ext = "png"
+
 viewport_width = 1900
 viewport_height = 980
 dpg.create_viewport(title="Raven-avatar settings editor",
+                    small_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_128_notext.{icon_ext}")).expanduser().resolve()),
+                    large_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_256.{icon_ext}")).expanduser().resolve()),
                     width=viewport_width,
                     height=viewport_height)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()

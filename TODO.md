@@ -47,9 +47,9 @@
 - Librarian
   - Minimal demo:
     - Draw assets:
-        - Make per-character AI chat icons (just jury-rig `raven/icons/ai.png` for minimal demo, fix later)
-        - Finish the new app icon for Raven (small and large sizes)
-    - Make video with OpenShot
+        - Make per-character AI chat icons
+          - Just jury-rig `raven/icons/ai.png` for minimal demo, fix later
+          - Or... quickly change the loader to look for `charactername_icon.png` in the same directory as the avatar, and fall back to a generic `ai.png` if not found
     - Set up system prompt (and character name) for demo.
     - Long subtitle splitter (we now have the audio length).
   - Fix:

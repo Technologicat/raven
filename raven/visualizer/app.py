@@ -33,7 +33,9 @@ with timer() as tim:
     import itertools
     import math
     import os
+    import pathlib
     import pickle
+    import platform
     import re
     import threading
     import time
@@ -608,7 +610,14 @@ with timer() as tim:
                                                  format=dpg.mvFormat_Float_rgba,
                                                  tag="word_cloud_texture")
 
+    if platform.system().upper() == "WINDOWS":
+        icon_ext = "ico"
+    else:
+        icon_ext = "png"
+
     dpg.create_viewport(title=f"Raven-visualizer {__version__}",
+                        small_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", f"app_128_notext.{icon_ext}")).expanduser().resolve()),
+                        large_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", f"app_256.{icon_ext}")).expanduser().resolve()),
                         width=gui_config.main_window_w,
                         height=gui_config.main_window_h)  # OS window (DPG "viewport")
     dpg.setup_dearpygui()
