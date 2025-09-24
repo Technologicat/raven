@@ -129,17 +129,38 @@ def list_models(backend_url: str) -> List[str]:
 def setup(backend_url: str) -> env:
     """Connect to LLM at `backend_url`.
 
-    Return an `env` object (a fancy namespace) populated with the following fields:
+    Return an `unpythonic.env.env` object (a fancy namespace) populated with the following fields:
 
-        `user`: Name of user's character.
-        `char`: Name of AI assistant.
-        `model`: Name of model running at `backend_url`, queried automatically from the backend.
-        `system_prompt`: Generic system prompt for the LLM (this is the LLaMA 3 preset from SillyTavern), to make it follow the character card.
-        `character_card`: Character card that configures the AI assistant to improve the model's performance.
-        `greeting`: The AI assistant's first message, used later for initializing the chat history.
-        `prompts`: Prompts for the LLM, BibTeX field processing functions, and any literal info to fill in the output BibTeX. See the main program for details.
-        `request_data`: Generation settings for the LLM backend.
-        `role_names`: A `dict` with keys "user", "assistant", "system", used for constructing chat messages (see `raven.librarian.chatutil.create_chat_message`).
+        `user: str`: User persona (name of user's character).
+
+        `char: str`: AI persona name (name of the AI's character).
+
+        `model: str`: Name of model running at `backend_url`, queried automatically from the backend.
+
+        `system_prompt: str`: Currently empty. Used to be a generic system prompt for the LLM (the LLaMA 3 preset from SillyTavern), to make it follow the character card.
+
+        `character_card: str`: Character card that configures the AI to improve the model's performance.
+
+        `stopping_strings: List[str]`: List of strings that automatically interrupt the AI in `invoke`.
+                                       The default is `[f"\n{user}:"]`, which prevents old models' habit of speaking on the user's behalf.
+
+                                       NOTE: Tool calls will not be processed if a stopping string is hit.
+
+        `greeting: str`: The AI's first message, used later for initializing the chat history.
+
+        `tools: List[Dict[str, Any]]`: JSON specifications of available tools (for LLMs capable of tool-calling).
+
+        `legacy_tools_prompt: str`: Tool-calling instructions for legacy models, automatically injected by `invoke` in legacy mode.
+
+        `tool_entrypoints: Dict[str, Callable]`: The Python functions that implement the tools.
+
+        `backend_url: str`: The `backend_url` argument, as-is.
+
+        `request_data: Dict[str, Any]`: Generation settings for the LLM backend.
+
+        `persona_names: Dict[str, Optional[str]]`: Persona name for the roles (dict keys) "user", "assistant", "system", and "tool", used for constructing
+                                                   chat messages (see `raven.librarian.chatutil.create_chat_message`). The "system" and "tool" roles typically
+                                                   have no persona name; for them, the persona name is stored as `None`.
     """
     user = "User"
     char = "Aria"
