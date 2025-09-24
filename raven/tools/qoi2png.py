@@ -17,7 +17,7 @@ import qoi
 
 import numpy as np
 
-from unpythonic import timer, uniqify
+from unpythonic import ETAEstimator, timer, uniqify
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="""Convert QOI (Quite OK Image) image file(s) to PNG.""",
@@ -29,12 +29,13 @@ def main() -> None:
 
     with timer() as tim:
         input_filenames = list(uniqify(opts.filenames))
+        eta_estimator = ETAEstimator(total=len(input_filenames), keep_last=50)
         for input_filename in input_filenames:
             dirname = os.path.dirname(input_filename)
             basename_without_extension = os.path.splitext(os.path.basename(input_filename))[0]
             output_filename = os.path.join(dirname, f"{basename_without_extension}.png")
             if opts.verbose:
-                print(f"{input_filename} -> {output_filename}")
+                print(f"{input_filename} -> {output_filename}; {eta_estimator.formatted_eta}")
 
             # Read and decode input file
             with open(input_filename, "rb") as image_file:
@@ -49,6 +50,8 @@ def main() -> None:
 
             # Save output file
             pil_image.save(output_filename)
+
+            eta_estimator.tick()
     if opts.verbose:
         plural_s = "s" if len(input_filenames) != 1 else ""
         average_time_str = f" (average {tim.dt / len(input_filenames):0.6g}s per image)" if len(input_filenames) > 1 else ""
