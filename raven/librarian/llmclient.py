@@ -200,6 +200,7 @@ def setup(backend_url: str) -> env:
     # TODO: Query the context size from the backend if possible. No, doesn't seem to be possible. https://github.com/oobabooga/text-generation-webui/discussions/5317
     #
     # TODO: Move the system prompt/character card to `raven.librarian.config`. Document the available variables.
+    # TODO: If the session rolls over midnight, the chat client should refresh the system prompt to update the current date.
     #
     character_card = dedent(f"""
     Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).
