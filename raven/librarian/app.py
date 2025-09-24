@@ -253,26 +253,33 @@ def get_next_or_prev_sibling(node_id: str, direction: str = "next") -> Optional[
             return siblings[node_index - 1]
     return None  # no sibling found
 
-def format_chat_message_for_clipboard(llm_settings: env,
-                                      message_number: Optional[int],
-                                      message_role: str,
-                                      message_text: str,
+def format_chat_message_for_clipboard(message_number: Optional[int],
+                                      role: str,
+                                      persona: Optional[str],
+                                      text: str,
                                       add_heading: bool) -> str:
     """Format a chat message for copying to clipboard, by adding a metadata header as Markdown.
 
     As a preprocessing step, the role name is stripped from the beginning of each line in `message_text`.
     It is then re-added in a unified form, using `message_role` as the role.
 
-    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
-
     `message_number`: The sequential number of the message in the current linearized view.
                       If `None`, the number part in the formatted output is omitted.
 
-    `message_role`: One of the roles supported by `raven.librarian.llmclient`.
-                    Typically, one of "assistant", "system", "tool", or "user".
+    `role`: One of the roles supported by `raven.librarian.llmclient`.
+            Typically, one of "assistant", "system", "tool", or "user".
 
-    `message_text`: The text content of the chat message to format.
-                    The content is pasted into the output as-is.
+    `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
+
+               If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
+               (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+
+               If you are editing a message from an existing chat node, use
+               `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
+               (which may be different from the current session's, e.g. if the AI character has been changed).
+
+    `text`: The text content of the chat message to format.
+            The content is pasted into the output as-is.
 
     `add_heading`: Whether to include the message number and role's character name
                    in the final output.
@@ -296,39 +303,41 @@ def format_chat_message_for_clipboard(llm_settings: env,
     Returns the formatted message.
     """
     if add_heading:
-        message_heading = chatutil.format_message_heading(llm_settings=llm_settings,
-                                                          message_number=message_number,
-                                                          role=message_role,
+        message_heading = chatutil.format_message_heading(message_number=message_number,
+                                                          role=role,
+                                                          persona=persona,
                                                           markup="markdown")
     else:
         message_heading = ""
-    message_text = chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings,
-                                                                role=message_role,
-                                                                text=message_text)
+    message_text = chatutil.remove_persona_from_start_of_line(persona=persona,
+                                                              text=text)
     return f"{message_heading}{message_text}"
 
-def get_node_message_text_without_role(node_id: str) -> str:
-    """Format a chat message from `node_id` in the datastore, by stripping the role name from the front.
+def get_node_message_text_without_persona(node_id: str) -> str:
+    """Format a chat message from `node_id` in the datastore, by stripping the persona name from the front.
 
     This is useful e.g. for displaying the message text in the linearized chat view,
     or for sending the message into TTS preprocessing (`avatar_add_text_to_preprocess_queue`).
 
-    Returns the tuple `(message_role, message_text)`, where:
+    Returns the tuple `(role, persona, text)`, where:
 
-        `message_role`: One of the roles supported by `raven.librarian.llmclient`.
-                        Typically, one of "assistant", "system", "tool", or "user".
+        `role`: One of the roles supported by `raven.librarian.llmclient`.
+                Typically, one of "assistant", "system", "tool", or "user".
 
-        `message_text`: The text content of the chat message with the role name stripped,
-                        at the node's current payload revision.
+        `persona`: The persona name of `role`, as it was stored in the chat node.
+                   If the role has no persona name, then this is `None`.
+
+        `text`: The text content of the chat message with the persona name stripped,
+                at the node's current payload revision.
     """
-    node_payload = datastore.get_payload(node_id)  # auto-selects latest revision  TODO: later (chat editing), we need to set the revision to load
+    node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
     message = node_payload["message"]
-    message_role = message["role"]
-    message_text = message["content"]
-    message_text = chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings,
-                                                                role=message_role,
-                                                                text=message_text)
-    return message_role, message_text
+    role = message["role"]
+    persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
+    text = message["content"]
+    text = chatutil.remove_persona_from_start_of_line(persona=persona,
+                                                      text=text)
+    return role, persona, text
 
 class DisplayedChatMessage:
     class_lock = threading.RLock()
@@ -354,6 +363,7 @@ class DisplayedChatMessage:
         self.gui_container_group = dpg.add_group(tag=f"chat_item_container_group_{self.gui_uuid}",
                                                  parent=self.gui_parent)
         self.role = None  # populated by `build`
+        self.persona = None  # populated by `build`
         self.paragraphs = []  # [{"text": ..., "rendered": True}, ...]
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
@@ -366,16 +376,33 @@ class DisplayedChatMessage:
 
     def build(self,
               role: str,
+              persona: Optional[str],
               text: Optional[str],
               node_id: Optional[str]) -> None:
         """Build the GUI widgets for this instance, thus rendering the chat message (and buttons and such) in the GUI.
 
-        The initial `text` may be `None` if you intend to add the text later.
+        `role`: One of the roles supported by `raven.librarian.llmclient`.
+                Typically, one of "assistant", "system", "tool", or "user".
+
+        `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
+
+                   If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
+                   (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+
+                   If you are editing a message from an existing chat node, use
+                   `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
+                   (which may be different from the current session's, e.g. if the AI character has been changed).
+
+        `text`: You can the chat message text to be displayed here, but it can be `None` if you intend to add text later.
+
+        `node_id`: The chat node ID of this message in the datastore, if applicable.
+                   (Streaming messages do not have a node yet.)
         """
         global gui_role_icons  # intent only
         global role_colors  # intent only
 
         self.role = role
+        self.persona = persona
         self.node_id = node_id
 
         # clear old GUI content (needed if rebuilding)
@@ -416,6 +443,13 @@ class DisplayedChatMessage:
                                                    parent=icon_and_text_container_group)
         dpg.add_spacer(height=gui_config.margin,
                        parent=text_vertical_layout_group)
+
+        # Render timestamp the revision number of the payload currently shown  TODO: later (chat editing): this needs to be switchable without regenerating the whole view
+        if node_id is not None:
+            node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+            payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active revision!
+            node_active_revision = datastore.get_revision(node_id)
+            dpg.add_text(f"{payload_datetime} R{node_active_revision}", color=(120, 120, 120), parent=text_vertical_layout_group)
 
         # render the actual text
         self.gui_text_group = dpg.add_group(tag=f"chat_message_text_container_group_{self.gui_uuid}",
@@ -585,6 +619,7 @@ class DisplayedChatMessage:
         without regenerating the whole linearized chat view.
         """
         self.role = None
+        self.persona = None
         self.paragraphs = []
         self.gui_text_group = None
         self.gui_button_callbacks = {}  # deleting GUI items, so clear the stashed callbacks too.
@@ -599,6 +634,7 @@ class DisplayedChatMessage:
                       This is not simply `self.gui_parent` due to other layout performed by `build`.
         """
         role = self.role
+        persona = self.persona
         text = self.text
         node_id = self.node_id
 
@@ -613,12 +649,19 @@ class DisplayedChatMessage:
             shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
             # Note we only add the role name when we include also the node ID.
             # Omitting the name in regular mode improves convenience for copy-pasting an existing question into the chat field.
-            formatted_message = format_chat_message_for_clipboard(llm_settings=llm_settings,
-                                                                  message_number=None,  # a single message copied to clipboard does not need a sequential number
-                                                                  message_role=role,
-                                                                  message_text=text,
+            formatted_message = format_chat_message_for_clipboard(message_number=None,  # a single message copied to clipboard does not need a sequential number
+                                                                  role=role,
+                                                                  persona=persona,
+                                                                  text=text,
                                                                   add_heading=shift_pressed)
-            header = f"*Node ID*: `{node_id}`\n\n" if shift_pressed else ""  # yes, it'll say `None` when not available, which is exactly what we want.
+
+            if shift_pressed:
+                node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+                payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active revision!
+                node_active_revision = datastore.get_revision(node_id)
+                header = f"*Node ID*: `{node_id}` {payload_datetime} R{node_active_revision}\n\n"  # yes, it'll say `None` when no node ID is available (incoming streaming message), which is exactly what we want.
+            else:
+                header = ""
             mode = "with node ID" if shift_pressed else "as-is"
             dpg.set_clipboard_text(f"{header}{formatted_message}\n")
             # Acknowledge the action in the GUI.
@@ -688,7 +731,7 @@ class DisplayedChatMessage:
         if role == "assistant":
             def speak_message_callback():
                 if app_state["avatar_speech_enabled"]:
-                    unused_message_role, message_text = get_node_message_text_without_role(node_id)
+                    unused_message_role, unused_message_persona, message_text = get_node_message_text_without_persona(node_id)
                     avatar_controller.send_text_to_tts(message_text,
                                                        voice=librarian_config.avatar_config.voice,
                                                        voice_speed=librarian_config.avatar_config.voice_speed,
@@ -828,9 +871,10 @@ class DisplayedCompleteChatMessage(DisplayedChatMessage):
 
     def build(self) -> None:
         """Build (or rebuild) the GUI widgets for this chat message."""
-        message_role, message_text = get_node_message_text_without_role(self.node_id)  # TODO: later (chat editing), we need to set the revision to load
-        super().build(role=message_role,
-                      text=message_text,
+        role, persona, text = get_node_message_text_without_persona(self.node_id)  # TODO: later (chat editing), we need to set the revision to load
+        super().build(role=role,
+                      persona=persona,
+                      text=text,
                       node_id=self.node_id)
 
 
@@ -843,6 +887,7 @@ class DisplayedStreamingChatMessage(DisplayedChatMessage):
 
     def build(self):
         super().build(role="assistant",  # TODO: parameterize this?
+                      persona=llm_settings.personas.get("assistant", None),
                       text=None,  # start with no text
                       node_id=None)
 
@@ -880,10 +925,10 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
             add_complete_chat_message_to_linearized_chat_panel(node_id=node_id,
                                                                scroll_to_end=False)  # we scroll just once, when done
     # Update avatar emotion from the message text
-    message_role, message_text = get_node_message_text_without_role(head_node_id)
-    if message_role == "assistant":
+    role, unused_persona, text = get_node_message_text_without_persona(head_node_id)
+    if role == "assistant":
         logger.info("build_linearized_chat_panel: linearized chat view new HEAD node is an AI message; updating avatar emotion from message content")
-        avatar_controller.update_emotion_from_text(message_text)
+        avatar_controller.update_emotion_from_text(text)
     dpg.split_frame()
     _scroll_chat_view_to_end()
 
@@ -1063,19 +1108,19 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
                 task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
                 if gui_alive:
-                    unused_message_role, message_text = get_node_message_text_without_role(node_id)
+                    unused_role, unused_persona, text = get_node_message_text_without_persona(node_id)
 
                     # Avatar speech and subtitling
                     logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
                     if app_state["avatar_speech_enabled"]:  # If TTS enabled, send final message text to TTS preprocess queue
-                        avatar_controller.send_text_to_tts(message_text,
+                        avatar_controller.send_text_to_tts(text,
                                                            voice=librarian_config.avatar_config.voice,
                                                            voice_speed=librarian_config.avatar_config.voice_speed,
                                                            video_offset=librarian_config.avatar_config.video_offset)
 
                     # Update avatar emotion one last time, from the final message text
                     logger.info("ai_turn.run_ai_turn.on_done: updating emotion from final message content")
-                    avatar_controller.update_emotion_from_text(message_text)
+                    avatar_controller.update_emotion_from_text(text)
 
                     # Update linearized chat view
                     logger.info("ai_turn.run_ai_turn.on_done: updating chat view with final message")
@@ -1395,21 +1440,27 @@ with timer() as tim:
                         if not current_chat_history:
                             return
 
-                        text = io.StringIO()
-                        text.write(f"# Raven-librarian chatlog\n\n- *HEAD node ID*: `{current_chat_history[-1].node_id}`\n- *Log generated*: {chatutil.format_chatlog_datetime_now()}\n\n{'-' * 80}\n\n")
+                        output_text = io.StringIO()
+                        output_text.write(f"# Raven-librarian chatlog\n\n- *HEAD node ID*: `{current_chat_history[-1].node_id}`\n- *Log generated*: {chatutil.format_chatlog_datetime_now()}\n\n{'-' * 80}\n\n")
                         for message_number, displayed_chat_message in enumerate(current_chat_history):
-                            node_payload = datastore.get_payload(displayed_chat_message.node_id)
+                            node_payload = datastore.get_payload(displayed_chat_message.node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
                             message = node_payload["message"]
-                            message_role = message["role"]
-                            message_text = message["content"]
-                            formatted_message = format_chat_message_for_clipboard(llm_settings=llm_settings,
-                                                                                  message_number=message_number,
-                                                                                  message_role=message_role,
-                                                                                  message_text=message_text,
+                            role = message["role"]
+                            persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
+                            text = message["content"]
+                            formatted_message = format_chat_message_for_clipboard(message_number=message_number,
+                                                                                  role=role,
+                                                                                  persona=persona,
+                                                                                  text=text,
                                                                                   add_heading=True)  # In the full chatlog, the message numbers and role names are important, so always include them.
-                            header = f"- *Node ID*: `{displayed_chat_message.node_id}`\n\n" if shift_pressed else ""
-                            text.write(f"{header}{formatted_message}\n\n{'-' * 80}\n\n")
-                    dpg.set_clipboard_text(text.getvalue())
+                            if shift_pressed:
+                                payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active revision!
+                                node_active_revision = datastore.get_revision(displayed_chat_message.node_id)
+                                header = f"- *Node ID*: `{displayed_chat_message.node_id}`\n- *Revision date*: {payload_datetime}\n- *Revision number*: {node_active_revision}\n\n"  # yes, it'll say `None` when no node ID is available (incoming streaming message), which is exactly what we want.
+                            else:
+                                header = ""
+                            output_text.write(f"{header}{formatted_message}\n\n{'-' * 80}\n\n")
+                    dpg.set_clipboard_text(output_text.getvalue())
                     # Acknowledge the action in the GUI.
                     mode = "with node IDs" if shift_pressed else "as-is"
                     gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Copied to clipboard! ({mode})",

@@ -83,8 +83,12 @@ def _refresh_system_prompt(llm_settings: env,
     system_prompt_node_id = _get_system_prompt_node_id(datastore, state)
     state["system_prompt_node_id"] = system_prompt_node_id  # remember it, the GUI chat client needs it
     old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
+    timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
     datastore.add_revision(node_id=system_prompt_node_id,
-                           payload={"message": chatutil.create_initial_system_message(llm_settings)})
+                           payload={"message": chatutil.create_initial_system_message(llm_settings),
+                                    "general_metadata": {"timestamp": timestamp,
+                                                         "datetime": f"{isodate} {isotime}",
+                                                         "persona": llm_settings.personas.get("system", None)}})
     datastore.delete_revision(node_id=system_prompt_node_id,
                               revision_id=old_system_prompt_revision_id)
 
@@ -170,6 +174,10 @@ def load(llm_settings: env,
         state["HEAD"] = state["new_chat_HEAD"]
         logger.info(f"load: Missing key 'HEAD' in '{orig_state_file}' (resolved to '{state_file}'), resetting it to 'new_chat_HEAD'")
 
+    if state["HEAD"] not in datastore.nodes:
+        logger.info(f"load: Key 'HEAD' in '{orig_state_file}' (resolved to '{state_file}') points to nonexistent chat node '{state['HEAD']}', resetting it to 'new_chat_HEAD'")
+        state["HEAD"] = state["new_chat_HEAD"]
+
     if "tools_enabled" not in state:
         state["tools_enabled"] = True
         logger.info(f"load: Missing key 'tools_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['tools_enabled']}'")
@@ -196,7 +204,8 @@ def load(llm_settings: env,
 
     # Migrate datastore (this updates only if needed)
     # v0.2.3+: data format change
-    chatutil.upgrade_datastore(datastore,
+    chatutil.upgrade_datastore(llm_settings,
+                               datastore,
                                system_prompt_node_id=_get_system_prompt_node_id(datastore,
                                                                                 state))
 

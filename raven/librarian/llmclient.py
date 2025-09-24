@@ -158,9 +158,10 @@ def setup(backend_url: str) -> env:
 
         `request_data: Dict[str, Any]`: Generation settings for the LLM backend.
 
-        `persona_names: Dict[str, Optional[str]]`: Persona name for the roles (dict keys) "user", "assistant", "system", and "tool", used for constructing
-                                                   chat messages (see `raven.librarian.chatutil.create_chat_message`). The "system" and "tool" roles typically
-                                                   have no persona name; for them, the persona name is stored as `None`.
+        `personas: Dict[str, Optional[str]]`: Persona (character name) for each of the roles (dict keys) "user", "assistant", "system", and "tool".
+                                              Used for constructing chat messages (see `raven.librarian.chatutil.create_chat_message`).
+
+                                              The "system" and "tool" roles typically have no persona; for them, the persona is stored as `None`.
     """
     user = "User"
     char = "Aria"
@@ -328,10 +329,10 @@ def setup(backend_url: str) -> env:
     }
 
     # See `raven.librarian.chatutil.create_chat_message`.
-    role_names = {"user": user,
-                  "assistant": char,
-                  "system": None,
-                  "tool": None}
+    personas = {"user": user,
+                "assistant": char,
+                "system": None,
+                "tool": None}
 
     # List of strings after which to interrupt the LLM.
     # Useful mainly with older models that tend to speak on behalf of the user.
@@ -347,7 +348,7 @@ def setup(backend_url: str) -> env:
                    tool_entrypoints=tool_entrypoints,  # for our implementation to be able to call them
                    backend_url=backend_url,
                    request_data=request_data,
-                   role_names=role_names)
+                   personas=personas)
     return settings
 
 # # neutralize other samplers (copied from what SillyTavern sends)
@@ -566,7 +567,7 @@ def invoke(settings: env,
     message = chatutil.create_chat_message(llm_settings=settings,
                                            role="assistant",
                                            text=llm_output_text,
-                                           add_role_name=False,
+                                           add_persona=False,
                                            tool_calls=tool_calls)
     return env(data=message,
                model=settings.model,
@@ -678,7 +679,7 @@ def perform_tool_calls(settings: env,
         tool_response_message = chatutil.create_chat_message(llm_settings=settings,
                                                              role="tool",
                                                              text=text,
-                                                             add_role_name=False)
+                                                             add_persona=False)
         record = env(data=tool_response_message,
                      status=status)
         if toolcall_id is not None:

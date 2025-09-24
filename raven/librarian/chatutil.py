@@ -7,17 +7,19 @@ __all__ = ["format_message_number",
            "format_chatlog_datetime_now", "format_chatlog_date_now",
            "format_reminder_to_focus_on_latest_input",
            "format_reminder_to_use_information_from_context_only",
+           "make_timestamp",
            "create_chat_message",
            "create_initial_system_message",
            "linearize_chat",
            "upgrade_datastore",
-           "remove_role_name_from_start_of_line",
+           "remove_persona_from_start_of_line",
            "scrub"]
 
 import copy
 import datetime
 import re
-from typing import Dict, List, Optional
+import time
+from typing import Dict, List, Optional, Tuple
 
 from mcpyrate import colorizer
 
@@ -54,16 +56,22 @@ def format_message_number(message_number: Optional[int],
         return out
     return ""
 
-def format_persona(llm_settings: env,
-                   role: str,
+def format_persona(role: str,
+                   persona: Optional[str],
                    markup: Optional[str]) -> str:
     """Format the persona name for `role`.
 
-    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
-                    Contains (among other things) a mapping of roles to persona names.
-
     `role`: One of the roles supported by `raven.librarian.llmclient`.
             Typically, one of "assistant", "system", "tool", or "user".
+
+    `persona`: The persona name speaking, or `None` if the role has no persona name ("system" and "tool" are like this).
+
+               If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
+               (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+
+               If you are editing a message from an existing chat node, use
+               `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
+               (which may be different from the current session's, e.g. if the AI character has been changed).
 
     `markup`: Which markup kind to use, or `None` for no markup. One of:
         "ansi": ANSI terminal color codes
@@ -73,7 +81,6 @@ def format_persona(llm_settings: env,
     Returns the formatted persona name.
     """
     _yell_if_unsupported_markup(markup)
-    persona = llm_settings.role_names.get(role, None)
     if persona is None:
         out = f"<<{role}>>"  # currently, this include "<<system>>" and "<<tool>>"
         if markup == "ansi":
@@ -89,9 +96,9 @@ def format_persona(llm_settings: env,
             out = f"**{out}**"
         return out
 
-def format_message_heading(llm_settings: env,
-                           message_number: Optional[int],
+def format_message_heading(message_number: Optional[int],
                            role: str,
+                           persona: Optional[str],
                            markup: Optional[str]) -> str:
     """Format a chat message heading.
 
@@ -107,7 +114,7 @@ def format_message_heading(llm_settings: env,
     """
     _yell_if_unsupported_markup(markup)
     markedup_number = format_message_number(message_number, markup)
-    markedup_persona = format_persona(llm_settings, role, markup)
+    markedup_persona = format_persona(role, persona, markup)
     if message_number is not None:
         return f"{markedup_number} {markedup_persona}: "
     else:
@@ -118,33 +125,43 @@ def format_message_heading(llm_settings: env,
 # Stock message formatting utilities
 
 _weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+def _format_isodatetime(d: datetime.datetime) -> Tuple[str, str, str]:
+    """datetime.datetime -> ['Wednesday', '2025-09-24', '08:57:00']"""
+    weekday = _weekdays[d.weekday()]
+    isodate = d.date().isoformat()
+    isotime = d.time().replace(microsecond=0).isoformat()
+    return weekday, isodate, isotime
+
 def format_chat_datetime_now() -> str:
-    """Return the text content of a dynamic system message containing the current date, weekday, and local time."""
-    now = datetime.datetime.now()
-    weekday = _weekdays[now.weekday()]
-    date = now.date().isoformat()
-    isotime = now.time().replace(microsecond=0).isoformat()
-    return f"[System information: Today is {weekday}, {date} (in ISO format). The local time now is {isotime}.]"
+    """Return the text content of a dynamic system message containing the current date, weekday, and local time.
+
+    This is for a dynamic injection.
+    """
+    weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
+    return f"[System information: Today is {weekday}, {isodate} (in ISO format). The local time now is {isotime}.]"
 
 def format_chatlog_datetime_now() -> str:
-    """Return the current date, weekday, and local time in a human-readable format."""
-    now = datetime.datetime.now()
-    weekday = _weekdays[now.weekday()]
-    date = now.date().isoformat()
-    isotime = now.time().replace(microsecond=0).isoformat()
-    return f"{weekday} {date} {isotime}"
+    """Return the current date, weekday, and local time in a human-readable format.
+
+    As of v0.2.3, only used by Raven-librarian for logging the export date and time of an exported chatlog.
+    """
+    weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
+    return f"{weekday} {isodate} {isotime}"
 
 def format_chatlog_date_now() -> str:
-    """Return the current date and weekday in a human-readable format."""
-    now = datetime.datetime.now()
-    weekday = _weekdays[now.weekday()]
-    date = now.date().isoformat()
-    return f"{weekday} {date}"
+    """Return the current date and weekday in a human-readable format.
+
+    This is mainly for the system prompt; LLMs like to be told the current date right there, not later in the chat log.
+    """
+    weekday, isodate, isotime = _format_isodatetime(datetime.datetime.now())
+    return f"{weekday} {isodate}"
 
 def format_reminder_to_focus_on_latest_input() -> str:
     """Return the text content of a system message that reminds the LLM to focus on the user's latest input.
 
     Some models such as the distills of DeepSeek-R1 need this to enable multi-turn conversation to work correctly.
+
+    This is for a dynamic injection.
     """
     return "[System information: IMPORTANT: Reply to the user's most recent message. In a discussion, prefer writing your raw thoughts rather than a structured report.]"
 
@@ -154,8 +171,11 @@ def format_reminder_to_use_information_from_context_only() -> str:
     As with all things LLM, this isn't completely reliable, but tends to increase the chances of the model NOT responding based on its static knowledge.
     This is useful when summarizing or extracting information from RAG search results.
 
-    (The first line of defense is not giving control to the LLM when the search comes up empty. This reminder helps when the search returns results,
-     but their content is irrelevant to the query.)
+    The first line of defense is not giving control to the LLM when the search comes up empty. This reminder helps when the search returns results,
+    but their content is irrelevant to the query - or when docs are not enabled, but there is some other data in the context, and the answer should be
+    based on that.
+
+    This is for a dynamic injection.
     """
     return "[System information: NOTE: Please answer based on the information provided in the context only.]"
 
@@ -163,11 +183,27 @@ def format_reminder_to_use_information_from_context_only() -> str:
 # --------------------------------------------------------------------------------
 # Chat message creation utilities
 
+def make_timestamp(timestamp: Optional[int] = None) -> Tuple[int, str, str, str]:
+    """Stamp the date and time.
+
+    `timestamp`: Nanoseconds since epoch, as returned by `time.time_ns()`.
+                 If `None`, stamp the current date and time.
+
+    Returns the tuple `(nanoseconds_since_epoch, weekday, isodate, isotime)`.
+
+    Useful e.g. for timestamping new chat messages.
+    """
+    if timestamp is None:
+        timestamp = time.time_ns()  # authoritative timestamp: nanoseconds since epoch
+    now = datetime.datetime.fromtimestamp(timestamp / 1e9)  # UGH, `datetime.datetime.now()` would be nicer, but then we would risk losing resolution in the authoritative timestamp.
+    weekday, isodate, isotime = _format_isodatetime(now)
+    return timestamp, weekday, isodate, isotime
+
 def create_chat_message(llm_settings: env,
                         role: str,
                         text: str,
-                        add_role_name: bool = True,
-                        tool_calls: List[str] = None) -> Dict:
+                        add_persona: bool = True,
+                        tool_calls: Optional[List[str]] = None) -> Dict:
     """Create a new chat message, compatible with the chat history format sent to the LLM.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -177,14 +213,19 @@ def create_chat_message(llm_settings: env,
             Typically, "system" is used for the initial system prompt / character card combo,
             and "tool" is used for tool responses from tool-calls made by the LLM.
 
+            Because this function creates a new chat message, the persona is always the current
+            session's persona for `role`, automatically read from `llm_settings`.
+
     `text`: The text content of the message.
 
-    `add_role_name`: If `True`, we prepend the name of `role` (e.g. "AI: ..." when
-                     `role='assistant'`) to the text content, if `settings.role_names`
-                     has a name defined for that role.
+    `add_persona`: If `True`, we prepend the persona of `role` to the text content,
+                   if `llm_settings.persona_names` has a name defined for that role.
 
-                     Usually this is the right thing to do, but there are some occasions
-                     (e.g. internally in `invoke`) where we need to skip this.
+                   E.g., if `role='assistant'`, format output as "AI: ...",
+                   where "AI" is the persona.
+
+                   Usually this is the right thing to do, but there are some occasions
+                   (e.g. internally in `invoke`) where we need to skip this.
 
     `tool_calls`: Tool call requests; a list of JSON strings generated by the LLM.
                   These are pre-parsed from the raw text output by the LLM backend.
@@ -194,14 +235,13 @@ def create_chat_message(llm_settings: env,
                   If `None`, an empty list is created. This is usually the right thing to do.
 
     Returns the new message: `{"role": ..., "content": ...}`.
-
     """
     if role not in ("user", "assistant", "system", "tool"):
         raise ValueError(f"Unknown role '{role}'; valid: one of 'user', 'assistant', 'system', 'tool'.")
 
-    if add_role_name and llm_settings.role_names[role] is not None:
-        content = f"{llm_settings.role_names[role]}: {text}"  # e.g. "User: ..."
-    else:  # System and tool messages typically do not use a speaker tag in the text content.
+    if add_persona and llm_settings.persona_names[role] is not None:
+        content = f"{llm_settings.persona_names[role]}: {text}"  # e.g. "User: ..."
+    else:  # System and tool messages typically do not include a persona name in the text content.
         content = text
 
     data = {"role": role,
@@ -254,10 +294,14 @@ def linearize_chat(datastore: chattree.Forest, node_id: str) -> List[Dict]:
     return message_history
 
 # v0.2.3+: data format change
-def upgrade_datastore(datastore: chattree.Forest, system_prompt_node_id: str) -> None:
-    """Upgrade a chat datastore's payloads to the latest format, modifying the datastore in-place.
+def upgrade_datastore(llm_settings: env,
+                      datastore: chattree.Forest,
+                      system_prompt_node_id: str) -> None:
+    """Upgrade the chat `datastore` payloads to the latest format, modifying `datastore` in-place.
 
     If the chat datastore's payloads are already in the latest format, no changes are made.
+
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
 
     `system_prompt_node_id`: The ID of the initial system prompt node (root node)
                              that starts a chat.
@@ -329,6 +373,20 @@ def upgrade_datastore(datastore: chattree.Forest, system_prompt_node_id: str) ->
                     for payload in payload_revisions.values():
                         payload[key] = copy.deepcopy(value)
 
+            # v0.2.3: Add general metadata (message timestamp and persona name)
+            #
+            # For nodes with missing general metadata, we copy the node's top-level timestamp to all revisions.
+            #
+            # Also, we populate the "persona" field from the current `llm_settings`, as this is more predictable than parsing it from the text content.
+            # Versions prior to 0.2.3 have no support for changing the personas, anyway, so this should also be correct (in most cases).
+            timestamp, unused_weekday, isodate, isotime = make_timestamp(node["timestamp"])
+            for payload in payload_revisions.values():
+                if "general_metadata" not in payload:
+                    role = payload["message"]["role"]
+                    payload["general_metadata"] = {"timestamp": timestamp,
+                                                   "datetime": f"{isodate} {isotime}",
+                                                   "persona": llm_settings.personas.get(role, None)}
+
 def factory_reset_datastore(datastore: chattree.Forest, llm_settings: env) -> str:
     """Reset `datastore` to its "factory-default" state.
 
@@ -344,11 +402,18 @@ def factory_reset_datastore(datastore: chattree.Forest, llm_settings: env) -> st
     """
     with datastore.lock:
         datastore.purge()
-        root_node_id = datastore.create_node(payload={"message": create_initial_system_message(llm_settings)},
+        timestamp, unused_weekday, isodate, isotime = make_timestamp()  # we'll use the same timestamp on both initial messages, for clarity
+        root_node_id = datastore.create_node(payload={"message": create_initial_system_message(llm_settings),
+                                                      "general_metadata": {"timestamp": timestamp,
+                                                                           "datetime": f"{isodate} {isotime}",
+                                                                           "persona": llm_settings.personas.get("system", None)}},
                                              parent_id=None)
         new_chat_node_id = datastore.create_node(payload={"message": create_chat_message(llm_settings,
                                                                                          role="assistant",
-                                                                                         text=llm_settings.greeting)},
+                                                                                         text=llm_settings.greeting),
+                                                          "general_metadata": {"timestamp": timestamp,
+                                                                               "datetime": f"{isodate} {isotime}",
+                                                                               "persona": llm_settings.personas.get("assistant", None)}},
                                                  parent_id=root_node_id)
         return new_chat_node_id
 
@@ -363,35 +428,44 @@ _nan_thought_block = re.compile(r"([<\[])(think|thinking)([>\]])\nNaN\n([<\[])/(
 _thought_begin_tag = re.compile(r"([<\[])(think|thinking)([>\]])", flags=re.IGNORECASE | re.DOTALL)
 _thought_end_tag = re.compile(r"([<\[])/(think|thinking)([>\]])", flags=re.IGNORECASE | re.DOTALL)
 
-def remove_role_name_from_start_of_line(llm_settings: env,
-                                        role: str,
-                                        text: str) -> str:
+def remove_persona_from_start_of_line(persona: Optional[str],
+                                      text: str) -> str:
     """Transform e.g. "User: blah blah" -> "blah blah", for every line in `text`.
 
-    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+    `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
 
-    `role`: One of the roles supported by `raven.librarian.llmclient`.
-            Typically, one of "assistant", "system", "tool", or "user".
+               If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
+               (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+
+               If you are editing a message from an existing chat node, use
+               `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
+               (which may be different from the current session's, e.g. if the AI character has been changed).
 
     `text`: The text to process.
 
     Returns the processed text.
     """
-    persona = llm_settings.role_names.get(role, None)
     if persona is None:
         return text
-    _role_name_at_start_of_line = re.compile(f"^{persona}:\\s+", re.MULTILINE)
-    text = re.sub(_role_name_at_start_of_line, r"", text)
+    _persona_at_start_of_line = re.compile(f"^{persona}:\\s+", re.MULTILINE)
+    text = re.sub(_persona_at_start_of_line, r"", text)
     return text
 
-def scrub(llm_settings: env,
+def scrub(persona: Optional[str],
           text: str,
           thoughts_mode: str,
           markup: Optional[str],
-          add_ai_role_name: bool) -> str:
+          add_persona: bool) -> str:
     """Heuristically clean up the text content of an LLM-generated message.
 
-    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+    `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
+
+               If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
+               (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+
+               If you are editing a message from an existing chat node, use
+               `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
+               (which may be different from the current session's, e.g. if the AI character has been changed).
 
     `text`: The text content of the message to scrub.
 
@@ -403,7 +477,8 @@ def scrub(llm_settings: env,
         "markdown": Markdown markup, with HTML tags for colors.
         `None` (the special value): no markup. (Same effect as setting `thoughts_mode='keep'`.)
 
-    `add_ai_role_name`: Whether to format the final text as "AI: blah blah" or just "blah blah".
+    `add_persona`: Whether to format the scrubbed text as e.g. "AI: blah blah" (standard chat storage convention),
+                   or just "blah blah" (e.g. for feeding into scripts).
 
     Returns the scrubbed text content.
     """
@@ -419,9 +494,8 @@ def scrub(llm_settings: env,
     #
     # This is important for consistency, since many models randomly sometimes add the persona name, and sometimes don't.
     #
-    text = remove_role_name_from_start_of_line(llm_settings=llm_settings,
-                                               role="assistant",
-                                               text=text)
+    text = remove_persona_from_start_of_line(persona=persona,
+                                             text=text)
 
     # Fix the most common kinds of broken thought blocks (for thinking models)
     text = re.sub(_doubled_think_tag, r"\1\2\3", text)  # <think><think>...
@@ -483,17 +557,13 @@ def scrub(llm_settings: env,
 
     # Postprocess:
     #
-    # If we should add the AI persona's name, now do so at the beginning of the text content, for consistency.
+    # If we should add the persona name, now do so at the beginning of the text content, for consistency.
     # It will appear before the thought block, if any, because this is the easiest to do. :)
-    #
-    # This is also good for detecting the persona name later. The OpenAI-compatible chat log format expects the persona name
-    # at the start of the first line of each chat message ("User: Blah..." or "AI: Blah..."). Hence we should keep it
-    # *only* there, to avoid duplicating information in the chat datastore. (This works as long as characters have unique names.)
     #
     # The main case where we DON'T need to do this is when piping the output to a script, in which case the chat framework
     # is superfluous. In that use case, we really use the LLM as an instruct-tuned model, i.e. a natural language processor
     # that is programmed via free-form instructions in English. Raven's PDF importer does this a lot.
-    if add_ai_role_name:
-        text = f"{llm_settings.char}: {text}"
+    if add_persona and persona is not None:
+        text = f"{persona}: {text}"
 
     return text

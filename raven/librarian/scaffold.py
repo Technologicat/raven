@@ -43,9 +43,13 @@ def user_turn(llm_settings: env,
     Returns the new HEAD node ID (i.e. the chat node that was just added).
     """
     # Add the user's message to the chat.
+    timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
     user_message_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(llm_settings=llm_settings,
                                                                                                    role="user",
-                                                                                                   text=user_message_text)},
+                                                                                                   text=user_message_text),
+                                                          "general_metadata": {"timestamp": timestamp,
+                                                                               "datetime": f"{isodate} {isotime}",
+                                                                               "persona": llm_settings.personas.get("user", None)}},
                                                  parent_id=head_node_id)
     return user_message_node_id
 
@@ -96,9 +100,13 @@ def _search_docs_with_bypass(llm_settings: env,
     # First line of defense (against hallucinations): docs on, no matches for given query, speculate off -> bypass LLM
     if not docs_results and not speculate:
         nomatch_text = "No matches in document database. Please try another query."
+        timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
         nomatch_message_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(llm_settings=llm_settings,
-                                                                                                          role="assistant",
-                                                                                                          text=nomatch_text)},
+                                                                                                         role="assistant",
+                                                                                                         text=nomatch_text),
+                                                                 "general_metadata": {"timestamp": timestamp,
+                                                                                      "datetime": f"{isodate} {isotime}",
+                                                                                      "persona": llm_settings.personas.get("assistant", None)}},
                                                         parent_id=head_node_id)
         nomatch_message_node_payload = datastore.get_payload(nomatch_message_node_id)  # get current revision (which is the only revision since we just created the node)
         nomatch_message_node_payload["retrieval"] = {"query": query,
@@ -426,20 +434,24 @@ def ai_turn(llm_settings: env,
 
         # Clean up the LLM's reply (heuristically). This version goes into the chat history.
         # TODO: Keep the thought blocks; strip them only when sending the history to the LLM. (If we even need to strip it then; don't the recent chat templates inside the models already do that?)
-        out.data["content"] = chatutil.scrub(llm_settings,
-                                             out.data["content"],
+        out.data["content"] = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
+                                             text=out.data["content"],
                                              thoughts_mode="discard",
                                              markup=markup,
-                                             add_ai_role_name=True)
+                                             add_persona=True)
 
         # Add the LLM's message to the chat.
         #
         # Note the token count of the message actually saved into the chat log may be different from `out.n_tokens`, e.g. if the AI is interrupted or when thoughts blocks are discarded.
         # However, to correctly compute the generation speed, we need to use the original count before any editing, since `out.dt` was measured for that.
+        timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
         ai_message_node_id = datastore.create_node(payload={"message": out.data,
                                                             "generation_metadata": {"model": out.model,
                                                                                     "n_tokens": out.n_tokens,  # could count final tokens with `llmclient.token_count(settings, out.data["content"])`
-                                                                                    "dt": out.dt}},
+                                                                                    "dt": out.dt},
+                                                            "general_metadata": {"timestamp": timestamp,
+                                                                                 "datetime": f"{isodate} {isotime}",
+                                                                                 "persona": llm_settings.personas.get("assistant", None)}},
                                                    parent_id=head_node_id)
         ai_message_node_payload = datastore.get_payload(ai_message_node_id)
         if docs_query is not None:
@@ -469,14 +481,20 @@ def ai_turn(llm_settings: env,
 
             # Add the tool response messages to the chat.
             for tool_response_record in tool_response_records:
-                payload = {"message": tool_response_record.data,
-                           "generation_metadata": {"status": tool_response_record.status}}  # status is "success" or "error"
+                generation_metadata = {"status": tool_response_record.status}  # status is "success" or "error"
                 if "toolcall_id" in tool_response_record:
-                    payload["generation_metadata"]["toolcall_id"] = tool_response_record.toolcall_id
+                    generation_metadata["toolcall_id"] = tool_response_record.toolcall_id
                 if "function_name" in tool_response_record:
-                    payload["generation_metadata"]["function_name"] = tool_response_record.function_name
+                    generation_metadata["function_name"] = tool_response_record.function_name
                 if "dt" in tool_response_record:
-                    payload["generation_metadata"]["dt"] = tool_response_record.dt
+                    generation_metadata["dt"] = tool_response_record.dt  # elapsed wall time, seconds
+
+                timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
+                payload = {"message": tool_response_record.data,
+                           "generation_metadata": generation_metadata,
+                           "general_metadata": {"timestamp": timestamp,
+                                                "datetime": f"{isodate} {isotime}",
+                                                "persona": llm_settings.personas.get("tool", None)}}
                 tool_response_message_node_id = datastore.create_node(payload=payload,
                                                                       parent_id=head_node_id)
                 head_node_id = tool_response_message_node_id

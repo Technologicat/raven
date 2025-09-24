@@ -269,30 +269,46 @@ def minimal_chat_client(backend_url) -> None:
                 print(f"        {model_name}")
             print()
 
-        def chat_print_message(message_number: Optional[int], role: str, text: str) -> None:
-            print(chatutil.format_message_heading(llm_settings=llm_settings,
-                                                  message_number=message_number,
+        def chat_print_message(message_number: Optional[int], role: str, persona: Optional[str], text: str) -> None:
+            print(chatutil.format_message_heading(message_number=message_number,
                                                   role=role,
+                                                  persona=persona,
                                                   markup="ansi"),
                   end="")
-            print(chatutil.remove_role_name_from_start_of_line(llm_settings=llm_settings, role=role, text=text))
+            print(chatutil.remove_persona_from_start_of_line(persona=persona, text=text))
 
-        def chat_print_history(history: List[Dict], show_numbers: bool = True) -> None:
+        def chat_print_history(node_id_history: List[Dict], show_numbers: bool = True) -> None:
             if show_numbers:
-                for k, message in enumerate(history):
-                    chat_print_message(message_number=k, role=message["role"], text=message["content"])
+                for k, node_id in enumerate(node_id_history):
+                    node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+                    message = node_payload["message"]
+                    role = message["role"]
+                    persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
+                    text = message["content"]
+                    chat_print_message(message_number=k,
+                                       role=role,
+                                       persona=persona,
+                                       text=text)
                     print()
             else:
-                for message in history:
-                    chat_print_message(message_number=None, role=message["role"], text=message["content"])
+                for node_id in node_id_history:
+                    node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+                    message = node_payload["message"]
+                    role = message["role"]
+                    persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
+                    text = message["content"]
+                    chat_print_message(message_number=None,
+                                       role=role,
+                                       persona=persona,
+                                       text=text)
                     print()
 
         action_proceed = sym("proceed")  # proceed current round as usual
         action_next_round = sym("next_round")  # skip to start of next round (after the user entered a special command)
 
         def user_turn() -> Values:
-            history = chatutil.linearize_chat(datastore, app_state["HEAD"])
-            user_message_number = len(history)
+            node_id_history = datastore.linearize_up(app_state["HEAD"])
+            user_message_number = len(node_id_history)
 
             # Print a user input prompt and get the user's input.
             #
@@ -302,9 +318,9 @@ def minimal_chat_client(backend_url) -> None:
             #
             # This avoids the input prompt getting overwritten when browsing history entries, and prevents backspacing over the input prompt.
             # https://stackoverflow.com/questions/75987688/how-can-readline-be-told-not-to-erase-externally-supplied-prompt
-            input_prompt = chatutil.format_message_heading(llm_settings=llm_settings,
-                                                           message_number=user_message_number,
+            input_prompt = chatutil.format_message_heading(message_number=user_message_number,
                                                            role="user",
+                                                           persona=llm_settings.personas.get("user", None),
                                                            markup="ansi")
             user_message_text = input(input_prompt)
             print()
@@ -315,7 +331,7 @@ def minimal_chat_client(backend_url) -> None:
                 app_state["HEAD"] = app_state["new_chat_HEAD"]
                 print(f"HEAD is now at '{app_state['HEAD']}'.")
                 print()
-                chat_print_history(chatutil.linearize_chat(datastore, app_state["HEAD"]))
+                chat_print_history(datastore.linearize_up(app_state["HEAD"]))
                 return Values(action=action_next_round)
             elif user_message_text.startswith("!docs"):  # TODO: refactor
                 split_command_text = user_message_text.split()
@@ -361,7 +377,7 @@ def minimal_chat_client(backend_url) -> None:
                 app_state["HEAD"] = new_head_id
                 print(f"HEAD is now at '{app_state['HEAD']}'.")
                 print()
-                chat_print_history(chatutil.linearize_chat(datastore, app_state["HEAD"]))
+                chat_print_history(datastore.linearize_up(app_state["HEAD"]))
                 return Values(action=action_next_round)
             elif user_message_text == "!help":
                 chat_show_help()
@@ -369,7 +385,7 @@ def minimal_chat_client(backend_url) -> None:
             elif user_message_text == "!history":
                 print(colorizer.colorize("Chat history (cleaned up):", colorizer.Style.BRIGHT))
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
-                chat_print_history(history)
+                chat_print_history(node_id_history)
                 print(colorizer.colorize("=" * 80, colorizer.Style.BRIGHT))
                 print()
                 return Values(action=action_next_round)
@@ -442,8 +458,8 @@ def minimal_chat_client(backend_url) -> None:
             # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
             docs_query = user_message_text if app_state["docs_enabled"] else None
 
-            history = chatutil.linearize_chat(datastore, app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
-            ai_message_number = len(history)
+            node_id_history = datastore.linearize_up(app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
+            ai_message_number = len(node_id_history)
 
             def on_llm_start() -> None:
                 nonlocal ai_message_number  # for documenting intent only
@@ -483,6 +499,7 @@ def minimal_chat_client(backend_url) -> None:
                 nomatch_message_node_payload = datastore.get_payload(node_id)
                 chat_print_message(message_number=ai_message_number,
                                    role="assistant",
+                                   persona=llm_settings.personas.get("assistant", None),
                                    text=nomatch_message_node_payload["message"]["content"])
                 print()
 
@@ -494,6 +511,7 @@ def minimal_chat_client(backend_url) -> None:
                 nomatch_message_node_payload = datastore.get_payload(node_id)
                 chat_print_message(message_number=ai_message_number,
                                    role="tool",
+                                   persona=llm_settings.personas.get("tool", None),
                                    text=nomatch_message_node_payload["message"]["content"])
                 print()
 
@@ -524,7 +542,7 @@ def minimal_chat_client(backend_url) -> None:
             return Values(action=action_proceed)
 
         # Show initial history (loaded from datastore, or blank upon first start)
-        chat_print_history(chatutil.linearize_chat(datastore, app_state["HEAD"]))
+        chat_print_history(datastore.linearize_up(app_state["HEAD"]))
 
         # Main loop
         while True:
