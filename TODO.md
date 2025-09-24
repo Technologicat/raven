@@ -52,7 +52,6 @@
     - Make video with OpenShot
     - Set up system prompt (and character name) for demo.
     - Long subtitle splitter (we now have the audio length).
-    - Raven-burstbib: turn a BibTeX database into individual documents for Raven-librarian.
   - Fix:
     - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens very occasionally with the last word in a sentence.
     - Lipsync: sometimes getting empty phonemes list from TTS? Is this for punctuation tokens only? Investigate.
