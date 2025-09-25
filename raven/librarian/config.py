@@ -71,7 +71,10 @@ llm_database_dir = llmclient_userdata_dir / "rag_index"
 # Where to store the search indices for the `HybridIR` API usage example / demo (raven.librarian.tests.test_hybridir)
 hybridir_demo_save_dir = global_config.toplevel_userdata_dir / "hybridir_demo"
 
-# Device settings for running vector embeddings and spaCy NLP locally, in the client process. (TODO: the backend may want to provide this mode too, but we should prefer the server here)
+# Device settings for running vector embeddings and spaCy NLP locally, in the client process.
+#
+# NOTE: These are used only as a local fallback when Raven-server is not running.
+# The RAG backend (`hybridir.HybridIR`) automatically prefers the server when it is available.
 devices = {
     "embeddings": {"device_string": "cuda:0",
                    "dtype": torch.float16},
@@ -79,6 +82,9 @@ devices = {
 }
 
 # NLP model for spaCy, used for tokenization in keyword search (RAG backend `raven.librarian.hybridir`).
+#
+# NOTE: If Raven-server is running, then its setting takes precedence, and this one is ignored.
+#       This is for the locally loaded fallback model.
 #
 # NOTE: Raven uses spaCy models in three places, and they don't have to be the same.
 #  - Raven-visualizer: keyword extraction
@@ -93,6 +99,10 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 
 # AI model for semantic search (RAG backend `raven.librarian.hybridir`), encoding both questions and answers into a joint semantic space.
 # Available on HuggingFace. Auto-downloaded on first use.
+#
+# NOTE: If the embedding model of the database being loaded does not match this, the database's stored model name takes precedence.
+#
+# NOTE: If Raven-server is running, then this setting is ignored. This is for the locally loaded fallback model.
 #
 # NOTE: Raven uses embedding models in three places, and they don't have to be the same.
 #  - Raven-librarian: RAG backend (this setting)

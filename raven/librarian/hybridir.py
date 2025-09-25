@@ -44,6 +44,9 @@ from unpythonic.env import env as envcls
 import bm25s  # keyword
 import chromadb  # semantic (vector)
 
+from ..client import api
+from ..client import config as client_config
+
 from ..common import bgtask
 from ..common import deviceinfo
 from ..common import nlptools
@@ -52,9 +55,16 @@ from ..common import utils as common_utils
 from . import config as librarian_config
 
 # --------------------------------------------------------------------------------
-# Inits that must run before we proceed any further
+# Module bootup
 
 deviceinfo.validate(librarian_config.devices)  # modifies in-place if CPU fallback needed
+
+api.initialize(raven_server_url=client_config.raven_server_url,
+               raven_api_key_file=client_config.raven_api_key_file,
+               tts_server_type=client_config.tts_server_type,
+               tts_url=client_config.tts_url,
+               tts_api_key_file=client_config.tts_api_key_file,
+               tts_playback_audio_device=client_config.tts_playback_audio_device)  # let it create a default executor
 
 # --------------------------------------------------------------------------------
 
@@ -256,11 +266,50 @@ class HybridIR:
             self.embedding_model_name = embedding_model_name
             self.documents = {}
 
-        self._semantic_embedder = nlptools.load_embedder(self.embedding_model_name,
-                                                         librarian_config.devices["embeddings"]["device_string"],
-                                                         librarian_config.devices["embeddings"]["dtype"])  # we compute vector embeddings manually (on Raven's side)
-        self._nlp_pipeline = nlptools.load_spacy_pipeline(librarian_config.spacy_model,
-                                                          librarian_config.devices["nlp"]["device_string"])
+        # Transparent Raven-server support -->
+        if api.raven_server_available():
+            server_modules = api.modules()
+        else:
+            server_modules = []
+            logger.info(f"HybridIR.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}'; loading models locally.")
+
+        if "embeddings" in server_modules:
+            self._local_semantic_embedder = None
+            def encode(texts: List[str]) -> List[List[float]]:
+                embeddings = api.embeddings_compute(texts,
+                                                    model=self.embedding_model_name)
+                return embeddings
+            encode(["The quick brown fox jumps over the lazy dog"])  # fail-fast: if the requested embeddings model isn't loaded on the server, any attempt to encode will HTTP 400
+        else:
+            logger.info(f"HybridIR.__init__: No `embeddings` module loaded on Raven-server at '{client_config.raven_server_url}', loading semantic embedding model locally.")
+
+            self._local_semantic_embedder = nlptools.load_embedder(self.embedding_model_name,
+                                                                   librarian_config.devices["embeddings"]["device_string"],
+                                                                   librarian_config.devices["embeddings"]["dtype"])  # we compute vector embeddings manually (on Raven's side)
+            def encode(texts: List[str]) -> List[List[float]]:
+                embeddings = self._local_semantic_embedder.encode(texts,
+                                                                  show_progress_bar=True,
+                                                                  convert_to_numpy=True,
+                                                                  normalize_embeddings=True)[0].tolist()
+                return embeddings
+        self._semantic_embed = encode
+
+        if "natlang" in server_modules:
+            self._local_nlp_pipeline = None
+            def nlp_analyze(text: str) -> List["spacy.tokens.token.Token"]:  # noqa: F821: type annotation only; no point importing both Torch and spaCy into this module just for this.
+                docs = api.natlang_analyze(text)
+                return docs[0]
+        else:
+            logger.info(f"HybridIR.__init__: No `natlang` module loaded on Raven-server at '{client_config.raven_server_url}', loading spaCy NLP model locally.")
+
+            self._local_nlp_pipeline = nlptools.load_spacy_pipeline(librarian_config.spacy_model,
+                                                                    librarian_config.devices["nlp"]["device_string"])
+            def nlp_analyze(text: str) -> List["spacy.tokens.token.Token"]:  # noqa: F821: type annotation only; no point importing both Torch and spaCy into this module just for this.
+                doc = self._local_nlp_pipeline(text)
+                return doc
+        self._nlp_analyze = nlp_analyze
+        # <-- Transparent Raven-server support
+
         self._stopwords = nlptools.default_stopwords
 
         # Semantic search: ChromaDB vector storage
@@ -311,7 +360,7 @@ class HybridIR:
 
         We use a spaCy NLP pipeline to do the analysis.
         """
-        doc = self._nlp_pipeline(text.lower())
+        doc = self._nlp_analyze(text.lower())
         tokens = [token.lemma_ for token in doc if token.is_alpha and token.text not in self._stopwords]
         return tokens
 
@@ -547,10 +596,7 @@ class HybridIR:
         # Embedding each chunk enables semantic search. These are used by the vector index (chromadb).
         # NOTE: This can be slow, depending on the embedding model, and whether GPU acceleration is available.
         logger.info(f"HybridIR._prepare_document_for_indexing: computing semantic embeddings for document '{document_id}'.")
-        document_embeddings = self._semantic_embedder.encode([chunk["text"] for chunk in document_chunks],
-                                                             show_progress_bar=True,
-                                                             convert_to_numpy=True,
-                                                             normalize_embeddings=True)  # SLOW; embeddings for each chunk
+        document_embeddings = self._semantic_embed([chunk["text"] for chunk in document_chunks])  # SLOW; embeddings for each chunk
         document_embeddings = document_embeddings.tolist()  # for JSON serialization
 
         prepdata = {"chunks": document_chunks,  # [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
@@ -678,10 +724,7 @@ class HybridIR:
         query_tokens = self._tokenize(query)
 
         # Prepare query for vector search
-        query_embedding = self._semantic_embedder.encode([query],
-                                                         show_progress_bar=True,
-                                                         convert_to_numpy=True,
-                                                         normalize_embeddings=True)[0].tolist()
+        query_embedding = self._semantic_embed([query])[0]
 
         with self.datastore_lock:
             if not self.documents:
