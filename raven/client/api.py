@@ -395,7 +395,8 @@ def classify(text: str) -> Dict[str, float]:
 # --------------------------------------------------------------------------------
 # Embeddings
 
-def embeddings_compute(text: Union[str, List[str]]) -> np.array:
+def embeddings_compute(text: Union[str, List[str]],
+                       model: str = "default") -> np.array:
     """Compute vector embeddings (semantic embeddings).
 
     Useful e.g. for semantic similarity comparison and RAG search.
@@ -411,7 +412,8 @@ def embeddings_compute(text: Union[str, List[str]]) -> np.array:
         raise RuntimeError("embeddings_compute: The `raven.client.api` module must be initialized before using the API.")
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
-    input_data = {"text": text}
+    input_data = {"text": text,
+                  "model": model}
     response = requests.post(f"{util.api_config.raven_server_url}/api/embeddings/compute", json=input_data, headers=headers)
     util.yell_on_error(response)
     output_data = response.json()
