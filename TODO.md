@@ -46,19 +46,16 @@
 
 - Librarian
   - Minimal demo:
-    - Draw assets:
-        - Make per-character AI chat icons
-          - Just jury-rig `raven/icons/ai.png` for minimal demo, fix later
-          - Or... quickly change the loader to look for `charactername_icon.png` in the same directory as the avatar, and fall back to a generic `ai.png` if not found
     - Set up system prompt (and character name) for demo.
-    - Long subtitle splitter (we now have the audio length).
-  - Fix:
-    - Lipsync: sometimes getting `None` timestamps from TTS? Seems to happen mostly with punctuation. Cleaning up the text helped. Still happens very occasionally with the last word in a sentence.
-    - Lipsync: sometimes getting empty phonemes list from TTS? Is this for punctuation tokens only? Investigate.
   - Document:
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Later:
+    - Remove Kokoro-FastAPI support (and `api.tts_server_available`; when needed, just check `api.raven_server_available`, then call `api.modules`, and check if "tts" is in the list)
+    - `raven.visualizer.importer`: auto-use server if available and the necessary modules loaded; if not, emit a log warning and load the model locally (see `raven.librarian.hybridir`, which does this)
+    - Long subtitle splitter (we now have the audio length).
+    - Draw assets:
+        - Make per-character AI chat icons
     - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
     - Improve user text entry: multiline input
     - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
