@@ -22,6 +22,8 @@ import requests
 import traceback
 from typing import Optional, Union
 
+from bs4 import BeautifulSoup  # for error message prettification (strip HTML)
+
 import pygame  # for audio (text to speech) support
 
 from unpythonic import equip_with_traceback
@@ -113,8 +115,15 @@ def initialize_api(raven_server_url: str,
 
     api_initialized = True
 
+def _strip_html(html: str) -> str:
+    try:
+        soup = BeautifulSoup(html, features='html.parser')
+        return soup.get_text()
+    except Exception:
+        return html  # used for cleaning error messages; important to see the original text if HTML stripping fails
+
 def yell_on_error(response: requests.Response) -> None:
     if response.status_code != 200:
         logger.error(f"Raven-server returned error: {response.status_code} {response.reason}. Content of error response follows.")
-        logger.error(response.text)
+        logger.error(_strip_html(response.text))
         raise RuntimeError(f"While calling Raven-server: HTTP {response.status_code} {response.reason}")
