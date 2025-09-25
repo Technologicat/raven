@@ -394,3 +394,7 @@ Note that installing Raven will auto-install dependencies into the same venv (vi
 # Acknowledgements
 
 This work was financially supported by the [gH2ADDVA](https://www.jamk.fi/en/research-and-development/rdi-projects/adding-value-by-clean-hydrogen-production) (Adding Value by Clean Hydrogen production) project at JAMK, co-funded by the EU and the Regional Council of Central Finland.
+
+<p align="center">
+<img src="img/jamk_new_industry_fi_blue.png" alt="JAMK Institute of New Industry" height="200"/> <br/>
+</p>
