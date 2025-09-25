@@ -31,6 +31,7 @@ This module is licensed under the 2-clause BSD license.
 __all__ = ["initialize",
            "raven_server_available",
            "tts_server_available",
+           "modules",
            "avatar_load", "avatar_reload", "avatar_unload",
            "avatar_load_emotion_templates", "avatar_load_emotion_templates_from_file",
            "avatar_load_animator_settings", "avatar_load_animator_settings_from_file",
@@ -129,6 +130,17 @@ def tts_server_available() -> bool:
     if response.status_code != 200:
         return False
     return True
+
+def modules() -> List[str]:
+    """Return the list of modules loaded on the running Raven-server."""
+    if not util.api_initialized:
+        raise RuntimeError("modules: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/modules", headers=headers)
+    util.yell_on_error(response)
+
+    output = response.json()
+    return output["modules"]
 
 # --------------------------------------------------------------------------------
 # Avatar

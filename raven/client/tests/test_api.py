@@ -50,6 +50,13 @@ def test():
         return
 
     # --------------------------------------------------------------------------------
+    # list modules
+
+    print("Modules loaded on server:")
+    print(api.modules())
+    print()
+
+    # --------------------------------------------------------------------------------
     # classify
 
     logger.info("test: classify")
