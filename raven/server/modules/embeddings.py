@@ -34,6 +34,7 @@ def init_module(config_module_name: str, device_string: str, torch_dtype: Union[
             embedders[role] = nlptools.load_embedder(model_name,
                                                      device_string,
                                                      torch_dtype)
+            embedders[model_name] = embedders[role]  # also provide each model under its HuggingFace model name; this is convenient for HybridIR when it loads a database from disk.
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'embeddings'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()
@@ -45,7 +46,7 @@ def is_available() -> bool:
     """Return whether this module is up and running."""
     return (server_config is not None)
 
-def embed_sentences(text: Union[str, List[str]], role: str = "default") -> Union[List[float], List[List[float]]]:
-    if role not in embedders:
-        raise ValueError(f"embed_sentences: Unknown role '{role}'; valid: {list(embedders.keys())}. See server configuration file.")
-    return nlptools.embed_sentences(embedders[role], text)
+def embed_sentences(text: Union[str, List[str]], model: str = "default") -> Union[List[float], List[List[float]]]:
+    if model not in embedders:
+        raise ValueError(f"embed_sentences: Unknown model '{model}'; valid: {list(embedders.keys())}. See server configuration file.")
+    return nlptools.embed_sentences(embedders[model], text)

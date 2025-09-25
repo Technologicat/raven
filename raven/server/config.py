@@ -101,6 +101,9 @@ dehyphenation_model = "multi"
 #
 # Several roles can use the same model. Duplicates are handled automatically; only one copy of each unique model is loaded.
 #
+# Upon loading, each model will be served under two names: its role name, and the model name (if these are different).
+# This is sometimes convenient, e.g. when `raven.librarian.hybridir.HybridIR` loads a database.
+#
 # Keep the number of unique models small. At server startup, *all* unique models are loaded onto the device specified
 # for "embeddings" in `enabled_modules`. So this can eat a lot of VRAM.
 #

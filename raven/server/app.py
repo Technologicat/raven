@@ -691,15 +691,24 @@ def api_embeddings_compute():
                   ...],
          "model": "default"}
 
-    The "model" field is optional. It selects the role:
+    or::
 
-      - If not specified, "default" is used.
+        {"text": ["Blah blah blah.",
+                  ...],
+         "model": "Snowflake/snowflake-arctic-embed-l"}
 
-      - If specified, the value must be one of the keys of `embedding_models` in the server config.
+    The "model" field is optional. It selects the embedding role, or directly the embedding model:
+
+      - If not specified, "default" is used, thus choosing the default role.
+
+      - If specified, the value must be either:
+          - a role: the keys of `embedding_models` in the server config,
+          - a HuggingFace model name: the values of `embedding_models`in the server config.
+
         The default config is `raven.server.config`, but note the server's `--config` command-line
         option, which can be used to specify a different config at server startup.
 
-      - If specified but not present in server config, the request aborts with HTTP error 400.
+      - If specified but the model is not present on the server, the request aborts with HTTP error 400.
 
     This functionality is provided because different models may be good for different use cases;
     e.g. beside a general-purpose embedder, having a separate specialized "qa" embedder that maps
@@ -723,7 +732,7 @@ def api_embeddings_compute():
         abort(400, 'api_embeddings_compute: "text" is required')
 
     sentences: Union[str, List[str]] = data["text"]
-    role: str = data["model"] if "model" in data else "default"  # one of the keys of `embedding_models` in `raven.server.config`
+    model: str = data["model"] if "model" in data else "default"  # See `embedding_models` in `raven.server.config`. Both the keys (roles) and the values (raw model names) are valid here.
 
     if not (isinstance(sentences, str) or (isinstance(sentences, list) and all(isinstance(x, str) for x in sentences))):
         abort(400, 'api_embeddings_compute: "text" must be string or array of strings')
@@ -732,9 +741,9 @@ def api_embeddings_compute():
     else:
         nitems = len(sentences)
 
-    print(f"Computing vector embedding for {nitems} item{'s' if nitems != 1 else ''} with model '{role}'")
+    print(f"Computing vector embedding for {nitems} item{'s' if nitems != 1 else ''} with model '{model}'")
     try:
-        vectors = embeddings.embed_sentences(sentences, role=role)
+        vectors = embeddings.embed_sentences(sentences, model=model)
         return jsonify({"embedding": vectors})
     except Exception as exc:
         traceback.print_exc()
