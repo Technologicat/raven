@@ -193,7 +193,8 @@ with timer() as tim:
     retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
                                                 recursive=librarian_config.llm_docs_dir_recursive,
                                                 db_dir=db_dir,
-                                                embedding_model_name=librarian_config.qa_embedding_model)
+                                                embedding_model_name=librarian_config.qa_embedding_model,
+                                                local_model_loader_fallback=False)  # Librarian requires Raven-server for other reasons, too
 
     logger.info(f"RAG document store is at '{str(librarian_config.llm_docs_dir)}' (put your plain-text documents here).")
     # The retriever's `documents` attribute must be locked before accessing.

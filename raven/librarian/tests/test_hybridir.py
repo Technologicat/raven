@@ -14,7 +14,8 @@ def test():
     # Create the retriever.
     hybridir_demo_userdata_dir = pathlib.Path(librarian_config.hybridir_demo_save_dir).expanduser().resolve()
     retriever = hybridir.HybridIR(datastore_base_dir=hybridir_demo_userdata_dir,
-                                  embedding_model_name=librarian_config.qa_embedding_model)
+                                  embedding_model_name=librarian_config.qa_embedding_model,
+                                  local_model_loader_fallback=True)  # don't require Raven-server to be running; load model locally as fallback
 
     # Documents, plain text. Replace this with your data loading.
     #

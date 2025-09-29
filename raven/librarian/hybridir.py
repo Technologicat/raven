@@ -200,6 +200,7 @@ class HybridIR:
     def __init__(self,
                  datastore_base_dir: Union[str, pathlib.Path],
                  embedding_model_name: str = "sentence-transformers/multi-qa-mpnet-base-cos-v1",
+                 local_model_loader_fallback: bool = True,
                  chunk_size: int = 1000,
                  overlap_fraction: float = 0.25) -> None:
         """Hybrid information retrieval (IR) index, using both keyword and semantic search.
@@ -220,6 +221,14 @@ class HybridIR:
 
                                 For more details, see `sentence_transformers.SentenceTransformer`, and:
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
+
+        `local_model_loader_fallback`: Whether to load models locally if Raven-server can't be reached.
+
+                                       Apps that need the server also for other reasons may want to disable this.
+
+                                       (Especially if the server is on another machine; then loading the models
+                                        locally will download an extra copy of the models on the client machine.
+                                        This could be undesirable if the app is not useful without the server.)
 
         `chunk_size`: Length of a search result chunk, in characters (Python native, so Unicode codepoints).
 
@@ -271,7 +280,11 @@ class HybridIR:
             server_modules = api.modules()
         else:
             server_modules = []
-            logger.info(f"HybridIR.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}'; loading models locally.")
+            if local_model_loader_fallback:
+                logger.info(f"HybridIR.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}'; loading models locally.")
+            else:
+                logger.error(f"HybridIR.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}', and local model loading is disabled. Cannot proceed.")
+                raise RuntimeError(f"HybridIR.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}', and local model loading is disabled. Cannot proceed.")
 
         if "embeddings" in server_modules:
             self._local_semantic_embedder = None
@@ -1084,6 +1097,7 @@ def setup(docs_dir: Union[pathlib.Path, str],
           exts=[".txt", ".md", ".rst", ".org"],
           callback: Optional[Callable] = None,
           embedding_model_name: str = "sentence-transformers/multi-qa-mpnet-base-cos-v1",
+          local_model_loader_fallback: bool = True,
           chunk_size: int = 1000,
           overlap_fraction: float = 0.25,
           executor: Optional = None) -> Tuple[HybridIR, HybridIRFileSystemEventHandler]:
@@ -1107,6 +1121,7 @@ def setup(docs_dir: Union[pathlib.Path, str],
     `callback`: Passed on to `HybridIRFileSystemEventHandler`, which see.
 
     `embedding_model_name`: passed on to `HybridIR`, which see.
+    `local_model_loader_fallback`: passed on to `HybridIR`, which see.
     `chunk_size`: passed on to `HybridIR`, which see.
     `overlap_fraction`: passed on to `HybridIR`, which see.
 
@@ -1128,6 +1143,7 @@ def setup(docs_dir: Union[pathlib.Path, str],
     # `HybridIR` also autoloads and auto-persists its search indices.
     retriever = HybridIR(datastore_base_dir=db_dir,
                          embedding_model_name=embedding_model_name,
+                         local_model_loader_fallback=local_model_loader_fallback,
                          chunk_size=chunk_size,
                          overlap_fraction=overlap_fraction)
 

@@ -112,7 +112,8 @@ def minimal_chat_client(backend_url) -> None:
         retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
                                                     recursive=librarian_config.llm_docs_dir_recursive,
                                                     db_dir=db_dir,
-                                                    embedding_model_name=librarian_config.qa_embedding_model)
+                                                    embedding_model_name=librarian_config.qa_embedding_model,
+                                                    local_model_loader_fallback=False)  # Minichat requires Raven-server for other reasons, too
         docs_enabled_str = "ON" if app_state["docs_enabled"] else "OFF"
         colorful_rag_status = colorizer.colorize(f"Document database (retrieval-augmented generation, RAG) is currently {docs_enabled_str}.",
                                                  colorizer.Style.BRIGHT)
