@@ -45,32 +45,89 @@
   - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
 
 - Librarian
-  - Minimal demo:
-    - Set up system prompt (and character name) for demo.
   - Document:
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
-  - Later:
+  - Maybe next:
     - Remove Kokoro-FastAPI support (and `api.tts_server_available`; when needed, just check `api.raven_server_available`, then call `api.modules`, and check if "tts" is in the list)
     - `raven.visualizer.importer`: auto-use server if available and the necessary modules loaded; if not, emit a log warning and load the model locally (see `raven.librarian.hybridir`, which does this)
     - Long subtitle splitter (we now have the audio length).
-    - Draw assets:
-        - Make per-character AI chat icons
     - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
-    - Improve user text entry: multiline input
-    - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
+    - Add GUI dynamic resizing on window size change
+    - Improve: thought blocks
+      - `llmclient.invoke` should inject the initial "<think>" tag if the model doesn't send it.
+        - Have a "thinking model" toggle that, when enabled, does the check at the start of the message (and only if NOT continuing a previous message).
+      - GUI: completed message: collapsible thought blocks (a button to hide/show a group)
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: Avatar idle off (10 sec)
+  - Later:
+    - Add feature: show prompt
+      - Save it per-chat-message, from `on_prompt_ready`.
+      - Show prompt length as tokens (`raven.llmclient.token_count`).
+    - Add feature: file attachments
+      - For detailed, full-content analysis of one or a small handful of documents
+      - E.g. read a PDF, inject full (cleaned) content into LLM context
+        - Should this be a tool, too?
+      - It's still possible to RAG ingest the document, by adding it to the document database. File attachments are an orthogonal feature, for cases where you need to ensure the LLM sees the full document.
+    - Document database: scopes (or enable/disable individual collections)
+    - Import tool for a batch of documents (useful when importing lots of documents at once)
+      - Just instantiate a `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Then exit.
+    - Draw assets:
+        - Make per-character AI chat icons (now Librarian supports them; e.g. `aria1_icon.png`, RGBA, 64x64)
+    - Add chat graph editor (this is part of where the true power of Librarian will come from)
+      - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_vewmodel.py#L206
+      - how to get mouse position: https://github.com/hoffstadt/DearPyGui/issues/2164
+      - simple examples:
+        - https://github.com/DataExplorerUser/drag_drop_node_editor/blob/main/drag_and_drop_node_editor_dear_py_gui.py
+        - https://github.com/hoshianaaa/DearPyGUI_NodeEditor_Template/tree/main
+      - Maybe better to just use a the plotter, with custom tooltips? We don't need a node *editor* here, but rather just something to visualize a graph.
+    - Have three RAG stores:
+      - documents: explicit, for user (exists)
+      - long-term memory: implicit, managed by system; for recalling old chats (new)
+      - explicit memory bank: explicit, for AI (new)
+    - Add feature: long-term memory
+      - A second RAG store that indexes chat messages
+        - Should be able to use the chat node ID (in the forest) as the document ID.
+      - Provide explicit access via tool-calling
+        - Search with a given query (get matching messages, with node IDs)
+        - Retrieve a local neighborhood of a given node ID (e.g. subtree max 3 levels up/down)
+      - Automatic associative memory: autosearch with user's most recent message or two?
+        - In autosearch, return also the AI's replies or only the user's messages? Similar commercial products return user's messages only, probably to keep the AI grounded.
+      - Each chat message = a RAG document; store chat node ID, too.
+        - Metadata side channel, or just use as a heading in the content? Content would be useful for the LLM to see the IDs, too, for tool-calling.
+      - To avoid reindexing at every new message, commit changes when switching to another chat branch (or when creating a new chat), or when app is shutting down.
+        - Ignore the chat nodes on the current branch, when searching the RAG store.
+    - Add feature: explicit long-term memory bank
+      - A third RAG store, for use by the AI
+      - Provide tools to store/list/search/retrieve memories (title and content)
+      - A customizable system message section for the AI to store things it wants to remember in every chat?
+    - Add feature: tool-call access to RAG
+      - Get full document, based on its ID (the current RAG autosearch already shows the document IDs).
+      - Search database with given query, optionally disabling or enabling only given collections.
+        - Get document IDs, which correspond to relative path (collection + filename).
+        - Titles would be nice, but we don't currently have a title field - the document content is completely arbitrary.
+      - Get topics.
+        - Auto-include, in the system message, a high-level summary of topics currently available in the document database?
+        - Simplest possible approach: collection names.
+        - One possible more sophisticated approach:
+          - Use keyword detection to identify what the documents are about.
+          - Preprocess keywords when tokenizing new/updated documents.
+            - Avoid running the full document through the NLP pipeline twice (need to mod `hybridir.HybridIR._tokenize`).
+            - Where to get the corpus data to compare against? Store the raw word frequency data for each document in the fulldocs database to avoid recomputing them each time a new document is added?
+              - We still need to aggregate across the whole database at each commit, but that's probably acceptable (AI parts as well as the reindexing step are much more expensive anyway).
+              - Ugh, we also need to update the whole database, to refresh the keyword sets for existing documents (they will change when the corpus changes).
+    - Improve user text entry: multiline input
+    - Upgrade translator
+      - HPLT consortium, new version (8April 2025) of the earlier model by Helsinki-NLP that we use currently
+      - Needs new infra at the backend: Marian format (not HuggingFace format)
+        - https://huggingface.co/HPLT/translate-en-fi-v2.0-hplt_opus
+    - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
     - Add feature: Switch chat (from all leaf nodes in datastore)
     - Add feature: Avatar: optional digital glitch effect when switching chat branches (change postprocessor config on the fly)
-    - Improve live preview of LLM output
-      - Store the thought blocks in the chat datastore, too, so that we can render them (`raven.librarian.scaffold.ai_turn` currently discards them)
     - Add websearch toggle? (Need to regenerate system prompt with/without tools)
-    - Add GUI dynamic resizing on window size change
     - Improve chat panel
       - Add double-buffering for rebuilding, like in Raven-visualizer
-    - Add feature: timestamped chat messages (when adding them to datastore; see `raven.librarian.scaffold`)
     - Add feature: save full prompt with each AI message (get it from the `on_prompt_ready` event of `raven.librarian.scaffold.ai_turn`)
       - Add a GUI button and window to show the full prompt (render as Markdown) and to copy it to clipboard
     - Robustness: temporarily disable the relevant buttons while the AI is writing
@@ -84,15 +141,8 @@
     - Avatar: vector emotions
       - Blend several emotions by classification values.
       - Boost neutral by (1 - sum(others)), or something. Think about normalization.
-    - Add feature: collapsible thought blocks
     - Add feature: message editing (use chattree's revision system)
-    - Add chat graph editor (this is part of where the true power of Librarian will come from)
-      - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_viewmodel.py#L206
-      - how to get mouse position: https://github.com/hoffstadt/DearPyGui/issues/2164
-      - simple examples:
-        - https://github.com/DataExplorerUser/drag_drop_node_editor/blob/main/drag_and_drop_node_editor_dear_py_gui.py
-        - https://github.com/hoshianaaa/DearPyGUI_NodeEditor_Template/tree/main
-      - Maybe better to just use a the plotter, with custom tooltips? We don't need a node *editor* here, but rather just something to visualize a graph.
+    - Add feature: context rolling (and summarization?) when the context window runs out
     - Integration with *Raven-visualizer*: AI summary and synthesis of selected studies
       - The apps could talk to each other over the network? For example, *Raven-visualizer* could send its selection data to *Raven-server*, from which *Raven-librarian* could query the document names to enable.
 
@@ -182,15 +232,6 @@
 - LLMClient, to prepare for interactive AI summarization:
   - Expand tool-calling functionality.
     - Add possibility for the user to call the tools, too? (Then control returns back to user. Use Python syntax?)
-    - Add a tool to get topics stored in RAG.
-      - Use keyword detection to identify what the documents are about.
-      - Preprocess keywords when tokenizing new/updated documents.
-        - Avoid running the full document through the NLP pipeline twice (need to mod `hybridir.HybridIR._tokenize`).
-        - Where to get the corpus data to compare against? Store the raw word frequency data for each document in the fulldocs database to avoid recomputing them each time a new document is added?
-          We still need to aggregate across the whole database at each commit, but that's probably acceptable (AI parts as well as the reindexing step are much more expensive anyway).
-    - Add a "RAG search" tool to allow the AI to explicitly query the RAG database.
-      - Remaining problem: how to dynamically tell the AI what kinds of topics are currently available in the database? Keyword auto-extraction and system message?
-    - Add a "get full document" tool to retrieve a full document from the RAG database based on its ID (the current RAG autosearch already shows the document IDs).
     - Finish websearch.
       - Final formatting for the results.
       - Store the raw results into the chat tree.
@@ -215,23 +256,6 @@
   - Inline citations?
   - See where to stuff the RAG search data in the chat tree, it's not part of the standard format.
   - Tune the system prompt, consider how it needs to be different when LLM speculation is on/off.
-  - Long-term memory experiment:
-    - A second RAG store for long-term memory
-    - Autosearch with user's most recent message
-    - Also provide explicit access via tool-calling
-    - Each entire chatlog (linearized up from a leaf node) = a RAG document
-    - To avoid reindexing at every new message, commit changes when switching to another chat branch. Ignore current branch when searching the RAG store.
-    - Should be able to use the chat node ID (in the forest) as the document ID.
-  - LLMClient GUI
-    - Separate module/class for LLM client GUI window; take in an animator instance
-    - In the main program, instantiate an animator and the GUI window
-    - Control the available RAG sources based on the selected data points in the `raven-visualizer` GUI.
-    - Swipes like in SillyTavern (regenerate AI response, keep also old ones).
-    - Branch chat from any point.
-    - Tree node view of full branching chat history.
-    - Linear chat view of current branch.
-    - Show also system messages such as tool-call results?
-    - Message editing?
 
 
 ## v0.3 and later
