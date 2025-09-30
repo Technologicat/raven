@@ -70,11 +70,14 @@
       - E.g. read a PDF, inject full (cleaned) content into LLM context
         - Should this be a tool, too?
       - It's still possible to RAG ingest the document, by adding it to the document database. File attachments are an orthogonal feature, for cases where you need to ensure the LLM sees the full document.
-    - Document database: scopes (or enable/disable individual collections)
-    - Import tool for a batch of documents (useful when importing lots of documents at once)
-      - Just instantiate a `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Then exit.
+    - Document database: scopes
+      - Scope = a subdirectory of `docs_dir`
+        - E.g. AI, hydrogen, MLP fanfics, ...
+      - For filtering, add a new custom metadata field: "scope". Works with both ChromaDB as well as our wrapper logic over BM25s.
+    - Import tool for importing a batch of documents into the document database (useful when importing lots of documents at once)
+      - Just instantiate a `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Once the rescan finishes, exit the tool.
     - Draw assets:
-        - Make per-character AI chat icons (now Librarian supports them; e.g. `aria1_icon.png`, RGBA, 64x64)
+        - Make per-character AI chat icons for all characters (now Librarian supports them; e.g. character `aria1.png` has `aria1_icon.png`, RGBA, 64x64)
     - Add chat graph editor (this is part of where the true power of Librarian will come from)
       - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_vewmodel.py#L206
       - how to get mouse position: https://github.com/hoffstadt/DearPyGui/issues/2164
@@ -88,7 +91,7 @@
       - explicit memory bank: explicit, for AI (new)
     - Add feature: long-term memory
       - A second RAG store that indexes chat messages
-        - Should be able to use the chat node ID (in the forest) as the document ID.
+        - Should be able to use the chat node ID (in the forest) as the document ID (it's a UUID).
       - Provide explicit access via tool-calling
         - Search with a given query (get matching messages, with node IDs)
         - Retrieve a local neighborhood of a given node ID (e.g. subtree max 3 levels up/down)
@@ -97,19 +100,19 @@
       - Each chat message = a RAG document; store chat node ID, too.
         - Metadata side channel, or just use as a heading in the content? Content would be useful for the LLM to see the IDs, too, for tool-calling.
       - To avoid reindexing at every new message, commit changes when switching to another chat branch (or when creating a new chat), or when app is shutting down.
-        - Ignore the chat nodes on the current branch, when searching the RAG store.
+        - Ignore the chat nodes on the current branch, when searching the RAG store. (Exclude by document ID.)
     - Add feature: explicit long-term memory bank
       - A third RAG store, for use by the AI
       - Provide tools to store/list/search/retrieve memories (title and content)
       - A customizable system message section for the AI to store things it wants to remember in every chat?
     - Add feature: tool-call access to RAG
       - Get full document, based on its ID (the current RAG autosearch already shows the document IDs).
-      - Search database with given query, optionally disabling or enabling only given collections.
-        - Get document IDs, which correspond to relative path (collection + filename).
+      - Search database with given query, optionally disabling or enabling only given scopes.
+        - Get document IDs, which correspond to relative path (scope + filename).
         - Titles would be nice, but we don't currently have a title field - the document content is completely arbitrary.
       - Get topics.
         - Auto-include, in the system message, a high-level summary of topics currently available in the document database?
-        - Simplest possible approach: collection names.
+        - Simplest possible approach: scope names.
         - One possible more sophisticated approach:
           - Use keyword detection to identify what the documents are about.
           - Preprocess keywords when tokenizing new/updated documents.
