@@ -1016,6 +1016,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         if gui_alive:
             dpg.enable_item("chat_stop_generation_button")  # tag
 
+        speech_enabled = app_state["avatar_speech_enabled"]  # grab once, in case the user toggles it while this AI turn is being processed
+
         try:
             streaming_chat_message = None
             def delete_streaming_chat_message():  # for replacing with completed message
@@ -1089,6 +1091,9 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     task_env.inside_think_block = False
                     # chunk_text = f"{chunk_text}</font>"  # TODO: currently doesn't work, because the GUI chat message does its own role-coloring.
 
+                    if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing
+                        api.avatar_start_talking(avatar_instance_id)
+
                 task_env.text.write(chunk_text)
                 time_now = time.monotonic()
                 dt = time_now - task_env.t0  # seconds since last GUI update
@@ -1125,11 +1130,14 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
                 task_env.text = io.StringIO()  # for next AI message (in case of tool calls)
                 if gui_alive:
+                    if not speech_enabled:  # If TTS is NOT enabled, stop the generic talking animation now that the LLM is done
+                        api.avatar_stop_talking(avatar_instance_id)
+
                     unused_role, unused_persona, text = get_node_message_text_without_persona(node_id)
 
                     # Avatar speech and subtitling
                     logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
-                    if app_state["avatar_speech_enabled"]:  # If TTS enabled, send final message text to TTS preprocess queue
+                    if speech_enabled:  # If TTS enabled, send final message text to TTS preprocess queue (this always uses lipsync)
                         avatar_controller.send_text_to_tts(text,
                                                            voice=librarian_config.avatar_config.voice,
                                                            voice_speed=librarian_config.avatar_config.voice_speed,
@@ -1225,6 +1233,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             if gui_alive:
                 dpg.disable_item("chat_stop_generation_button")  # tag
                 avatar_controller.stop_data_eyes()  # make sure the data eyes effect ends (unless app shutting down, in which case we shouldn't start new GUI animations)
+                if not speech_enabled:  # make sure the generic talking animation ends (if we invoked it)
+                    api.avatar_stop_talking(avatar_instance_id)
                 # Also make sure that the processing indicators hide
                 dpg.hide_item(docs_indicator_group)
                 dpg.hide_item(web_indicator_group)
