@@ -900,7 +900,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
 
                      If you never delete the instance, there is no need to bother - this constructor
                      sets up an exit trigger automatically, so that the directory monitor shuts down
-                     cleanly when the app exits.
+                     cleanly when the app exits. If the instance has been deleted, the exit trigger no-ops.
 
         `retriever`: The `HybridIR` instance to send changes to, to automatically keep it up to date.
 
@@ -970,7 +970,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         then call the `shutdown` method of the old instance before creating the new one.
         """
         with self._shutdown_lock:
-            try:
+            try:  # EAFP
                 self.docs_observer.stop()
                 self.docs_observer.join()
             except AttributeError:  # `self.docs_observer is None` already
@@ -1077,7 +1077,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         logger.info(f"HybridIRFileSystemEventHandler.rescan: Found {len(found_paths)} file{plural_s}.")
 
         with self.retriever.datastore_lock:
-            def came_from_file(doc: Dict) -> bool:
+            def came_from_file(doc: Dict) -> bool:  # convention: in-memory sources use paths of the form "<document_name_here>"
                 return not (doc["path"].startswith("<") and doc["path"].endswith(">"))
             indexed_paths = [doc["path"] for doc in self.retriever.documents.values() if came_from_file(doc)]
             indexed_paths_set = set(indexed_paths)
