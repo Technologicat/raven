@@ -480,6 +480,8 @@ def scrub(persona: Optional[str],
     `add_persona`: Whether to format the scrubbed text as e.g. "AI: blah blah" (standard chat storage convention),
                    or just "blah blah" (e.g. for feeding into scripts).
 
+                   This formatting is only added if `persona is not None`.
+
     Returns the scrubbed text content.
     """
     _yell_if_unsupported_markup(markup)
