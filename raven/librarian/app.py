@@ -658,7 +658,7 @@ class DisplayedChatMessage:
             self.gui_button_callbacks = {}  # deleting GUI items, so clear the stashed callbacks too.
             try:
                 dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
-            except SystemError:  # the group went bye-bye already (app shutdown)
+            except SystemError:  # the group went bye-bye (app shutdown)
                 pass
 
     def build_buttons(self,
