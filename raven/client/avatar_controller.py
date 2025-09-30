@@ -401,23 +401,35 @@ class DataEyesFadeOut(gui_animation.Animation):
 
         return gui_animation.action_continue
 
+_data_eyes_state = False
+_data_eyes_state_lock = threading.RLock()
 _data_eyes_fadeout_animation = None
 def start_data_eyes() -> None:
     """Start the scifi "data eyes" effect (LLM tool access indicator), if the current character supports it."""
+    global _data_eyes_state
     global _data_eyes_fadeout_animation
-    if _data_eyes_fadeout_animation is not None:  # cancel latest fadeout animation if any (no-op if it's no longer running)
-        gui_animation.animator.cancel(_data_eyes_fadeout_animation)
-    api.avatar_modify_overrides(avatar_controller_config.avatar_instance_id, action="set", overrides={"data1": 1.0})
+    with _data_eyes_state_lock:
+        if _data_eyes_state:  # no-op if already active
+            return
+        if _data_eyes_fadeout_animation is not None:  # cancel latest fadeout animation if any (no-op if it's no longer running)
+            gui_animation.animator.cancel(_data_eyes_fadeout_animation)
+        api.avatar_modify_overrides(avatar_controller_config.avatar_instance_id, action="set", overrides={"data1": 1.0})
+        _data_eyes_state = True
 
 def stop_data_eyes() -> None:
     """Stop the scifi "data eyes" effect (LLM tool access indicator), if the current character supports it.
 
     The effect fades out as configured in `initialize`.
     """
+    global _data_eyes_state
     global _data_eyes_fadeout_animation
-    if _data_eyes_fadeout_animation is not None:  # cancel latest previous instance if any (no-op if it's no longer running)
-        gui_animation.animator.cancel(_data_eyes_fadeout_animation)
-    _data_eyes_fadeout_animation = gui_animation.animator.add(DataEyesFadeOut(duration=avatar_controller_config.data_eyes_fadeout_duration))
+    with _data_eyes_state_lock:
+        if not _data_eyes_state:  # no-op (no fadeout animation!) if not active
+            return
+        if _data_eyes_fadeout_animation is not None:  # cancel latest previous instance if any (no-op if it's no longer running)
+            gui_animation.animator.cancel(_data_eyes_fadeout_animation)
+        _data_eyes_fadeout_animation = gui_animation.animator.add(DataEyesFadeOut(duration=avatar_controller_config.data_eyes_fadeout_duration))
+        _data_eyes_state = False
 
 # --------------------------------------------------------------------------------
 # Background task: TTS input preprocessor
