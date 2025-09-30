@@ -938,7 +938,13 @@ class DisplayedCompleteChatMessage(DisplayedChatMessage):
 class DisplayedStreamingChatMessage(DisplayedChatMessage):
     def __init__(self,
                  gui_parent: Union[int, str]):
-        """A chat message being streamed live from the LLM, displayed in the linearized chat view."""
+        """A chat message being streamed live from the LLM, displayed in the linearized chat view.
+
+        Starts as blank. Use the `add_paragraph` and/or `replace_last_paragraph` methods to add text.
+
+        To replace the streaming message with a completed message, call the streaming message's
+        `demolish` method first to remove it from the GUI.
+        """
         super().__init__(gui_parent=gui_parent)
         self.build()
 
