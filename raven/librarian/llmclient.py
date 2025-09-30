@@ -244,7 +244,7 @@ def setup(backend_url: str) -> env:
 
     - The system accesses external data beyond its built-in knowledge through:
       - Tool calls.
-      - Additional context that is provided by the software this LLM is running in.
+      - Additional context that is provided by the software this LLM is running in, e.g. matches in document database.
     """).strip()
 
     # The AI's initial greeting. Used when a new chat is started.
