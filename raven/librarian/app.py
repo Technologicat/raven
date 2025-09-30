@@ -382,12 +382,14 @@ class DisplayedChatMessage:
         self.role = None  # populated by `build`
         self.persona = None  # populated by `build`
         self.paragraphs = []  # [{"text": ..., "rendered": True}, ...]
+        self.paragraphs_lock = threading.RLock()
         self.node_id = None  # populated by `build`
         self.gui_text_group = None  # populated by `build`
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
 
     def _get_text(self):
-        return "\n".join(paragraph["text"] for paragraph in self.paragraphs)
+        with self.paragraphs_lock:
+            return "\n".join(paragraph["text"] for paragraph in self.paragraphs)
     text = property(fget=_get_text,
                     doc="Full text of this GUI chat message. Read-only.")
 
@@ -578,8 +580,9 @@ class DisplayedChatMessage:
         paragraph = {"text": text,
                      "is_thought": is_thought,
                      "rendered": False}
-        self.paragraphs.append(paragraph)
-        self._render_text()
+        with self.paragraphs_lock:
+            self.paragraphs.append(paragraph)
+            self._render_text()
 
     def replace_last_paragraph(self, text: str, is_thought: bool) -> None:  # TODO: Only last paragraph is replaceable for now, because it's easier for coding the GUI. :)
         """Replace the last paragraph of text in this widget. If there are no paragraphs yet, create one automatically.
@@ -587,51 +590,53 @@ class DisplayedChatMessage:
        `is_thought`: Whether this paragraph is (part of) a `<think>...</think>` block.
                      Can be different from the old state.
          """
-        if not self.paragraphs:
-            self.add_paragraph(text, is_thought)
-            return
-        paragraph = self.paragraphs[-1]
+        with self.paragraphs_lock:
+            if not self.paragraphs:
+                self.add_paragraph(text, is_thought)
+                return
+            paragraph = self.paragraphs[-1]
 
-        # The mutex guarantees this section runs in the same frame.
-        #     https://github.com/hoffstadt/DearPyGui/discussions/1002
-        # TODO: Grabbing the mutex here causes the app to randomly hang during `on_llm_progress`. Debug why. Just disabling this for now.
-        # with dpg.mutex():
-        if "widget" in paragraph:
-            dpg.delete_item(paragraph.pop("widget"))
-        paragraph["text"] = text
-        paragraph["is_thought"] = is_thought
-        paragraph["rendered"] = False
-        self._render_text()
+            # The mutex guarantees this section runs in the same frame.
+            #     https://github.com/hoffstadt/DearPyGui/discussions/1002
+            # TODO: Grabbing the mutex here causes the app to randomly hang during `on_llm_progress`. Debug why. Just disabling this for now.
+            # with dpg.mutex():
+            if "widget" in paragraph:
+                dpg.delete_item(paragraph.pop("widget"))
+            paragraph["text"] = text
+            paragraph["is_thought"] = is_thought
+            paragraph["rendered"] = False
+            self._render_text()
 
         dpg.split_frame()  # ...and anything after this point runs in another frame.
 
     def _render_text(self) -> None:
         """Internal method. Render any pending new paragraphs. We assume new paragraphs are added only to the end."""
-        if self.gui_text_group is None:
-            assert False
-        # dpg.delete_item(self.gui_text_group, children_only=True)  # how to clear all old text if we ever need to
-        role = self.role
-        role_color = role_colors[role]["front"] if role in role_colors else "#ffffff"
-        think_color = librarian_config.gui_config.chat_color_think_front
-        for idx, paragraph in enumerate(self.paragraphs):
-            if paragraph["rendered"]:
-                continue
-            assert "widget" not in paragraph  # a paragraph that hasn't been rendered has no GUI text widget associated with it
-            text = paragraph["text"].strip()
-            if text:  # don't bother if text is blank
-                # TODO: Add collapsible thought blocks to the GUI. For now, we just replace the tags with something that doesn't look like HTML to avoid confusing the Markdown renderer (which drops unknown tags).
-                text = text.replace("<tool_call>", "**>>>Tool call>>>**")
-                text = text.replace("</tool_call>", "**<<<Tool call<<<**")
-                text = text.replace("<think>", "**>>>Thinking>>>**")
-                text = text.replace("</think>", "**<<<Thinking<<<**")
-                color = think_color if paragraph["is_thought"] else role_color
-                colorized_text = f"<font color='{color}'>{text}</font>"
-                widget = dpg_markdown.add_text(colorized_text,
-                                               wrap=gui_config.chat_text_w,
-                                               parent=self.gui_text_group)
-                paragraph["widget"] = widget
-                dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")
-            paragraph["rendered"] = True
+        with self.paragraphs_lock:
+            if self.gui_text_group is None:
+                assert False
+            # dpg.delete_item(self.gui_text_group, children_only=True)  # how to clear all old text if we ever need to
+            role = self.role
+            role_color = role_colors[role]["front"] if role in role_colors else "#ffffff"
+            think_color = librarian_config.gui_config.chat_color_think_front
+            for idx, paragraph in enumerate(self.paragraphs):
+                if paragraph["rendered"]:
+                    continue
+                assert "widget" not in paragraph  # a paragraph that hasn't been rendered has no GUI text widget associated with it
+                text = paragraph["text"].strip()
+                if text:  # don't bother if text is blank
+                    # TODO: Add collapsible thought blocks to the GUI. For now, we just replace the tags with something that doesn't look like HTML to avoid confusing the Markdown renderer (which drops unknown tags).
+                    text = text.replace("<tool_call>", "**>>>Tool call>>>**")
+                    text = text.replace("</tool_call>", "**<<<Tool call<<<**")
+                    text = text.replace("<think>", "**>>>Thinking>>>**")
+                    text = text.replace("</think>", "**<<<Thinking<<<**")
+                    color = think_color if paragraph["is_thought"] else role_color
+                    colorized_text = f"<font color='{color}'>{text}</font>"
+                    widget = dpg_markdown.add_text(colorized_text,
+                                                   wrap=gui_config.chat_text_w,
+                                                   parent=self.gui_text_group)
+                    paragraph["widget"] = widget
+                    dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")
+                paragraph["rendered"] = True
 
     def demolish(self) -> None:
         """The opposite of `build`: delete all GUI widgets belonging to this instance.
@@ -645,12 +650,16 @@ class DisplayedChatMessage:
         The main use case is switching a streaming message to a completed one when the streaming is done,
         without regenerating the whole linearized chat view.
         """
-        self.role = None
-        self.persona = None
-        self.paragraphs = []
-        self.gui_text_group = None
-        self.gui_button_callbacks = {}  # deleting GUI items, so clear the stashed callbacks too.
-        dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
+        with self.paragraphs_lock:
+            self.role = None
+            self.persona = None
+            self.paragraphs = []
+            self.gui_text_group = None
+            self.gui_button_callbacks = {}  # deleting GUI items, so clear the stashed callbacks too.
+            try:
+                dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
+            except SystemError:  # the group went bye-bye already (app shutdown)
+                pass
 
     def build_buttons(self,
                       gui_parent: Union[int, str]) -> None:
