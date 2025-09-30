@@ -334,7 +334,7 @@ def get_node_message_text_without_persona(node_id: str) -> str:
     """Format a chat message from `node_id` in the datastore, by stripping the persona name from the front.
 
     This is useful e.g. for displaying the message text in the linearized chat view,
-    or for sending the message into TTS preprocessing (`avatar_add_text_to_preprocess_queue`).
+    or for sending the message into TTS preprocessing (`avatar_controller.send_text_to_tts`).
 
     Returns the tuple `(role, persona, text)`, where:
 
@@ -1148,7 +1148,10 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     _update_avatar_emotion_from_incoming_text(paragraph_text)
                     # if speech_enabled:  # If TTS enabled, send complete paragraph to TTS preprocess queue
                     #     if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
-                    #         avatar_add_text_to_preprocess_queue(paragraph_text)
+                    #         avatar_controller.send_text_to_tts(paragraph_text,
+                    #                                            voice=librarian_config.avatar_config.voice,
+                    #                                            voice_speed=librarian_config.avatar_config.voice_speed,
+                    #                                            video_offset=librarian_config.avatar_config.video_offset)
                     streaming_chat_message.replace_last_paragraph(paragraph_text,
                                                                   is_thought=(task_env.inside_think_block or ("</think>" in chunk_text)))  # easiest to special-case the closing tag
                     streaming_chat_message.add_paragraph("",
