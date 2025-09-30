@@ -882,12 +882,27 @@ def init(executor):
 # See e.g. https://www.kdnuggets.com/monitor-your-file-system-with-pythons-watchdog
 class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
     def __init__(self,
+                 docs_dir: Union[str, pathlib.Path],
+                 recursive: bool,
                  retriever: HybridIR,
                  exts: List[str] = [".txt", ".md", ".rst", ".org"],
                  callback: Callable = None) -> None:
         """Simple auto-updater that monitors a directory and auto-commits changes to a `HybridIR`.
 
-        `retriever`: The `HybridIR` instance to automatically keep up to date.
+        `docs_dir`: The path to monitor.
+
+        `recursive`: Whether to monitor also subdirectories.
+
+                     Cannot be changed while running.
+
+                     If you need to re-instantiate, call the `shutdown` method of the old instance
+                     before deleting it, to make its directory monitor exit.
+
+                     If you never delete the instance, there is no need to bother - this constructor
+                     sets up an exit trigger automatically, so that the directory monitor shuts down
+                     cleanly when the app exits.
+
+        `retriever`: The `HybridIR` instance to send changes to, to automatically keep it up to date.
 
         `ext`: File extensions of files to monitor.
 
@@ -903,9 +918,14 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
 
         Uses the `watchdog` library.
         """
+        self.docs_dir = pathlib.Path(docs_dir) if not isinstance(docs_dir, pathlib.Path) else docs_dir
+        self.recursive = recursive
         self.retriever = retriever
         self.exts = exts
         self.callback = callback
+
+        self._docs_observer = None  # populated by `bootup`
+        self._shutdown_lock = threading.RLock()
 
         # For delayed commit (commit when new/modified files stop appearing in quick succession)
         self._status_box = box()
@@ -924,13 +944,44 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
                                                     entrypoint=commit,
                                                     running_poll_interval=1.0,
                                                     pending_wait_duration=1.0)
+        self.bootup()
 
-    # TODO: `document_id` needs to be unique, but easily mappable from filename, persistently.
-    # Currently this doesn't work for duplicate filenames across subdirectories.
-    # Also ChromaDB has some limitations as to valid IDs.
-    def _document_id_from_path(self, path: Union[pathlib.Path, str]) -> str:
+    def bootup(self):
+        """Scan for offline changes, start the directory monitor, and set up the app-exit hook for monitor shutdown."""
+
+        # Rescan docs directory for changes made while the app was not running.
+        self.rescan(self.docs_dir,
+                    recursive=self.recursive)
+
+        # Register handler to auto-update search indices on live changes in docs directory.
+        self._docs_observer = watchdog.observers.Observer()
+        self._docs_observer.schedule(self,
+                                     path=self.docs_dir,
+                                     recursive=self.recursive)
+        self._docs_observer.start()
+
+        # And make sure it shuts down gracefully at app exit.
+        atexit.register(self.shutdown)
+
+    def shutdown(self):
+        """Make the directory monitor exit gracefully.
+
+        This is normally only used as the app-exit hook, but if you need to re-instantiate,
+        then call the `shutdown` method of the old instance before creating the new one.
+        """
+        with self._shutdown_lock:
+            try:
+                self.docs_observer.stop()
+                self.docs_observer.join()
+            except AttributeError:  # `self.docs_observer is None` already
+                pass
+            self.docs_observer = None
+
+    # `document_id` needs to be unique, but easily mappable from filename, persistently.
+    def _make_document_id_from_path(self, path: Union[pathlib.Path, str]) -> str:
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
-        return p.name
+        relp = p.relative_to(self.docs_dir)
+        return str(relp)
 
     def _sanity_check(self, path: Union[pathlib.Path, str]) -> bool:
         if not task_managers:
@@ -962,7 +1013,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
     def _make_task(self, kind: str, path: Union[pathlib.Path, str]) -> Callable:
         p = pathlib.Path(path) if not isinstance(path, pathlib.Path) else path
         abspath = p.expanduser().resolve()
-        document_id = self._document_id_from_path(abspath)
+        document_id = self._make_document_id_from_path(abspath)
         if kind == "add":
             def scheduled_add(task_env: envcls) -> None:
                 logger.debug(f"HybridIRFileSystemEventHandler.scheduled_add: file '{path}': ingesting file content.")
@@ -1034,7 +1085,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
                 return path in indexed_paths_set
             def is_file_updated(path: str) -> bool:
                 stats = self.retriever._stat(path)
-                document_id = self._document_id_from_path(path)
+                document_id = self._make_document_id_from_path(path)
                 assert document_id in self.retriever.documents  # this is only ever called for already indexed documents
                 doc = self.retriever.documents[document_id]
                 mtime_increased = (stats["mtime"] > doc["mtime"])
@@ -1147,23 +1198,10 @@ def setup(docs_dir: Union[pathlib.Path, str],
                          chunk_size=chunk_size,
                          overlap_fraction=overlap_fraction)
 
-    # Rescan docs directory for changes made while the app was not running.
-    scanner = HybridIRFileSystemEventHandler(retriever,
+    scanner = HybridIRFileSystemEventHandler(docs_dir=docs_dir,
+                                             recursive=recursive,
+                                             retriever=retriever,
                                              exts=exts,
                                              callback=callback)
-    scanner.rescan(docs_dir,
-                   recursive=recursive)
-
-    # Register handler to auto-update search indices on live changes in docs directory.
-    docs_observer = watchdog.observers.Observer()
-    docs_observer.schedule(scanner,
-                           path=docs_dir,
-                           recursive=recursive)
-    docs_observer.start()
-
-    def _docs_observer_shutdown():
-        docs_observer.stop()
-        docs_observer.join()
-    atexit.register(_docs_observer_shutdown)
 
     return retriever, scanner

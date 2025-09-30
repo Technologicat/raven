@@ -62,7 +62,7 @@ docs_num_results = 20
 # Add/modify/delete a file in this directory to trigger a document database index auto-update in Librarian and Minichat.
 llm_docs_dir = llmclient_userdata_dir / "documents"
 
-# Whether to scan also subdirectories of `llm_docs_dir` (TODO: doesn't yet work properly, need to mod doc IDs)
+# Whether to scan also subdirectories of `llm_docs_dir`.
 llm_docs_dir_recursive = False
 
 # Where to store the search indices for the RAG database (machine-readable).
