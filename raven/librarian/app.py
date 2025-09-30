@@ -1124,8 +1124,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 if gui_alive and chunk_text:  # avoid triggering on the initial empty chunk (ACK)
                     dpg.hide_item(llm_indicator_group)  # hide prompt processing indicator
 
-                # If the task is cancelled, interrupt the LLM, keeping the content received so far (the scaffold will automatically send the content to `on_llm_done`).
-                # TODO: arrange for the GUI to actually cancel the task upon the user pressing an interrupt button
+                # If the task is cancelled (`stop_ai_turn` was called), interrupt the LLM, keeping the content received so far.
+                # The scaffold will automatically send the content to `on_llm_done`.
                 if task_env.cancelled or not gui_alive:  # TODO: EAFP to avoid TOCTTOU
                     reason = "Cancelled" if task_env.cancelled else "App is shutting down"
                     logger.info(f"ai_turn.run_ai_turn.on_llm_progress: {reason}, stopping text generation.")
@@ -1139,7 +1139,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     logger.info("ai_turn.run_ai_turn.on_llm_progress: AI exited thinking state.")
                     task_env.inside_think_block = False
 
-                    if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing
+                    if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing (after it is no longer thinking)
                         api.avatar_start_talking(avatar_instance_id)
 
                 task_env.text.write(chunk_text)
