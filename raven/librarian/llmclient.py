@@ -415,6 +415,7 @@ def token_count(settings: env, text: str) -> int:
 def invoke(settings: env,
            history: List[Dict],
            on_progress: Optional[Callable] = None,
+           on_prompt_ready: Optional[Callable] = None,
            tools_enabled: bool = True) -> env:
     """Invoke the LLM with the given chat history.
 
@@ -422,7 +423,18 @@ def invoke(settings: env,
 
     `settings`: Obtain this by calling `setup()` at app start time.
 
-    `history`: List of chat messages, see `raven.librarian.chatutil.create_chat_message`.
+    `history`: List of chat messages, where each message is in OpenAI format (with "role" and "content" fields,
+               and an optional "tool_calls" field). See `raven.librarian.chatutil.create_chat_message`.
+
+    `on_prompt_ready`: 1-argument callable, with argument `history: List[Dict]`. Debug/info hook.
+                       The return value is ignored.
+
+                       Called after the LLM context has been completely prepared, before sending it to the LLM.
+
+                       This is the modified history, after scrubbing thought blocks.
+
+                       Each element of the list is a chat message in the format accepted by the LLM backend,
+                       with "role" and "content" fields.
 
     `on_progress`: 2-argument callable with arguments `(n_chunks: int, chunk_text: str)`.
                    Called while streaming the response from the LLM, typically once per generated token.
@@ -452,7 +464,24 @@ def invoke(settings: env,
                              This is provided for convenience.
     """
     data = copy.deepcopy(settings.request_data)
+
+    # Scrub thought blocks.
+    #
+    # TODO: `llmclient.invoke`: Do we need to scrub thought blocks manually? Doesn't the Jinja chat template inside most modern models do that already?
+    #                           OTOH, by doing this manually, we get the (hopefully) final prompt, so that calling `token_count` on it returns the correct final total.
+    #
+    # For most thinking models, thought blocks are just inference-time compute, and should not be included in the previous messages in the chat log.
+    history = copy.deepcopy(history)
+    for message in history:
+        message["content"] = chatutil.scrub(persona=settings.personas.get(message["role"], None),
+                                            text=message["content"],
+                                            thoughts_mode="discard",
+                                            markup=None,
+                                            add_persona=True)
+
     data["messages"] = history
+    if on_prompt_ready is not None:
+        on_prompt_ready(history)
 
     if tools_enabled:
         logger.info("llmclient.invoke: Tool calling is enabled. Providing tool specifications in request.")

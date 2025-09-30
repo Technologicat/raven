@@ -529,8 +529,8 @@ def minimal_chat_client(backend_url) -> None:
                                                 markup="ansi",
                                                 on_docs_start=None,
                                                 on_docs_done=None,
-                                                on_prompt_ready=None,  # debug/info hook
                                                 on_llm_start=on_llm_start,
+                                                on_prompt_ready=None,  # debug/info hook
                                                 on_llm_progress=on_llm_progress,
                                                 on_llm_done=on_llm_done,
                                                 on_nomatch_done=on_nomatch_done,

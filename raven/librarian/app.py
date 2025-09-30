@@ -394,7 +394,6 @@ class DisplayedChatMessage:
     def build(self,
               role: str,
               persona: Optional[str],
-              text: Optional[str],
               node_id: Optional[str]) -> None:
         """Build the GUI widgets for this instance, thus rendering the chat message (and buttons and such) in the GUI.
 
@@ -410,10 +409,15 @@ class DisplayedChatMessage:
                    `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
                    (which may be different from the current session's, e.g. if the AI character has been changed).
 
-        `text`: You can the chat message text to be displayed here, but it can be `None` if you intend to add text later.
-
         `node_id`: The chat node ID of this message in the datastore, if applicable.
                    (Streaming messages do not have a node yet.)
+
+        NOTE: You still need to `add_paragraph` the text you want to show in the chat message widget.
+              It's done this way to be able to handle messages that *contain* thought blocks
+              (i.e. any complete message from a thinking model), because the `is_thought` state
+              needs to be different for the think-block and final-message segments.
+
+        NOTE: `DisplayedCompleteChatMessage` parses the content from the chat node add adds the text automatically.
         """
         global gui_role_icons  # intent only
         global role_colors  # intent only
@@ -471,8 +475,7 @@ class DisplayedChatMessage:
         # render the actual text
         self.gui_text_group = dpg.add_group(tag=f"chat_message_text_container_group_{self.gui_uuid}",
                                             parent=text_vertical_layout_group)  # create another group to act as container so that we can update/replace just the text easily
-        if text is not None:  # Add the first text (paragraph) if supplied.
-            self.add_paragraph(text)
+        # NOTE: We now have an empty group, for `add_paragraph`/`replace_last_paragraph`.
 
         # Show LLM performance statistics if linked to a chat node, and the chat node has them
         if role == "assistant" and node_id is not None:
@@ -567,17 +570,25 @@ class DisplayedChatMessage:
         #     dpg.set_frame_callback(dpg.get_frame_count() + 10,
         #                            type(self).run_callbacks)
 
-    def add_paragraph(self, text: str) -> None:
-        """Add a new paragraph of text to this widget."""
+    def add_paragraph(self, text: str, is_thought: bool) -> None:
+        """Add a new paragraph of text to this widget.
+
+        `is_thought`: Whether this paragraph is (part of) a `<think>...</think>` block.
+        """
         paragraph = {"text": text,
+                     "is_thought": is_thought,
                      "rendered": False}
         self.paragraphs.append(paragraph)
         self._render_text()
 
-    def replace_last_paragraph(self, text: str) -> None:  # TODO: Only last paragraph is replaceable for now, because it's easier for coding the GUI. :)
-        """Replace the last paragraph of text in this widget. If there are no paragraphs yet, create one automatically."""
+    def replace_last_paragraph(self, text: str, is_thought: bool) -> None:  # TODO: Only last paragraph is replaceable for now, because it's easier for coding the GUI. :)
+        """Replace the last paragraph of text in this widget. If there are no paragraphs yet, create one automatically.
+
+       `is_thought`: Whether this paragraph is (part of) a `<think>...</think>` block.
+                     Can be different from the old state.
+         """
         if not self.paragraphs:
-            self.add_paragraph(text)
+            self.add_paragraph(text, is_thought)
             return
         paragraph = self.paragraphs[-1]
 
@@ -588,6 +599,7 @@ class DisplayedChatMessage:
         if "widget" in paragraph:
             dpg.delete_item(paragraph.pop("widget"))
         paragraph["text"] = text
+        paragraph["is_thought"] = is_thought
         paragraph["rendered"] = False
         self._render_text()
 
@@ -599,22 +611,20 @@ class DisplayedChatMessage:
             assert False
         # dpg.delete_item(self.gui_text_group, children_only=True)  # how to clear all old text if we ever need to
         role = self.role
-        color = role_colors[role]["front"] if role in role_colors else "#ffffff"
+        role_color = role_colors[role]["front"] if role in role_colors else "#ffffff"
+        think_color = librarian_config.gui_config.chat_color_think_front
         for idx, paragraph in enumerate(self.paragraphs):
             if paragraph["rendered"]:
                 continue
             assert "widget" not in paragraph  # a paragraph that hasn't been rendered has no GUI text widget associated with it
             text = paragraph["text"].strip()
             if text:  # don't bother if text is blank
-                # TODO: Handle thought blocks properly in GUI. For now, we just replace the tags with something that doesn't look like HTML to avoid confusing the Markdown renderer (which drops unknown tags).
-                #  - Use `chatutil.scrub` for auto-coloring
-                #  - But first, `scaffold.ai_turn` shouldn't discard thought blocks (as long as it does, we only get thoughts while streaming)
-                #  - MD renderer doesn't support nested font tags, need to do something here
-                #  - A thought block may span multiple paragraphs, so need to track thought-block state while rendering
+                # TODO: Add collapsible thought blocks to the GUI. For now, we just replace the tags with something that doesn't look like HTML to avoid confusing the Markdown renderer (which drops unknown tags).
                 text = text.replace("<tool_call>", "**>>>Tool call>>>**")
                 text = text.replace("</tool_call>", "**<<<Tool call<<<**")
                 text = text.replace("<think>", "**>>>Thinking>>>**")
                 text = text.replace("</think>", "**<<<Thinking<<<**")
+                color = think_color if paragraph["is_thought"] else role_color
                 colorized_text = f"<font color='{color}'>{text}</font>"
                 widget = dpg_markdown.add_text(colorized_text,
                                                wrap=gui_config.chat_text_w,
@@ -749,6 +759,12 @@ class DisplayedChatMessage:
             def speak_message_callback():
                 if app_state["avatar_speech_enabled"]:
                     unused_message_role, unused_message_persona, message_text = get_node_message_text_without_persona(node_id)
+                    # Send only non-thought message content to TTS
+                    message_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
+                                                  text=message_text,
+                                                  thoughts_mode="discard",
+                                                  markup=None,
+                                                  add_persona=False)
                     avatar_controller.send_text_to_tts(message_text,
                                                        voice=librarian_config.avatar_config.voice,
                                                        voice_speed=librarian_config.avatar_config.voice_speed,
@@ -887,12 +903,27 @@ class DisplayedCompleteChatMessage(DisplayedChatMessage):
         self.build()
 
     def build(self) -> None:
-        """Build (or rebuild) the GUI widgets for this chat message."""
+        """Build (or rebuild) the GUI widgets for this chat message.
+
+        Automatically parse the content from the chat node, and add the text to the GUI.
+        """
         role, persona, text = get_node_message_text_without_persona(self.node_id)  # TODO: later (chat editing), we need to set the revision to load
         super().build(role=role,
                       persona=persona,
-                      text=text,
                       node_id=self.node_id)
+
+        paragraphs = text.split("\n")
+        inside_think_block = False
+        for paragraph in paragraphs:
+            # Detect think block state (TODO: improve; very rudimentary and brittle for now)
+            p = paragraph.strip()
+            if p == "<think>":
+                inside_think_block = True
+            elif p == "</think>":
+                inside_think_block = False
+
+            self.add_paragraph(paragraph,
+                               is_thought=(inside_think_block or (p == "</think>")))  # easiest to special-case the closing tag
 
 
 class DisplayedStreamingChatMessage(DisplayedChatMessage):
@@ -905,7 +936,6 @@ class DisplayedStreamingChatMessage(DisplayedChatMessage):
     def build(self):
         super().build(role="assistant",  # TODO: parameterize this?
                       persona=llm_settings.personas.get("assistant", None),
-                      text=None,  # start with no text
                       node_id=None)
 
 
@@ -941,10 +971,15 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
         for node_id in node_id_history:
             add_complete_chat_message_to_linearized_chat_panel(node_id=node_id,
                                                                scroll_to_end=False)  # we scroll just once, when done
-    # Update avatar emotion from the message text
+    # Update avatar emotion from the message text (use only non-thought message content)
     role, unused_persona, text = get_node_message_text_without_persona(head_node_id)
     if role == "assistant":
-        logger.info("build_linearized_chat_panel: linearized chat view new HEAD node is an AI message; updating avatar emotion from message content")
+        logger.info("build_linearized_chat_panel: linearized chat view new HEAD node is an AI message; updating avatar emotion from (non-thought) message content")
+        text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
+                              text=text,
+                              thoughts_mode="discard",
+                              markup=None,
+                              add_persona=False)
         avatar_controller.update_emotion_from_text(text)
     dpg.split_frame()
     _scroll_chat_view_to_end()
@@ -1085,11 +1120,9 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 if "<think>" in chunk_text:
                     task_env.inside_think_block = True
                     logger.info("ai_turn.run_ai_turn.on_llm_progress: AI entered thinking state.")
-                    # chunk_text = f'<font color="{gui_config.chat_color_think_front}">{chunk_text}'  # TODO: currently doesn't work, because the GUI chat message does its own role-coloring.
                 elif "</think>" in chunk_text:
                     logger.info("ai_turn.run_ai_turn.on_llm_progress: AI exited thinking state.")
                     task_env.inside_think_block = False
-                    # chunk_text = f"{chunk_text}</font>"  # TODO: currently doesn't work, because the GUI chat message does its own role-coloring.
 
                     if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing
                         api.avatar_start_talking(avatar_instance_id)
@@ -1104,11 +1137,13 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     paragraph_text = task_env.text.getvalue()
                     # NOTE: The last paragraph of the AI's reply - for thinking models, commonly the final response - often never gets a "\n", and must be handled in `on_done`.
                     _update_avatar_emotion_from_incoming_text(paragraph_text)
-                    # if app_state["avatar_speech_enabled"]:  # If TTS enabled, send complete paragraph to TTS preprocess queue
+                    # if speech_enabled:  # If TTS enabled, send complete paragraph to TTS preprocess queue
                     #     if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
                     #         avatar_add_text_to_preprocess_queue(paragraph_text)
-                    streaming_chat_message.replace_last_paragraph(paragraph_text)
-                    streaming_chat_message.add_paragraph("")
+                    streaming_chat_message.replace_last_paragraph(paragraph_text,
+                                                                  is_thought=(task_env.inside_think_block or ("</think>" in chunk_text)))  # easiest to special-case the closing tag
+                    streaming_chat_message.add_paragraph("",
+                                                         is_thought=task_env.inside_think_block)
                     task_env.text = io.StringIO()
                     dpg.split_frame()
                     _scroll_chat_view_to_end()
@@ -1117,14 +1152,15 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit changes to in-progress last paragraph
                     task_env.t0 = time_now
                     task_env.n_chunks0 = n_chunks
-                    streaming_chat_message.replace_last_paragraph(task_env.text.getvalue())  # at first paragraph, will auto-create it if not created yet
+                    streaming_chat_message.replace_last_paragraph(task_env.text.getvalue(),
+                                                                  is_thought=task_env.inside_think_block)  # at first paragraph, will auto-create it if not created yet
                     dpg.split_frame()
                     _scroll_chat_view_to_end()
 
                 # Let the LLM keep generating (if it wants to).
                 return llmclient.action_ack
 
-            def on_done(node_id: str) -> None:   # Regardless of whether an LLM-written message, or the canned "no matches in document database" message.
+            def on_done(node_id: str) -> None:   # For both `on_llm_done` and `on_nomatch_done`.
                 global gui_alive  # intent only
 
                 app_state["HEAD"] = node_id  # update just in case of Ctrl+C or crash during tool calls
@@ -1135,8 +1171,15 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
 
                     unused_role, unused_persona, text = get_node_message_text_without_persona(node_id)
 
+                    # Keep only non-thought content for TTS and emotion update
+                    text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
+                                          text=text,
+                                          thoughts_mode="discard",
+                                          markup=None,
+                                          add_persona=False)
+
                     # Avatar speech and subtitling
-                    logger.info("ai_turn.run_ai_turn.on_done: sending final message for translation, TTS, and subtitling")
+                    logger.info("ai_turn.run_ai_turn.on_done: sending final (non-thought) message content for translation, TTS, and subtitling")
                     if speech_enabled:  # If TTS enabled, send final message text to TTS preprocess queue (this always uses lipsync)
                         avatar_controller.send_text_to_tts(text,
                                                            voice=librarian_config.avatar_config.voice,
@@ -1144,7 +1187,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                                                            video_offset=librarian_config.avatar_config.video_offset)
 
                     # Update avatar emotion one last time, from the final message text
-                    logger.info("ai_turn.run_ai_turn.on_done: updating emotion from final message content")
+                    logger.info("ai_turn.run_ai_turn.on_done: updating emotion from final (non-thought) message content")
                     avatar_controller.update_emotion_from_text(text)
 
                     # Update linearized chat view
@@ -1218,8 +1261,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                                                 markup="markdown",
                                                 on_docs_start=on_docs_start,
                                                 on_docs_done=on_docs_done,
-                                                on_prompt_ready=None,  # debug/info hook
                                                 on_llm_start=on_llm_start,
+                                                on_prompt_ready=None,  # debug/info hook
                                                 on_llm_progress=on_llm_progress,
                                                 on_llm_done=on_done,
                                                 on_nomatch_done=on_done,

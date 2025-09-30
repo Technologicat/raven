@@ -280,21 +280,23 @@ def ai_turn(llm_settings: env,
                        - `on_docs_done` signals that the documents database search has completed.
                        - `on_nomatch_done` signals that the whole AI turn has completed due to the no-match LLM bypass.
 
-    `on_prompt_ready`: 1-argument callable, with argument `history: List[Dict]`. Debug/info hook.
-                       The return value is ignored.
-
-                       Called after the LLM context has been completely prepared, before sending it to the LLM.
-
-                       This is the modified history, after including document search results and temporary injects.
-                       Each element of the list is a chat message in the format accepted by the LLM backend,
-                       with "role" and "content" fields.
-
     `on_llm_start`: 0-argument callable. Called just before we call `llmclient.invoke` and the LLM starts
                     parsing the prompt, and eventually streaming a response.
                     The return value is ignored.
 
                     The LLM will start once at the beginning of the AI's turn, and then once after each set
                     of tool calls.
+
+    `on_prompt_ready`: 1-argument callable, with argument `history: List[Dict]`. Debug/info hook.
+                       The return value is ignored.
+
+                       Called after the LLM context has been completely prepared, before sending it to the LLM.
+
+                       This is the modified history, after including document search results and temporary injects,
+                       and after scrubbing thought blocks.
+
+                       Each element of the list is a chat message in the format accepted by the LLM backend,
+                       with "role" and "content" fields.
 
     `on_llm_progress`: 2-argument callable, with arguments `(n_chunks: int, chunk_text: str)`.
                        Called while streaming the response from the LLM, typically once per generated token.
@@ -421,22 +423,20 @@ def ai_turn(llm_settings: env,
                          history=message_history,
                          speculate=speculate,
                          docs_matches=docs_matches)
-        if on_prompt_ready is not None:
-            on_prompt_ready(message_history)
 
         if on_llm_start is not None:
             on_llm_start()
         out = llmclient.invoke(settings=llm_settings,
                                history=message_history,
+                               on_prompt_ready=on_prompt_ready,
                                on_progress=on_llm_progress,  # this handles `action_stop` from `on_llm_progress`
                                tools_enabled=tools_enabled)
         # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
 
         # Clean up the LLM's reply (heuristically). This version goes into the chat history.
-        # TODO: Keep the thought blocks; strip them only when sending the history to the LLM. (If we even need to strip it then; don't the recent chat templates inside the models already do that?)
         out.data["content"] = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
                                              text=out.data["content"],
-                                             thoughts_mode="discard",
+                                             thoughts_mode="keep",
                                              markup=markup,
                                              add_persona=True)
 
