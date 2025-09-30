@@ -168,7 +168,7 @@ gui_config = env(  # ----------------------------------------
                  subtitle_font_basename="OpenSans",
                  subtitle_font_variant="Bold",
                  subtitle_font_size=48,  # pixels
-                 subtitle_color=(255, 255, 0),  # bright yellow
+                 subtitle_color=(255, 255, 255),  # white
                  # Subtitle x-offset from left edge of content area of avatar panel
                  subtitle_x0=24,  # pixels
                  # Subtitle extra y-offset from bottom edge of content area of avatar panel
