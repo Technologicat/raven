@@ -429,13 +429,29 @@ class ButtonFlash(Animation):
     def finish(self) -> None:
         """Clean up resources upon the end of the animation."""
         with self.instance_lock:
-            dpg.bind_item_theme(self.target_button, "disablable_button_theme")  # tag
-            if self.target_tooltip is not None:
-                dpg.bind_item_theme(self.target_tooltip, self.original_theme)
+            try:
+                dpg.bind_item_theme(self.target_button, "disablable_button_theme")  # tag
+            except SystemError:  # didn't exist (a transient GUI element that has already been deleted, e.g. message-specific chat buttons)
+                pass  # it's fine
+
+            try:
+                if self.target_tooltip is not None:
+                    dpg.bind_item_theme(self.target_tooltip, self.original_theme)
+            except SystemError:
+                pass
+
             if self.target_text is not None:
-                dpg.set_value(self.target_text, self.original_message)
-                dpg.bind_item_theme(self.target_text, self.original_theme)
-            dpg.delete_item(self.theme)
+                try:
+                    dpg.set_value(self.target_text, self.original_message)
+                    dpg.bind_item_theme(self.target_text, self.original_theme)
+                except SystemError:
+                    pass
+
+            try:
+                dpg.delete_item(self.theme)
+            except SystemError:  # might happen during app shutdown
+                pass
+
             self.theme = None
             self.reified = False
 
