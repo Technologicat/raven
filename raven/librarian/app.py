@@ -116,7 +116,16 @@ with timer() as tim:
 
     # Initialize textures.
     with dpg.texture_registry(tag="librarian_app_textures"):
-        w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve()))
+        # Prefer per-character icon; default to generic icon if not present.
+        character_image_path = librarian_config.avatar_config.image_path
+        character_dir = character_image_path.parent
+        basename = os.path.basename(str(character_image_path))  # e.g. "/foo/bar/example.png" -> "example.png"
+        stem, ext = os.path.splitext(basename)  # -> "example", ".png"
+        character_icon_path = character_dir / f"{stem}_icon{ext}"
+        if not character_icon_path.exists():
+            character_icon_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve()  # generic AI icon
+
+        w, h, c, data = dpg.load_image(str(character_icon_path))
         icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture")
 
         w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "system.png")).expanduser().resolve()))
