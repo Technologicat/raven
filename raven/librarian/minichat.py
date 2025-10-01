@@ -168,16 +168,17 @@ def minimal_chat_client(backend_url) -> None:
             print()
             print("    Special commands (tab-completion available):")
             print("        !clear                  - Start new chat")
-            print(f"        !tools [True|False]     - Tool-calling on/off/toggle (currently {app_state['tools_enabled']})")
             print(f"        !docs [True|False]      - Document database on/off/toggle (currently {app_state['docs_enabled']}; document store at '{str(librarian_config.llm_docs_dir)}')")
-            print(f"        !speculate [True|False] - LLM speculate on/off/toggle (currently {app_state['speculate_enabled']}); used only if docs is True.")
-            print("                                  If speculate is False, try to use only RAG results to answer.")
-            print("                                  If speculate is True, let the LLM respond however it wants.")
             print("        !dump                   - See raw contents of chat node datastore")
             print("        !head some-node-id      - Switch to another chat branch (get the node ID from `!dump`)")
             print("        !history                - Print a cleaned-up transcript of the current chat branch")
             print("        !model                  - Show which model is in use")
             print("        !models                 - List all models available at connected backend")
+            print("        !reroll                 - Reroll (regenerate) the latest AI response, creating a new sibling.")
+            print(f"        !speculate [True|False] - LLM speculate on/off/toggle (currently {app_state['speculate_enabled']}); used only if docs is True.")
+            print("                                  If speculate is False, try to use only RAG results to answer.")
+            print("                                  If speculate is True, let the LLM respond however it wants.")
+            print(f"        !tools [True|False]     - Tool-calling on/off/toggle (currently {app_state['tools_enabled']})")
             print("        !help                   - Show this message again")
             print()
             print("    Press Ctrl+D to exit chat.")
@@ -194,6 +195,7 @@ def minimal_chat_client(backend_url) -> None:
                     "!history",
                     "!model",
                     "!models",
+                    "!reroll",
                     "!speculate",
                     "!tools"]
         def get_completions(candidates: List[str], text: str) -> List[str]:
@@ -276,7 +278,14 @@ def minimal_chat_client(backend_url) -> None:
                                                   persona=persona,
                                                   markup="ansi"),
                   end="")
-            print(chatutil.remove_persona_from_start_of_line(persona=persona, text=text))
+            message_text = chatutil.remove_persona_from_start_of_line(persona=persona, text=text)
+            # Colorize thought blocks
+            message_text = chatutil.scrub(persona=persona,
+                                          text=message_text,
+                                          thoughts_mode="markup",
+                                          markup="ansi",
+                                          add_persona=False)
+            print(message_text)
 
         def chat_print_history(node_id_history: List[Dict], show_numbers: bool = True) -> None:
             if show_numbers:
@@ -308,6 +317,17 @@ def minimal_chat_client(backend_url) -> None:
         action_next_round = sym("next_round")  # skip to start of next round (after the user entered a special command)
 
         def user_turn() -> Values:
+            # NOTE: Rudimentary approach to RAG search, using the user's latest message text as the query. (Good enough to demonstrate the functionality. Improve later.)
+            def scan_history_for_docs_query(node_id_history: List[Dict]) -> Optional[str]:
+                """Handle the RAG query: find the latest existing user message."""
+                docs_query = None  # if no user message, send `None` as query to AI -> no docs search
+                for node_id in reversed(node_id_history):
+                    role, unused_persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
+                    if role == "user":
+                        docs_query = text
+                        break
+                return docs_query
+
             node_id_history = datastore.linearize_up(app_state["HEAD"])
             user_message_number = len(node_id_history)
 
@@ -396,6 +416,23 @@ def minimal_chat_client(backend_url) -> None:
             elif user_message_text == "!models":
                 chat_show_list_of_models()
                 return Values(action=action_next_round)
+            elif user_message_text == "!reroll":
+                if len(node_id_history) < 4:  # system prompt, the AI's initial greeting, the user's first message, the AI's first message.
+                    print("!reroll: There is no AI message to reroll.")
+                    print()
+                    return Values(action=action_next_round)
+                role, unused_persona, unused_text = chatutil.get_node_message_text_without_persona(datastore, node_id_history[-1])
+                if role != "assistant":
+                    print("!reroll: Latest message shown is not an AI message, cannot reroll.")
+                    print()
+                    return Values(action=action_next_round)
+                print("Rerolling latest AI response.")
+                print()
+                app_state["HEAD"] = datastore.get_parent(node_id_history[-1])
+                node_id_history = datastore.linearize_up(app_state["HEAD"])
+                chat_print_history(node_id_history)
+                print()
+                return Values(action=action_proceed, docs_query=scan_history_for_docs_query(node_id_history))
             elif user_message_text.startswith("!speculate"):  # TODO: refactor
                 split_command_text = user_message_text.split()
                 nargs = len(split_command_text) - 1
@@ -447,17 +484,25 @@ def minimal_chat_client(backend_url) -> None:
                 return Values(action=action_next_round)
             # Not a special command.
 
-            # Add the user's message to the chat.
-            new_head_node_id = scaffold.user_turn(llm_settings=llm_settings,
-                                                  datastore=datastore,
-                                                  head_node_id=app_state["HEAD"],
-                                                  user_message_text=user_message_text)
-            app_state["HEAD"] = new_head_node_id
-            return Values(action=action_proceed, text=user_message_text)
+            # Add the user's message to the chat, if non-empty.
+            #
+            # By sending empty `user_message_text`, it is possible to have the AI generate
+            # another message without the user writing in between.
+            if user_message_text:
+                new_head_node_id = scaffold.user_turn(llm_settings=llm_settings,
+                                                      datastore=datastore,
+                                                      head_node_id=app_state["HEAD"],
+                                                      user_message_text=user_message_text)
+                app_state["HEAD"] = new_head_node_id
+                # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
+                docs_query = user_message_text
+            else:
+                docs_query = scan_history_for_docs_query(node_id_history)
 
-        def ai_turn(user_message_text: str) -> Values:
-            # NOTE: Rudimentary approach to RAG search, using the user's message text as the query. (Good enough to demonstrate the functionality. Improve later.)
-            docs_query = user_message_text if app_state["docs_enabled"] else None
+            return Values(action=action_proceed, docs_query=docs_query)
+
+        def ai_turn(docs_query: Optional[str]) -> Values:
+            docs_query = docs_query if app_state["docs_enabled"] else None
 
             node_id_history = datastore.linearize_up(app_state["HEAD"])  # latest history (ugh, we only need this here to get its length, for the sequential message number)
             ai_message_number = len(node_id_history)
@@ -467,15 +512,32 @@ def minimal_chat_client(backend_url) -> None:
                 print(chatutil.format_message_number(ai_message_number, markup="ansi"))
 
             chars = 0
+            inside_think_block = False
             def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
                 nonlocal chars
+                nonlocal inside_think_block
+
                 chars += len(chunk_text)
+
+                # Detect think block state (TODO: improve; very rudimentary and brittle for now) and determine text color
+                if "<think>" in chunk_text:
+                    inside_think_block = True
+                    colorful_chunk_text = colorizer.colorize("⊳⊳⊳Thought⊳⊳⊳", colorizer.Fore.BLUE)
+                elif "</think>" in chunk_text:
+                    inside_think_block = False
+                    colorful_chunk_text = colorizer.colorize("⊲⊲⊲Thought⊲⊲⊲", colorizer.Fore.BLUE)
+                elif inside_think_block:
+                    colorful_chunk_text = colorizer.colorize(chunk_text, colorizer.Style.DIM)
+                else:
+                    colorful_chunk_text = chunk_text
+
                 if "\n" in chunk_text:  # one token at a time; should have either one linefeed or no linefeed
                     chars = 0  # good enough?
                 elif chars >= librarian_config.llm_line_wrap_width:  # TODO: think of a better way to split to lines
                     print()
                     chars = 0
-                print(chunk_text, end="")
+
+                print(colorful_chunk_text, end="")
                 sys.stdout.flush()
                 return llmclient.action_ack  # let the LLM keep generating (we could return `action_stop` to interrupt the LLM, keeping the content received so far)
 
@@ -551,8 +613,7 @@ def minimal_chat_client(backend_url) -> None:
             if user_result["action"] is action_next_round:
                 continue
 
-            # The AI needs the text of the user's latest message for the RAG autosearch query.
-            ai_result = ai_turn(user_message_text=user_result["text"])
+            ai_result = ai_turn(docs_query=user_result["docs_query"])
             if ai_result["action"] is action_next_round:
                 continue  # Silly, since this is the last thing in the loop, but for symmetry.
 
