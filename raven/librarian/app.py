@@ -330,32 +330,6 @@ def format_chat_message_for_clipboard(message_number: Optional[int],
                                                               text=text)
     return f"{message_heading}{message_text}"
 
-def get_node_message_text_without_persona(node_id: str) -> str:
-    """Format a chat message from `node_id` in the datastore, by stripping the persona name from the front.
-
-    This is useful e.g. for displaying the message text in the linearized chat view,
-    or for sending the message into TTS preprocessing (`avatar_controller.send_text_to_tts`).
-
-    Returns the tuple `(role, persona, text)`, where:
-
-        `role`: One of the roles supported by `raven.librarian.llmclient`.
-                Typically, one of "assistant", "system", "tool", or "user".
-
-        `persona`: The persona name of `role`, as it was stored in the chat node.
-                   If the role has no persona name, then this is `None`.
-
-        `text`: The text content of the chat message with the persona name stripped,
-                at the node's current payload revision.
-    """
-    node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
-    message = node_payload["message"]
-    role = message["role"]
-    persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
-    text = message["content"]
-    text = chatutil.remove_persona_from_start_of_line(persona=persona,
-                                                      text=text)
-    return role, persona, text
-
 class DisplayedChatMessage:
     class_lock = threading.RLock()
     callbacks = {}
@@ -767,7 +741,7 @@ class DisplayedChatMessage:
         if role == "assistant":
             def speak_message_callback():
                 if app_state["avatar_speech_enabled"]:
-                    unused_message_role, unused_message_persona, message_text = get_node_message_text_without_persona(node_id)
+                    unused_message_role, unused_message_persona, message_text = chatutil.get_node_message_text_without_persona(datastore, node_id)
                     # Send only non-thought message content to TTS
                     message_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
                                                   text=message_text,
@@ -916,7 +890,7 @@ class DisplayedCompleteChatMessage(DisplayedChatMessage):
 
         Automatically parse the content from the chat node, and add the text to the GUI.
         """
-        role, persona, text = get_node_message_text_without_persona(self.node_id)  # TODO: later (chat editing), we need to set the revision to load
+        role, persona, text = chatutil.get_node_message_text_without_persona(datastore, self.node_id)  # TODO: later (chat editing), we need to set the revision to load
         super().build(role=role,
                       persona=persona,
                       node_id=self.node_id)
@@ -987,7 +961,7 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
             add_complete_chat_message_to_linearized_chat_panel(node_id=node_id,
                                                                scroll_to_end=False)  # we scroll just once, when done
     # Update avatar emotion from the message text (use only non-thought message content)
-    role, unused_persona, text = get_node_message_text_without_persona(head_node_id)
+    role, unused_persona, text = chatutil.get_node_message_text_without_persona(datastore, head_node_id)
     if role == "assistant":
         logger.info("build_linearized_chat_panel: linearized chat view new HEAD node is an AI message; updating avatar emotion from (non-thought) message content")
         text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
@@ -1187,7 +1161,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     if not speech_enabled:  # If TTS is NOT enabled, stop the generic talking animation now that the LLM is done
                         api.avatar_stop_talking(avatar_instance_id)
 
-                    unused_role, unused_persona, text = get_node_message_text_without_persona(node_id)
+                    unused_role, unused_persona, text = chatutil.get_node_message_text_without_persona(datastore, node_id)
 
                     # Keep only non-thought content for TTS and emotion update
                     text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),

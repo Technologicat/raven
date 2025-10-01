@@ -13,6 +13,7 @@ __all__ = ["format_message_number",
            "linearize_chat",
            "upgrade_datastore",
            "remove_persona_from_start_of_line",
+           "get_node_message_text_without_persona",
            "scrub"]
 
 import copy
@@ -451,6 +452,33 @@ def remove_persona_from_start_of_line(persona: Optional[str],
     text = re.sub(_persona_at_start_of_line, r"", text)
     return text
 
+def get_node_message_text_without_persona(datastore: chattree.Forest,
+                                          node_id: str) -> str:
+    """Format a chat message from `node_id` in the datastore, by stripping the persona name from the front.
+
+    This is useful e.g. for displaying the message text in the linearized chat view,
+    or for sending the message into TTS preprocessing (`avatar_controller.send_text_to_tts`).
+
+    Returns the tuple `(role, persona, text)`, where:
+
+        `role`: One of the roles supported by `raven.librarian.llmclient`.
+                Typically, one of "assistant", "system", "tool", or "user".
+
+        `persona`: The persona name of `role`, as it was stored in the chat node.
+                   If the role has no persona name, then this is `None`.
+
+        `text`: The text content of the chat message with the persona name stripped,
+                at the node's current payload revision.
+    """
+    node_payload = datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
+    message = node_payload["message"]
+    role = message["role"]
+    persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
+    text = message["content"]
+    text = remove_persona_from_start_of_line(persona=persona,
+                                             text=text)
+    return role, persona, text
+
 def scrub(persona: Optional[str],
           text: str,
           thoughts_mode: str,
@@ -537,17 +565,19 @@ def scrub(persona: Optional[str],
         # r"<hr><font color="#8080ff"><i>Thinking...</i><br><font color="#a0a0a0">$4<br></font><i>Thinking...</i></font><hr>"  -- incomplete thought
         #
         if markup == "ansi":
-            blue_thought = colorizer.colorize("Thought", colorizer.Fore.BLUE)
+            blue_thought_start = colorizer.colorize("⊳⊳⊳Thought⊳⊳⊳", colorizer.Fore.BLUE)
+            blue_thought_end = colorizer.colorize("⊲⊲⊲Thought⊲⊲⊲", colorizer.Fore.BLUE)
             def _colorize(match_obj):
                 s = match_obj.group(4)
                 s = colorizer.colorize(s, colorizer.Style.DIM)
-                return f"⊳⊳⊳{blue_thought}⊳⊳⊳\n{s}⊲⊲⊲{blue_thought}⊲⊲⊲\n"
+                return f"{blue_thought_start}\n{s}{blue_thought_end}\n"
         elif markup == "markdown":
-            blue_thought = '<font color="#808080ff">Thought</font>'
+            blue_thought_start = '<font color="#808080ff">⊳⊳⊳Thought⊳⊳⊳</font>'
+            blue_thought_end = '<font color="#808080ff">⊲⊲⊲Thought⊲⊲⊲</font>'
             def _colorize(match_obj):
                 s = match_obj.group(4)
                 s = f'<font color="#a0a0a0">{s}</font>'
-                return f"⊳⊳⊳{blue_thought}⊳⊳⊳\n-----\n{s}\n-----\n⊲⊲⊲{blue_thought}⊲⊲⊲\n"
+                return f"{blue_thought_start}\n-----\n{s}\n-----\n{blue_thought_end}\n"
 
         if markup is not None:  # one of the supported markup types was picked?
             text = re.sub(_complete_thought_block, _colorize, text)
