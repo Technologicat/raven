@@ -39,7 +39,7 @@ Maybe later.
   - In anime terms, the client-side backdrop (in `raven.avatar.settings_editor.app`) is essentially a separate backdrop cel, placed behind the CG animated character cel.
 
 - Voice mixing. Would allow for greater variation for voices.
-  - Supported by Kokoro-FastAPI; need to add this functionality to our own server too.
+  - See Kokoro-FastAPI; if we want this feature, we need to add it to Raven-server.
   - Two voices, second voice is optional, can be None.
   - GUI:
     - Add a second combobox, for the second voice. Add the None option, make it the default (so that the default is to use only one voice).
