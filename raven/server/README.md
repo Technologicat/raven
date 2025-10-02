@@ -28,7 +28,7 @@
     - [General](#general)
     - [Raven-avatar client](#raven-avatar-client)
         - [DPG GUI driver](#dpg-gui-driver)
-        - [TTS and subtitling controller](#tts-and-subtitling-controller)
+        - [Avatar controller (TTS, subtitles, data eyes, emotion autoreset)](#avatar-controller-tts-subtitles-data-eyes-emotion-autoreset)
     - [Text sentiment classification](#text-sentiment-classification)
     - [Semantic embeddings](#semantic-embeddings)
     - [Image processing](#image-processing)
@@ -420,26 +420,42 @@ This lives in a separate module, [`raven.client.avatar_renderer`](../client/avat
   - This also serves as a starting point for porting the avatar's GUI driver to other GUI toolkits and to other programming languages.
   - Instantiate `DPGAvatarRenderer`, then configure it, then `start` it. See docstrings for details. See usage example in [`raven.avatar.settings_editor.app`](../avatar/settings_editor/app.py).
 
-### TTS and subtitling controller
+### Avatar controller (TTS, subtitles, data eyes, emotion autoreset)
 
 This lives in a separate module, [`raven.client.avatar_controller`](../client/avatar_controller.py). It is part of the API, but not imported automatically.
 
-This adds lipsynced TTS to the avatar, as well as optional subtitles. The subtitles can be either auto-translated (via Raven-server's `translate` module), or shown as-is as closed captions (CC) in the input language.
+This module has a light DPG dependency, for rendering the optional subtitles, and optionally enabling/disabling the TTS stop button automatically (if your GUI has one).
 
-The TTS is handled once sentence at a time. More sentences are precomputed from the module's TTS queue while the first one is being spoken, thus minimizing latency (for the second and further sentences) even if the TTS model is running on CPU.
+As the name suggests, this module controls some avatar features:
 
-This module also controls the avatar's "data eyes" effect (LLM tool access indicator).
+- Lipsynced TTS.
+  - Handled once sentence at a time, stabilizing the talking speed and word timestamp accuracy of the AI TTS.
+  - More sentences are precomputed from the module's TTS queue while the first one is being spoken, thus minimizing latency (for the second and further sentences) even if the TTS model is running on CPU.
+- Subtitles (optional) for the TTS.
+  - Either auto-translated (via Raven-server's `translate` module), or shown as-is as closed captions (CC) in the input language.
+- The "data eyes" effect, can be used e.g. as an LLM tool access indicator.
+- Emotion autoreset.
+  - Triggers when the avatar instance is not speaking, waiting a few seconds (configurable).
+  - Speaking, or updating the avatar's emotion with `update_emotion_from_text` resets the countdown.
 
-This module has a light DPG dependency, for rendering the optional subtitles, and optionally enabling/disabling the TTS stop button automatically.
+API:
 
-- `initialize`: Initialize and configure the module, and start background tasks.
-  - Must be called first, and only after `dpg.create_context`.
-- `shutdown`: Prepare module for GUI teardown and stop background tasks.
-- `update_emotion_from_text`: Update the avatar's emotion from given text, using the `classify` module on Raven-server.
-- `send_text_to_tts`: Send text into the TTS queue.
-- `stop_tts`: Clear the TTS queue and stop the TTS.
-- `start_data_eyes`: Enter the "data eyes" state. The animation will start instantly. While in data eyes state, further calls no-op.
-- `stop_data_eyes`: Exit the "data eyes" state. The animation will fade out. Each call will start the fadeout from the beginning.
+- `DPGAvatarController`
+  - Must be instantiated only after `dpg.create_context`, and only once per app.
+  - Then call the `register_avatar_instance` method for any avatar instance(s) you want the controller to control.
+    - This creates an avatar-instance-specific configuration record, but importantly, also starts the emotion autoreset background task for that instance.
+  - Other important methods:
+    - For a given controlled avatar instance:
+      - `update_emotion_from_text`: Update the avatar's emotion from given text, using the `classify` module on Raven-server.
+        - Calling this resets the emotion autoreset countdown for that avatar instance.
+      - `start_data_eyes`: Enter the "data eyes" state.
+        - The animation will start instantly. While in data eyes state, further calls no-op.
+      - `stop_data_eyes`: Exit the "data eyes" state.
+        - The animation will fade out. If the fadeout animation is already playing, it will restart from the beginning.
+      - `send_text_to_tts`: Send text into the TTS queue.
+    - Not specific to an avatar instance:
+      - `stop_tts`: Clear the TTS queue and stop the TTS.
+      - `shutdown`: Prepare module for GUI teardown and stop background tasks.
 
 
 ## Text sentiment classification

@@ -45,7 +45,7 @@ with timer() as tim:
     # from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
     from ..client import api  # Raven-server support
-    from ..client import avatar_controller
+    from ..client.avatar_controller import DPGAvatarController
     from ..client.avatar_renderer import DPGAvatarRenderer
     from ..client import config as client_config
 
@@ -748,7 +748,8 @@ class DisplayedChatMessage:
                                                   thoughts_mode="discard",
                                                   markup=None,
                                                   add_persona=False)
-                    avatar_controller.send_text_to_tts(message_text,
+                    avatar_controller.send_text_to_tts(config=avatar_record,
+                                                       text=message_text,
                                                        voice=librarian_config.avatar_config.voice,
                                                        voice_speed=librarian_config.avatar_config.voice_speed,
                                                        video_offset=librarian_config.avatar_config.video_offset)
@@ -969,7 +970,8 @@ def build_linearized_chat_panel(head_node_id: Optional[str] = None) -> None:
                               thoughts_mode="discard",
                               markup=None,
                               add_persona=False)
-        avatar_controller.update_emotion_from_text(text)
+        avatar_controller.update_emotion_from_text(config=avatar_record,
+                                                   text=text)
     dpg.split_frame()
     _scroll_chat_view_to_end()
 
@@ -1053,7 +1055,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             def on_docs_start() -> None:
                 global gui_alive  # intent only
                 if gui_alive:
-                    avatar_controller.start_data_eyes()
+                    avatar_controller.start_data_eyes(config=avatar_record)
                     pulsating_gray_text_glow.reset()  # start new pulsation cycle
                     dpg.show_item(docs_indicator_group)
 
@@ -1061,7 +1063,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 global gui_alive  # intent only
                 if gui_alive:
                     dpg.hide_item(docs_indicator_group)
-                    avatar_controller.stop_data_eyes()
+                    avatar_controller.stop_data_eyes(config=avatar_record)
 
             def on_llm_start() -> None:
                 global gui_alive  # intent only
@@ -1089,7 +1091,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
                     text = "".join(task_env.emotion_recent_paragraphs)
                     logger.info(f"ai_turn.ai_turn_task._update_avatar_emotion_from_incoming_text: updating emotion from {len(text)} characters of recent text")
-                    avatar_controller.update_emotion_from_text(text)
+                    avatar_controller.update_emotion_from_text(config=avatar_record,
+                                                               text=text)
                 task_env.emotion_update_calls += 1
 
             def on_llm_progress(n_chunks: int, chunk_text: str) -> None:
@@ -1128,7 +1131,8 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     _update_avatar_emotion_from_incoming_text(paragraph_text)
                     # if speech_enabled:  # If TTS enabled, send complete paragraph to TTS preprocess queue
                     #     if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
-                    #         avatar_controller.send_text_to_tts(paragraph_text,
+                    #         avatar_controller.send_text_to_tts(config=avatar_record,
+                    #                                            text=paragraph_text,
                     #                                            voice=librarian_config.avatar_config.voice,
                     #                                            voice_speed=librarian_config.avatar_config.voice_speed,
                     #                                            video_offset=librarian_config.avatar_config.video_offset)
@@ -1173,14 +1177,16 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                     # Avatar speech and subtitling
                     if speech_enabled:  # If TTS enabled, send final message text to TTS preprocess queue (this always uses lipsync)
                         logger.info("ai_turn.ai_turn_task.on_done: sending final (non-thought) message content for translation, TTS, and subtitling")
-                        avatar_controller.send_text_to_tts(text,
+                        avatar_controller.send_text_to_tts(config=avatar_record,
+                                                           text=text,
                                                            voice=librarian_config.avatar_config.voice,
                                                            voice_speed=librarian_config.avatar_config.voice_speed,
                                                            video_offset=librarian_config.avatar_config.video_offset)
 
                     # Update avatar emotion one last time, from the final message text
                     logger.info("ai_turn.ai_turn_task.on_done: updating emotion from final (non-thought) message content")
-                    avatar_controller.update_emotion_from_text(text)
+                    avatar_controller.update_emotion_from_text(config=avatar_record,
+                                                               text=text)
 
                     # Update linearized chat view
                     logger.info("ai_turn.ai_turn_task.on_done: updating chat view with final message")
@@ -1203,7 +1209,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
             def on_tools_start(tool_calls: List[Dict]) -> None:
                 global gui_alive  # intent only
                 if gui_alive:
-                    avatar_controller.start_data_eyes()
+                    avatar_controller.start_data_eyes(config=avatar_record)
 
                     # # HACK: If websearch is present *anywhere* among the tool calls in this message,
                     # #       light up the web access indicator for the whole tool call processing step.
@@ -1240,7 +1246,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 global gui_alive  # intent only
                 if gui_alive:
                     # dpg.hide_item(web_indicator_group)
-                    avatar_controller.stop_data_eyes()
+                    avatar_controller.stop_data_eyes(config=avatar_record)
 
             new_head_node_id = scaffold.ai_turn(llm_settings=llm_settings,
                                                 datastore=datastore,
@@ -1267,7 +1273,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
         finally:
             if gui_alive:
                 dpg.disable_item("chat_stop_generation_button")  # tag
-                avatar_controller.stop_data_eyes()  # make sure the data eyes effect ends (unless app shutting down, in which case we shouldn't start new GUI animations)
+                avatar_controller.stop_data_eyes(config=avatar_record)  # make sure the data eyes effect ends (unless app shutting down, in which case we shouldn't start new GUI animations)
                 if not speech_enabled:  # make sure the generic talking animation ends (if we invoked it)
                     api.avatar_stop_talking(avatar_instance_id)
                 # Also make sure that the processing indicators hide
@@ -1453,7 +1459,7 @@ with timer() as tim:
                             app_state["avatar_speech_enabled"] = not app_state["avatar_speech_enabled"]
                         def toggle_subtitles_enabled():
                             app_state["avatar_subtitles_enabled"] = not app_state["avatar_subtitles_enabled"]
-                            avatar_controller.avatar_controller_config.subtitles_enabled = app_state["avatar_subtitles_enabled"]
+                            avatar_controller.subtitles_enabled = app_state["avatar_subtitles_enabled"]
                         dpg.add_checkbox(label="Tools", default_value=app_state["tools_enabled"], callback=toggle_tools_enabled, tag="tools_enabled_checkbox")
                         dpg.add_tooltip("tools_enabled_checkbox", tag="tools_enabled_tooltip")  # tag
                         dpg.add_text("Provide tools to the AI, such as web search.", parent="tools_enabled_tooltip")  # tag
@@ -1619,9 +1625,9 @@ with timer() as tim:
                 #     global _testing_data_eyes_enabled
                 #     _testing_data_eyes_enabled = not _testing_data_eyes_enabled
                 #     if _testing_data_eyes_enabled:
-                #         avatar_controller.start_data_eyes()
+                #         avatar_controller.start_data_eyes(config=avatar_record)
                 #     else:
-                #         avatar_controller.stop_data_eyes()
+                #         avatar_controller.stop_data_eyes(config=avatar_record)
                 #     # Acknowledge the action in the GUI.
                 #     gui_animation.animator.add(gui_animation.ButtonFlash(message="Ran the action being tested!",
                 #                                                          target_button=testing_button,
@@ -1852,22 +1858,22 @@ avatar_instance_id = api.avatar_load(librarian_config.avatar_config.image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
 api.avatar_start(avatar_instance_id)
 dpg_avatar_renderer.start(avatar_instance_id)
-avatar_controller.initialize(avatar_instance_id=avatar_instance_id,
-                             data_eyes_fadeout_duration=librarian_config.avatar_config.data_eyes_fadeout_duration,
-                             emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
-                             emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
-                             stop_tts_button_gui_widget="chat_stop_speech_button",  # tag
-                             on_tts_idle=None,
-                             tts_idle_check_interval=None,
-                             subtitles_enabled=app_state["avatar_subtitles_enabled"],
-                             subtitle_text_gui_widget="avatar_subtitle_text",  # tag
-                             subtitle_left_x0=gui_config.subtitle_x0,
-                             subtitle_bottom_y0=subtitle_bottom_y0,
-                             translator_source_lang=gui_config.translator_source_lang,
-                             translator_target_lang=gui_config.translator_target_lang,
-                             main_window_w=gui_config.main_window_w,
-                             main_window_h=gui_config.main_window_h,
-                             executor=bg)  # use the same thread pool as our main task manager
+avatar_controller = DPGAvatarController(stop_tts_button_gui_widget="chat_stop_speech_button",  # tag
+                                        on_tts_idle=None,
+                                        tts_idle_check_interval=None,
+                                        subtitles_enabled=app_state["avatar_subtitles_enabled"],
+                                        subtitle_text_gui_widget="avatar_subtitle_text",  # tag
+                                        subtitle_left_x0=gui_config.subtitle_x0,
+                                        subtitle_bottom_y0=subtitle_bottom_y0,
+                                        translator_source_lang=gui_config.translator_source_lang,
+                                        translator_target_lang=gui_config.translator_target_lang,
+                                        main_window_w=gui_config.main_window_w,
+                                        main_window_h=gui_config.main_window_h,
+                                        executor=bg)  # use the same thread pool as our main task manager
+avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=avatar_instance_id,
+                                                           emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
+                                                           emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
+                                                           data_eyes_fadeout_duration=librarian_config.avatar_config.data_eyes_fadeout_duration)
 
 gui_alive = True  # Global flag for app shutdown, for background tasks in our main task manager to detect if GUI teardown has started (so that updating GUI elements is no longer safe).
 def gui_shutdown() -> None:
