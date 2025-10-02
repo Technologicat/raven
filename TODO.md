@@ -49,19 +49,24 @@
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Maybe next:
-    - Remove Kokoro-FastAPI support (and `api.tts_server_available`; when needed, just check `api.raven_server_available`, then call `api.modules`, and check if "tts" is in the list)
+    - Refactor the linearized chat view into a class
+    - Consider: should the GUI<->scaffold integration be a separate module?
     - `raven.visualizer.importer`: auto-use server if available and the necessary modules loaded; if not, emit a log warning and load the model locally (see `raven.librarian.hybridir`, which does this)
     - Long subtitle splitter (we now have the audio length).
     - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
     - Add GUI dynamic resizing on window size change
     - Improve: thought blocks
-      - `llmclient.invoke` should inject the initial "<think>" tag if the model doesn't send it.
         - Have a "thinking model" toggle that, when enabled, does the check at the start of the message (and only if NOT continuing a previous message).
       - GUI: completed message: collapsible thought blocks (a button to hide/show a group)
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: Avatar idle off (10 sec)
   - Later:
+    - Support for non-thinking models
+      - Librarian currently assumes in a few places (e.g. avatar speaking animation control) that the model will first emit a "<think>" tag.
+      - `raven.librarian.llmclient.invoke` should inject the initial "<think>" tag if the model doesn't send it. Some models don't (e.g. QwQ-32B, which was a preview of Qwen3).
+      - `raven.librarian.chatutil.scrub` already fixes a missing initial think tag (if there is a closing tag but not an opening one), but that's only for the final message.
+    - MCP support for loading tools from remote servers?
     - Add feature: show prompt
       - Save it per-chat-message, from `on_prompt_ready`.
       - Show prompt length as tokens (`raven.llmclient.token_count`).
@@ -74,6 +79,7 @@
       - Scope = a subdirectory of `docs_dir`
         - E.g. AI, hydrogen, MLP fanfics, ...
       - For filtering, add a new custom metadata field: "scope". Works with both ChromaDB as well as our wrapper logic over BM25s.
+      - Add feature: scope selection for docs search.
     - Import tool for importing a batch of documents into the document database (useful when importing lots of documents at once)
       - Just instantiate a `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Once the rescan finishes, exit the tool.
     - Draw assets:
