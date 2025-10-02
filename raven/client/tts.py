@@ -19,7 +19,6 @@ import copy
 import functools
 import io
 import json
-import re
 import requests
 import time
 import traceback
@@ -143,13 +142,8 @@ def tts_list_voices() -> List[str]:
     """
     if not util.api_initialized:
         raise RuntimeError("tts_list_voices: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_server_type is None:
-        return []
-    headers = copy.copy(util.api_config.tts_default_headers)
-    if util.api_config.tts_server_type == "kokoro":
-        response = requests.get(f"{util.api_config.tts_url}/v1/audio/voices", headers=headers)
-    else:  # util.api_config.tts_server_type == "raven"
-        response = requests.get(f"{util.api_config.tts_url}/api/tts/list_voices", headers=headers)
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/tts/list_voices", headers=headers)
     util.yell_on_error(response)
     output_data = response.json()
     return output_data["voices"]
@@ -186,86 +180,24 @@ def tts_prepare(text: str,
     """
     if not util.api_initialized:
         raise RuntimeError("tts_prepare: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_server_type is None:
-        logger.info("tts_prepare: TTS server type missing from API config. Cancelled.")
-        return None
     if not text.strip():
         logger.info("tts_prepare: Ignoring blank `text`. Cancelled.")
         return None
-    headers = copy.copy(util.api_config.tts_default_headers)
+    headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
 
     result = {}
 
-    # Get phonemes
-    if get_metadata:
-        # TODO: Kokoro-FastAPI doesn't support returning phonemes with word-level timestamps, so for `tts_server_type="kokoro"`, we jury-rig this.
-        # It often works, but not always (e.g. a year number produces one word, but multiple phoneme sequences).
-        #
-        # The STRONGLY RECOMMENDED, robust solution is to use a local Kokoro installation (`tts_server_type="raven"`), which allows us to get
-        # word-level phonemes with the same word boundaries as in the timestamps.
-        #
-        # However, we retain the option to use Kokoro-FastAPI.
-        if util.api_config.tts_server_type == "kokoro":
-            # Phonemize and word-level timestamping treat underscores differently: phonemize treats them as spaces,
-            # whereas word-level timestamping doesn't (no word split at underscore). Better to remove them.
-            def prefilter(text: str) -> str:
-                return text.replace("_", " ")
-            text = prefilter(text)
-
-            def get_phonemes_from_kokoro_fastapi(task_env: envcls) -> None:
-                with timer() as tim:
-                    logger.info("tts_prepare.get_phonemes_from_kokoro_fastapi: starting")
-                    # Language codes:
-                    #   https://github.com/hexgrad/kokoro
-                    #   🇺🇸 'a' => American English, 🇬🇧 'b' => British English
-                    #   🇪🇸 'e' => Spanish es
-                    #   🇫🇷 'f' => French fr-fr
-                    #   🇮🇳 'h' => Hindi hi
-                    #   🇮🇹 'i' => Italian it
-                    #   🇯🇵 'j' => Japanese: pip install misaki[ja]
-                    #   🇧🇷 'p' => Brazilian Portuguese pt-br
-                    #   🇨🇳 'z' => Mandarin Chinese: pip install misaki[zh]
-                    data = {"text": text,
-                            "language": "a"}
-                    response = requests.post(f"{util.api_config.tts_url}/dev/phonemize", headers=headers, json=data, stream=True)
-                    util.yell_on_error(response)
-                    response_json = response.json()
-                    phonemes = response_json["phonemes"]
-                    # phonemess = phonemes.split()  # -> [word0, word1, ...]
-                    # phonemess = re.split(r"\s|,|;|:|\.|!|\?|“|”", phonemes)  # -> [word0, word1, ...], dropping punctuation
-                    # Word-level timestamping splits at ":" (even if inside a word), so we should too. But it doesn't split at periods in dotted names, so we shouldn't either.
-                    phonemess = re.split(r"\s|:", phonemes)  # -> [word0, word1, ...], but also very much a phone-mess.
-                    phonemess = [p for p in phonemess if p]  # drop empty strings
-                    task_env.phonemess = phonemess
-                    task_env.done = True
-                logger.info(f"tts_prepare.get_phonemes_from_kokoro_fastapi: done in {tim.dt:0.6g}s.")
-            logger.info("tts_prepare: submitting background task to get phonemes from Kokoro-FastAPI")
-            phonemes_task_env = envcls(done=False)
-            util.api_config.task_manager.submit(get_phonemes_from_kokoro_fastapi, phonemes_task_env)
-        # When `util.api_config.tts_server_type == "raven"`, we'll get the phonemes in the metadata, no need for a separate fetch.
-
     # Get audio, and if getting metadata, also the word-level timestamps
     with timer() as tim:
-        if util.api_config.tts_server_type == "kokoro":
-            logger.info("tts_prepare: getting TTS audio with word-level timestamps from Kokoro-FastAPI")
-            data = {"model": "kokoro",
-                    "voice": voice,
-                    "input": text,
-                    "response_format": "mp3",
-                    "speed": speed,
-                    "stream": True,
-                    "return_timestamps": get_metadata}
-            stream_response = requests.post(f"{util.api_config.tts_url}/dev/captioned_speech", headers=headers, json=data, stream=True)
-        else:  # util.api_config.tts_server_type == "raven"
-            logger.info("tts_prepare: getting TTS audio with word-level timestamps and phonemes from Raven-server")
-            data = {"voice": voice,
-                    "text": text,
-                    "format": "mp3",
-                    "speed": speed,
-                    "stream": True,
-                    "get_metadata": get_metadata}
-            stream_response = requests.post(f"{util.api_config.tts_url}/api/tts/speak", headers=headers, json=data, stream=True)
+        logger.info("tts_prepare: getting TTS audio with word-level timestamps and phonemes from Raven-server")
+        data = {"voice": voice,
+                "text": text,
+                "format": "mp3",
+                "speed": speed,
+                "stream": True,
+                "get_metadata": get_metadata}
+        stream_response = requests.post(f"{util.api_config.raven_server_url}/api/tts/speak", headers=headers, json=data, stream=True)
         util.yell_on_error(stream_response)
 
         # Get word-level timestamps from HTTP header
@@ -274,8 +206,9 @@ def tts_prepare(text: str,
                 # Keep also the most common punctuation, used for closing the mouth.
                 return len(s) > 1 or s.isalnum() or s in ",.!?:;"
 
+            # I got duplicate timestamps from Kokoro-FastAPI; Raven now always uses the internal Kokoro TTS, but since I'm not sure if the cause was FastAPI or the engine itself, I'm keeping the precaution here.
             def clean_timestamps(timestamps: List[Dict]) -> List[Dict]:
-                """Remove consecutive duplicate timestamps (some versions of Kokoro-FastAPI produce those) and any timestamps for punctuation."""
+                """Remove consecutive duplicate timestamps and some punctuation timestamps."""
                 out = []
                 last_start_time = None
                 for record in timestamps:  # format: [{"word": "blah", "start_time": 1.23, "end_time": 1.45}, ...]
@@ -284,18 +217,12 @@ def tts_prepare(text: str,
                         last_start_time = record["start_time"]
                 return out
 
-            # The Kokoro-FastAPI docs were out of date at least when this was implemented.
-            # Using a running Kokoro-FastAPI and sending an example request at http://localhost:8880/docs
-            # helped to figure out what to actually do here.
-            #
-            # Raven-server also sends the metadata in the same header field.
             timestamps = json.loads(stream_response.headers["x-word-timestamps"])
 
-            # For Raven-server, the words are URL-encoded to ASCII with percent-escaped UTF-8, due to possible presence of exotic characters,
-            # due to HTTP limitations (can't send Unicode in HTTP headers).
-            if util.api_config.tts_server_type == "raven":
-                for timestamp in timestamps:
-                    timestamp["word"] = urllib.parse.unquote(timestamp["word"])
+            # The words and phonemes are URL-encoded to ASCII with percent-escaped UTF-8, due to HTTP limitations (can't send Unicode in HTTP headers).
+            for timestamp in timestamps:
+                timestamp["word"] = urllib.parse.unquote(timestamp["word"])
+                timestamp["phonemes"] = urllib.parse.unquote(timestamp["phonemes"])
 
             timestamps = clean_timestamps(timestamps)
 
@@ -313,47 +240,14 @@ def tts_prepare(text: str,
     audio_buffer.seek(0)
     result["audio_bytes"] = audio_buffer.getvalue()
 
-    if util.api_config.tts_server_type == "raven":
-        total_audio_duration = json.loads(stream_response.headers["x-audio-duration"])
-        audio_duration_str = f" (duration {total_audio_duration:0.6g}s)"
-    else:
-        audio_duration_str = ""  # Kokoro-FastAPI doesn't send this information
-
+    total_audio_duration = json.loads(stream_response.headers["x-audio-duration"])
+    audio_duration_str = f" (duration {total_audio_duration:0.6g}s)"
     logger.info(f"tts_prepare: got TTS audio{audio_duration_str} in {tim.dt:0.6g}s.")
 
     # Postprocess per-word phoneme data
     if get_metadata:
         logger.info("tts_prepare: postprocessing per-word phoneme data")
         with timer() as tim:
-            if util.api_config.tts_server_type == "kokoro":
-                # Wait until phonemization background task completes (usually it completes faster than audio, so likely completed already)
-                while not phonemes_task_env.done:
-                    time.sleep(0.01)
-
-                # for record in timestamps:
-                #     print(record)  # DEBUG, show word-level timestamps
-                # print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
-
-                # Now we have:
-                #   - `timestamps`: words, with word-level start and end times
-                #   - `phonemes`: phonemes for each word
-                #
-                # Consolidate data for convenience
-                if len(phonemes_task_env.phonemess) != len(timestamps):  # should have exactly one phoneme sequence for each word
-                    logger.error(f"tts_prepare: Metadata was requested, but the number of phoneme sequences ({len(phonemes_task_env.phonemess)}) does not match number of words ({len(timestamps)}). Can't process phonemes. Cancelled.")
-                    for record in timestamps:
-                        print(record)  # DEBUG, show timestamped words
-                    print(phonemes_task_env.phonemess)  # DEBUG, show phoneme sequences
-                    return None
-
-                for timestamp, phonemes in zip(timestamps, phonemes_task_env.phonemess):
-                    timestamp["phonemes"] = phonemes
-            else:  # util.api_config.tts_server_type == "raven"
-                # For Raven-server, the timestamp metadata contains the phonemes too.
-                # But they're URL-encoded to ASCII with percent-escaped UTF-8, due to HTTP limitations (can't send Unicode in HTTP headers).
-                for timestamp in timestamps:
-                    timestamp["phonemes"] = urllib.parse.unquote(timestamp["phonemes"])
-
             # Expand dipthongs to IPA notation.
             for timestamp in timestamps:
                 for dipthong, ipa_expansion in dipthong_vowel_to_ipa.items():
@@ -405,10 +299,7 @@ def tts_speak(text: str,
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_server_type is None:
-        logger.info("tts_speak: TTS server type missing from API config. Cancelled.")
-        return
-    headers = copy.copy(util.api_config.tts_default_headers)
+    headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
 
     # We run this in the background
@@ -508,9 +399,6 @@ def tts_speak_lipsynced(instance_id: str,
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak_lipsynced: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_server_type is None:
-        logger.info("tts_speak_lipsynced: TTS server type missing from API config. Cancelled.")
-        return None
 
     def speak(task_env: envcls) -> None:
         if prep is None:
@@ -682,8 +570,6 @@ def tts_stop() -> None:
     """Stop the speech synthesizer."""
     if not util.api_initialized:
         raise RuntimeError("tts_stop: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_server_type is None:
-        return
     logger.info("tts_stop: stopping audio")
     pygame.mixer.music.stop()
 
@@ -691,8 +577,6 @@ def tts_speaking() -> bool:
     """Query whether the speech synthesizer is speaking."""
     if not util.api_initialized:
         raise RuntimeError("tts_stop: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_server_type is None:
-        return
     is_speaking = pygame.mixer.music.get_busy()
     logger.info(f"tts_speaking: is audio playing: {is_speaking}")
     return is_speaking

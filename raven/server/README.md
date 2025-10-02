@@ -352,7 +352,7 @@ Full list of Python API functions follows.
   - This loads the client configuration, and starts the audio service so that TTS can work.
   - The implementation of this one client API function actually lives in `raven.client.util`; see function `initialize_api`.
 - `raven_server_available`: Check whether the client can connect to *Raven-server* (whose URL was specified when `initialize` was called).
-- `tts_server_available`: Same, but check the TTS server. This isn't needed when using *Raven-server*'s internal TTS (recommended).
+- `tts_server_available`: Same, but also check if the `"tts"` module is loaded.
 
 ## Raven-avatar client
 

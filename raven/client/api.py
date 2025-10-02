@@ -93,9 +93,7 @@ from .util import initialize_api as initialize  # noqa: F401: re-export
 def raven_server_available() -> bool:
     """Return whether Raven-server is available.
 
-    Raven-server handles everything on the server side of Raven,
-    except possibly TTS (speech synthesis), if that has been configured
-    to use another server in `init_module`.
+    Raven-server handles everything on the server side of Raven.
     """
     if not util.api_initialized:
         raise RuntimeError("raven_server_available: The `raven.client.api` module must be initialized before using the API.")
@@ -114,22 +112,17 @@ def raven_server_available() -> bool:
 def tts_server_available() -> bool:
     """Return whether the speech synthesizer is available.
 
-    TTS may use either Raven-server, or a separate Kokoro-FastAPI server,
-    depending on how it was configured in `init_module`.
+    TTS uses Raven-server, but whether the "tts" module is loaded depends on the server config.
+
+    This is a shorthand for::
+
+        api.raven_server_available() and ("tts" in api.modules())
+
+    Other modules don't have a shorthand function, but you can use the same strategy manually.
     """
     if not util.api_initialized:
         raise RuntimeError("tts_server_available: The `raven.client.api` module must be initialized before using the API.")
-    if util.api_config.tts_server_type is None:
-        return False
-    headers = copy.copy(util.api_config.tts_default_headers)
-    try:
-        response = requests.get(f"{util.api_config.tts_url}/health", headers=headers)
-    except requests.exceptions.ConnectionError as exc:
-        logger.error(f"tts_server_available: {type(exc)}: {exc}")
-        return False
-    if response.status_code != 200:
-        return False
-    return True
+    return raven_server_available() and ("tts" in modules())
 
 def modules() -> List[str]:
     """Return the list of modules loaded on the running Raven-server."""
