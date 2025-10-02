@@ -293,17 +293,18 @@ class DPGAvatarController:
             while True:
                 if task_env.cancelled:
                     return
-                time_now = time.time_ns()
-                dt = (time_now - config._emotion_autoreset_t0) / 10**9
-                if not config._avatar_speaking and dt > config.emotion_autoreset_interval:
-                    config._emotion_autoreset_t0 = time_now
-                    logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar idle for at least {config.emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
-                    try:
-                        api.avatar_set_emotion(instance_id=config.avatar_instance_id,
-                                               emotion_name="neutral")
-                    except Exception:  # exit task if the avatar instance is gone
-                        logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar instance is gone, exiting.")
-                        return
+                if config.emotion_autoreset_interval is not None:
+                    time_now = time.time_ns()
+                    dt = (time_now - config._emotion_autoreset_t0) / 10**9
+                    if not config._avatar_speaking and dt > config.emotion_autoreset_interval:
+                        config._emotion_autoreset_t0 = time_now
+                        logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar idle for at least {config.emotion_autoreset_interval} seconds; updating emotion to 'neutral' (default idle state)")
+                        try:
+                            api.avatar_set_emotion(instance_id=config.avatar_instance_id,
+                                                   emotion_name="neutral")
+                        except Exception:  # exit task if the avatar instance is gone
+                            logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar instance is gone, exiting.")
+                            return
                 time.sleep(0.1)
         # Save the env and the task handle for possible cancellation.
         config._emotion_autoreset_task_env = env()
