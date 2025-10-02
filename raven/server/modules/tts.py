@@ -107,7 +107,7 @@ def text_to_speech(voice: str,
 
     The audio file is returned as the response content.
 
-    `voice`: See https://github.com/hexgrad/kokoro and https://github.com/remsky/Kokoro-FastAPI
+    `voice`: See `get_voices`, or the `raven-avatar-settings-editor` GUI app.
 
     `speed`: Speed, relative to the normal speed of the selected voice.
 
@@ -203,8 +203,7 @@ def text_to_speech(voice: str,
     plural_s = "s" if len(audios) != 1 else ""
     logger.info(f"text_to_speech: Processing complete in {tim.dt:0.6g}s. Got {len(audios)} TTS response segment{plural_s}, with a total audio duration of {total_audio_duration:0.6g}s.")
 
-    # Our output format is otherwise exactly like that of Kokoro-FastAPI's "/dev/captioned_speech" endpoint (June 2025),
-    # but we include the phonemes too, for lipsyncing.
+    # Our output format is inspired by Kokoro-FastAPI's "/dev/captioned_speech" endpoint (June 2025), but we include the phonemes too, for lipsyncing, and the audio duration.
     output_headers = {"Content-Type": f"audio/{format}",
                       "x-audio-duration": total_audio_duration}  # seconds
     if get_metadata:
