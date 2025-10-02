@@ -62,6 +62,8 @@
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: Avatar idle off (10 sec)
   - Later:
+    - IBM Granite OCR for PDF input
+    - STT: whisper-v3-turbo
     - `DPGAvatarRenderer`, `DPGAvatarController`: isolate the DPG-specific parts
     - Support for non-thinking models
       - Librarian currently assumes in a few places (e.g. avatar speaking animation control) that the model will first emit a "<think>" tag.
