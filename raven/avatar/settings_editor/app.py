@@ -56,7 +56,7 @@ with timer() as tim:
 
     from ...client import api  # convenient Python functions that abstract away the web API
     from ...client import config as client_config
-    from ...client import avatar_controller
+    from ...client.avatar_controller import DPGAvatarController
     from ...client.avatar_renderer import DPGAvatarRenderer
 
     from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
@@ -71,9 +71,6 @@ task_manager = bgtask.TaskManager(name="avatar_settings_editor",
                                   executor=bg)
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
-               tts_server_type=client_config.tts_server_type,
-               tts_url=client_config.tts_url,
-               tts_api_key_file=client_config.tts_api_key_file,
                tts_playback_audio_device=client_config.tts_playback_audio_device,
                executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
 
@@ -588,10 +585,10 @@ class PostprocessorSettingsEditorGUI:
                         def toggle_data_eyes():
                             self._data_eyes_state = not self._data_eyes_state
                             if self._data_eyes_state:
-                                avatar_controller.start_data_eyes()
+                                avatar_controller.start_data_eyes(config=avatar_record)
                                 dpg.set_item_label("data_eyes_button", "Stop data eyes")  # tag  # TODO: DRY GUI labels
                             else:
-                                avatar_controller.stop_data_eyes()
+                                avatar_controller.stop_data_eyes(config=avatar_record)
                                 dpg.set_item_label("data_eyes_button", "Start data eyes")  # tag  # TODO: DRY GUI labels
 
                         dpg.add_button(label="Start data eyes", width=205, callback=toggle_data_eyes, tag="data_eyes_button")  # per-character "data eyes" effect
@@ -620,15 +617,15 @@ class PostprocessorSettingsEditorGUI:
                     # AI speech synthesizer
                     tts_alive = api.tts_server_available()
                     if tts_alive:
-                        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS server at {client_config.tts_url}.{Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to TTS at {client_config.raven_server_url}.{Style.RESET_ALL}")
                         print(f"{Fore.GREEN}{Style.BRIGHT}Speech synthesis is available.{Style.RESET_ALL}")
-                        heading_label = f"Voice [Ctrl+V] [{client_config.tts_url}]"
+                        heading_label = f"Voice [Ctrl+V] [{client_config.raven_server_url}]"
                         self.voice_names = api.tts_list_voices()
                     else:
-                        print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS server at {client_config.tts_url}.{Style.RESET_ALL} Is the TTS server running?")
+                        print(f"{Fore.YELLOW}{Style.BRIGHT}WARNING: Cannot connect to TTS at {client_config.raven_server_url}.{Style.RESET_ALL} Is the 'tts' module loaded?")
                         print(f"{Fore.YELLOW}{Style.BRIGHT}Speech synthesis is NOT available.{Style.RESET_ALL}")
                         heading_label = "Voice [Ctrl+V] [not connected]"
-                        self.voice_names = ["[TTS server not available]"]
+                        self.voice_names = ["[TTS not available]"]
                     dpg.add_text(heading_label)
                     self.voice_choice = dpg.add_combo(items=self.voice_names,
                                                       default_value=self.voice_names[0],
@@ -1223,7 +1220,8 @@ class PostprocessorSettingsEditorGUI:
                 logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_start_sentence: video frame {frame_no}: end of sentence {output_record['sentence_uuid']}: '{output_record['sentence']}'")
                 batch_audio_end_timestamps.append(frame_no)
 
-        avatar_controller.send_text_to_tts(text=text,
+        avatar_controller.send_text_to_tts(config=avatar_record,
+                                           text=text,
                                            voice=selected_voice,
                                            voice_speed=dpg.get_value("speak_speed_slider") / 10,
                                            video_offset=dpg.get_value("speak_video_offset") / 10,
@@ -1373,22 +1371,22 @@ gui_instance.dpg_avatar_renderer.start(avatar_instance_id,  # ...and start displ
 # We don't use most of the features of the controller here (particularly the autotranslator and subtitler), but we want the sentence-splitting and precomputing TTS,
 # which gives much better lipsync and better latency than TTS'ing a long text in one go. The cost is producing a separate audio file for each sentence.
 # If there is just one sentence (as judged by the server's `natlang` module), it works as before.
-avatar_controller.initialize(avatar_instance_id=avatar_instance_id,
-                             data_eyes_fadeout_duration=0.75,
-                             emotion_autoreset_interval=None,
-                             emotion_blacklist=[],  # only used for `avatar_controller.update_emotion_from_text`
-                             stop_tts_button_gui_widget=None,  # We have no dedicated stop button, but two play/stop toggles (one with recording). We manage the state ourselves.
-                             on_tts_idle=None,
-                             tts_idle_check_interval=None,
-                             subtitles_enabled=False,
-                             subtitle_text_gui_widget=None,
-                             subtitle_left_x0=0,
-                             subtitle_bottom_y0=0,
-                             translator_source_lang=None,
-                             translator_target_lang=None,
-                             main_window_w=0,
-                             main_window_h=0,
-                             executor=bg)  # use the same thread pool as our main task manager
+avatar_controller = DPGAvatarController(stop_tts_button_gui_widget=None,  # We have no dedicated stop button, but two play/stop toggles (one with recording). We manage the state ourselves.
+                                        on_tts_idle=None,
+                                        tts_idle_check_interval=None,
+                                        subtitles_enabled=False,
+                                        subtitle_text_gui_widget=None,
+                                        subtitle_left_x0=0,
+                                        subtitle_bottom_y0=0,
+                                        translator_source_lang=None,
+                                        translator_target_lang=None,
+                                        main_window_w=0,
+                                        main_window_h=0,
+                                        executor=bg)  # use the same thread pool as our main task manager
+avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=avatar_instance_id,
+                                                           emotion_autoreset_interval=None,
+                                                           emotion_blacklist=(),  # only used for `avatar_controller.update_emotion_from_text`
+                                                           data_eyes_fadeout_duration=0.75)
 
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
