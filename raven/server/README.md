@@ -424,19 +424,20 @@ This lives in a separate module, [`raven.client.avatar_renderer`](../client/avat
 
 This lives in a separate module, [`raven.client.avatar_controller`](../client/avatar_controller.py). It is part of the API, but not imported automatically.
 
-This module has a light DPG dependency, for rendering the optional subtitles, and optionally enabling/disabling the TTS stop button automatically (if your GUI has one).
+This module has a light DPG dependency, for displaying the optional subtitles, and optionally enabling/disabling the TTS stop button automatically (if your GUI has one).
 
 As the name suggests, this module controls some avatar features:
 
 - Lipsynced TTS.
   - Handled once sentence at a time, stabilizing the talking speed and word timestamp accuracy of the AI TTS.
-  - More sentences are precomputed from the module's TTS queue while the first one is being spoken, thus minimizing latency (for the second and further sentences) even if the TTS model is running on CPU.
-- Subtitles (optional) for the TTS.
-  - Either auto-translated (via Raven-server's `translate` module), or shown as-is as closed captions (CC) in the input language.
+  - More sentences are precomputed from the controller's TTS queue while the first one is being spoken, thus minimizing latency (for the second and further sentences) even if the TTS model is running on CPU.
+- Subtitles for the TTS. Optional.
+  - Auto-translated (via Raven-server's `translate` module), or shown as-is as closed captions (CC) in the input language.
 - The "data eyes" effect, can be used e.g. as an LLM tool access indicator.
-- Emotion autoreset.
-  - Triggers when the avatar instance is not speaking, waiting a few seconds (configurable).
-  - Speaking, or updating the avatar's emotion with `update_emotion_from_text` resets the countdown.
+  - This is a per-character cel effect. It only does anything if the character supports it.
+- Emotion autoreset. Optional.
+  - Triggers when the avatar instance is not speaking, after a few seconds of idle time (configurable).
+  - Speaking, or updating the avatar instance's emotion with `update_emotion_from_text` resets the countdown.
 
 API:
 
