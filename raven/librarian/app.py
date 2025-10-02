@@ -1011,7 +1011,7 @@ def chat_round(user_message_text: str) -> None:  # message text comes from GUI
 
 def user_turn(text: str) -> None:
     """Add the user's message to the chat, and append it to the linearized chat view in the GUI."""
-    def run_user_turn(task_env: env) -> None:
+    def user_turn_task(task_env: env) -> None:
         if task_env.cancelled:  # while the task was in the queue
             return
 
@@ -1021,7 +1021,7 @@ def user_turn(text: str) -> None:
                                               user_message_text=text)
         app_state["HEAD"] = new_head_node_id  # as soon as possible, so that not affected by any errors during GUI building
         add_complete_chat_message_to_linearized_chat_panel(new_head_node_id)
-    task_manager.submit(run_user_turn, env())
+    task_manager.submit(user_turn_task, env())
 
 def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     """Run the AI's response part of a chat round.
@@ -1031,7 +1031,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
     """
     docs_query = docs_query if app_state["docs_enabled"] else None
 
-    def run_ai_turn(task_env: env) -> None:
+    def ai_turn_task(task_env: env) -> None:
         global gui_alive  # intent only
 
         if task_env.cancelled:  # while the task was in the queue
@@ -1088,7 +1088,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 task_env.emotion_recent_paragraphs.popleft()
                 if task_env.emotion_update_calls % task_env.emotion_update_interval == 0:
                     text = "".join(task_env.emotion_recent_paragraphs)
-                    logger.info(f"ai_turn.run_ai_turn._update_avatar_emotion_from_incoming_text: updating emotion from {len(text)} characters of recent text")
+                    logger.info(f"ai_turn.ai_turn_task._update_avatar_emotion_from_incoming_text: updating emotion from {len(text)} characters of recent text")
                     avatar_controller.update_emotion_from_text(text)
                 task_env.emotion_update_calls += 1
 
@@ -1102,15 +1102,15 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 # The scaffold will automatically send the content to `on_llm_done`.
                 if task_env.cancelled or not gui_alive:  # TODO: EAFP to avoid TOCTTOU
                     reason = "Cancelled" if task_env.cancelled else "App is shutting down"
-                    logger.info(f"ai_turn.run_ai_turn.on_llm_progress: {reason}, stopping text generation.")
+                    logger.info(f"ai_turn.ai_turn_task.on_llm_progress: {reason}, stopping text generation.")
                     return llmclient.action_stop
 
                 # Detect think block state (TODO: improve; very rudimentary and brittle for now)
                 if "<think>" in chunk_text:
                     task_env.inside_think_block = True
-                    logger.info("ai_turn.run_ai_turn.on_llm_progress: AI entered thinking state.")
+                    logger.info("ai_turn.ai_turn_task.on_llm_progress: AI entered thinking state.")
                 elif "</think>" in chunk_text:
-                    logger.info("ai_turn.run_ai_turn.on_llm_progress: AI exited thinking state.")
+                    logger.info("ai_turn.ai_turn_task.on_llm_progress: AI exited thinking state.")
                     task_env.inside_think_block = False
 
                     if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing (after it is no longer thinking)
@@ -1171,23 +1171,23 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                                           add_persona=False)
 
                     # Avatar speech and subtitling
-                    logger.info("ai_turn.run_ai_turn.on_done: sending final (non-thought) message content for translation, TTS, and subtitling")
                     if speech_enabled:  # If TTS enabled, send final message text to TTS preprocess queue (this always uses lipsync)
+                        logger.info("ai_turn.ai_turn_task.on_done: sending final (non-thought) message content for translation, TTS, and subtitling")
                         avatar_controller.send_text_to_tts(text,
                                                            voice=librarian_config.avatar_config.voice,
                                                            voice_speed=librarian_config.avatar_config.voice_speed,
                                                            video_offset=librarian_config.avatar_config.video_offset)
 
                     # Update avatar emotion one last time, from the final message text
-                    logger.info("ai_turn.run_ai_turn.on_done: updating emotion from final (non-thought) message content")
+                    logger.info("ai_turn.ai_turn_task.on_done: updating emotion from final (non-thought) message content")
                     avatar_controller.update_emotion_from_text(text)
 
                     # Update linearized chat view
-                    logger.info("ai_turn.run_ai_turn.on_done: updating chat view with final message")
+                    logger.info("ai_turn.ai_turn_task.on_done: updating chat view with final message")
                     delete_streaming_chat_message()  # if we are called by docs nomatch, the in-progress message shouldn't exist in the GUI; then this doesn't matter.
                     add_complete_chat_message_to_linearized_chat_panel(node_id)
 
-                    logger.info("ai_turn.run_ai_turn.on_done: all done.")
+                    logger.info("ai_turn.ai_turn_task.on_done: all done.")
 
             # def _parse_toolcall(request_record: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
             #     """Given a tool call request record in OpenAI format, return tool call ID and function name."""
@@ -1274,7 +1274,7 @@ def ai_turn(docs_query: Optional[str]) -> None:  # TODO: implement continue mode
                 dpg.hide_item(docs_indicator_group)
                 dpg.hide_item(web_indicator_group)
                 dpg.hide_item(llm_indicator_group)
-    ai_turn_task_manager.submit(run_ai_turn, env())
+    ai_turn_task_manager.submit(ai_turn_task, env())
 
 def stop_ai_turn() -> None:
     """Interrupt the AI, i.e. stop ongoing text generation.
@@ -1876,7 +1876,7 @@ def gui_shutdown() -> None:
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
     # Tell background tasks that GUI teardown is in progress (app is shutting down, so trying to update GUI elements may hang the app).
-    # This also tells `run_ai_turn` to exit, so we don't need to clear the `ai_turn_task_manager`.
+    # This also tells `ai_turn_task` to exit, so we don't need to clear the `ai_turn_task_manager`.
     # Same for `avatar_preprocess_task` in the `avatar_preprocess_task_manager`.
     gui_alive = False
     task_manager.clear(wait=True)  # Wait until background tasks actually exit.
