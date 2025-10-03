@@ -193,7 +193,7 @@ def _perform_injects(llm_settings: env,
 # TODO: `tools_enabled` is a blunt hammer; maybe have also an optional tool name list for fine-grained control?
 def ai_turn(llm_settings: env,
             datastore: chattree.Forest,
-            retriever: hybridir.HybridIR,
+            retriever: Optional[hybridir.HybridIR],
             head_node_id: str,
             tools_enabled: bool,
             docs_query: Optional[str],
@@ -220,7 +220,8 @@ def ai_turn(llm_settings: env,
 
     `datastore`: The chat datastore.
 
-    `retriever`: A `raven.librarian.hybridir.HybridIR` retriever connected to the document database.
+    `retriever`: A `raven.librarian.hybridir.HybridIR` retriever connected to the document database,
+                 if there is a document database.
 
     `head_node_id`: Current HEAD node of the chat. Used as the parent for the no-match message, if needed.
 
@@ -229,10 +230,15 @@ def ai_turn(llm_settings: env,
 
     `docs_query`: Optional query string to search with in the document database.
 
-                  If supplied, `retriever` is queried, and the search results are injected into the context
-                  before sending the context to the LLM.
+                  If both this and `retriever` are supplied, `retriever` is queried, and the search results
+                  are injected into the context before sending the context to the LLM.
 
                   If `None`, no search is performed.
+
+                  NOTE: The official way to NOT search for anything, when you have a document database,
+                  is to set `docs_query=None`. If you instead disconnect by setting `retriever=None`,
+                  a warning will be logged every time `docs_query` is supplied (because a query requires
+                  a retriever).
 
     `docs_num_results`: How many `docs_query` results to return, at most. Used only if `docs_query` is supplied.
 
@@ -390,7 +396,7 @@ def ai_turn(llm_settings: env,
     Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
     # Search document database if requested
-    if docs_query is not None:
+    if retriever is not None and docs_query is not None:
         if on_docs_start is not None:
             on_docs_start()
         docs_result = _search_docs_with_bypass(llm_settings=llm_settings,
@@ -412,6 +418,8 @@ def ai_turn(llm_settings: env,
             if on_docs_done is not None:
                 on_docs_done(docs_matches)
     else:
+        if retriever is None and docs_query is not None:
+            logger.warning("ai_turn: A `docs_query` was supplied without a `retriever` to search with. Ignoring the query.")
         docs_matches = []
 
     while True:  # LLM agent loop - interleave LLM responses, tool calls and tool call results, until the LLM is done (no more tool calls).
