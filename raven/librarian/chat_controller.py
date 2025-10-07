@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 import collections
 import concurrent.futures
 import io
+import pathlib
+import os
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -56,11 +58,6 @@ gui_config = librarian_config.gui_config  # shorthand, this is used a lot
 
 # --------------------------------------------------------------------------------
 
-gui_role_icons = {"assistant": "icon_ai_texture",
-                  "system": "icon_system_texture",
-                  "tool": "icon_tool_texture",
-                  "user": "icon_user_texture",
-                  }
 role_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},
                "system": {"front": gui_config.chat_color_system_front, "back": gui_config.chat_color_system_back},
                "tool": {"front": gui_config.chat_color_tool_front, "back": gui_config.chat_color_tool_back},
@@ -151,7 +148,6 @@ class DPGChatMessage:
 
         NOTE: `DPGCompleteChatMessage` parses the content from the chat node add adds the text automatically.
         """
-        global gui_role_icons  # intent only
         global role_colors  # intent only
 
         self.role = role
@@ -174,8 +170,8 @@ class DPGChatMessage:
                                          height=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          tag=f"chat_icon_drawlist_{self.gui_uuid}",
                                          parent=icon_and_text_container_group)  # empty drawlist acts as placeholder if no icon
-        if role in gui_role_icons:
-            dpg.draw_image(gui_role_icons[role],
+        if role in self.parent_view.chat_controller.gui_role_icons:
+            dpg.draw_image(self.parent_view.chat_controller.gui_role_icons[role],
                            (gui_config.margin, gui_config.margin),
                            (gui_config.margin + gui_config.chat_icon_size, gui_config.margin + gui_config.chat_icon_size),
                            uv_min=(0, 0),
@@ -840,19 +836,66 @@ class DPGLinearizedChatView:
 # Scaffold to GUI integration
 
 class DPGChatController:
+    _class_initialized = False
+    @classmethod
+    def _load_class_textures(cls):
+        if cls._class_initialized:
+            return
+        # Initialize textures.
+        with dpg.texture_registry(tag="librarian_chat_controller_textures"):
+            w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "system.png")).expanduser().resolve()))
+            cls.icon_system_texture = dpg.add_static_texture(w, h, data, tag="icon_system_texture")
+
+            w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "tool.png")).expanduser().resolve()))
+            cls.icon_tool_texture = dpg.add_static_texture(w, h, data, tag="icon_tool_texture")
+
+            w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "user.png")).expanduser().resolve()))
+            cls.icon_user_texture = dpg.add_static_texture(w, h, data, tag="icon_user_texture")
+
+            w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve()))   # generic AI icon
+            cls.icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture_generic")
+        cls._class_initialized = True
+
+    def _load_instance_textures(self,
+                                avatar_image_path: Optional[Union[str, pathlib.Path]]):
+        """
+        `avatar_image_path`: Path to the main character image of the AI's avatar.
+                             Used for detecting the presence of a per-character icon.
+
+                             If no per-character icon exists for this character,
+                             a generic AI icon is used.
+        """
+        # Prefer per-character icon, if available.
+        # This intentionally shadows `type(self).icon_ai_texture`.
+        character_image_path = avatar_image_path
+        character_dir = character_image_path.parent
+        basename = os.path.basename(str(character_image_path))  # e.g. "/foo/bar/example.png" -> "example.png"
+        stem, ext = os.path.splitext(basename)  # -> "example", ".png"
+        character_icon_path = character_dir / f"{stem}_icon{ext}"
+        if character_icon_path.exists():
+            w, h, c, data = dpg.load_image(str(character_icon_path))
+            self.icon_ai_texture = dpg.add_static_texture(w, h, data, tag=f"icon_ai_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")
+
+        self.gui_role_icons = {"assistant": self.icon_ai_texture,
+                               "system": self.icon_system_texture,
+                               "tool": self.icon_tool_texture,
+                               "user": self.icon_user_texture,
+                               }
+
     def __init__(self,
                  llm_settings: env,
                  datastore: chattree.Forest,
-                 retriever: Optional[hybridir.HybridIR],  # document database
-                 app_state: env,  # mainly HEAD, but also some option flags
-                 avatar_controller: DPGAvatarController,  # data eyes, TTS
-                 avatar_record: env,  # the avatar instance of the AI in this chat view
+                 retriever: Optional[hybridir.HybridIR],
+                 app_state: env,
+                 avatar_controller: DPGAvatarController,
+                 avatar_record: env,
+                 avatar_image_path: Optional[Union[str, pathlib.Path]],
                  themes_and_fonts: env,
-                 chat_panel_widget: Union[str, int],  # panel / child window
-                 indicator_glow_animation: Optional[gui_animation.PulsatingColor],  # the cycle of this animation will be reset when an indicator appears, to make glow work correctly
-                 llm_indicator_widget: Union[str, int],  # DPG widget to show while the prompt is being processed by the LLM backend
-                 docs_indicator_widget: Union[str, int],  # DPG widget to show while the docs database is being searched
-                 web_indicator_widget: Union[str, int],  # DPG widget to show while the websearch tool is being called
+                 chat_panel_widget: Union[str, int],
+                 indicator_glow_animation: Optional[gui_animation.PulsatingColor],
+                 llm_indicator_widget: Union[str, int],
+                 docs_indicator_widget: Union[str, int],
+                 web_indicator_widget: Union[str, int],
                  executor: Optional = None):
         """Controller for LLM scaffold to GUI integration.
 
@@ -894,6 +937,9 @@ class DPGChatController:
 
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
         """
+        type(self)._load_class_textures()
+        self._load_instance_textures(avatar_image_path)
+
         self.llm_settings = llm_settings
         self.datastore = datastore
         self.retriever = retriever

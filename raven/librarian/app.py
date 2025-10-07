@@ -21,7 +21,6 @@ with timer() as tim:
     import requests
     import sys
     import traceback
-    from typing import Optional
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
     # https://github.com/hoffstadt/DearPyGui/issues/554
@@ -95,29 +94,6 @@ with timer() as tim:
     pulsating_gray_text_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
                                                             theme_color_widget=pulsating_gray_color)
     gui_animation.animator.add(pulsating_gray_text_glow)
-
-    # Initialize textures.
-    with dpg.texture_registry(tag="librarian_app_textures"):
-        # Prefer per-character icon; default to generic icon if not present.
-        character_image_path = librarian_config.avatar_config.image_path
-        character_dir = character_image_path.parent
-        basename = os.path.basename(str(character_image_path))  # e.g. "/foo/bar/example.png" -> "example.png"
-        stem, ext = os.path.splitext(basename)  # -> "example", ".png"
-        character_icon_path = character_dir / f"{stem}_icon{ext}"
-        if not character_icon_path.exists():
-            character_icon_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve()  # generic AI icon
-
-        w, h, c, data = dpg.load_image(str(character_icon_path))
-        icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture")
-
-        w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "system.png")).expanduser().resolve()))
-        icon_system_texture = dpg.add_static_texture(w, h, data, tag="icon_system_texture")
-
-        w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "tool.png")).expanduser().resolve()))
-        icon_tool_texture = dpg.add_static_texture(w, h, data, tag="icon_tool_texture")
-
-        w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "user.png")).expanduser().resolve()))
-        icon_user_texture = dpg.add_static_texture(w, h, data, tag="icon_user_texture")
 
     if platform.system().upper() == "WINDOWS":
         icon_ext = "ico"
@@ -687,6 +663,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     datastore=datastore,
                                     retriever=retriever,
                                     app_state=app_state,
+                                    avatar_image_path=librarian_config.avatar_config.image_path,
                                     avatar_controller=avatar_controller,
                                     avatar_record=avatar_record,
                                     themes_and_fonts=themes_and_fonts,
