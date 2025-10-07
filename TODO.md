@@ -49,8 +49,6 @@
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Maybe next:
-    - Refactor the linearized chat view into a class
-    - Consider: should the GUI<->scaffold integration be a separate module?
     - `raven.visualizer.importer`: auto-use server if available and the necessary modules loaded; if not, emit a log warning and load the model locally (see `raven.librarian.hybridir`, which does this)
     - Long subtitle splitter (we now have the audio length).
     - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
