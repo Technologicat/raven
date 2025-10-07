@@ -54,7 +54,6 @@
     - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
     - Add GUI dynamic resizing on window size change
     - Improve: thought blocks
-        - Have a "thinking model" toggle that, when enabled, does the check at the start of the message (and only if NOT continuing a previous message).
       - GUI: completed message: collapsible thought blocks (a button to hide/show a group)
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
@@ -66,6 +65,7 @@
     - Support for non-thinking models
       - Librarian currently assumes in a few places (e.g. avatar speaking animation control) that the model will first emit a "<think>" tag.
       - `raven.librarian.llmclient.invoke` should inject the initial "<think>" tag if the model doesn't send it. Some models don't (e.g. QwQ-32B, which was a preview of Qwen3).
+        - Have a "thinking model" toggle that, when enabled, does the initial "<think>" tag check at the start of the message (and only if NOT continuing a previous message).
       - `raven.librarian.chatutil.scrub` already fixes a missing initial think tag (if there is a closing tag but not an opening one), but that's only for the final message.
     - MCP support for loading tools from remote servers?
     - Add feature: show prompt
