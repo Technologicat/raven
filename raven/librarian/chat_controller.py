@@ -913,7 +913,6 @@ class DPGChatController:
                                           gui_parent=chat_panel_widget,
                                           chat_controller=self)
 
-        # TODO: task managers
         if executor is None:
             executor = concurrent.futures.ThreadPoolExecutor()
 
