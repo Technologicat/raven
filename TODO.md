@@ -66,8 +66,12 @@
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Maybe next:
+    - Add `voice` and `voice_speed` to `avatar_record` in `raven.client.avatar_controller.DPGAvatarController.register_avatar_instance`
+      - Then also `raven.client.avatar_controller.DPGAvatarController.send_text_to_tts` can read them from there, no need for separate parameters
     - `raven.visualizer.importer`: auto-use server if available and the necessary modules loaded; if not, emit a log warning and load the model locally (see `raven.librarian.hybridir`, which does this)
     - Long subtitle splitter (we now have the audio length).
+    - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
+    - Add feature: Delete chat node and all descendants
     - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
     - Add GUI dynamic resizing on window size change
     - Improve: thought blocks
@@ -83,6 +87,8 @@
         - https://github.com/DataExplorerUser/drag_drop_node_editor/blob/main/drag_and_drop_node_editor_dear_py_gui.py
         - https://github.com/hoshianaaa/DearPyGUI_NodeEditor_Template/tree/main
       - Maybe better to just use a the plotter, with custom tooltips? We don't need a node *editor* here, but rather just something to visualize a graph.
+      - Need a "jump to chat node by chat node ID" feature (chatlog export reports the IDs)
+    - Add feature: switch HEAD node by chat node ID (chatlog export reports the IDs)
     - IBM Granite OCR for PDF input
     - STT: whisper-v3-turbo
     - `DPGAvatarRenderer`, `DPGAvatarController`: isolate the DPG-specific parts
@@ -149,7 +155,6 @@
       - HPLT consortium, new version (8April 2025) of the earlier model by Helsinki-NLP that we use currently
       - Needs new infra at the backend: Marian format (not HuggingFace format)
         - https://huggingface.co/HPLT/translate-en-fi-v2.0-hplt_opus
-    - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
     - Add feature: Switch chat (from all leaf nodes in datastore)
     - Add feature: Avatar: optional digital glitch effect when switching chat branches (change postprocessor config on the fly)
     - Add websearch toggle? (Need to regenerate system prompt with/without tools)
