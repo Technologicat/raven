@@ -4,18 +4,9 @@ This module renders a linearized chat view of the current branch, and contains t
 that controls chatting with the AI.
 """
 
-# TODO:
-#   - `DPGChatController` orchestrates
-#     - owns a `DPGLinearizedChatView`
-#     - its `app_state` is really a controller-specific state (if several controllers in the same app)
-#   - `DPGLinearizedChatView` displays
-#     - owns chat message widgets
-#     - `DPGChatMessage` and its descendants display individual messages
-#     - the view's `gui_parent` should be a panel (DPG child window)
-#
 # TODO: check DPG tags - shouldn't directly use anything defined on the main app side (have a constructor parameter for each of these)
 #
-# TODO: Are these classes a bit too friendly with each other? A lot of state lives in the `DPGChatController`, and the lower levels reach into that.
+# TODO: check if we need to shuffle the abstraction levels around - e.g. if there are many references to `self.parent_view.chat_controller.something`, does `something` really belong to the controller level?
 
 __all__ = ["DPGChatController"]
 
