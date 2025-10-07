@@ -659,6 +659,7 @@ avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=av
                                                            emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
                                                            emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
                                                            data_eyes_fadeout_duration=librarian_config.avatar_config.data_eyes_fadeout_duration)
+
 chat_controller = DPGChatController(llm_settings=llm_settings,
                                     datastore=datastore,
                                     retriever=retriever,
@@ -668,6 +669,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     avatar_record=avatar_record,
                                     themes_and_fonts=themes_and_fonts,
                                     chat_panel_widget=chat_panel_widget,
+                                    chat_stop_generation_button_widget=stop_generation_button,
                                     indicator_glow_animation=pulsating_gray_text_glow,
                                     llm_indicator_widget=llm_indicator_group,
                                     docs_indicator_widget=docs_indicator_group,

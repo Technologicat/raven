@@ -67,12 +67,17 @@ def format_persona(role: str,
 
     `persona`: The persona name speaking, or `None` if the role has no persona name ("system" and "tool" are like this).
 
-               If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
-               (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+               To get the **current session's** persona, use::
 
-               If you are editing a message from an existing chat node, use
-               `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
-               (which may be different from the current session's, e.g. if the AI character has been changed).
+                   persona=llm_settings.personas.get(role, None)
+
+               where `role` is one of "assistant", "system", "tool", "user".
+
+               To get the **stored** persona from a chat node::
+
+                   persona=node_payload["general_metadata"]["persona"]
+
+               This may differ from the current session's persona, e.g. if the chat node was generated with a different AI character.
 
     `markup`: Which markup kind to use, or `None` for no markup. One of:
         "ansi": ANSI terminal color codes
@@ -435,12 +440,17 @@ def remove_persona_from_start_of_line(persona: Optional[str],
 
     `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
 
-               If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
-               (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+               To get the **current session's** persona, use::
 
-               If you are editing a message from an existing chat node, use
-               `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
-               (which may be different from the current session's, e.g. if the AI character has been changed).
+                   persona=llm_settings.personas.get(role, None)
+
+               where `role` is one of "assistant", "system", "tool", "user".
+
+               To get the **stored** persona from a chat node::
+
+                   persona=node_payload["general_metadata"]["persona"]
+
+               This may differ from the current session's persona, e.g. if the chat node was generated with a different AI character.
 
     `text`: The text to process.
 
@@ -488,12 +498,17 @@ def scrub(persona: Optional[str],
 
     `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
 
-               If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
-               (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+               To get the **current session's** persona, use::
 
-               If you are editing a message from an existing chat node, use
-               `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
-               (which may be different from the current session's, e.g. if the AI character has been changed).
+                   persona=llm_settings.personas.get(role, None)
+
+               where `role` is one of "assistant", "system", "tool", "user".
+
+               To get the **stored** persona from a chat node::
+
+                   persona=node_payload["general_metadata"]["persona"]
+
+               This may differ from the current session's persona, e.g. if the chat node was generated with a different AI character.
 
     `text`: The text content of the message to scrub.
 

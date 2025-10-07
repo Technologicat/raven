@@ -4,8 +4,6 @@ This module renders a linearized chat view of the current branch, and contains t
 that controls chatting with the AI.
 """
 
-# TODO: check DPG tags - shouldn't directly use anything defined on the main app side (have a constructor parameter for each of these)
-#
 # TODO: check if we need to shuffle the abstraction levels around - e.g. if there are many references to `self.parent_view.chat_controller.something`, does `something` really belong to the controller level?
 
 __all__ = ["DPGChatController"]
@@ -49,11 +47,11 @@ gui_config = librarian_config.gui_config  # shorthand, this is used a lot
 
 # --------------------------------------------------------------------------------
 
-role_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},
-               "system": {"front": gui_config.chat_color_system_front, "back": gui_config.chat_color_system_back},
-               "tool": {"front": gui_config.chat_color_tool_front, "back": gui_config.chat_color_tool_back},
-               "user": {"front": gui_config.chat_color_user_front, "back": gui_config.chat_color_user_back},
-               }
+role_to_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gui_config.chat_color_ai_back},
+                  "system": {"front": gui_config.chat_color_system_front, "back": gui_config.chat_color_system_back},
+                  "tool": {"front": gui_config.chat_color_tool_front, "back": gui_config.chat_color_tool_back},
+                  "user": {"front": gui_config.chat_color_user_front, "back": gui_config.chat_color_user_back},
+                  }
 
 # --------------------------------------------------------------------------------
 
@@ -64,8 +62,8 @@ def format_chat_message_for_clipboard(message_number: Optional[int],
                                       add_heading: bool) -> str:
     """Format a chat message for copying to clipboard, by adding a metadata header as Markdown.
 
-    As a preprocessing step, the role name is stripped from the beginning of each line in `message_text`.
-    It is then re-added in a unified form, using `message_role` as the role.
+    As a preprocessing step, `persona` is stripped from the beginning of each line in `message_text`.
+    It is then re-added in a unified form.
 
     `message_number`: The sequential number of the message in the current linearized view.
                       If `None`, the number part in the formatted output is omitted.
@@ -75,12 +73,17 @@ def format_chat_message_for_clipboard(message_number: Optional[int],
 
     `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
 
-               If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
-               (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+               To get the **current session's** persona, use::
 
-               If you are editing a message from an existing chat node, use
-               `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
-               (which may be different from the current session's, e.g. if the AI character has been changed).
+                   persona=llm_settings.personas.get(role, None)
+
+               where `role` is one of "assistant", "system", "tool", "user".
+
+               To get the **stored** persona from a chat node::
+
+                   persona=node_payload["general_metadata"]["persona"]
+
+               This may differ from the current session's persona, e.g. if the chat node was generated with a different AI character.
 
     `text`: The text content of the chat message to format.
             The content is pasted into the output as-is.
@@ -133,7 +136,7 @@ class DPGChatMessage:
                 cls.callbacks.pop(tag)
 
     def __init__(self,
-                 gui_parent: Union[int, str],
+                 gui_parent: Union[str, int],
                  parent_view: "DPGLinearizedChatView"):
         """Base class for a chat message displayed in the linearized chat view.
 
@@ -154,24 +157,28 @@ class DPGChatMessage:
         self.gui_text_group = None  # populated by `build`
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
 
-    def _get_text(self):
+    def _get_text(self) -> str:
         with self.paragraphs_lock:
             return "\n".join(paragraph["text"] for paragraph in self.paragraphs)
     text = property(fget=_get_text,
-                    doc="Full text of this GUI chat message. Read-only.")
+                    doc="Full text of this GUI chat message as `str`. Read-only.")
 
     def _get_next_or_prev_sibling_in_datastore(self,
                                                node_id: str,
                                                direction: str = "next") -> Optional[str]:
-        siblings, node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
+        """Get the next or previous sibling of `node_id` in the chat datastore.
+
+        Returns the node ID of the sibling, or `None` if no such sibling.
+        """
+        siblings, this_node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
         if siblings is None:
             return None
         if direction == "next":
-            if node_index < len(siblings) - 1:
-                return siblings[node_index + 1]
+            if this_node_index < len(siblings) - 1:
+                return siblings[this_node_index + 1]
         else:  # direction == "prev":
-            if node_index > 0:
-                return siblings[node_index - 1]
+            if this_node_index > 0:
+                return siblings[this_node_index - 1]
         return None  # no sibling found
 
     def build(self,
@@ -185,24 +192,36 @@ class DPGChatMessage:
 
         `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
 
-                   If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
-                   (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+                   To get the **current session's** persona, use::
 
-                   If you are editing a message from an existing chat node, use
-                   `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
-                   (which may be different from the current session's, e.g. if the AI character has been changed).
+                       persona=llm_settings.personas.get(role, None)
+
+                   where `role` is one of "assistant", "system", "tool", "user".
+
+                   To get the **stored** persona from a chat node::
+
+                       persona=node_payload["general_metadata"]["persona"]
+
+                   This may differ from the current session's persona, e.g. if the chat node was generated with a different AI character.
 
         `node_id`: The chat node ID of this message in the datastore, if applicable.
-                   (Streaming messages do not have a node yet.)
+
+                   NOTE: Particularly, an incoming streaming message from the LLM does not have a node in the datastore.
 
         NOTE: You still need to `add_paragraph` the text you want to show in the chat message widget.
-              It's done this way to be able to handle messages that *contain* thought blocks
-              (i.e. any complete message from a thinking model), because the `is_thought` state
-              needs to be different for the think-block and final-message segments.
 
-        NOTE: `DPGCompleteChatMessage` parses the content from the chat node add adds the text automatically.
+              We require explicit adding in order to be able to handle messages that *contain* thought blocks
+              (i.e. any complete message from a thinking model), because the `is_thought` state (which is
+              required when adding a paragraph) needs to be different for the think-block and final-message segments.
+
+              The derived class `DPGCompleteChatMessage` automates this; it parses the content from a chat node,
+              and adds the text to the widget.
+
+              The derived class `DPGStreamingChatMessage`, on the other hand, requires full manual control, by design,
+              so that the GUI driver handling the incoming message (`DPGChatController.ai_turn`) gets full control
+              of what is displayed in the widget.
         """
-        global role_colors  # intent only
+        global role_to_colors  # intent only - we only read the color settings from this.
 
         self.role = role
         self.persona = persona
@@ -211,7 +230,9 @@ class DPGChatMessage:
         # clear old GUI content (needed if rebuilding)
         dpg.delete_item(self.gui_container_group, children_only=True)
 
-        # lay out the role icon and the text content horizontally
+        # --------------------------------------------------------------------------------
+        # lay out the role icon and the text content areas horizontally
+
         icon_and_text_container_group = dpg.add_group(horizontal=True,
                                                       tag=f"chat_icon_and_text_container_group_{self.gui_uuid}",
                                                       parent=self.gui_container_group)
@@ -219,7 +240,6 @@ class DPGChatMessage:
         # ----------------------------------------
         # role icon
 
-        # TODO: add icons and colors for system and tool; improve user/AI icons
         icon_drawlist = dpg.add_drawlist(width=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          height=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          tag=f"chat_icon_drawlist_{self.gui_uuid}",
@@ -250,7 +270,7 @@ class DPGChatMessage:
         # Render timestamp the revision number of the payload currently shown  TODO: later (chat editing): this needs to be switchable without regenerating the whole view
         if node_id is not None:
             node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
-            payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active revision!
+            payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active payload revision!
             node_active_revision = self.parent_view.chat_controller.datastore.get_revision(node_id)
             dpg.add_text(f"{payload_datetime} R{node_active_revision}", color=(120, 120, 120), parent=text_vertical_layout_group)
 
@@ -259,7 +279,7 @@ class DPGChatMessage:
                                             parent=text_vertical_layout_group)  # create another group to act as container so that we can update/replace just the text easily
         # NOTE: We now have an empty group, for `add_paragraph`/`replace_last_paragraph`.
 
-        # Show LLM performance statistics if linked to a chat node, and the chat node has them
+        # Show LLM performance statistics for AI chat node, if linked to a chat node, and the chat node has them stored
         if role == "assistant" and node_id is not None:
             ai_message_node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)
             if (generation_metadata := ai_message_node_payload.get("generation_metadata", None)) is not None:
@@ -270,7 +290,7 @@ class DPGChatMessage:
                              color=(120, 120, 120),
                              parent=text_vertical_layout_group)
 
-        # If there is no datastore chat node attached to this message, it doesn't need the datastore control buttons.
+        # If there is no linked chat node, this is a live streaming chat message, so the GUI widget should end here - it doesn't need the datastore control buttons or end spacers.
         # This makes the GUI look calmer while rendering a streaming message.
         if node_id is None:
             return
@@ -286,7 +306,7 @@ class DPGChatMessage:
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
         n_message_buttons = 8
-        dpg.add_spacer(width=gui_config.chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 32 = some space for sibling counter
+        dpg.add_spacer(width=gui_config.chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 64 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
         self.build_buttons(gui_parent=buttons_horizontal_layout_group)
@@ -298,7 +318,7 @@ class DPGChatMessage:
                        tag=f"chat_turn_end_spacer1_{self.gui_uuid}",
                        parent=self.gui_container_group)
 
-        if role in role_colors:
+        if role in role_to_colors:
             dpg.add_drawlist(height=1,
                              width=(gui_config.chat_text_w + 64),
                              tag=f"chat_turn_end_drawlist_{self.gui_uuid}",
@@ -306,7 +326,7 @@ class DPGChatMessage:
             dpg.draw_rectangle((64, 0), (gui_config.chat_text_w + 64, 1),
                                color=(80, 80, 80),
                                fill=(80, 80, 80),
-                               parent=f"chat_turn_end_drawlist_{self.gui_uuid}")
+                               parent=f"chat_turn_end_drawlist_{self.gui_uuid}")  # tag
 
         dpg.add_spacer(height=4,
                        tag=f"chat_turn_end_spacer2_{self.gui_uuid}",
@@ -316,6 +336,7 @@ class DPGChatMessage:
         """Add a new paragraph of text to this widget.
 
         `is_thought`: Whether this paragraph is (part of) a `<think>...</think>` block.
+                      The renderer selects the text color appropriately.
         """
         paragraph = {"text": text,
                      "is_thought": is_thought,
@@ -328,7 +349,9 @@ class DPGChatMessage:
         """Replace the last paragraph of text in this widget. If there are no paragraphs yet, create one automatically.
 
        `is_thought`: Whether this paragraph is (part of) a `<think>...</think>` block.
-                     Can be different from the old state.
+                     The renderer selects the text color appropriately.
+
+                     If needed, can be different from the old state of the same paragraph.
          """
         with self.paragraphs_lock:
             if not self.paragraphs:
@@ -353,10 +376,10 @@ class DPGChatMessage:
         """Internal method. Render any pending new paragraphs. We assume new paragraphs are added only to the end."""
         with self.paragraphs_lock:
             if self.gui_text_group is None:
-                assert False
+                assert False  # the chat message GUI widget did not fully initialize
             # dpg.delete_item(self.gui_text_group, children_only=True)  # how to clear all old text if we ever need to
             role = self.role
-            role_color = role_colors[role]["front"] if role in role_colors else "#ffffff"
+            role_color = role_to_colors[role]["front"] if role in role_to_colors else "#ffffff"
             think_color = librarian_config.gui_config.chat_color_think_front
             for idx, paragraph in enumerate(self.paragraphs):
                 if paragraph["rendered"]:
@@ -364,7 +387,7 @@ class DPGChatMessage:
                 assert "widget" not in paragraph  # a paragraph that hasn't been rendered has no GUI text widget associated with it
                 text = paragraph["text"].strip()
                 if text:  # don't bother if text is blank
-                    # TODO: Add collapsible thought blocks to the GUI. For now, we just replace the tags with something that doesn't look like HTML to avoid confusing the Markdown renderer (which drops unknown tags).
+                    # TODO: Add collapsible thought blocks to the GUI. For now, we just replace the tokens with something that doesn't look like HTML to avoid confusing the Markdown renderer (which silently drops unknown tags).
                     text = text.replace("<tool_call>", "**>>>Tool call>>>**")
                     text = text.replace("</tool_call>", "**<<<Tool call<<<**")
                     text = text.replace("<think>", "**>>>Thinking>>>**")
@@ -375,39 +398,40 @@ class DPGChatMessage:
                                                    wrap=gui_config.chat_text_w,
                                                    parent=self.gui_text_group)
                     paragraph["widget"] = widget
-                    dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")
+                    dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")  # tag
                 paragraph["rendered"] = True
 
     def demolish(self) -> None:
         """The opposite of `build`: delete all GUI widgets belonging to this instance.
 
-        If you use `DPGLinearizedChatView.build`, it takes care of clearing all chat message GUI widgets automatically,
+        If you use `DPGLinearizedChatView.build`, it takes care of clearing all old chat message GUI widgets automatically,
         and you do not need to call this.
 
-        If you are editing the linearized chat view directly, this should be called before deleting
-        the `DPGChatMessage` instance.
+        If you are editing the GUI contents of the linearized chat view directly, this should be called before deleting
+        the `DPGChatMessage` (or a derived class) instance.
 
         The main use case is switching a streaming message to a completed one when the streaming is done,
-        without regenerating the whole linearized chat view.
+        without regenerating the whole linearized chat view (which may contain a lot of messages).
         """
         with self.paragraphs_lock:
             self.role = None
             self.persona = None
             self.paragraphs = []
             self.gui_text_group = None
-            self.gui_button_callbacks = {}  # deleting GUI items, so clear the stashed callbacks too.
+            self.gui_button_callbacks = {}  # deleting all GUI widgets, so clear the stashed callbacks too.
             try:
                 dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
             except SystemError:  # the group went bye-bye (app shutdown)
                 pass
 
     def build_buttons(self,
-                      gui_parent: Union[int, str]) -> None:
+                      gui_parent: Union[str, int]) -> None:
         """Build the set of control buttons for a single chat message in the GUI.
 
         `gui_parent`: DPG tag or ID of the GUI widget (typically a group) to add the buttons to.
 
-                      This is not simply `self.gui_parent` due to other layout performed by `build`.
+                      This is not simply `self.gui_parent` due to other layout performed by `build`;
+                      the buttons go into a group.
         """
         role = self.role
         persona = self.persona
@@ -415,15 +439,13 @@ class DPGChatMessage:
 
         g = dpg.add_group(horizontal=True, tag=f"{role}_message_buttons_group_{self.gui_uuid}", parent=gui_parent)
 
-        # dpg.add_text("[0 t, 0 s, ∞ t/s]", color=(180, 180, 180), tag=f"performance_stats_text_ai_{self.gui_uuid}", parent=g)  # TODO: add the performance stats
-
         # dpg.add_spacer(tag=f"ai_message_buttons_spacer_{self.gui_uuid}",
         #                parent=g)
 
         def copy_message_to_clipboard_callback() -> None:
             shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
             # Note we only add the role name when we include also the node ID.
-            # Omitting the name in regular mode improves convenience for copy-pasting an existing question into the chat field.
+            # Omitting the speaker's name in regular mode improves convenience for copy-pasting an existing question into the chat field (to slightly modify it before re-submitting).
             formatted_message = format_chat_message_for_clipboard(message_number=None,  # a single message copied to clipboard does not need a sequential number
                                                                   role=role,
                                                                   persona=persona,
@@ -432,7 +454,7 @@ class DPGChatMessage:
 
             if shift_pressed:
                 node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
-                payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active revision!
+                payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active payload revision!
                 node_active_revision = self.parent_view.chat_controller.datastore.get_revision(node_id)
                 header = f"*Node ID*: `{node_id}` {payload_datetime} R{node_active_revision}\n\n"  # yes, it'll say `None` when no node ID is available (incoming streaming message), which is exactly what we want.
             else:
@@ -457,9 +479,9 @@ class DPGChatMessage:
         copy_message_tooltip = dpg.add_tooltip(copy_message_button)
         copy_message_tooltip_text = dpg.add_text("Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID", parent=copy_message_tooltip)
 
-        # Only AI messages can be rerolled
+        # Rerolling for AI messages
         if role == "assistant":
-            def reroll_message_callback():  # TODO: parameterize this - callback needs to come from main app (at least for the `ai_turn` part)
+            def reroll_message_callback():
                 # Find this AI message in the chat history
                 for k, dpg_chat_message in enumerate(reversed(self.parent_view.chat_controller.current_chat_history)):
                     if dpg_chat_message.node_id == node_id:
@@ -473,7 +495,7 @@ class DPGChatMessage:
 
                 # Handle the RAG query: find the latest user message (above this AI message)
                 user_message_text = None
-                for dpg_chat_message in reversed(self.parent_view.chat_controller.current_chat_history):  # ...what's remaining of the history, anyway
+                for dpg_chat_message in reversed(self.parent_view.chat_controller.current_chat_history):  # ...what's remaining of the history
                     if dpg_chat_message.role == "user":
                         user_message_text = dpg_chat_message.text
                         break
@@ -502,19 +524,19 @@ class DPGChatMessage:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
         if role == "assistant":
-            def speak_message_callback():  # TODO: parameterize this - callback needs to come from main app
+            def speak_message_callback():
                 if self.parent_view.chat_controller.app_state["avatar_speech_enabled"]:
-                    unused_message_role, unused_message_persona, message_text = chatutil.get_node_message_text_without_persona(self.parent_view.chat_controller.datastore, node_id)
+                    unused_message_role, message_persona, message_text = chatutil.get_node_message_text_without_persona(self.parent_view.chat_controller.datastore, node_id)
                     # Send only non-thought message content to TTS
-                    message_text = chatutil.scrub(persona=self.parent_view.chat_controller.llm_settings.personas.get("assistant", None),
+                    message_text = chatutil.scrub(persona=message_persona,
                                                   text=message_text,
                                                   thoughts_mode="discard",
                                                   markup=None,
                                                   add_persona=False)
                     self.parent_view.chat_controller.avatar_controller.send_text_to_tts(config=self.parent_view.chat_controller.avatar_record,
                                                                                         text=message_text,
-                                                                                        voice=librarian_config.avatar_config.voice,
-                                                                                        voice_speed=librarian_config.avatar_config.voice_speed,
+                                                                                        voice=librarian_config.avatar_config.voice,  # TODO: maybe parameterize avatar voice (could be stored in `avatar_record`)
+                                                                                        voice_speed=librarian_config.avatar_config.voice_speed,  # TODO: maybe parameterize avatar voice speed (could be stored in `avatar_record`)
                                                                                         video_offset=librarian_config.avatar_config.video_offset)
 
                     # Acknowledge the action in the GUI.
@@ -580,29 +602,21 @@ class DPGChatMessage:
         c_end = '</font>'
         dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_branch_tooltip)
 
-        def make_navigate_to_prev_sibling(message_node_id: str) -> Callable:
-            def navigate_to_prev_sibling_callback():
-                node_id = self._get_next_or_prev_sibling_in_datastore(message_node_id, direction="prev")
+        def make_navigate_to_sibling(message_node_id: str, direction: str) -> Callable:
+            def navigate_to_sibling_callback():
+                node_id = self._get_next_or_prev_sibling_in_datastore(message_node_id, direction=direction)
                 if node_id is not None:
                     self.parent_view.chat_controller.app_state["HEAD"] = node_id
                     self.parent_view.build()
-            return navigate_to_prev_sibling_callback
-
-        def make_navigate_to_next_sibling(message_node_id: str) -> Callable:
-            def navigate_to_next_sibling_callback():
-                node_id = self._get_next_or_prev_sibling_in_datastore(message_node_id, direction="next")
-                if node_id is not None:
-                    self.parent_view.chat_controller.app_state["HEAD"] = node_id
-                    self.parent_view.build()
-            return navigate_to_next_sibling_callback
+            return navigate_to_sibling_callback
 
         # Only messages attached to a datastore chat node can have siblings in the datastore
         if node_id is not None:
-            siblings, node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
-            prev_enabled = (node_index is not None and node_index > 0)
-            next_enabled = (node_index is not None and node_index < len(siblings) - 1)
-            navigate_to_prev_sibling_callback = make_navigate_to_prev_sibling(node_id)
-            navigate_to_next_sibling_callback = make_navigate_to_next_sibling(node_id)
+            siblings, this_node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
+            prev_enabled = (this_node_index is not None and this_node_index > 0)
+            next_enabled = (this_node_index is not None and this_node_index < len(siblings) - 1)
+            navigate_to_prev_sibling_callback = make_navigate_to_sibling(node_id, direction="prev")
+            navigate_to_next_sibling_callback = make_navigate_to_sibling(node_id, direction="next")
             if prev_enabled:
                 self.gui_button_callbacks["prev"] = navigate_to_prev_sibling_callback
             if next_enabled:
@@ -631,7 +645,7 @@ class DPGChatMessage:
             dpg.add_text("Switch to next sibling [Ctrl+Right]", parent=next_branch_tooltip)
 
             if siblings is not None:
-                dpg.add_text(f"{node_index + 1} / {len(siblings)}", parent=g)
+                dpg.add_text(f"{this_node_index + 1} / {len(siblings)}", parent=g)
         else:
             # Add the two spacers separately so we get the same margins as with two separate buttons
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
@@ -641,7 +655,7 @@ class DPGChatMessage:
 class DPGCompleteChatMessage(DPGChatMessage):
     def __init__(self,
                  node_id: str,
-                 gui_parent: Union[int, str],
+                 gui_parent: Union[str, int],
                  parent_view: "DPGLinearizedChatView"):
         """A complete chat message displayed in the linearized chat view, linked to a node ID in the datastore.
 
@@ -680,7 +694,7 @@ class DPGCompleteChatMessage(DPGChatMessage):
 
 class DPGStreamingChatMessage(DPGChatMessage):
     def __init__(self,
-                 gui_parent: Union[int, str],
+                 gui_parent: Union[str, int],
                  parent_view: "DPGLinearizedChatView"):
         """A chat message being streamed live from the LLM, displayed in the linearized chat view.
 
@@ -690,7 +704,7 @@ class DPGStreamingChatMessage(DPGChatMessage):
         Starts as blank. Use the `add_paragraph` and/or `replace_last_paragraph` methods to add text.
 
         To replace the streaming message with a completed message, call the streaming message's
-        `demolish` method first to remove it from the GUI.
+        `demolish` method first. Doing so removes its widgets from the GUI.
         """
         super().__init__(gui_parent=gui_parent,
                          parent_view=parent_view)
@@ -705,7 +719,7 @@ class DPGStreamingChatMessage(DPGChatMessage):
 class DPGLinearizedChatView:
     def __init__(self,
                  themes_and_fonts: env,
-                 gui_parent: Union[str, int],  # panel (DPG child window)
+                 gui_parent: Union[str, int],
                  chat_controller: "DPGChatController"):
         """A view of the current chat branch, displayed as a linear chat.
 
@@ -757,7 +771,7 @@ class DPGLinearizedChatView:
         dpg.set_y_scroll(self.gui_parent, max_y_scroll)
 
     def get_chatlog_as_markdown(self, include_metadata: bool) -> Optional[str]:
-        """Format this linearized chat as Markdown, e.g. for copying to clipboard or saving to file.
+        """Format this linearized chat as Markdown, for e.g. copying to the clipboard or saving to a file.
 
         `include_metadata`: If `True`, the output will contain the node IDs, revision timestamps (ISO format), and revision numbers.
 
@@ -781,7 +795,7 @@ class DPGLinearizedChatView:
                                                                       text=text,
                                                                       add_heading=True)  # In the full chatlog, the message numbers and role names are important, so always include them.
                 if include_metadata:
-                    payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active revision!
+                    payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active payload revision!
                     node_active_revision = self.chat_controller.datastore.get_revision(dpg_chat_message.node_id)
                     header = f"- *Node ID*: `{dpg_chat_message.node_id}`\n- *Revision date*: {payload_datetime}\n- *Revision number*: {node_active_revision}\n\n"  # yes, it'll say `None` when no node ID is available (incoming streaming message), which is exactly what we want.
                 else:
@@ -830,10 +844,10 @@ class DPGLinearizedChatView:
                 self.add_complete_message(node_id=node_id,
                                           scroll_to_end=False)  # we scroll just once, when done
         # Update avatar emotion from the message text (use only non-thought message content)
-        role, unused_persona, text = chatutil.get_node_message_text_without_persona(self.chat_controller.datastore, head_node_id)
+        role, persona, text = chatutil.get_node_message_text_without_persona(self.chat_controller.datastore, head_node_id)
         if role == "assistant":
             logger.info("DPGLinearizedChatView.build: linearized chat view new HEAD node is an AI message; updating avatar emotion from (non-thought) message content")
-            text = chatutil.scrub(persona=self.chat_controller.llm_settings.personas.get("assistant", None),
+            text = chatutil.scrub(persona=persona,
                                   text=text,
                                   thoughts_mode="discard",
                                   markup=None,
@@ -847,45 +861,47 @@ class DPGLinearizedChatView:
 # Scaffold to GUI integration
 
 class DPGChatController:
+    _class_lock = threading.RLock()
     _class_initialized = False
     @classmethod
     def _load_class_textures(cls):
-        if cls._class_initialized:
-            return
-        # Initialize textures.
-        with dpg.texture_registry(tag="librarian_chat_controller_textures"):
-            w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "system.png")).expanduser().resolve()))
-            cls.icon_system_texture = dpg.add_static_texture(w, h, data, tag="icon_system_texture")
+        """Load textures common to all instances of this class."""
+        with cls._class_lock:
+            if cls._class_initialized:
+                return
+            # Initialize textures.
+            with dpg.texture_registry(tag="librarian_chat_controller_textures"):
+                w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "system.png")).expanduser().resolve()))
+                cls.icon_system_texture = dpg.add_static_texture(w, h, data, tag="icon_system_texture")
 
-            w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "tool.png")).expanduser().resolve()))
-            cls.icon_tool_texture = dpg.add_static_texture(w, h, data, tag="icon_tool_texture")
+                w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "tool.png")).expanduser().resolve()))
+                cls.icon_tool_texture = dpg.add_static_texture(w, h, data, tag="icon_tool_texture")
 
-            w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "user.png")).expanduser().resolve()))
-            cls.icon_user_texture = dpg.add_static_texture(w, h, data, tag="icon_user_texture")
+                w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "user.png")).expanduser().resolve()))
+                cls.icon_user_texture = dpg.add_static_texture(w, h, data, tag="icon_user_texture")
 
-            w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve()))   # generic AI icon
-            cls.icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture_generic")
-        cls._class_initialized = True
+                w, h, c, data = dpg.load_image(str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "icons", "ai.png")).expanduser().resolve()))   # generic AI icon
+                cls.icon_ai_texture = dpg.add_static_texture(w, h, data, tag="icon_ai_texture_generic")
+            cls._class_initialized = True
 
     def _load_instance_textures(self,
                                 avatar_image_path: Optional[Union[str, pathlib.Path]]):
-        """
+        """Load instance-specific textures.
+
         `avatar_image_path`: Path to the main character image of the AI's avatar.
                              Used for detecting the presence of a per-character icon.
 
                              If no per-character icon exists for this character,
                              a generic AI icon is used.
         """
-        # Prefer per-character icon, if available.
-        # This intentionally shadows `type(self).icon_ai_texture`.
-        character_image_path = avatar_image_path
-        character_dir = character_image_path.parent
-        basename = os.path.basename(str(character_image_path))  # e.g. "/foo/bar/example.png" -> "example.png"
+        # Prefer per-character icon, if available. This intentionally shadows `type(self).icon_ai_texture`.
+        character_dir = avatar_image_path.parent
+        basename = os.path.basename(str(avatar_image_path))  # e.g. "/foo/bar/example.png" -> "example.png"
         stem, ext = os.path.splitext(basename)  # -> "example", ".png"
         character_icon_path = character_dir / f"{stem}_icon{ext}"
         if character_icon_path.exists():
             w, h, c, data = dpg.load_image(str(character_icon_path))
-            self.icon_ai_texture = dpg.add_static_texture(w, h, data, tag=f"icon_ai_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")
+            self.icon_ai_texture = dpg.add_static_texture(w, h, data, tag=f"icon_ai_texture_0x{id(self):x}", parent="librarian_chat_controller_textures")  # tag
 
         self.gui_role_icons = {"assistant": self.icon_ai_texture,
                                "system": self.icon_system_texture,
@@ -903,6 +919,7 @@ class DPGChatController:
                  avatar_image_path: Optional[Union[str, pathlib.Path]],
                  themes_and_fonts: env,
                  chat_panel_widget: Union[str, int],
+                 chat_stop_generation_button_widget: Union[str, int],
                  indicator_glow_animation: Optional[gui_animation.PulsatingColor],
                  llm_indicator_widget: Union[str, int],
                  docs_indicator_widget: Union[str, int],
@@ -923,7 +940,12 @@ class DPGChatController:
 
         `avatar_controller`: For TTS, and for controlling the "data eyes" effect of the avatar.
 
-        `avatar_record`: The avatar instance of the AI in this chat view.
+                             NOTE: In case of multiple avatars in the same app, there is still just one controller (to serialize TTS correctly).
+                                   Each avatar instance has its own `avatar_record`.
+
+        `avatar_record`: Control data for the avatar instance of the AI in this chat view.
+
+                         See the `register_avatar_instance` method of `raven.client.avatar_controller.DPGAvatarController`.
 
         `avatar_image_path`: The file path to the main character image of the avatar of the AI speaking in this chat view.
                              This is used for detecting and loading the per-character icon. If the current character
@@ -932,6 +954,9 @@ class DPGChatController:
         `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
 
         `chat_panel_widget`: DPG tag or ID of the panel (child window) you want the chat to be rendered in.
+
+        `chat_stop_generation_button_widget`: DPG tag or ID of the GUI button to interrupt the LLM (stop generating text).
+                                              Will be auto-enabled only while the LLM is generating.
 
         `indicator_glow_animation`: When an indicator icon appears, the cycle of this animation will be reset,
                                     so that the glow always starts at the first animation frame.
@@ -957,6 +982,7 @@ class DPGChatController:
         self.app_state = app_state
         self.avatar_controller = avatar_controller
         self.avatar_record = avatar_record
+        self.chat_stop_generation_button_widget = chat_stop_generation_button_widget
         self.indicator_glow_animation = indicator_glow_animation
         self.llm_indicator_widget = llm_indicator_widget
         self.docs_indicator_widget = docs_indicator_widget
@@ -1063,7 +1089,7 @@ class DPGChatController:
                 return
 
             if self.gui_updates_safe:
-                dpg.enable_item("chat_stop_generation_button")  # tag
+                dpg.enable_item(self.chat_stop_generation_button_widget)
 
             speech_enabled = self.app_state["avatar_speech_enabled"]  # grab once, in case the user toggles it while this AI turn is being processed
 
@@ -1184,10 +1210,10 @@ class DPGChatController:
                         if not speech_enabled:  # If TTS is NOT enabled, stop the generic talking animation now that the LLM is done
                             api.avatar_stop_talking(self.avatar_record.avatar_instance_id)
 
-                        unused_role, unused_persona, text = chatutil.get_node_message_text_without_persona(self.datastore, node_id)
+                        unused_role, persona, text = chatutil.get_node_message_text_without_persona(self.datastore, node_id)
 
                         # Keep only non-thought content for TTS and emotion update
-                        text = chatutil.scrub(persona=self.llm_settings.personas.get("assistant", None),
+                        text = chatutil.scrub(persona=persona,
                                               text=text,
                                               thoughts_mode="discard",
                                               markup=None,
@@ -1271,7 +1297,7 @@ class DPGChatController:
                                                     docs_query=docs_query,
                                                     docs_num_results=librarian_config.docs_num_results,
                                                     speculate=self.app_state["speculate_enabled"],
-                                                    markup="markdown",
+                                                    markup="markdown",  # TODO: check if we actually use the `markup` argument for anything but thought blocks - those are in any case emitted as-is (and formatted at render time).
                                                     on_docs_start=on_docs_start,
                                                     on_docs_done=on_docs_done,
                                                     on_llm_start=on_llm_start,
@@ -1287,7 +1313,7 @@ class DPGChatController:
                 self.app_state["HEAD"] = new_head_node_id
             finally:
                 if self.gui_updates_safe:
-                    dpg.disable_item("chat_stop_generation_button")  # tag
+                    dpg.disable_item(self.chat_stop_generation_button_widget)
                     self.avatar_controller.stop_data_eyes(config=self.avatar_record)  # make sure the data eyes effect ends (unless app shutting down, in which case we shouldn't start new GUI animations)
                     if not speech_enabled:  # make sure the generic talking animation ends (if we invoked it)
                         api.avatar_stop_talking(self.avatar_record.avatar_instance_id)
@@ -1304,6 +1330,6 @@ class DPGChatController:
         so that there's no need to wait for a complete response.
         """
         if self.gui_updates_safe:
-            dpg.disable_item("chat_stop_generation_button")  # tag
+            dpg.disable_item(self.chat_stop_generation_button_widget)
         # Cancelling all background tasks from the AI turn specific task manager stops the task (co-operatively, so it shuts down gracefully).
         self.ai_turn_task_manager.clear()
