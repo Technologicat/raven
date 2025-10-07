@@ -59,6 +59,13 @@
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: Avatar idle off (10 sec)
   - Later:
+    - Add nonlinear chat view / chat graph editor (this is part of where the true power of Librarian will come from)
+      - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_vewmodel.py#L206
+      - how to get mouse position: https://github.com/hoffstadt/DearPyGui/issues/2164
+      - simple examples:
+        - https://github.com/DataExplorerUser/drag_drop_node_editor/blob/main/drag_and_drop_node_editor_dear_py_gui.py
+        - https://github.com/hoshianaaa/DearPyGUI_NodeEditor_Template/tree/main
+      - Maybe better to just use a the plotter, with custom tooltips? We don't need a node *editor* here, but rather just something to visualize a graph.
     - IBM Granite OCR for PDF input
     - STT: whisper-v3-turbo
     - `DPGAvatarRenderer`, `DPGAvatarController`: isolate the DPG-specific parts
@@ -85,13 +92,6 @@
       - Just instantiate a `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Once the rescan finishes, exit the tool.
     - Draw assets:
         - Make per-character AI chat icons for all characters (now Librarian supports them; e.g. character `aria1.png` has `aria1_icon.png`, RGBA, 64x64)
-    - Add chat graph editor (this is part of where the true power of Librarian will come from)
-      - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_vewmodel.py#L206
-      - how to get mouse position: https://github.com/hoffstadt/DearPyGui/issues/2164
-      - simple examples:
-        - https://github.com/DataExplorerUser/drag_drop_node_editor/blob/main/drag_and_drop_node_editor_dear_py_gui.py
-        - https://github.com/hoshianaaa/DearPyGUI_NodeEditor_Template/tree/main
-      - Maybe better to just use a the plotter, with custom tooltips? We don't need a node *editor* here, but rather just something to visualize a graph.
     - Have three RAG stores:
       - documents: explicit, for user (exists)
       - long-term memory: implicit, managed by system; for recalling old chats (new)
