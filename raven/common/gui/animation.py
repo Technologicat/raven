@@ -816,8 +816,14 @@ class PulsatingColor(Animation):
                                                      theme_color_widget=pulsating_red_color)
             animator.add(pulsating_red_animation)
 
+        Then bind the theme "my_pulsating_red_text_theme" to the GUI widget(s) that you want
+        to have the pulsating red text color.
+
         This animation, once created, runs continuously in the background.
-        To reset the pulsation sequence, call the `reset` method.
+
+        To reset the pulsation sequence, call the `reset` method. This is useful e.g. when an
+        indicator icon bound to the theme appears, so that the pulsation animation always starts
+        at the same animation frame.
         """
         super().__init__()
         self.cycle_duration = cycle_duration

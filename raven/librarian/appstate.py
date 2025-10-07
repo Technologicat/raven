@@ -1,4 +1,6 @@
-"""Chat app state saving/loading.
+"""Persistent chat app state.
+
+Importantly, contains the HEAD node ID of the current chat, as well as some persistent option flags.
 
 This module is shared between `minichat` (command-line app) and `app` (Raven-librarian GUI app).
 """
