@@ -439,8 +439,7 @@ class PostprocessorSettingsEditorGUI:
                 with dpg.child_window(width=1024, height=viewport_height - 16,
                                       border=False, no_scrollbar=True, no_scroll_with_mouse=True,
                                       tag="avatar_child_window"):
-                    self.dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="avatar_settings_editor_textures",
-                                                                 gui_parent="avatar_child_window",
+                    self.dpg_avatar_renderer = DPGAvatarRenderer(gui_parent="avatar_child_window",
                                                                  avatar_x_center=512,
                                                                  avatar_y_bottom=viewport_height - 16,
                                                                  paused_text="[Animator is paused]",

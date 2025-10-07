@@ -85,11 +85,8 @@ class ResultFeedReader:
 # --------------------------------------------------------------------------------
 # API
 
-# TODO: manage our own texture registry?
-
 class DPGAvatarRenderer:
     def __init__(self,
-                 texture_registry: Union[str, int],
                  gui_parent: Union[str, int],
                  avatar_x_center: int,
                  avatar_y_bottom: int,
@@ -99,7 +96,6 @@ class DPGAvatarRenderer:
 
         This can only be instantiated after DPG bootup is complete, because the constructor sets up some GUI widgets.
 
-        `texture_registry`: DPG tag or ID; where to keep the DPG texture object.
         `gui_parent`: DPG tag or ID; where to put the GUI image widget that displays the live texture.
         `avatar_x_center`: x center position of avatar video feed, in pixels, in the coordinate system of `gui_parent`.
         `avatar_y_bottom`: y bottom (one past end) of avatar video feed, in pixels, in the coordinate system of `gui_parent`.
@@ -115,9 +111,9 @@ class DPGAvatarRenderer:
 
         For a complete usage example, see `raven.avatar.settings_editor.app`.
         """
-        self.texture_registry = texture_registry
         self.gui_parent = gui_parent
         self.task_manager = task_manager
+        self.texture_registry = dpg.add_texture_registry(tag=f"librarian_avatar_renderer_0x{id(self):x}_textures")
         self._task_env = None  # This holds the local namespace (`unpythonic.env.env`) of the background task, so we can cancel the task if needed.
 
         self.live_texture = None  # The raw texture object

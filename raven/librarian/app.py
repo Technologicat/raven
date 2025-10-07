@@ -246,8 +246,7 @@ with timer() as tim:
                     # so we must compute the initial size.
                     avatar_panel_w = (gui_config.main_window_w - (gui_config.chat_panel_w + 16) - 3 * 8)  # the 3 * 8 are the outer borders outside the panels (between panel and window edge, and between the panels)
                     avatar_panel_h = chat_panel_h
-                    dpg_avatar_renderer = DPGAvatarRenderer(texture_registry="librarian_app_textures",
-                                                            gui_parent="avatar_panel",
+                    dpg_avatar_renderer = DPGAvatarRenderer(gui_parent="avatar_panel",
                                                             avatar_x_center=(avatar_panel_w // 2),
                                                             avatar_y_bottom=avatar_panel_h - 8,
                                                             paused_text="[No video]",
