@@ -43,9 +43,26 @@
 - Visualizer
   - Keep the app state in top-level containers, and pass these in/out explicitly. More FP and facilitates adding unit tests later.
   - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
+    - Refactor the help card into a reusable class.
+      - Add help card to other apps in constellation:
+        - Librarian
+        - Avatar settings editor
+        - Avatar pose editor
+    - Refactoring the info panel (~2k SLOC, half of the app) would help a lot.
+    - Info tooltip another good candidate, and needs many of the same data sources to be passed in. (Do these two need to work together?)
+  - Make the layout switchable left/right (which side of the screen the info panel is on, for on-site collaboration accounting for physical placement constraints for laptop and users)
+  - Improve keyword autodetection
+    - Preprocess text by LLM before handing over to the simple keyword detector algorithm?
+  - Account for BibTeX entry type: article, inproceedings, book, patent, ...
+    - Show entry type for each entry
+    - Show count by type in selection
+    - Allow filtering by entry type
+  - BUG: Search result highlight: "Can a" -> highlights whole word "Can", then highlights "a" inside it, breaking the outer highlight
+  - BUG: Initial zoom sometimes misses a few data points at the very edges of the latent space (must zoom out by one mouse wheel tick before select-all)
+    - Investigate whether this trick works: https://stackoverflow.com/questions/75069012/set-initial-axis-limits-while-preserving-pan-zoom-in-dearpygui
 
 - Librarian
-  - Document:
+  - Documentation:
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Maybe next:
