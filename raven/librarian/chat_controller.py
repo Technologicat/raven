@@ -644,12 +644,21 @@ class DPGLinearizedChatView:
                  themes_and_fonts: env,
                  gui_parent: Union[str, int],  # panel (DPG child window)
                  chat_controller: "DPGChatController"):
+        """A view of the current chat branch, displayed as a linear chat.
+
+        `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
+
+        `gui_parent`: DPG tag or ID of the panel (child window) you want the chat to be rendered in.
+
+        `chat_controller`: The controller this view belongs to. Managed internally;
+                           the `DPGLinearizedChatView` is instantiated and owned by the `DPGChatController`.
+        """
         self.themes_and_fonts = themes_and_fonts
         self.gui_parent = gui_parent
         self.gui_uuid = str(uuid.uuid4())  # used in GUI widget tags
         self.chat_controller = chat_controller
 
-        # TODO: We can later use the existence of the chat container group widget for double-buffering (can render a new group and then switch it in)
+        # TODO: We can later use the existence of this chat container group widget for double-buffering (can render a new group and then switch it in)
         self.chat_messages_container_group_widget = dpg.add_group(tag=f"chat_messages_container_group_{self.gui_uuid}",
                                                                   parent=gui_parent)
 
