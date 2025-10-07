@@ -727,10 +727,10 @@ class DPGLinearizedChatView:
 
     def scroll_to_end(self,
                       max_wait_frames: int = 50) -> None:
-        """Scroll this linearized chat view to end.
+        """Scroll this linearized chat view to the end.
 
         `max_wait_frames`: If `max_wait_frames > 0`, wait at most for that may frames
-                           for the chat panel to get a nonzero `max_y_scroll`.
+                           for the chat panel (`self.gui_parent`) to get a nonzero `max_y_scroll`.
 
                            Some waiting is usually needed at least at app startup
                            before the GUI settles.
@@ -757,6 +757,12 @@ class DPGLinearizedChatView:
         dpg.set_y_scroll(self.gui_parent, max_y_scroll)
 
     def get_chatlog_as_markdown(self, include_metadata: bool) -> Optional[str]:
+        """Format this linearized chat as Markdown, e.g. for copying to clipboard or saving to file.
+
+        `include_metadata`: If `True`, the output will contain the node IDs, revision timestamps (ISO format), and revision numbers.
+
+        Returns the chatlog as Markdown. If the view is empty, returns `None`.
+        """
         with self.chat_controller.current_chat_history_lock:
             if not self.chat_controller.current_chat_history:
                 return None
@@ -787,7 +793,11 @@ class DPGLinearizedChatView:
     def add_complete_message(self,
                              node_id: str,
                              scroll_to_end: bool = True) -> DPGCompleteChatMessage:
-        """Append the given chat node to the end of the linearized chat view in the GUI."""
+        """Append the chat node with `node_id` to the end of the linearized chat view in the GUI.
+
+        `scroll_to_end`: If `True`, then once the message has been added, wait for one frame
+                         for the message to render, and scroll the chat view to the end.
+        """
         with self.chat_controller.current_chat_history_lock:
             dpg_chat_message = DPGCompleteChatMessage(gui_parent=self.chat_messages_container_group_widget,
                                                       parent_view=self,
@@ -805,7 +815,7 @@ class DPGLinearizedChatView:
 
         As side effects:
 
-          - Update the controller's `current_chat_history`.
+          - Update the `current_chat_history` of the chat controller this view is bound to.
           - If `head_node_id` is an AI message, update the avatar's emotion from that
             (using the node's current payload revision).
         """
