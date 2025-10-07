@@ -57,6 +57,69 @@ role_colors = {"assistant": {"front": gui_config.chat_color_ai_front, "back": gu
 
 # --------------------------------------------------------------------------------
 
+def format_chat_message_for_clipboard(message_number: Optional[int],
+                                      role: str,
+                                      persona: Optional[str],
+                                      text: str,
+                                      add_heading: bool) -> str:
+    """Format a chat message for copying to clipboard, by adding a metadata header as Markdown.
+
+    As a preprocessing step, the role name is stripped from the beginning of each line in `message_text`.
+    It is then re-added in a unified form, using `message_role` as the role.
+
+    `message_number`: The sequential number of the message in the current linearized view.
+                      If `None`, the number part in the formatted output is omitted.
+
+    `role`: One of the roles supported by `raven.librarian.llmclient`.
+            Typically, one of "assistant", "system", "tool", or "user".
+
+    `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
+
+               If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
+               (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
+
+               If you are editing a message from an existing chat node, use
+               `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
+               (which may be different from the current session's, e.g. if the AI character has been changed).
+
+    `text`: The text content of the chat message to format.
+            The content is pasted into the output as-is.
+
+    `add_heading`: Whether to include the message number and role's character name
+                   in the final output.
+
+                   Example. If `add_heading` is `True`, then both::
+
+                       Lorem ipsum.
+
+                   and::
+
+                       Aria: Lorem ipsum.
+
+                   become::
+
+                       *[#42]* **Aria**: Lorem ipsum.
+
+                   If `add_heading` is `False`, then both become just::
+
+                       Lorem ipsum.
+
+    Returns the formatted message.
+    """
+    if add_heading:
+        message_heading = chatutil.format_message_heading(message_number=message_number,
+                                                          role=role,
+                                                          persona=persona,
+                                                          markup="markdown")
+    else:
+        message_heading = ""
+    message_text = chatutil.remove_persona_from_start_of_line(persona=persona,
+                                                              text=text)
+    return f"{message_heading}{message_text}"
+
+
+# --------------------------------------------------------------------------------
+
 class DPGChatMessage:
     class_lock = threading.RLock()
     callbacks = {}
@@ -361,11 +424,11 @@ class DPGChatMessage:
             shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
             # Note we only add the role name when we include also the node ID.
             # Omitting the name in regular mode improves convenience for copy-pasting an existing question into the chat field.
-            formatted_message = self.parent_view.format_chat_message_for_clipboard(message_number=None,  # a single message copied to clipboard does not need a sequential number
-                                                                                   role=role,
-                                                                                   persona=persona,
-                                                                                   text=self.text,
-                                                                                   add_heading=shift_pressed)
+            formatted_message = format_chat_message_for_clipboard(message_number=None,  # a single message copied to clipboard does not need a sequential number
+                                                                  role=role,
+                                                                  persona=persona,
+                                                                  text=self.text,
+                                                                  add_heading=shift_pressed)
 
             if shift_pressed:
                 node_payload = self.parent_view.chat_controller.datastore.get_payload(node_id)  # auto-selects active revision  TODO: later (chat editing), we need to set the revision to load
@@ -706,11 +769,11 @@ class DPGLinearizedChatView:
                 role = message["role"]
                 persona = node_payload["general_metadata"]["persona"]  # stored persona for this chat message
                 text = message["content"]
-                formatted_message = self.format_chat_message_for_clipboard(message_number=message_number,
-                                                                           role=role,
-                                                                           persona=persona,
-                                                                           text=text,
-                                                                           add_heading=True)  # In the full chatlog, the message numbers and role names are important, so always include them.
+                formatted_message = format_chat_message_for_clipboard(message_number=message_number,
+                                                                      role=role,
+                                                                      persona=persona,
+                                                                      text=text,
+                                                                      add_heading=True)  # In the full chatlog, the message numbers and role names are important, so always include them.
                 if include_metadata:
                     payload_datetime = node_payload["general_metadata"]["datetime"]  # of the active revision!
                     node_active_revision = self.chat_controller.datastore.get_revision(dpg_chat_message.node_id)
@@ -720,68 +783,6 @@ class DPGLinearizedChatView:
                 output_text.write(f"{header}{formatted_message}\n\n{'-' * 80}\n\n")
 
             return output_text.getvalue()
-
-    # TODO: This wants to be a separate helper function (used by both `DPGChatMessage` and `DPGLinearizedChatView`)
-    def format_chat_message_for_clipboard(self,
-                                          message_number: Optional[int],
-                                          role: str,
-                                          persona: Optional[str],
-                                          text: str,
-                                          add_heading: bool) -> str:
-        """Format a chat message for copying to clipboard, by adding a metadata header as Markdown.
-
-        As a preprocessing step, the role name is stripped from the beginning of each line in `message_text`.
-        It is then re-added in a unified form, using `message_role` as the role.
-
-        `message_number`: The sequential number of the message in the current linearized view.
-                          If `None`, the number part in the formatted output is omitted.
-
-        `role`: One of the roles supported by `raven.librarian.llmclient`.
-                Typically, one of "assistant", "system", "tool", or "user".
-
-        `persona`: The persona name speaking `text`, or `None` if the role has no persona name ("system" and "tool" are like this).
-
-                   If you are creating a new chat message, use `persona=llm_settings.personas.get(role, None)`
-                   (where `role` is one of "assistant", "system", "tool", "user") to get the current session's persona.
-
-                   If you are editing a message from an existing chat node, use
-                   `persona=node_payload["general_metadata"]["persona"]` to get the stored persona
-                   (which may be different from the current session's, e.g. if the AI character has been changed).
-
-        `text`: The text content of the chat message to format.
-                The content is pasted into the output as-is.
-
-        `add_heading`: Whether to include the message number and role's character name
-                       in the final output.
-
-                       Example. If `add_heading` is `True`, then both::
-
-                           Lorem ipsum.
-
-                       and::
-
-                           Aria: Lorem ipsum.
-
-                       become::
-
-                           *[#42]* **Aria**: Lorem ipsum.
-
-                       If `add_heading` is `False`, then both become just::
-
-                           Lorem ipsum.
-
-        Returns the formatted message.
-        """
-        if add_heading:
-            message_heading = chatutil.format_message_heading(message_number=message_number,
-                                                              role=role,
-                                                              persona=persona,
-                                                              markup="markdown")
-        else:
-            message_heading = ""
-        message_text = chatutil.remove_persona_from_start_of_line(persona=persona,
-                                                                  text=text)
-        return f"{message_heading}{message_text}"
 
     def add_complete_message(self,
                              node_id: str,
