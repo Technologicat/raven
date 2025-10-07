@@ -854,6 +854,46 @@ class DPGChatController:
                  docs_indicator_widget: Union[str, int],  # DPG widget to show while the docs database is being searched
                  web_indicator_widget: Union[str, int],  # DPG widget to show while the websearch tool is being called
                  executor: Optional = None):
+        """Controller for LLM scaffold to GUI integration.
+
+        Owns a `DPGLinearizedChatView`, which displays the current branch of the chat.
+
+        `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+
+        `datastore`: The chat datastore.
+
+        `retriever`: A `raven.librarian.hybridir.HybridIR` retriever connected to the document database.
+
+        `app_state`: The chat's HEAD node ID, plus some persistent option flags.
+                     See `raven.librarian.appstate`.
+
+        `avatar_controller`: For TTS, and for controlling the "data eyes" effect of the avatar.
+
+        `avatar_record`: The avatar instance of the AI in this chat view.
+
+        `avatar_image_path`: The file path to the main character image of the avatar of the AI speaking in this chat view.
+                             This is used for detecting and loading the per-character icon. If the current character
+                             has no per-character icon, a generic AI icon is used automatically.
+
+        `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
+
+        `chat_panel_widget`: DPG tag or ID of the panel (child window) you want the chat to be rendered in.
+
+        `indicator_glow_animation`: When an indicator icon appears, the cycle of this animation will be reset,
+                                    so that the glow always starts at the first animation frame.
+
+                                    See `PulsatingColor` in `raven.common.gui.animation`.
+
+        `llm_indicator_widget`: DPG tag or ID of the widget to show while the prompt is being processed by the LLM backend.
+                                Typically, a DPG group with items bound to the theme whose color `indicator_glow_animation`
+                                pulsates.
+
+        `doca_indicator_widget`: DPG tag or ID of the widget to show while the document database is being searched.
+
+        `web_indicator_widget`: DPG tag or ID of the widget to show while a "websearch" tool call is in progress.
+
+        `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
+        """
         self.llm_settings = llm_settings
         self.datastore = datastore
         self.retriever = retriever
@@ -900,16 +940,21 @@ class DPGChatController:
         dpg_chat_message = self.current_chat_history[-1]
         return dpg_chat_message
 
-    def chat_round(self, user_message_text: str) -> None:  # message text comes from GUI
+    def chat_round(self, user_message_text: str) -> None:
         """Run a chat round (user and AI).
+
+        `user_message_text`: What the user wrote.
+
+                             If `user_message_text` is the empty string, the AI will generate another message
+                             without the user writing in between.
+
+        The RAG query (for document database search) is taken from the latest available user message:
+
+          - `user_message_text` if not the empty string.
+          - Otherwise, automatically obtained by scanning the current chat for the user's latest message.
 
         This spawns a background task to avoid hanging GUI event handlers,
         since the typical use case is to call `chat_round` from a GUI event handler.
-
-        By sending empty `user_message_text`, it is possible to have the AI generate
-        another message without the user writing in between.
-
-        The RAG query is taken from the latest available user message.
         """
         def chat_round_task(task_env: env) -> None:
             if task_env.cancelled:  # while the task was in the queue
@@ -933,7 +978,10 @@ class DPGChatController:
         self.task_manager.submit(chat_round_task, env())
 
     def user_turn(self, text: str) -> None:
-        """Add the user's message to the chat, and append it to the linearized chat view in the GUI."""
+        """Run the user's part of a chat round.
+
+        This appends the user's message to the current chat, and append it to the linearized chat view in the GUI.
+        """
         def user_turn_task(task_env: env) -> None:
             if task_env.cancelled:  # while the task was in the queue
                 return
@@ -950,7 +998,7 @@ class DPGChatController:
         """Run the AI's response part of a chat round.
 
         This spawns a background task to avoid hanging GUI event handlers,
-        since the reroll GUI event handler calls `ai_turn` directly.
+        to allow GUI event handlers (e.g. AI reroll) to call `ai_turn` directly.
         """
         docs_query = docs_query if self.app_state["docs_enabled"] else None
 
@@ -1060,13 +1108,13 @@ class DPGChatController:
                         task_env.text = io.StringIO()
                         dpg.split_frame()
                         self.view.scroll_to_end()
-                    # - update at least every 0.5 sec
-                    # - update after every 10 chunks, but rate-limited (at least 0.1 sec must have passed since last update)
+                    # - update at least every 0.5 sec, even if the LLM is slow
+                    # - update after every 10 chunks, but with a rate limit
                     elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit changes to in-progress last paragraph
                         task_env.t0 = time_now
                         task_env.n_chunks0 = n_chunks
                         streaming_chat_message.replace_last_paragraph(task_env.text.getvalue(),
-                                                                      is_thought=task_env.inside_think_block)  # at first paragraph, will auto-create it if not created yet
+                                                                      is_thought=task_env.inside_think_block)  # at first paragraph, will auto-create the paragraph if not created yet
                         dpg.split_frame()
                         self.view.scroll_to_end()
 
@@ -1196,7 +1244,7 @@ class DPGChatController:
     def stop_ai_turn(self) -> None:
         """Interrupt the AI, i.e. stop ongoing text generation.
 
-        Useful to have in case you see the AI has misunderstood your question,
+        Useful to have in case you (as the user) see the AI has misunderstood your question,
         so that there's no need to wait for a complete response.
         """
         if self.gui_updates_safe:
