@@ -304,6 +304,8 @@
   - What needs to be done here?
     - What packages should be installed? (I don't have an AMD environment to test/develop in.)
 
+- Visualizer: visualize links between documents if link/reference information available in data?
+
 - **More import sources**.
   - We currently have:
     - Web of Science (working).
