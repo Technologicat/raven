@@ -496,7 +496,9 @@ def load_embedder(model_name: str, device_string: str, torch_dtype: Union[str, t
             device_string = "cpu"
             torch_dtype = "float32"  # probably (we need a cache key, so let's use this)
             cache_key = (model_name, device_string, str(torch_dtype))
-            embedder = SentenceTransformer(model_name, device=device_string)
+            embedder = SentenceTransformer(model_name,
+                                           device=device_string,
+                                           model_kwargs={"torch_dtype": torch_dtype})
         except RuntimeError as exc:
             logger.warning(f"load_embedder: failed to load SentenceTransformer: {type(exc)}: {exc}")
             raise
