@@ -61,6 +61,10 @@
   - BUG: Initial zoom sometimes misses a few data points at the very edges of the latent space (must zoom out by one mouse wheel tick before select-all)
     - Investigate whether this trick works: https://stackoverflow.com/questions/75069012/set-initial-axis-limits-while-preserving-pan-zoom-in-dearpygui
   - Importer: Configurable hyperparameters
+  - Configurable plotter:
+    - Background color
+    - Colormap
+  - File extensions: dataset (.pickle) should have file extension different from nlp cache (.pickle)
 
 - Librarian
   - Documentation:
