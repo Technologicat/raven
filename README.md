@@ -207,6 +207,8 @@ pdm remove chromadb
 
 Then run `pdm install` again.
 
+:exclamation: *In general, if a package fails to install, but is not explicitly listed in the dependencies, you can try to find out which package pulls it in, by issuing the command `pdm list --tree`. This shows a tree-structured summary of the dependencies.* :exclamation:
+
 #### Install on Windows (if Windows Defender gets angry)
 
 *Installing Raven does **not** need admin rights.*
