@@ -185,16 +185,24 @@ On MacOSX, installing torch 2.3.0 or later requires an ARM64 processor and MacOS
 
 If you have an Intel Mac (x86_64) with MacOSX 10.x, to work around this, you can use Torch 2.2.x.
 
-To do this, modify Raven's [`pyproject.toml`](pyproject.toml) in a text editor, so that the line
+To do this, modify Raven's [`pyproject.toml`](pyproject.toml) in a text editor, so that the lines
 
 ```
     "torch>=2.4.0",
+    "torchvision>=0.22.0",
 ```
 
-becomes
+become
 
 ```
     "torch>=2.2.0,<2.3.0",
+    "torchvision>=0.17.2",
+```
+
+Also, ChromaDB requires `onnxruntime`, which doesn't seem to be installable on this version of OS X. This means *Raven-librarian* and *Raven-server* won't work (as the RAG backend and the server's `embeddings` module require ChromaDB), but you can still get *Raven-visualizer* to work, by removing ChromaDB. Run this command in the terminal:
+
+```bash
+pdm remove chromadb
 ```
 
 Then run `pdm install` again.
