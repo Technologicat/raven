@@ -3,10 +3,8 @@
 
 This script performs analysis and writes the visualization data file. See `app.py` to plot the results.
 
-We use `bibtexparser` v2.x. To install, e.g.::
-    pip install bibtexparser --pre --upgrade --user
-For more, see::
-    https://github.com/sciunto-org/python-bibtexparser
+This module is both a standalone command-line app, as well as an importable module for Raven-visualizer,
+used by its *Import BibTeX* window.
 """
 
 __all__ = ["init",
