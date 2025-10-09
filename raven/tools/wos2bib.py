@@ -38,7 +38,7 @@ def main():
     parser = argparse.ArgumentParser(description="""Convert Web of Science plain text export (.wos/.txt) to BibTeX.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
-    parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="bib", help="Web of Science (WOS) plain text file(s) to parse")
+    parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="wos", help="Web of Science (WOS) plain text file(s) to parse")
     opts = parser.parse_args()
 
     logger.info(f"Reading input file{'s' if len(opts.filenames) != 1 else ''} {opts.filenames}...")
