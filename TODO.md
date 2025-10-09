@@ -205,9 +205,12 @@
   - When running on MacOSX, instead of the Ctrl key, all hotkeys use the Cmd key instead.
     - We should detect the OS we're running on at app startup, and change help and tooltips accordingly.
   - Resolve hotkey conflicts with MacOSX builtin hotkeys.
-    - The hidden debug window Ctrl+M (to show FPS stats) doesn't work, because Cmd+M is *Minimize window*.
+    - As of v0.2.3, the hidden debug window (to show FPS stats) is now Cmd+Shift+M, which works. Note that bare Cmd+M is *Minimize window*.
   - Right-click or right-drag features on MacOSX with a one-button mouse or trackpad?
   - F-keys on MacOSX?
+  - OS X 10.x support. In that environment:
+    - ChromaDB won't install, because it depends on `onnxruntime`, which won't install. HybridIR won't work, preventing Raven-librarian from starting.
+    - `av` won't install, so the TTS's mp3 audio compressor won't work. This may prevent Raven-server from starting, when it tries to import the `tts` module. We could add a `try`/`except` and disable just `tts`.
 
 - Fix issues found via user feedback from initial testing:
   - Installation instructions: TL;DR version (without CUDA), walk through how to import the included dataset

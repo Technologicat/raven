@@ -1,5 +1,7 @@
 """Transparent Raven-server support for some NLP components, with local (client-side) fallback."""
 
+# TODO: This could be extended to cover all applicable server modules, but YAGNI. As of v0.2.4, we only need the embedder and spaCy NLP to have this capability, for Raven-visualizer's importer.
+
 __all__ = ["MaybeRemoteService",
            "Embedder",
            "NLP"]
