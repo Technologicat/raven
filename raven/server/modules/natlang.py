@@ -52,18 +52,10 @@ def analyze(text: Union[str, List[str]], pipes: Optional[List[str]]) -> Response
     The model's language code (e.g. "en" for English) is sent in the custom header "x-langcode".
     The client needs the language code to be able to deserialize the data correctly.
     """
-    if isinstance(text, str):  # always wrap in a list container
-        text = [text]
-
-    if pipes is not None:
-        # TODO: This approach of selecting the NLP pipes is likely not thread-safe (think multiple concurrent requests to the server). Revisit this later.
-        with nlp_pipeline.select_pipes(enable=pipes):  # only the requested pipes (e.g. `pipes=["tok2vec", "parser", "senter"]` to split text to sentences with "en_core_web_sm")
-            docs = list(nlp_pipeline.pipe(text))
-    else:  # default pipes
-        docs = list(nlp_pipeline.pipe(text))
-
+    docs = nlptools.spacy_analyze(nlp_pipeline,
+                                  text,
+                                  pipes)
     docs_bytes = nlptools.serialize_spacy_docs(docs)
-
     output_headers = {"Content-Type": "application/octet-stream",
                       "Content-Length": len(docs_bytes),
                       "x-langcode": nlp_pipeline.lang}

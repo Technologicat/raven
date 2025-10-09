@@ -15,7 +15,7 @@ Backends:
 """
 
 __all__ = {"default_stopwords",
-           "load_spacy_pipeline",
+           "load_spacy_pipeline", "spacy_analyze",
            "serialize_spacy_pipeline", "deserialize_spacy_pipeline",
            "serialize_spacy_docs", "deserialize_spacy_docs",
            "load_classifier", "classify",
@@ -68,8 +68,6 @@ default_stopwords = set(x.lower() for x in _load_stopwords())
 
 # --------------------------------------------------------------------------------
 # NLP backend: spaCy NLP pipeline
-
-# For this backend, we provide no utility functions; do what you want with the `nlp` object.
 
 _spacy_pipelines = {}
 def load_spacy_pipeline(model_name: str, device_string: str):
@@ -127,6 +125,40 @@ def load_spacy_pipeline(model_name: str, device_string: str):
     logger.info(f"load_spacy_pipeline: Loaded spaCy model '{model_name}' on device '{device_string}'.")
     _spacy_pipelines[cache_key] = nlp
     return nlp
+
+def spacy_analyze(nlp,
+                  text: Union[str, List[str]],
+                  pipes: Optional[List[str]] = None) -> List[List[spacy.tokens.token.Token]]:
+    """Run spaCy NLP analysis on `text`.
+
+    This is a convenience function for the most common use case of a spaCy pipeline.
+
+    `nlp`: return value of `load_spacy_pipeline`.
+
+    `pipes`: If provided, enable only the listed pipes. Which ones exist depend on the spaCy model.
+             If not provided, use the model's default pipes.
+
+             E.g. `pipes=["tok2vec", "parser", "senter"]` to split text to sentences with "en_core_web_sm".
+             Then, after analysis, the sentences are available as `doc.sents`.
+
+    Returns a `list` of spaCy documents (even if just one `text`).
+
+    NOTE: The return value is not JSONable; if you need to send the results to over the network,
+          see `serialize_spacy_docs` and `deserialize_spacy_docs`.
+
+          For those functions, the receiver must be running the same Python and spaCy versions as the sender,
+          so this is mostly useful internally in a single app constellation that has server and client parts.
+    """
+    if isinstance(text, str):  # always wrap in a list container
+        text = [text]
+    if pipes is not None:
+        # Process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
+        # TODO: This approach of selecting the NLP pipes is likely not thread-safe (think multiple concurrent requests; each unique `model_name` has only one spaCy model instance loaded). Revisit this later.
+        with nlp.select_pipes(enable=pipes):
+            docs = list(nlp.pipe(text))
+    else:  # default pipes
+        docs = list(nlp.pipe(text))
+    return docs
 
 # The following four functions are based on:
 #   https://spacy.io/usage/saving-loading
@@ -617,8 +649,12 @@ def _summarize_chunked(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) ->
     except IndexError:
         logger.info(f"_summarize_chunked: input text (length {len(text)} characters) is long; cutting text in half at a sentence boundary and summarizing the halves separately.")
 
-        with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
-            doc = nlp_pipe(text)
+        docs = spacy_analyze(nlp_pipe,
+                             text,
+                             pipes=['tok2vec', "parser", "senter"])
+        assert len(docs) == 1
+        doc = docs[0]
+
         sents = list(doc.sents)
         mid = len(sents) // 2
         firsthalf = " ".join(str(sent).strip() for sent in sents[:mid])
@@ -640,8 +676,11 @@ def _summarize_chunked(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) ->
         # def full_sentence_trimmer(overlap, mode, text):
         #     @memoize  # from `unpythonic`
         #     def get_sentences(text):
-        #         with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
-        #             doc = nlp_pipe(text)
+        #         docs = spacy_analyze(nlp_pipe,
+        #                              text,
+        #                              pipes=['tok2vec', "parser", "senter"])
+        #         assert len(docs) == 1
+        #         doc = docs[0]
         #         return list(doc.sents)
         #
         #     offset = 0
@@ -704,8 +743,11 @@ def summarize(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
         end = -1 if text[-1] not in (".", "!", "?") else None
 
         # Split into sentences via NLP. (This is the sane approach.)
-        with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # Process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
-            doc = nlp_pipe(text)
+        docs = spacy_analyze(nlp_pipe,
+                             text,
+                             pipes=['tok2vec', "parser", "senter"])
+        assert len(docs) == 1
+        doc = docs[0]
         sents = list(doc.sents)
         if end is not None and len(sents) == 1:  # If only one sentence, keep it even if incomplete.
             end = None
@@ -821,8 +863,11 @@ def _translate_chunked(translator: pipeline, nlp_pipe, text: str) -> str:
     # TODO: Can sometimes give bad results:
     #   - If the sentence splitting is bad (e.g. scientific abstract with [ABC1992] inline citations can confuse spaCy)
     #   - If the sentences depend on larger context to make sense.
-    with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
-        doc = nlp_pipe(text)
+    docs = spacy_analyze(nlp_pipe,
+                         text,
+                         pipes=['tok2vec', "parser", "senter"])
+    assert len(docs) == 1
+    doc = docs[0]
     sents = list(doc.sents)
     outputs = translator([str(sent).strip() for sent in sents])
     translations = [output["translation_text"] for output in outputs]
@@ -834,8 +879,11 @@ def _translate_chunked(translator: pipeline, nlp_pipe, text: str) -> str:
     # except IndexError:
     #     logger.info(f"_translate_chunked: input text (length {len(text)} characters) is long; cutting text in half at a sentence boundary and translating the halves separately.")
     #
-    #     with nlp_pipe.select_pipes(enable=['tok2vec', "parser", "senter"]):  # process faster by enabling only needed modules; https://stackoverflow.com/a/74907505
-    #         doc = nlp_pipe(text)
+    #     docs = spacy_analyze(nlp_pipe,
+    #                          text,
+    #                          pipes=['tok2vec', "parser", "senter"])
+    #     assert len(docs) == 1
+    #     doc = docs[0]
     #     sents = list(doc.sents)
     #     mid = len(sents) // 2
     #     firsthalf = " ".join(str(sent).strip() for sent in sents[:mid])

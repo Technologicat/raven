@@ -46,6 +46,7 @@ import chromadb  # semantic (vector)
 
 from ..client import api
 from ..client import config as client_config
+from ..client import mayberemote
 
 from ..common import bgtask
 from ..common import deviceinfo
@@ -272,53 +273,14 @@ class HybridIR:
             self.embedding_model_name = embedding_model_name
             self.documents = {}
 
-        # Transparent Raven-server support -->
-        if api.raven_server_available():
-            server_modules = api.modules()
-        else:
-            server_modules = []
-            if local_model_loader_fallback:
-                logger.info(f"HybridIR.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}'; loading models locally.")
-            else:
-                logger.error(f"HybridIR.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}', and local model loading is disabled. Cannot proceed.")
-                raise RuntimeError(f"HybridIR.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}', and local model loading is disabled. Cannot proceed.")
-
-        if "embeddings" in server_modules:
-            self._local_semantic_embedder = None
-            def encode(texts: List[str]) -> List[List[float]]:
-                embeddings = api.embeddings_compute(texts,
-                                                    model=self.embedding_model_name)
-                return embeddings
-            encode(["The quick brown fox jumps over the lazy dog"])  # fail-fast: if the requested embeddings model isn't loaded on the server, any attempt to encode will HTTP 400
-        else:
-            logger.info(f"HybridIR.__init__: No `embeddings` module loaded on Raven-server at '{client_config.raven_server_url}', loading semantic embedding model locally.")
-
-            self._local_semantic_embedder = nlptools.load_embedder(self.embedding_model_name,
-                                                                   librarian_config.devices["embeddings"]["device_string"],
-                                                                   librarian_config.devices["embeddings"]["dtype"])  # we compute vector embeddings manually (on Raven's side)
-            def encode(texts: List[str]) -> List[List[float]]:
-                embeddings = self._local_semantic_embedder.encode(texts,
-                                                                  show_progress_bar=True,
-                                                                  convert_to_numpy=True,
-                                                                  normalize_embeddings=True)[0].tolist()
-                return embeddings
-        self._semantic_embed = encode
-
-        if "natlang" in server_modules:
-            self._local_nlp_pipeline = None
-            def nlp_analyze(text: str) -> List["spacy.tokens.token.Token"]:  # noqa: F821: type annotation only; no point importing both Torch and spaCy into this module just for this.
-                docs = api.natlang_analyze(text)
-                return docs[0]
-        else:
-            logger.info(f"HybridIR.__init__: No `natlang` module loaded on Raven-server at '{client_config.raven_server_url}', loading spaCy NLP model locally.")
-
-            self._local_nlp_pipeline = nlptools.load_spacy_pipeline(librarian_config.spacy_model,
-                                                                    librarian_config.devices["nlp"]["device_string"])
-            def nlp_analyze(text: str) -> List["spacy.tokens.token.Token"]:  # noqa: F821: type annotation only; no point importing both Torch and spaCy into this module just for this.
-                doc = self._local_nlp_pipeline(text)
-                return doc
-        self._nlp_analyze = nlp_analyze
-        # <-- Transparent Raven-server support
+        # We compute vector embeddings manually (on Raven's side).
+        self.embedder = mayberemote.Embedder(allow_local=local_model_loader_fallback,
+                                             model_name=self.embedding_model_name,
+                                             device_string=librarian_config.devices["embeddings"]["device_string"],
+                                             dtype=librarian_config.devices["embeddings"]["dtype"])
+        self.nlp = mayberemote.NLP(allow_local=local_model_loader_fallback,
+                                   model_name=librarian_config.spacy_model,
+                                   device_string=librarian_config.devices["nlp"]["device_string"])
 
         self._stopwords = nlptools.default_stopwords
 
@@ -370,7 +332,9 @@ class HybridIR:
 
         We use a spaCy NLP pipeline to do the analysis.
         """
-        doc = self._nlp_analyze(text.lower())
+        docs = self.nlp.analyze(text.lower())
+        assert len(docs) == 1
+        doc = docs[0]
         tokens = [token.lemma_ for token in doc if token.is_alpha and token.text not in self._stopwords]
         return tokens
 
@@ -606,7 +570,7 @@ class HybridIR:
         # Embedding each chunk enables semantic search. These are used by the vector index (chromadb).
         # NOTE: This can be slow, depending on the embedding model, and whether GPU acceleration is available.
         logger.info(f"HybridIR._prepare_document_for_indexing: computing semantic embeddings for document '{document_id}'.")
-        document_embeddings = self._semantic_embed([chunk["text"] for chunk in document_chunks])  # SLOW; embeddings for each chunk
+        document_embeddings = self.embedder.encode([chunk["text"] for chunk in document_chunks])  # SLOW; embeddings for each chunk
         document_embeddings = document_embeddings.tolist()  # for JSON serialization
 
         prepdata = {"chunks": document_chunks,  # [{"text": ..., "chunk_id": ..., "offset": ...}, ...]
@@ -734,7 +698,7 @@ class HybridIR:
         query_tokens = self._tokenize(query)
 
         # Prepare query for vector search
-        query_embedding = self._semantic_embed([query])[0]
+        query_embedding = self.embedder.encode([query])[0]
 
         with self.datastore_lock:
             if not self.documents:
