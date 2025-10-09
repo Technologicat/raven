@@ -71,8 +71,6 @@
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Maybe next:
-    - Add `voice` and `voice_speed` to `avatar_record` in `raven.client.avatar_controller.DPGAvatarController.register_avatar_instance`
-      - Then also `raven.client.avatar_controller.DPGAvatarController.send_text_to_tts` can read them from there, no need for separate parameters
     - `raven.visualizer.importer`: auto-use server if available and the necessary modules loaded; if not, emit a log warning and load the model locally (see `raven.librarian.hybridir`, which does this)
     - Long subtitle splitter (we now have the audio length).
     - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)

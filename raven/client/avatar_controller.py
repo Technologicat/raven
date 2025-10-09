@@ -241,6 +241,8 @@ class DPGAvatarController:
 
     def register_avatar_instance(self,
                                  avatar_instance_id: str,
+                                 voice: Optional[str],
+                                 voice_speed: Optional[float],
                                  emotion_autoreset_interval: Optional[float],
                                  emotion_blacklist: Tuple[str],
                                  data_eyes_fadeout_duration: float) -> env:
@@ -251,6 +253,15 @@ class DPGAvatarController:
         The fields of `config` which have the same names as the parameters of this function are public:
 
         `avatar_instance_id`: Avatar instance to control. You get this from `raven.client.api.avatar_load`.
+
+        `voice`: TTS voice name. To get the list of available voices, call `raven.client.api.tts_list_voices`,
+                 or use the `raven-avatar-settings-editor` GUI app.
+
+        `voice_speed`: For each voice, 1.0 is the default speed the voice is designed to speak at.
+                       Raising this too high may cause skipped words.
+
+                 Use `None` ONLY IF you intend to populate `voice` and `voice_speed` later; trying to send
+                 text to the TTS while the voice or the voice speed are set to `None` will raise `ValueError`.
 
         `emotion_autoreset_interval`: seconds, or `None` to disable.
 
@@ -277,6 +288,8 @@ class DPGAvatarController:
         config = env()
 
         config.avatar_instance_id = avatar_instance_id
+        config.voice = voice
+        config.voice_speed = voice_speed
         config.emotion_autoreset_interval = emotion_autoreset_interval
         config.emotion_blacklist = tuple(emotion_blacklist)  # Ensure it's hashable, for LRU cache
         config.data_eyes_fadeout_duration = data_eyes_fadeout_duration
@@ -380,8 +393,6 @@ class DPGAvatarController:
     def send_text_to_tts(self,
                          config: env,
                          text: str,
-                         voice: str,
-                         voice_speed: float,
                          video_offset: float,
                          on_audio_ready: Optional[Callable] = None,
                          on_start_speaking: Optional[Callable] = None,
@@ -396,11 +407,7 @@ class DPGAvatarController:
         `config`: Configuration for controlling a specific avatar instance and its GUI elements.
                   See `register_avatar_instance`.
 
-        `voice`: TTS voice name. To get the list of available voices, call `raven.client.api.tts_list_voices`,
-                 or use the `raven-avatar-settings-editor` GUI app.
-
-        `voice_speed`: For each voice, 1.0 is the default speed the voice is designed to speak at.
-                       Raising this too high may cause skipped words.
+                  Voice settings ("voice" and "voice_speed") are stored in `config`.
 
         `video_offset`: seconds, for adjusting lipsync animation.
             - Positive values: Use if the video is early. Shifts video later with respect to the audio.
@@ -444,6 +451,13 @@ class DPGAvatarController:
         that you passed to `send_text_to_tts`. (`text` is named `batch_text`; and `on_audio_ready`
         is gone, because it has already been handled by that point.)
         """
+        if config.voice is None:
+            logger.error("send_text_to_tts: 'voice' field of `config` is required (cannot be `None`)")
+            raise ValueError("'voice' field of `config` is required (cannot be `None`)")
+        if config.voice_speed is None:
+            logger.error("send_text_to_tts: 'voice_speed' field of `config` is required (cannot be `None`)")
+            raise ValueError("'voice_speed' field of `config` is required (cannot be `None`)")
+
         batch_uuid = str(gensym("tts_job"))
         logger.info("send_text_to_tts: adding text to TTS queue, batch {batch_uuid}.")
         # One atomic operation, no need for a lock.
@@ -455,8 +469,6 @@ class DPGAvatarController:
         # in the output queue.
         self.tts_input_queue.put({"batch_uuid": batch_uuid,
                                   "batch_text": text,
-                                  "voice": voice,
-                                  "voice_speed": voice_speed,
                                   "video_offset": video_offset,
                                   "on_audio_ready": on_audio_ready,
                                   "on_start_speaking": on_start_speaking,
@@ -588,8 +600,8 @@ class DPGAvatarController:
                     # We have plenty of wall time to precompute more, even when running the TTS on CPU, while the first sentence is being spoken.
                     logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): precomputing TTS audio and phoneme data")
                     prep = api.tts_prepare(text=sentence,
-                                           voice=input_record["voice"],
-                                           speed=input_record["voice_speed"],
+                                           voice=input_record["config"].voice,
+                                           speed=input_record["config"].voice_speed,
                                            get_metadata=True)
                     if prep is None:
                         logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): error during precomputing, skipping sentence")
@@ -602,8 +614,6 @@ class DPGAvatarController:
                     # The first part is for introspection/logging/debug; the second part is needed when speaking.
                     output_record = {"batch_uuid": input_record["batch_uuid"],
                                      "batch_text": input_record["batch_text"],
-                                     "voice": input_record["voice"],
-                                     "voice_speed": input_record["voice_speed"],
                                      "line_number": lineno,
                                      "lines_count": len(lines),
                                      "sentence_number_on_line": sentenceno,

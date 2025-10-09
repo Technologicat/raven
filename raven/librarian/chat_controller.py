@@ -535,8 +535,6 @@ class DPGChatMessage:
                                                   add_persona=False)
                     self.parent_view.chat_controller.avatar_controller.send_text_to_tts(config=self.parent_view.chat_controller.avatar_record,
                                                                                         text=message_text,
-                                                                                        voice=librarian_config.avatar_config.voice,  # TODO: maybe parameterize avatar voice (could be stored in `avatar_record`)
-                                                                                        voice_speed=librarian_config.avatar_config.voice_speed,  # TODO: maybe parameterize avatar voice speed (could be stored in `avatar_record`)
                                                                                         video_offset=librarian_config.avatar_config.video_offset)
 
                     # Acknowledge the action in the GUI.
@@ -1180,8 +1178,6 @@ class DPGChatController:
                         #     if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
                         #         avatar_controller.send_text_to_tts(config=avatar_record,
                         #                                            text=paragraph_text,
-                        #                                            voice=librarian_config.avatar_config.voice,
-                        #                                            voice_speed=librarian_config.avatar_config.voice_speed,
                         #                                            video_offset=librarian_config.avatar_config.video_offset)
                         streaming_chat_message.replace_last_paragraph(paragraph_text,
                                                                       is_thought=(task_env.inside_think_block or ("</think>" in chunk_text)))  # easiest to special-case the closing tag
@@ -1224,8 +1220,6 @@ class DPGChatController:
                             logger.info("ai_turn.ai_turn_task.on_done: sending final (non-thought) message content for translation, TTS, and subtitling")
                             self.avatar_controller.send_text_to_tts(config=self.avatar_record,
                                                                     text=text,
-                                                                    voice=librarian_config.avatar_config.voice,
-                                                                    voice_speed=librarian_config.avatar_config.voice_speed,
                                                                     video_offset=librarian_config.avatar_config.video_offset)
 
                         # Update avatar emotion one last time, from the final message text

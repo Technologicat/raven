@@ -656,6 +656,8 @@ avatar_controller = DPGAvatarController(stop_tts_button_gui_widget="chat_stop_sp
                                         main_window_h=gui_config.main_window_h,
                                         executor=bg)  # use the same thread pool as our main task manager
 avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=avatar_instance_id,
+                                                           voice=librarian_config.avatar_config.voice,
+                                                           voice_speed=librarian_config.avatar_config.voice_speed,
                                                            emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
                                                            emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
                                                            data_eyes_fadeout_duration=librarian_config.avatar_config.data_eyes_fadeout_duration)

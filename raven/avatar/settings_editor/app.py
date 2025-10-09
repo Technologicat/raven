@@ -1219,10 +1219,11 @@ class PostprocessorSettingsEditorGUI:
                 logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_start_sentence: video frame {frame_no}: end of sentence {output_record['sentence_uuid']}: '{output_record['sentence']}'")
                 batch_audio_end_timestamps.append(frame_no)
 
+        # Populate the voice and voice speed fields
+        avatar_record.voice = selected_voice
+        avatar_record.voice_speed = dpg.get_value("speak_speed_slider") / 10
         avatar_controller.send_text_to_tts(config=avatar_record,
                                            text=text,
-                                           voice=selected_voice,
-                                           voice_speed=dpg.get_value("speak_speed_slider") / 10,
                                            video_offset=dpg.get_value("speak_video_offset") / 10,
                                            on_audio_ready=on_audio_ready,
                                            on_start_speaking=on_start_batch,
@@ -1383,6 +1384,8 @@ avatar_controller = DPGAvatarController(stop_tts_button_gui_widget=None,  # We h
                                         main_window_h=0,
                                         executor=bg)  # use the same thread pool as our main task manager
 avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=avatar_instance_id,
+                                                           voice=None,  # to be populated later
+                                                           voice_speed=None,  # to be populated later
                                                            emotion_autoreset_interval=None,
                                                            emotion_blacklist=(),  # only used for `avatar_controller.update_emotion_from_text`
                                                            data_eyes_fadeout_duration=0.75)
