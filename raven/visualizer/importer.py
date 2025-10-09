@@ -54,6 +54,10 @@ with timer() as tim:
 
     from sklearn.cluster import HDBSCAN
 
+    from ..client import api
+    from ..client import config as client_config
+    from ..client import mayberemote
+
     from ..common import bgtask
     from ..common import deviceinfo
     from ..common import nlptools
@@ -70,6 +74,20 @@ deviceinfo.validate(visualizer_config.devices)  # modifies in-place if CPU fallb
 # The extended stopword set (with custom additional stopwords tuned for English-language scientific text).
 extended_stopwords = copy.copy(nlptools.default_stopwords)
 extended_stopwords.update(x.lower() for x in visualizer_config.custom_stopwords)
+
+# For us (Raven-visualizer importer), running Raven-server is optional.
+#
+# Using the server avoids loading an extra copy of (possibly large) NLP models in VRAM,
+# especially if also Raven-librarian is running simultaneously.
+#
+# If the server is running, we'll call into its NLP modules.
+# If not, no big deal - we'll run in standalone mode, loading the NLP models locally. See `mayberemote`.
+#
+# It doesn't hurt to always initialize the API. This doesn't yet connect to the server.
+# TODO: Maybe Raven-visualizer should init the API in its main module, for consistency with the other apps. OTOH, this is a main module too, for the command-line importer.
+api.initialize(raven_server_url=client_config.raven_server_url,
+               raven_api_key_file=client_config.raven_api_key_file,
+               tts_playback_audio_device=client_config.tts_playback_audio_device)
 
 # --------------------------------------------------------------------------------
 # Common helpers
@@ -90,26 +108,24 @@ def update_status_and_log(msg, *, log_indent=0):
 # TL;DR: AI-based summarization
 
 if visualizer_config.summarize:
-    summarization_device = visualizer_config.devices["summarization"]
-    summarizer = nlptools.load_summarizer(visualizer_config.summarization_model,
-                                          summarization_device["device_string"],
-                                          summarization_device["dtype"],
-                                          visualizer_config.summarization_prefix)
-    summarization_nlp_pipe = nlptools.load_spacy_pipeline(visualizer_config.spacy_model,
-                                                          "cpu")
+    summarizer = mayberemote.Summarizer(allow_local=True,
+                                        model_name=visualizer_config.summarization_model,
+                                        device_string=visualizer_config.devices["summarization"]["device_string"],
+                                        dtype=visualizer_config.devices["summarization"]["dtype"],
+                                        summarization_prefix=visualizer_config.summarization_prefix,
+                                        spacy_model_name=visualizer_config.spacy_model,
+                                        spacy_device_string="cpu")
 else:
-    summarization_device = None
     summarizer = None
-    summarization_nlp_pipe = None
 
 def tldr(text: str) -> str:
-    """Return AI-based summary of `text`.
+    """Return AI-based abstractive summary of `text`.
 
-    The input must fit into the model's context window.
+    If `text` does not fit into the loaded model's context window, the summarizer automatically uses chunked mode.
     """
     if summarizer is None:
         raise RuntimeError("tldr: Summarization is not enabled in `raven.visualizer.config`, so the summarizer is not loaded.")
-    return nlptools.summarize(summarizer, summarization_nlp_pipe, text)
+    return summarizer.summarize(text)
 
 # # https://github.com/sciunto-org/python-bibtexparser/issues/467
 # from bibtexparser.library import Library
@@ -232,7 +248,7 @@ def get_highdim_semantic_vectors(input_data):
     embeddings_cache_filenames = {fn: common_utils.make_cache_filename(fn, "embeddings_cache", "npz") for fn in input_data.resolved_filenames}
 
     all_vectors_by_filename = {}
-    sentence_embedder = None
+    embedder = None
     progress.set_micro_count(len(input_data.parsed_data_by_filename))
     for j, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
         if _is_cancelled():
@@ -266,10 +282,11 @@ def get_highdim_semantic_vectors(input_data):
         else:  # no cache
             logger.info(f"        No cached embeddings '{embeddings_cache_filename}', reason: {cache_state}")
             logger.info("        Computing embeddings...")
-            if sentence_embedder is None:  # delayed init - load only if needed, on first use
-                sentence_embedder = nlptools.load_embedder(visualizer_config.embedding_model,
-                                                           visualizer_config.devices["embeddings"]["device_string"],
-                                                           visualizer_config.devices["embeddings"]["dtype"])
+            if embedder is None:  # delayed init - load only if needed, on first use
+                embedder = mayberemote.Embedder(allow_local=True,
+                                                model_name=visualizer_config.embedding_model,
+                                                device_string=visualizer_config.devices["embeddings"]["device_string"],
+                                                dtype=visualizer_config.devices["embeddings"]["dtype"])
             logger.info("        Encoding...")
             with timer() as tim:
                 def format_entry_for_vectorization(entry: env) -> str:
@@ -284,17 +301,14 @@ def get_highdim_semantic_vectors(input_data):
                         return entry.title
 
                 all_inputs = [format_entry_for_vectorization(entry) for entry in entries]
-                all_vectors = sentence_embedder.encode(all_inputs,
-                                                       show_progress_bar=True,
-                                                       convert_to_numpy=True,
-                                                       normalize_embeddings=True)
+                all_vectors = embedder.encode(all_inputs)
                 # Round-trip to force truncation, if needed.
                 # This matters to make the "cluster centers" coincide with the original datapoints when clustering is disabled.
-                embeddings_device = visualizer_config.devices["embeddings"]
-                all_vectors = torch.tensor(all_vectors,
-                                           device=embeddings_device["device_string"],
-                                           dtype=embeddings_device["dtype"])
-                all_vectors = all_vectors.detach().cpu().numpy()
+                if embedder.is_local():  # TODO: We can only do this when running locally (otherwise, the device can be different from what we expect). What is the correct solution in the remote case?
+                    all_vectors = torch.tensor(all_vectors,
+                                               device=visualizer_config.devices["embeddings"]["device_string"],
+                                               dtype=visualizer_config.devices["embeddings"]["dtype"])
+                    all_vectors = all_vectors.detach().cpu().numpy()
             logger.info(f"            Done in {tim.dt:0.6g}s [avg {len(all_inputs) / tim.dt:0.6g} entries/s].")
 
             logger.info(f"        Caching embeddings for this dataset to '{embeddings_cache_filename}'...")
@@ -553,7 +567,7 @@ def extract_keywords(input_data, max_vis_kw=6):
     nlp_cache_version = 1
 
     all_keywords_by_filename = {}
-    nlp_pipeline = None
+    nlp = None
     progress.set_micro_count(len(input_data.parsed_data_by_filename))
     for j, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
         if _is_cancelled():
@@ -589,14 +603,12 @@ def extract_keywords(input_data, max_vis_kw=6):
         else:
             logger.info(f"        No cached NLP data '{nlp_cache_filename}', reason: {cache_state}")
             logger.info("        Extracting keywords...")
-            if nlp_pipeline is None:
+            if nlp is None:
                 update_status_and_log("Loading NLP pipeline for keyword analysis...", log_indent=2)
-                nlp_pipeline = nlptools.load_spacy_pipeline(visualizer_config.spacy_model,
-                                                            visualizer_config.devices["nlp"]["device_string"])
+                nlp = mayberemote.NLP(allow_local=True,
+                                      model_name=visualizer_config.spacy_model,
+                                      device_string=visualizer_config.devices["nlp"]["device_string"])
                 update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
-                # analysis = nlp_pipeline.analyze_pipes(pretty=True)  # print pipeline overview
-                # nlp_pipeline.disable_pipe("parser")
-                # nlp_pipeline.enable_pipe("senter")
 
             def format_entry_for_keyword_extraction(entry: env) -> str:
                 # return entry.title
@@ -612,13 +624,13 @@ def extract_keywords(input_data, max_vis_kw=6):
 
                 # The pipe-batched version processed about 25 entries per second on an RTX 3070 Ti mobile GPU.
                 # TODO: Can we minibatch the NLP pipelining to save VRAM when using the Transformers model?
-                # all_docs_for_this_file = [nlp_pipeline(text) for text in all_texts_for_nlp_for_this_file]
-                all_docs_for_this_file = list(nlp_pipeline.pipe(all_texts_for_nlp_for_this_file))
+                # all_docs_for_this_file = [nlp.analyze(text) for text in all_texts_for_nlp_for_this_file]
+                all_docs_for_this_file = nlp.analyze(all_texts_for_nlp_for_this_file)
                 # all_docs_for_this_file = []
                 # for j, text in enumerate(all_texts_for_nlp_for_this_file):
                 #     if j % 100 == 0:
                 #         logger.info(f"    {j + 1} out of {len(all_texts_for_nlp_for_this_file)}...")
-                #     all_docs_for_this_file.append(nlp_pipeline(text))
+                #     all_docs_for_this_file.append(nlp.analyze(text))
             logger.info(f"                Done in {tim.dt:0.6g}s [avg {input_data.n_entries_total / tim.dt:0.6g} entries/s].")
 
             # TODO: Should we trim the keywords across the whole dataset? We currently trim each input file separately.
@@ -1168,7 +1180,7 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
 # Main program (when run as a standalone command-line tool)
 
 def main() -> None:
-    logger.info("Settings:")
+    logger.info("Settings (for LOCAL models):")
     logger.info(f"    Embedding model: {visualizer_config.embedding_model}")
     logger.info(f"        Dimension reduction method: {visualizer_config.vis_method}")
     logger.info(f"    Extract keywords: {visualizer_config.extract_keywords}")
