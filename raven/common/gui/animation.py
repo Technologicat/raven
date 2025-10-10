@@ -415,13 +415,22 @@ class ButtonFlash(Animation):
                         self.highlight_disabled_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color, category=dpg.mvThemeCat_Core)
                 type(self).id_counter += 1
 
-                dpg.bind_item_theme(self.target_button, self.theme)
+                try:
+                    dpg.bind_item_theme(self.target_button, self.theme)
+                except SystemError:  # gone -> no-op
+                    pass
                 if self.target_tooltip is not None:
-                    dpg.bind_item_theme(self.target_tooltip, self.theme)
+                    try:
+                        dpg.bind_item_theme(self.target_tooltip, self.theme)
+                    except SystemError:
+                        pass
                 if self.target_text is not None:
                     self.original_message = dpg.get_value(self.target_text)
-                    dpg.set_value(self.target_text, self.message)
-                    dpg.bind_item_theme(self.target_text, self.theme)
+                    try:
+                        dpg.set_value(self.target_text, self.message)
+                        dpg.bind_item_theme(self.target_text, self.theme)
+                    except SystemError:
+                        pass
 
                 type(self).instances[self.target_button] = self
                 self.reified = True  # This is the instance that animates `self.target_button`.
