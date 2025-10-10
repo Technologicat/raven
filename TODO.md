@@ -71,10 +71,12 @@
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Maybe next:
+    - Improve "continue AI message":
+      - Should enable the button only for the last message in the linearized chat view
+      - Add hotkey (search for `continue_message_callback` in `raven.librarian.chat_controller`; the button is created there, too)
     - Long subtitle splitter (we now have the audio length).
     - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
     - Add feature: Delete chat node and all descendants
-    - Add feature: Continue AI generation in current HEAD node (create a new revision, or just replace? Maybe just replace?)
     - Add GUI dynamic resizing on window size change
     - Improve: thought blocks
       - GUI: completed message: collapsible thought blocks (a button to hide/show a group)

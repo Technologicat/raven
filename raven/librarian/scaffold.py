@@ -121,6 +121,7 @@ injectors = [chatutil.format_chat_datetime_now,  # let the LLM know the current 
              chatutil.format_reminder_to_focus_on_latest_input]  # remind the LLM to focus on user's last message (some models such as the distills of DeepSeek-R1 need this to support multi-turn conversation)
 def _perform_injects(llm_settings: env,
                      history: List[Dict],  # mutated!
+                     continue_: bool,
                      speculate: bool,
                      docs_matches: List[Dict]) -> None:
     """Perform the temporary injects to prepare for the AI's turn.
@@ -132,6 +133,13 @@ def _perform_injects(llm_settings: env,
                     Contains (among other things) a mapping of roles to persona names.
 
     `history`: Linearized message history in the OpenAI format sent to the LLM.
+
+    `continue_`: Whether to continue AI's last message. Affects the inject position:
+
+                 If `False`, always-on injects are appended to the end. Usually you want this.
+
+                 If `True`, always-on injects are added just before the last message,
+                            which is the message being continued.
 
     `speculate`: If `False`, remind the LLM to respond using in-context information only.
 
@@ -174,28 +182,38 @@ def _perform_injects(llm_settings: env,
                                                          text=n_matches_text)
         history.insert(1, message_to_inject)
 
+    # When we're continuing AI's latest message, the history should appear as it was at the point where generation was interrupted.
+    # Hence the always-on injects at the end of the history should be placed just before the AI's incomplete message, which will be continued.
+    #
+    # Otherwise, those injects should be placed at the end, since the AI will add a new message to the end.
+    def inject(message):
+        if continue_:
+            history.insert(-1, message_to_inject)
+        else:
+            history.append(message_to_inject)
+
     # Always-on injects, e.g. current local datetime
     for thunk in injectors:
         message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
                                                           role="system",
                                                           text=thunk())
-        history.append(message_to_inject)
+        inject(message_to_inject)
 
     # If speculation is off, remind the LLM to use information from the context only.
     if not speculate:
         message_to_inject = chatutil.create_chat_message(llm_settings=llm_settings,
                                                           role="system",
                                                           text=chatutil.format_reminder_to_use_information_from_context_only())
-        history.append(message_to_inject)
+        inject(message_to_inject)
 
 
-# TODO: `raven.librarian.scaffold.ai_turn`: implement continue mode, to continue an interrupted generation (or one that ran out of max output length)
 # TODO: `tools_enabled` is a blunt hammer; maybe have also an optional tool name list for fine-grained control?
 def ai_turn(llm_settings: env,
             datastore: chattree.Forest,
             retriever: Optional[hybridir.HybridIR],
             head_node_id: str,
             tools_enabled: bool,
+            continue_: bool,
             docs_query: Optional[str],
             docs_num_results: Optional[int],
             speculate: bool,
@@ -227,6 +245,13 @@ def ai_turn(llm_settings: env,
 
     `tools_enabled`: Whether the LLM is allowed to use the tools available in `llmclient.setup`.
                      This can be disabled e.g. to temporarily turn off websearch.
+
+    `continue_`: If `False` (default), generate a new AI message. Most of the time, this is what you want.
+                 A new chat node is created.
+
+                 If `True`, continue an incomplete AI message, which must be the message at `head_node_id`.
+                 The chat node will be updated with the continued message, creating a new revision.
+                 The new revision is set as active. The old revision is not removed.
 
     `docs_query`: Optional query string to search with in the document database.
 
@@ -395,6 +420,14 @@ def ai_turn(llm_settings: env,
 
     Returns the new HEAD node ID (i.e. the last chat node that was just added).
     """
+    # Sanity check
+    if continue_:
+        head_node_payload = datastore.get_payload(head_node_id)
+        if head_node_payload["message"]["role"] != "assistant":
+            error_message = f"node '{head_node_id}' is not an AI message (role is '{head_node_payload['message']['role']}'), cannot continue it."
+            logger.error(f"ai_turn: {error_message}")
+            raise ValueError(error_message)
+
     # Search document database if requested
     if retriever is not None and docs_query is not None:
         if on_docs_start is not None:
@@ -422,6 +455,7 @@ def ai_turn(llm_settings: env,
             logger.warning("ai_turn: A `docs_query` was supplied without a `retriever` to search with. Ignoring the query.")
         docs_matches = []
 
+    continue_this_message = continue_  # we need to continue at most the first message in the agent loop
     while True:  # LLM agent loop - interleave LLM responses, tool calls and tool call results, until the LLM is done (no more tool calls).
         message_history = chatutil.linearize_chat(datastore=datastore,
                                                   node_id=head_node_id)
@@ -429,6 +463,7 @@ def ai_turn(llm_settings: env,
         # Prepare the final LLM prompt, by including the temporary injects (the document search results, too).
         _perform_injects(llm_settings=llm_settings,
                          history=message_history,
+                         continue_=continue_this_message,
                          speculate=speculate,
                          docs_matches=docs_matches)
 
@@ -438,7 +473,8 @@ def ai_turn(llm_settings: env,
                                history=message_history,
                                on_prompt_ready=on_prompt_ready,
                                on_progress=on_llm_progress,  # this handles `action_stop` from `on_llm_progress`
-                               tools_enabled=tools_enabled)
+                               tools_enabled=tools_enabled,
+                               continue_=continue_this_message)
         # `out.data` is now the complete message object (in the format returned by `create_chat_message`)
 
         # Clean up the LLM's reply (heuristically). This version goes into the chat history.
@@ -453,18 +489,27 @@ def ai_turn(llm_settings: env,
         # Note the token count of the message actually saved into the chat log may be different from `out.n_tokens`, e.g. if the AI is interrupted or when thoughts blocks are discarded.
         # However, to correctly compute the generation speed, we need to use the original count before any editing, since `out.dt` was measured for that.
         timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
-        ai_message_node_id = datastore.create_node(payload={"message": out.data,
-                                                            "generation_metadata": {"model": out.model,
-                                                                                    "n_tokens": out.n_tokens,  # could count final tokens with `llmclient.token_count(settings, out.data["content"])`
-                                                                                    "dt": out.dt},
-                                                            "general_metadata": {"timestamp": timestamp,
-                                                                                 "datetime": f"{isodate} {isotime}",
-                                                                                 "persona": llm_settings.personas.get("assistant", None)}},
-                                                   parent_id=head_node_id)
-        ai_message_node_payload = datastore.get_payload(ai_message_node_id)
-        if docs_query is not None:
-            ai_message_node_payload["retrieval"] = {"query": docs_query,
-                                                    "results": docs_matches}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
+        if not continue_this_message:  # new message (usual case)
+            ai_message_node_id = datastore.create_node(payload={"message": out.data,
+                                                                "generation_metadata": {"model": out.model,
+                                                                                        "n_tokens": out.n_tokens,  # could count final tokens with `llmclient.token_count(settings, out.data["content"])`
+                                                                                        "dt": out.dt},
+                                                                "general_metadata": {"timestamp": timestamp,
+                                                                                     "datetime": f"{isodate} {isotime}",
+                                                                                     "persona": llm_settings.personas.get("assistant", None)}},
+                                                       parent_id=head_node_id)
+            ai_message_node_payload = datastore.get_payload(ai_message_node_id)
+            if docs_query is not None:
+                ai_message_node_payload["retrieval"] = {"query": docs_query,
+                                                        "results": docs_matches}  # store RAG results in the chat node that was generated based on them, for later use (upcoming citation mechanism)
+        else:  # continue existing message
+            ai_message_node_id = head_node_id
+            datastore.add_revision(node_id=ai_message_node_id,
+                                   payload={"message": out.data,
+                                            "general_metadata": {"timestamp": timestamp,
+                                                                 "datetime": f"{isodate} {isotime}",
+                                                                 "persona": llm_settings.personas.get("assistant", None)}})
+            continue_this_message = False  # any further messages during this AI turn should be created normally
         head_node_id = ai_message_node_id
         if on_llm_done is not None:
             on_llm_done(head_node_id)

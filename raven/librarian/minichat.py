@@ -584,6 +584,7 @@ def minimal_chat_client(backend_url) -> None:
                                                 datastore=datastore,
                                                 retriever=retriever,
                                                 head_node_id=app_state["HEAD"],
+                                                continue_=False,  # continue-incomplete-message mode not supported by minichat; see `raven.librarian.app` for a GUI frontend that supports this.
                                                 tools_enabled=app_state["tools_enabled"],
                                                 docs_query=docs_query,
                                                 docs_num_results=librarian_config.docs_num_results,

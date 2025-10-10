@@ -305,7 +305,7 @@ class DPGChatMessage:
         buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
-        n_message_buttons = 8
+        n_message_buttons = 9
         dpg.add_spacer(width=gui_config.chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 64 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
@@ -508,7 +508,8 @@ class DPGChatMessage:
                 old_dpg_chat_message.demolish()
 
                 # Generate new AI message
-                self.parent_view.chat_controller.ai_turn(docs_query=user_message_text)
+                self.parent_view.chat_controller.ai_turn(docs_query=user_message_text,
+                                                         continue_=False)
             reroll_enabled = (node_id is not None and node_id != self.parent_view.chat_controller.app_state["new_chat_HEAD"])  # The AI's initial greeting can't be rerolled
             if reroll_enabled:
                 self.gui_button_callbacks["reroll"] = reroll_message_callback  # stash it so we can call it from the hotkey handler
@@ -525,6 +526,42 @@ class DPGChatMessage:
         else:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
+        if role == "assistant":
+            def continue_message_callback():
+                dpg_chat_message = self.parent_view.chat_controller.current_chat_history[-1]  # latest message
+                if dpg_chat_message.node_id != node_id:  # latest message is not this message --> can't continue
+                    return
+
+                # Handle the RAG query: find the latest user message (above this AI message)
+                user_message_text = None
+                for dpg_chat_message in reversed(self.parent_view.chat_controller.current_chat_history):
+                    if dpg_chat_message.role == "user":
+                        user_message_text = dpg_chat_message.text
+                        break
+
+                # Continue the AI message
+                self.parent_view.chat_controller.ai_turn(docs_query=user_message_text,
+                                                         continue_=True)
+                # No button flash, because the button will be deleted immediately, when the chat message widget is replaced.
+            # TODO: We should enable continue only for the last message, but when we get here, this message isn't in the view yet.
+            #       We probably need to enable the button from the outside once we're done rendering the view.
+            continue_enabled = (node_id is not None and node_id != self.parent_view.chat_controller.app_state["new_chat_HEAD"])  # The AI's initial greeting can't be continued
+            if continue_enabled:
+                self.gui_button_callbacks["continue"] = continue_message_callback  # stash it so we can call it from the hotkey handler
+            dpg.add_button(label=fa.ICON_ARROW_RIGHT,
+                           callback=continue_message_callback,
+                           enabled=continue_enabled,
+                           width=gui_config.toolbutton_w,
+                           tag=f"message_continue_button_{self.gui_uuid}",
+                           parent=g)
+            dpg.bind_item_font(f"message_continue_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_theme(f"message_continue_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            continue_message_tooltip = dpg.add_tooltip(f"message_continue_button_{self.gui_uuid}")  # tag
+            dpg.add_text("Continue this response (create new revision)", parent=continue_message_tooltip)
+        else:
+            dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
+
+        # TTS for AI messages
         if role == "assistant":
             def speak_message_callback():
                 if self.parent_view.chat_controller.app_state["avatar_speech_enabled"]:
@@ -1056,7 +1093,8 @@ class DPGChatController:
                         break
             if task_env.cancelled:  # during user turn
                 return
-            self.ai_turn(docs_query=docs_query)
+            self.ai_turn(docs_query=docs_query,
+                         continue_=False)
         self.task_manager.submit(chat_round_task, env())
 
     def user_turn(self, text: str) -> None:
@@ -1076,11 +1114,18 @@ class DPGChatController:
             self.view.add_complete_message(new_head_node_id)
         self.task_manager.submit(user_turn_task, env())
 
-    def ai_turn(self, docs_query: Optional[str]) -> None:  # TODO: implement continue mode
+    def ai_turn(self,
+                docs_query: Optional[str],
+                continue_: bool) -> None:
         """Run the AI's response part of a chat round.
 
         This spawns a background task to avoid hanging GUI event handlers,
         to allow GUI event handlers (e.g. AI reroll) to call `ai_turn` directly.
+
+        `docs_query`: Query for RAG document database, or `None` for no search. Search results are auto-injected before the LLM replies.
+
+        `continue_`: If `False`, create a new AI message. Most of the time, this is what you want.
+                     If `True`, continue the AI's current message.
         """
         docs_query = docs_query if self.app_state["docs_enabled"] else None
 
@@ -1116,6 +1161,12 @@ class DPGChatController:
                 def on_llm_start() -> None:
                     if self.gui_updates_safe:
                         nonlocal streaming_chat_message
+
+                        # When continuing, delete the previous completed revision of the message from the GUI
+                        if continue_:
+                            old_dpg_chat_message = self.current_chat_history.pop(-1)
+                            old_dpg_chat_message.demolish()
+
                         streaming_chat_message = DPGStreamingChatMessage(gui_parent=self.view.chat_messages_container_group_widget,
                                                                          parent_view=self.view)
                         dpg.split_frame()
@@ -1285,11 +1336,20 @@ class DPGChatController:
                         # dpg.hide_item(self.web_indicator_widget)
                         self.avatar_controller.stop_data_eyes(config=self.avatar_record)
 
+                def on_prompt_ready(history) -> None:
+                    # logger.info("DPGChatController.ai_turn.on_prompt_ready: full prompt (message history) that will be sent to the LLM:")
+                    # logger.info("=" * 80)
+                    # for item in history:
+                    #     logger.info(item)
+                    # logger.info("=" * 80)
+                    pass
+
                 new_head_node_id = scaffold.ai_turn(llm_settings=self.llm_settings,
                                                     datastore=self.datastore,
                                                     retriever=self.retriever,
                                                     head_node_id=self.app_state["HEAD"],
                                                     tools_enabled=self.app_state["tools_enabled"],
+                                                    continue_=continue_,
                                                     docs_query=docs_query,
                                                     docs_num_results=librarian_config.docs_num_results,
                                                     speculate=self.app_state["speculate_enabled"],
@@ -1297,7 +1357,7 @@ class DPGChatController:
                                                     on_docs_start=on_docs_start,
                                                     on_docs_done=on_docs_done,
                                                     on_llm_start=on_llm_start,
-                                                    on_prompt_ready=None,  # debug/info hook
+                                                    on_prompt_ready=on_prompt_ready,  # debug/info hook
                                                     on_llm_progress=on_llm_progress,
                                                     on_llm_done=on_done,
                                                     on_nomatch_done=on_done,
