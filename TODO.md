@@ -133,6 +133,7 @@
         - Metadata side channel, or just use as a heading in the content? Content would be useful for the LLM to see the IDs, too, for tool-calling.
       - To avoid reindexing at every new message, commit changes when switching to another chat branch (or when creating a new chat), or when app is shutting down.
         - Ignore the chat nodes on the current branch, when searching the RAG store. (Exclude by document ID.)
+      - Memory reinforcement
     - Add feature: explicit long-term memory bank
       - A third RAG store, for use by the AI
       - Provide tools to store/list/search/retrieve memories (title and content)
