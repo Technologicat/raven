@@ -554,71 +554,33 @@ def librarian_hotkeys_callback(sender, app_data):
             if key == dpg.mvKey_Return:  # tag  # regardless of modifier state
                 send_message_to_ai_callback()
                 dpg.focus_item("chat_field")  # tag
-
-    # # Ctrl+Shift+...
-    # if ctrl_pressed and shift_pressed:
-    #     if key == dpg.mvKey_E:  # emotions
-    #         show_open_json_dialog()
-    #     elif key == dpg.mvKey_A:  # load animator settings
-    #         show_open_animator_settings_dialog()
-    #     elif key == dpg.mvKey_S:  # save animator settings
-    #         show_save_animator_settings_dialog()
-    #
-    # # Ctrl+...
-    # elif ctrl_pressed:
-    #     if key == dpg.mvKey_O:
-    #         show_open_input_image_dialog()
-    #     elif key == dpg.mvKey_R:
-    #         gui_instance.on_reload_input_image(sender, app_data)
-    #     elif key == dpg.mvKey_B:
-    #         show_open_backdrop_image_dialog()
-    #     elif key == dpg.mvKey_T:
-    #         gui_instance.toggle_talking()
-    #     elif key == dpg.mvKey_P:
-    #         gui_instance.toggle_animator_paused()
-    #     elif key == dpg.mvKey_E:
-    #         dpg.focus_item(gui_instance.emotion_choice)
-    #     elif key == dpg.mvKey_V:
-    #         dpg.focus_item(gui_instance.voice_choice)
-    #     elif key == dpg.mvKey_S:
-    #         if not gui_instance.speaking:
-    #             gui_instance.on_start_speaking(sender, app_data)
-    #         else:
-    #             gui_instance.on_stop_speaking(sender, app_data)
-    #
-    # # Bare key
-    # #
-    # # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
-    # else:
-    #     if key == dpg.mvKey_F11:
-    #         toggle_fullscreen()
-    #     else:
-    #         # {widget_tag_or_id: list_of_choices}
-    #         global combobox_choice_map
-    #         if combobox_choice_map is None:  # build on first use
-    #             combobox_choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
-    #                                    gui_instance.voice_choice: (gui_instance.voice_names, None)}
-    #         def browse(choice_widget, data):
-    #             choices, callback = data
-    #             index = choices.index(dpg.get_value(choice_widget))
-    #             if key == dpg.mvKey_Down:
-    #                 new_index = min(index + 1, len(choices) - 1)
-    #             elif key == dpg.mvKey_Up:
-    #                 new_index = max(index - 1, 0)
-    #             elif key == dpg.mvKey_Home:
-    #                 new_index = 0
-    #             elif key == dpg.mvKey_End:
-    #                 new_index = len(choices) - 1
-    #             else:
-    #                 new_index = None
-    #             if new_index is not None:
-    #                 dpg.set_value(choice_widget, choices[new_index])
-    #                 if callback is not None:
-    #                     callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
-    #         focused_item = dpg.get_focused_item()
-    #         focused_item = dpg.get_item_alias(focused_item)
-    #         if focused_item in combobox_choice_map.keys():
-    #             browse(focused_item, combobox_choice_map[focused_item])
+        # else:
+        #     # {widget_tag_or_id: list_of_choices}
+        #     global combobox_choice_map
+        #     if combobox_choice_map is None:  # build on first use
+        #         combobox_choice_map = {gui_instance.emotion_choice: (gui_instance.emotion_names, gui_instance.on_send_emotion),
+        #                                gui_instance.voice_choice: (gui_instance.voice_names, None)}
+        #     def browse(choice_widget, data):
+        #         choices, callback = data
+        #         index = choices.index(dpg.get_value(choice_widget))
+        #         if key == dpg.mvKey_Down:
+        #             new_index = min(index + 1, len(choices) - 1)
+        #         elif key == dpg.mvKey_Up:
+        #             new_index = max(index - 1, 0)
+        #         elif key == dpg.mvKey_Home:
+        #             new_index = 0
+        #         elif key == dpg.mvKey_End:
+        #             new_index = len(choices) - 1
+        #         else:
+        #             new_index = None
+        #         if new_index is not None:
+        #             dpg.set_value(choice_widget, choices[new_index])
+        #             if callback is not None:
+        #                 callback(sender, app_data)  # the callback doesn't trigger automatically if we programmatically set the combobox value
+        #     focused_item = dpg.get_focused_item()
+        #     focused_item = dpg.get_item_alias(focused_item)
+        #     if focused_item in combobox_choice_map.keys():
+        #         browse(focused_item, combobox_choice_map[focused_item])
 with dpg.handler_registry(tag="librarian_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="librarian_hotkeys_handler", callback=librarian_hotkeys_callback)
 
