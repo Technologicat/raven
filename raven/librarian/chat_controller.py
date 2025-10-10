@@ -486,6 +486,8 @@ class DPGChatMessage:
                 for k, dpg_chat_message in enumerate(reversed(self.parent_view.chat_controller.current_chat_history)):
                     if dpg_chat_message.node_id == node_id:
                         break
+                else:  # not found
+                    return
                 # `k` is now how many messages must be popped from the end to reach this one
                 assert k < len(self.parent_view.chat_controller.current_chat_history) - 3  # should have at least the system prompt, the AI's initial greeting, and the user's first message remaining
                 # Rewind the linearized chat history in the GUI
