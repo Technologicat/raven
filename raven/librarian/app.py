@@ -531,6 +531,8 @@ def librarian_hotkeys_callback(sender, app_data):
             dpg.focus_item("chat_field")  # tag
         elif key == dpg.mvKey_R:
             fire_event_if_exists("reroll")
+        elif key == dpg.mvKey_T:
+            fire_event_if_exists("continue")
         elif key == dpg.mvKey_Left:
             fire_event_if_exists("prev")
         elif key == dpg.mvKey_Right:
