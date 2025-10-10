@@ -459,7 +459,7 @@ class DPGAvatarController:
             raise ValueError("'voice_speed' field of `config` is required (cannot be `None`)")
 
         batch_uuid = str(gensym("tts_job"))
-        logger.info("send_text_to_tts: adding text to TTS queue, batch {batch_uuid}.")
+        logger.info(f"send_text_to_tts: adding text to TTS queue, batch {batch_uuid}.")
         # One atomic operation, no need for a lock.
         #
         # `speak_task` speaks the sentences in the order they arrive. The ordering of
