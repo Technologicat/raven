@@ -506,6 +506,9 @@ def ai_turn(llm_settings: env,
             ai_message_node_id = head_node_id
             datastore.add_revision(node_id=ai_message_node_id,
                                    payload={"message": out.data,
+                                            "generation_metadata": {"model": out.model,
+                                                                    "n_tokens": out.n_tokens,
+                                                                    "dt": out.dt},
                                             "general_metadata": {"timestamp": timestamp,
                                                                  "datetime": f"{isodate} {isotime}",
                                                                  "persona": llm_settings.personas.get("assistant", None)}})
