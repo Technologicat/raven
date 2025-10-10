@@ -854,6 +854,14 @@ class DPGLinearizedChatView:
                                                       parent_view=self,
                                                       node_id=node_id)
             self.chat_controller.current_chat_history.append(dpg_chat_message)
+
+            # Enable the continue button on the last message only (disable it from the others)
+            for dpg_old_message in self.chat_controller.current_chat_history[:-1]:
+                if dpg_old_message.role == "assistant":  # only AI messages have a continue button
+                    dpg.disable_item(f"message_continue_button_{dpg_old_message.gui_uuid}")
+            if dpg_chat_message.role == "assistant":
+                dpg.enable_item(f"message_continue_button_{dpg_chat_message.gui_uuid}")
+
         if scroll_to_end:
             dpg.split_frame()
             self.scroll_to_end()
