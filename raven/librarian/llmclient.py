@@ -413,7 +413,8 @@ def invoke(settings: env,
            history: List[Dict],
            on_progress: Optional[Callable] = None,
            on_prompt_ready: Optional[Callable] = None,
-           tools_enabled: bool = True) -> env:
+           tools_enabled: bool = True,
+           continue_: bool = False) -> env:
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
@@ -449,6 +450,12 @@ def invoke(settings: env,
     `tools_enabled`: Whether the LLM is allowed to use the tools available in `llmclient.setup`.
                      This can be disabled e.g. to temporarily turn off websearch.
 
+    `continue_`: If `False` (default), generate a new AI message. Most of the time, this is what you want.
+                 The new message is returned.
+
+                 If `True`, continue an incomplete AI message. The last message in `history` should be the AI message
+                 that you want the AI to continue. The updated (continued) message is returned.
+
     Returns an `unpythonic.env.env` WITHOUT adding the LLM's reply to `history`.
 
     The returned `env` has the following attributes:
@@ -469,12 +476,19 @@ def invoke(settings: env,
     #
     # For most thinking models, thought blocks are just inference-time compute, and should not be included in the previous messages in the chat log.
     history = copy.deepcopy(history)
-    for message in history:
+    end_idx = -1 if continue_ else None  # Don't scrub the current AI message when continuing; else scrub all messages.
+    for message in history[:end_idx]:
         message["content"] = chatutil.scrub(persona=settings.personas.get(message["role"], None),
                                             text=message["content"],
                                             thoughts_mode="discard",
                                             markup=None,
                                             add_persona=True)
+
+    # Not mentioned in the oobabooga docs, but see:
+    #  `text-generation-webui/extensions/openai/script.py`, function `openai_chat_completions`
+    #  `text-generation-webui/extensions/openai/typing.py`, classes `ChatCompletionRequest` and `ChatCompletionRequestParams`
+    #  `text-generation-webui/extensions/openai/completions.py`, function `chat_completions_common`
+    data["continue_"] = continue_
 
     data["messages"] = history
     if on_prompt_ready is not None:
