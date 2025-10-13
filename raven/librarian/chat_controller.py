@@ -557,7 +557,7 @@ class DPGChatMessage:
             dpg.bind_item_font(f"message_continue_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
             dpg.bind_item_theme(f"message_continue_button_{self.gui_uuid}", "disablable_button_theme")  # tag
             continue_message_tooltip = dpg.add_tooltip(f"message_continue_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Continue this response (create new revision) [Ctrl+T]", parent=continue_message_tooltip)
+            dpg.add_text("Ask the AI to continue this response (create new revision) [Ctrl+T]", parent=continue_message_tooltip)
         else:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
