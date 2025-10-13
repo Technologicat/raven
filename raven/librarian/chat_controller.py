@@ -466,7 +466,7 @@ class DPGChatMessage:
                                                                  target_button=copy_message_button,
                                                                  target_tooltip=copy_message_tooltip,
                                                                  target_text=copy_message_tooltip_text,
-                                                                 original_theme=self.parent_view.themes_and_fonts.global_theme,
+                                                                 original_theme=dpg.get_item_theme(copy_message_tooltip),
                                                                  duration=gui_config.acknowledgment_duration))
         self.gui_button_callbacks["copy"] = copy_message_to_clipboard_callback
         copy_message_button = dpg.add_button(label=fa.ICON_COPY,
@@ -581,7 +581,7 @@ class DPGChatMessage:
                                                                          target_button=speak_message_button,
                                                                          target_tooltip=speak_message_tooltip,
                                                                          target_text=speak_message_tooltip_text,
-                                                                         original_theme=self.parent_view.themes_and_fonts.global_theme,
+                                                                         original_theme=dpg.get_item_theme(speak_message_tooltip),
                                                                          duration=gui_config.acknowledgment_duration))
             speak_enabled = (role == "assistant")
             if speak_enabled:

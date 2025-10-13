@@ -314,7 +314,7 @@ with timer() as tim:
                                                                          target_button=new_chat_button,
                                                                          target_tooltip=new_chat_tooltip,
                                                                          target_text=new_chat_tooltip_text,
-                                                                         original_theme=themes_and_fonts.global_theme,
+                                                                         original_theme=dpg.get_item_theme(new_chat_tooltip),
                                                                          duration=gui_config.acknowledgment_duration))
 
                 def copy_chatlog_to_clipboard_as_markdown_callback(self) -> None:
@@ -327,7 +327,7 @@ with timer() as tim:
                                                                          target_button=copy_chat_button,
                                                                          target_tooltip=copy_chat_tooltip,
                                                                          target_text=copy_chat_tooltip_text,
-                                                                         original_theme=themes_and_fonts.global_theme,
+                                                                         original_theme=dpg.get_item_theme(copy_chat_tooltip),
                                                                          duration=gui_config.acknowledgment_duration))
 
                 def stop_text_generation_callback() -> None:
@@ -337,7 +337,7 @@ with timer() as tim:
                                                                          target_button=stop_generation_button,
                                                                          target_tooltip=stop_generation_tooltip,
                                                                          target_text=stop_generation_tooltip_text,
-                                                                         original_theme=themes_and_fonts.global_theme,
+                                                                         original_theme=dpg.get_item_theme(stop_generation_tooltip),
                                                                          duration=gui_config.acknowledgment_duration))
 
                 def stop_speech_callback() -> None:
@@ -347,7 +347,7 @@ with timer() as tim:
                                                                          target_button=stop_speech_button,
                                                                          target_tooltip=stop_speech_tooltip,
                                                                          target_text=stop_speech_tooltip_text,
-                                                                         original_theme=themes_and_fonts.global_theme,
+                                                                         original_theme=dpg.get_item_theme(stop_speech_tooltip),
                                                                          duration=gui_config.acknowledgment_duration))
 
                 def toggle_fullscreen():
@@ -425,7 +425,7 @@ with timer() as tim:
                 #                                                          target_button=testing_button,
                 #                                                          target_tooltip=testing_tooltip,
                 #                                                          target_text=testing_tooltip_text,
-                #                                                          original_theme=themes_and_fonts.global_theme,
+                #                                                          original_theme=dpg.get_item_theme(testing_tooltip),
                 #                                                          duration=gui_config.acknowledgment_duration))
                 # testing_button = dpg.add_button(label=fa.ICON_VOLCANO,
                 #                                 callback=testing_callback,

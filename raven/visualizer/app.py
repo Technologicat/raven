@@ -572,7 +572,7 @@ def write_word_cloud(filename):
                                                          target_button="word_cloud_save_button",
                                                          target_tooltip="word_cloud_save_tooltip",
                                                          target_text="word_cloud_save_tooltip_text",
-                                                         original_theme=themes_and_fonts.global_theme,
+                                                         original_theme=dpg.get_item_theme("word_cloud_save_tooltip"),
                                                          duration=gui_config.acknowledgment_duration))
 
     def write_task():
@@ -2679,7 +2679,7 @@ def _copy_report_to_clipboard(*, report_format):
                                                          target_button=copy_report_button,
                                                          target_tooltip=copy_report_tooltip,
                                                          target_text=copy_report_tooltip_text,
-                                                         original_theme=themes_and_fonts.global_theme,
+                                                         original_theme=dpg.get_item_theme(copy_report_tooltip),
                                                          duration=gui_config.acknowledgment_duration))
 
 def copy_current_entry_to_clipboard():
@@ -2722,7 +2722,7 @@ def _copy_entry_to_clipboard(item):
                                                          target_button=button,
                                                          target_tooltip=tooltip,
                                                          target_text=tooltip_text,
-                                                         original_theme=themes_and_fonts.global_theme,
+                                                         original_theme=dpg.get_item_theme(tooltip),
                                                          duration=gui_config.acknowledgment_duration))
 
 def search_or_select_current_entry():
