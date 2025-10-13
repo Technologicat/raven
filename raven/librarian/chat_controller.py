@@ -513,7 +513,7 @@ class DPGChatMessage:
             reroll_enabled = (node_id is not None and node_id != self.parent_view.chat_controller.app_state["new_chat_HEAD"])  # The AI's initial greeting can't be rerolled
             if reroll_enabled:
                 self.gui_button_callbacks["reroll"] = reroll_message_callback  # stash it so we can call it from the hotkey handler
-            dpg.add_button(label=fa.ICON_RECYCLE,
+            dpg.add_button(label=fa.ICON_DICE_D20,  # fa.ICON_RECYCLE,
                            callback=reroll_message_callback,
                            enabled=reroll_enabled,
                            width=gui_config.toolbutton_w,
@@ -548,7 +548,7 @@ class DPGChatMessage:
             continue_enabled = (node_id is not None and node_id != self.parent_view.chat_controller.app_state["new_chat_HEAD"])  # The AI's initial greeting can't be continued
             if continue_enabled:
                 self.gui_button_callbacks["continue"] = continue_message_callback  # stash it so we can call it from the hotkey handler
-            dpg.add_button(label=fa.ICON_ARROW_RIGHT,
+            dpg.add_button(label=fa.ICON_PARAGRAPH,  # fa.ICON_RIGHT_LONG,  # fa.ICON_ARROW_RIGHT,
                            callback=continue_message_callback,
                            enabled=continue_enabled,
                            width=gui_config.toolbutton_w,
