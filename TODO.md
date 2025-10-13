@@ -72,8 +72,6 @@
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Maybe next:
     - Long subtitle splitter (we now have the audio length).
-    - Add feature: Branch chat at this node (set that node as HEAD, like !head ... of minichat)
-    - Add feature: Delete chat node and all descendants
     - Add GUI dynamic resizing on window size change
     - Improve: thought blocks
       - GUI: completed message: collapsible thought blocks (a button to hide/show a group)

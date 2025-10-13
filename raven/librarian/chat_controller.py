@@ -157,6 +157,10 @@ class DPGChatMessage:
         self.gui_text_group = None  # populated by `build`
         self.gui_button_callbacks = {}  # {name0: callable0, ...} - to trigger button features programmatically
 
+        # for "delete subtree" confirmation (cannot be undone)
+        self.last_delete_click_time = None
+        self.confirm_duration = 2.0
+
     def _get_text(self) -> str:
         with self.paragraphs_lock:
             return "\n".join(paragraph["text"] for paragraph in self.paragraphs)
@@ -610,9 +614,18 @@ class DPGChatMessage:
         edit_tooltip = dpg.add_tooltip(f"chat_edit_button_{self.gui_uuid}")  # tag
         dpg.add_text("Edit (revise)", parent=edit_tooltip)
 
+        # Branch chat at this node
+        # NOTE: We disallow branching from the system prompt, as well as from any message that is not linked to a chat node in the datastore.
+        #       We also disallow using the "branch from here" feature on the AI's initial greeting, as that's an unnecessarily confusing way to say "start new chat".
+        branch_enabled = (node_id is not None and
+                          node_id not in (self.parent_view.chat_controller.app_state["system_prompt_node_id"],
+                                          self.parent_view.chat_controller.app_state["new_chat_HEAD"]))
+        def branch_chat_callback():
+            self.parent_view.chat_controller.app_state["HEAD"] = node_id
+            self.parent_view.build()
         dpg.add_button(label=fa.ICON_CODE_BRANCH,
-                       callback=lambda: None,  # TODO
-                       enabled=False,
+                       callback=branch_chat_callback,
+                       enabled=branch_enabled,
                        width=gui_config.toolbutton_w,
                        tag=f"message_new_branch_button_{self.gui_uuid}",
                        parent=g)
@@ -621,23 +634,65 @@ class DPGChatMessage:
         new_branch_tooltip = dpg.add_tooltip(f"message_new_branch_button_{self.gui_uuid}")  # tag
         dpg.add_text("Branch from this node", parent=new_branch_tooltip)
 
+        # Delete subtree starting from this node (requires a confirmation click)
+        #
         # NOTE: We disallow deleting the system prompt and the AI's initial greeting, as well as any message that is not linked to a chat node in the datastore.
         delete_enabled = (node_id is not None and
                           node_id not in (self.parent_view.chat_controller.app_state["system_prompt_node_id"],
                                           self.parent_view.chat_controller.app_state["new_chat_HEAD"]))
-        dpg.add_button(label=fa.ICON_TRASH_CAN,
-                       callback=lambda: None,  # TODO
-                       enabled=False,  # TODO: use `delete_enabled` once delete is implemented
-                       width=gui_config.toolbutton_w,
-                       tag=f"message_delete_branch_button_{self.gui_uuid}",
-                       parent=g)
+        def delete_subtree_callback():
+            current_time = time.time_ns()
+            if self.last_delete_click_time is not None:
+                double_okd = (current_time - self.last_delete_click_time < self.confirm_duration * 10**9)
+            else:
+                double_okd = False
+            self.last_delete_click_time = current_time
+
+            if double_okd:  # perform delete
+                # Find which node to switch HEAD to after delete.
+                #   - Switch to previous sibling, or if this was the first one, then the next one.
+                #   - Switch to parent if no siblings remaining after delete.
+                siblings, this_node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
+                assert len(siblings) >= 1  # should always have at least the node itself
+                if len(siblings) == 1:  # no remaining siblings after delete --> set parent as HEAD
+                    new_HEAD = self.parent_view.chat_controller.datastore.get_parent(node_id)
+                # now `len(siblings) > 1`
+                elif this_node_index == 0:
+                    new_HEAD = siblings[1]
+                # now `this_node_index > 0`
+                else:
+                    new_HEAD = siblings[this_node_index - 1]
+
+                # Perform the delete
+                self.parent_view.chat_controller.datastore.delete_subtree(node_id)
+
+                # Refresh view
+                self.parent_view.chat_controller.app_state["HEAD"] = new_HEAD
+                self.parent_view.build()
+            else:
+                gui_animation.animator.add(gui_animation.ButtonFlash(message="Press again to confirm.\nDeletion CANNOT BE UNDONE.",
+                                                                     target_button=delete_subtree_button,
+                                                                     target_tooltip=delete_subtree_tooltip,
+                                                                     target_text=delete_subtree_tooltip_text,
+                                                                     original_theme=dpg.get_item_theme(delete_subtree_tooltip),
+                                                                     flash_color=(255, 32, 32),  # orange for warning
+                                                                     text_color=(255, 255, 255),
+                                                                     duration=self.confirm_duration))
+        delete_subtree_button = dpg.add_button(label=fa.ICON_TRASH_CAN,
+                                               callback=delete_subtree_callback,
+                                               enabled=delete_enabled,
+                                               width=gui_config.toolbutton_w,
+                                               tag=f"message_delete_branch_button_{self.gui_uuid}",
+                                               parent=g)
         dpg.bind_item_font(f"message_delete_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
         dpg.bind_item_theme(f"message_delete_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
-        delete_branch_tooltip = dpg.add_tooltip(f"message_delete_branch_button_{self.gui_uuid}")  # tag
+        delete_subtree_tooltip = dpg.add_tooltip(f"message_delete_branch_button_{self.gui_uuid}")  # tag
+        delete_subtree_tooltip_text = dpg.add_text("Delete branch (subtree starting from this node, ALL descendants!)", parent=delete_subtree_tooltip)
 
-        c_red = '<font color="(255, 96, 96)">'
-        c_end = '</font>'
-        dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_branch_tooltip)
+        # # TODO: Meh, `raven.common.gui.animation.ButtonFlash` doesn't play together with `dpg_markdown`.
+        # c_red = '<font color="(255, 96, 96)">'
+        # c_end = '</font>'
+        # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_subtree_tooltip)
 
         def make_navigate_to_sibling(message_node_id: str, direction: str) -> Callable:
             def navigate_to_sibling_callback():
