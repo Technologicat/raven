@@ -770,18 +770,44 @@ class DPGCompleteChatMessage(DPGChatMessage):
                       persona=persona,
                       node_id=self.node_id)
 
+        paragraph_accumulator = io.StringIO()
+        def commit_paragraph():
+            nonlocal paragraph_accumulator
+            text_to_commit = paragraph_accumulator.getvalue()
+            if not text_to_commit:
+                return
+            self.add_paragraph(text_to_commit,
+                               is_thought=inside_think_block)
+            paragraph_accumulator = io.StringIO()
+
         paragraphs = text.split("\n")
         inside_think_block = False
-        for paragraph in paragraphs:
-            # Detect think block state (TODO: improve; very rudimentary and brittle for now)
+        for idx, paragraph in enumerate(paragraphs):
             p = paragraph.strip()
-            if p == "<think>":
-                inside_think_block = True
-            elif p == "</think>":
-                inside_think_block = False
 
-            self.add_paragraph(paragraph,
-                               is_thought=(inside_think_block or (p == "</think>")))  # easiest to special-case the closing tag
+            # Detect think block state (TODO: improve; very rudimentary and brittle for now; should detect from token stream, not join it into a single string and then split again, as we do now)
+            entering_think_block = False
+            exiting_think_block = False
+            if p == "<think>":
+                entering_think_block = True
+            elif p == "</think>":
+                exiting_think_block = True
+
+            if entering_think_block:
+                commit_paragraph()  # commit previous text (if any) before start of think block
+                inside_think_block = True
+
+            paragraph_accumulator.write(f"{paragraph}\n")  # regardless of if it's just a newline
+
+            # Consolidate "<think>...</think>" into one paragraph, so that we can hide/show it easily.
+            # When at last paragraph, always commit (even if incomplete think block).
+            if (inside_think_block and not exiting_think_block) and (idx < len(paragraphs) - 1):
+                continue
+
+            commit_paragraph()
+
+            if exiting_think_block:
+                inside_think_block = False
 
 
 class DPGStreamingChatMessage(DPGChatMessage):
@@ -1278,6 +1304,19 @@ class DPGChatController:
                         if not speech_enabled:  # If TTS is NOT enabled, show the generic talking animation while the LLM is writing (after it is no longer thinking)
                             api.avatar_start_talking(self.avatar_record.avatar_instance_id)
 
+                    # HACK: Detect whether *whatever we're about to send to the GUI next* is part of a think block.
+                    #
+                    # `task_env.inside_think_block` is not the whole truth, because the closing tag "</think>"
+                    # should be treated as part of the think block. Qwen3 sends the token "</think>" (on a new line)
+                    # and then a separate token "\n\n" (paragraph break), so it's not enough to look for "</think>"
+                    # in the last received token (`chunk_text`), either.
+                    #
+                    # So for detecting whether we are about to send the closing tag to the GUI,
+                    # we must look at the *accumulated text* since the last send.
+                    paragraph_text = task_env.text.getvalue()
+                    is_thought = (task_env.inside_think_block or ("</think>" in paragraph_text))
+                    # logger.debug(f"'''{chunk_text}'''")  # DEBUG: Print the raw tokens as they come in. A token may contain newlines, so we display the token in triple quotes for clarity.
+
                     task_env.text.write(chunk_text)
                     time_now = time.monotonic()
                     dt = time_now - task_env.t0  # seconds since last GUI update
@@ -1285,16 +1324,15 @@ class DPGChatController:
                     if "\n" in chunk_text:  # start new paragraph?
                         task_env.t0 = time_now
                         task_env.n_chunks0 = n_chunks
-                        paragraph_text = task_env.text.getvalue()
                         # NOTE: The last paragraph of the AI's reply - for thinking models, commonly the final response - often never gets a "\n", and must be handled in `on_done`.
-                        _update_avatar_emotion_from_incoming_text(paragraph_text)
+                        _update_avatar_emotion_from_incoming_text(paragraph_text)  # update emotion from recent received text (thoughts too)
                         # if speech_enabled:  # If TTS enabled, send complete paragraph to TTS preprocess queue
                         #     if not task_env.inside_think_block and "</think>" not in chunk_text:  # not enough, "</think>" can be in the previous chunk(s) in the same "paragraph".
                         #         avatar_controller.send_text_to_tts(config=avatar_record,
-                        #                                            text=paragraph_text,
+                        #                                            text=paragraph_accumulator,
                         #                                            video_offset=librarian_config.avatar_config.video_offset)
                         streaming_chat_message.replace_last_paragraph(paragraph_text,
-                                                                      is_thought=(task_env.inside_think_block or ("</think>" in chunk_text)))  # easiest to special-case the closing tag
+                                                                      is_thought=is_thought)
                         streaming_chat_message.add_paragraph("",
                                                              is_thought=task_env.inside_think_block)
                         task_env.text = io.StringIO()
