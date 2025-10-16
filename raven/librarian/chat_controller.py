@@ -941,7 +941,7 @@ class DPGLinearizedChatView:
             for node_id in node_id_history:
                 self.add_complete_message(node_id=node_id,
                                           scroll_to_end=False)  # we scroll just once, when done
-        # Update avatar emotion from the message text (use only non-thought message content)
+        # Update avatar emotion from the final message text (use only non-thought message content)
         role, persona, text = chatutil.get_node_message_text_without_persona(self.chat_controller.datastore, head_node_id)
         if role == "assistant":
             logger.info("DPGLinearizedChatView.build: linearized chat view new HEAD node is an AI message; updating avatar emotion from (non-thought) message content")
@@ -1243,8 +1243,8 @@ class DPGChatController:
 
                 task_env.inside_think_block = False
 
-                task_env.emotion_update_interval = 5  # how many complete paragraphs (newline-separated text snippets) to wait between emotion updates (NOTE: Qwen3 likes using newlines liberally)
-                task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap, to stabilize the detection
+                task_env.emotion_update_interval = 5  # how many lines of text to wait between emotion updates (NOTE: Qwen3 uses a double newline as its paragraph separator, so that eats an extra line)
+                task_env.emotion_recent_paragraphs = collections.deque([""] * (4 * task_env.emotion_update_interval))  # buffer with 75% overlap between updates, to stabilize the detection
                 task_env.emotion_update_calls = 0
                 def _update_avatar_emotion_from_incoming_text(new_paragraph: str) -> None:
                     task_env.emotion_recent_paragraphs.append(new_paragraph)
@@ -1322,7 +1322,7 @@ class DPGChatController:
 
                         unused_role, persona, text = chatutil.get_node_message_text_without_persona(self.datastore, node_id)
 
-                        # Keep only non-thought content for TTS and emotion update
+                        # Keep only non-thought content for TTS and final emotion update
                         text = chatutil.scrub(persona=persona,
                                               text=text,
                                               thoughts_mode="discard",
