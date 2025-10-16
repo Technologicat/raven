@@ -210,7 +210,7 @@ def scan_addon_cels(image_file_name: str) -> Dict[str, str]:
                         logger.info(f"scan_addon_cels: Loading character-specific cel '{filename}' for '{image_file_name}'")
                         cels_filenames[celname] = os.path.join(root, filename)
                     elif celname.endswith("icon"):  # chat icon; accept but ignore
-                        logger.info(f"scan_addon_cels: Ignoring chat icon '{celname}' for '{image_file_name}'. (This is normal; it's for the LLM frontend, not for Raven-avatar.)")
+                        logger.info(f"scan_addon_cels: Ignoring chat icon '{filename}' for '{image_file_name}'. (This is normal; it's for the LLM frontend, not for Raven-avatar.)")
                     else:
                         logger.warning(f"scan_addon_cels: Ignoring unknown extra cel '{celname}' for '{image_file_name}'. Known cels are: {supported_cels} (plus any fx_* cels)")
 
