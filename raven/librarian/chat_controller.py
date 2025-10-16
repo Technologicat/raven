@@ -1305,8 +1305,8 @@ class DPGChatController:
                     elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit changes to in-progress last paragraph
                         task_env.t0 = time_now
                         task_env.n_chunks0 = n_chunks
-                        streaming_chat_message.replace_last_paragraph(task_env.text.getvalue(),
-                                                                      is_thought=task_env.inside_think_block)  # at first paragraph, will auto-create the paragraph if not created yet
+                        streaming_chat_message.replace_last_paragraph(paragraph_text,
+                                                                      is_thought=is_thought)  # at first paragraph, will auto-create the paragraph if not created yet
                         dpg.split_frame()
                         self.view.scroll_to_end()
 
