@@ -278,25 +278,28 @@ To import PDF into BibTeX:
 
 ```bash
 $(pdm venv activate)
-raven-pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>output.bib 2>log.txt
+raven-pdf2bib http://127.0.0.1:5000 -i some_input_directory -s success.bib -f failed.bib -l log.txt -o done_success -of done_failed
 ```
 
 The "*http://...*" argument is the URL of an LLM serving an OpenAI-compatible API (streaming mode).
 
-The command imports all PDF files in `some_input_directory` (which can be a relative or absolute path), automatically descending into subdirectories. The files are processed one directory at a time, in Unicode lexicographical order by filename. Output is written to `output.bib`, and log messages to `log.txt`.
+The command imports all PDF files in `some_input_directory` (which can be a relative or absolute path), automatically descending into subdirectories. The files are processed one directory at a time, in Unicode lexicographical order by filename. Successful outputs are written to `success.bib`, failed outputs to `failed.bib`, and log messages to `log.txt`.
 
-The `-o done` moves each PDF file into directory named `done` after the file has been processed. This allows canceling the job and easily continuing it later, which is useful if there are lots of input files; the LLM analysis can be slow. An input PDF file is moved if and only if it was successfully processed, **after** printing the generated BibTeX entry.
+The input directory (`-i some_input_directory`) is optional; if not provided, the current working directory of the terminal will be used.
 
-The directory specified by `-o` is ignored while descending into subdirectories of the input directory, so it is possible to use e.g. `-o some_input_directory/done`.
+The `-s success.bib` writes items that were successfully processed into a BibTeX entry into the BibTeX file `success.bib`.
 
-To continue a partial import (with some files already having been moved into `done`, and some remaining):
+Similarly, `-f failed.bib` writes failed items, which require manual checking and fixing. Failures are detected from LLM output by heuristics. LLM traces for failed items are logged into the log file (`-l log.txt`), for troubleshooting.
 
-```bash
-$(pdm venv activate)
-raven-pdf2bib http://127.0.0.1:5000 -i some_input_directory -o done 1>>output.bib 2>>log.txt
-```
+The output buffers for the bib files are flushed to disk after each entry, so if you have a text editor app that autodetects updated files, you can monitor the progress by viewing the bib file there.
 
-That is, just use the append mode (`>>` instead of `>`) for redirecting the output into files.
+The `-o done_success` moves each PDF file into directory named `done_success` after the file has been processed. This allows canceling the job and easily continuing it later, which is useful if there are lots of input files; the LLM analysis can be slow. An input PDF file is moved if and only if it was successfully processed, **after** writing the generated BibTeX entry.
+
+The `-of done_failed` moves failed items similarly.
+
+The directory specified by `-o` (as well as that by `-of`) is ignored while descending into subdirectories of the input directory, so it is possible to use e.g. `-o some_input_directory/done_success`.
+
+To continue a partial import (with some files already having been moved into the done-directories, and some remaining), just run the same command again - all the output files (success and failure bibs, and the log) are appended to automatically.
 
 #### How the PDF importer works
 

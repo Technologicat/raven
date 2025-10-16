@@ -28,7 +28,7 @@ from .. import __version__
 
 import argparse
 import collections
-from functools import partial
+import contextlib
 import io
 import os
 import pathlib
@@ -38,9 +38,9 @@ import subprocess
 import sys
 from textwrap import dedent
 import traceback
-from typing import List
+from typing import Dict, List, Optional, TextIO, Tuple
 
-from unpythonic import timer, ETAEstimator, uniqify
+from unpythonic import sym, timer, ETAEstimator, uniqify
 from unpythonic.env import env
 
 from ..common import utils as common_utils
@@ -53,14 +53,17 @@ from ..librarian import llmclient
 # --------------------------------------------------------------------------------
 # Bootup
 
-datastore = chattree.Forest()
+datastore = chattree.Forest()  # NOT persistent. We'll be using the LLM to run throwaway one-shot tasks.
+
+status_success = sym("success")
+status_failed = sym("failed")
 
 # --------------------------------------------------------------------------------
 # Settings
 
 # This conference information is automatically filled into all generated BibTeX entries.
 # TODO: Add command-line options for conference info, to make this script into a properly reusable tool.
-conference_slug = "ECCOMAS2024"  # BibTeX entry keys are generated as <slug>-<PDF_filename>
+conference_slug = "ECCOMAS2024"  # Short name of conference; BibTeX entry keys are generated as <slug>-<PDF_filename>
 conference_year = "2024"
 conference_booktitle = "The 9th European Congress on Computational Methods in Applied Sciences and Engineering (ECCOMAS Congress 2024)"
 conference_note = "3--7 June 2024, Lisbon, Portugal"
@@ -69,16 +72,74 @@ conference_url = "https://eccomas2024.org/"
 # --------------------------------------------------------------------------------
 # Utilities
 
-def print_progress(n_chunks, chunk, glyph="."):
-    """Progress indicator while the LLM is processing. Callback for `llmclient.invoke`."""
-    if (n_chunks == 1 or n_chunks % 10 == 0):  # in any message being written by the AI, print a progress symbol for the first chunk, and then again every 10 chunks.
-        print(glyph, end="", file=sys.stderr)
-        sys.stderr.flush()
+# TODO: `oneshot_llm_task` might want to live in `raven.librarian.chatutil` or in `raven.librarian.llmclient`.
+def oneshot_llm_task(llm_settings: env,
+                     instruction: str,
+                     progress_symbol: str) -> Tuple[str, str]:
+    """Perform a one-shot (throwaway) task on the LLM, as if in chat mode.
 
-def setup_prompts(settings: env) -> env:
-    """Set up the task prompts for the LLM, writing them to `settings.prompts` (dict).
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+    `instruction`: Task specification and input data for the LLM. This is what the user would type in as a message to an LLM chat app.
+    `progress_symbol`: This symbol will be printed to the console every 10 tokens while the LLM is writing.
 
-    Returns `settings` for convenience.
+    Returns the tuple `(raw_output_text, scrubbed_output_text)`.
+
+    The scrubbed output is the LLM's final response to the task, ready for feeding into the rest of your text processing pipeline.
+
+    The raw output contains the thinking trace, too (if running on a thinking model). Useful for debugging/logging.
+    """
+    def on_progress(n_chunks: int,
+                    chunk_text: str) -> None:
+        """Progress indicator while the LLM is processing. Callback for `llmclient.invoke`."""
+        if (n_chunks == 1 or n_chunks % 10 == 0):  # in any message being written by the AI, print a progress symbol for the first chunk, and then again every 10 chunks.
+            print(progress_symbol, end="", file=sys.stderr)
+            sys.stderr.flush()
+
+    root_node_id = chatutil.factory_reset_datastore(datastore, llm_settings)  # Throwaway one-shot task, so start with an empty chat history with just the system prompt and the AI's initial greeting.
+    request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(llm_settings,
+                                                                                             role="user",
+                                                                                             text=instruction)},
+                                            parent_id=root_node_id)
+    history = chatutil.linearize_chat(datastore, request_node_id)
+    out = llmclient.invoke(llm_settings,
+                           history,
+                           on_progress=on_progress,
+                           tools_enabled=False)
+    raw_output_text = out.data["content"]
+    scrubbed_output_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
+                                          text=raw_output_text,
+                                          thoughts_mode="discard",
+                                          markup=None,
+                                          add_persona=False)
+    return raw_output_text, scrubbed_output_text
+
+def setup_prompts(llm_settings: env) -> Dict:
+    """Set up the LLM task handlers.
+
+    Returns a dict, in the format `{bibtex_fieldname: (kind: str,
+                                                       thing: Union[str, Callable],
+                                                       progress_symbol: str)}`,
+
+    where the RHS are instructions for the main loop as to what to write into the field `bibtex_fieldname`.
+    Although the content is hardcoded in the implementation of this function, we document the data structure here:
+
+    `kind`: one of "literal", "prompt", "function":
+
+       "literal": Inject the exact given text `thing: str` into the field.
+
+       "prompt": Treat `thing: str` as a prompt for the LLM. Send in the prompt, a Markdown separator, and the complete text content of the PDF.
+                 Use `progress_symbol` to indicate progress on the console. Inject the LLM's output (after heuristic cleaning) into the field.
+
+       "function": Call `thing: Callable` with arguments `(unique_id, text)`, where `text` is the complete text content of the PDF.
+                   Return value must be `(status, output)`.
+
+                   `status` must be `status_success` or `status_failed`, to indicate whether the text was processed successfully.
+
+                   Inject `output` into the field.
+                   Except, if `output` is `None`, omit that field from the BibTeX.
+
+    Obviously, the "function" kind is the most flexible. We use it to strip the reference list before handing over the text to the LLM.
+    This tends to improve author list detection (by removing likely false positives before the LLM sees the text).
     """
 
     # Section headings that can be programmatically detected easily. These allow us to make some LLM processing simpler by removing confounders (e.g. reference lists have lots of author names and titles).
@@ -174,7 +235,8 @@ def setup_prompts(settings: env) -> env:
     IMPORTANT: Reply ONLY with the reformatted list.
     """)
 
-    def extract_authors(uid: str, text: str) -> str:
+    def extract_authors(unique_id: str, text: str) -> str:
+        status = status_success
         text = strip_postamble(text)
 
         # TODO: Handle the case of a missing author list (there's at least one such abstract in the dataset). First check for author list presence using the LLM?
@@ -320,29 +382,23 @@ def setup_prompts(settings: env) -> env:
 
         **ORIGINAL INPUT, please analyze this**
         """)
-        root_node_id = chatutil.factory_reset_datastore(datastore, settings)
-
         # # Sanity-check for presence of author list, for logging a warning if the LLM thinks the author list is missing.
         # # This doesn't work well with an 8B model, even with majority voting ( see Wang et al., 2023 https://arxiv.org/abs/2203.11171 ).
         # # So let's just skip this, and use a heuristic check on the final result (whether the extracted names are present in the original text).
-        # T = settings.request_data["temperature"]
-        # settings.request_data["temperature"] = 0.3
+        # T = llm_settings.request_data["temperature"]
+        # llm_settings.request_data["temperature"] = 0.3
         # llm_outputs = []
         # answers = collections.Counter()
         # for _ in range(3):
         #     print(_ + 1, end="", file=sys.stderr)
-        #     request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
-        #                                                                                              role="user",
-        #                                                                                              text=f"{prompt_check_authorlist}\n\n{text}")},
-        #                                             parent_id=root_node_id)
-        #     history = chatutil.linearize_chat(datastore, request_node_id)
-        #     out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="*"), tools_enabled=False)
-        #     out.data["content"] = chatutil.scrub(persona=settings.personas.get("assistant", None), text=out.data["content"], thoughts_mode="discard", markup=None, add_persona=False)
-        #     has_author_list = out.data["content"][-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
+        #     raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
+        #                                                              instruction=f"{prompt_check_authorlist}\n\n{text}",
+        #                                                              progress_symbol="*")
+        #     has_author_list = scrubbed_output_text[-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
         #     has_author_list = has_author_list.translate(str.maketrans('', '', string.punctuation))  # Strip punctuation, in case of spurious formatting.
         #     answers[has_author_list] += 1
-        #     llm_outputs.append(out.data["content"])
-        # settings.request_data["temperature"] = T
+        #     llm_outputs.append(scrubbed_output_text)
+        # llm_settings.request_data["temperature"] = T
         # votes = answers.most_common()  # [(item0, count0), ...]
         #
         # logger.info("Detection reports follow.")
@@ -350,55 +406,39 @@ def setup_prompts(settings: env) -> env:
         #     logger.info(llm_output)
         #
         # if not any(count > 1 for answer, count in votes):  # no majority?
-        #     logger.info(f"Input file '{uid}': LLM could not detect whether there is an author list. Votes: {votes}")
+        #     logger.info(f"Input file '{unique_id}': LLM could not detect whether there is an author list. Votes: {votes}")
         # else:
         #     has_author_list = votes[0][0]
         #     if has_author_list in ("YES", "NO"):
         #         if has_author_list == "NO":
-        #             logger.info(f"Input file '{uid}': LLM says the author list is missing; manual check recommended.")
+        #             logger.info(f"Input file '{unique_id}': LLM says the author list is missing; manual check recommended.")
         #     else:
-        #         logger.info(f"Input file '{uid}': LLM returned unknown author list detection result '{has_author_list}', should be 'YES' or 'NO'; manual check recommended.")
+        #         logger.info(f"Input file '{unique_id}': LLM returned unknown author list detection result '{has_author_list}', should be 'YES' or 'NO'; manual check recommended.")
 
-        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
-                                                                                                 role="user",
-                                                                                                 text=f"{prompt_get_authors}\n-----\n\n{text}")},
-                                                parent_id=root_node_id)
-        history = chatutil.linearize_chat(datastore, request_node_id)
-        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="A"), tools_enabled=False)
-        out.data["content"] = chatutil.scrub(persona=settings.personas.get("assistant", None), text=out.data["content"], thoughts_mode="discard", markup=None, add_persona=False)
-
-        logger.debug(f"\n        extracted : {out.data}")
+        raw_output_text_1, scrubbed_output_text_1 = oneshot_llm_task(llm_settings,
+                                                                     instruction=f"{prompt_get_authors}\n-----\n\n{text}",
+                                                                     progress_symbol="A")
+        logger.debug(f"\n        EXTRACT AUTHORS    : {scrubbed_output_text_1}")
 
         # Usually the output is correct, but sometimes:
         #   - Some authors may be missing from the list
         #   - The list may have additional hallucinated authors
         #   - The list may use commas instead of the word "and"
         # so we perform some post-processing.
+        raw_output_text_2, scrubbed_output_text_2 = oneshot_llm_task(llm_settings,
+                                                                     instruction=prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1),
+                                                                     progress_symbol="a")
+        logger.debug(f"\n        DROP AFFILIATIONS  : {scrubbed_output_text_2}")
 
-        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
-                                                                                                 role="user",
-                                                                                                 text=prompt_drop_author_affiliations.format(author_names=out.data["content"]))},
-                                                parent_id=root_node_id)
-        history = chatutil.linearize_chat(datastore, request_node_id)
-        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="a"), tools_enabled=False)
-        out.data["content"] = chatutil.scrub(persona=settings.personas.get("assistant", None), text=out.data["content"], thoughts_mode="discard", markup=None, add_persona=False)
+        raw_output_text_3, scrubbed_output_text_3 = oneshot_llm_task(llm_settings,
+                                                                     instruction=prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2),
+                                                                     progress_symbol=".")
+        logger.debug(f"\n        REFORMAT SEPARATORS: {scrubbed_output_text_3}")
 
-        logger.debug(f"\n        LLM pass 1: {out.data}")
+        if scrubbed_output_text_3.endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
+            scrubbed_output_text_3 = scrubbed_output_text_3[:-3]
 
-        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
-                                                                                                 role="user",
-                                                                                                 text=prompt_reformat_author_separators.format(author_names=out.data["content"]))},
-                                                parent_id=root_node_id)
-        history = chatutil.linearize_chat(datastore, request_node_id)
-        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."), tools_enabled=False)
-        out.data["content"] = chatutil.scrub(persona=settings.personas.get("assistant", None), text=out.data["content"], thoughts_mode="discard", markup=None, add_persona=False)
-
-        logger.debug(f"\n        LLM pass 2: {out.data}")
-
-        if out.data["content"].endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
-            out.data["content"] = out.data["content"][:-3]
-
-        authors = out.data["content"].strip()  # Final result from LLM. Remove extra whitespace, just in case.
+        authors = scrubbed_output_text_3.strip()  # Final result from LLM. Remove extra whitespace, just in case.
 
         # Sanity-check the LLM output.
         #
@@ -413,14 +453,28 @@ def setup_prompts(settings: env) -> env:
                 possibly_broken_names.append(author)
         if len(possibly_broken_names):
             plural_s = "s" if len(possibly_broken_names) > 1 else ""
-            logger.warning(f"Input file '{uid}': Extractor returned one-component author name{plural_s}; manual check recommended: {possibly_broken_names}")
+            logger.warning(f"Input file '{unique_id}': Extractor returned one-component or blank author name{plural_s}; manual check recommended: {possibly_broken_names}")
+            logger.warning(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}")
+            logger.warning(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}")
+            logger.warning(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}")
+            logger.warning(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}")
+            logger.warning(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}")
+            logger.warning(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}")
+            status = status_failed
 
         # No author should be listed more than once.
         authors_counter = collections.Counter(authors_list)  # TODO: I hope `Counter` preserves insertion order?
         duplicate_names = [author for author, count in authors_counter.items() if count > 1]
         if len(duplicate_names):
             plural_s = "s" if len(duplicate_names) > 1 else ""
-            logger.warning(f"Input file '{uid}': Extractor returned duplicate author name{plural_s}; de-duplicated, but manual check recommended: {duplicate_names}")
+            logger.warning(f"Input file '{unique_id}': Extractor returned duplicate author name{plural_s}; de-duplicated, but manual check recommended: {duplicate_names}")
+            logger.warning(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}")
+            logger.warning(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}")
+            logger.warning(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}")
+            logger.warning(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}")
+            logger.warning(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}")
+            logger.warning(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}")
+            status = status_failed
 
         # Add missing periods for abbreviated first and middle names. Sometimes these drop out during the LLM correction passes.
         def fix_abbrevs(author: str) -> str:
@@ -483,8 +537,15 @@ def setup_prompts(settings: env) -> env:
                     for part in parts:  # comma-separated parts
                         components = part.split()
                         if len(components) > 1:
-                            logger.warning(f"Input file '{uid}': Possibly broken format in processed author list; manual check recommended: '{authors}'")
+                            logger.warning(f"Input file '{unique_id}': Possibly broken format in processed author list; manual check recommended: '{authors}'")
+                            logger.warning(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}")
+                            logger.warning(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}")
+                            logger.warning(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}")
+                            logger.warning(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}")
+                            logger.warning(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}")
+                            logger.warning(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}")
                             format_warning_logged = True
+                            status = status_failed
                             break
             else:
                 parts = [author.strip()]  # needed for the other check.
@@ -508,11 +569,18 @@ def setup_prompts(settings: env) -> env:
                 for part in parts:  # comma-separated parts
                     components = part.split()
                     if any(component not in text for component in components):
-                        logger.warning(f"Input file '{uid}': Possible LLM error with one or more spurious names in processed author list; manual check recommended: '{authors}'")
+                        logger.warning(f"Input file '{unique_id}': Possible LLM error in processed author list; manual check recommended: '{authors}'")
+                        logger.warning(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}")
+                        logger.warning(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}")
+                        logger.warning(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}")
+                        logger.warning(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}")
+                        logger.warning(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}")
+                        logger.warning(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}")
                         llm_warning_logged = True
+                        status = status_failed
                         break
 
-        return authors
+        return status, authors
 
     prompt_get_title = dedent("""What is the title of the abstract?
 
@@ -523,28 +591,23 @@ def setup_prompts(settings: env) -> env:
     Do NOT place quotation marks around the title.
     """)
 
-    def extract_title(uid: str, text: str) -> str:
+    def extract_title(unique_id: str, text: str) -> str:
         """Extract the title from the fulltext of a conference abstract.
 
-        `uid`: input file identifier, for error messages
+        `unique_id`: input file identifier, for error messages
         `text`: the full text
 
         Returns the title.
         """
+        status = status_success
         text = strip_postamble(text)
 
-        root_node_id = chatutil.factory_reset_datastore(datastore, settings)
-        request_node_id = datastore.create_node(payload={chatutil.create_chat_message(settings,
-                                                                                      role="user",
-                                                                                      text=f"{prompt_get_title}\n-----\n\n{text}")},
-                                                parent_id=root_node_id)
-        history = chatutil.linearize_chat(datastore, request_node_id)
-        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="T"), tools_enabled=False)
-        out.data["content"] = chatutil.scrub(persona=settings.personas.get("assistant", None), text=out.data["content"], thoughts_mode="discard", markup=None, add_persona=False)
+        raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
+                                                                 instruction=f"{prompt_get_title}\n-----\n\n{text}",
+                                                                 progress_symbol="T")
+        logger.debug(f"\n        original : {scrubbed_output_text}")
 
-        logger.debug(f"\n        original : {out.data}")
-
-        title = out.data["content"].strip()
+        title = scrubbed_output_text.strip()
 
         # Strip spurious period
         while title[-1] == ".":
@@ -560,7 +623,7 @@ def setup_prompts(settings: env) -> env:
 
         logger.debug(f"\n        formatted: {title}")
 
-        return title
+        return status, title
 
     prompt_get_keywords = dedent("""What are the keywords, as given in the abstract?
 
@@ -577,42 +640,37 @@ def setup_prompts(settings: env) -> env:
     IMPORTANT: The list of keywords in the original abstract may end abruptly. This is fine. Do NOT add additional keywords from the main text.
     """)
 
-    def extract_keywords(uid: str, text: str) -> str:
+    def extract_keywords(unique_id: str, text: str) -> str:
         """Extract the keywords from the fulltext of a conference abstract.
 
-        `uid`: input file identifier, for error messages
+        `unique_id`: input file identifier, for error messages
         `text`: the full text
 
         Returns the comma-separated keywords as a string.
         """
+        status = status_success
         text = strip_postamble(text)
 
         # Sanity check that the abstract has keywords before we run the LLM to extract them.
         match = kws_pattern.search(text)
         if match is None:
-            logger.warning(f"Input file '{uid}': No keywords provided in original input, skipping keyword extraction.")
-            return None  # No keywords provided
+            logger.warning(f"Input file '{unique_id}': No keywords provided in original input, skipping keyword extraction.")
+            return status, None  # No keywords provided
 
-        root_node_id = chatutil.factory_reset_datastore(datastore, settings)
-        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
-                                                                                                 role="user",
-                                                                                                 text=f"{prompt_get_keywords}\n-----\n\n{text}")},
-                                                parent_id=root_node_id)
-        history = chatutil.linearize_chat(datastore, request_node_id)
-        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="K"), tools_enabled=False)
-        out.data["content"] = chatutil.scrub(persona=settings.personas.get("assistant", None), text=out.data["content"], thoughts_mode="discard", markup=None, add_persona=False)
-
-        logger.debug(f"\n        original : {out.data}")
+        raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
+                                                                 instruction=f"{prompt_get_keywords}\n-----\n\n{text}",
+                                                                 progress_symbol="K")
+        logger.debug(f"\n        original : {scrubbed_output_text}")
 
         # Remove spurious heading
         for heading in ("Keywords:", "KEYWORDS:", "Key words:", "Key Words:", "KEY WORDS:"):
-            if out.data["content"].startswith(heading):
-                out.data["content"] = out.data["content"][len(heading):]
+            if scrubbed_output_text.startswith(heading):
+                scrubbed_output_text = scrubbed_output_text[len(heading):]
 
         # Sanity-check the LLM output.
         #
         # Initial list of keywords.
-        keywords = out.data["content"].strip()
+        keywords = scrubbed_output_text.strip()
 
         # Strip spurious period
         while keywords[-1] == ".":
@@ -625,14 +683,17 @@ def setup_prompts(settings: env) -> env:
         duplicate_keywords = [author for author, count in keywords_counter.items() if count > 1]
         if len(duplicate_keywords):
             plural_s = "s" if len(duplicate_keywords) > 1 else ""
-            logger.warning(f"Input file '{uid}': Extractor returned duplicate keyword{plural_s}; de-duplicated, but manual check recommended: {duplicate_keywords}")
+            logger.warning(f"Input file '{unique_id}': Extractor returned duplicate keyword{plural_s}; de-duplicated, but manual check recommended: {duplicate_keywords}")
+            logger.warning(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}")
+            logger.warning(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}")
+            status = status_failed
         keywords = ", ".join(keywords_counter.keys())  # de-duplicate
 
         # TODO: Other sanity checks.
 
         logger.debug(f"\n        formatted: {keywords}")
 
-        return keywords
+        return status, keywords
 
     # This is by far the most difficult part: grab text that has no obvious programmatically detectable starting delimiter.
     #
@@ -655,46 +716,37 @@ def setup_prompts(settings: env) -> env:
     Note that the reference list has already been stripped. It is normal for the abstract to refer to citations not listed here.
     """)
 
-    def extract_abstract(uid: str, text: str) -> str:
+    def extract_abstract(unique_id: str, text: str) -> str:
         """Extract the main text from the fulltext of a conference abstract.
 
-        `uid`: input file identifier, for error messages
+        `unique_id`: input file identifier, for error messages
         `text`: the full text
 
         Returns the main text of the conference abstract.
         """
+        status = status_success
         text = strip_postamble(text)
 
-        root_node_id = chatutil.factory_reset_datastore(datastore, settings)
-        request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
-                                                                                                 role="user",
-                                                                                                 text=f"{prompt_get_abstract}\n-----\n\n{text}")},
-                                                parent_id=root_node_id)
-        history = chatutil.linearize_chat(datastore, request_node_id)
-        out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph="."), tools_enabled=False)
-        out.data["content"] = chatutil.scrub(persona=settings.personas.get("assistant", None), text=out.data["content"], thoughts_mode="discard", markup=None, add_persona=False)
+        raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
+                                                                 instruction=f"{prompt_get_abstract}\n-----\n\n{text}",
+                                                                 progress_symbol=".")
+        abstract = scrubbed_output_text.strip()
 
-        abstract = out.data["content"].strip()
+        return status, abstract
 
-        return abstract
-
-    # {bibtex_fieldname: (kind, thing, progress_symbol_for_llm)}
-    #
-    # `kind`: one of "literal", "prompt", "function"
-    #    "literal": Inject the exact given text `thing` (str) into the field.
-    #    "prompt": Treat `thing` (str) as a prompt for the LLM. Send in the prompt and the complete text content of the PDF. Use `progress_symbol` to indicate progress. Inject the output into the field.
-    #    "function": Call `thing` (callable) with arguments `uid, fulltext`. Inject the return value into the field. Except, if the return value is `None`, omit that field from the BibTeX.
-    settings.prompts = {
-                        "author": ("function", extract_authors, None),
-                        "year": ("literal", conference_year, None),
-                        "title": ("function", extract_title, None),
-                        "booktitle": ("literal", conference_booktitle, None),
-                        "note": ("literal", conference_note, None),
-                        "url": ("literal", conference_url, None),
-                        "keywords": ("function", extract_keywords, None),
-                        "abstract": ("function", extract_abstract, None),
-                       }
-    return settings
+    # Format is {bibtex_fieldname: (kind, thing, progress_symbol)}.
+    # Details in master copy, in the docstring of this function.
+    prompts = {
+        "author": ("function", extract_authors, None),
+        "year": ("literal", conference_year, None),
+        "title": ("function", extract_title, None),
+        "booktitle": ("literal", conference_booktitle, None),
+        "note": ("literal", conference_note, None),
+        "url": ("literal", conference_url, None),
+        "keywords": ("function", extract_keywords, None),
+        "abstract": ("function", extract_abstract, None),
+    }
+    return prompts
 
 
 # --------------------------------------------------------------------------------
@@ -704,6 +756,68 @@ def listpdf(path: str) -> List[str]:
     """Return a list of all PDF files under `path`, recursively."""
     return list(sorted(filename for filename in os.listdir(path) if filename.endswith(".pdf")))
 
+def process_one(llm_settings: env,
+                prompts: Dict,
+                unique_id: str,
+                text: str) -> str:
+    """Convert one confrence abstract from free-form text to BibTeX.
+
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+    `prompts`: Obtain by calling `setup_prompts` at app start time.
+    `unique_id`: input file identifier, for error messages
+    `text`: The text to process (extracted from a conference abstract PDF).
+
+    Returns the BibTeX record as a string.
+    """
+    # Process one field at a time.
+    #   - Fill whatever we can programmatically.
+    #   - Use the LLM to populate the actual field content only, giving it one small task at a time.
+    #
+    entry_key = f"{conference_slug}-{unique_id}"
+    bibtex_entry = io.StringIO()
+    bibtex_entry.write(f"@incollection{{{entry_key},\n")
+    entry_status = status_success
+    with timer() as tim:
+        print("    ", end="", file=sys.stderr)  # Indent the progress indicator
+        sys.stderr.flush()
+        for field_key, (data_kind, data, progress_symbol) in prompts.items():
+            if data_kind == "literal":
+                bibtex_entry.write(f"    {field_key} = {{{data}}},\n")
+                field_status = status_success
+            elif data_kind == "prompt":
+                # To keep things simple, we use a single-turn conversation for querying the LLM.
+                # Note this typically causes a full prompt rescan for every query.
+                raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
+                                                                         instruction=f"{data}\n-----\n\n{text}",
+                                                                         progress_symbol="p")  # "p" for "prompt mode"
+                bibtex_entry.write(f"    {field_key} = {{{scrubbed_output_text}}},\n")
+                field_status = status_success
+            elif data_kind == "function":
+                field_status, function_output = data(unique_id, text)
+                if field_status is status_failed:  # aggregate: failing at least one field means a this whole entry failed (and should be manually checked)
+                    entry_status = status_failed
+                if function_output is not None:  # A function can indicate "no data" by returning `None`. Inject the field only if data was returned.
+                    bibtex_entry.write(f"    {field_key} = {{{function_output}}},\n")
+            else:
+                raise ValueError(f"Unknown data kind '{data_kind}'; please check your settings.")
+    print(f"done in {tim.dt:0.2f}s", file=sys.stderr)
+    bibtex_entry.write("}")
+    bibtex_entry = bibtex_entry.getvalue()
+    return entry_status, bibtex_entry
+
+@contextlib.contextmanager
+def maybe_open_for_append(filename: Optional[str]) -> TextIO:
+    """[context manager] Adapter so that we can always syntactically `with open` even when we should just write to stdout.
+
+    `filename`: If not `None`, behave as `with open(filename, "a")`.
+                If `None`, then return `sys.stdout` in place of the file handle.
+    """
+    if filename is not None:
+        with open(filename, "a") as f:
+            yield f
+    else:
+        yield sys.stdout
+
 def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
     """Process all PDFs under `paths`, recursively.
 
@@ -711,13 +825,13 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
     """
     # Connect to the LLM
     try:
-        settings = llmclient.setup(backend_url=opts.backend_url)  # If this succeeds, then we know the backend is alive.
+        llm_settings = llmclient.setup(backend_url=opts.backend_url)  # If this succeeds, then we know the backend is alive.
     except Exception as exc:
-        msg = f"Failed to connect to LLM backend, reason {type(exc)}: {exc}"
+        msg = f"Failed to connect to LLM backend at {opts.backend_url}, reason {type(exc)}: {exc}"
         logger.error(msg)
         raise RuntimeError(msg)
-    settings = setup_prompts(settings)
-    logger.info(f"Connected to {opts.backend_url}")
+    prompts = setup_prompts(llm_settings)
+    logger.info(f"Connected to LLM backend at {opts.backend_url}")
     # logger.info("    available models:")
     # response = requests.get(f"{opts.backend_url}/v1/internal/model/list",
     #                         headers=headers,
@@ -725,92 +839,70 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
     # payload = response.json()
     # for model_name in sorted(payload["model_names"], key=lambda s: s.lower()):
     #     logger.info(f"        {model_name}")
-    logger.info(f"    model: {settings.model}")
-    logger.info(f"    character: {settings.char} [defined in this client]")
+    logger.info(f"    model: {llm_settings.model}")
+    logger.info(f"    character: {llm_settings.char} [defined in this client]")
 
     # Process the PDFs
     #
     # bibtex_entries = []
-    uid = 0
-    try:
-        for path in paths:
-            logger.info(f"Processing directory \"{path}\"...")
-            # results = []
-            filenames = listpdf(path)
-            est = ETAEstimator(total=len(filenames), keep_last=10)
-            for idx, filename in enumerate(filenames):
-                fullpath = os.path.join(path, filename)
-                uid = os.path.splitext(os.path.basename(fullpath))[0]  # "/foo/blah.pdf" -> "blah"
-                logger.info(f"{fullpath} [{idx + 1} out of {len(filenames)}, {est.formatted_eta}]")
+    with maybe_open_for_append(opts.success_filename) as f_success:
+        with maybe_open_for_append(opts.failed_filename) as f_failed:  # Actually the stdout from this is unused if the filename is not provided, since we send to the success output, wherever that is. Doesn't matter.
+            try:
+                for path in paths:
+                    logger.info(f"Processing directory \"{path}\"...")
+                    # results = []
+                    filenames = listpdf(path)
+                    est = ETAEstimator(total=len(filenames), keep_last=10)
+                    for idx, filename in enumerate(filenames):
+                        fullpath = os.path.join(path, filename)
+                        unique_id = os.path.splitext(os.path.basename(fullpath))[0]  # "/foo/blah.pdf" -> "blah"
+                        logger.info(f"{fullpath} [{idx + 1} out of {len(filenames)}, {est.formatted_eta}]")
 
-                # Extract the text content from the PDF.
-                #
-                # Since we'll be using an LLM for the processing step, it doesn't matter if the extraction isn't perfect
-                # (e.g. the LLM will clean the author names if they have affiliation symbols or such).
-                #
-                cmd = ['pdftotext',
-                       fullpath,
-                       '-']  # output to stdout
-                try:
-                    completed = subprocess.run(cmd, check=True,
-                                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                except subprocess.CalledProcessError as err:
-                    logger.error(f"When processing {fullpath}: subprocess returned non-zero exit status")
-                    traceback.print_exc()
-                    logger.error(err.stderr.decode("utf-8"))
-                    raise
+                        # Extract the text content from the PDF.
+                        #
+                        # Since we'll be using an LLM for the processing step, it doesn't matter if the extraction isn't perfect
+                        # (e.g. the LLM will clean the author names if they have affiliation symbols or such).
+                        #
+                        cmd = ['pdftotext',
+                               fullpath,
+                               '-']  # output to stdout
+                        try:
+                            completed = subprocess.run(cmd, check=True,
+                                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        except subprocess.CalledProcessError as err:
+                            logger.error(f"When processing {fullpath}: subprocess returned non-zero exit status")
+                            traceback.print_exc()
+                            logger.error(err.stderr.decode("utf-8"))
+                            raise
 
-                text_from_pdf = completed.stdout.decode("utf-8")
+                        text_from_pdf = completed.stdout.decode("utf-8")
 
-                # Process one field at a time.
-                #   - Fill whatever we can programmatically.
-                #   - Use the LLM to populate the actual field content only, giving it one small task at a time.
-                #
-                entry_key = f"{conference_slug}-{uid}"
-                bibtex_entry = io.StringIO()
-                bibtex_entry.write(f"@incollection{{{entry_key},\n")
-                with timer() as tim:
-                    print("    ", end="", file=sys.stderr)  # Indent the progress indicator
-                    sys.stderr.flush()
-                    for field_key, (data_kind, data, progress_symbol) in settings.prompts.items():
-                        if data_kind == "literal":
-                            bibtex_entry.write(f"    {field_key} = {{{data}}},\n")
-                        elif data_kind == "prompt":
-                            # To keep things simple, we use a single-turn conversation for querying the LLM.
-                            # Note this typically causes a full prompt rescan for every query.
-                            root_node_id = chatutil.factory_reset_datastore(datastore, settings)
-                            request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(settings,
-                                                                                                                     role="user",
-                                                                                                                     text=f"{data}\n-----\n\n{text_from_pdf}")},
-                                                                    parent_id=root_node_id)
-                            history = chatutil.linearize_chat(datastore, request_node_id)
-                            out = llmclient.invoke(settings, history, progress_callback=partial(print_progress, glyph=progress_symbol), tools_enabled=False)
-                            out.data["content"] = chatutil.scrub(persona=settings.personas.get("assistant", None), text=out.data["content"], thoughts_mode="discard", markup=None, add_persona=False)
-                            bibtex_entry.write(f"    {field_key} = {{{out.data['content']}}},\n")
-                        elif data_kind == "function":
-                            function_output = data(uid, text_from_pdf)
-                            if function_output is not None:  # A function can indicate "no data" by returning `None`. Inject the field only if data was returned.
-                                bibtex_entry.write(f"    {field_key} = {{{function_output}}},\n")
-                        else:
-                            raise ValueError(f"Unknown data kind '{data_kind}'; please check your settings.")
-                print(f"done in {tim.dt:0.2f}s", file=sys.stderr)
-                bibtex_entry.write("}")
-                bibtex_entry = bibtex_entry.getvalue()
-                # bibtex_entries.append(bibtex_entry)
+                        status, bibtex_entry = process_one(llm_settings,
+                                                           prompts,
+                                                           unique_id,
+                                                           text_from_pdf)
+                        # bibtex_entries.append(bibtex_entry)
 
-                print(bibtex_entry)
-                print()  # one blank line after each entry
-                sys.stdout.flush()
+                        f = f_success
+                        output_dir = opts.output_dir
+                        if status is status_failed:
+                            # If provided, use the separate output file and item directory for failed items
+                            if opts.failed_filename is not None:
+                                f = f_failed
+                            if opts.failed_output_dir is not None:
+                                output_dir = opts.failed_output_dir
+                        f.write(f"{bibtex_entry}\n\n")  # one blank line after each entry
+                        f.flush()
 
-                # Move input file to done directory if specified (allows continuing later)
-                if opts.output_dir is not None:
-                    shutil.move(fullpath, os.path.join(opts.output_dir, os.path.basename(fullpath)))
+                        # Move input file to done directory if specified (allows continuing later)
+                        if output_dir is not None:
+                            shutil.move(fullpath, os.path.join(output_dir, os.path.basename(fullpath)))
 
-                est.tick()
-    finally:
-        pass
-        # bibtex_str = "\n\n".join(bibtex_entries)
-        # print(bibtex_str)
+                        est.tick()
+            finally:
+                pass
+                # bibtex_str = "\n\n".join(bibtex_entries)
+                # print(bibtex_str)
 
 # --------------------------------------------------------------------------------
 # Main program
@@ -820,10 +912,30 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
-    parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="output_dir", help="directory to move done files into (optional; allows easily continuing later)")
+    parser.add_argument("-s", "--success", dest="success_filename", type=str, metavar="success.bib", help="Output BibTeX file for successful entries (default stdout). Will be appended to.")
+    parser.add_argument("-f", "--failed", dest="failed_filename", type=str, metavar="failed.bib", help="Output BibTeX file for failed entries (default: send these too to the success output). Will be appended to. As detected by heuristics, requiring manual verification/fixes.")
+    parser.add_argument("-l", "--log", dest="log_filename", type=str, metavar="log.txt", help="Output logfile, for a copy of the console log. Will be appended to. Useful for seeing what went wrong in each specific failed entry.")
+    parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="dir", help="directory to move done files into (optional; allows easily continuing later). If also `-of` is specified, then only successful files will be moved to the `-o` directory; failed files will be moved to the `-of` directory.")
+    parser.add_argument("-of", "--failed-output-dir", dest="failed_output_dir", default=None, type=str, metavar="dir", help="directory to move failed done files into (optional; allows easily continuing later)")
     parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing PDF file(s) to import (will be scanned recursively)")
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     opts = parser.parse_args()
+
+    if opts.success_filename is not None:
+        success_filename = pathlib.Path(opts.success_filename).expanduser().resolve()
+        success_bib_dir = success_filename.parent
+        common_utils.create_directory(success_bib_dir)
+        opts.success_filename = str(success_filename)
+
+    if opts.failed_filename is not None:
+        failed_filename = pathlib.Path(opts.failed_filename).expanduser().resolve()
+        failed_bib_dir = failed_filename.parent
+        common_utils.create_directory(failed_bib_dir)
+        opts.failed_filename = str(failed_filename)
+
+    if opts.log_filename is not None:
+        opts.log_filename = str(pathlib.Path(opts.log_filename).expanduser().resolve())
+        logger.addHandler(logging.FileHandler(opts.log_filename))
 
     if opts.input_dir is None:
         opts.input_dir = "."
@@ -832,8 +944,14 @@ def main():
 
     if opts.output_dir is not None:
         opts.output_dir = str(pathlib.Path(opts.output_dir).expanduser().resolve())
-        logger.info(f"Moving done files to {opts.output_dir}.")
+        kind_str = "successful" if opts.failed_output_dir is not None else "all"
+        logger.info(f"Moving {kind_str} done files to {opts.output_dir}.")
         common_utils.create_directory(opts.output_dir)
+
+    if opts.failed_output_dir is not None:
+        opts.failed_output_dir = str(pathlib.Path(opts.failed_output_dir).expanduser().resolve())
+        logger.info(f"Moving failed done files to {opts.failed_output_dir}.")
+        common_utils.create_directory(opts.failed_output_dir)
 
     blacklist = []
     paths = []
@@ -844,9 +962,11 @@ def main():
                 dirs.remove(x)
     paths = list(uniqify(str(pathlib.Path(p).expanduser().resolve()) for p in paths))
 
-    # Avoid recursing into output directory
+    # Avoid recursing into output directories
     if opts.output_dir is not None:
         paths = [p for p in paths if not p.startswith(opts.output_dir)]
+    if opts.failed_output_dir is not None:
+        paths = [p for p in paths if not p.startswith(opts.failed_output_dir)]
 
     process_abstracts(sorted(paths), opts)
 
