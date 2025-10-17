@@ -414,7 +414,7 @@ def setup_prompts(llm_settings: env) -> Dict:
             logger.debug(f"\n        EXTRACT AUTHORS    : {scrubbed_output_text_1}")
             if scrubbed_output_text_1.strip() != "":
                 break
-            logger.warning(f"EXTRACT AUTHORS: Empty author list at attempt {retry + 1}; retrying (up to {retry_limit} times in total)")
+            logger.warning(f"EXTRACT AUTHORS: Empty author list at attempt {retry + 1} out of {retry_limit}")
         else:
             error_msg = "EXTRACT AUTHORS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
@@ -435,7 +435,7 @@ def setup_prompts(llm_settings: env) -> Dict:
             logger.debug(f"\n        DROP AFFILIATIONS  : {scrubbed_output_text_2}")
             if scrubbed_output_text_2.strip() != "":
                 break
-            logger.warning(f"DROP AFFILIATIONS: Empty author list at attempt {retry + 1}; retrying (up to {retry_limit} times in total)")
+            logger.warning(f"DROP AFFILIATIONS: Empty author list at attempt {retry + 1} out of {retry_limit}")
         else:
             error_msg = "DROP AFFILIATIONS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
@@ -449,7 +449,7 @@ def setup_prompts(llm_settings: env) -> Dict:
             logger.debug(f"\n        REFORMAT SEPARATORS: {scrubbed_output_text_3}")
             if scrubbed_output_text_3.strip() != "":
                 break
-            logger.warning(f"REFORMAT SEPARATORS: Empty author list at attempt {retry + 1}; retrying (up to {retry_limit} times in total)")
+            logger.warning(f"REFORMAT SEPARATORS: Empty author list at attempt {retry + 1} out of {retry_limit}")
         else:
             error_msg = "REFORMAT SEPARATORS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
