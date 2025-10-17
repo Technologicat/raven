@@ -786,7 +786,7 @@ def process_one(llm_settings: env,
                 field_status, function_output = data(unique_id, text)
                 if field_status is status_failed:  # aggregate: failing at least one field means a this whole entry failed (and should be manually checked)
                     entry_status = status_failed
-                if function_output is not None:  # A function can indicate "no data" by returning `None`. Inject the field only if data was returned.
+                if function_output is not None:  # A function can indicate "no data" by returning `None`. Inject the field only if data was returned. Inject also when we suspect an error.
                     bibtex_entry.write(f"    {field_key} = {{{function_output}}},\n")
             else:
                 raise ValueError(f"Unknown data kind '{data_kind}'; please check your settings.")
