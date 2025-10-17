@@ -931,7 +931,7 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                             # Shunt LLM traces for detected errors into a separate file
                             error_info_filename = f"{unique_id}_errors.txt"
                             error_info_path = os.path.join(path, error_info_filename)
-                            logger.info(f"When processing {fullpath}: errors detected in output, writing details to {error_info_path}")
+                            logger.info(f"When processing {fullpath}: Heuristics flagged possible errors in output, treating this file as failed and writing details to {error_info_path}")
                             with open(error_info_path, "w") as f_errors:
                                 f_errors.write(error_info)
 
