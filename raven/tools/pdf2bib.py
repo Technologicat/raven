@@ -187,7 +187,7 @@ def setup_prompts(llm_settings: env) -> Dict:
 
     {author_names}
 
-    **Notes**
+    **Notes on input format**
 
     - The list is automatically extracted raw data.
     - Author names may have affiliation markings such as '*', '1', '2', or similar. Sometimes, the same author may have several affiliations.
@@ -199,13 +199,7 @@ def setup_prompts(llm_settings: env) -> Dict:
 
     **Task**
 
-    Please remove all affiliation markings.
-
-    Make NO other changes.
-
-    Keep accented characters as-is.
-
-    Keep names in the same order as in the original list.
+    Please remove all affiliation markings, keeping everything else the same.
 
     IMPORTANT: Reply ONLY with the cleaned-up list.
     """)
@@ -214,7 +208,7 @@ def setup_prompts(llm_settings: env) -> Dict:
 
     {author_names}
 
-    **Notes**
+    **Notes on input format**
 
     - In the original list, author names are separated by a comma, or by the word "and".
     - Periods are used ONLY for abbreviation, NOT as a separator.
@@ -227,10 +221,6 @@ def setup_prompts(llm_settings: env) -> Dict:
     **Task**
 
     Please reformat the list, separating ALL authors using the word "and". Do NOT use a comma or a newline to separate authors.
-
-    Make NO other changes.
-
-    Keep accented characters as-is.
 
     IMPORTANT: Reply ONLY with the reformatted list.
     """)
