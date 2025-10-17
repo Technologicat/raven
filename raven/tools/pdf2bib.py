@@ -419,6 +419,7 @@ def setup_prompts(llm_settings: env) -> Dict:
             error_msg = "EXTRACT AUTHORS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
             return status_failed, error_info.getvalue(), ""
 
         # Usually the output is correct, but sometimes:
@@ -440,6 +441,8 @@ def setup_prompts(llm_settings: env) -> Dict:
             error_msg = "DROP AFFILIATIONS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
             return status_failed, error_info.getvalue(), ""
 
         for retry in range(retry_limit):
@@ -454,6 +457,9 @@ def setup_prompts(llm_settings: env) -> Dict:
             error_msg = "REFORMAT SEPARATORS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
             error_info.write(f"{error_msg}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
             return status_failed, error_info.getvalue(), ""
 
         if scrubbed_output_text_3.endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
