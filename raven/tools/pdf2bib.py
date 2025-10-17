@@ -113,8 +113,15 @@ def oneshot_llm_task(llm_settings: env,
                                           add_persona=False)
     return raw_output_text, scrubbed_output_text
 
-def setup_prompts(llm_settings: env) -> Dict:
+def setup_prompts(llm_settings: env,
+                  n_retries: int) -> Dict:
     """Set up the LLM task handlers.
+
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+
+    `n_retries`: How many times to try (including the initial attempt) when author list extraction fails.
+                 This is an LLM overthinking guard; the model may sometimes think so much that it fails to
+                 produce a reply in the maximum token limit.
 
     Returns a dict, in the format `{bibtex_fieldname: (kind: str,
                                                        thing: Union[str, Callable],
@@ -406,15 +413,14 @@ def setup_prompts(llm_settings: env) -> Dict:
         #     else:
         #         logger.info(f"Input file '{unique_id}': LLM returned unknown author list detection result '{has_author_list}', should be 'YES' or 'NO'; manual check recommended.")
 
-        retry_limit = 3
-        for retry in range(retry_limit):
+        for retry in range(n_retries):
             raw_output_text_1, scrubbed_output_text_1 = oneshot_llm_task(llm_settings,
                                                                          instruction=f"{prompt_get_authors}\n-----\n\n{text}",
                                                                          progress_symbol="A")
             logger.debug(f"\n        EXTRACT AUTHORS    : {scrubbed_output_text_1}")
             if scrubbed_output_text_1.strip() != "":
                 break
-            logger.warning(f"EXTRACT AUTHORS: Empty author list at attempt {retry + 1} out of {retry_limit}")
+            logger.warning(f"EXTRACT AUTHORS: Empty author list at attempt {retry + 1} out of {n_retries}")
         else:
             error_msg = "EXTRACT AUTHORS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
@@ -429,14 +435,14 @@ def setup_prompts(llm_settings: env) -> Dict:
         # so we perform some post-processing and checking.
 
         # Here the LLM (Qwen3 2507) sometimes gets stuck overthinking.
-        for retry in range(retry_limit):
+        for retry in range(n_retries):
             raw_output_text_2, scrubbed_output_text_2 = oneshot_llm_task(llm_settings,
                                                                          instruction=prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1),
                                                                          progress_symbol="a")
             logger.debug(f"\n        DROP AFFILIATIONS  : {scrubbed_output_text_2}")
             if scrubbed_output_text_2.strip() != "":
                 break
-            logger.warning(f"DROP AFFILIATIONS: Empty author list at attempt {retry + 1} out of {retry_limit}")
+            logger.warning(f"DROP AFFILIATIONS: Empty author list at attempt {retry + 1} out of {n_retries}")
         else:
             error_msg = "DROP AFFILIATIONS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
@@ -445,14 +451,14 @@ def setup_prompts(llm_settings: env) -> Dict:
             error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
             return status_failed, error_info.getvalue(), ""
 
-        for retry in range(retry_limit):
+        for retry in range(n_retries):
             raw_output_text_3, scrubbed_output_text_3 = oneshot_llm_task(llm_settings,
                                                                          instruction=prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2),
                                                                          progress_symbol=".")
             logger.debug(f"\n        REFORMAT SEPARATORS: {scrubbed_output_text_3}")
             if scrubbed_output_text_3.strip() != "":
                 break
-            logger.warning(f"REFORMAT SEPARATORS: Empty author list at attempt {retry + 1} out of {retry_limit}")
+            logger.warning(f"REFORMAT SEPARATORS: Empty author list at attempt {retry + 1} out of {n_retries}")
         else:
             error_msg = "REFORMAT SEPARATORS: Author list empty after retries exhausted; giving up."
             logger.warning(error_msg)
@@ -879,8 +885,11 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
         msg = f"Failed to connect to LLM backend at {opts.backend_url}, reason {type(exc)}: {exc}"
         logger.error(msg)
         raise RuntimeError(msg)
-    prompts = setup_prompts(llm_settings)
+    prompts = setup_prompts(llm_settings,
+                            n_retries=opts.retries)
     logger.info(f"Connected to LLM backend at {opts.backend_url}")
+    plural_s = "s" if opts.retries != 1 else ""
+    logger.info(f"    prompts set up to use up to {opts.retries} attempt{plural_s}")
     # logger.info("    available models:")
     # response = requests.get(f"{opts.backend_url}/v1/internal/model/list",
     #                         headers=headers,
@@ -970,12 +979,17 @@ def main():
     parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
     parser.add_argument("-s", "--success", dest="success_filename", type=str, metavar="success.bib", help="Output BibTeX file for successful entries (default stdout). Will be appended to.")
     parser.add_argument("-f", "--failed", dest="failed_filename", type=str, metavar="failed.bib", help="Output BibTeX file for failed entries (default: send these too to the success output). Will be appended to. As detected by heuristics, requiring manual verification/fixes.")
+    parser.add_argument("-r", "--retries", dest="retries", default=3, type=int, metavar="x", help="Up to this many attempts (default: 3) will be made at the various processing steps for author extraction, when the processing fails. The number set here includes the initial attempt, so '-r 3' means 'try, and then retry up to twice if needed'. Attempts are counted separately for each processing step; each step gets this many retries if needed. This often helps get the LLM unstuck, especially if it started overthinking and failed to produce a final response within the maximum token limit for a reply.")
     parser.add_argument("-l", "--log", dest="log_filename", type=str, metavar="log.txt", help="Output logfile, for a copy of the console log. Will be appended to. Useful for seeing what went wrong in each specific failed entry.")
     parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="dir", help="directory to move done files into (optional; allows easily continuing later). If also `-of` is specified, then only successful files will be moved to the `-o` directory; failed files will be moved to the `-of` directory.")
     parser.add_argument("-of", "--failed-output-dir", dest="failed_output_dir", default=None, type=str, metavar="dir", help="directory to move failed done files into (optional; allows easily continuing later)")
     parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing PDF file(s) to import (will be scanned recursively)")
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     opts = parser.parse_args()
+
+    if opts.retries < 1:
+        logger.info(f"-r, --retries: At least one attempt is required, got {opts.retries}. Setting to 1.")
+        opts.retries = 1
 
     if opts.success_filename is not None:
         success_filename = pathlib.Path(opts.success_filename).expanduser().resolve()
