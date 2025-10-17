@@ -227,6 +227,7 @@ def setup_prompts(llm_settings: env) -> Dict:
 
     def extract_authors(unique_id: str, text: str) -> str:
         status = status_success
+        error_info = io.StringIO()
         text = strip_postamble(text)
 
         # TODO: Handle the case of a missing author list (there's at least one such abstract in the dataset). First check for author list presence using the LLM?
@@ -405,25 +406,55 @@ def setup_prompts(llm_settings: env) -> Dict:
         #     else:
         #         logger.info(f"Input file '{unique_id}': LLM returned unknown author list detection result '{has_author_list}', should be 'YES' or 'NO'; manual check recommended.")
 
-        raw_output_text_1, scrubbed_output_text_1 = oneshot_llm_task(llm_settings,
-                                                                     instruction=f"{prompt_get_authors}\n-----\n\n{text}",
-                                                                     progress_symbol="A")
-        logger.debug(f"\n        EXTRACT AUTHORS    : {scrubbed_output_text_1}")
+        retry_limit = 3
+        for retry in range(retry_limit):
+            raw_output_text_1, scrubbed_output_text_1 = oneshot_llm_task(llm_settings,
+                                                                         instruction=f"{prompt_get_authors}\n-----\n\n{text}",
+                                                                         progress_symbol="A")
+            logger.debug(f"\n        EXTRACT AUTHORS    : {scrubbed_output_text_1}")
+            if scrubbed_output_text_1.strip() != "":
+                break
+            logger.warning(f"EXTRACT AUTHORS: Empty author list at attempt {retry + 1}; retrying (up to {retry_limit} times in total)")
+        else:
+            error_msg = "EXTRACT AUTHORS: Author list empty after retries exhausted; giving up."
+            logger.warning(error_msg)
+            error_info.write(f"{error_msg}\n")
+            return status_failed, error_info.getvalue(), ""
 
         # Usually the output is correct, but sometimes:
-        #   - Some authors may be missing from the list
-        #   - The list may have additional hallucinated authors
         #   - The list may use commas instead of the word "and"
-        # so we perform some post-processing.
-        raw_output_text_2, scrubbed_output_text_2 = oneshot_llm_task(llm_settings,
-                                                                     instruction=prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1),
-                                                                     progress_symbol="a")
-        logger.debug(f"\n        DROP AFFILIATIONS  : {scrubbed_output_text_2}")
+        #   - The list may have additional hallucinated authors
+        #   - Some authors may be missing from the list
+        # so we perform some post-processing and checking.
 
-        raw_output_text_3, scrubbed_output_text_3 = oneshot_llm_task(llm_settings,
-                                                                     instruction=prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2),
-                                                                     progress_symbol=".")
-        logger.debug(f"\n        REFORMAT SEPARATORS: {scrubbed_output_text_3}")
+        # Here the LLM (Qwen3 2507) sometimes gets stuck overthinking.
+        for retry in range(retry_limit):
+            raw_output_text_2, scrubbed_output_text_2 = oneshot_llm_task(llm_settings,
+                                                                         instruction=prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1),
+                                                                         progress_symbol="a")
+            logger.debug(f"\n        DROP AFFILIATIONS  : {scrubbed_output_text_2}")
+            if scrubbed_output_text_2.strip() != "":
+                break
+            logger.warning(f"DROP AFFILIATIONS: Empty author list at attempt {retry + 1}; retrying (up to {retry_limit} times in total)")
+        else:
+            error_msg = "DROP AFFILIATIONS: Author list empty after retries exhausted; giving up."
+            logger.warning(error_msg)
+            error_info.write(f"{error_msg}\n")
+            return status_failed, error_info.getvalue(), ""
+
+        for retry in range(retry_limit):
+            raw_output_text_3, scrubbed_output_text_3 = oneshot_llm_task(llm_settings,
+                                                                         instruction=prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2),
+                                                                         progress_symbol=".")
+            logger.debug(f"\n        REFORMAT SEPARATORS: {scrubbed_output_text_3}")
+            if scrubbed_output_text_3.strip() != "":
+                break
+            logger.warning(f"REFORMAT SEPARATORS: Empty author list at attempt {retry + 1}; retrying (up to {retry_limit} times in total)")
+        else:
+            error_msg = "REFORMAT SEPARATORS: Author list empty after retries exhausted; giving up."
+            logger.warning(error_msg)
+            error_info.write(f"{error_msg}\n")
+            return status_failed, error_info.getvalue(), ""
 
         if scrubbed_output_text_3.endswith("and"):  # Remove spurious "and" with one author. Can happen especially if, in the original abstract, a comma follows the single author name.
             scrubbed_output_text_3 = scrubbed_output_text_3[:-3]
@@ -443,13 +474,15 @@ def setup_prompts(llm_settings: env) -> Dict:
                 possibly_broken_names.append(author)
         if len(possibly_broken_names):
             plural_s = "s" if len(possibly_broken_names) > 1 else ""
-            logger.warning(f"Input file '{unique_id}': Extractor returned one-component or blank author name{plural_s}; manual check recommended: {possibly_broken_names}")
-            logger.warning(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}")
-            logger.warning(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}")
-            logger.warning(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}")
-            logger.warning(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}")
-            logger.warning(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}")
-            logger.warning(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}")
+            error_msg = f"Input file '{unique_id}': Extractor returned one-component or blank author name{plural_s}; manual check recommended: {possibly_broken_names}"
+            logger.warning(error_msg)
+            error_info.write(f"{error_msg}\n")
+            error_info.write(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}\n")
+            error_info.write(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}\n")
+            error_info.write(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
             status = status_failed
 
         # No author should be listed more than once.
@@ -457,13 +490,15 @@ def setup_prompts(llm_settings: env) -> Dict:
         duplicate_names = [author for author, count in authors_counter.items() if count > 1]
         if len(duplicate_names):
             plural_s = "s" if len(duplicate_names) > 1 else ""
-            logger.warning(f"Input file '{unique_id}': Extractor returned duplicate author name{plural_s}; de-duplicated, but manual check recommended: {duplicate_names}")
-            logger.warning(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}")
-            logger.warning(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}")
-            logger.warning(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}")
-            logger.warning(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}")
-            logger.warning(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}")
-            logger.warning(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}")
+            error_msg = f"Input file '{unique_id}': Extractor returned duplicate author name{plural_s}; de-duplicated, but manual check recommended: {duplicate_names}"
+            logger.warning(error_msg)
+            error_info.write(f"{error_msg}\n")
+            error_info.write(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}\n")
+            error_info.write(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}\n")
+            error_info.write(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}\n")
+            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
+            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
             status = status_failed
 
         # Add missing periods for abbreviated first and middle names. Sometimes these drop out during the LLM correction passes.
@@ -527,13 +562,15 @@ def setup_prompts(llm_settings: env) -> Dict:
                     for part in parts:  # comma-separated parts
                         components = part.split()
                         if len(components) > 1:
-                            logger.warning(f"Input file '{unique_id}': Possibly broken format in processed author list; manual check recommended: '{authors}'")
-                            logger.warning(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}")
-                            logger.warning(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}")
-                            logger.warning(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}")
-                            logger.warning(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}")
-                            logger.warning(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}")
-                            logger.warning(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}")
+                            error_msg = f"Input file '{unique_id}': Possibly broken format in processed author list; manual check recommended: '{authors}'"
+                            logger.warning(error_msg)
+                            error_info.write(f"{error_msg}\n")
+                            error_info.write(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}\n")
+                            error_info.write(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}\n")
+                            error_info.write(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}\n")
+                            error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
+                            error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
+                            error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
                             format_warning_logged = True
                             status = status_failed
                             break
@@ -559,18 +596,20 @@ def setup_prompts(llm_settings: env) -> Dict:
                 for part in parts:  # comma-separated parts
                     components = part.split()
                     if any(component not in text for component in components):
-                        logger.warning(f"Input file '{unique_id}': Possible LLM error in processed author list; manual check recommended: '{authors}'")
-                        logger.warning(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}")
-                        logger.warning(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}")
-                        logger.warning(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}")
-                        logger.warning(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}")
-                        logger.warning(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}")
-                        logger.warning(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}")
+                        error_msg = f"Input file '{unique_id}': Possible LLM error in processed author list; manual check recommended: '{authors}'"
+                        logger.warning(error_msg)
+                        error_info.write(f"{error_msg}\n")
+                        error_info.write(f"Final result for step EXTRACT AUTHORS: {scrubbed_output_text_1}\n")
+                        error_info.write(f"Final result for step DROP AFFILIATIONS: {scrubbed_output_text_2}\n")
+                        error_info.write(f"Final result for step REFORMAT SEPARATORS: {scrubbed_output_text_3}\n")
+                        error_info.write(f"Full LLM output trace for step EXTRACT AUTHORS:\n{'-' * 80}\n{raw_output_text_1}\n{'-' * 80}\n")
+                        error_info.write(f"Full LLM output trace for step DROP AFFILIATIONS:\n{'-' * 80}\n{raw_output_text_2}\n{'-' * 80}\n")
+                        error_info.write(f"Full LLM output trace for step REFORMAT SEPARATORS:\n{'-' * 80}\n{raw_output_text_3}\n{'-' * 80}\n")
                         llm_warning_logged = True
                         status = status_failed
                         break
 
-        return status, authors
+        return status, error_info.getvalue(), authors
 
     prompt_get_title = dedent("""What is the title of the abstract?
 
@@ -590,6 +629,7 @@ def setup_prompts(llm_settings: env) -> Dict:
         Returns the title.
         """
         status = status_success
+        error_info = io.StringIO()
         text = strip_postamble(text)
 
         raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
@@ -613,7 +653,7 @@ def setup_prompts(llm_settings: env) -> Dict:
 
         logger.debug(f"\n        formatted: {title}")
 
-        return status, title
+        return status, error_info.getvalue(), title
 
     prompt_get_keywords = dedent("""What are the keywords, as given in the abstract?
 
@@ -639,51 +679,54 @@ def setup_prompts(llm_settings: env) -> Dict:
         Returns the comma-separated keywords as a string.
         """
         status = status_success
+        error_info = io.StringIO()
         text = strip_postamble(text)
 
         # Sanity check that the abstract has keywords before we run the LLM to extract them.
         match = kws_pattern.search(text)
         if match is None:
             logger.warning(f"Input file '{unique_id}': No keywords provided in original input, skipping keyword extraction.")
-            return status, None  # No keywords provided
+            keywords = None  # No keywords provided
+        else:
+            raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
+                                                                     instruction=f"{prompt_get_keywords}\n-----\n\n{text}",
+                                                                     progress_symbol="K")
+            logger.debug(f"\n        original : {scrubbed_output_text}")
 
-        raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
-                                                                 instruction=f"{prompt_get_keywords}\n-----\n\n{text}",
-                                                                 progress_symbol="K")
-        logger.debug(f"\n        original : {scrubbed_output_text}")
+            # Remove spurious heading
+            for heading in ("Keywords:", "KEYWORDS:", "Key words:", "Key Words:", "KEY WORDS:"):
+                if scrubbed_output_text.startswith(heading):
+                    scrubbed_output_text = scrubbed_output_text[len(heading):]
 
-        # Remove spurious heading
-        for heading in ("Keywords:", "KEYWORDS:", "Key words:", "Key Words:", "KEY WORDS:"):
-            if scrubbed_output_text.startswith(heading):
-                scrubbed_output_text = scrubbed_output_text[len(heading):]
+            # Sanity-check the LLM output.
+            #
+            # Initial list of keywords.
+            keywords = scrubbed_output_text.strip()
 
-        # Sanity-check the LLM output.
-        #
-        # Initial list of keywords.
-        keywords = scrubbed_output_text.strip()
+            # Strip spurious period
+            while keywords[-1] == ".":
+                keywords = keywords[:-1]
 
-        # Strip spurious period
-        while keywords[-1] == ".":
-            keywords = keywords[:-1]
+            keywords_list = [keyword.strip() for keyword in keywords.split(",")]
 
-        keywords_list = [keyword.strip() for keyword in keywords.split(",")]
+            # No keyword should be listed more than once.
+            keywords_counter = collections.Counter(keywords_list)  # TODO: I hope `Counter` preserves insertion order?
+            duplicate_keywords = [author for author, count in keywords_counter.items() if count > 1]
+            if len(duplicate_keywords):
+                plural_s = "s" if len(duplicate_keywords) > 1 else ""
+                error_msg = f"Input file '{unique_id}': Extractor returned duplicate keyword{plural_s}; de-duplicated, but manual check recommended: {duplicate_keywords}"
+                logger.warning(error_msg)
+                error_info.write(f"{error_msg}\n")
+                error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
+                error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
+                status = status_failed
+            keywords = ", ".join(keywords_counter.keys())  # de-duplicate
 
-        # No keyword should be listed more than once.
-        keywords_counter = collections.Counter(keywords_list)  # TODO: I hope `Counter` preserves insertion order?
-        duplicate_keywords = [author for author, count in keywords_counter.items() if count > 1]
-        if len(duplicate_keywords):
-            plural_s = "s" if len(duplicate_keywords) > 1 else ""
-            logger.warning(f"Input file '{unique_id}': Extractor returned duplicate keyword{plural_s}; de-duplicated, but manual check recommended: {duplicate_keywords}")
-            logger.warning(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}")
-            logger.warning(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}")
-            status = status_failed
-        keywords = ", ".join(keywords_counter.keys())  # de-duplicate
+            # TODO: Other sanity checks.
 
-        # TODO: Other sanity checks.
+            logger.debug(f"\n        formatted: {keywords}")
 
-        logger.debug(f"\n        formatted: {keywords}")
-
-        return status, keywords
+        return status, error_info.getvalue(), keywords
 
     # This is by far the most difficult part: grab text that has no obvious programmatically detectable starting delimiter.
     #
@@ -715,6 +758,7 @@ def setup_prompts(llm_settings: env) -> Dict:
         Returns the main text of the conference abstract.
         """
         status = status_success
+        error_info = io.StringIO()
         text = strip_postamble(text)
 
         raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
@@ -722,7 +766,7 @@ def setup_prompts(llm_settings: env) -> Dict:
                                                                  progress_symbol=".")
         abstract = scrubbed_output_text.strip()
 
-        return status, abstract
+        return status, error_info.getvalue(), abstract
 
     # Format is {bibtex_fieldname: (kind, thing, progress_symbol)}.
     # Details in master copy, in the docstring of this function.
@@ -767,6 +811,7 @@ def process_one(llm_settings: env,
     bibtex_entry = io.StringIO()
     bibtex_entry.write(f"@incollection{{{entry_key},\n")
     entry_status = status_success
+    error_infos = []
     with timer() as tim:
         print("    ", end="", file=sys.stderr)  # Indent the progress indicator
         sys.stderr.flush()
@@ -783,9 +828,10 @@ def process_one(llm_settings: env,
                 bibtex_entry.write(f"    {field_key} = {{{scrubbed_output_text}}},\n")
                 field_status = status_success
             elif data_kind == "function":
-                field_status, function_output = data(unique_id, text)
+                field_status, field_error_info, function_output = data(unique_id, text)
                 if field_status is status_failed:  # aggregate: failing at least one field means a this whole entry failed (and should be manually checked)
                     entry_status = status_failed
+                    error_infos.append(field_error_info)
                 if function_output is not None:  # A function can indicate "no data" by returning `None`. Inject the field only if data was returned. Inject also when we suspect an error.
                     bibtex_entry.write(f"    {field_key} = {{{function_output}}},\n")
             else:
@@ -793,7 +839,7 @@ def process_one(llm_settings: env,
     print(f"done in {tim.dt:0.2f}s", file=sys.stderr)
     bibtex_entry.write("}")
     bibtex_entry = bibtex_entry.getvalue()
-    return entry_status, bibtex_entry
+    return entry_status, "\n\n".join(error_infos), bibtex_entry
 
 @contextlib.contextmanager
 def maybe_open_for_append(filename: Optional[str]) -> TextIO:
@@ -867,15 +913,22 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
 
                         text_from_pdf = completed.stdout.decode("utf-8")
 
-                        status, bibtex_entry = process_one(llm_settings,
-                                                           prompts,
-                                                           unique_id,
-                                                           text_from_pdf)
+                        status, error_info, bibtex_entry = process_one(llm_settings,
+                                                                       prompts,
+                                                                       unique_id,
+                                                                       text_from_pdf)
                         # bibtex_entries.append(bibtex_entry)
 
                         f = f_success
                         output_dir = opts.output_dir
                         if status is status_failed:
+                            # Shunt LLM traces for detected errors into a separate file
+                            error_info_filename = f"{unique_id}_errors.txt"
+                            error_info_path = os.path.join(path, error_info_filename)
+                            logger.info(f"When processing {fullpath}: errors detected in output, writing details to {error_info_path}")
+                            with open(error_info_path, "w") as f_errors:
+                                f_errors.write(error_info)
+
                             # If provided, use the separate output file and item directory for failed items
                             if opts.failed_filename is not None:
                                 f = f_failed
