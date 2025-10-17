@@ -645,19 +645,26 @@ def setup_prompts(llm_settings: env) -> Dict:
 
         title = scrubbed_output_text.strip()
 
-        # Strip spurious period
-        while title[-1] == ".":
-            title = title[:-1]
+        if not title:
+            status = status_failed
+            error_msg = f"Input file '{unique_id}': LLM returned empty title; manual check recommended."
+            logger.warning(error_msg)
+            error_info.write(f"{error_msg}\n")
+            error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{raw_output_text}\n{'-' * 80}\n")
+        else:
+            # Strip spurious period
+            while title[-1] == ".":
+                title = title[:-1]
 
-        # Strip spurious quotation marks (they may still occasionally happen even though we instruct the LLM not to emit them)
-        while (title.startswith('"') and title.endswith('"')) or (title.startswith("'") and title.endswith("'")):
-            title = title[1:-1]
+            # Strip spurious quotation marks (they may still occasionally happen even though we instruct the LLM not to emit them)
+            while (title.startswith('"') and title.endswith('"')) or (title.startswith("'") and title.endswith("'")):
+                title = title[1:-1]
 
-        # Strip spurious period, again (inside quotation marks)
-        while title[-1] == ".":
-            title = title[:-1]
+            # Strip spurious period, again (inside quotation marks)
+            while title[-1] == ".":
+                title = title[:-1]
 
-        logger.debug(f"\n        formatted: {title}")
+            logger.debug(f"\n        formatted: {title}")
 
         return status, error_info.getvalue(), title
 
