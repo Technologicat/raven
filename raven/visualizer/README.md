@@ -289,7 +289,7 @@ The input directory (`-i some_input_directory`) is optional; if not provided, th
 
 The `-s success.bib` writes items that were successfully processed into a BibTeX entry into the BibTeX file `success.bib`.
 
-Similarly, `-f failed.bib` writes failed items, which require manual checking and fixing. Failures are detected from LLM output by heuristics. LLM traces for failed items are logged into the log file (`-l log.txt`), for troubleshooting.
+Similarly, `-f failed.bib` writes failed items, which require manual checking and fixing. Failures are detected from LLM output by heuristics. Failed items are logged into the log file (`-l log.txt`), for troubleshooting. Full LLM traces of the possible error(s) are saved into the *input* directory, into separate files. For example, if `myfile.pdf` triggers errors, the LLM traces will be in `myfile_errors.txt`. This may help figure out where the LLM is going wrong. But note that since LLMs are stochastic, sometimes just running again may fix the error. (Just move the PDF file back from the failed output directory and retry.)
 
 The output buffers for the bib files are flushed to disk after each entry, so if you have a text editor app that autodetects updated files, you can monitor the progress by viewing the bib file there.
 
@@ -305,7 +305,7 @@ To continue a partial import (with some files already having been moved into the
 
 The PDF importer analyzes the human-readable text content of the PDF via an LLM. If the text contains a section title *"References"*, anything after that point is discarded before processing. This is done to prevent cross-contamination, which would otherwise be an issue especially when extracting the title and the author list.
 
-To improve reliability, the fields are processed one at a time. Some prompt engineering has gone both into the system prompt as well as each individual data-extracting prompt. The prompts have been engineered manually; we have not yet looked at automatic prompt optimization.
+To improve reliability, the fields are processed one at a time. Some prompt engineering has gone both into the system prompt as well as each individual data-extracting prompt. The prompts have been engineered manually; we have not looked at automatic prompt optimization.
 
 The extracted data is automatically double-checked via heuristics, for fields for which this is reasonably possible. Any suspicious-looking LLM responses are flagged with a warning. It is **very strongly recommended** to manually double-check any entries that were flagged by comparing the generated BibTeX entry to the human-readable content of the original PDF file, because any flagged entries are **very likely** to be incorrect in one or more ways.
 
@@ -315,13 +315,17 @@ As is well known, LLMs may make things up, may respond incorrectly, or may occas
 
 #### LLM requirements for PDF import
 
-The `raven-pdf2bib` tool requires a locally hosted LLM (on the same network as Raven, or even on the same machine), with an OpenAI compatible API. Some LLM backends suitable for this are e.g. [AnythingLLM](https://anythingllm.com/) or [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui). The main advantages of a local LLM are full privacy, since the data never leaves the local network, and full customizability (including the system prompt).
+Note that `raven-pdf2bib` has only been tested with a locally hosted LLM. Here "locally hosted" means "on the same LAN as Raven" (can even be on the same machine). A cloud LLM with an OpenAI compatible API *might* work if you put an API key to `~/.config/raven/llmclient/api_key.txt`, and set the URL in `raven.librarian.config`. This is however not a development priority.
 
-The PDF importer has been tested on a local Llama 3.1 8B instance running on Oobabooga. This model fits into a laptop's 8 GB VRAM at 4 bits, e.g. in a Q4_K_M quantized format, while leaving enough VRAM for 24576 (24k) tokens of context. Based on our own testing, accuracy with this LLM is ~80%, or in other words, on average, 8 out of 10 abstracts import without warnings (and also look correct by manual inspection).
+For locally hosting an LLM, we recommend [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui), which Raven is tested with. Other LLM backends such as [AnythingLLM](https://anythingllm.com/) might also work.
 
-As of February 2025, support for thinking LLMs has been added. This is done by automatically stripping `<think>...</think>` sections from the LLM output. We are currently testing this on a Q4_K_M quant of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), with 65536 (64k) tokens of context, running the model on an eGPU with 24GB of VRAM. This increases the accuracy by a couple of percentage points, but makes the import much slower. The newer [QwQ 32B](https://huggingface.co/Qwen/QwQ-32B) model (March 2025, Alibaba, *Qwen with Questions*) can run with similar specs, but has not been tested yet for this.
+In 2024, `raven-pdf2bib` was originally tested on a local Llama 3.1 8B instance running on Oobabooga. This model fits into a laptop's 8 GB VRAM at 4 bits, e.g. in a Q4_K_M quantized format, while leaving enough VRAM for 24576 (24k) tokens of context. Based on our own testing, accuracy with this LLM is ~80%, or in other words, on average, 8 out of 10 abstracts import without warnings (and also look correct by manual inspection).
 
-Supporting cloud LLMs is not a high priority, but PRs are welcome. The main issues here are that LLM API keys are not currently supported, and that the importer expects the LLM to accept a custom system prompt. Cloud LLMs could probably run without the customized system prompt, as this is a fairly standard instruction-following task.
+In **February 2025**, support for thinking LLMs was added. This was originally tested on a Q4_K_M quant of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), with 65536 (64k) tokens of context, running the model on an eGPU with 24GB of VRAM. This increases the accuracy by a couple of percentage points, but makes the import much slower. The newer [QwQ 32B](https://huggingface.co/Qwen/QwQ-32B) model (March 2025, Alibaba, *Qwen with Questions*) can run with similar specs.
+
+As of **October 2025**, `raven-pdf2bib` is tested with [Qwen3 2507 30B A3B Thinking](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507). This is **the currently recommended LLM**. This can also run on a 24GB eGPU at 4bit, and as it's a MoE (*Mixture of Experts*) with 3B active parameters per token, it's much faster than earlier models. With 24GB, the model loads fine with 131072 (128k) context, and works as expected at least up to ~50k, but I have not tested filling up the whole context. The model itself supports up to 262144 (256k), but then 24GB VRAM is not enough (the model fails to load). This model seems much smarter than earlier ones.
+
+If you must run with limited VRAM, then [Qwen3 2507 4B Thinking](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507) is worth a try. Obviously, compared to the 30B of the same model series, it's not nearly as intelligent; but it punches way above its size class. I think this one is strictly better than LLaMa 3.1 8B or DeepSeek-R1-Distill-Qwen-7B, despite half the size.
 
 
 # Visualize
