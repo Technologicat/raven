@@ -670,6 +670,16 @@ def setup_prompts(llm_settings: env,
             while title[-1] == ".":
                 title = title[:-1]
 
+            # Sanity check: are all words of the LLM-extracted title present in the original text?
+            components = title.split()
+            if any(component not in text for component in components):
+                error_msg = f"Input file '{unique_id}': Possible LLM error in processed title: one or more of the title words not found in original text; manual check recommended: '{title}'"
+                logger.warning(error_msg)
+                error_info.write(f"{error_msg}\n")
+                error_info.write(f"Final result for EXTRACT TITLE: {scrubbed_output_text}\n")
+                error_info.write(f"Full LLM output trace for EXTRACT TITLE:\n{'-' * 80}\n{raw_output_text}\n{'-' * 80}\n")
+                status = status_failed
+
             logger.debug(f"\n        formatted: {title}")
 
         return status, error_info.getvalue(), title
