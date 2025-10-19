@@ -717,51 +717,50 @@ def setup_prompts(llm_settings: env,
             logger.warning(f"Input file '{unique_id}': No keywords provided in original input, skipping keyword extraction.")
             keywords = None  # No keywords provided
         else:
-            raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
-                                                                     instruction=f"{prompt_get_keywords}\n-----\n\n{text}",
-                                                                     progress_symbol="K")
-            logger.debug(f"\n        original : {scrubbed_output_text}")
+            for retry in range(n_retries):
+                raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
+                                                                         instruction=f"{prompt_get_keywords}\n-----\n\n{text}",
+                                                                         progress_symbol="K")
+                logger.debug(f"\n        original : {scrubbed_output_text}")
 
-            # Remove spurious heading
-            for heading in ("Keywords:", "KEYWORDS:", "Key words:", "Key Words:", "KEY WORDS:"):
-                if scrubbed_output_text.startswith(heading):
-                    scrubbed_output_text = scrubbed_output_text[len(heading):]
+                # Remove spurious heading and surrounding whitespace
+                for heading in ("Keywords:", "KEYWORDS:", "Key words:", "Key Words:", "KEY WORDS:"):
+                    if scrubbed_output_text.startswith(heading):
+                        scrubbed_output_text = scrubbed_output_text[len(heading):]
+                keywords = scrubbed_output_text.strip()
 
-            # Sanity-check the LLM output.
-            #
-            # Initial list of keywords.
-            keywords = scrubbed_output_text.strip()
-
-            # Sanity check: the result may be empty
-            if not keywords:
-                error_msg = f"Input file '{unique_id}': Extractor returned empty keywords"
+                if keywords:
+                    break
+                logger.warning(f"Input file '{unique_id}': Keywords empty at attempt {retry + 1} out of {n_retries}")
+            else:
+                error_msg = f"Input file '{unique_id}': Keywords empty after retries exhausted; giving up."
                 logger.warning(error_msg)
                 error_info.write(f"{error_msg}\n")
                 error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
+                return status_failed, error_info.getvalue(), ""
+
+            # Strip spurious period
+            while keywords[-1] == ".":
+                keywords = keywords[:-1]
+
+            keywords_list = [keyword.strip() for keyword in keywords.split(",")]
+
+            # No keyword should be listed more than once.
+            keywords_counter = collections.Counter(keywords_list)  # TODO: I hope `Counter` preserves insertion order?
+            duplicate_keywords = [author for author, count in keywords_counter.items() if count > 1]
+            if len(duplicate_keywords):
+                plural_s = "s" if len(duplicate_keywords) > 1 else ""
+                error_msg = f"Input file '{unique_id}': Extractor returned duplicate keyword{plural_s}; de-duplicated, but manual check recommended: {duplicate_keywords}"
+                logger.warning(error_msg)
+                error_info.write(f"{error_msg}\n")
+                error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
+                error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
                 status = status_failed
-            else:
-                # Strip spurious period
-                while keywords[-1] == ".":
-                    keywords = keywords[:-1]
+            keywords = ", ".join(keywords_counter.keys())  # de-duplicate
 
-                keywords_list = [keyword.strip() for keyword in keywords.split(",")]
+            # TODO: Other sanity checks.
 
-                # No keyword should be listed more than once.
-                keywords_counter = collections.Counter(keywords_list)  # TODO: I hope `Counter` preserves insertion order?
-                duplicate_keywords = [author for author, count in keywords_counter.items() if count > 1]
-                if len(duplicate_keywords):
-                    plural_s = "s" if len(duplicate_keywords) > 1 else ""
-                    error_msg = f"Input file '{unique_id}': Extractor returned duplicate keyword{plural_s}; de-duplicated, but manual check recommended: {duplicate_keywords}"
-                    logger.warning(error_msg)
-                    error_info.write(f"{error_msg}\n")
-                    error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
-                    error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
-                    status = status_failed
-                keywords = ", ".join(keywords_counter.keys())  # de-duplicate
-
-                # TODO: Other sanity checks.
-
-                logger.debug(f"\n        formatted: {keywords}")
+            logger.debug(f"\n        formatted: {keywords}")
 
         return status, error_info.getvalue(), keywords
 
