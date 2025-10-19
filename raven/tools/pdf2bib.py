@@ -739,7 +739,7 @@ def setup_prompts(llm_settings: env,
                 error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
                 return status_failed, error_info.getvalue(), ""
 
-            # Strip spurious period
+            # Strip spurious period(s) at end
             while keywords[-1] == ".":
                 keywords = keywords[:-1]
 
