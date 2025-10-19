@@ -756,7 +756,18 @@ def setup_prompts(llm_settings: env,
                 error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
                 error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
                 status = status_failed
-            keywords = ", ".join(keywords_counter.keys())  # de-duplicate
+            keywords = list(keywords_counter.keys())
+
+            # Sanity check: are all LLM-extracted extracted keywords present in the original text?
+            if any(component not in text for component in keywords):
+                error_msg = f"Input file '{unique_id}': Possible LLM error in processed keywords: one or more of the keywords not found in original text; manual check recommended"
+                logger.warning(error_msg)
+                error_info.write(f"{error_msg}\n")
+                error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
+                error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
+                status = status_failed
+
+            keywords = ", ".join(keywords)  # de-duplicate
 
             # TODO: Other sanity checks.
 
