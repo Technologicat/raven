@@ -8,6 +8,8 @@ import torch
 
 from unpythonic.env import env
 
+import dearpygui.dearpygui as dpg
+
 # --------------------------------------------------------------------------------
 # Torch config
 
@@ -250,6 +252,33 @@ custom_stopwords = set(filler_stopwords + scilang_stopwords +
 # --------------------------------------------------------------------------------
 # Raven-visualizer GUI
 
+# For `plotter_colormap` below, see colormaps provided by DPG:
+#     https://dearpygui.readthedocs.io/en/latest/_modules/dearpygui/dearpygui.html?highlight=mvPlotColormap#
+#
+# From section "Constants":
+#     mvPlotColormap_Default=internal_dpg.mvPlotColormap_Default
+#     mvPlotColormap_Deep=internal_dpg.mvPlotColormap_Deep
+#     mvPlotColormap_Dark=internal_dpg.mvPlotColormap_Dark
+#     mvPlotColormap_Pastel=internal_dpg.mvPlotColormap_Pastel
+#     mvPlotColormap_Paired=internal_dpg.mvPlotColormap_Paired
+#     mvPlotColormap_Viridis=internal_dpg.mvPlotColormap_Viridis
+#     mvPlotColormap_Plasma=internal_dpg.mvPlotColormap_Plasma
+#     mvPlotColormap_Hot=internal_dpg.mvPlotColormap_Hot
+#     mvPlotColormap_Cool=internal_dpg.mvPlotColormap_Cool
+#     mvPlotColormap_Pink=internal_dpg.mvPlotColormap_Pink
+#     mvPlotColormap_Jet=internal_dpg.mvPlotColormap_Jet
+#     mvPlotColormap_Twilight=internal_dpg.mvPlotColormap_Twilight
+#     mvPlotColormap_RdBu=internal_dpg.mvPlotColormap_RdBu
+#     mvPlotColormap_BrBG=internal_dpg.mvPlotColormap_BrBG
+#     mvPlotColormap_PiYG=internal_dpg.mvPlotColormap_PiYG
+#     mvPlotColormap_Spectral=internal_dpg.mvPlotColormap_Spectral
+#     mvPlotColormap_Greys=internal_dpg.mvPlotColormap_Greys
+#
+# See also:
+#     https://dearpygui.readthedocs.io/en/latest/reference/dearpygui.html#dearpygui.dearpygui.sample_colormap
+#     https://dearpygui.readthedocs.io/en/latest/documentation/themes.html
+
+
 # TODO: Section this into subnamespaces?
 gui_config = env(  # ----------------------------------------
                  # GUI element sizes, in pixels.
@@ -269,6 +298,20 @@ gui_config = env(  # ----------------------------------------
                  info_panel_button_w=26,  # Width of the inline buttons in the info panel. Same width as a DPG arrow button so all buttons align properly.
                  annotation_tooltip_w=800,  # Just the width; height is automatic depending on content.
                  font_size=20,  # Also in pixels.
+                 # ----------------------------------------
+                 # Plotter
+                 #
+                 # default colors
+                 plotter_background_color=(37, 37, 38),  # measured from DPG default theme using GIMP
+                 plotter_grid_color=(60, 60, 64),  # measured from DPG default theme using GIMP, from the major tick grid
+                 #
+                 # # light colors
+                 # plotter_background_color=(255, 255, 255),
+                 # plotter_grid_color=(255, 128, 64),
+                 #
+                 plotter_colormap=dpg.mvPlotColormap_Viridis,
+                 plotter_search_results_highlight_color=(255, 96, 96),  # Raven default red
+                 plotter_selection_highlight_color=(96, 255, 255),  # Raven default cyan
                  # ----------------------------------------
                  # Animations
                  n_many_searchresults=200,  # Number of data points to reach minimum per-datapoint glow highlight brightness for search results.

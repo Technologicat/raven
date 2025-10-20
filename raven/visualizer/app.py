@@ -602,6 +602,16 @@ with timer() as tim:
 
     themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
 
+    # https://dearpygui.readthedocs.io/en/latest/documentation/themes.html#plot-colors
+    with dpg.theme(tag="my_plotter_theme"):
+        with dpg.theme_component(dpg.mvPlot):
+            dpg.add_theme_color(dpg.mvPlotCol_AxisGrid, gui_config.plotter_grid_color, category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_PlotBg, gui_config.plotter_background_color, category=dpg.mvThemeCat_Plots)
+            # Disable the axis mouseover highlight, matching the axis colors to the plotter frame color in the default theme (measured using GIMP).
+            dpg.add_theme_color(dpg.mvPlotCol_AxisBg, (51, 51, 51), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_AxisBgActive, (51, 51, 51), category=dpg.mvThemeCat_Plots)  # TODO: what is this?
+            dpg.add_theme_color(dpg.mvPlotCol_AxisBgHovered, (51, 51, 51), category=dpg.mvThemeCat_Plots)
+
     # Initialize textures.
     with dpg.texture_registry(tag="app_textures"):
         word_cloud_texture = dpg.add_raw_texture(width=gui_config.word_cloud_w,  # TODO: once we add a settings dialog, we may need to change the texture size while the app is running.
@@ -774,33 +784,7 @@ def load_data_into_plotter(dataset):
         for label, xs, ys in datas:
             series_tag = f"my_scatter_series_{label}"  # tag
             series_theme = f"my_plot_theme_{label}"  # tag
-            colormap = dpg.mvPlotColormap_Viridis
-
-            # Colormaps provided by DPG:
-            #     https://dearpygui.readthedocs.io/en/1.x/_modules/dearpygui/dearpygui.html?highlight=colormap#
-            #
-            # From section "Constants":
-            #     mvPlotColormap_Default=internal_dpg.mvPlotColormap_Default
-            #     mvPlotColormap_Deep=internal_dpg.mvPlotColormap_Deep
-            #     mvPlotColormap_Dark=internal_dpg.mvPlotColormap_Dark
-            #     mvPlotColormap_Pastel=internal_dpg.mvPlotColormap_Pastel
-            #     mvPlotColormap_Paired=internal_dpg.mvPlotColormap_Paired
-            #     mvPlotColormap_Viridis=internal_dpg.mvPlotColormap_Viridis
-            #     mvPlotColormap_Plasma=internal_dpg.mvPlotColormap_Plasma
-            #     mvPlotColormap_Hot=internal_dpg.mvPlotColormap_Hot
-            #     mvPlotColormap_Cool=internal_dpg.mvPlotColormap_Cool
-            #     mvPlotColormap_Pink=internal_dpg.mvPlotColormap_Pink
-            #     mvPlotColormap_Jet=internal_dpg.mvPlotColormap_Jet
-            #     mvPlotColormap_Twilight=internal_dpg.mvPlotColormap_Twilight
-            #     mvPlotColormap_RdBu=internal_dpg.mvPlotColormap_RdBu
-            #     mvPlotColormap_BrBG=internal_dpg.mvPlotColormap_BrBG
-            #     mvPlotColormap_PiYG=internal_dpg.mvPlotColormap_PiYG
-            #     mvPlotColormap_Spectral=internal_dpg.mvPlotColormap_Spectral
-            #     mvPlotColormap_Greys=internal_dpg.mvPlotColormap_Greys
-            #
-            # See also:
-            #     https://dearpygui.readthedocs.io/en/1.x/reference/dearpygui.html?highlight=colormap#dearpygui.dearpygui.sample_colormap
-            #     https://dearpygui.readthedocs.io/en/1.x/documentation/themes.html
+            colormap = gui_config.plotter_colormap
 
             # Render this data series, placing it before the first highlight series so that all highlights render on top.
             dpg.add_scatter_series(xs, ys, tag=series_tag, parent="axis1", before="my_mouse_hover_scatter_series")  # tag
@@ -1190,7 +1174,7 @@ class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is set up
 
         # We pulsate the search results and selected items at opposite phases to make both easy
         # to see when they overlap. We use colors that make the highlights stand out from the
-        # Viridis colormap used for plotting the data.
+        # default Viridis colormap used for plotting the data.
         #
         # For how to do this in DPG, see e.g. https://github.com/hoffstadt/DearPyGui/issues/1512
         # Basically, bind a custom theme to the GUI widgets that need to have their color animated,
@@ -1205,8 +1189,8 @@ class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is set up
         alpha_selection = self._compute_alpha(1.0 - animation_pos,
                                               len(unbox(selection_data_idxs_box)),
                                               gui_config.n_many_selection)
-        dpg.set_value(search_results_highlight_color, (255, 96, 96, alpha_search))  # red
-        dpg.set_value(selection_highlight_color, (96, 255, 255, alpha_selection))  # cyan
+        dpg.set_value(search_results_highlight_color, (*gui_config.plotter_search_results_highlight_color, alpha_search))
+        dpg.set_value(selection_highlight_color, (*gui_config.plotter_selection_highlight_color, alpha_selection))
 
         return gui_animation.action_continue
 
@@ -1840,6 +1824,7 @@ with timer() as tim:
                                 dpg.add_theme_style(dpg.mvPlotStyleVar_MarkerSize, 6, category=dpg.mvThemeCat_Plots)
 
                         _create_highlight_scatter_series()  # some utilities may access the highlight series before the app has completely booted up
+                dpg.bind_item_theme("plot", "my_plotter_theme")
 
     # Word cloud display.
     with dpg.window(show=False, modal=False, no_title_bar=False, tag="word_cloud_window",
@@ -3903,8 +3888,8 @@ def make_help_window():
             c_txt = f'<font color="{help_text_color}">'
             c_dim = f'<font color="{help_dim_color}">'
             c_hig = '<font color="#ff0000">'  # help text highlight for very important parts
-            c_search = '<font color="(255, 96, 96)">'  # same color as search highlight in plotter
-            c_selection = '<font color="(96, 255, 255)">'  # same color as selection highlight in plotter
+            c_search = f'<font color="{gui_config.plotter_search_results_highlight_color}">'
+            c_selection = f'<font color="{gui_config.plotter_selection_highlight_color}">'
             c_end = '</font>'
 
             # Extract columns from the human-readable representation
@@ -3962,8 +3947,8 @@ def make_help_window():
                         dpg_markdown.add_text(f"- {c_txt}**Current item**: The topmost item **fully** visible in the info panel. The controls of the current item glow slightly.{c_end}")
                         dpg_markdown.add_text(f"- {c_txt}**Current cluster**: The cluster the current item belongs to. Clusters are auto-detected by a linguistic analysis.{c_end}")
                     with dpg.group(horizontal=False):
-                        dpg_markdown.add_text(f"- {c_txt}**Selection set**: The selected items, glowing {c_end}{c_selection}**cyan**{c_end}{c_txt} in the plotter. As many are loaded into the info panel as reasonably fit.{c_end}")
-                        dpg_markdown.add_text(f"- {c_txt}**Search result set**: The items matching the current search, glowing {c_end}{c_search}**red**{c_end}{c_txt} in the plotter.{c_end}")
+                        dpg_markdown.add_text(f"- {c_txt}**Selection set**: The selected items, {c_end}{c_selection}**glowing**{c_end}{c_txt} in the plotter. As many are loaded into the info panel as reasonably fit.{c_end}")
+                        dpg_markdown.add_text(f"- {c_txt}**Search result set**: The items matching the current search, {c_end}{c_search}**glowing**{c_end}{c_txt} in the plotter.{c_end}")
                 dpg.add_spacer(width=1, height=themes_and_fonts.font_size)
 
                 # Additional general help
