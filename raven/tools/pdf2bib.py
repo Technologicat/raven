@@ -759,13 +759,22 @@ def setup_prompts(llm_settings: env,
             keywords = list(keywords_counter.keys())
 
             # Sanity check: are all LLM-extracted extracted keywords present in the original text?
-            if any(component not in text for component in keywords):
-                error_msg = f"Input file '{unique_id}': Possible LLM error in processed keywords: one or more of the keywords not found in original text; manual check recommended"
-                logger.warning(error_msg)
-                error_info.write(f"{error_msg}\n")
-                error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
-                error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
-                status = status_failed
+            #
+            # We check multiple-word keywords ("finite element method") one word at a time.
+            #
+            # This isn't 100% foolproof, but checking for the whole word runs into text layout issues very often,
+            # producing lots of false positives. The keyword may be split across a linefeed in the original,
+            # causing the exact complete keyword string not to appear in the input.
+            for keyword in keywords:
+                components = keyword.split()
+                if any(component not in text for component in components):
+                    error_msg = f"Input file '{unique_id}': Possible LLM error in processed keywords: one or more of the keywords not found in original text; manual check recommended"
+                    logger.warning(error_msg)
+                    error_info.write(f"{error_msg}\n")
+                    error_info.write(f"Final result for EXTRACT KEYWORDS:\n{'-' * 80}\n{scrubbed_output_text}\n")
+                    error_info.write(f"Full LLM output trace for EXTRACT KEYWORDS:\n{'-' * 80}\n{raw_output_text}\n")
+                    status = status_failed
+                    break
 
             keywords = ", ".join(keywords)  # de-duplicate
 
