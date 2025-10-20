@@ -149,6 +149,42 @@ def reset_plotter_zoom():
     dpg.fit_axis_data("axis0")  # tag
     dpg.fit_axis_data("axis1")  # tag
 
+    # Leave some empty space at the edges.
+    # This ensures all data points are *inside* the plotter view,
+    # not exactly on the edges (which may cause them not to be selected with a "select visible").
+
+    # First, wait until the fit takes.
+    wait_frames_max = 5
+    orig_xmin, orig_xmax = dpg.get_axis_limits("axis0")  # in data space  # tag
+    orig_ymin, orig_ymax = dpg.get_axis_limits("axis1")  # in data space  # tag
+    for waited in range(wait_frames_max):
+        dpg.split_frame()
+        xmin, xmax = dpg.get_axis_limits("axis0")  # in data space  # tag
+        ymin, ymax = dpg.get_axis_limits("axis1")  # in data space  # tag
+        if xmin != orig_xmin or ymin != orig_ymin or xmax != orig_xmax or ymax != orig_ymax:
+            logger.info(f"reset_plotter_zoom: waited {waited} frame{'s' if waited != 1 else ''} for fit_axis_data")
+            break
+    else:
+        logger.info(f"reset_plotter_zoom: timeout ({wait_frames_max} frames) when waiting for fit_axis_data")
+
+    # Then compute the new axis limits.
+    x_center = xmin + (xmax - xmin) / 2.0
+    y_center = ymin + (ymax - ymin) / 2.0
+    x_range = xmax - xmin
+    y_range = ymax - ymin
+    boost = 1.01
+    dpg.set_axis_limits("axis0",
+                        x_center - (boost * x_range) / 2.0,
+                        x_center + (boost * x_range) / 2.0)
+    dpg.set_axis_limits("axis1",
+                        y_center - (boost * y_range) / 2.0,
+                        y_center + (boost * y_range) / 2.0)
+    # https://stackoverflow.com/questions/75069012/set-initial-axis-limits-while-preserving-pan-zoom-in-dearpygui
+    dpg.split_frame()  # important
+    dpg.set_axis_limits_auto("axis0")
+    dpg.set_axis_limits_auto("axis1")
+
+
 # --------------------------------------------------------------------------------
 # Selection management (related to datapoints in the plotter)
 
