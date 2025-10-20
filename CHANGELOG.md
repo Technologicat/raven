@@ -22,7 +22,6 @@
 
 - *Raven-visualizer*:
   - Fix bug: "reset zoom" missed some datapoints (in a "select visible", hotkey F9), if they were exactly at the edges of the data bounding box.
-    - This has been fixed in a preliminary manner; the view jumps while the zoom settles, but now all datapoints are always *inside* the bounding box after a "reset zoom".
     - Note that also loading a dataset resets the zoom, so the bug also affected the initial view upon loading a dataset.
     - Workaround for previous versions: after a "reset zoom", zoom out by one mouse wheel click before using "select visible".
 
