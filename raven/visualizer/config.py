@@ -284,7 +284,6 @@ gui_config = env(  # ----------------------------------------
                  # GUI element sizes, in pixels.
                  main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
                  help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
-                 word_cloud_w=768, word_cloud_h=768,
                  importer_w=600,
                  info_panel_w=600,
                  info_panel_header_h=40,  # The title section and the navigation controls section both have this height.
@@ -299,6 +298,12 @@ gui_config = env(  # ----------------------------------------
                  annotation_tooltip_w=800,  # Just the width; height is automatic depending on content.
                  font_size=20,  # Also in pixels.
                  # ----------------------------------------
+                 # Word cloud
+                 #
+                 word_cloud_w=768, word_cloud_h=768,
+                 word_cloud_background_color="black",
+                 word_cloud_colormap="viridis",  # string identifying a Matplotlib colormap
+                 # ----------------------------------------
                  # Plotter
                  #
                  # default colors
@@ -309,7 +314,7 @@ gui_config = env(  # ----------------------------------------
                  # plotter_background_color=(255, 255, 255),
                  # plotter_grid_color=(255, 128, 64),
                  #
-                 plotter_colormap=dpg.mvPlotColormap_Viridis,
+                 plotter_colormap=dpg.mvPlotColormap_Viridis,  # DPG colormap
                  plotter_search_results_highlight_color=(255, 96, 96),  # Raven default red
                  plotter_selection_highlight_color=(96, 255, 255),  # Raven default cyan
                  # ----------------------------------------

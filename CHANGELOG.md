@@ -6,6 +6,7 @@
 
 - *Raven-visualizer*:
   - Configurable plotter colors (background, grid, colormap). Loaded from `raven.visualizer.config` at app startup.
+  - Configurable word cloud colors (background, colormap). Loaded from `raven.visualizer.config` at app startup.
   - The section headings in the BibTeX import dialog are now clickable, and perform the same function as the icon buttons.
   - The importer now automatically uses *Raven-server* for embeddings and NLP if it is running.
     - If the server is not running, the AI models are loaded locally (in the client process) as before.
