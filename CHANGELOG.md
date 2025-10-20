@@ -14,6 +14,9 @@
   - Librarian's document database now uses *Raven-server* for embeddings and NLP.
     - Because Librarian requires *Raven-server* for other purposes, too, it will not start if the server is not running.
 
+- Tools:
+  - *Raven-pdf2bib*: Overhauled. See updated instructions in [visualizer README](raven/visualizer/README.md).
+
 
 ---
 
