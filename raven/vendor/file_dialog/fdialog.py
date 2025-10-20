@@ -582,13 +582,13 @@ class FileDialog:
                 return
             assert len(sort_specs) == 1  # multi sort not supported
 
-            # print(column_id, dpg.get_item_label(column_id))  # this is the table column widget that was clicked  # DEBUG
-            # print(sender, dpg.get_item_type(sender), dpg.get_item_alias(sender))  # the sender is the table widget itself  # DEBUG
-            # print([dpg.get_item_type(x) for x in dpg.get_item_children(sender, 0)])  # table columns use slot 0  # DEBUG
-
             column_id, direction = sort_specs[0]
             columns = dpg.get_item_children(sender, 0)  # -> list of DPG IDs; table columns use slot 0
             rows = dpg.get_item_children(sender, 1)  # -> list of DPG IDs
+
+            # print(column_id, dpg.get_item_label(column_id))  # this is the table column widget that was clicked  # DEBUG
+            # print(sender, dpg.get_item_type(sender), dpg.get_item_alias(sender))  # the sender is the table widget itself  # DEBUG
+            # print([dpg.get_item_type(x) for x in dpg.get_item_children(sender, 0)])  # table columns use slot 0  # DEBUG
 
             do_reverse = sort_specs[0][1] < 0
             if not do_reverse:
