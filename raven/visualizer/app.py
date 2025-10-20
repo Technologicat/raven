@@ -1910,11 +1910,26 @@ with timer() as tim:
                                callback=show_save_import_dialog)
                 dpg.bind_item_font("importer_save_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("importer_save_button", tag="importer_save_tooltip"):  # tag
-                    dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="importer_save_tooltip_text")
+                    dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="importer_save_tooltip_text")  # TODO: DRY duplicate definitions for labels
 
-                with dpg.table(header_row=True, sortable=False, width=gui_config.importer_w - gui_config.toolbutton_w - 11, tag="save_import_table"):
-                    dpg.add_table_column(label="Output dataset file")
-                update_save_import_gui_table()
+                # We use a separate button widget instead of a header row.
+                #
+                # The header row would look clickable, but it isn't. It only supports a sort callback when `sortable=True`,
+                # and abusing that as a button click callback is nontrivial. It gets called also when the table is rendered
+                # (i.e. when the import window is opened), which also leads to an incorrect window size for the file-open dialog.
+                with dpg.group():
+                    dpg.add_button(label="Output dataset file",
+                                   tag="importer_save_heading_text_button",
+                                   width=gui_config.importer_w - gui_config.toolbutton_w - 11,
+                                   callback=show_save_import_dialog)
+                    with dpg.tooltip("importer_save_heading_text_button", tag="importer_save_heading_text_tooltip"):  # tag
+                        dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="importer_save_heading_text_tooltip_text")  # TODO: DRY duplicate definitions for labels
+                    with dpg.table(header_row=False,
+                                   sortable=False,
+                                   width=gui_config.importer_w - gui_config.toolbutton_w - 11,
+                                   tag="save_import_table"):
+                        dpg.add_table_column(label="Output dataset file")
+                    update_save_import_gui_table()
 
             with dpg.group(horizontal=True):
                 dpg.add_button(label=fa.ICON_FOLDER,
@@ -1923,11 +1938,21 @@ with timer() as tim:
                                callback=show_open_import_dialog)
                 dpg.bind_item_font("importer_select_input_files_button", themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("importer_select_input_files_button", tag="importer_select_input_files_tooltip"):  # tag
-                    dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="importer_select_input_files_tooltip_text")
+                    dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="importer_select_input_files_tooltip_text")  # TODO: DRY duplicate definitions for labels
 
-                with dpg.table(header_row=True, sortable=False, width=gui_config.importer_w - gui_config.toolbutton_w - 11, tag="open_import_table"):
-                    dpg.add_table_column(label="Input BibTeX files")
-                update_open_import_gui_table()
+                with dpg.group():
+                    dpg.add_button(label="Input BibTeX files",
+                                   tag="importer_select_input_files_heading_text_button",
+                                   width=gui_config.importer_w - gui_config.toolbutton_w - 11,
+                                   callback=show_open_import_dialog)
+                    with dpg.tooltip("importer_select_input_files_heading_text_button", tag="importer_select_input_files_heading_text_tooltip"):  # tag
+                        dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="importer_select_input_files_heading_text_tooltip_text")  # TODO: DRY duplicate definitions for labels
+                    with dpg.table(header_row=False,
+                                   sortable=False,
+                                   width=gui_config.importer_w - gui_config.toolbutton_w - 11,
+                                   tag="open_import_table"):
+                        dpg.add_table_column(label="Input BibTeX files")
+                    update_open_import_gui_table()
 
             dpg.add_spacer(width=gui_config.importer_w, height=2)  # leave some vertical space
 
