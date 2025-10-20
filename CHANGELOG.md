@@ -1,0 +1,103 @@
+# Changelog
+
+**0.2.4** (October 2025, in progress):
+
+**Changed**:
+
+- *Raven-visualizer*:
+  - Configurable plotter colors (background, grid, colormap). Loaded from `raven.visualizer.config` at app startup.
+  - The section headings in the BibTeX import dialog are now clickable, and perform the same function as the icon buttons.
+  - The importer now automatically uses *Raven-server* for embeddings and NLP if it is running.
+    - If the server is not running, the AI models are loaded locally (in the client process) as before.
+
+- *Raven-librarian*:
+  - Librarian's document database now uses *Raven-server* for embeddings and NLP.
+    - Because Librarian requires *Raven-server* for other purposes, too, it will not start if the server is not running.
+
+
+---
+
+**0.2.3** (7 October 2025):
+
+**Added**:
+
+- Prototype of *Raven-librarian*, a scientific LLM frontend GUI app.
+  - Features an animated AI avatar with TTS and auto-translated subtitles, document database (plain text files for now), and tool-calling support (websearch for now).
+    - Document database uses hybrid search (BM25 for keyword search, ChromaDB for semantic search).
+  - In this prototype, chats are saved, but going back to previous chats is not yet possible because the GUI for that has not yet been developed.
+  - When the *Documents* checkbox in the GUI is ON, the document database is autosearched, using the user's latest message to the AI as the query.
+    - If, additionally, the *Speculation* checkbox is OFF, the LLM is bypassed when there is no match in the document database.
+  - Websearch is enabled when the *Tools* checkbox in the GUI is ON.
+  - Requires both *Raven-server* and the LLM backend (oobabooga/text-generation-webui, with `--api`) to be running.
+  - For configuring Raven-librarian, for now, see `raven.librarian.config`.
+    - The default location for the document database is `~/.config/raven/llmclient/documents`.
+      - Librarian monitors this directory automatically, and also scans for offline changes at app startup.
+      - Put `.txt` files there; they are search-indexed automatically. Replace files; the index is updated automatically. Remove files; they are removed from the index automatically.
+      - If you need to force a manual index rebuild: make sure Librarian is not running, then delete `~/.config/raven/llmclient/rag_index`. It will be rebuilt at app startup.
+
+- *Raven-avatar* now has a "data eyes" effect, for use as an LLM tool access indicator in Librarian.
+  - Cel animation, up to 4 frames. Can be tested in `raven-avatar-settings-editor`.
+
+- Speech video recording in `raven-avatar-settings-editor`.
+  - Output goes in the `rec/` subdirectory.
+  - TTS speech is saved as `.mp3` files, one per sentence.
+  - Avatar video (avatar only, no background) is saved as as individual frames as `.qoi`.
+    - For converting the video frames into a usable format, see the `raven-qoi2png` tool.
+  - A speech timings list is saved as `.txt`.
+  - These can be used to piece together a speech video in a video editor such as *OpenShot*.
+
+
+**Changed**:
+
+- *Raven-visualizer*'s importer now uses both the title and the abstract to cluster the inputs.
+  - This requires *Snowflake-Arctic* or better as the embedding model; the older *mpnet* model tends to lead everything to become one cluster if the abstracts are used for clustering.
+  - Old datasets must be imported again for the changes to take effect, because the embeddings are computed at import time.
+    - Old embeddings caches must be deleted before re-importing!
+    - For example, when `mydata.bib` is imported, Raven's importer produces:
+      - `mydata_embeddings_cache.npz`: The vector embeddings. Delete this cache file!
+      - `mydata_nlp_cache.pickle`: The natural language processing results, used for keyword detection. This cache is not affected by this change, so no need to delete.
+
+- *Raven-server* now hosts all AI components, including embeddings and spaCy NLP.
+  - spaCy NLP is only available for Python-based clients running the same versions of Python and spaCy, because it communicates in spaCy's internal format.
+
+
+---
+
+**0.2.2** (13 August 2025):
+
+**Added**:
+
+- First complete tech demo of *Raven-avatar*.
+  - See the GUI apps `raven-avatar-settings-editor` (completely new postprocessor settings GUI) and `raven-avatar-pose-editor` (ported from the old THA3 pose editor).
+  - The settings editor requires *Raven-server* to be running.
+
+- *Raven-avatar* now has cel-blending and animefx support.
+
+
+---
+
+**0.2.1** (18 June 2025):
+
+Otherwise the same as 0.2.0 (17 June 2025), but with the TODO cleaned up. Documenting both here.
+
+**Added**:
+
+- *Raven-server*: to provide an animated AI avatar, and to eventually host all AI components.
+  - This is a web API server, initially ported and stripped from the discontinued *SillyTavern-extras*.
+    - AGPL license! Affects the `raven.server` and `raven.avatar.pose_editor` directories.
+    - All other components of *Raven* remain BSD-licensed. This includes `raven.avatar.settings_editor`.
+  - Pose editor ported from wxPython to DPG, to match the rest of the *Raven* constellation, and to require only one GUI toolkit.
+  - Added in d42d52356d61d290d4d9a1e5ffd0e1b6e0843c61, 22 May 2025. The entrypoint has since moved to `raven.server.app`.
+  - Avatar has new features compared to the old Talkinghead:
+    - Lipsync, to new TTS module based on Kokoro-82M.
+    - Anime4k upscaling (super-resolution).
+
+
+---
+
+
+**0.1.x** and older
+
+No changelog was maintained.
+
+These versions included only *Raven-visualizer*.
