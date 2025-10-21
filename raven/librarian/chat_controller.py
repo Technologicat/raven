@@ -417,6 +417,7 @@ class DPGChatMessage:
                                        tag=f"message_think_toggle_button_{self.gui_uuid}",
                                        parent=widget)
                         dpg.bind_item_font(f"message_think_toggle_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+                        # dpg.bind_item_theme(f"message_think_toggle_button_{self.gui_uuid}", "disablable_blue_button_theme")  # tag
                         message_think_toggle_tooltip = dpg.add_tooltip(f"message_think_toggle_button_{self.gui_uuid}")  # tag
                         dpg.add_text("Show/hide thinking trace", parent=message_think_toggle_tooltip)
                         text_content = dpg_markdown.add_text(colorized_text,

@@ -28,6 +28,8 @@ from ...vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://githu
 
 from .. import numutils
 
+from ..video import colorspace
+
 from . import fontsetup
 
 def get_font_path(font_basename: str = "OpenSans",
@@ -214,6 +216,15 @@ def bootup(font_size: int,
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
 
+    with dpg.theme(tag="disablable_blue_button_theme") as disablable_blue_button_theme:  # Librarian think block
+        with dpg.theme_component(dpg.mvButton, enabled_state=False):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, colorspace.hex_to_rgb("#9ea2eeff"))
+
     out = env(font_size=font_size,  # for introspection
               font_basename=font_basename,  # for introspection
               font_registry=the_font_registry,  # for the app to be able to add more fonts while running (`load_extra_font`)
@@ -222,7 +233,8 @@ def bootup(font_size: int,
               global_theme=global_theme,
               my_no_spacing_theme=my_no_spacing_theme,
               disablable_button_theme=disablable_button_theme,
-              disablable_red_button_theme=disablable_red_button_theme)
+              disablable_red_button_theme=disablable_red_button_theme,
+              disablable_blue_button_theme=disablable_blue_button_theme)
     return out
 
 def load_extra_font(themes_and_fonts: env,
