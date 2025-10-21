@@ -836,6 +836,9 @@ def load_data_into_plotter(dataset):
             dpg.add_scatter_series(xs, ys, tag=series_tag, parent="axis1", before="my_mouse_hover_scatter_series")  # tag
 
             # Compute the color for this series, and create a theme for it.
+            # See:
+            #     https://dearpygui.readthedocs.io/en/latest/reference/dearpygui.html#dearpygui.dearpygui.sample_colormap
+            #     https://dearpygui.readthedocs.io/en/latest/documentation/themes.html
             color = dpg.sample_colormap(colormap, t=(label + 1) / (max_label + 1))
             color = [int(255 * component) for component in color]  # RGBA
             color[-1] = int(0.5 * color[-1])  # A; make translucent

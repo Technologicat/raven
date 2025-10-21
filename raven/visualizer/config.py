@@ -276,10 +276,6 @@ custom_stopwords = set(filler_stopwords + scilang_stopwords +
 #     mvPlotColormap_PiYG=internal_dpg.mvPlotColormap_PiYG
 #     mvPlotColormap_Spectral=internal_dpg.mvPlotColormap_Spectral
 #     mvPlotColormap_Greys=internal_dpg.mvPlotColormap_Greys
-#
-# See also:
-#     https://dearpygui.readthedocs.io/en/latest/reference/dearpygui.html#dearpygui.dearpygui.sample_colormap
-#     https://dearpygui.readthedocs.io/en/latest/documentation/themes.html
 
 
 # TODO: Section this into subnamespaces?
