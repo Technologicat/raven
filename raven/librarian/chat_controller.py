@@ -391,16 +391,42 @@ class DPGChatMessage:
                 assert "widget" not in paragraph  # a paragraph that hasn't been rendered has no GUI text widget associated with it
                 text = paragraph["text"].strip()
                 if text:  # don't bother if text is blank
-                    # TODO: Add collapsible thought blocks to the GUI. For now, we just replace the tokens with something that doesn't look like HTML to avoid confusing the Markdown renderer (which silently drops unknown tags).
+                    # Replace known XML tokens with something that doesn't look like HTML to avoid confusing the Markdown renderer (which silently drops unknown tags).
                     text = text.replace("<tool_call>", "**>>>Tool call>>>**")
                     text = text.replace("</tool_call>", "**<<<Tool call<<<**")
                     text = text.replace("<think>", "**>>>Thinking>>>**")
                     text = text.replace("</think>", "**<<<Thinking<<<**")
                     color = think_color if paragraph["is_thought"] else role_color
                     colorized_text = f"<font color='{color}'>{text}</font>"
-                    widget = dpg_markdown.add_text(colorized_text,
-                                                   wrap=gui_config.chat_text_w,
-                                                   parent=self.gui_text_group)
+                    if isinstance(self, DPGCompleteChatMessage) and paragraph["is_thought"]:  # make think blocks in complete messages collapsible (they are populated as a single paragraph)
+                        widget = dpg.add_group(horizontal=True, parent=self.gui_text_group)
+                        def toggle_message_think_callback():
+                            try:
+                                v = dpg.is_item_visible(text_content)
+                                if v:
+                                    logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: hiding thinking trace for chat node '{self.node_id}'")
+                                    dpg.hide_item(text_content)
+                                else:
+                                    logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: showing thinking trace for chat node '{self.node_id}'")
+                                    dpg.show_item(text_content)
+                            except SystemError:  # does not exist
+                                logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: GUI widget for chat node '{self.node_id}' does not exist, ignoring.")
+                        dpg.add_button(label=fa.ICON_CLOUD,
+                                       callback=toggle_message_think_callback,
+                                       width=gui_config.toolbutton_w,
+                                       tag=f"message_think_toggle_button_{self.gui_uuid}",
+                                       parent=widget)
+                        dpg.bind_item_font(f"message_think_toggle_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+                        message_think_toggle_tooltip = dpg.add_tooltip(f"message_think_toggle_button_{self.gui_uuid}")  # tag
+                        dpg.add_text("Show/hide thinking trace", parent=message_think_toggle_tooltip)
+                        text_content = dpg_markdown.add_text(colorized_text,
+                                                             wrap=gui_config.chat_text_w,
+                                                             parent=widget)
+                        dpg.hide_item(text_content)
+                    else:
+                        widget = dpg_markdown.add_text(colorized_text,
+                                                       wrap=gui_config.chat_text_w,
+                                                       parent=self.gui_text_group)
                     paragraph["widget"] = widget
                     dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")  # tag
                 paragraph["rendered"] = True

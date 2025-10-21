@@ -68,8 +68,6 @@
   - Maybe next:
     - Long subtitle splitter (we now have the audio length).
     - Add GUI dynamic resizing on window size change
-    - Improve: thought blocks
-      - GUI: completed message: collapsible thought blocks (a button to hide/show a group)
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: Avatar idle off (10 sec)
