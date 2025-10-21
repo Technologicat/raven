@@ -252,6 +252,9 @@ custom_stopwords = set(filler_stopwords + scilang_stopwords +
 # --------------------------------------------------------------------------------
 # Raven-visualizer GUI
 
+# For `word_cloud_colormap` below, see colormaps provided by Matplotlib:
+#     https://matplotlib.org/stable/gallery/color/colormap_reference.html
+
 # For `plotter_colormap` below, see colormaps provided by DPG:
 #     https://dearpygui.readthedocs.io/en/latest/_modules/dearpygui/dearpygui.html?highlight=mvPlotColormap#
 #
@@ -302,7 +305,7 @@ gui_config = env(  # ----------------------------------------
                  #
                  word_cloud_w=768, word_cloud_h=768,
                  word_cloud_background_color="black",
-                 word_cloud_colormap="viridis",  # string identifying a Matplotlib colormap
+                 word_cloud_colormap="viridis",  # Matplotlib colormap (name as string)
                  # ----------------------------------------
                  # Plotter
                  #
@@ -314,7 +317,7 @@ gui_config = env(  # ----------------------------------------
                  # plotter_background_color=(255, 255, 255),
                  # plotter_grid_color=(255, 128, 64),
                  #
-                 plotter_colormap=dpg.mvPlotColormap_Viridis,  # DPG colormap
+                 plotter_colormap=dpg.mvPlotColormap_Viridis,  # DPG colormap (one of the `dpg.mvPlotColormap_*` constants)
                  plotter_search_results_highlight_color=(255, 96, 96),  # Raven default red
                  plotter_selection_highlight_color=(96, 255, 255),  # Raven default cyan
                  # ----------------------------------------
