@@ -39,6 +39,8 @@
 
 - Avatar
   - Update assets for all characters (add at least eye-waver effect, maybe other cel-blending cels too)
+  - Move data eyes management to server side
+  - Optional: hologram glitch effect when switching chat branches
 
 - Visualizer
   - Keep the app state in top-level containers, and pass these in/out explicitly. More FP and facilitates adding unit tests later.
@@ -71,6 +73,7 @@
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: Avatar idle off (10 sec)
+    - TTS warmup: add API function, call in Librarian and in avatar settings editor
     - Help card
   - Later:
     - Add nonlinear chat view / chat graph editor (this is part of where the true power of Librarian will come from)
