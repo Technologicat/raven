@@ -25,6 +25,9 @@
   - Fix bug: "reset zoom" missed some datapoints (in a "select visible", hotkey F9), if they were exactly at the edges of the data bounding box.
     - Note that also loading a dataset resets the zoom, so the bug also affected the initial view upon loading a dataset.
     - Workaround for previous versions: after a "reset zoom", zoom out by one mouse wheel click before using "select visible".
+  - Fix bug: wrong dtype in the embedder loader's CPU fallback.
+    - The CPU fallback loader now always uses float32.
+    - Workaround for previous versions: when working without a GPU, configure the embedder explicitly to use dtype `torch.float32`. See `raven.visualizer.config` and `raven.server.config`.
 
 
 ---
