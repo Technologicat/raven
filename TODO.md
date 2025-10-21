@@ -73,7 +73,6 @@
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: Avatar idle off (10 sec)
-    - TTS warmup: add API function, call in Librarian and in avatar settings editor
     - Help card
   - Later:
     - Add nonlinear chat view / chat graph editor (this is part of where the true power of Librarian will come from)

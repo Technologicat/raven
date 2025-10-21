@@ -54,6 +54,7 @@ __all__ = ["initialize",
            "tts_speak", "tts_speak_lipsynced",
            "tts_stop",
            "tts_speaking",
+           "tts_warmup",
            "websearch_search"]
 
 import logging
@@ -81,7 +82,7 @@ from ..common import netutil
 from ..common import nlptools
 from ..server.modules import avatarutil
 
-from .tts import tts_list_voices, tts_prepare, tts_speak, tts_speak_lipsynced, tts_stop, tts_speaking  # noqa: F401: re-export
+from .tts import tts_list_voices, tts_prepare, tts_speak, tts_speak_lipsynced, tts_stop, tts_speaking, tts_warmup  # noqa: F401: re-export
 from . import util  # for the `api_initialized` flag (must be looked up on the `util` module each time it is used, because the flag is not boxed)  # TODO: box it, or wrap it in a property?
 
 from .util import api_config, yell_on_error  # noqa: F401: re-export

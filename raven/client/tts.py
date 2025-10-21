@@ -4,6 +4,7 @@ This module coordinates lipsync between the TTS and the avatar, and implements t
 """
 
 __all__ = ["tts_list_voices",
+           "tts_warmup",
            "tts_prepare",
            "tts_speak",
            "tts_speak_lipsynced",
@@ -148,6 +149,20 @@ def tts_list_voices() -> List[str]:
     output_data = response.json()
     return output_data["voices"]
 
+def tts_warmup(voice: str) -> None:
+    """Warm up the TTS, before you need it for the first time.
+
+    The first invocation of the TTS may take some extra time as it loads the voice;
+    this function does that explicitly.
+    """
+    # Skip the LRU cache, as it would defeat the whole point of this function.
+    logger.info(f"tts_warmup: Warming up TTS for voice '{voice}'.")
+    _tts_prepare(text="The quick brown fox jumps over the lazy dog.",
+                 voice=voice,
+                 speed=1.0,
+                 get_metadata=True)  # not sure if the phonemizer needs warmup, but let's do it anyway
+    logger.info(f"tts_warmup: Warmup for voice '{voice}' done.")
+
 @functools.lru_cache(maxsize=128)
 def tts_prepare(text: str,
                 voice: str,
@@ -178,6 +193,13 @@ def tts_prepare(text: str,
 
     If anything goes wrong, returns `None`.
     """
+    return _tts_prepare(text, voice, speed, get_metadata)
+
+def _tts_prepare(text: str,
+                 voice: str,
+                 speed: float = 1.0,
+                 get_metadata: bool = True) -> Optional[Dict[str, Any]]:
+    """Internal. Non-cached variant of `tts_prepare`, containing the actual implementation."""
     if not util.api_initialized:
         raise RuntimeError("tts_prepare: The `raven.client.api` module must be initialized before using the API.")
     if not text.strip():
