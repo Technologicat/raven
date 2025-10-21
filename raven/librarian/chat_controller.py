@@ -411,6 +411,7 @@ class DPGChatMessage:
                                     dpg.show_item(text_content)
                             except SystemError:  # does not exist
                                 logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: GUI widget for chat node '{self.node_id}' does not exist, ignoring.")
+                        self.gui_button_callbacks["toggle_thinking_trace"] = toggle_message_think_callback  # stash it so we can call it from the hotkey handler
                         dpg.add_button(label=fa.ICON_CLOUD,
                                        callback=toggle_message_think_callback,
                                        width=gui_config.toolbutton_w,
@@ -419,7 +420,7 @@ class DPGChatMessage:
                         dpg.bind_item_font(f"message_think_toggle_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
                         # dpg.bind_item_theme(f"message_think_toggle_button_{self.gui_uuid}", "disablable_blue_button_theme")  # tag
                         message_think_toggle_tooltip = dpg.add_tooltip(f"message_think_toggle_button_{self.gui_uuid}")  # tag
-                        dpg.add_text("Show/hide thinking trace", parent=message_think_toggle_tooltip)
+                        dpg.add_text("Show/hide thinking trace [Ctrl+T]", parent=message_think_toggle_tooltip)
                         text_content = dpg_markdown.add_text(colorized_text,
                                                              wrap=gui_config.chat_text_w,
                                                              parent=widget)
@@ -588,7 +589,7 @@ class DPGChatMessage:
             dpg.bind_item_font(f"message_continue_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
             dpg.bind_item_theme(f"message_continue_button_{self.gui_uuid}", "disablable_button_theme")  # tag
             continue_message_tooltip = dpg.add_tooltip(f"message_continue_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Ask the AI to continue this response (create new revision) [Ctrl+T]", parent=continue_message_tooltip)
+            dpg.add_text("Ask the AI to continue this response (create new revision) [Ctrl+U]", parent=continue_message_tooltip)
         else:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 

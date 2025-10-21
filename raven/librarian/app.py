@@ -532,6 +532,8 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_R:
             fire_event_if_exists("reroll")
         elif key == dpg.mvKey_T:
+            fire_event_if_exists("toggle_thinking_trace")
+        elif key == dpg.mvKey_U:
             fire_event_if_exists("continue")
         elif key == dpg.mvKey_Left:
             fire_event_if_exists("prev")
