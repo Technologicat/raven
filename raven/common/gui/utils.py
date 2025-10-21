@@ -243,7 +243,8 @@ def load_extra_font(themes_and_fonts: env,
                     variant: Optional[str]) -> Union[str, int]:
     """Load another (non-default) font.
 
-    `themes_and_fonts`: obtain this from `bootup`; the font will be cached here.
+    `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
+                        The font will be cached here.
     `font_size`: in pixels, as in DPG functions that handle fonts.
     `font_basename`: passed to `get_font_path`, which see.
     `variant`: passed to `get_font_path`, which see.
@@ -251,7 +252,7 @@ def load_extra_font(themes_and_fonts: env,
     Returns the tuple `(key, id)`, where:
 
       - `key` is the name of the font.
-              Get the ID as `themes_and_fonts[key]`.
+              You can get the corresponding DPG font ID as `themes_and_fonts[key]`.
 
               Key depends on all of `font_basename`, `variant` (if applicable),
               and `font_size`.
