@@ -981,13 +981,6 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                         f = f_success
                         output_dir = opts.output_dir
                         if status is status_failed:
-                            # Shunt LLM traces for detected errors into a separate file
-                            error_info_filename = f"{unique_id}_errors.txt"
-                            error_info_path = os.path.join(path, error_info_filename)
-                            logger.info(f"When processing {fullpath}: Heuristics flagged possible errors in output, treating this file as failed and writing details to {error_info_path}")
-                            with open(error_info_path, "w") as f_errors:
-                                f_errors.write(error_info)
-
                             # If provided, use the separate output file and item directory for failed items
                             if opts.failed_filename is not None:
                                 f = f_failed
@@ -995,6 +988,14 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                                 output_dir = opts.failed_output_dir
                         f.write(f"{bibtex_entry}\n\n")  # one blank line after each entry
                         f.flush()
+
+                        if status is status_failed:
+                            # Shunt LLM traces for detected errors into a separate file
+                            error_info_filename = f"{unique_id}_errors.txt"
+                            error_info_path = os.path.join(output_dir, error_info_filename)
+                            logger.info(f"When processing {fullpath}: Heuristics flagged possible errors in output, treating this file as failed and writing details to {error_info_path}")
+                            with open(error_info_path, "w") as f_errors:
+                                f_errors.write(error_info)
 
                         # Move input file to done directory if specified (allows continuing later)
                         if output_dir is not None:
