@@ -41,15 +41,13 @@
   - Update assets for all characters (add at least eye-waver effect, maybe other cel-blending cels too)
   - Move data eyes management to server side
   - Optional: hologram glitch effect when switching chat branches
+  - Add help cards:
+    - Avatar settings editor
+    - Avatar pose editor
 
 - Visualizer
   - Keep the app state in top-level containers, and pass these in/out explicitly. More FP and facilitates adding unit tests later.
   - See if we can still refactor something to make `raven.visualizer.app` shorter (still too much of a "god object").
-    - Refactor the help card into a reusable class.
-      - Add help card to other apps in constellation:
-        - Librarian
-        - Avatar settings editor
-        - Avatar pose editor
     - Refactoring the info panel (~2k SLOC, half of the app) would help a lot.
     - Info tooltip another good candidate, and needs many of the same data sources to be passed in. (Do these two need to work together?)
   - Make the layout switchable left/right (which side of the screen the info panel is on, for on-site collaboration accounting for physical placement constraints for laptop and users)
@@ -74,7 +72,6 @@
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: Avatar idle off (10 sec)
-    - Help card
   - Later:
     - Add nonlinear chat view / chat graph editor (this is part of where the true power of Librarian will come from)
       - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_vewmodel.py#L206
@@ -161,7 +158,6 @@
       - Add a GUI button and window to show the full prompt (render as Markdown) and to copy it to clipboard
     - Robustness: temporarily disable the relevant buttons while the AI is writing
       - Per-message buttons can be then re-enabled correctly by checking whether the relevant action has a callback stashed for that specific displayed chat message (need to stash button DPG IDs or tags, too)
-    - Add feature: Help card, like in Raven-visualizer
     - Add feature: Ctrl+F find in current chat history, with highlighting
     - Add feature: search for chats (incremental fragment search for now)
     - Avatar: do more to eliminate stutter while receiving LLM response
