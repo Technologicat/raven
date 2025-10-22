@@ -21,6 +21,7 @@ with timer() as tim:
     import requests
     import sys
     import traceback
+    from typing import Union
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
     # https://github.com/hoffstadt/DearPyGui/issues/554
@@ -30,9 +31,11 @@ with timer() as tim:
     import dearpygui.dearpygui as dpg
 
     from mcpyrate import colorizer
+    from unpythonic.env import env
 
     # Vendored libraries
     from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
+    from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     # from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
     from ..client import api  # Raven-server support
@@ -43,6 +46,7 @@ with timer() as tim:
     from ..common import bgtask
 
     from ..common.gui import animation as gui_animation
+    from ..common.gui import helpcard
     from ..common.gui import utils as guiutils
 
     from . import appstate
@@ -411,6 +415,15 @@ with timer() as tim:
                     dpg.add_text("Toggle fullscreen [F11]",
                                  tag="fullscreen_tooltip_text")
 
+                # We'll define and bind the callback later, when we set up the help window.
+                dpg.add_button(label=fa.ICON_CIRCLE_QUESTION,
+                               width=gui_config.toolbutton_w,
+                               tag="help_button")
+                dpg.bind_item_font("help_button", themes_and_fonts.icon_font_regular)  # tag
+                with dpg.tooltip("help_button", tag="help_tooltip"):  # tag
+                    dpg.add_text("Open the Help card [F1]",
+                                 tag="help_tooltip_text")
+
                 # # DEBUG / TESTING button
                 # _testing_data_eyes_enabled = False
                 # def testing_callback() -> None:
@@ -436,7 +449,7 @@ with timer() as tim:
                 # testing_tooltip = dpg.add_tooltip("chat_testing_button")  # tag
                 # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
 
-                n_below_chat_buttons = 6
+                n_below_chat_buttons = 7
                 avatar_panel_left = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8)
                 dpg.add_spacer(width=avatar_panel_left + 60)
 
@@ -450,6 +463,85 @@ with timer() as tim:
 
 def update_animations():
     gui_animation.animator.render_frame()
+
+# --------------------------------------------------------------------------------
+# Built-in help window
+
+hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus text entry field", notes=""),
+               env(key_indent=1, key="Enter", action_indent=0, action="Send message to AI", notes="When text entry field focused"),
+               env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="When text entry field focused"),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop AI text generation", notes="While the AI is writing"),
+               env(key_indent=0, key="Ctrl+U", action_indent=0, action="Continue last AI message", notes="Creates new revision of same node"),
+               env(key_indent=0, key="Ctrl+R", action_indent=0, action="Reroll last AI message", notes="Creates new sibling"),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+T", action_indent=0, action="Show/hide last thinking trace", notes="For thinking models"),
+               env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak last AI message / stop speaking", notes=""),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling of last message", notes=""),
+               env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling of last message", notes=""),
+               helpcard.hotkey_new_column,
+               env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="F8", action_indent=0, action="Copy chatlog to clipboard", notes="As-is"),
+               env(key_indent=1, key="Shift+F8", action_indent=0, action="Copy chatlog to clipboard", notes="With chat node IDs"),
+               helpcard.hotkey_blank_entry,
+               env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
+               env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
+               )
+def render_help_extras(gui_parent: Union[str, int],
+                       c_hed: str,
+                       c_txt: str,
+                       c_dim: str,
+                       c_end: str) -> None:
+    """Render app-specific extra information into the help card.
+
+    Called by `HelpWindow` when the help card is first rendered.
+    """
+    c_hig = '<font color="#ff0000">'  # help text highlight for very important parts
+
+    # Chat history
+    dpg_markdown.add_text(f"{c_hed}**Chat history**{c_end}", parent=gui_parent)
+    g = dpg.add_group(horizontal=True, parent=gui_parent)
+    g1 = dpg.add_group(horizontal=False, parent=g)
+    dpg_markdown.add_text(f"{c_txt}The chat history is **natively nonlinear**. Messages are stored as nodes in a tree. The current chat is the HEAD, plus its ancestor chain up to the system prompt. Continuing the chat adds a new child node below the latest message displayed.{c_end}",
+                          parent=g1)
+    dpg_markdown.add_text(f"{c_txt}Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.{c_end}",
+                          parent=g1)
+    dpg_markdown.add_text(f"{c_txt}**This is a tech demo.** Currently old chats are stored, but there is no way to access them. We will add a graph view to navigate the chat tree later.{c_end}",
+                          parent=g1)
+    dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
+
+    # Docs database
+    dpg_markdown.add_text(f"{c_hed}**Document database**{c_end} (retrieval-augmented generation, RAG)", parent=gui_parent)
+    g = dpg.add_group(horizontal=True, parent=gui_parent)
+    g1 = dpg.add_group(horizontal=False, parent=g)
+    dpg_markdown.add_text(f'{c_txt}You can put *.txt* documents for the AI to access in *{librarian_config.llm_docs_dir}*. The path can be configured in *raven.librarian.config*.{c_end}',
+                          parent=g1)
+    dpg_markdown.add_text(f'{c_txt}The documents are search-indexed automatically. The index is automatically kept up to date. The search index is stored in *{librarian_config.llm_database_dir}*. If you ever need to clear it, just delete that directory.{c_end}',
+                          parent=g1)
+    dpg_markdown.add_text(f'{c_txt}When the **Documents** checkbox in the app is **ON**, the document database is automatically searched, using your latest message to the AI as the search query. If **Speculation** is **OFF**, and there is no match, the LLM is bypassed.{c_end}',
+                          parent=g1)
+    dpg_markdown.add_text(f'{c_txt}To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).{c_end}',
+                          parent=g1)
+
+    # Tool use (tool-calling)
+    dpg_markdown.add_text(f"{c_hed}**Tool use** (tool-calling){c_end}", parent=gui_parent)
+    g = dpg.add_group(horizontal=True, parent=gui_parent)
+    g1 = dpg.add_group(horizontal=False, parent=g)
+    dpg_markdown.add_text(f'{c_txt}Raven-librarian provides some tools, such as websearch, for the AI to use if it wants to. These can be enabled/disabled with the **Tools** checkbox in the app.{c_end}',
+                          parent=g1)
+    dpg_markdown.add_text(f'{c_txt}**This is a tech demo.** We plan to add more tools later.{c_end}',
+                          parent=g1)
+help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
+                                  width=gui_config.help_window_w,
+                                  height=gui_config.help_window_h,
+                                  reference_window=main_window,
+                                  themes_and_fonts=themes_and_fonts,
+                                  on_render_extras=render_help_extras,
+                                  on_show=None,
+                                  on_hide=None)
+dpg.set_item_callback("help_button", help_window.show)  # tag
 
 # --------------------------------------------------------------------------------
 # TODO: App window (viewport) resizing
@@ -507,11 +599,16 @@ def librarian_hotkeys_callback(sender, app_data):
     # Hotkeys that are always available, regardless of any dialogs (even if modal)
     if key == dpg.mvKey_F11:  # de facto standard hotkey for toggle fullscreen
         toggle_fullscreen()
-    # elif some_modal_window_visible():
-    #     ...
+
+    # Hotkeys while the Help card is shown - helpcard handles its own hotkeys
+    elif help_window.is_visible():
+        return
+
+    elif key == dpg.mvKey_F1:  # de facto standard hotkey for help
+        help_window.show()
 
     # Hotkeys for main window, while no modal window is shown
-    if key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
+    elif key == dpg.mvKey_F8:  # NOTE: Shift is a modifier here
         copy_chatlog_to_clipboard_as_markdown_callback()
     # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
