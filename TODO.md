@@ -62,6 +62,7 @@
   - BUG: Search result highlight: "Can a" -> highlights whole word "Can", then highlights "a" inside it, breaking the outer highlight
   - Importer: Configurable hyperparameters
   - File extensions: dataset (.pickle) should have file extension different from nlp cache (.pickle)
+  - Show item slug (BibTeX identifier)
 
 - Librarian
   - Documentation:
