@@ -1795,11 +1795,11 @@ with timer() as tim:
                 toolbar_separator()
 
                 # We'll define and bind the callback later, when we set up the help window.
-                dpg.add_button(label=fa.ICON_QUESTION,
+                dpg.add_button(label=fa.ICON_CIRCLE_QUESTION,
                                tag="help_button",
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("help_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("help_button", themes_and_fonts.icon_font_regular)  # tag
                 with dpg.tooltip("help_button", tag="help_tooltip"):  # tag
                     dpg.add_text("Open the Help card [F1]",
                                  tag="help_tooltip_text")
