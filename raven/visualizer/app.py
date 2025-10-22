@@ -39,6 +39,7 @@ with timer() as tim:
     import re
     import threading
     import time
+    from typing import Union
 
     import numpy as np
 
@@ -66,6 +67,7 @@ with timer() as tim:
     from ..common import utils as common_utils
 
     from ..common.gui import animation as gui_animation
+    from ..common.gui import helpcard
     from ..common.gui import utils as guiutils
     from ..common.gui import widgetfinder
 
@@ -447,7 +449,7 @@ def is_any_modal_window_visible():
     """
     return (is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible() or
             is_open_import_dialog_visible() or is_save_import_dialog_visible() or
-            is_help_window_visible())
+            help_window.is_visible())
 
 # --------------------------------------------------------------------------------
 # Word cloud
@@ -3873,16 +3875,7 @@ def _update_info_panel(*, task_env=None, env=None):
 # --------------------------------------------------------------------------------
 # Built-in help window
 
-# Human-readable list of hotkeys. The layout engine below auto-converts this into a GUI table of hotkeys.
-#
-# - The table entries are here listed in human reading order, column first.
-# - To tell the layout engine to start a new column (other than the first one), use `hotkey_new_column`.
-# - To leave an empty row in the current column, use `hotkey_blank_entry`. This is useful to visually separate groups of related hotkeys.
-# - The columns don't have to be the same length.
-#
-hotkey_new_column = sym("next_column")
-hotkey_blank_entry = env(key_indent=0, key="", action_indent=0, action="", notes="")
-hotkey_help = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a dataset", notes=""),
+hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a dataset", notes=""),
                env(key_indent=0, key="Ctrl+I", action_indent=0, action="Import BibTeX files", notes="Use this to create a dataset"),
                env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus search field", notes=""),
                env(key_indent=1, key="Enter", action_indent=0, action="Select search matches, and unfocus", notes="When search field focused"),
@@ -3892,7 +3885,7 @@ hotkey_help = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=1, key="Esc", action_indent=0, action="Cancel search term edit, and unfocus", notes="When search field focused"),
                env(key_indent=0, key="F3", action_indent=0, action="Scroll to next search match", notes="When matches shown in info panel"),
                env(key_indent=0, key="Shift+F3", action_indent=0, action="Scroll to previous search match", notes="When matches shown in info panel"),
-               hotkey_blank_entry,
+               helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+U", action_indent=0, action="Scroll to start of current cluster", notes='"up"'),
                env(key_indent=1, key="Ctrl+N", action_indent=0, action="Scroll to next cluster", notes=""),
                env(key_indent=1, key="Ctrl+P", action_indent=0, action="Scroll to previous cluster", notes=""),
@@ -3903,7 +3896,7 @@ hotkey_help = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=1, key="Up arrow", action_indent=0, action="Scroll up slightly", notes="When search field NOT focused"),
                env(key_indent=1, key="Down arrow", action_indent=0, action="Scroll down slightly", notes="When search field NOT focused"),
 
-               hotkey_new_column,
+               helpcard.hotkey_new_column,
                env(key_indent=0, key="F6", action_indent=0, action="Search/unsearch current item", notes="Searching highlights it in the plotter"),
                env(key_indent=1, key="Shift+F6", action_indent=0, action="Set selection to current item only", notes=""),
                env(key_indent=1, key="Ctrl+F6", action_indent=0, action="Remove current item from selection", notes=""),
@@ -3925,140 +3918,56 @@ hotkey_help = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
                )
+def render_help_extras(gui_parent: Union[str, int],
+                       c_hed: str,
+                       c_txt: str,
+                       c_dim: str,
+                       c_end: str) -> None:
+    """Render app-specific extra information into the help card.
 
-# We create the window on demand, because we need some styling, but `dpg_markdown.add_text` hangs the app if used at startup.
-# (Apparently, if called more than once before the first frame. Probably due to font loading?)
-help_window = None
-def make_help_window():
-    """Create the built-in help card (if not created yet)."""
-    global help_window
-    if help_window is not None:
-        return
-    if dpg.get_frame_count() < 10:
-        return
-
-    with dpg.window(show=False, label="Help", tag="help_window",
-                    modal=True,
-                    on_close=hide_help_window,
-                    no_collapse=True,
-                    no_resize=True,
-                    no_scrollbar=True,
-                    no_scroll_with_mouse=True,
-                    width=gui_config.help_window_w,
-                    height=gui_config.help_window_h) as help_window:
-        @call  # avoid polluting top-level namespace
-        def _():
-            help_heading_color = (255, 255, 255, 255)
-            help_text_color = (180, 180, 180, 255)
-            help_dim_color = (140, 140, 140, 255)
-            help_indent_pixels = 20
-
-            # Shorthand for color control sequences for MD renderer
-            c_hed = f'<font color="{help_heading_color}">'
-            c_txt = f'<font color="{help_text_color}">'
-            c_dim = f'<font color="{help_dim_color}">'
-            c_hig = '<font color="#ff0000">'  # help text highlight for very important parts
-            c_search = f'<font color="{gui_config.plotter_search_results_highlight_color}">'
-            c_selection = f'<font color="{gui_config.plotter_selection_highlight_color}">'
-            c_end = '</font>'
-
-            # Extract columns from the human-readable representation
-            columns = []
-            current_column = []
-            for help_entry in hotkey_help:
-                if help_entry is hotkey_new_column:
-                    columns.append(current_column)
-                    current_column = []
-                else:
-                    current_column.append(help_entry)
-            if len(current_column):  # loop-and-a-half, kind of
-                columns.append(current_column)
-            ncols = len(columns)
-
-            # Convert to rows (format actually used by DPG for constructing tables)
-            rows = list(itertools.zip_longest(*columns, fillvalue=hotkey_blank_entry))
-
-            with dpg.group(tag="hotkeys_help_group"):
-                # Header
-                dpg_markdown.add_text(f"{c_dim}[Press Esc to close. For a handy reference, screenshot this!]{c_end}")
-                dpg.add_spacer(width=1, height=themes_and_fonts.font_size // 2)
-
-                # Table of hotkeys. Render the specified layout.
-                with dpg.table(header_row=True, borders_innerV=True, sortable=False):
-                    for _ in range(ncols):
-                        dpg.add_table_column(label="Key or combination")  # key
-                        dpg.add_table_column(label="Action")  # action
-                        dpg.add_table_column(label="Notes")  # notes
-
-                    for row in rows:
-                        with dpg.table_row():
-                            for help_entry in row:
-                                if help_entry.key_indent > 0:
-                                    with dpg.group(horizontal=True):
-                                        dpg.add_spacer(width=help_entry.key_indent * help_indent_pixels)
-                                        dpg.add_text(help_entry.key, wrap=0, color=help_heading_color)
-                                else:
-                                    dpg.add_text(help_entry.key, wrap=0, color=help_heading_color)
-
-                                if help_entry.action_indent > 0:
-                                    with dpg.group(horizontal=True):
-                                        dpg.add_spacer(width=help_entry.action_indent * help_indent_pixels)
-                                        dpg.add_text(help_entry.action, wrap=0, color=help_dim_color)
-                                else:
-                                    dpg.add_text(help_entry.action, wrap=0, color=help_dim_color)
-
-                                dpg.add_text(help_entry.notes, wrap=0, color=help_dim_color)
-                dpg.add_spacer(width=1, height=themes_and_fonts.font_size)
-
-                # Legend for table
-                dpg_markdown.add_text(f"{c_hed}**Terminology**{c_end}")
-                with dpg.group(horizontal=True):
-                    with dpg.group(horizontal=False):
-                        dpg_markdown.add_text(f"- {c_txt}**Current item**: The topmost item **fully** visible in the info panel. The controls of the current item glow slightly.{c_end}")
-                        dpg_markdown.add_text(f"- {c_txt}**Current cluster**: The cluster the current item belongs to. Clusters are auto-detected by a linguistic analysis.{c_end}")
-                    with dpg.group(horizontal=False):
-                        dpg_markdown.add_text(f"- {c_txt}**Selection set**: The selected items, {c_end}{c_selection}**glowing**{c_end}{c_txt} in the plotter. As many are loaded into the info panel as reasonably fit.{c_end}")
-                        dpg_markdown.add_text(f"- {c_txt}**Search result set**: The items matching the current search, {c_end}{c_search}**glowing**{c_end}{c_txt} in the plotter.{c_end}")
-                dpg.add_spacer(width=1, height=themes_and_fonts.font_size)
-
-                # Additional general help
-                dpg_markdown.add_text(f"{c_hed}**How search works**{c_end}")
-                dpg_markdown.add_text(f"{c_txt}Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match. Ordering of fragments does **not** matter. The {c_end}{c_search}search result{c_end}{c_txt} and {c_end}{c_selection}selection{c_end}{c_txt} sets are **independent**. {c_end}{c_search}Search results{c_end}{c_txt} live-update as you type.{c_end}")
-                dpg_markdown.add_text(f'- {c_txt}A **lowercase** fragment matches **that fragment {c_end}{c_hig}case-insensitively{c_end}{c_txt}**. E.g. *"hydrogen"* matches also *"Hydrogen"*.{c_end}')
-                dpg_markdown.add_text(f'- {c_txt}A fragment with **at least one uppercase** letter matches **that fragment {c_end}{c_hig}case-sensitively{c_end}{c_txt}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.{c_end}')
-                dpg_markdown.add_text(f'- {c_txt}You can use regular numbers in place of subscript/superscript numbers. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*. {c_end}')
-                dpg_markdown.add_text(f"{c_txt}When the search field is focused, the usual text editing keys are available (*Enter, Esc, Home, End, Shift-select, Ctrl+Left, Ctrl+Right, Ctrl+A, Ctrl+Z, Ctrl+Y*).{c_end}")
-
-def show_help_window():
-    """Show the built-in help card."""
-    logger.debug("show_help_window: Ensuring help window exists.")
-    make_help_window()
-    logger.debug("show_help_window: Recentering help window.")
-    guiutils.recenter_window(help_window, reference_window=main_window)
-    logger.debug("show_help_window: Showing help window.")
-    dpg.show_item(help_window)  # For some reason, we need to do this *after* `set_item_pos` for a modal window, or this works only every other time (1, 3, 5, ...). Maybe a modal must be inside the viewport to successfully show it?
-    enter_modal_mode()
-    logger.debug("show_help_window: Done.")
-dpg.set_item_callback("help_button", show_help_window)  # tag
-
-def hide_help_window():
-    """Close the built-in help card, if it is open."""
-    if help_window is None:
-        logger.debug("hide_help_window: Help window does not exist. Nothing needs to be done.")
-        return
-    logger.debug("hide_help_window: Hiding help window.")
-    dpg.hide_item(help_window)
-    exit_modal_mode()
-    logger.debug("hide_help_window: Done.")
-
-def is_help_window_visible():
-    """Return whether the built-in help card is open.
-
-    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist, if it has not been opened yet.
+    Called by `HelpWindow` when the help card is first rendered.
     """
-    if help_window is None:
-        return False
-    return dpg.is_item_visible(help_window)
+    c_hig = '<font color="#ff0000">'  # help text highlight for very important parts
+    c_search = f'<font color="{gui_config.plotter_search_results_highlight_color}">'
+    c_selection = f'<font color="{gui_config.plotter_selection_highlight_color}">'
+
+    # Legend for table
+    dpg_markdown.add_text(f"{c_hed}**Terminology**{c_end}", parent=gui_parent)
+    g = dpg.add_group(horizontal=True, parent=gui_parent)
+    g1 = dpg.add_group(horizontal=False, parent=g)
+    dpg_markdown.add_text(f"- {c_txt}**Current item**: The topmost item **fully** visible in the info panel. The controls of the current item glow slightly.{c_end}",
+                          parent=g1)
+    dpg_markdown.add_text(f"- {c_txt}**Current cluster**: The cluster the current item belongs to. Clusters are auto-detected by a linguistic analysis.{c_end}",
+                          parent=g1)
+    g2 = dpg.add_group(horizontal=False, parent=g)
+    dpg_markdown.add_text(f"- {c_txt}**Selection set**: The selected items, {c_end}{c_selection}**glowing**{c_end}{c_txt} in the plotter. As many are loaded into the info panel as reasonably fit.{c_end}",
+                          parent=g2)
+    dpg_markdown.add_text(f"- {c_txt}**Search result set**: The items matching the current search, {c_end}{c_search}**glowing**{c_end}{c_txt} in the plotter.{c_end}",
+                          parent=g2)
+    dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
+
+    # Additional general help
+    dpg_markdown.add_text(f"{c_hed}**How search works**{c_end}",
+                          parent=gui_parent)
+    dpg_markdown.add_text(f"{c_txt}Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match. Ordering of fragments does **not** matter. The {c_end}{c_search}search result{c_end}{c_txt} and {c_end}{c_selection}selection{c_end}{c_txt} sets are **independent**. {c_end}{c_search}Search results{c_end}{c_txt} live-update as you type.{c_end}",
+                          parent=gui_parent)
+    dpg_markdown.add_text(f'- {c_txt}A **lowercase** fragment matches **that fragment {c_end}{c_hig}case-insensitively{c_end}{c_txt}**. E.g. *"hydrogen"* matches also *"Hydrogen"*.{c_end}',
+                          parent=gui_parent)
+    dpg_markdown.add_text(f'- {c_txt}A fragment with **at least one uppercase** letter matches **that fragment {c_end}{c_hig}case-sensitively{c_end}{c_txt}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.{c_end}',
+                          parent=gui_parent)
+    dpg_markdown.add_text(f'- {c_txt}You can use regular numbers in place of subscript/superscript numbers. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*. {c_end}',
+                          parent=gui_parent)
+    dpg_markdown.add_text(f"{c_txt}When the search field is focused, the usual text editing keys are available (*Enter, Esc, Home, End, Shift-select, Ctrl+Left, Ctrl+Right, Ctrl+A, Ctrl+Z, Ctrl+Y*).{c_end}",
+                          parent=gui_parent)
+help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
+                                  width=gui_config.help_window_w,
+                                  height=gui_config.help_window_h,
+                                  reference_window=main_window,
+                                  themes_and_fonts=themes_and_fonts,
+                                  on_render_extras=render_help_extras,
+                                  on_show=enter_modal_mode,
+                                  on_hide=exit_modal_mode)
+dpg.set_item_callback("help_button", help_window.show)  # tag
 
 # --------------------------------------------------------------------------------
 # GUI resizing handler
@@ -4087,7 +3996,7 @@ def _resize_gui():
     logger.debug("_resize_gui: Updating info panel current item on-screen coordinates.")
     update_current_item_info()
     logger.debug("_resize_gui: Recentering help window.")
-    guiutils.recenter_window(help_window, reference_window=main_window)
+    help_window.reposition()
     logger.debug("_resize_gui: Updating annotation tooltip.")
     update_mouse_hover(force=True, wait=False)
     logger.debug("_resize_gui: Rebuilding dimmer overlay.")
@@ -4318,10 +4227,8 @@ def hotkeys_callback(sender, app_data):
     if key == dpg.mvKey_F11:  # de facto standard hotkey for toggle fullscreen
         toggle_fullscreen()
 
-    # Hotkeys while the Help card is shown
-    elif is_help_window_visible():
-        if key == dpg.mvKey_Escape:
-            hide_help_window()
+    # Hotkeys while the Help card is shown - helpcard handles its own hotkeys
+    elif help_window.is_visible():
         return
 
     # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
@@ -4355,8 +4262,7 @@ def hotkeys_callback(sender, app_data):
     elif dpg.is_item_focused("search_field") and key == dpg.mvKey_Escape:  # tag  # cancel current search edit (handled by the text input internally, by sending a change event; but we need to handle the keyboard focus)
         dpg.focus_item("item_information_panel")  # tag
     elif key == dpg.mvKey_F1:  # de facto standard hotkey for help
-        show_help_window()
-        dpg.focus_item(help_window)
+        help_window.show()
     elif key == dpg.mvKey_F3:  # some old MS-DOS software in the 1990s used F3 for next/prev search match, I think?
         if (dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)):
             if dpg.is_item_enabled("prev_search_match_button"):  # tag
