@@ -91,6 +91,7 @@
         - Have a "thinking model" toggle that, when enabled, does the initial "<think>" tag check at the start of the message (and only if NOT continuing a previous message).
       - `raven.librarian.chatutil.scrub` already fixes a missing initial think tag (if there is a closing tag but not an opening one), but that's only for the final message.
     - MCP support for loading tools from remote servers?
+      - And/or skills support?
     - Add feature: show prompt
       - Save it per-chat-message, from `on_prompt_ready`.
       - Show prompt length as tokens (`raven.llmclient.token_count`).
