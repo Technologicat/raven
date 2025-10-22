@@ -123,6 +123,7 @@ llm_line_wrap_width = 160  # Raven-minichat: text wrapping in live update.
 gui_config = env(  # ----------------------------------------
                  # GUI element sizes, in pixels.
                  main_window_w=1920, main_window_h=1040,  # The default size just fits onto a 1080p screen in Linux Mint.
+                 help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
                  ai_warning_h=42,
                  chat_controls_h=42,
                  chat_panel_w=(1920 // 2),  # net width 960 -> gross width with borders = this + 2 * 8 = 976
