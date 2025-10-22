@@ -25,12 +25,6 @@
 
 - Make clustering hyperparameters configurable, preferably in the GUI. Put defaults into `raven.visualizer.config`.
 
-- Move the remaining GPU-dependent components of Raven to the server side.
-  - NLP / spaCy pipeline: use `raven.client.api.natlang_analyze` instead of loading spaCy locally in `raven.visualizer.importer` and `raven.librarian.hybridir`.
-  - Embeddings: Web API endpoint exists in `raven.server.app`, and a client-side Python API in `raven.client.api`; now just use it instead of loading `sentence_transformers` locally in `raven.visualizer.importer` and in `raven.librarian.hybridir`.
-  - Summarization: importer's `tldr` should call the server's `summarize` module. API available (`raven.client.api.summarize_summarize`).
-  - Have an option to use local AI models in the client, for an all-in-one solution? The point of having a server (in case of the visualizer) is being able to distribute.
-
 - Server
   - Zip the avatar characters, for ease of use
     - Include all extra cels in the zip, as well as optional animator/postprocessor settings, and optional emotion templates
