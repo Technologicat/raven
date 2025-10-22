@@ -1055,8 +1055,12 @@ def importer_started_callback(task_env):
     We use this to update the GUI state.
     """
     dpg.set_item_label("importer_startstop_button", fa.ICON_STOP)
-    dpg.set_value("importer_startstop_tooltip_text", "Cancel BibTeX import [Ctrl+Enter]")
+    dpg.set_value("importer_startstop_tooltip_text", "Cancel BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
     dpg.enable_item("importer_startstop_button")
+
+    dpg.set_item_label("importer_startstop_heading_text_button", "Running; click to cancel")  # TODO: DRY duplicate definitions for labels
+    dpg.set_value("importer_startstop_heading_text_tooltip_text", "Cancel BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
+    dpg.enable_item("importer_startstop_heading_text_button")
 
 def importer_done_callback(task_env):
     """Callback that fires when the BibTeX importer task actually exits, via the `done_callback` mechanism.
@@ -1069,9 +1073,15 @@ def importer_done_callback(task_env):
     update_importer_status()
     dpg.configure_item("importer_progress_bar", overlay="")
     dpg.hide_item("importer_progress_bar")
+
     dpg.set_item_label("importer_startstop_button", fa.ICON_PLAY)
     dpg.set_value("importer_startstop_tooltip_text", "Start BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
     dpg.enable_item("importer_startstop_button")
+
+    dpg.set_item_label("importer_startstop_heading_text_button", "Start")  # TODO: DRY duplicate definitions for labels
+    dpg.set_value("importer_startstop_heading_text_tooltip_text", "Start BibTeX import [Ctrl+Enter]")  # TODO: DRY duplicate definitions for labels
+    dpg.enable_item("importer_startstop_heading_text_button")
+
     # dpg.set_item_label("importer_window", "BibTeX import")  # TODO: DRY duplicate definitions for labels
 
 def start_importer(output_file, *input_files):
@@ -1080,6 +1090,7 @@ def start_importer(output_file, *input_files):
         return
     dpg.show_item("importer_progress_bar")
     dpg.disable_item("importer_startstop_button")  # Prevent multiple clicks: wait until the task actually starts before allowing the user to tell it to stop. The button will be re-enabled by the `started_callback`.
+    dpg.disable_item("importer_startstop_heading_text_button")
     importer.start_task(importer_started_callback, importer_done_callback, output_file, *input_files)
 
 def stop_importer():
@@ -1087,6 +1098,8 @@ def stop_importer():
     if not importer.has_task():
         return
     dpg.disable_item("importer_startstop_button")  # We must wait until the previous task actually exits before we can start a new one. The button will be re-enabled by the `done_callback`.
+    dpg.disable_item("importer_startstop_heading_text_button")
+    dpg.set_item_label("importer_startstop_heading_text_button", "Canceling...")  # TODO: DRY duplicate definitions for labels
     importer.cancel_task()
 
 def start_or_stop_importer():
@@ -2000,6 +2013,14 @@ with timer() as tim:
                 dpg.bind_item_theme("importer_startstop_button", "disablable_button_theme")  # tag
                 with dpg.tooltip("importer_startstop_button", tag="importer_startstop_tooltip"):  # tag
                     dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="importer_startstop_tooltip_text")  # TODO: DRY duplicate definitions for labels
+
+                dpg.add_button(label="Start",
+                               tag="importer_startstop_heading_text_button",
+                               width=gui_config.importer_w - gui_config.toolbutton_w - 11,
+                               callback=start_or_stop_importer)
+                dpg.bind_item_theme("importer_startstop_heading_text_button", "disablable_button_theme")  # tag
+                with dpg.tooltip("importer_startstop_heading_text_button", tag="importer_startstop_heading_text_tooltip"):
+                    dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="importer_startstop_heading_text_tooltip_text")
 
             importer_separator()
 
