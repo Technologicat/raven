@@ -363,8 +363,8 @@ def wait_for_resize(widget: Union[str, int],
         logger.debug(f"wait_for_resize: timeout ({wait_frames_max} frames) when waiting for resize of DPG widget {widget}")
     return False
 
-def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, int]) -> None:
-    """Reposition `thewindow` (DPG ID or tag), if visible, so that it is centered on `reference_window`.
+def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, int], update_window_size: bool = True) -> None:
+    """Reposition `thewindow` (DPG ID or tag), so that it is centered on `reference_window`.
 
     To center on viewport, pass your maximized main window as `reference_window`.
     """
@@ -383,13 +383,15 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
     logger.debug(f"recenter_window: Reference window (tag '{dpg.get_item_alias(reference_window)}', type {dpg.get_item_type(reference_window)}) size is {reference_window_w}x{reference_window_h}.")
 
     # Render offscreen so we get the final size. Only needed if the size can change.
-    dpg.set_item_pos(thewindow,
-                     (reference_window_w,
-                      reference_window_h))
-    dpg.show_item(thewindow)
-    logger.debug(f"recenter_window: After show command: Window is visible? {dpg.is_item_visible(thewindow)}.")
-    dpg.split_frame()  # wait for render
-    logger.debug(f"recenter_window: After wait for render: Window is visible? {dpg.is_item_visible(thewindow)}.")
+    if update_window_size:
+        logger.debug("recenter_window: Updating window size.")
+        dpg.set_item_pos(thewindow,
+                         (reference_window_w,
+                          reference_window_h))
+        dpg.show_item(thewindow)
+        logger.debug(f"recenter_window: After show command: Window is visible? {dpg.is_item_visible(thewindow)}.")
+        dpg.split_frame()
+        logger.debug(f"recenter_window: After wait for render: Window is visible? {dpg.is_item_visible(thewindow)}.")
 
     w, h = get_widget_size(thewindow)
     logger.debug(f"recenter_window: Window {thewindow} (tag '{dpg.get_item_alias(thewindow)}', type {dpg.get_item_type(thewindow)}) size is {w}x{h}.")
