@@ -13,10 +13,15 @@
     - There is no visible difference from the user's perspective (other than saving some VRAM, if also *Librarian* is running at the same time).
 
 - *Raven-librarian*:
-  - *Librarian*'s document database now uses *Raven-server* for embeddings and NLP.
+  - The document database now uses *Raven-server* for embeddings and NLP.
     - This saves some VRAM, by avoiding loading another copy of the same models in the client process.
     - This also makes the `raven.librarian.hybridir` information retrieval backend fully client-server, allowing the AI components for this too to run on another machine.
     - Because *Librarian* requires *Raven-server* for other purposes, too, *Librarian* will not start if the server is not running.
+  - Many small UI improvements, for example:
+    - Window resizing implemented.
+    - Collapsible thinking traces.
+    - Interrupt/continue.
+    - Help card added.
 
 - Tools:
   - *Raven-pdf2bib*: Overhauled. See updated instructions in [visualizer README](raven/visualizer/README.md).
