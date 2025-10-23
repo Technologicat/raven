@@ -894,7 +894,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
         def commit(task_env: envcls) -> None:
             assert task_env is not None
             logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Entered.")
-            if task_env.cancelled:
+            if task_env.cancelled:  # while waiting in queue
                 logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Cancelled.")
                 return
             logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Committing changes to HybridIR (may take a while; this step cannot be cancelled).")
