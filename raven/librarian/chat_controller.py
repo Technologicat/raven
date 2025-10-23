@@ -1013,12 +1013,12 @@ class DPGLinearizedChatView:
 # Scaffold to GUI integration
 
 class DPGChatController:
-    _class_lock = threading.RLock()
+    class_lock = threading.RLock()
     _class_initialized = False
     @classmethod
     def _load_class_textures(cls):
         """Load textures common to all instances of this class."""
-        with cls._class_lock:
+        with cls.class_lock:
             if cls._class_initialized:
                 return
             # Initialize textures.
