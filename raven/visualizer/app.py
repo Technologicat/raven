@@ -456,8 +456,6 @@ def is_any_modal_window_visible():
 
 # See also `initialize_filedialogs` further below.
 
-word_cloud_render_status_box = box(bgtask.status_stopped)
-word_cloud_render_lock = threading.Lock()
 word_cloud_last_dataset_addr = None  # for storing the `id()` of the last dataset the word cloud was generated for (to detect the user opening a different file)
 word_cloud_last_data_idxs = set()  # for detecting selection changes
 word_cloud_image_box = box(np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4],  # For texture data. We currently mutate the array, although we could avoid that since it's boxed.
@@ -483,11 +481,10 @@ def update_word_cloud(data_idxs, *, only_if_visible=False, wait=False):
     if not doit:
         return
 
-    word_cloud_render_task = bgtask.make_managed_task(status_box=word_cloud_render_status_box,
-                                                      lock=word_cloud_render_lock,
-                                                      entrypoint=_update_word_cloud,
-                                                      running_poll_interval=0.1,
-                                                      pending_wait_duration=0.1)
+    word_cloud_render_task = bgtask.ManagedTask(category="raven_visualizer_word_cloud_render",
+                                                entrypoint=_update_word_cloud,
+                                                running_poll_interval=0.1,
+                                                pending_wait_duration=0.1)
     word_cloud_task_manager.submit(word_cloud_render_task, envcls(wait=wait,
                                                                   data_idxs=data_idxs))
 
@@ -1373,6 +1370,7 @@ def update_animations():
     # ----------------------------------------
     # Show loading spinner when info panel is refreshing
 
+    info_panel_render_status_box = bgtask.ManagedTask.get_status_box("raven_visualizer_info_panel_render")
     if unbox(info_panel_render_status_box) is bgtask.status_pending:
         dpg.hide_item("info_panel_rendering_spinner")  # tag
         dpg.show_item("info_panel_pending_spinner")  # tag
@@ -2097,8 +2095,6 @@ def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
 # --------------------------------------------------------------------------------
 # Annotation tooltip for mouse hover on the plotter
 
-annotation_render_status_box = box(bgtask.status_stopped)
-annotation_render_lock = threading.Lock()  # Render access - only one copy of the renderer may be rebuilding the annotation tooltip at any given time.
 annotation_content_lock = threading.RLock()  # Content double buffering (swap). Allowing the same thread to enter multiple nested critical sections makes some checks simpler here.
 
 annotation_build_number = 0  # Sequence number of last completed annotation tooltip build.
@@ -2147,11 +2143,10 @@ def update_mouse_hover(*, force=False, wait=True, wait_duration=0.05, env=None):
         dpg.hide_item(annotation_window)
     env.m_prev = m
 
-    annotation_render_task = bgtask.make_managed_task(status_box=annotation_render_status_box,
-                                                      lock=annotation_render_lock,
-                                                      entrypoint=_update_annotation,
-                                                      running_poll_interval=0.01,
-                                                      pending_wait_duration=wait_duration)
+    annotation_render_task = bgtask.ManagedTask(category="raven_visualizer_annotation_render",
+                                                entrypoint=_update_annotation,
+                                                running_poll_interval=0.01,
+                                                pending_wait_duration=wait_duration)
     annotation_task_manager.submit(annotation_render_task, envcls(wait=wait))
 
 # Worker.
@@ -2428,8 +2423,6 @@ def clear_mouse_hover():
 #
 # NOTE: Fasten your seatbelt, everything related to the info panel makes up ~half of the entire program.
 
-info_panel_render_status_box = box(bgtask.status_stopped)
-info_panel_render_lock = threading.Lock()  # Render access - only one copy of the renderer may be rebuilding the info panel at any given time.
 info_panel_content_lock = threading.RLock()  # Content double buffering (swap). Allowing the same thread to enter multiple nested critical sections makes some checks simpler here.
 
 info_panel_build_number = 0  # Sequence number of last completed info panel build, so that callbacks can refer to the GUI widgets of the entries currently in the info panel by their DPG tags.
@@ -2500,11 +2493,10 @@ def update_info_panel(*, wait=True, wait_duration=0.25):
     Note that *running* tasks are never cancelled, so if a previous update was already in progress, it will still
     complete, and then a new update will be triggered by the latest search input.
     """
-    info_panel_render_task = bgtask.make_managed_task(status_box=info_panel_render_status_box,
-                                                      lock=info_panel_render_lock,
-                                                      entrypoint=_update_info_panel,
-                                                      running_poll_interval=0.1,
-                                                      pending_wait_duration=wait_duration)
+    info_panel_render_task = bgtask.ManagedTask(category="raven_visualizer_info_panel_render",
+                                                entrypoint=_update_info_panel,
+                                                running_poll_interval=0.1,
+                                                pending_wait_duration=wait_duration)
     info_panel_task_manager.submit(info_panel_render_task, envcls(wait=wait))
 
 # ----------------------------------------
@@ -3160,7 +3152,7 @@ def _update_info_panel(*, task_env=None, env=None):
     `env`: Internal, handled by `@dlet`. Stores local state between calls (for scroll position management).
     """
     # NOTE: In this function ONLY, we don't need to acquire `info_panel_content_lock` to guard against sudden content swaps,
-    # because this function is the only one that does those swaps, and this is only ever entered with `info_panel_render_lock` held.
+    # because this function is the only one that does those swaps, and this is only ever entered with the info panel render lock held (managed in the `ManagedTask`).
 
     # For stopping the scroll animation, if running when we perform the content swap.
     global scroll_animation

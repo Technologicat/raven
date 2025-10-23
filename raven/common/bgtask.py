@@ -1,5 +1,5 @@
 __all__ = ["TaskManager",
-           "make_managed_task",
+           "ManagedTask", "make_managed_task",
            "status_stopped", "status_pending", "status_running"]
 
 import logging
@@ -7,11 +7,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
+import collections
 import concurrent.futures
 import threading
 import time
 import traceback
-from typing import Callable, Union
+from typing import Callable
 
 from unpythonic import box, gensym, sym, Symbol, unbox
 from unpythonic.env import env
@@ -226,6 +227,60 @@ class TaskManager:
             logger.info(f"TaskManager.clear: instance '{self.name}': clearing task list.")
             self.tasks.clear()
 
+class ManagedTask:
+    """A simple wrapper class for `make_managed_task` that manages task status boxes and locks automatically per unique category name."""
+    class_lock = threading.RLock()
+    boxes = collections.defaultdict(lambda: box(status_stopped))
+    locks = {}
+
+    def __init__(self,
+                 category: str,
+                 entrypoint: Callable,
+                 running_poll_interval: float,
+                 pending_wait_duration: float):
+        """Object-oriented interface to `make_managed_task`, which see.
+
+        `status_box` and `lock` are handled automatically, per unique `category`.
+
+        `entrypoint`, `running_poll_interval` and `pending_wait_duration` are passed to `make_managed_task`.
+        """
+        with type(self).class_lock:
+            if category not in type(self).locks:
+                type(self).locks[category] = threading.Lock()
+            self.fn = make_managed_task(status_box=type(self).boxes[category],
+                                        lock=type(self).locks[category],
+                                        entrypoint=entrypoint,
+                                        running_poll_interval=running_poll_interval,
+                                        pending_wait_duration=pending_wait_duration)
+
+    @classmethod
+    def get_status_box(cls, category: str) -> box:
+        """Get the status box for `category`, thread-safely.
+
+        This is for clients to display GUI task status indicators and such.
+
+        Usage example::
+
+            my_status_box = bgtask.ManagedTask.get_status_box("my_unique_category_tag")
+            if unbox(my_status_box) is bgtask.status_pending:
+                ...
+            elif unbox(my_status_box) is bgtask.status_running:
+                ...
+            else:  # bgtask.status_stopped
+                ...
+
+        Here "my_unique_category_tag" is whatever you pass to `ManagedTask` to create your task.
+        It doesn't matter if no task for that category has been created yet. The box for a category
+        is created at first access time, regardless of if that access is by creating a task, or by
+        calling this function.
+        """
+        with cls.class_lock:
+            return cls.boxes[category]  # note auto-create
+
+    def __call__(self, *args, **kwargs):
+        """Call the entrypoint with the given arguments. Used by `TaskManager` when it starts this task."""
+        return self.fn(*args, **kwargs)
+
 def make_managed_task(*,
                       status_box: box,
                       lock: threading.Lock,
@@ -233,6 +288,8 @@ def make_managed_task(*,
                       running_poll_interval: float,
                       pending_wait_duration: float) -> Callable:
     """Create a background task that makes double-sure that only one instance is running at a time.
+
+    If you'd rather use an object-oriented interface that handles `status_box` and `lock` automatically, see `ManagedTask`.
 
     This works together with `TaskManager`, adding on top of it mechanisms to track the status for
     the same kind of tasks (for displaying spinners in the GUI), as well as a lock to ensure that only one call

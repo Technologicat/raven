@@ -31,6 +31,7 @@ import os
 import pathlib
 import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+import uuid
 
 import watchdog.events
 import watchdog.observers
@@ -900,11 +901,11 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Committing changes to HybridIR (may take a while; this step cannot be cancelled).")
             self.retriever.commit()
             logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Done.")
-        self.commit_task = bgtask.make_managed_task(status_box=self._status_box,
-                                                    lock=self._lock,
-                                                    entrypoint=commit,
-                                                    running_poll_interval=1.0,
-                                                    pending_wait_duration=1.0)
+        self.uuid = str(uuid.uuid4())
+        self.commit_task = bgtask.ManagedTask(category=f"raven_librarian_HybridIRFileSystemEventHandler_{self.uuid}_commit",
+                                              entrypoint=commit,
+                                              running_poll_interval=1.0,
+                                              pending_wait_duration=1.0)
         self.bootup()
 
     def bootup(self):
