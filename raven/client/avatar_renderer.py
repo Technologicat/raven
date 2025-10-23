@@ -23,6 +23,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import concurrent.futures
 import io
 import os
 import pathlib
@@ -91,7 +92,7 @@ class DPGAvatarRenderer:
                  avatar_x_center: int,
                  avatar_y_bottom: int,
                  paused_text: Optional[str],
-                 task_manager: bgtask.TaskManager):
+                 executor: concurrent.futures.Executor):
         """DPG GUI driver for Raven-avatar.
 
         This can only be instantiated after DPG bootup is complete, because the constructor sets up some GUI widgets.
@@ -112,9 +113,11 @@ class DPGAvatarRenderer:
         For a complete usage example, see `raven.avatar.settings_editor.app`.
         """
         self.gui_parent = gui_parent
-        self.task_manager = task_manager
+        self.task_manager = bgtask.TaskManager(name="avatar_renderer",
+                                               mode="concurrent",
+                                               executor=executor)
         self.texture_registry = dpg.add_texture_registry(tag=f"librarian_avatar_renderer_0x{id(self):x}_textures")
-        self._task_env = None  # This holds the local namespace (`unpythonic.env.env`) of the background task, so we can cancel the task if needed.
+        self._task_env = None  # This holds the local namespace (`unpythonic.env.env`) of the currently running background task.
 
         self.live_texture = None  # The raw texture object
         self.blank_texture = None  # Raw blank texture
@@ -602,15 +605,18 @@ class DPGAvatarRenderer:
         self.animator_running = True  # automatically enter animator running state when `start` is called
         dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")  # and show the image  # tag
 
-    def stop(self) -> None:
+    def stop(self, wait: bool = False) -> None:
         """The opposite of `start`.
 
         This disconnects the `DPGAvatarRenderer` instance from the avatar instance.
 
         This also explicitly shuts down the background task that receives video.
+
+        `wait`: Whether to wait until the background task actually exits. Useful during app shutdown,
+                so that GUI resources won't go bye-bye before the task has exited.
         """
         if self._task_env is not None:
             logger.info(f"DPGAvatarRenderer.stop: Stopping background task for avatar instance '{self.avatar_instance_id}'.")
-            self._task_env.cancelled = True
+            self.task_manager.clear(wait=wait)
         else:
             logger.info("DPGAvatarRenderer.stop: Nothing to do (no background task running), ignoring.")

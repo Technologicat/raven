@@ -48,7 +48,6 @@ with timer() as tim:
     from ...vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
     from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
-    from ...common import bgtask
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import messagebox
     from ...common.gui import utils as guiutils
@@ -66,9 +65,6 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # Module bootup
 
 bg = concurrent.futures.ThreadPoolExecutor()
-task_manager = bgtask.TaskManager(name="avatar_settings_editor",
-                                  mode="concurrent",
-                                  executor=bg)
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
                tts_playback_audio_device=client_config.tts_playback_audio_device,
@@ -443,7 +439,7 @@ class PostprocessorSettingsEditorGUI:
                                                                  avatar_x_center=512,
                                                                  avatar_y_bottom=viewport_height - 16,
                                                                  paused_text="[Animator is paused]",
-                                                                 task_manager=task_manager)
+                                                                 executor=bg)
                     image_size = int(self.upscale * self.source_image_size)
                     self.dpg_avatar_renderer.configure_live_texture(image_size)
                     self.dpg_avatar_renderer.configure_fps_counter(show=True)
@@ -1395,10 +1391,9 @@ def gui_shutdown() -> None:
     global gui_instance
     logger.info("gui_shutdown: entered")
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
-    task_manager.clear(wait=True)  # Wait until background tasks actually exit.
     avatar_controller.shutdown()
     if gui_instance is not None:
-        gui_instance.dpg_avatar_renderer.stop()
+        gui_instance.dpg_avatar_renderer.stop(wait=True)
     gui_animation.animator.clear()
     gui_instance = None
     logger.info("gui_shutdown: done")
@@ -1480,7 +1475,7 @@ try:
         dpg.render_dearpygui_frame()
     # dpg.start_dearpygui()  # automatic render loop
 except KeyboardInterrupt:
-    task_manager.clear(wait=False)  # signal background tasks to exit
+    pass  # cleanup will be handled by our DPG exit handler
 
 dpg.destroy_context()
 

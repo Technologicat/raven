@@ -61,7 +61,6 @@
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
   - Maybe next:
-    - `raven.client.avatar_renderer` could have its own task manager (just get the `concurrent.futures.executor` as a parameter)
     - Long subtitle splitter (we now have the audio length).
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?

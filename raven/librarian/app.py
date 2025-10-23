@@ -63,9 +63,6 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # Module bootup
 
 bg = concurrent.futures.ThreadPoolExecutor()
-task_manager = bgtask.TaskManager(name="librarian",  # for avatar renderer
-                                  mode="concurrent",
-                                  executor=bg)
 gui_resize_task_manager = bgtask.TaskManager(name="librarian_gui_resize",  # de-spammer for expensive parts of GUI resizing
                                              mode="sequential",
                                              executor=bg)
@@ -276,7 +273,7 @@ with timer() as tim:
                                                             avatar_x_center=(avatar_panel_w // 2),
                                                             avatar_y_bottom=(avatar_panel_h - 8),
                                                             paused_text="[No video]",
-                                                            task_manager=task_manager)
+                                                            executor=bg)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
                     dpg_avatar_renderer.configure_live_texture(new_image_size=int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * librarian_config.avatar_config.source_image_size))
 
@@ -820,10 +817,9 @@ def gui_shutdown() -> None:
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
     gui_resize_task_manager.clear(wait=True)
-    task_manager.clear(wait=True)
     chat_controller.shutdown()
     avatar_controller.shutdown()
-    dpg_avatar_renderer.stop()
+    dpg_avatar_renderer.stop(wait=True)
     gui_animation.animator.clear()
     logger.info("gui_shutdown: done")
 dpg.set_exit_callback(gui_shutdown)
