@@ -278,7 +278,7 @@ class HelpWindow:
         global visible_help_window_instance
         logger.info("HelpWindow.show: Showing window.")
         self._render()
-        self.reposition()
+        self.reposition(_force=True)
         dpg.show_item(self._window)  # For some reason, we need to do this *after* `set_item_pos` for a modal window, or this works only every other time (1, 3, 5, ...). Maybe a modal must be inside the viewport to successfully show it?
         visible_help_window_instance = self
         if self.on_show is not None:
@@ -311,11 +311,18 @@ class HelpWindow:
             return False
         return dpg.is_item_visible(self._window)
 
-    def reposition(self):
-        """Recenter the help window on its reference window."""
+    def reposition(self, _force: bool = False) -> None:
+        """Recenter the help window on its reference window.
+
+        `_force`: Center the window even if it is not visible. (This will make it visible.)
+                  For internal use by `show`.
+        """
         if self._window is None:
             logger.info("HelpWindow.reposition: Window does not exist. Nothing needs to be done.")
             return
-        logger.info("HelpWindow.reposition: Recentering window.")
-        guiutils.recenter_window(self._window, reference_window=self.reference_window)
-        logger.info("HelpWindow.reposition: Done.")
+        if _force or self.is_visible():
+            logger.info("HelpWindow.reposition: Recentering window.")
+            guiutils.recenter_window(self._window, reference_window=self.reference_window, update_window_size=_force)
+            logger.info("HelpWindow.reposition: Done.")
+        else:
+            logger.info("HelpWindow.reposition: Window is not visible. Nothing needs to be done.")
