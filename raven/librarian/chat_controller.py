@@ -917,7 +917,7 @@ class DPGLinearizedChatView:
         """
         max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
         for elapsed_frames in range(max_wait_frames):
-            if max_y_scroll > 0:
+            if max_y_scroll > 0:  # TODO: This approach fails when the content is less than one screenful in length. Think of a better way; currently we just use a small `max_wait_frames`.
                 break
             dpg.split_frame()
             max_y_scroll = dpg.get_y_scroll_max(self.gui_parent)
