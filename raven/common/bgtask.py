@@ -228,7 +228,7 @@ class TaskManager:
 
 def make_managed_task(*,
                       status_box: box,
-                      lock: Union[threading.Lock, threading.RLock],
+                      lock: threading.Lock,
                       entrypoint: Callable,
                       running_poll_interval: float,
                       pending_wait_duration: float) -> Callable:
