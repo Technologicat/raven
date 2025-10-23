@@ -779,8 +779,6 @@ logger.info("App bootup...")
 
 avatar_instance_id = api.avatar_load(librarian_config.avatar_config.image_path)
 api.avatar_load_emotion_templates(avatar_instance_id, {})  # send empty dict -> reset emotion templates to server defaults
-api.avatar_start(avatar_instance_id)
-dpg_avatar_renderer.start(avatar_instance_id)
 avatar_controller = DPGAvatarController(stop_tts_button_gui_widget="chat_stop_speech_button",  # tag
                                         on_tts_idle=None,
                                         tts_idle_check_interval=None,
@@ -875,6 +873,8 @@ def _load_initial_animator_settings() -> None:
     animator_settings.update(librarian_config.avatar_config.animator_settings_overrides)
 
     api.avatar_load_animator_settings(avatar_instance_id, animator_settings)  # send settings to server
+    api.avatar_start(avatar_instance_id)
+    dpg_avatar_renderer.start(avatar_instance_id)
     dpg_avatar_renderer.load_backdrop_image(animator_settings["backdrop_path"])
     dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 16,
                                            new_height=avatar_panel_h - 16,
