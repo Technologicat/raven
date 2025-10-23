@@ -400,6 +400,7 @@ class DPGAvatarRenderer:
                 w, h = guiutils.get_widget_size(self.paused_text_gui_widget)
                 dpg.set_item_pos(self.paused_text_gui_widget, (((self.image_size - w) // 2), (self.image_size // 2)))  # TODO: account for font size / height
                 dpg.hide_item(f"avatar_live_image_{self.live_texture_id_counter}")
+                dpg.hide_item(self.backdrop_drawlist_gui_widget)
                 api.avatar_stop(self.avatar_instance_id)
                 self.animator_running = False
             except SystemError:  # window or live image widget does not exist
@@ -407,6 +408,7 @@ class DPGAvatarRenderer:
         else:  # action == "resume":
             api.avatar_start(self.avatar_instance_id)
             dpg.hide_item(self.paused_text_gui_widget)
+            dpg.show_item(self.backdrop_drawlist_gui_widget)
             dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")
             self.animator_running = True
 

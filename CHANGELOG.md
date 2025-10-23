@@ -40,6 +40,9 @@
     - The axes are not clickable, so the highlight was spurious.
     - This was broken when we upgraded to DearPyGUI 2.0, where the plotter changed to introduce that hover-highlight by default. Now we disable the highlight by theming the plotter.
 
+- *Raven-avatar*:
+  - Fix bug: Also the background image is now hidden while the avatar is paused.
+
 
 ---
 
