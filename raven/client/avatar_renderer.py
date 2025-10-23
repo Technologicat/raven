@@ -609,6 +609,8 @@ class DPGAvatarRenderer:
 
         This also explicitly shuts down the background task that receives video.
         """
-        if self._task_env is None:
-            raise RuntimeError("DPGAvatarRenderer.stop: not running, nothing to stop.")
-        self._task_env.cancelled = True
+        if self._task_env is not None:
+            logger.info(f"DPGAvatarRenderer.stop: Stopping background task for avatar instance '{self.avatar_instance_id}'.")
+            self._task_env.cancelled = True
+        else:
+            logger.info("DPGAvatarRenderer.stop: Nothing to do (no background task running), ignoring.")

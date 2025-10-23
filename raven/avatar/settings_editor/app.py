@@ -1392,12 +1392,14 @@ avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=av
 
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
+    global gui_instance
     logger.info("gui_shutdown: entered")
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     task_manager.clear(wait=True)  # Wait until background tasks actually exit.
     avatar_controller.shutdown()
+    if gui_instance is not None:
+        gui_instance.dpg_avatar_renderer.stop()
     gui_animation.animator.clear()
-    global gui_instance
     gui_instance = None
     logger.info("gui_shutdown: done")
 dpg.set_exit_callback(gui_shutdown)

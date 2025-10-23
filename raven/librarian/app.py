@@ -823,6 +823,7 @@ def gui_shutdown() -> None:
     task_manager.clear(wait=True)
     chat_controller.shutdown()
     avatar_controller.shutdown()
+    dpg_avatar_renderer.stop()
     gui_animation.animator.clear()
     logger.info("gui_shutdown: done")
 dpg.set_exit_callback(gui_shutdown)
