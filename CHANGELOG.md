@@ -8,12 +8,15 @@
   - Configurable plotter colors (background, grid, colormap). Loaded from `raven.visualizer.config` at app startup.
   - Configurable word cloud colors (background, colormap). Loaded from `raven.visualizer.config` at app startup.
   - The section headings in the BibTeX import dialog are now clickable, and perform the same function as the icon buttons.
-  - The importer now automatically uses *Raven-server* for embeddings and NLP if it is running.
+  - *Visualizer*'s importer now automatically uses *Raven-server* for embeddings and NLP if it is running.
     - If the server is not running, the AI models are loaded locally (in the client process) as before.
+    - There is no visible difference from the user's perspective (other than saving some VRAM, if also *Librarian* is running at the same time).
 
 - *Raven-librarian*:
-  - Librarian's document database now uses *Raven-server* for embeddings and NLP.
-    - Because Librarian requires *Raven-server* for other purposes, too, it will not start if the server is not running.
+  - *Librarian*'s document database now uses *Raven-server* for embeddings and NLP.
+    - This saves some VRAM, by avoiding loading another copy of the same models in the client process.
+    - This also makes the `raven.librarian.hybridir` information retrieval backend fully client-server, allowing the AI components for this too to run on another machine.
+    - Because *Librarian* requires *Raven-server* for other purposes, too, *Librarian* will not start if the server is not running.
 
 - Tools:
   - *Raven-pdf2bib*: Overhauled. See updated instructions in [visualizer README](raven/visualizer/README.md).
@@ -28,6 +31,9 @@
   - Fix bug: wrong dtype in the embedder loader's CPU fallback.
     - The CPU fallback loader now always uses float32.
     - Workaround for previous versions: when working without a GPU, configure the embedder explicitly to use dtype `torch.float32`. See `raven.visualizer.config` and `raven.server.config`.
+  - Fix UI bug: the plotter axes no longer light up when the mouse hovers on them.
+    - The axes are not clickable, so the highlight was spurious.
+    - This was broken when we upgraded to DearPyGUI 2.0, where the plotter changed to introduce that hover-highlight by default. Now we disable the highlight by theming the plotter.
 
 
 ---
