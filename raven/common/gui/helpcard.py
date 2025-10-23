@@ -47,7 +47,7 @@ class HelpWindow:
     _class_initialized = False
 
     @classmethod
-    def _initialize_class(cls):
+    def _initialize_class(cls) -> None:
         with cls._class_init_lock:
             if cls._class_initialized:
                 return
@@ -167,8 +167,8 @@ class HelpWindow:
 
         self._initialize_class()
 
-    def _render(self):
-        """Construct the GUI. Called automatically."""
+    def _render(self) -> None:
+        """Construct the GUI. Called automatically when the window is shown for the first time."""
         if self._window is not None:  # already rendered
             logger.info("HelpWindow._render: Done, GUI already rendered.")
             return
@@ -268,7 +268,7 @@ class HelpWindow:
         self._window = help_window
         logger.info("HelpWindow._render: Done.")
 
-    def show(self):
+    def show(self) -> None:
         """Show the help window.
 
         This also auto-centers the help window on the reference window.
@@ -286,7 +286,7 @@ class HelpWindow:
         dpg.focus_item(self._window)
         logger.info("HelpWindow.show: Done.")
 
-    def hide(self):
+    def hide(self) -> None:
         """Close the help window, if it is open.
 
         If the window was open, and is being closed, the `on_hide` handler, if set, will be called.
@@ -302,7 +302,7 @@ class HelpWindow:
             self.on_hide()
         logger.info("HelpWindow.hide: Done.")
 
-    def is_visible(self):
+    def is_visible(self) -> bool:
         """Return whether the help window is open.
 
         We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist, if it has not been opened yet.
