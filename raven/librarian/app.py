@@ -21,7 +21,7 @@ with timer() as tim:
     import requests
     import sys
     import traceback
-    from typing import Union
+    from typing import Tuple, Union
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
     # https://github.com/hoffstadt/DearPyGui/issues/554
@@ -180,20 +180,68 @@ logger.info(f"RAG document store loaded in {tim.dt:0.6g}s.")
 
 logger.info("Initial GUI setup...")
 with timer() as tim:
-    with dpg.window(show=True, modal=False, no_title_bar=False, tag="summarizer_window",
+    with dpg.window(show=True, modal=False, no_title_bar=False, tag="librarian_main_window",
                     label="Raven-librarian main window",
                     no_scrollbar=True, autosize=True) as main_window:  # DPG "window" inside the app OS window ("viewport"), container for the whole GUI
+        # We all love magic numbers!
+        #
+        # The dynamic panel sizes are not available at startup, until the GUI is rendered at least once,
+        # so we must compute the initial sizes explicitly. These is also needed for dynamic resizing.
+        def _get_chat_panel_base_size() -> Tuple[int, int]:  # at initial view, with the window at its design size
+            w = gui_config.chat_panel_w + 16  # 16 = round border (8 on each side)
+            h = gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8
+            return w, h
+        def _get_chat_panel_size(main_window_w: int, main_window_h: int) -> Tuple[int, int]:  # at current window size
+            extra_w = main_window_w - gui_config.main_window_w
+            extra_h = main_window_h - gui_config.main_window_h
+            base_w, base_h = _get_chat_panel_base_size()
+            w = base_w + extra_w
+            h = base_h + extra_h
+            return w, h
+        def _get_avatar_panel_base_size() -> Tuple[int, int]:
+            chat_panel_base_w, chat_panel_base_h = _get_chat_panel_base_size()
+            w = (gui_config.main_window_w - chat_panel_base_w - 3 * 8)  # the 3 * 8 are the outer borders outside the panels (between panel and window edge, and between the panels)
+            h = chat_panel_base_h
+            return w, h
+        def _get_avatar_panel_size(main_window_w: int, main_window_h: int) -> Tuple[int, int]:
+            extra_w = 0  # avatar panel keeps the same width
+            extra_h = main_window_h - gui_config.main_window_h
+            base_w, base_h = _get_avatar_panel_base_size()
+            w = base_w + extra_w
+            h = base_h + extra_h
+            return w, h
+        def _get_chat_field_base_width() -> int:
+            return gui_config.chat_panel_w - gui_config.toolbutton_w - 8
+        def _get_chat_field_width(main_window_w: int) -> int:
+            extra_w = main_window_w - gui_config.main_window_w
+            base_w = _get_chat_field_base_width()
+            w = base_w + extra_w
+            return w
+        def _get_chat_controls_base_size() -> Tuple[int, int]:
+            chat_panel_base_w, chat_panel_base_h = _get_chat_panel_base_size()
+            w = chat_panel_base_w
+            h = gui_config.chat_controls_h
+            return w, h
+        def _get_chat_controls_size(main_window_w: int, main_window_h: int) -> Tuple[int, int]:
+            extra_w = main_window_w - gui_config.main_window_w
+            extra_h = 0
+            base_w, base_h = _get_chat_controls_base_size()
+            w = base_w + extra_w
+            h = base_h + extra_h
+            return w, h
+
         with dpg.group(horizontal=True):
             with dpg.group():  # left column: linearized chat view
                 # The `DPGChatController` goes into this panel when the app boots up.
-                chat_panel_h = gui_config.main_window_h - (gui_config.ai_warning_h + 16) - (gui_config.chat_controls_h + 16) + 8
+                chat_panel_w, chat_panel_h = _get_chat_panel_base_size()
                 chat_panel_widget = dpg.add_child_window(tag="chat_panel",
-                                                         width=(gui_config.chat_panel_w + 16),  # 16 = round border (8 on each side)
+                                                         width=chat_panel_w,
                                                          height=chat_panel_h)
 
+                chat_controls_w, chat_controls_h = _get_chat_controls_base_size()
                 with dpg.child_window(tag="chat_controls",
-                                      width=(gui_config.chat_panel_w + 16),  # 16 = round border (8 on each side)
-                                      height=gui_config.chat_controls_h,
+                                      width=chat_controls_w,
+                                      height=chat_controls_h,
                                       no_scrollbar=True,
                                       no_scroll_with_mouse=True):
                     with dpg.group(horizontal=True):
@@ -204,7 +252,7 @@ with timer() as tim:
                         dpg.add_input_text(tag="chat_field",
                                            default_value="",
                                            hint="[ask the AI questions here] [Ctrl+Space to focus]",
-                                           width=gui_config.chat_panel_w - gui_config.toolbutton_w - 8)
+                                           width=_get_chat_field_base_width())
                         dpg.add_button(label=fa.ICON_PAPER_PLANE,
                                        callback=send_message_to_ai_callback,
                                        width=gui_config.toolbutton_w,
@@ -215,20 +263,15 @@ with timer() as tim:
                             dpg.add_text("Send to AI [Enter]")
 
             with dpg.group():  # right column: AI avatar
+                avatar_panel_w, avatar_panel_h = _get_avatar_panel_base_size()
                 with dpg.child_window(tag="avatar_panel",
-                                      width=-1,
-                                      height=chat_panel_h,
+                                      width=avatar_panel_w,
+                                      height=avatar_panel_h,
                                       no_scrollbar=True,
                                       no_scroll_with_mouse=True):
-                    # We all love magic numbers!
-                    #
-                    # The size of the avatar panel is not available at startup, until the GUI is rendered at least once,
-                    # so we must compute the initial size.
-                    avatar_panel_w = (gui_config.main_window_w - (gui_config.chat_panel_w + 16) - 3 * 8)  # the 3 * 8 are the outer borders outside the panels (between panel and window edge, and between the panels)
-                    avatar_panel_h = chat_panel_h
                     dpg_avatar_renderer = DPGAvatarRenderer(gui_parent="avatar_panel",
                                                             avatar_x_center=(avatar_panel_w // 2),
-                                                            avatar_y_bottom=avatar_panel_h - 8,
+                                                            avatar_y_bottom=(avatar_panel_h - 8),
                                                             paused_text="[No video]",
                                                             task_manager=task_manager)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
@@ -303,7 +346,7 @@ with timer() as tim:
                             subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
                         dpg.add_text(f"{subtitle_explanation_str}\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
 
-        with dpg.child_window(tag="chat_ai_warning",
+        with dpg.child_window(tag="chat_global_buttons",
                               height=gui_config.ai_warning_h,
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
@@ -356,7 +399,7 @@ with timer() as tim:
 
                 def toggle_fullscreen():
                     dpg.toggle_viewport_fullscreen()
-                    # resize_gui()  # TODO: resizable GUI
+                    resize_gui()
 
                 new_chat_button = dpg.add_button(label=fa.ICON_FILE,
                                                  callback=start_new_chat_callback,
@@ -450,8 +493,8 @@ with timer() as tim:
                 # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
 
                 n_below_chat_buttons = 7
-                avatar_panel_left = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8)
-                dpg.add_spacer(width=avatar_panel_left + 60)
+                ai_warning_spacer_base_size = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8) + 60
+                dpg.add_spacer(width=ai_warning_spacer_base_size, tag="ai_warning_spacer")
 
                 with dpg.group(horizontal=True):
                     dpg.add_text(fa.ICON_TRIANGLE_EXCLAMATION, color=(255, 180, 120), tag="ai_warning_icon")  # orange
@@ -539,28 +582,58 @@ help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
 dpg.set_item_callback("help_button", help_window.show)  # tag
 
 # --------------------------------------------------------------------------------
-# TODO: App window (viewport) resizing
+# GUI resizing handler
 
-# def toggle_fullscreen():
-#     dpg.toggle_viewport_fullscreen()
-#     resize_gui()  # see below
-#
-# def resize_gui():
-#     """Wait for the viewport size to actually change, then resize dynamically sized GUI elements.
-#
-#     This is handy for toggling fullscreen, because the size changes at the next frame at the earliest.
-#     For the viewport resize callback, that one fires (*almost* always?) after the size has already changed.
-#     """
-#     logger.debug("resize_gui: Entered. Waiting for viewport size change.")
-#     if guiutils.wait_for_resize(gui_instance.window):
-#         _resize_gui()
-#     logger.debug("resize_gui: Done.")
-#
-# def _resize_gui():
-#     if gui_instance is None:
-#         return
-#     gui_instance._resize_gui()
-# dpg.set_viewport_resize_callback(_resize_gui)
+def resize_gui():
+    """Wait for the viewport size to actually change, then resize dynamically sized GUI elements.
+
+    This is handy for toggling fullscreen, because the size changes at the next frame at the earliest.
+    For the viewport resize callback, that one fires (*almost* always?) after the size has already changed.
+    """
+    logger.debug("resize_gui: Entered. Waiting for viewport size change.")
+    if guiutils.wait_for_resize(main_window):
+        _resize_gui()
+    logger.debug("resize_gui: Done.")
+
+def _resize_panels():
+    """Resize the panels in the main window RIGHT NOW, based on main window size."""
+    global _animator_settings  # intent only; loaded during app startup
+
+    w, h = guiutils.get_widget_size(main_window)
+
+    chat_panel_w, chat_panel_h = _get_chat_panel_size(main_window_w=w, main_window_h=h)
+    dpg.set_item_width("chat_panel", chat_panel_w)  # tag
+    dpg.set_item_height("chat_panel", chat_panel_h)  # tag
+    chat_controls_w, chat_controls_h = _get_chat_controls_size(main_window_w=w, main_window_h=h)
+    dpg.set_item_width("chat_controls", chat_controls_w)
+    dpg.set_item_height("chat_controls", chat_controls_h)
+    chat_field_w = _get_chat_field_width(main_window_w=w)
+    dpg.set_item_width("chat_field", chat_field_w)  # tag
+
+    extra_w = w - gui_config.main_window_w
+    dpg.set_item_width("ai_warning_spacer", ai_warning_spacer_base_size + extra_w)  # tag
+
+    avatar_panel_w, avatar_panel_h = _get_avatar_panel_size(main_window_w=w, main_window_h=h)
+    dpg.set_item_width("avatar_panel", avatar_panel_w)  # tag
+    dpg.set_item_height("avatar_panel", avatar_panel_h)  # tag
+    dpg_avatar_renderer.reposition(new_x_center=(avatar_panel_w // 2),
+                                   new_y_bottom=(avatar_panel_h - 8))
+    dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 16,
+                                           new_height=avatar_panel_h - 16,
+                                           new_blur_state=_animator_settings["backdrop_blur"])
+
+    # TODO: change upscale factor too? (need to update "upscale" in `librarian_config.avatar_config.animator_settings_overrides` and send config to server)
+
+def _resize_gui():
+    """Resize dynamically sized GUI elements, RIGHT NOW."""
+    logger.debug("_resize_gui: Entered.")
+    logger.debug("_resize_gui: Updating main window GUI element sizes.")
+    _resize_panels()
+    logger.debug("_resize_gui: Recentering help window.")
+    help_window.reposition()
+    logger.debug("_resize_gui: Done.")
+
+dpg.set_viewport_resize_callback(_resize_gui)
 
 # --------------------------------------------------------------------------------
 # Hotkey support
@@ -774,7 +847,10 @@ dpg.show_viewport()
 #
 # We must defer loading the animator settings until after the GUI has been rendered at least once,
 # so that if there are any issues during loading, we can open a modal dialog. (We don't currently do that, though.)
+_animator_settings = None
 def _load_initial_animator_settings() -> None:
+    global _animator_settings
+
     animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "settings", "animator.json")).expanduser().resolve()
 
     try:
@@ -797,6 +873,7 @@ def _load_initial_animator_settings() -> None:
     dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 16,
                                            new_height=avatar_panel_h - 16,
                                            new_blur_state=animator_settings["backdrop_blur"])
+    _animator_settings = animator_settings  # for access from GUI event handlers
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
 
