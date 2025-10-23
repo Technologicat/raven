@@ -559,7 +559,7 @@ def render_help_extras(self: helpcard.HelpWindow,
     g1 = dpg.add_group(horizontal=False, parent=g)
     dpg_markdown.add_text(f'{self.c_txt}You can put *.txt* documents for the AI to access in *{librarian_config.llm_docs_dir}*. The path can be configured in *raven.librarian.config*.{self.c_end}',
                           parent=g1)
-    dpg_markdown.add_text(f'{self.c_txt}The documents are search-indexed automatically. The index is automatically kept up to date. The search index is stored in *{librarian_config.llm_database_dir}*. If you ever need to clear it, just delete that directory.{self.c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}The documents are search-indexed automatically. The index is automatically kept up to date. The search index is stored in *{librarian_config.llm_database_dir}*. If you ever need to clear it manually, just delete that directory.{self.c_end}',
                           parent=g1)
     dpg_markdown.add_text(f'{self.c_txt}When the {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt} checkbox in the app is **ON**, the document database is automatically searched, using your latest message to the AI as the search query. If {self.c_end}{self.c_hig}**Speculation**{self.c_end}{self.c_txt} is **OFF**, and there is no match, the LLM is bypassed.{self.c_end}',
                           parent=g1)
