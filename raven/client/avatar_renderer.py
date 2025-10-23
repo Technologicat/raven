@@ -338,6 +338,14 @@ class DPGAvatarRenderer:
 
         logger.info("DPGAvatarRenderer.configure_live_texture: done.")
 
+    def _reposition_paused_text(self):
+        avatar_x_center = self.avatar_x_center
+        avatar_y_center = self.avatar_y_bottom - (self.image_size // 2)
+        w_text, h_text = guiutils.get_widget_size(self.paused_text_gui_widget)
+        dpg.set_item_pos(self.paused_text_gui_widget,
+                         ((avatar_x_center - (w_text // 2)),
+                          (avatar_y_center - (h_text // 2))))  # TODO: account for font size / height
+
     def reposition(self,
                    new_x_center: Optional[int] = None,
                    new_y_bottom: Optional[int] = None) -> None:
@@ -359,8 +367,12 @@ class DPGAvatarRenderer:
         y_top = self.avatar_y_bottom - self.image_size
         try:
             dpg.set_item_pos(self.live_image_widget, (x_left, y_top))
+
+            # TODO/FIXME/ABUSE: `reposition` is often called from a GUI resize handler. When the GUI is resized, we need to re-position the "paused" text, too, if it is visible.
+            if dpg.is_item_visible(self.paused_text_gui_widget):
+                self._reposition_paused_text()
         except SystemError:  # window or live image widget does not exist
-            logger.info("DPGAvatarRenderer.reposition: Live image GUI widget doesn't exist; ignoring. (This is normal at app shutdown.)")
+            logger.info("DPGAvatarRenderer.reposition: GUI widget doesn't exist; ignoring. (This is normal at app shutdown.)")
         else:
             logger.info("DPGAvatarRenderer.reposition: success")
 
@@ -399,9 +411,8 @@ class DPGAvatarRenderer:
                 # position offscreen and render, to compute size
                 dpg.set_item_pos(self.paused_text_gui_widget, (0, -100))
                 dpg.show_item(self.paused_text_gui_widget)
-                dpg.split_frame()
-                w, h = guiutils.get_widget_size(self.paused_text_gui_widget)
-                dpg.set_item_pos(self.paused_text_gui_widget, (((self.image_size - w) // 2), (self.image_size // 2)))  # TODO: account for font size / height
+                dpg.split_frame()  # wait for the text to show so that DPG computes its size
+                self._reposition_paused_text()
                 dpg.hide_item(f"avatar_live_image_{self.live_texture_id_counter}")
                 dpg.hide_item(self.backdrop_drawlist_gui_widget)
                 api.avatar_stop(self.avatar_instance_id)
