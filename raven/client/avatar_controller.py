@@ -1,6 +1,9 @@
 """Avatar TTS (text to speech) and subtitling system controller.
 
-Also starts/stops the avatar's "data eyes" effect (LLM tool access indicator).
+Handles also two other features:
+
+  - Autoresets the avatar emotion when not speaking and a timeout has elapsed.
+  - Starts/stops the avatar's "data eyes" effect (LLM tool access indicator).
 
 Contrast `avatar_renderer`, which is concerned with blitting the avatar video into the GUI.
 
@@ -716,7 +719,7 @@ class DPGAvatarController:
                     if self.stop_tts_button_gui_widget is not None:
                         dpg.disable_item(self.stop_tts_button_gui_widget)
                 with task_env.lock:
-                    config._emotion_autoreset_t0 = time.time_ns()  # reset the emotion autoreset timer, so that the last emotion (from `on_done` or sibling switching at an AI message) stays for a couple more seconds once speaking ends.
+                    config._emotion_autoreset_t0 = time.time_ns()  # reset the emotion autoreset timer, so that the last emotion stays for a couple more seconds once speaking ends.
                     # Set the speaking state flags very last. These events are called from a different thread (the TTS client's background task),
                     # and our task threads (for `speak_task`, `emotion_autoreset_task`) monitor these flags and take action immediately.
                     config._avatar_speaking = False
