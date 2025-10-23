@@ -35,6 +35,7 @@ from ..client.avatar_controller import DPGAvatarController
 from ..common import bgtask
 
 from ..common.gui import animation as gui_animation
+from ..common.gui import utils as guiutils
 
 from . import chattree
 from . import chatutil
@@ -185,6 +186,12 @@ class DPGChatMessage:
                 return siblings[this_node_index - 1]
         return None  # no sibling found
 
+    def get_chat_text_width(self) -> int:
+        """Get the current text wrap width of the chat."""
+        w, h = guiutils.get_widget_size(self.parent_view.gui_parent)  # The view's GUI parent is the actual panel (DPG child window), whose width changes in a window resize.
+        chat_text_w = w - gui_config.chat_text_right_margin_w
+        return chat_text_w
+
     def build(self,
               role: str,
               persona: Optional[str],
@@ -310,7 +317,8 @@ class DPGChatMessage:
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
         n_message_buttons = 9
-        dpg.add_spacer(width=gui_config.chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 64 = some space for sibling counter
+        chat_text_w = self.get_chat_text_width()
+        dpg.add_spacer(width=chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 64 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
         self.build_buttons(gui_parent=buttons_horizontal_layout_group)
@@ -324,10 +332,10 @@ class DPGChatMessage:
 
         if role in role_to_colors:
             dpg.add_drawlist(height=1,
-                             width=(gui_config.chat_text_w + 64),
+                             width=(chat_text_w + 64),
                              tag=f"chat_turn_end_drawlist_{self.gui_uuid}",
                              parent=self.gui_container_group)
-            dpg.draw_rectangle((64, 0), (gui_config.chat_text_w + 64, 1),
+            dpg.draw_rectangle((64, 0), (chat_text_w + 64, 1),
                                color=(80, 80, 80),
                                fill=(80, 80, 80),
                                parent=f"chat_turn_end_drawlist_{self.gui_uuid}")  # tag
@@ -398,6 +406,9 @@ class DPGChatMessage:
                     text = text.replace("</think>", "**<<<Thinking<<<**")
                     color = think_color if paragraph["is_thought"] else role_color
                     colorized_text = f"<font color='{color}'>{text}</font>"
+
+                    chat_text_w = self.get_chat_text_width()
+
                     if isinstance(self, DPGCompleteChatMessage) and paragraph["is_thought"]:  # make think blocks in complete messages collapsible (they are populated as a single paragraph)
                         widget = dpg.add_group(horizontal=True, parent=self.gui_text_group)
                         def toggle_message_think_callback():
@@ -422,12 +433,12 @@ class DPGChatMessage:
                         message_think_toggle_tooltip = dpg.add_tooltip(f"message_think_toggle_button_{self.gui_uuid}")  # tag
                         dpg.add_text("Show/hide thinking trace [Ctrl+T]", parent=message_think_toggle_tooltip)
                         text_content = dpg_markdown.add_text(colorized_text,
-                                                             wrap=gui_config.chat_text_w,
+                                                             wrap=chat_text_w,
                                                              parent=widget)
                         dpg.hide_item(text_content)
                     else:
                         widget = dpg_markdown.add_text(colorized_text,
-                                                       wrap=gui_config.chat_text_w,
+                                                       wrap=chat_text_w,
                                                        parent=self.gui_text_group)
                     paragraph["widget"] = widget
                     dpg.set_item_alias(widget, f"chat_message_text_{role}_paragraph_{idx}_{self.gui_uuid}")  # tag
@@ -886,7 +897,7 @@ class DPGLinearizedChatView:
                                                                   parent=gui_parent)
 
     def scroll_to_end(self,
-                      max_wait_frames: int = 50) -> None:
+                      max_wait_frames: int = 10) -> None:
         """Scroll this linearized chat view to the end.
 
         `max_wait_frames`: If `max_wait_frames > 0`, wait at most for that may frames

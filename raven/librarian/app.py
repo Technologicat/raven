@@ -63,9 +63,12 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 # Module bootup
 
 bg = concurrent.futures.ThreadPoolExecutor()
-task_manager = bgtask.TaskManager(name="librarian",  # for most tasks
+task_manager = bgtask.TaskManager(name="librarian",  # for avatar renderer
                                   mode="concurrent",
                                   executor=bg)
+gui_resize_task_manager = bgtask.TaskManager(name="librarian_gui_resize",  # de-spammer for expensive parts of GUI resizing
+                                             mode="sequential",
+                                             executor=bg)
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
                tts_playback_audio_device=client_config.tts_playback_audio_device,
@@ -584,7 +587,7 @@ dpg.set_item_callback("help_button", help_window.show)  # tag
 # --------------------------------------------------------------------------------
 # GUI resizing handler
 
-def resize_gui():
+def resize_gui() -> None:
     """Wait for the viewport size to actually change, then resize dynamically sized GUI elements.
 
     This is handy for toggling fullscreen, because the size changes at the next frame at the earliest.
@@ -595,7 +598,7 @@ def resize_gui():
         _resize_gui()
     logger.debug("resize_gui: Done.")
 
-def _resize_panels():
+def _resize_panels() -> None:
     """Resize the panels in the main window RIGHT NOW, based on main window size."""
     global _animator_settings  # intent only; loaded during app startup
 
@@ -624,13 +627,29 @@ def _resize_panels():
 
     # TODO: change upscale factor too? (need to update "upscale" in `librarian_config.avatar_config.animator_settings_overrides` and send config to server)
 
-def _resize_gui():
-    """Resize dynamically sized GUI elements, RIGHT NOW."""
-    logger.debug("_resize_gui: Entered.")
-    logger.debug("_resize_gui: Updating main window GUI element sizes.")
+def _resize_gui_task(task_env: env) -> None:
+    """We run this in the background. Expensive parts of the GUI update benefit from the "there can be only one" mechanism."""
+    if task_env.cancelled:  # while waiting in queue
+        return
+    logger.debug(f"_resize_gui_task: {task_env.task_name}: Updating main window GUI element sizes.")
     _resize_panels()
+    if task_env.cancelled:
+        return
+    logger.debug(f"_resize_gui_task: {task_env.task_name}: Re-rendering linearized chat view.")
+    chat_controller.view.build()
+    logger.debug(f"_resize_gui_task: {task_env.task_name}: Done.")
+
+def _resize_gui() -> None:
+    """Resize dynamically sized GUI elements, RIGHT NOW (unless overridden by another call shortly in succession)."""
+    logger.debug("_resize_gui: Entered.")
     logger.debug("_resize_gui: Recentering help window.")
     help_window.reposition()
+    logger.debug("_resize_gui: Submitting task for computationally expensive GUI updates.")
+    task_view_rebuild_task = bgtask.ManagedTask(category="raven_librarian_chat_view_rebuild",
+                                                entrypoint=_resize_gui_task,
+                                                running_poll_interval=0.01,
+                                                pending_wait_duration=0.1)
+    gui_resize_task_manager.submit(task_view_rebuild_task, env(wait=True))
     logger.debug("_resize_gui: Done.")
 
 dpg.set_viewport_resize_callback(_resize_gui)
@@ -754,18 +773,6 @@ with dpg.handler_registry(tag="librarian_handler_registry"):  # global (whole vi
     dpg.add_key_press_handler(tag="librarian_hotkeys_handler", callback=librarian_hotkeys_callback)
 
 # --------------------------------------------------------------------------------
-# Set up app exit cleanup
-
-def clear_background_tasks(wait: bool):
-    """Stop (cancel) and delete all background tasks."""
-    task_manager.clear(wait=wait)
-
-def clean_up_at_exit():
-    logger.info("App exiting.")
-    clear_background_tasks(wait=True)
-dpg.set_exit_callback(clean_up_at_exit)
-
-# --------------------------------------------------------------------------------
 # Start the app
 
 logger.info("App bootup...")
@@ -814,12 +821,11 @@ def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
-    task_manager.clear(wait=True)  # Wait until background tasks actually exit.
+    gui_resize_task_manager.clear(wait=True)
+    task_manager.clear(wait=True)
     chat_controller.shutdown()
     avatar_controller.shutdown()
     gui_animation.animator.clear()
-    # global gui_instance  # TODO: maybe we need to encapsulate the main GUi into a class? Or maybe not?
-    # gui_instance = None
     logger.info("gui_shutdown: done")
 dpg.set_exit_callback(gui_shutdown)
 
@@ -890,7 +896,7 @@ try:
         dpg.render_dearpygui_frame()
     # dpg.start_dearpygui()  # automatic render loop
 except KeyboardInterrupt:
-    clear_background_tasks(wait=False)  # signal background tasks to exit
+    pass  # cleanup will be handled by our DPG exit handler
 
 logger.info("App render loop exited.")
 

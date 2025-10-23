@@ -63,7 +63,6 @@
   - Maybe next:
     - `raven.client.avatar_renderer` could have its own task manager (just get the `concurrent.futures.executor` as a parameter)
     - Long subtitle splitter (we now have the audio length).
-    - Improve GUI dynamic resizing: re-layout the text (use a background task in "sequential" mode, with a pending wait state, like visualizer's info panel)
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
     - Add feature: Avatar idle off (10 sec)
