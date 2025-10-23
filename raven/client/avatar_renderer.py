@@ -606,6 +606,8 @@ class DPGAvatarRenderer:
         """The opposite of `start`.
 
         This disconnects the `DPGAvatarRenderer` instance from the avatar instance.
+
+        This also explicitly shuts down the background task that receives video.
         """
         if self._task_env is None:
             raise RuntimeError("DPGAvatarRenderer.stop: not running, nothing to stop.")
