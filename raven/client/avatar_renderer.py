@@ -178,7 +178,7 @@ class DPGAvatarRenderer:
         except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
             pass
 
-    def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]):
+    def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]) -> None:
         """Load a backdrop image. To clear the background (no image), use `filename=None`.
 
         The backdrop change takes effect upon the next call to `configure_backdrop`, which see.
@@ -602,7 +602,7 @@ class DPGAvatarRenderer:
         self.animator_running = True  # automatically enter animator running state when `start` is called
         dpg.show_item(f"avatar_live_image_{self.live_texture_id_counter}")  # and show the image  # tag
 
-    def stop(self):
+    def stop(self) -> None:
         """The opposite of `start`.
 
         This disconnects the `DPGAvatarRenderer` instance from the avatar instance.
