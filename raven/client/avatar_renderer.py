@@ -210,6 +210,7 @@ class DPGAvatarRenderer:
 
               Calling from any other thread (including GUI event handlers) is fine.
         """
+        logger.info(f"DPGAvatarRenderer.configure_backdrop: Updating backdrop size to {new_width}x{new_height}, and blur state to {new_blur_state}")
         old_width = self.backdrop_old_width
         old_height = self.backdrop_old_height
         old_blur_state = self.backdrop_old_blur_state
