@@ -63,6 +63,7 @@ class HelpWindow:
                  height: int,
                  reference_window: Union[str, int],
                  themes_and_fonts: env,
+                 highlight_color: Tuple[int] = (255, 0, 0, 255),
                  heading_color: Tuple[int] = (255, 255, 255, 255),
                  text_color: Tuple[int] = (180, 180, 180, 255),
                  dimmed_color: Tuple[int] = (140, 140, 140, 255),
@@ -103,23 +104,32 @@ class HelpWindow:
                             To manually recenter (e.g. in a DPG viewport resize handler), you can call the `reposition` method.
 
         `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
-        `heading_color`: Text color for help headings.
-        `text_color`: Text color for regular help text.
-        `dimmed_color`: Text color for dimmed help text.
 
-        `on_render_extras`: User extras renderer.
+        `highlight_color`: RGB or RGBA tuple, range [0, 255]. Text color for a highlighted segment. Meant for use by `on_render_extras`.
+        `heading_color`: RGB or RGBA tuple, range [0, 255]. Text color for help headings.
+        `text_color`: RGB or RGBA tuple, range [0, 255]. Text color for regular help text.
+        `dimmed_color`: RGB or RGBA tuple, range [0, 255]. Text color for dimmed help text.
+
+        `on_render_extras`: User extras renderer. Optional 2-argument callable, signature is::
+
+                                (self: HelpWindow, gui_parent: Union[str, int]) -> None
+
+                            The return value is ignored.
 
                             If provided, this is called once, when the help card is first rendered. The callback can generate
                             arbitrary DPG widgets. The `gui_parent` argument is the DPG tag of the group the widgets should be
                             rendered in (so as not to depend on the DPG stack state; set the parent using `parent=...`).
 
-                            Call signature `(gui_parent: str, c_hed: str, c_txt: str, c_dim: str, c_end: str) -> None`.
-
-                            The `c_*` arguments are HTML strings to invoke the heading, text, and dimmed colors,
-                            and an HTML string to end a colored segment.
-
                             If you have several help windows in your app, this instance's unique identifier, meant for use
-                            in DPG tags, is available as `my_help_window.gui_uuid`.
+                            in DPG tags, is available in `self.gui_uuid`.
+
+                            For use as the `color` argument of `dpg.add_text`, the configured colors are available as RGB or RGBA tuples
+                            in the attributes `highlight_color`, `heading_color`, `text_color`, and `dimmed_color`.
+
+                            For `dpg_markdown` color formatting, HTML tag variants of the colors are available in the attributes
+                            `c_hig`, `c_hed`, `c_txt`, and `c_dim`. The HTML tag to end a colored segment is available as the attribute `c_end`.
+
+                            Note that `dpg_markdown` does not support nesting color tags.
 
         `on_show`: Triggered when the help window opens. 0-argument callable. Return value is ignored.
         `on_hide`: Triggered when the help window closes. 0-argument callable. Return value is ignored.
@@ -132,13 +142,27 @@ class HelpWindow:
         self.width = width
         self.height = height
         self.reference_window = reference_window
+
         self.themes_and_fonts = themes_and_fonts
+
+        self.highlight_color = highlight_color
         self.heading_color = heading_color
         self.text_color = text_color
         self.dimmed_color = dimmed_color
+
+        self.help_indent_pixels = 20  # per indent level
+
+        # Shorthand for color control sequences for MD renderer
+        self.c_hig = f'<font color="{self.highlight_color}">'
+        self.c_hed = f'<font color="{self.heading_color}">'
+        self.c_txt = f'<font color="{self.text_color}">'
+        self.c_dim = f'<font color="{self.dimmed_color}">'
+        self.c_end = '</font>'
+
         self.on_render_extras = on_render_extras
         self.on_show = on_show
         self.on_hide = on_hide
+
         self._window = None
 
         self._initialize_class()
@@ -171,14 +195,6 @@ class HelpWindow:
 
         # --------------------------------------------------------------------------------
 
-        help_indent_pixels = 20  # per indent level
-
-        # Shorthand for color control sequences for MD renderer
-        c_hed = f'<font color="{self.heading_color}">'
-        c_txt = f'<font color="{self.text_color}">'
-        c_dim = f'<font color="{self.dimmed_color}">'
-        c_end = '</font>'
-
         help_window = dpg.add_window(show=False, label="Help", tag=f"help_window_{self.gui_uuid}",
                                      modal=True,
                                      on_close=self.hide,
@@ -192,7 +208,7 @@ class HelpWindow:
         help_group = dpg.add_group(tag=f"help_group_{self.gui_uuid}",
                                    parent=help_window)
         # Header
-        dpg_markdown.add_text(f"{c_dim}[Press Esc to close. For a handy reference, screenshot this!]{c_end}",
+        dpg_markdown.add_text(f"{self.c_dim}[Press Esc to close. For a handy reference, screenshot this!]{self.c_end}",
                               parent=help_group)
         dpg.add_spacer(width=1,
                        height=self.themes_and_fonts.font_size // 2,
@@ -216,7 +232,7 @@ class HelpWindow:
                 if help_entry.key_indent > 0:
                     g = dpg.add_group(horizontal=True,
                                       parent=table_row)
-                    dpg.add_spacer(width=help_entry.key_indent * help_indent_pixels,
+                    dpg.add_spacer(width=help_entry.key_indent * self.help_indent_pixels,
                                    parent=g)
                     dpg.add_text(help_entry.key, wrap=0, color=self.heading_color,
                                  parent=g)
@@ -227,7 +243,7 @@ class HelpWindow:
                 if help_entry.action_indent > 0:
                     g = dpg.add_group(horizontal=True,
                                       parent=table_row)
-                    dpg.add_spacer(width=help_entry.action_indent * help_indent_pixels,
+                    dpg.add_spacer(width=help_entry.action_indent * self.help_indent_pixels,
                                    parent=g)
                     dpg.add_text(help_entry.action, wrap=0, color=self.dimmed_color,
                                  parent=g)
@@ -245,7 +261,7 @@ class HelpWindow:
         # Optional user extras
         if self.on_render_extras is not None:
             logger.info("HelpWindow._render: Rendering user extras.")
-            self.on_render_extras(help_group, c_hed, c_txt, c_dim, c_end)
+            self.on_render_extras(self, help_group)
         else:
             logger.info("HelpWindow._render: No user extras renderer specified, skipping.")
 

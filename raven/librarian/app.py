@@ -489,49 +489,44 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
                )
-def render_help_extras(gui_parent: Union[str, int],
-                       c_hed: str,
-                       c_txt: str,
-                       c_dim: str,
-                       c_end: str) -> None:
+def render_help_extras(self: helpcard.HelpWindow,
+                       gui_parent: Union[str, int]) -> None:
     """Render app-specific extra information into the help card.
 
     Called by `HelpWindow` when the help card is first rendered.
     """
-    c_hig = '<font color="#ff0000">'  # help text highlight for very important parts
-
     # Chat history
-    dpg_markdown.add_text(f"{c_hed}**Chat history**{c_end}", parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_hed}**Chat history**{self.c_end}", parent=gui_parent)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f"{c_txt}The chat history is **natively nonlinear**. Messages are stored as nodes in a tree. The current chat is the HEAD, plus its ancestor chain up to the system prompt. Continuing the chat adds a new child node below the latest message displayed.{c_end}",
+    dpg_markdown.add_text(f"{self.c_txt}The chat history is **natively nonlinear**. Messages are stored as nodes in a tree. The current chat is the HEAD, plus its ancestor chain up to the system prompt. Continuing the chat adds a new child node below the latest message displayed.{self.c_end}",
                           parent=g1)
-    dpg_markdown.add_text(f"{c_txt}Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.{c_end}",
+    dpg_markdown.add_text(f"{self.c_txt}Rerolling creates a new sibling and sets the HEAD pointer to that. Previous siblings remain stored in the tree. Starting a new chat, or branching the chat, only resets the HEAD pointer.{self.c_end}",
                           parent=g1)
-    dpg_markdown.add_text(f"{c_txt}**This is a tech demo.** Currently old chats are stored, but there is no way to access them. We will add a graph view to navigate the chat tree later.{c_end}",
+    dpg_markdown.add_text(f"{self.c_txt}**This is a tech demo.** Currently old chats are stored, but there is no way to access them. We will add a graph view to navigate the chat tree later.{self.c_end}",
                           parent=g1)
     dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
 
     # Docs database
-    dpg_markdown.add_text(f"{c_hed}**Document database**{c_end} (retrieval-augmented generation, RAG)", parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_hed}**Document database**{self.c_end} (retrieval-augmented generation, RAG)", parent=gui_parent)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{c_txt}You can put *.txt* documents for the AI to access in *{librarian_config.llm_docs_dir}*. The path can be configured in *raven.librarian.config*.{c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}You can put *.txt* documents for the AI to access in *{librarian_config.llm_docs_dir}*. The path can be configured in *raven.librarian.config*.{self.c_end}',
                           parent=g1)
-    dpg_markdown.add_text(f'{c_txt}The documents are search-indexed automatically. The index is automatically kept up to date. The search index is stored in *{librarian_config.llm_database_dir}*. If you ever need to clear it, just delete that directory.{c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}The documents are search-indexed automatically. The index is automatically kept up to date. The search index is stored in *{librarian_config.llm_database_dir}*. If you ever need to clear it, just delete that directory.{self.c_end}',
                           parent=g1)
-    dpg_markdown.add_text(f'{c_txt}When the **Documents** checkbox in the app is **ON**, the document database is automatically searched, using your latest message to the AI as the search query. If **Speculation** is **OFF**, and there is no match, the LLM is bypassed.{c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}When the {self.c_end}{self.c_hig}**Documents**{self.c_end}{self.c_txt} checkbox in the app is **ON**, the document database is automatically searched, using your latest message to the AI as the search query. If {self.c_end}{self.c_hig}**Speculation**{self.c_end}{self.c_txt} is **OFF**, and there is no match, the LLM is bypassed.{self.c_end}',
                           parent=g1)
-    dpg_markdown.add_text(f'{c_txt}To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).{c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}To improve search result quality, Raven-librarian uses a hybrid method: Okapi BM25 for keywords, and vector embeddings for semantic search. Results are combined with RRF (reciprocal rank fusion).{self.c_end}',
                           parent=g1)
 
     # Tool use (tool-calling)
-    dpg_markdown.add_text(f"{c_hed}**Tool use** (tool-calling){c_end}", parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_hed}**Tool use** (tool-calling){self.c_end}", parent=gui_parent)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{c_txt}Raven-librarian provides some tools, such as websearch, for the AI to use if it wants to. These can be enabled/disabled with the **Tools** checkbox in the app.{c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}Raven-librarian provides some tools, such as websearch, for the AI to use if it wants to. These can be enabled/disabled with the {self.c_end}{self.c_hig}**Tools**{self.c_end}{self.c_txt} checkbox in the app.{self.c_end}',
                           parent=g1)
-    dpg_markdown.add_text(f'{c_txt}**This is a tech demo.** We plan to add more tools later.{c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}**This is a tech demo.** We plan to add more tools later.{self.c_end}',
                           parent=g1)
 help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
                                   width=gui_config.help_window_w,

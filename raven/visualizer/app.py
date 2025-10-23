@@ -3918,46 +3918,42 @@ hotkey_info = (env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open a d
                env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen mode", notes=""),
                env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
                )
-def render_help_extras(gui_parent: Union[str, int],
-                       c_hed: str,
-                       c_txt: str,
-                       c_dim: str,
-                       c_end: str) -> None:
+def render_help_extras(self: helpcard.HelpWindow,
+                       gui_parent: Union[str, int]) -> None:
     """Render app-specific extra information into the help card.
 
     Called by `HelpWindow` when the help card is first rendered.
     """
-    c_hig = '<font color="#ff0000">'  # help text highlight for very important parts
     c_search = f'<font color="{gui_config.plotter_search_results_highlight_color}">'
     c_selection = f'<font color="{gui_config.plotter_selection_highlight_color}">'
 
     # Legend for table
-    dpg_markdown.add_text(f"{c_hed}**Terminology**{c_end}", parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_hed}**Terminology**{self.c_end}", parent=gui_parent)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f"- {c_txt}**Current item**: The topmost item **fully** visible in the info panel. The controls of the current item glow slightly.{c_end}",
+    dpg_markdown.add_text(f"- {self.c_txt}**Current item**: The topmost item **fully** visible in the info panel. The controls of the current item glow slightly.{self.c_end}",
                           parent=g1)
-    dpg_markdown.add_text(f"- {c_txt}**Current cluster**: The cluster the current item belongs to. Clusters are auto-detected by a linguistic analysis.{c_end}",
+    dpg_markdown.add_text(f"- {self.c_txt}**Current cluster**: The cluster the current item belongs to. Clusters are auto-detected by a linguistic analysis.{self.c_end}",
                           parent=g1)
     g2 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f"- {c_txt}**Selection set**: The selected items, {c_end}{c_selection}**glowing**{c_end}{c_txt} in the plotter. As many are loaded into the info panel as reasonably fit.{c_end}",
+    dpg_markdown.add_text(f"- {self.c_txt}**Selection set**: The selected items, {self.c_end}{c_selection}**glowing**{self.c_end}{self.c_txt} in the plotter. As many are loaded into the info panel as reasonably fit.{self.c_end}",
                           parent=g2)
-    dpg_markdown.add_text(f"- {c_txt}**Search result set**: The items matching the current search, {c_end}{c_search}**glowing**{c_end}{c_txt} in the plotter.{c_end}",
+    dpg_markdown.add_text(f"- {self.c_txt}**Search result set**: The items matching the current search, {self.c_end}{c_search}**glowing**{self.c_end}{self.c_txt} in the plotter.{self.c_end}",
                           parent=g2)
     dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
 
     # Additional general help
-    dpg_markdown.add_text(f"{c_hed}**How search works**{c_end}",
+    dpg_markdown.add_text(f"{self.c_hed}**How search works**{self.c_end}",
                           parent=gui_parent)
-    dpg_markdown.add_text(f"{c_txt}Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match. Ordering of fragments does **not** matter. The {c_end}{c_search}search result{c_end}{c_txt} and {c_end}{c_selection}selection{c_end}{c_txt} sets are **independent**. {c_end}{c_search}Search results{c_end}{c_txt} live-update as you type.{c_end}",
+    dpg_markdown.add_text(f"{self.c_txt}Each space-separated search term is a **fragment**. For a data point to match, **all** fragments must match. Ordering of fragments does **not** matter. The {self.c_end}{c_search}search result{self.c_end}{self.c_txt} and {self.c_end}{c_selection}selection{self.c_end}{self.c_txt} sets are **independent**. {self.c_end}{c_search}Search results{self.c_end}{self.c_txt} live-update as you type.{self.c_end}",
                           parent=gui_parent)
-    dpg_markdown.add_text(f'- {c_txt}A **lowercase** fragment matches **that fragment {c_end}{c_hig}case-insensitively{c_end}{c_txt}**. E.g. *"hydrogen"* matches also *"Hydrogen"*.{c_end}',
+    dpg_markdown.add_text(f'- {self.c_txt}A **lowercase** fragment matches **that fragment {self.c_end}{self.c_hig}case-insensitively{self.c_end}{self.c_txt}**. E.g. *"hydrogen"* matches also *"Hydrogen"*.{self.c_end}',
                           parent=gui_parent)
-    dpg_markdown.add_text(f'- {c_txt}A fragment with **at least one uppercase** letter matches **that fragment {c_end}{c_hig}case-sensitively{c_end}{c_txt}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.{c_end}',
+    dpg_markdown.add_text(f'- {self.c_txt}A fragment with **at least one uppercase** letter matches **that fragment {self.c_end}{self.c_hig}case-sensitively{self.c_end}{self.c_txt}**. E.g. *"TiO"* matches only titanium oxide, not *"bastion"*.{self.c_end}',
                           parent=gui_parent)
-    dpg_markdown.add_text(f'- {c_txt}You can use regular numbers in place of subscript/superscript numbers. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*. {c_end}',
+    dpg_markdown.add_text(f'- {self.c_txt}You can use regular numbers in place of subscript/superscript numbers. E.g. *"h2so4"* matches also *"H₂SO₄"*, and *"x2"* matches also *"x²"*. {self.c_end}',
                           parent=gui_parent)
-    dpg_markdown.add_text(f"{c_txt}When the search field is focused, the usual text editing keys are available (*Enter, Esc, Home, End, Shift-select, Ctrl+Left, Ctrl+Right, Ctrl+A, Ctrl+Z, Ctrl+Y*).{c_end}",
+    dpg_markdown.add_text(f"{self.c_txt}When the search field is focused, the usual text editing keys are available (*Enter, Esc, Home, End, Shift-select, Ctrl+Left, Ctrl+Right, Ctrl+A, Ctrl+Z, Ctrl+Y*).{self.c_end}",
                           parent=gui_parent)
 help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
                                   width=gui_config.help_window_w,
