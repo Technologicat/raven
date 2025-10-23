@@ -13,7 +13,7 @@ import time
 import traceback
 from typing import Callable, Union
 
-from unpythonic import box, gensym, gsym, sym, unbox
+from unpythonic import box, gensym, sym, Symbol, unbox
 from unpythonic.env import env
 
 # --------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ class TaskManager:
         self.tasks = {}  # task name (unique) -> (future, env)
         self.lock = threading.RLock()
 
-    def submit(self, function: Callable, env: env) -> gsym:
+    def submit(self, function: Callable, env: env) -> Symbol:
         """Submit a new task.
 
         `function`: callable, must take one positional argument.
@@ -136,7 +136,7 @@ class TaskManager:
         with self.lock:
             return len(self.tasks)
 
-    def _find_task_by_future(self, future: concurrent.futures.Future) -> gsym:
+    def _find_task_by_future(self, future: concurrent.futures.Future) -> Symbol:
         """Internal method. Find the `task_name` for a given `future`. Return `task_name`, or `None` if not found."""
         with self.lock:
             for task_name, (f, e) in self.tasks.items():
@@ -182,7 +182,7 @@ class TaskManager:
                 finally:
                     self.tasks.pop(task_name)
 
-    def cancel(self, task_name: gsym, pop: bool = True) -> None:
+    def cancel(self, task_name: Symbol, pop: bool = True) -> None:
         """Cancel a specific task, by name.
 
         Usually there is no need to call this manually.
