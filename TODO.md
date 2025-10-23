@@ -89,6 +89,7 @@
     - Add feature: show prompt
       - Save it per-chat-message, from `on_prompt_ready`.
       - Show prompt length as tokens (`raven.llmclient.token_count`).
+    - Add feature: show RAG results (first step toward an attribution mechanism)
     - Add feature: file attachments
       - For detailed, full-content analysis of one or a small handful of documents
       - E.g. read a PDF, inject full (cleaned) content into LLM context
