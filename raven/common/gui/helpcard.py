@@ -1,7 +1,5 @@
 """Generic single-screen GUI help window for DPG apps, intended mainly as a hotkey reference."""
 
-# TODO: robustness: create all DPG GUI widgets by passing an explicit parent widget (don't rely on DPG stack)
-
 __all__ = ["hotkey_new_column", "hotkey_blank_entry",
            "HelpWindow"]
 
