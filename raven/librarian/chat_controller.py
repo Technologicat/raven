@@ -1076,7 +1076,7 @@ class DPGChatController:
                  llm_indicator_widget: Union[str, int],
                  docs_indicator_widget: Union[str, int],
                  web_indicator_widget: Union[str, int],
-                 executor: Optional = None):
+                 executor: Optional[concurrent.futures.Executor] = None):
         """Controller for LLM scaffold to GUI integration.
 
         Owns a `DPGLinearizedChatView`, which displays the current branch of the chat.

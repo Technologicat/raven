@@ -134,7 +134,7 @@ class DPGAvatarController:
                  translator_target_lang: Optional[str],
                  main_window_w: int,
                  main_window_h: int,
-                 executor: Optional = None):
+                 executor: Optional[concurrent.futures.Executor] = None):
         """Avatar TTS (text to speech) and subtitling system controller.
 
         Instantiate this **after** your app's GUI is alive.

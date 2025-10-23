@@ -38,7 +38,7 @@ api_config = envcls(raven_default_headers={},
 def initialize_api(raven_server_url: str,
                    raven_api_key_file: Optional[Union[pathlib.Path, str]],
                    tts_playback_audio_device: Optional[str],
-                   executor: Optional = None):
+                   executor: Optional[concurrent.futures.Executor] = None):
     """Set up URLs and API keys, and initialize the audio mixer.
 
     Call this before calling any of the actual API functions in `raven.client.api`.

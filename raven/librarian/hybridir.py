@@ -1112,7 +1112,7 @@ def setup(docs_dir: Union[pathlib.Path, str],
           local_model_loader_fallback: bool = True,
           chunk_size: int = 1000,
           overlap_fraction: float = 0.25,
-          executor: Optional = None) -> Tuple[HybridIR, HybridIRFileSystemEventHandler]:
+          executor: Optional[concurrent.futures.Executor] = None) -> Tuple[HybridIR, HybridIRFileSystemEventHandler]:
     """Set up hybrid keyword/semantic search for a directory containing document files.
 
     This is a convenience function that wires up both `HybridIR` and `HybridIRFileSystemEventHandler`

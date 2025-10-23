@@ -11,8 +11,10 @@ import concurrent.futures
 import threading
 import time
 import traceback
+from typing import Callable, Union
 
-from unpythonic import gensym, sym, unbox
+from unpythonic import box, gensym, gsym, sym, unbox
+from unpythonic.env import env
 
 # --------------------------------------------------------------------------------
 # Background task manager
@@ -22,7 +24,7 @@ status_pending = sym("pending")
 status_running = sym("running")
 
 class TaskManager:
-    def __init__(self, name, mode, executor):
+    def __init__(self, name: str, mode: str, executor: concurrent.futures.Executor):
         """Simple background task manager.
 
         In practice this is a rather thin wrapper over `ThreadPoolExecutor`, adding task tracking
@@ -59,7 +61,7 @@ class TaskManager:
         self.tasks = {}  # task name (unique) -> (future, env)
         self.lock = threading.RLock()
 
-    def submit(self, function, env):
+    def submit(self, function: Callable, env: env) -> gsym:
         """Submit a new task.
 
         `function`: callable, must take one positional argument.
@@ -129,12 +131,12 @@ class TaskManager:
             logger.info(f"TaskManager.submit: instance '{self.name}': task '{env.task_name}' submitted.")
             return env.task_name
 
-    def has_tasks(self):
+    def has_tasks(self) -> bool:
         """Return whether this task manager is currently tracking any tasks."""
         with self.lock:
             return len(self.tasks)
 
-    def _find_task_by_future(self, future):
+    def _find_task_by_future(self, future: concurrent.futures.Future) -> gsym:
         """Internal method. Find the `task_name` for a given `future`. Return `task_name`, or `None` if not found."""
         with self.lock:
             for task_name, (f, e) in self.tasks.items():
@@ -142,7 +144,7 @@ class TaskManager:
                     return task_name
             return None
 
-    def _done_callback(self, future):
+    def _done_callback(self, future: concurrent.futures.Future) -> None:
         """Internal method. Remove a completed task, by a reference to its `future` (that we get from `ThreadPoolExecutor`).
 
         Before removing the task, automatically call the custom `done_callback`, if it was provided.
@@ -180,7 +182,7 @@ class TaskManager:
                 finally:
                     self.tasks.pop(task_name)
 
-    def cancel(self, task_name, pop=True):
+    def cancel(self, task_name: gsym, pop: bool = True) -> None:
         """Cancel a specific task, by name.
 
         Usually there is no need to call this manually.
@@ -203,7 +205,7 @@ class TaskManager:
             e.cancelled = True  # In case it's running (pythonic co-operative cancellation). Do this first, so the custom `done_callback` (if any) sees the `cancelled` flag when we cancel the future.
             future.cancel()  # In case it's still queued in the executor, don't start it.
 
-    def clear(self, wait=False):
+    def clear(self, wait: bool = False) -> None:
         """Cancel all tasks.
 
         During normal operation, usually there is no need to call this manually, but can be useful during app shutdown.
@@ -224,7 +226,12 @@ class TaskManager:
             logger.info(f"TaskManager.clear: instance '{self.name}': clearing task list.")
             self.tasks.clear()
 
-def make_managed_task(*, status_box, lock, entrypoint, running_poll_interval, pending_wait_duration):
+def make_managed_task(*,
+                      status_box: box,
+                      lock: Union[threading.Lock, threading.RLock],
+                      entrypoint: Callable,
+                      running_poll_interval: float,
+                      pending_wait_duration: float) -> Callable:
     """Create a background task that makes double-sure that only one instance is running at a time.
 
     This works together with `TaskManager`, adding on top of it mechanisms to track the status for
