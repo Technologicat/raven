@@ -1156,7 +1156,7 @@ class DPGChatController:
                                                executor=executor)
         self.ai_turn_task_manager = bgtask.TaskManager(name="librarian_chat_controller_ai_turn",  # for running the AI's turn, specifically (so that we can easily cancel just that one task when needed)
                                                        mode="concurrent",
-                                                       executor=executor)  # same thread poool
+                                                       executor=executor)  # same thread pool
 
     def shutdown(self):
         """Prepare module for app shutdown.
