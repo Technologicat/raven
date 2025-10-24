@@ -866,7 +866,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
 
         `retriever`: The `HybridIR` instance to send changes to, to automatically keep it up to date.
 
-        `ext`: File extensions of files to monitor.
+        `exts`: File extensions of files to monitor.
 
         `callback`: When new content arrives (a file is created or updated in the target directory),
                     this function is called.
