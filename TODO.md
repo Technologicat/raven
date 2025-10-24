@@ -85,6 +85,7 @@
       - `raven.librarian.chatutil.scrub` already fixes a missing initial think tag (if there is a closing tag but not an opening one), but that's only for the final message.
     - MCP support for loading tools from remote servers?
       - And/or skills support?
+        https://simonwillison.net/2025/Oct/16/claude-skills/
     - Add feature: show prompt
       - Save it per-chat-message, from `on_prompt_ready`.
       - Show prompt length as tokens (`raven.llmclient.token_count`).
