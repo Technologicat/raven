@@ -346,6 +346,7 @@ class DPGAvatarRenderer:
         else:
             x_center = self.avatar_x_center
             y_center = self.avatar_y_bottom - (self.image_size // 2)  # *avatar* image size
+        logger.info(f"DPGAvatarRenderer._reposition_paused_text: Updating paused text position to x_center = {x_center}, y_center = {y_center}")
         w_text, h_text = guiutils.get_widget_size(self.paused_text_gui_widget)
         dpg.set_item_pos(self.paused_text_gui_widget,
                          ((x_center - (w_text // 2)),
