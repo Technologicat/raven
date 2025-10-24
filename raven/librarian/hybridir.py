@@ -847,7 +847,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
                  docs_dir: Union[str, pathlib.Path],
                  recursive: bool,
                  retriever: HybridIR,
-                 exts: List[str] = [".txt", ".md", ".rst", ".org"],
+                 exts: List[str] = [".txt", ".md", ".rst", ".org", ".bib"],
                  callback: Callable = None) -> None:
         """Simple auto-updater that monitors a directory and auto-commits changes to a `HybridIR`.
 
