@@ -338,8 +338,8 @@ class DPGAvatarRenderer:
 
         logger.info("DPGAvatarRenderer.configure_live_texture: done.")
 
-    def _reposition_paused_text(self):
-        # Center the paused text on the backdrop if it exists, otherwise center it on the avatar
+    def _reposition_paused_text(self) -> None:
+        """Center the paused text on the backdrop if it exists, otherwise center it on the avatar video."""
         if self.backdrop_last_configured_image is not None:
             x_center = self.backdrop_width // 2
             y_center = self.backdrop_height // 2
@@ -354,9 +354,11 @@ class DPGAvatarRenderer:
     def reposition(self,
                    new_x_center: Optional[int] = None,
                    new_y_bottom: Optional[int] = None) -> None:
-        """Position the image widget within its parent.
+        """Position the avatar video and paused text widgets within the GUI parent.
 
-        Optionally, change the position.
+        Optionally, update the position of the avatar video to `new_x_center` and/or `new_y_bottom`.
+
+        The paused text is centered on the backdrop if it exists, and otherwise on the avatar video.
 
         `configure_live_texture` calls this automatically.
         """
@@ -373,7 +375,6 @@ class DPGAvatarRenderer:
         try:
             dpg.set_item_pos(self.live_image_widget, (x_left, y_top))
 
-            # TODO/FIXME/ABUSE: `reposition` is often called from a GUI resize handler. When the GUI is resized, we need to re-position the "paused" text, too, if it is visible.
             if dpg.is_item_visible(self.paused_text_gui_widget):
                 self._reposition_paused_text()
         except SystemError:  # window or live image widget does not exist
