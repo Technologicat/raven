@@ -280,6 +280,7 @@ class ManagedTask:
     def __call__(self, *args, **kwargs):
         """Call the entrypoint with the given arguments. Used by `TaskManager` when it starts this task."""
         return self.fn(*args, **kwargs)
+Callable.register(ManagedTask)  # virtual base class
 
 def make_managed_task(*,
                       status_box: box,
