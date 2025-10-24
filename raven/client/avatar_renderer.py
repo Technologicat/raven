@@ -270,7 +270,7 @@ class DPGAvatarRenderer:
         self.backdrop_blur_state = new_blur_state
 
         # Positioning the paused text requires the `self.backdrop_*` to be up to date, so do this last.
-        if dpg.is_item_visible(self.paused_text_gui_widget):
+        if not self.animator_running:
             self._reposition_paused_text()
 
     def configure_live_texture(self, new_image_size: int) -> None:
@@ -376,7 +376,7 @@ class DPGAvatarRenderer:
         try:
             dpg.set_item_pos(self.live_image_widget, (x_left, y_top))
 
-            if dpg.is_item_visible(self.paused_text_gui_widget):
+            if not self.animator_running:
                 self._reposition_paused_text()
         except SystemError:  # window or live image widget does not exist
             logger.info("DPGAvatarRenderer.reposition: GUI widget doesn't exist; ignoring. (This is normal at app shutdown.)")
