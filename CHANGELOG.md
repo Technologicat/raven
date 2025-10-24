@@ -17,6 +17,8 @@
     - This saves some VRAM, by avoiding loading another copy of the same models in the client process.
     - This also makes the `raven.librarian.hybridir` information retrieval backend fully client-server, allowing the AI components for this too to run on another machine.
     - Because *Librarian* requires *Raven-server* for other purposes, too, *Librarian* will not start if the server is not running.
+  - The document database now ingests `.bib` files, too.
+    - This allows using the `raven-burstbib` command-line tool to mass-feed abstracts (each as a separate document) into Librarian's document database.
   - Many small UI improvements, for example:
     - Window resizing implemented.
     - Collapsible thinking traces.
