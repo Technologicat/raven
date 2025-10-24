@@ -71,7 +71,7 @@ def main() -> None:
             while True:
                 line = input_file.readline()
                 if line == "":  # EOF
-                    output_path = output_dir / f"{slug}.txt"
+                    output_path = output_dir / f"{slug}.bib"
                     if opts.verbose:
                         print(f"    Writing '{str(output_path)}'")
                     with open(output_path, "w") as output_file:
@@ -79,7 +79,7 @@ def main() -> None:
                     break
 
                 if is_headerline(line):  # start of next record
-                    output_path = output_dir / f"{slug}.txt"
+                    output_path = output_dir / f"{slug}.bib"
                     if opts.verbose:
                         print(f"    Writing '{str(output_path)}'")
                     with open(output_path, "w") as output_file:
