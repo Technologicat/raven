@@ -272,7 +272,7 @@ with timer() as tim:
                     dpg_avatar_renderer = DPGAvatarRenderer(gui_parent="avatar_panel",
                                                             avatar_x_center=(avatar_panel_w // 2),
                                                             avatar_y_bottom=(avatar_panel_h - 8),
-                                                            paused_text="[No video]",
+                                                            paused_text="[Video is off]",
                                                             executor=bg)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
                     dpg_avatar_renderer.configure_live_texture(new_image_size=int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * librarian_config.avatar_config.source_image_size))
@@ -641,6 +641,8 @@ def _resize_gui() -> None:
     logger.debug("_resize_gui: Entered.")
     logger.debug("_resize_gui: Recentering help window.")
     help_window.reposition()
+    logger.debug("_resize_gui: Recentering avatar.")
+    dpg_avatar_renderer.reposition()  # reposition paused text
     logger.debug("_resize_gui: Submitting task for computationally expensive GUI updates.")
     task_view_rebuild_task = bgtask.ManagedTask(category="raven_librarian_chat_view_rebuild",
                                                 entrypoint=_resize_gui_task,
@@ -789,10 +791,12 @@ avatar_controller = DPGAvatarController(stop_tts_button_gui_widget="chat_stop_sp
                                         main_window_h=gui_config.main_window_h,
                                         executor=bg)  # use the same thread pool as our main task manager
 avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=avatar_instance_id,
+                                                           avatar_renderer=dpg_avatar_renderer,
                                                            voice=librarian_config.avatar_config.voice,
                                                            voice_speed=librarian_config.avatar_config.voice_speed,
-                                                           emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
                                                            emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
+                                                           emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
+                                                           idle_timeout=librarian_config.avatar_config.idle_off_timeout,
                                                            data_eyes_fadeout_duration=librarian_config.avatar_config.data_eyes_fadeout_duration)
 api.tts_warmup(voice=librarian_config.avatar_config.voice)
 

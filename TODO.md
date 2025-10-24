@@ -64,7 +64,6 @@
     - Long subtitle splitter (we now have the audio length).
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Chat graph editor?
-    - Add feature: Avatar idle off (10 sec)
   - Later:
     - Add nonlinear chat view / chat graph editor (this is part of where the true power of Librarian will come from)
       - zoom hack: https://github.com/iwatake2222/dear_ros_node_viewer/blob/main/src/dear_ros_node_viewer/graph_vewmodel.py#L206

@@ -30,6 +30,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import concurrent.futures
+import contextlib
 import functools
 import queue
 import threading
@@ -52,6 +53,7 @@ from ..common.gui import animation as gui_animation
 from ..common.gui import utils as guiutils
 
 from . import api  # Raven-server support
+from .avatar_renderer import DPGAvatarRenderer
 
 # --------------------------------------------------------------------------------
 # For CPU-friendliness, LRU-cache all AI-heavy parts (for the "speak again" feature).
@@ -157,6 +159,10 @@ class DPGAvatarController:
                        as long as the avatar is not speaking, so the actions should be idempotent
                        (i.e. have no further effect if called more than once).
 
+                       Note also that in the case of multiple avatars, this event does not distinguish
+                       between them; this is global for the TTS system. For an avatar instance specific
+                       idle event, see `on_idle` in `register_avatar_instance` instead.
+
         `tts_idle_check_interval`: seconds. How often to check whether TTS has become idle,
                                    and trigger `on_tts_idle` if it has.
 
@@ -244,10 +250,12 @@ class DPGAvatarController:
 
     def register_avatar_instance(self,
                                  avatar_instance_id: str,
+                                 avatar_renderer: Optional[DPGAvatarRenderer],
                                  voice: Optional[str],
                                  voice_speed: Optional[float],
-                                 emotion_autoreset_interval: Optional[float],
                                  emotion_blacklist: Tuple[str],
+                                 emotion_autoreset_interval: Optional[float],
+                                 idle_timeout: Optional[float],
                                  data_eyes_fadeout_duration: float) -> env:
         """Register an avatar instance, for methods that take a `config` parameter.
 
@@ -256,6 +264,8 @@ class DPGAvatarController:
         The fields of `config` which have the same names as the parameters of this function are public:
 
         `avatar_instance_id`: Avatar instance to control. You get this from `raven.client.api.avatar_load`.
+
+        `avatar_renderer`: The renderer instance that is rendering this avatar instance in the GUI.
 
         `voice`: TTS voice name. To get the list of available voices, call `raven.client.api.tts_list_voices`,
                  or use the `raven-avatar-settings-editor` GUI app.
@@ -266,6 +276,12 @@ class DPGAvatarController:
                  Use `None` ONLY IF you intend to populate `voice` and `voice_speed` later; trying to send
                  text to the TTS while the voice or the voice speed are set to `None` will raise `ValueError`.
 
+        `emotion_blacklist`: Prevent this avatar instance from automatically entering any of the listed emotions
+                             when the emotion is updated with `dpg_avatar_controller.update_emotion_from_text`.
+                             The most matching non-blacklisted emotion wins.
+
+                             Can be useful if the emotion detector is misbehaving.
+
         `emotion_autoreset_interval`: seconds, or `None` to disable.
 
                                       When enabled, this registers a handler to automatically reset the avatar
@@ -275,11 +291,12 @@ class DPGAvatarController:
                                         - The end of speaking, and
                                         - The last update to the avatar's emotion using `update_emotion_from_text`.
 
-        `emotion_blacklist`: Prevent this avatar instance from automatically entering any of the listed emotions
-                             when the emotion is updated with `dpg_avatar_controller.update_emotion_from_text`.
-                             The most matching non-blacklisted emotion wins.
+        `idle_timeout`: seconds, or `None` to disable. How long of no activity (for this avatar instance)
+                        until `on_idle` triggers.
 
-                             Can be useful if the emotion detector is misbehaving.
+                        To reset the timeout, call the `ping` method.
+
+                        To temporarily override the timeout, see the `idle_override` context manager.
 
         `data_eyes_fadeout_duration`: seconds; how long it takes for this avatar instance's "data eyes" effect
                                       (LLM tool access indicator) to fade out when `dpg_avatar_controller.stop_data_eyes`
@@ -291,10 +308,12 @@ class DPGAvatarController:
         config = env()
 
         config.avatar_instance_id = avatar_instance_id
+        config.avatar_renderer = avatar_renderer
         config.voice = voice
         config.voice_speed = voice_speed
-        config.emotion_autoreset_interval = emotion_autoreset_interval
         config.emotion_blacklist = tuple(emotion_blacklist)  # Ensure it's hashable, for LRU cache
+        config.emotion_autoreset_interval = emotion_autoreset_interval
+        config.idle_timeout = idle_timeout
         config.data_eyes_fadeout_duration = data_eyes_fadeout_duration
 
         config._data_eyes_state = False
@@ -302,6 +321,9 @@ class DPGAvatarController:
         config._data_eyes_fadeout_animation = None
 
         config._emotion_autoreset_t0 = time.time_ns()
+        config._idle_detector_lock = threading.RLock()
+        config._idle_detector_overrides = 0
+        config._idle_detector_t0 = time.time_ns()
         config._avatar_speaking = False  # per-avatar-instance flag, set/reset by start/stop events in `speak_task`
 
         # Reset emotion after a few seconds of idle time (when the TTS is not speaking).
@@ -321,6 +343,19 @@ class DPGAvatarController:
                         except Exception:  # exit task if the avatar instance is gone
                             logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar instance is gone, exiting.")
                             return
+                with config._idle_detector_lock:
+                    if (config.avatar_renderer is not None) and (config.avatar_renderer.animator_running) and (config._idle_detector_overrides == 0) and (config.idle_timeout is not None):
+                        time_now = time.time_ns()
+                        dt = (time_now - config._idle_detector_t0) / 10**9
+                        if not config._avatar_speaking and dt > config.idle_timeout:
+                            logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar idle for at least {config.idle_timeout} seconds; pausing avatar video")
+                            try:
+                                if config.avatar_renderer is not None:
+                                    config.avatar_renderer.pause(action="pause")
+                            except Exception as exc:
+                                logger.error(f"emotion_autoreset_task: during `avatar_renderer.pause`: {type(exc)}: {exc}")
+                                traceback.print_exc()
+                            config._idle_detector_t0 = time_now  # reset the timeout last, so that the old timestamp is available during `on_idle`.
                 time.sleep(0.1)
         # Save the env and the task handle for possible cancellation.
         config._emotion_autoreset_task_env = env()
@@ -328,6 +363,63 @@ class DPGAvatarController:
                                                                                     config._emotion_autoreset_task_env)
 
         return config
+
+    def ping(self,
+             config: env) -> None:
+        """Reset the avatar instance idle-off timeout.
+
+        `config`: Configuration for controlling a specific avatar instance and its GUI elements.
+                  See `register_avatar_instance`.
+
+        If `avatar_renderer` is provided in `config`: resume the avatar video, if currently paused.
+        """
+        config._idle_detector_t0 = time.time_ns()
+        if (config.avatar_renderer is not None) and (not config.avatar_renderer.animator_running):
+            config.avatar_renderer.pause(action="resume")
+
+    @contextlib.contextmanager
+    def idle_override(self,
+                      config: env) -> None:
+        """Context manager. Temporarily override the idle-off mechanism for this avatar instance.
+
+        `config`: Configuration for controlling a specific avatar instance and its GUI elements.
+                  See `register_avatar_instance`.
+
+        While overridden, the video auto-pause mechanism will not trigger. This can be used
+        to keep the avatar active e.g. when the AI is processing, even if the prompt processing
+        and/or tool calls are slow.
+
+        When the override starts, this will ping once, so that the avatar video resumes if paused.
+
+        When the override ends, this will also ping once, to reset the idle timeout.
+
+        This is thread-safe, and acts as an OR gate across threads. The override is active
+        as long as at least one dynamic extent with the override is active, in any thread.
+        """
+        # Possible scenarios.
+        #
+        # The brackets denote dynamic extents. The initial state is "not overridden".
+        # Each dynamic extent wants to temporarily set the state to "overridden".
+        #
+        #    -+          -+
+        #     |           | -+
+        #     | -+        |  |
+        #     |  |        | -+
+        #    -+  |       -+
+        #        |
+        #       -+
+        #
+        with config._idle_detector_lock:
+            config._idle_detector_overrides += 1
+            self.ping(config)
+        try:
+            yield
+        finally:
+            with config._idle_detector_lock:
+                config._idle_detector_overrides -= 1
+                if config._idle_detector_overrides == 0:
+                    self.ping(config)
+            assert config._idle_detector_overrides >= 0  # contract: postcondition
 
     def update_emotion_from_text(self,
                                  config: env,
@@ -371,6 +463,7 @@ class DPGAvatarController:
                 gui_animation.animator.cancel(config._data_eyes_fadeout_animation)
             api.avatar_modify_overrides(config.avatar_instance_id, action="set", overrides={"data1": 1.0})  # The "data1" cel blend controls the effect strength.
             config._data_eyes_state = True
+            self.ping(config)
 
     def stop_data_eyes(self, config: env) -> None:
         """Stop the scifi "data eyes" cel effect (LLM tool access indicator).
@@ -392,6 +485,7 @@ class DPGAvatarController:
             config._data_eyes_fadeout_animation = gui_animation.animator.add(DataEyesFadeOut(duration=config.data_eyes_fadeout_duration,
                                                                                              avatar_instance_id=config.avatar_instance_id))
             config._data_eyes_state = False
+            self.ping(config)
 
     def send_text_to_tts(self,
                          config: env,
@@ -681,6 +775,7 @@ class DPGAvatarController:
 
             def speak_task_on_start_speaking():
                 logger.info(f"speak_task.process_item.speak_task_on_start_speaking: instance {task_env.task_name}: sentence {sentence_uuid}: TTS starting to speak.")
+                self.ping(config)
                 if output_record["is_first_sentence_in_batch"] and (custom_on_start_speaking := output_record["on_start_speaking"]) is not None:
                     custom_on_start_speaking(output_record)
                 if (custom_on_start_sentence := output_record["on_start_sentence"]) is not None:
@@ -720,6 +815,7 @@ class DPGAvatarController:
                         dpg.disable_item(self.stop_tts_button_gui_widget)
                 with task_env.lock:
                     config._emotion_autoreset_t0 = time.time_ns()  # reset the emotion autoreset timer, so that the last emotion stays for a couple more seconds once speaking ends.
+                    self.ping(config)  # similarly, reset the idle countdown when speaking ends.
                     # Set the speaking state flags very last. These events are called from a different thread (the TTS client's background task),
                     # and our task threads (for `speak_task`, `emotion_autoreset_task`) monitor these flags and take action immediately.
                     config._avatar_speaking = False

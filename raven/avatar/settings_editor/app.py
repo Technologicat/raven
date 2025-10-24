@@ -1380,10 +1380,12 @@ avatar_controller = DPGAvatarController(stop_tts_button_gui_widget=None,  # We h
                                         main_window_h=0,
                                         executor=bg)  # use the same thread pool as our main task manager
 avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=avatar_instance_id,
+                                                           avatar_renderer=None,  # no need to auto-pause/resume avatar video in this app
                                                            voice=None,  # to be populated later
                                                            voice_speed=None,  # to be populated later
-                                                           emotion_autoreset_interval=None,
                                                            emotion_blacklist=(),  # only used for `avatar_controller.update_emotion_from_text`
+                                                           emotion_autoreset_interval=None,
+                                                           idle_timeout=None,
                                                            data_eyes_fadeout_duration=0.75)
 
 def gui_shutdown() -> None:

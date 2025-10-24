@@ -608,6 +608,7 @@ class DPGChatMessage:
         if role == "assistant":
             def speak_message_callback():
                 if self.parent_view.chat_controller.app_state["avatar_speech_enabled"]:
+                    self.parent_view.chat_controller.avatar_controller.ping(config=self.parent_view.chat_controller.avatar_record)  # wake up the AI avatar before starting to speak
                     unused_message_role, message_persona, message_text = chatutil.get_node_message_text_without_persona(self.parent_view.chat_controller.datastore, node_id)
                     # Send only non-thought message content to TTS
                     message_text = chatutil.scrub(persona=message_persona,
@@ -1017,6 +1018,7 @@ class DPGLinearizedChatView:
                                   add_persona=False)
             self.chat_controller.avatar_controller.update_emotion_from_text(config=self.chat_controller.avatar_record,
                                                                             text=text)
+        self.chat_controller.avatar_controller.ping(config=self.chat_controller.avatar_record)  # wake up the AI avatar when the chat view is re-rendered
         dpg.split_frame()
         self.scroll_to_end()
 
@@ -1482,28 +1484,30 @@ class DPGChatController:
                     # logger.info("=" * 80)
                     pass
 
-                new_head_node_id = scaffold.ai_turn(llm_settings=self.llm_settings,
-                                                    datastore=self.datastore,
-                                                    retriever=self.retriever,
-                                                    head_node_id=self.app_state["HEAD"],
-                                                    tools_enabled=self.app_state["tools_enabled"],
-                                                    continue_=continue_,
-                                                    docs_query=docs_query,
-                                                    docs_num_results=librarian_config.docs_num_results,
-                                                    speculate=self.app_state["speculate_enabled"],
-                                                    markup="markdown",  # TODO: check if we actually use the `markup` argument for anything but thought blocks - those are in any case emitted as-is (and formatted at render time).
-                                                    on_docs_start=on_docs_start,
-                                                    on_docs_done=on_docs_done,
-                                                    on_llm_start=on_llm_start,
-                                                    on_prompt_ready=on_prompt_ready,  # debug/info hook
-                                                    on_llm_progress=on_llm_progress,
-                                                    on_llm_done=on_done,
-                                                    on_nomatch_done=on_done,
-                                                    on_tools_start=on_tools_start,
-                                                    on_call_lowlevel_start=on_call_lowlevel_start,
-                                                    on_call_lowlevel_done=on_call_lowlevel_done,
-                                                    on_tool_done=on_tool_done,
-                                                    on_tools_done=on_tools_done)
+                # `scaffold.ai_turn` is a synchronous call, which allows us to use the context manager for the idle-off override.
+                with self.avatar_controller.idle_override(config=self.avatar_record):
+                    new_head_node_id = scaffold.ai_turn(llm_settings=self.llm_settings,
+                                                        datastore=self.datastore,
+                                                        retriever=self.retriever,
+                                                        head_node_id=self.app_state["HEAD"],
+                                                        tools_enabled=self.app_state["tools_enabled"],
+                                                        continue_=continue_,
+                                                        docs_query=docs_query,
+                                                        docs_num_results=librarian_config.docs_num_results,
+                                                        speculate=self.app_state["speculate_enabled"],
+                                                        markup="markdown",  # TODO: check if we actually use the `markup` argument for anything but thought blocks - those are in any case emitted as-is (and formatted at render time).
+                                                        on_docs_start=on_docs_start,
+                                                        on_docs_done=on_docs_done,
+                                                        on_llm_start=on_llm_start,
+                                                        on_prompt_ready=on_prompt_ready,  # debug/info hook
+                                                        on_llm_progress=on_llm_progress,
+                                                        on_llm_done=on_done,
+                                                        on_nomatch_done=on_done,
+                                                        on_tools_start=on_tools_start,
+                                                        on_call_lowlevel_start=on_call_lowlevel_start,
+                                                        on_call_lowlevel_done=on_call_lowlevel_done,
+                                                        on_tool_done=on_tool_done,
+                                                        on_tools_done=on_tools_done)
                 self.app_state["HEAD"] = new_head_node_id
             finally:
                 if self.gui_updates_safe:

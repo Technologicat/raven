@@ -23,6 +23,13 @@
     - Window resizing implemented.
     - Collapsible thinking traces.
     - Interrupt/continue.
+    - Avatar idle off.
+      - Configurable, optional. See `avatar_config.idle_off_timeout` in `raven.librarian.config`. Seconds as float, or `None` to disable.
+      - This saves some GPU compute by switching off the avatar video after the AI avatar is idle for a while.
+      - The avatar video switches back on when:
+        - The AI starts processing (writing new message, continuing existing message, rerolling existing message).
+        - The chat view is re-rendered (e.g. by switching chat branches, or resizing the window).
+        - The AI starts speaking (Ctrl+S, send last message to TTS).
     - Help card added.
 
 - Tools:
