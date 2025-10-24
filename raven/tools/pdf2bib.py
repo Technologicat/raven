@@ -997,6 +997,12 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                             with open(error_info_path, "w") as f_errors:
                                 f_errors.write(error_info)
 
+                            # Save a copy of the failed bib entry as a separate file, for easy inspection
+                            error_bib_filename = f"{unique_id}.bib"
+                            error_bib_path = os.path.join(output_dir, error_bib_filename)
+                            with open(error_bib_path, "w") as f_error_bib:
+                                f_error_bib.write(f"{bibtex_entry}\n\n")
+
                         # Move input file to done directory if specified (allows continuing later)
                         if output_dir is not None:
                             shutil.move(fullpath, os.path.join(output_dir, os.path.basename(fullpath)))
