@@ -126,17 +126,14 @@ class DPGAvatarRenderer:
         self.last_image_rgba = None  # For rescaling last received frame on upscaler size change before we get new data
 
         self.backdrop_path = None  # The path to the loaded backdrop image (`Optional[Union[str, pathlib.Path]]`); a client can get it here if they need to
-        self.backdrop_image = None  # PIL image
+        self.backdrop_image = None  # PIL image; latest loaded image, or `None` for no backdrop
         self.backdrop_texture = None  # raw texture
         self.backdrop_texture_id_counter = 0
-        self.backdrop_width = None
-        self.backdrop_height = None
-        self.backdrop_blur_state = None  # whether to blur background (by calling Raven-server's `imagefx` module); a client can get it here if they need to
-        # tracking for backdrop's previous state so that `configure_backdrop` knows whether it needs to do anything
-        self.backdrop_old_image = None
-        self.backdrop_old_width = None
-        self.backdrop_old_height = None
-        self.backdrop_old_blur_state = None
+        # tracking for backdrop's state so that `configure_backdrop` knows whether it needs to do anything
+        self.backdrop_last_configured_image = None  # image last seen and configured by `configure_backdrop`
+        self.backdrop_width = None  # will contain the width after `configure_backdrop`
+        self.backdrop_height = None  # similarly
+        self.backdrop_blur_state = None  # similarly
 
         self.avatar_instance_id = None  # initialized at `start`
         self.animator_running = False
@@ -216,11 +213,11 @@ class DPGAvatarRenderer:
         if new_blur_state is None:
             raise TypeError("`new_blur_state` is mandatory; got `None`")
         logger.info(f"DPGAvatarRenderer.configure_backdrop: Updating backdrop size to {new_width}x{new_height}, and blur state to {new_blur_state}")
-        old_width = self.backdrop_old_width
-        old_height = self.backdrop_old_height
-        old_blur_state = self.backdrop_old_blur_state
+        old_width = self.backdrop_width
+        old_height = self.backdrop_height
+        old_blur_state = self.backdrop_blur_state
         old_texture_id = self.backdrop_texture_id_counter
-        if self.backdrop_image is not None and (self.backdrop_image != self.backdrop_old_image or new_width != old_width or new_height != old_height or new_blur_state != old_blur_state):
+        if self.backdrop_image is not None and (self.backdrop_image != self.backdrop_last_configured_image or new_width != old_width or new_height != old_height or new_blur_state != old_blur_state):
             new_texture_id = old_texture_id + 1
 
             image_width, image_height = self.backdrop_image.size
@@ -266,12 +263,15 @@ class DPGAvatarRenderer:
             dpg.delete_item("avatar_backdrop_drawlist", children_only=True)  # delete old draw items
             dpg.configure_item("avatar_backdrop_drawlist", width=new_width, height=new_height)
             guiutils.maybe_delete_item(f"avatar_backdrop_texture_{old_texture_id}")
-        self.backdrop_blur_state = new_blur_state  # save it for clients
 
-        self.backdrop_old_image = self.backdrop_image
-        self.backdrop_old_width = new_width
-        self.backdrop_old_height = new_height
-        self.backdrop_old_blur_state = new_blur_state
+        self.backdrop_last_configured_image = self.backdrop_image
+        self.backdrop_width = new_width
+        self.backdrop_height = new_height
+        self.backdrop_blur_state = new_blur_state
+
+        # Positioning the paused text requires the `self.backdrop_*` to be up to date, so do this last.
+        if dpg.is_item_visible(self.paused_text_gui_widget):
+            self._reposition_paused_text()
 
     def configure_live_texture(self, new_image_size: int) -> None:
         """Set up (or re-set-up) the texture and image widgets for rendering the video stream of the live AI avatar.
@@ -339,12 +339,17 @@ class DPGAvatarRenderer:
         logger.info("DPGAvatarRenderer.configure_live_texture: done.")
 
     def _reposition_paused_text(self):
-        avatar_x_center = self.avatar_x_center
-        avatar_y_center = self.avatar_y_bottom - (self.image_size // 2)
+        # Center the paused text on the backdrop if it exists, otherwise center it on the avatar
+        if self.backdrop_last_configured_image is not None:
+            x_center = self.backdrop_width // 2
+            y_center = self.backdrop_height // 2
+        else:
+            x_center = self.avatar_x_center
+            y_center = self.avatar_y_bottom - (self.image_size // 2)  # *avatar* image size
         w_text, h_text = guiutils.get_widget_size(self.paused_text_gui_widget)
         dpg.set_item_pos(self.paused_text_gui_widget,
-                         ((avatar_x_center - (w_text // 2)),
-                          (avatar_y_center - (h_text // 2))))  # TODO: account for font size / height
+                         ((x_center - (w_text // 2)),
+                          (y_center - (h_text // 2))))  # TODO: account for font size / height
 
     def reposition(self,
                    new_x_center: Optional[int] = None,
