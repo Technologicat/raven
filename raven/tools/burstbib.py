@@ -24,6 +24,8 @@ def main() -> None:
     parser.add_argument("-V", "--verbose", dest="verbose", action="store_true", default=False, help="Print progress messages.")
     opts = parser.parse_args()
 
+    if opts.output_dir is None:
+        opts.output_dir = "."
     output_dir = pathlib.Path(opts.output_dir).expanduser().resolve()
     if opts.verbose:
         print(f"Creating output directory '{opts.output_dir}' (resolved to '{str(output_dir)}')")
