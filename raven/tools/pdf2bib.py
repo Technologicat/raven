@@ -817,10 +817,21 @@ def setup_prompts(llm_settings: env,
         error_info = io.StringIO()
         text = strip_postamble(text)
 
-        raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
-                                                                 instruction=f"{prompt_get_abstract}\n-----\n\n{text}",
-                                                                 progress_symbol=".")
-        abstract = scrubbed_output_text.strip()
+        for retry in range(n_retries):
+            raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
+                                                                     instruction=f"{prompt_get_abstract}\n-----\n\n{text}",
+                                                                     progress_symbol=".")
+            abstract = scrubbed_output_text.strip()
+
+            if abstract:
+                break
+            logger.warning(f"Input file '{unique_id}': Abstract empty at attempt {retry + 1} out of {n_retries}")
+        else:
+            error_msg = f"Input file '{unique_id}': Abstract empty after retries exhausted; giving up."
+            logger.warning(error_msg)
+            error_info.write(f"{error_msg}\n")
+            error_info.write(f"Full LLM output trace for EXTRACT ABSTRACT:\n{'-' * 80}\n{raw_output_text}\n")
+            return status_failed, error_info.getvalue(), ""
 
         return status, error_info.getvalue(), abstract
 
