@@ -42,12 +42,15 @@ from typing import Dict, List, Tuple
 from unpythonic import sym, timer, ETAEstimator, uniqify
 from unpythonic.env import env
 
+from ..client import mayberemote
+
 from ..common import utils as common_utils
 
 from ..librarian import chattree
 from ..librarian import chatutil
 from ..librarian import config as librarian_config
 from ..librarian import llmclient
+from ..visualizer import config as visualizer_config
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -56,6 +59,11 @@ datastore = chattree.Forest()  # NOT persistent. We'll be using the LLM to run t
 
 status_success = sym("success")
 status_failed = sym("failed")
+
+# TODO: refactor: tools shouldn't load `visualizer_config`
+dehyphenator = mayberemote.Dehyphenator(allow_local=True,
+                                        model_name=visualizer_config.dehyphenation_model,
+                                        device_string=visualizer_config.devices["sanitize"]["device_string"])
 
 # --------------------------------------------------------------------------------
 # Settings
@@ -831,6 +839,8 @@ def setup_prompts(llm_settings: env,
             error_info.write(f"{error_msg}\n")
             error_info.write(f"Full LLM output trace for EXTRACT ABSTRACT:\n{'-' * 80}\n{raw_output_text}\n")
             return status_failed, error_info.getvalue(), ""
+
+        abstract = dehyphenator.dehyphenate(abstract)
 
         return status, error_info.getvalue(), abstract
 

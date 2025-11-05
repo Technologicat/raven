@@ -34,6 +34,7 @@ def main() -> None:
                    raven_api_key_file=client_config.raven_api_key_file,
                    tts_playback_audio_device=client_config.tts_playback_audio_device)
 
+    # TODO: refactor: tools shouldn't load `visualizer_config`
     dehyphenator = mayberemote.Dehyphenator(allow_local=True,
                                             model_name=visualizer_config.dehyphenation_model,
                                             device_string=visualizer_config.devices["sanitize"]["device_string"])
