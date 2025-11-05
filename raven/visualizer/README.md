@@ -268,6 +268,7 @@ So if you are a conference organizer, and would like to semantically visualize t
 - Each PDF should contain one abstract. Multiple abstracts are fed in as separate PDF files.
 - The importer does not enforce a length limit, but its intended use case is a typical conference abstract, 1-2 pages in length.
 - The abstract should have a human-recognizable title, authors, and main text. Exact formatting does not matter.
+- Starting with v0.2.4, the extracted abstract text is sanitized with the dehyphenator before it is written to the "abstract" field of the output BibTeX record.
 - If the abstract contains a line beginning with "*keywords:*" or "*key words:*", the importer will attempt to also extract keywords.
 
 **:exclamation: This functionality is currently in beta. :exclamation:**
