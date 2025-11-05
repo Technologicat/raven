@@ -1,6 +1,6 @@
 """Miscellaneous general utilities."""
 
-__all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
+__all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory", "maybe_open",
            "make_blank_index_array",
            "UnionFilter",
            "environ_override",
@@ -21,7 +21,7 @@ import os
 import pathlib
 import re
 import threading
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, TextIO, Union
 import unicodedata
 
 import numpy as np
@@ -89,6 +89,29 @@ def create_directory(path: Union[str, pathlib.Path]) -> None:
 # def clear_and_create_directory(path: str) -> None:
 #     delete_directory_recursively(path)
 #     create_directory(path)
+
+@contextlib.contextmanager
+def maybe_open(filename: Optional[Union[str, pathlib.Path]],
+               mode: str,
+               fallback: TextIO,
+               **kwargs) -> TextIO:  # TODO: generic utility, move to `unpythonic`?
+    """[context manager] Adapter so that we can always syntactically `with open` even when we should just use stdin/stdout.
+
+    `filename`: If not `None`, behave as `with open(filename, mode)`.
+                If `None`, then return `fallback` in place of the file handle.
+
+    `mode`: As in `with open`.
+
+    `fallback`: Used when `filename is None`. Useful values include `sys.stdin` for reading,
+                and `sys.stdout` or `sys.stderr` for writing or appending.
+
+    `kwargs`: passed to `open` as-is.
+    """
+    if filename is not None:
+        with open(filename, mode, **kwargs) as f:
+            yield f
+    else:
+        yield fallback
 
 # --------------------------------------------------------------------------------
 # Misc utilities
