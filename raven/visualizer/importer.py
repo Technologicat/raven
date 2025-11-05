@@ -177,6 +177,7 @@ def parse_input_files(*filenames):
 
     logger.info("Extracting data from input records...")
     parsed_data_by_filename = {}
+    dehyphenator = None
     with timer() as tim:
         n_total_entries = sum(len(entries) for entries in bibtex_entries_by_filename.values())
         progress.set_micro_count(n_total_entries)
@@ -206,7 +207,14 @@ def parse_input_files(*filenames):
 
                 # abstract is optional
                 if "abstract" in fields and fields["abstract"].value:
-                    abstract = common_utils.unicodize_basic_markup(fields["abstract"].value)
+                    abstract = fields["abstract"].value
+                    if visualizer_config.dehyphenate:
+                        if dehyphenator is None:  # delayed init - load only if needed, on first use
+                            dehyphenator = mayberemote.Dehyphenator(allow_local=True,
+                                                                    model_name=visualizer_config.dehyphenation_model,
+                                                                    device_string=visualizer_config.devices["sanitize"]["device_string"])
+                        abstract = dehyphenator.dehyphenate(abstract)
+                    abstract = common_utils.unicodize_basic_markup(abstract)
                 else:
                     abstract = None
 

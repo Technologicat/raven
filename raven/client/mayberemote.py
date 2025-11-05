@@ -6,6 +6,7 @@ NOTE: Before using this module, you must `raven.client.api.initialize` first.
 # TODO: This could be extended to cover all applicable server modules, but YAGNI. As of v0.2.4, we only need some specific modules to have this capability, for Raven-visualizer's importer.
 
 __all__ = ["MaybeRemoteService",
+           "Dehyphenator",
            "Embedder",
            "NLP",
            "Summarizer"]
@@ -91,6 +92,47 @@ class MaybeRemoteService:
     def is_local(self) -> bool:
         """Return whether this service is in local mode."""
         return self._local_model is not None  # In local mode, each derived class loads the relevant local model.
+
+
+class Dehyphenator(MaybeRemoteService):
+    def __init__(self,
+                 allow_local: bool,
+                 model_name: Optional[str],
+                 device_string: Optional[str]):
+        """Dehyphenate broken text (e.g. as extracted from a PDF), via perplexity analysis using a character-level AI model for NLP.
+
+        `allow_local`: See `MaybeRemoteService`.
+
+        `model_name`: Required if `allow_local=True`. If local mode triggers, spaCy model name to load, e.g. "en_web_core_sm".
+
+        `device_string`: Required if `allow_local=True`. If local mode triggers, passed to `raven.common.nlptools`.
+        """
+        super().__init__(allow_local)
+        self.model_name = model_name
+        self.device_string = device_string
+
+        if "sanitize" in self.server_modules:
+            logger.info(f"Dehyphenator.__init__: Using `sanitize` module on Raven-server at '{client_config.raven_server_url}'.")
+        else:
+            if self.server_available:
+                logger.info(f"Dehyphenator.__init__: No `sanitize` module loaded on Raven-server at '{client_config.raven_server_url}', loading dehyphenator model locally.")
+            self._local_model = nlptools.load_dehyphenator(model_name,
+                                                           device_string)
+
+    def dehyphenate(self,
+                    text: Union[str, List[str]]) -> Union[str, List[str]]:
+        """Dehyphenate `text`.
+
+        `text`: one or more texts to dehyphenate.
+
+        Returns `str` (one input) or `list` of `str` (more inputs).
+        """
+        if self._local_model is None:
+            dehyphenated_text = api.sanitize_dehyphenate(text)
+        else:
+            dehyphenated_text = nlptools.dehyphenate(self._local_model,
+                                                     text)
+        return dehyphenated_text
 
 
 class Embedder(MaybeRemoteService):

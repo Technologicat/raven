@@ -64,8 +64,11 @@ default_port = 5100
 classification_model = "joeddav/distilbert-base-uncased-go-emotions-student"
 # classification_model = "nateraw/bert-base-uncased-emotion"
 
-# Character-level contextual embeddings by Flair-NLP. Used by the `sanitize` module
-# for dehyphenation of broken text (e.g. as extracted from a PDF file).
+# Character-level contextual embeddings by Flair-NLP. Used for dehyphenation of broken text (e.g. as extracted from a PDF file).
+#
+# NOTE: Raven uses dehyphenation mdoels in two places, and they don't have to be the same.
+#  - Raven-visualizer: processing of abstracts during BibTeX import
+#  - Raven-server: served by the `sanitize` module (this setting)
 #
 # This is NOT a HuggingFace model name, but is auto-downloaded (by Flair-NLP) on first use.
 #

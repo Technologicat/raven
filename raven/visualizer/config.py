@@ -22,6 +22,7 @@ devices = {
     "embeddings": {"device_string": "cuda:0",
                    "dtype": torch.float16},
     "nlp": {"device_string": "cuda:0"},  # no configurable dtype
+    "sanitize": {"device_string": "cuda:0"},  # used for dehyphenation; no configurable dtype
     "summarization": {"device_string": "cuda:0",
                       "dtype": torch.float16}
 }
@@ -66,6 +67,33 @@ extract_keywords = True
 #
 spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but can also benefit from GPU acceleration.
 # spacy_model = "en_core_web_trf"  # Transformer-based pipeline; more accurate, slower, requires GPU, takes lots of VRAM.
+
+# Dehyphenate abstracts?
+#
+# This can fix PDF text bro-ken by hyp-he-na-tion, but may also cause paragraphs to run together
+# (in those abstracts that have multiple paragraphs).
+dehyphenate = True
+
+# Character-level contextual embeddings by Flair-NLP. Used for dehyphenation of broken text (e.g. as extracted from a PDF file).
+#
+# NOTE: Raven uses dehyphenation mdoels in two places, and they don't have to be the same.
+#  - Raven-visualizer: processing of abstracts during BibTeX import (this setting)
+#  - Raven-server: served by the `sanitize` module
+#
+# This is NOT a HuggingFace model name, but is auto-downloaded (by Flair-NLP) on first use.
+#
+# This is installed into `~/.flair/embeddings/`.
+#
+# For available models, see:
+#     https://github.com/flairNLP/flair/blob/master/resources/docs/embeddings/FLAIR_EMBEDDINGS.md
+#     https://github.com/flairNLP/flair/blob/master/flair/embeddings/token.py
+#
+# This model is loaded by the `dehyphen` package; omit the "-forward" or "-backward" part
+# of the model name, those are added automatically.
+#
+# At first, try "multi", it should support 300+ languages. If that doesn't perform adequately, then look at the docs.
+#
+dehyphenation_model = "multi"
 
 summarize = False  # Shorten abstracts using AI? VERY slow; experimental, the results are not used yet.
 
