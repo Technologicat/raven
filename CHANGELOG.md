@@ -2,6 +2,15 @@
 
 **0.2.4** (October 2025, in progress):
 
+**Added**:
+
+- Tools:
+  - New tool: *Raven-dehyphenate*.
+    - This uses the `dehyphen` package to sanitize text bro-ken by hyp-he-na-tion.
+    - This can be useful for `pdftotext` outputs, and for text obtained from PDF files by OCR (such as with `ocrmypdf --force-ocr input.pdf output.pdf`).
+    - Raven-server's `sanitize` module is used automatically, if the server is reachable and the module is loaded on the server; else the dehyphenator model is loaded locally.
+
+
 **Changed**:
 
 - *Raven-visualizer*:
@@ -11,6 +20,13 @@
   - *Visualizer*'s importer now automatically uses *Raven-server* for embeddings and NLP if it is running.
     - If the server is not running, the AI models are loaded locally (in the client process) as before.
     - There is no visible difference from the user's perspective (other than saving some VRAM, if also *Librarian* is running at the same time).
+  - The importer now sanitizes abstracts using the `sanitize` module of Raven-server. This feature is on by default.
+    - This affects only new BibTeX imports. Existing datasets are not modified.
+    - The feature can be turned off in `raven.visualizer.config`. See the `dehyphenate` setting.
+    - For each abstract, all paragraphs are sent together for processing. This may cause paragraphs to run together, if an abstract contains multiple paragraphs,
+      but is often the only way if the input text is REALLY broken and contains newlines at arbitrary places. It was felt this is preferable, because scientific
+      abstracts are often just one 200-word paragraph.
+    - Raven-server's `sanitize` module is used automatically, if the server is reachable and the module is loaded on the server; else the dehyphenator model is loaded locally.
 
 - *Raven-librarian*:
   - The document database now uses *Raven-server* for embeddings and NLP.
