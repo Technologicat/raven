@@ -476,6 +476,18 @@ def _join_paragraphs(scorer: dehyphen.FlairScorer, candidate_paragraphs: List[st
 def dehyphenate(scorer: dehyphen.FlairScorer, text: Union[str, List[str]]) -> Union[str, List[str]]:
     """Dehyphenate broken text (e.g. as extracted from a PDF), via perplexity analysis using a character-level AI model for NLP.
 
+    Be aware that this often causes paragraphs in `text` to run together, because the likely-paragraph-split analyzer is not perfect.
+    Broken input text may contain blank lines at arbitrary positions, so a double newline is not always a reliable indicator of an
+    actually intended paragraph break.
+
+    If you have known paragraphs you want to preserve, you can pass them as a list to process them separately, e.g.::
+
+        paragraphs = my_text.split("\n\n")
+        dehyphenated_paragraphs = dehyphenate(scorer, paragraphs)
+        dehyphenated_my_text = "\n\n".join(dehyphenated_paragraphs)
+
+    (This is how the `raven-dehyphenate` command-line tool does it.)
+
     `scorer`: return value of `load_dehyphenator`
     `text`: one or more texts to dehyphenate.
 
