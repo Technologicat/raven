@@ -79,6 +79,9 @@ with timer() as tim:
     # Emit further log messages only from a few select modules (our own plus some vendored)
     for handler in logging.root.handlers:
         handler.addFilter(common_utils.UnionFilter(logging.Filter(__name__),
+                                                   logging.Filter("raven.client.mayberemote"),
+                                                   logging.Filter("raven.client.api"),
+                                                   logging.Filter("raven.client.util"),
                                                    logging.Filter("raven.common.bgtask"),
                                                    logging.Filter("raven.common.deviceinfo"),
                                                    logging.Filter("raven.common.gui.animation"),
