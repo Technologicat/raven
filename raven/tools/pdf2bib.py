@@ -28,7 +28,6 @@ from .. import __version__
 
 import argparse
 import collections
-import contextlib
 import io
 import os
 import pathlib
@@ -38,7 +37,7 @@ import subprocess
 import sys
 from textwrap import dedent
 import traceback
-from typing import Dict, List, Optional, TextIO, Tuple
+from typing import Dict, List, Tuple
 
 from unpythonic import sym, timer, ETAEstimator, uniqify
 from unpythonic.env import env
@@ -908,19 +907,6 @@ def process_one(llm_settings: env,
     bibtex_entry = bibtex_entry.getvalue()
     return entry_status, "\n\n".join(error_infos), bibtex_entry
 
-@contextlib.contextmanager
-def maybe_open_for_append(filename: Optional[str]) -> TextIO:
-    """[context manager] Adapter so that we can always syntactically `with open` even when we should just write to stdout.
-
-    `filename`: If not `None`, behave as `with open(filename, "a")`.
-                If `None`, then return `sys.stdout` in place of the file handle.
-    """
-    if filename is not None:
-        with open(filename, "a") as f:
-            yield f
-    else:
-        yield sys.stdout
-
 def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
     """Process all PDFs under `paths`, recursively.
 
@@ -951,8 +937,8 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
     # Process the PDFs
     #
     # bibtex_entries = []
-    with maybe_open_for_append(opts.success_filename) as f_success:
-        with maybe_open_for_append(opts.failed_filename) as f_failed:  # Actually the stdout from this is unused if the filename is not provided, since we send to the success output, wherever that is. Doesn't matter.
+    with common_utils.maybe_open(opts.success_filename, mode="a", fallback=sys.stdout) as f_success:
+        with common_utils.maybe_open(opts.failed_filename, mode="a", fallback=sys.stdout) as f_failed:  # Actually the stdout from this is unused if the filename is not provided, since we send to the success output, wherever that is. Doesn't matter.
             try:
                 for path in paths:
                     logger.info(f"Processing directory \"{path}\"...")
