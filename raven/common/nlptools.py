@@ -428,6 +428,15 @@ def _join_paragraphs(scorer: dehyphen.FlairScorer, candidate_paragraphs: List[st
         while True:
             candidate2 = candidate_paragraphs[j]
 
+            # handle blank lines in the middle of the input, or at the end of the input
+            if not len(candidate2):
+                if j == len(candidate_paragraphs) - 1:  # end of text: commit whatever we have left
+                    out.append(candidate1)  # candidate1 is a complete paragraph (after it there are only blank lines)
+                    break
+                else:
+                    j += 1
+                    continue
+
             # # DEBUG
             # print("=" * 80)
             # print(j)
@@ -473,8 +482,9 @@ def dehyphenate(scorer: dehyphen.FlairScorer, text: Union[str, List[str]]) -> Un
     Returns `str` (one input) or `list` of `str` (more inputs).
     """
     def doit(text: str) -> str:
-        # Don't send if the input is a single character, to avoid crashing `dehyphen`.
-        if len(text) == 1:
+        if len(text) == 1:  # Don't send if the input is a single character, to avoid crashing `dehyphen`.
+            return text
+        if text.count("\n") <= 1:  # Don't send a single line - there's nothing to fix.
             return text
         data = dehyphen.text_to_format(text)
         data = scorer.dehyphen(data)
