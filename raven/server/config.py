@@ -115,6 +115,14 @@ embedding_models = {
     "qa": "sentence-transformers/multi-qa-mpnet-base-cos-v1",  # maps questions and related answers near each other
 }
 
+# Models for the Kokoro speech synthesizer (text to speech, TTS).
+#
+# The newer, smaller and faster KittenTTS is currently not supported, because it does not output
+# per-word timestamps and per-word phonemes, which are needed for avatar lipsync. This is tracked here:
+#   https://github.com/KittenML/KittenTTS/issues/14
+#
+kokoro_models = "hexgrad/Kokoro-82M"  # ~360 MB
+
 # NLP model for spaCy, used for breaking text into sentences in the `summarize` module.
 #
 # NOTE: Raven uses spaCy models in three places, and they don't have to be the same.
@@ -172,14 +180,6 @@ translation_models = {
     "fi": {"en": "Helsinki-NLP/opus-mt-tc-big-en-fi"},  # to fi, from en
     # "en": {"fi": "Helsinki-NLP/opus-mt-tc-big-fi-en"},  # to en, from fi
 }
-
-# Models for the Kokoro speech synthesizer (text to speech, TTS).
-#
-# The newer, smaller and faster KittenTTS is currently not supported, because it does not output
-# per-word timestamps and per-word phonemes, which are needed for avatar lipsync. This is tracked here:
-#   https://github.com/KittenML/KittenTTS/issues/14
-#
-kokoro_models = "hexgrad/Kokoro-82M"  # ~360 MB
 
 # --------------------------------------------------------------------------------
 # AI avatar
