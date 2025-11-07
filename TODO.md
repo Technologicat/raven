@@ -33,6 +33,12 @@
     - should detect token-limit-exceeded in `raven.librarian.llmclient`, and return a status flag in the metadata
 
 - Server
+  - Finish the new `stt` module (speech to text)
+    - Server README / user manual / api docs
+    - Docstrings
+    - Rewrite the `stt` module implementation using the high-level pipeline API if possible
+    - Test also `stt_transcribe_file` and `stt_transcribe_array`
+    - whisper-large-v3-turbo needs another 1.6 GB of VRAM; check if we could use a quantized model (may need vLLM)
   - Zip the avatar characters, for ease of use
     - Include all extra cels in the zip, as well as optional animator/postprocessor settings, and optional emotion templates
     - Implement zip loading on server side, add a new web API endpoint
@@ -82,14 +88,12 @@
       - Pick the most recent continuation and show it, if any continuations exist
         - To determine which is the most recent: for each possible continuation, scan subtree for the most recent revision timestamp anywhere in descendants
       - This gives us a *very* rudimentary way to navigate the chat database.
+    - STT (speech to text, speech recognition):
+      - UI: Hold Ctrl+Shift+Space or hold down a mic button in the GUI to speak to the AI.
+      - Then STT the recorded audio (using Raven-server's new `stt` module), and send it to the AI as the user's chat message.
     - Long subtitle splitter (we now have the audio length).
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Recent chats list, once we implement that?
-    - STT (speech to text, speech recognition):
-      - Probably good starting point: whisper-v3-turbo
-      - Newer models exist; should evaluate them, too.
-      - UI? Hold Ctrl+Shift+Space or hold down a mic button in the GUI to speak to the AI?
-      - Then STT the recorded audio, and send it to the AI as the user's chat message.
 
   - Later:
     - Document database: scopes
