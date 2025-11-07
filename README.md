@@ -239,7 +239,7 @@ python -m pdm install
 
 This works because PDM is just a Python module. This will be allowed to run if `python` is allowed to run.
 
-Similarly, Raven apps are just Python modules, and can be run via Python, as follows. Full list as of Raven v0.2.3:
+Similarly, Raven apps are just Python modules, and can be run via Python, as follows. Full list as of Raven v0.2.4:
 
 ```
 Command                                Replacement
@@ -248,6 +248,7 @@ raven-visualizer                  →    python -m raven.visualizer.app
 raven-importer                    →    python -m raven.visualizer.importer
 raven-arxiv2id                    →    python -m raven.tools.arxiv2id
 raven-burstbib                    →    python -m raven.tools.burstbib
+raven-dehyphenate                 →    python -m raven.tools.dehyphenate
 raven-wos2bib                     →    python -m raven.tools.wos2bib
 raven-pdf2bib                     →    python -m raven.tools.pdf2bib
 raven-server                      →    python -m raven.server.app
