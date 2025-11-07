@@ -593,27 +593,7 @@ def imagefx_upscale_array(image_data: np.array,
     return output_image_rgba
 
 # --------------------------------------------------------------------------------
-# Sanitize
-
-def sanitize_dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
-    """Dehyphenate input text.
-
-    Returns `str` (one input) or `list` of `str` (more inputs).
-    """
-    if not util.api_initialized:
-        raise RuntimeError("sanitize_dehyphenate: The `raven.client.api` module must be initialized before using the API.")
-    headers = copy.copy(util.api_config.raven_default_headers)
-    headers["Content-Type"] = "application/json"
-    input_data = {"text": text}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/sanitize/dehyphenate", json=input_data, headers=headers)
-    util.yell_on_error(response)
-    output_data = response.json()
-
-    output_text = output_data["text"]
-    return output_text
-
-# --------------------------------------------------------------------------------
-# Summarize
+# Natlang
 
 def natlang_analyze(text: Union[str, List[str]], pipes: Optional[List[str]] = None) -> List[List[spacy.tokens.token.Token]]:
     """Perform NLP analysis on input text.
@@ -638,6 +618,26 @@ def natlang_analyze(text: Union[str, List[str]], pipes: Optional[List[str]] = No
 
     docs = nlptools.deserialize_spacy_docs(docs_bytes, lang=lang)
     return docs
+
+# --------------------------------------------------------------------------------
+# Sanitize
+
+def sanitize_dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
+    """Dehyphenate input text.
+
+    Returns `str` (one input) or `list` of `str` (more inputs).
+    """
+    if not util.api_initialized:
+        raise RuntimeError("sanitize_dehyphenate: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    input_data = {"text": text}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/sanitize/dehyphenate", json=input_data, headers=headers)
+    util.yell_on_error(response)
+    output_data = response.json()
+
+    output_text = output_data["text"]
+    return output_text
 
 # --------------------------------------------------------------------------------
 # Summarize
