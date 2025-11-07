@@ -649,7 +649,24 @@ def sanitize_dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
 def stt_transcribe(stream,
                    prompt: Optional[str] = None,
                    language: Optional[str] = None) -> List[str]:
-    """TODO: docstring"""
+    """Transcribe speech to text.
+
+    `stream`: The audio to send, as a filelike or a `bytes` object. Filelikes are e.g.:
+                - `with open("example.mp3", "rb") as stream`, or
+                - a `BytesIO` object.
+              File format is autodetected on the server side.
+              It can be anything PyAV can read (https://pyav.org/docs/stable/api/audio.html).
+
+    `prompt`: Optionally, condition the model with text that resembles the speech being
+              transcribed. This can help e.g. with spelling rare proper names correctly.
+
+              See examples in server-side docs in `raven.server.app`.
+
+    `language`: Optionally, specify the speech language. Default is to autodetect and
+                transcribe in the detected language.
+
+    Returns a list of strings, containing the text content corresponding to the speech audio.
+    """
     if not util.api_initialized:
         raise RuntimeError("stt_transcribe: The `raven.client.api` module must be initialized before using the API.")
     # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
