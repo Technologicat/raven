@@ -83,14 +83,16 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app:
 - :construction: *Raven-librarian*: **Scientific LLM frontend** (under development)
   - **Documentation**: under development
   - **Goal**: Efficiently interrogate a stack of 2k scientific papers. Talk with a local LLM for synthesis, clarifications, speculation, ...
-    - Status: A command-line prototype `raven-minichat` is available.
-      - We recommend having `raven-server` running; this allows the LLM to search the web.
-      - A GUI application is planned, but not available yet.
+    - Status: An initial prototype of GUI app `raven-librarian` is available; as well as a command-line mini-prototype `raven-minichat` (which does not support all features the GUI app has).
+      - The GUI app is under development.
+      - For `raven-librarian`, `raven-server` must be running.
+      - For `raven-minichat`, we recommend having `raven-server` running; this allows the LLM to search the web.
   - **Features**:
     - 100% local (when using a locally hosted LLM)
     - Natively nonlinear branching chat history - think [Loom](https://github.com/cosmicoptima/loom) or [SillyTavern-Timelines](https://github.com/SillyTavern/SillyTavern-Timelines).
       - Chat messages are stored as nodes in a tree. A chat branch is just its HEAD pointer; the chat app follows the `parent` links to reconstruct the linear history for that branch.
-      - The command-line prototype can create chat branches and switch between them, but not delete them. Complete control for chat branches will be in the GUI app.
+      - The command-line prototype can create chat branches and switch between them, but not delete them.
+      - As of v0.2.4, the GUI app is still missing chat branch navigation.
     - RAG (retrieval-augmented generation) with hybrid (semantic + keyword) search.
       - Semantic backend: [ChromaDB](https://www.trychroma.com/) (with telemetry off, for maximum privacy).
       - Keyword backend: [bm25s](https://huggingface.co/blog/xhluca/bm25s), which implements the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking algorithm.
@@ -110,7 +112,7 @@ Currently, this takes the form of installing the app and dependencies into a ven
 
 Raven has been developed and tested on Linux Mint. It should work in any environment that has `bash` and `pdm`.
 
-It has been reported to work on Mac OS X, as well as on Windows (with Miniconda).
+It has been reported to work on Mac OS X, as well as on Windows (with [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) to provide Python).
 
 ## From source
 
@@ -125,13 +127,15 @@ Raven has the following requirements:
 
 Raven uses [PDM](https://pdm-project.org/en/latest/) to manage its dependencies. This allows easy installation of the app and its dependencies into a venv (virtual environment) that is local to this one app, so that installing Raven will not break your other apps that use machine-learning libraries (which tend to be very version-sensitive).
 
+Note that in contrast to many AI/ML apps, which use `conda` to manage the venv for the app, Raven instead uses PDM. The venv creation and management for the app is automatic, but you need a Python environment to run PDM in. That Python environment is used for running PDM **only**. Raven itself will run in the venv created automatically by PDM, which may even have a Python version different from that of the environment where PDM runs.
+
 If your Python environment does not have PDM, you will need to install it first:
 
 ```bash
 python -m pip install pdm
 ```
 
-Don't worry; it won't break `pip`, `poetry`, or other similar tools.
+Don't worry; it won't break `pip`, `poetry`, `uv`, or other similar tools.
 
 ### Install Raven via PDM
 
@@ -390,8 +394,8 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
 - Avatar AI animator: THA3 [[code](https://github.com/pkhungurn/talking-head-anime-3-demo)], [[models](https://huggingface.co/OktayAlpk/talking-head-anime-3/tree/main)], [[tech report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html)].
 - Many more open-weight small, specialized AI models for tasks such as summarization, sentiment classification, dehyphenation, and natural language translation; see [`raven.server.config`](raven/server/config.py) for details.
 - Graphical user interface: [DearPyGUI](https://github.com/hoffstadt/DearPyGui/).
-  - "Open"/"Save as" dialog: [file_dialog](https://github.com/totallynotdrait/file_dialog), but customized for Raven, and some features added.
-  - Markdown renderer: [DearPyGui-Markdown](https://github.com/IvanNazaruk/DearPyGui-Markdown).
+  - "Open"/"Save as" dialog: [file_dialog](https://github.com/totallynotdrait/file_dialog), but customized for Raven, bugs fixed, and some features added (sortable view, overwrite confirmation with animated OK button, ...).
+  - Markdown renderer: [DearPyGui-Markdown](https://github.com/IvanNazaruk/DearPyGui-Markdown), but robustified for multithreaded dynamic use (programmatic creation/deletion of MD text widgets, possibly concurrently).
   - Toolbutton icons: [Font Awesome](https://github.com/FortAwesome/Font-Awesome) v6.6.0.
   - Word cloud renderer: [word_cloud](https://github.com/amueller/word_cloud).
 
