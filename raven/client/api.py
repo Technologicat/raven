@@ -684,7 +684,7 @@ def stt_transcribe_array(audio_data: np.array,
                          language: Optional[str] = None) -> List[str]:
     """Exactly like `stt_transcribe`, but take audio data from in-memory array.
 
-    The `audio_data` array is expected to be mono audio data, type float, range [-1, 1], sampled at `sample_rate`.
+    The `audio_data` array is expected to be mono audio data, type `np.int16`, sampled at `sample_rate`.
     """
     # Encode audio
     logger.info(f"stt_transcribe_array: encoding {len(audio_data) / sample_rate:0.6g}s of audio for sending to server.")
