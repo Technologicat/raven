@@ -106,7 +106,7 @@ def pack_parameters_into_json_file_attachment(parameters: Dict[str, Any]) -> str
 
     The return value can be used as a value in the `files` argument of a `requests.post` call::
 
-        files={"my_param_file": pack_parameters_into_json_file_attachment(...),
+        files={"my_param_file": pack_parameters_into_json_file_attachment({param_name0: value0, ...}),
                "my_data_file": ...}
 
     This is meant for endpoints that on the server side receive "multipart/form-data" because
@@ -119,7 +119,7 @@ def pack_parameters_into_json_file_attachment(parameters: Dict[str, Any]) -> str
 def unpack_parameters_from_json_file_attachment(stream) -> Dict[str, Any]:
     """Return API call parameters as `dict`, that came in the request as a JSON file.
 
-    `stream`: the `request.files["my_tag"].stream`.
+    `stream`: the `request.files["my_param_file"].stream`.
 
     Returns a dictionary `{param_name0: value0, ...}`.
 
