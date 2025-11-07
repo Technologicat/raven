@@ -53,6 +53,7 @@ with timer() as tim:
     from .modules import imagefx
     from .modules import natlang
     from .modules import sanitize
+    from .modules import stt
     from .modules import summarize
     from .modules import translate
     from .modules import tts
@@ -170,6 +171,8 @@ def get_modules():
         modules.append("natlang")
     if sanitize.is_available():
         modules.append("sanitize")
+    if stt.is_available():
+        modules.append("stt")
     if summarize.is_available():
         modules.append("summarize")
     if translate.is_available():
@@ -1032,6 +1035,101 @@ def api_sanitize_dehyphenate():
         abort(400, f"api_sanitize_dehyphenate: failed, reason: {type(exc)}: {exc}")
 
 # ----------------------------------------
+# module: stt
+
+# TODO: add OpenAI compatible "/api/v1/audio/transcriptions", for other client apps?
+
+@app.route("/api/stt/transcribe", methods=["POST"])
+def api_stt_transcribe():
+    """Transcribe speech audio into text.
+
+    This uses the speech recognition model configured in `raven.server.config`.
+    By default the model is `whisper-large-v3-turbo`, and this is mostly designed
+    to use that, or a model with similar functionality.
+
+    Input is POST, Content-Type "multipart/form-data", with two file attachments:
+
+        "file": the actual audio file (binary, any supported format)
+        "json": the API call parameters, in JSON format.
+
+    The parameters are::
+
+        {"prompt": "The following is a discussion on AI, particularly Qwen3.",
+         "language": "en"}
+
+    Output is JSON, a list of texts (which might only contain one item)::
+
+        {"text": ["This is the speech transcribed as text."]}
+
+    The "language" field is optional. It specifies the language of the speech audio.
+    If not specified, the model will autodetect, and transcribe the text in the
+    same language as the input.
+
+    The "prompt" field is optional. If provided, the model will be conditioned
+    on the prompt.
+
+    NOTE: `whisper` is NOT an instruction-following model. When writing prompts,
+    it'll work best if you treat it like a base LLM (raw predictor).
+
+    In other words, the prompt should "look like" the transcription result
+    of speech similar to the audio to be transcribed.
+
+    NOTE: `whisper` uses only the last 224 tokens of the prompt.
+
+    NOTE: For `whisper`, max_new_tokens = 448. This includes also the prompt tokens,
+          so a long prompt will reduce the length of speech the model can transcribe
+          at once.
+
+    Below are some examples of prompts.
+
+    A prompt can help with transcribing proper names correctly::
+
+        "ZyntriQix, Digique Plus, CynapseFive, VortiQore V8, EchoNix Array,
+         OrbitalLink Seven, DigiFractal Matrix, PULSE, RAPT, B.R.I.C.K.,
+         Q.U.A.R.T.Z., F.L.I.N.T."
+
+    In this example, the prompt is just a comma-separated list of proper names.
+    This is fine.
+
+    A prompt can set the context::
+
+      "The following conversation is a lecture about the recent developments
+       around OpenAI, GPT-4.5 and the future of AI."
+
+    A prompt can nudge the model toward a given transcription style::
+
+      "Hello, welcome to my lecture."
+        --> Model attempts to transcribe into complete sentences, with punctuation.
+
+      "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking."
+        --> Model transcribes also common filler words used in spoken language, such as "umm".
+
+    See:
+        https://hackmd.io/@ll-24-25/r1RSCmxJxl/%2FIkddsjn9T2-dermdWP4BsQ
+        https://github.com/openai/openai-cookbook/blob/main/examples/Whisper_prompting_guide.ipynb
+        https://huggingface.co/openai/whisper-large-v3-turbo
+        https://huggingface.co/docs/transformers/en/model_doc/whisper
+    """
+    if not stt.is_available():
+        abort(403, "Module 'stt' not running")
+
+    try:
+        file = request.files["file"]
+        parameters = netutil.unpack_parameters_from_json_file_attachment(request.files["json"].stream)
+
+        prompt = parameters["prompt"] if "prompt" in parameters else None
+        language = parameters["language"] if "language" in parameters else None
+
+        result = stt.speech_to_text(file.stream,
+                                    prompt=prompt,
+                                    language=language)
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_stt_transcribe: failed, reason: {type(exc)}: {exc}")
+
+    return jsonify({"text": result})
+
+# ----------------------------------------
 # module: summarize
 
 @app.route("/api/summarize", methods=["POST"])
@@ -1492,6 +1590,10 @@ def init_server_modules():  # keep global namespace clean
     if (record := server_config.enabled_modules.get("sanitize", None)) is not None:
         device_string = record["device_string"]  # no configurable dtype
         sanitize.init_module(server_config.dehyphenation_model, device_string)
+
+    if (record := server_config.enabled_modules.get("stt", None)) is not None:
+        device_string, torch_dtype = record["device_string"], record["dtype"]
+        stt.init_module(config_module_name, device_string, torch_dtype)
 
     if (record := server_config.enabled_modules.get("summarize", None)) is not None:
         device_string, torch_dtype = record["device_string"], record["dtype"]

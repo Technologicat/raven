@@ -32,6 +32,8 @@ def test():
 
     colorama_init()
 
+    print("=" * 80)
+
     logger.info("test: initialize API")
     api.initialize(raven_server_url=client_config.raven_server_url,
                    raven_api_key_file=client_config.raven_api_key_file,
@@ -49,12 +51,15 @@ def test():
     # --------------------------------------------------------------------------------
     # list modules
 
+    print("=" * 80)
+
     print("Modules loaded on server:")
     print(api.modules())
-    print()
 
     # --------------------------------------------------------------------------------
     # classify
+
+    print("=" * 80)
 
     logger.info("test: classify")
     print(f"Emotions supported by the classifier model currently loaded on the server: {api.classify_labels()}")  # get available emotion names from server
@@ -65,6 +70,8 @@ def test():
 
     # --------------------------------------------------------------------------------
     # imagefx
+
+    print("=" * 80)
 
     logger.info("test: imagefx")
 
@@ -93,6 +100,8 @@ def test():
 
     # --------------------------------------------------------------------------------
     # natlang
+
+    print("=" * 80)
 
     logger.info("test: natlang")
     docs = api.natlang_analyze("This is a test document for NLP analysis.")
@@ -127,6 +136,8 @@ def test():
 
     # --------------------------------------------------------------------------------
     # dehyphenate, summarize
+
+    print("=" * 80)
 
     logger.info("test: summarize")
     print(api.summarize_summarize(" The quick brown fox jumped over the lazy dog.  This is the second sentence! What?! This incomplete sentence"))
@@ -205,6 +216,8 @@ def test():
     # --------------------------------------------------------------------------------
     # translate
 
+    print("=" * 80)
+
     with timer() as tim:
         print(api.translate_translate(scientific_abstract, source_lang="en", target_lang="fi"))
     print(f"translate summary of scientific abstract 1: {tim.dt:0.6g}s")
@@ -224,10 +237,28 @@ def test():
     print(f"translate fandom text on Sharon Apple: {tim.dt:0.6g}s")
 
     # --------------------------------------------------------------------------------
-    # tts
+    # tts, stt
+
+    print("=" * 80)
 
     logger.info("test: tts: list voices")
     print(api.tts_list_voices())
+
+    speech_input_text = "The quick brown fox jumps over the lazy dog."
+    prep = api.tts_prepare(text=speech_input_text,
+                           voice="af_nova",
+                           speed=1.0,
+                           get_metadata=True)  # get phoneme metadata just for code coverage purposes
+
+    print("=" * 80)
+
+    audio_buffer = io.BytesIO()
+    audio_buffer.write(prep["audio_bytes"])  # roundtrip test: send the audio file received from TTS into STT for transcription; bytes object -> stream
+    audio_buffer.seek(0)
+    transcribed_text = api.stt_transcribe(stream=audio_buffer,
+                                          prompt="Hi, and welcome to my lecture.")  # nudge the model to transcribe with punctuation
+    print(f"Original: '{speech_input_text}'")
+    print(f"Transcribed: {transcribed_text}")
 
     # --------------------------------------------------------------------------------
     # websearch
@@ -248,12 +279,16 @@ def test():
     # --------------------------------------------------------------------------------
     # embeddings
 
+    print("=" * 80)
+
     logger.info("test: embeddings")
     print(api.embeddings_compute(text).shape)
     print(api.embeddings_compute([text, "Testing, 1, 2, 3."]).shape)
 
     # --------------------------------------------------------------------------------
     # avatar
+
+    print("=" * 80)
 
     logger.info("test: initialize avatar")
     # send an avatar - mandatory
@@ -283,6 +318,8 @@ def test():
         api.avatar_unload(avatar_instance_id)  # this closes the connection too
 
     # --------------------------------------------------------------------------------
+
+    print("=" * 80)
 
     logger.info("test: all done")
 

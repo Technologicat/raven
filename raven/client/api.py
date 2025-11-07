@@ -17,6 +17,7 @@ We support all modules served by `raven.server.app`:
   - imagefx     - apply filter effects to an image (see `raven.common.video.postprocessor`)
   - natlang     - low-level NLP analysis (part-of-speech tagging, lemmatization, named entity recognition, ...)
   - sanitize    - sanitize text (currently, dehyphenate broken text extracted from PDF)
+  - stt         - speech-to-text, transcribe spoken audio into text
   - summarize   - write an abstractive summary of given text (using a small specialized AI model)
   - tts         - text-to-speech with and without lipsyncing the AI avatar
   - websearch   - search the web, and parse results for consumption by an LLM
@@ -47,6 +48,7 @@ __all__ = ["initialize",
            "imagefx_upscale", "imagefx_upscale_file", "imagefx_upscale_array",
            "natlang_analyze",
            "sanitize_dehyphenate",
+           "stt_transcribe", "stt_transcribe_file", "stt_transcribe_array",
            "summarize_summarize",
            "translate_translate",
            "tts_list_voices",
@@ -87,6 +89,8 @@ from . import util  # for the `api_initialized` flag (must be looked up on the `
 
 from .util import api_config, yell_on_error  # noqa: F401: re-export
 from .util import initialize_api as initialize  # noqa: F401: re-export
+
+from ..vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 
 # --------------------------------------------------------------------------------
 # General utilities
@@ -638,6 +642,61 @@ def sanitize_dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
 
     output_text = output_data["text"]
     return output_text
+
+# --------------------------------------------------------------------------------
+# STT
+
+def stt_transcribe(stream,
+                   prompt: Optional[str] = None,
+                   language: Optional[str] = None) -> List[str]:
+    """TODO: docstring"""
+    if not util.api_initialized:
+        raise RuntimeError("stt_transcribe: The `raven.client.api` module must be initialized before using the API.")
+    # Flask expects the file as multipart/form-data. `requests` sets this automatically when we send files, if we don't set a 'Content-Type' header.
+    # We must jump through some hoops to send parameters in the same request - a convenient way is to put those into another (virtual) file.
+    headers = copy.copy(util.api_config.raven_default_headers)
+    parameters = {}
+    if prompt is not None:
+        parameters["prompt"] = prompt
+    if language is not None:
+        parameters["language"] = language
+    files = {"json": netutil.pack_parameters_into_json_file_attachment(parameters),
+             "file": ("audio.bin", stream, "application/octet-stream")}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/stt/transcribe", headers=headers, files=files)
+    util.yell_on_error(response)
+    output_data = response.json()
+    output_text = output_data["text"]
+    return output_text
+
+def stt_transcribe_file(filename: Union[pathlib.Path, str],
+                        prompt: Optional[str] = None,
+                        language: Optional[str] = None) -> List[str]:
+    """Exactly like `stt_transcribe`, but open `filename` for reading, and set the `stream` argument to the file handle."""
+    if not util.api_initialized:
+        raise RuntimeError("stt_transcribe_file: The `raven.client.api` module must be initialized before using the API.")
+
+    with open(filename, "rb") as audio_file:
+        return stt_transcribe(audio_file, prompt, language)
+
+def stt_transcribe_array(audio_data: np.array,
+                         sample_rate: int,
+                         prompt: Optional[str] = None,
+                         language: Optional[str] = None) -> List[str]:
+    """Exactly like `stt_transcribe`, but take audio data from in-memory array.
+
+    The `audio_data` array is expected to be mono audio data, type float, range [-1, 1], sampled at `sample_rate`.
+    """
+    # Encode audio
+    logger.info(f"stt_transcribe_array: encoding {len(audio_data) / sample_rate:0.6g}s of audio for sending to server.")
+    audio_encoder = StreamingAudioWriter(format="mp3",
+                                         sample_rate=sample_rate,
+                                         channels=1)
+    audio_buffer = io.BytesIO()
+    audio_buffer.write(audio_encoder.write_chunk(audio_data))
+    audio_buffer.write(audio_encoder.write_chunk(finalize=True))
+    audio_buffer.seek(0)
+
+    return stt_transcribe(audio_buffer, prompt, language)
 
 # --------------------------------------------------------------------------------
 # Summarize

@@ -54,7 +54,8 @@ dependencies = [
     "sentencepiece>=0.2.1",  # server, `translate` module, needed by some transformers models
     "sacremoses>=0.1.1",  # server, `translate` module, needed by some transformers models
     "strip-markdown>=1.3",  # TTS
-    "emoji>=1.7.0"  # TTS, emoji stripping
+    "emoji>=1.7.0",  # TTS, emoji stripping
+    "accelerate>=1.11.0"  # faster loading of `whisper-large-v3-turbo`, according to model card
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]

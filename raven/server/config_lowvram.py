@@ -25,6 +25,8 @@ enabled_modules = {
                 "dtype": torch.float32},
     "natlang": {"device_string": "cpu"},  # this module has no dtype setting
     "sanitize": {"device_string": "cpu"},  # this module has no dtype setting
+    "stt": {"device_string": "cpu",
+            "dtype": torch.float32},
     "summarize": {"device_string": "cpu",  # device settings used for the simple summarizer
                   "dtype": torch.float32},
     "translate": {"device_string": "cpu",

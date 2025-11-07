@@ -33,6 +33,8 @@ enabled_modules = {
                 "dtype": torch.float16},
     "natlang": {"device_string": "cuda:0"},  # this module has no dtype setting
     "sanitize": {"device_string": "cuda:0"},  # this module has no dtype setting
+    "stt": {"device_string": "cuda:0",
+            "dtype": torch.float16},
     "summarize": {"device_string": "cuda:0",  # device settings used for the simple summarizer
                   "dtype": torch.float16},
     "translate": {"device_string": "cuda:0",
@@ -137,6 +139,15 @@ kokoro_models = "hexgrad/Kokoro-82M"  # ~360 MB
 #
 spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but can also benefit from GPU acceleration.
 # spacy_model = "en_core_web_trf"  # Transformer-based pipeline; more accurate, slower, requires GPU, takes lots of VRAM.
+
+# Speech recognition (speech to text, STT) model.
+#
+# Served by the `stt` module. Used by Raven-librarian for speech input in the AI chat.
+# Supports "multiple languages" (which, the model card doesn't say), but currently we only use English.
+#
+# https://huggingface.co/openai/whisper-large-v3-turbo
+#
+speech_recognition_model = "openai/whisper-large-v3-turbo"  # TODO: also this model is ~1.6 GB; look into quantized variants to save VRAM (may need to change the backend to the vLLM library to run those)
 
 # AI model used by the `summarize` module, for abstractive summarization.
 #
