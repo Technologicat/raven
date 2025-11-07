@@ -246,6 +246,7 @@ Command                                Replacement
 
 raven-visualizer                  →    python -m raven.visualizer.app
 raven-importer                    →    python -m raven.visualizer.importer
+raven-librarian                   →    python -m raven.librarian.app
 raven-arxiv2id                    →    python -m raven.tools.arxiv2id
 raven-burstbib                    →    python -m raven.tools.burstbib
 raven-dehyphenate                 →    python -m raven.tools.dehyphenate
