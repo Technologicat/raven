@@ -662,8 +662,8 @@ def stt_transcribe(stream,
 
               See examples in server-side docs in `raven.server.app`.
 
-    `language`: Optionally, specify the speech language. Default is to autodetect and
-                transcribe in the detected language.
+    `language`: Optionally, specify the speech language, such as "en" for English.
+                Default is to autodetect and transcribe in the detected language.
 
     Returns a list of strings, containing the text content corresponding to the speech audio.
     """
