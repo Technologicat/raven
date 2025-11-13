@@ -143,7 +143,7 @@ def speech_to_text(stream,
     # p[i, 0] contains the index of the audio frame that is currently being transcribed
     # for batch item i. p[i, 1] contains the total number of frames for batch item i.
     # No return value is expected.
-    with tqdm(desc="STT", leave=True) as pbar:
+    with tqdm(desc="Transcribing", leave=True) as pbar:
         def monitor_progress(p_batch):
             i = torch.argmax(p_batch[:, 1])
             p = p_batch[i].detach().cpu()
