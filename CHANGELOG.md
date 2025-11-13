@@ -152,6 +152,8 @@ Otherwise the same as 0.2.0 (17 June 2025), but with the TODO cleaned up. Docume
 
 **0.1.x** and older
 
+The project was started in December 2024.
+
 No changelog was maintained.
 
 These versions included only *Raven-visualizer*.
