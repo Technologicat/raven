@@ -90,7 +90,9 @@ def decode_audio(stream: BinaryIO,
                         input_sample_format = frame.format.name
                         input_sample_rate = frame.sample_rate
                         input_layout = frame.layout.name
-                        logger.info(f"decode_audio: Detected input sample format '{frame.format.name}', sample rate {frame.sample_rate}, audio frame size {frame.samples} samples per channel, layout '{frame.layout.name}', channels: { {channel.name: channel.description for channel in frame.layout.channels} }.")
+
+                        plural_s = "s" if frame.samples != 1 else ""
+                        logger.info(f"decode_audio: Detected input sample format '{frame.format.name}', sample rate {frame.sample_rate}, audio frame size {frame.samples} sample{plural_s} per channel, layout '{frame.layout.name}', channels: { {channel.name: channel.description for channel in frame.layout.channels} }.")
 
                         target_sample_format_str = f"'{target_sample_format}'" if (target_sample_format is not None) else "same as input"
                         target_sample_rate_str = f"{target_sample_rate} Hz" if (target_sample_rate is not None) else "same as input"
