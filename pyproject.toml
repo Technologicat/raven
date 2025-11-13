@@ -26,7 +26,7 @@ dependencies = [
     "psutil>=5.9.0",  # vendored file_dialog
     "scikit-learn>=1.5.1",  # BibTeX importer: high-dimensional clustering (HDBSCAN)
     "scipy>=1.14.0",  # visualizer: KDTree
-    "sentence_transformers>=3.4.1",  # BibTeX importer: vector embeddings for visualization and semantic search
+    "sentence_transformers>=4.57.1",  # BibTeX importer: vector embeddings for visualization and semantic search. Also many of the server's AI modules use this.
     "spacy>=3.7.5",  # BibTeX importer: NLP analysis
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",  # spaCy
     "sseclient-py>=1.8.0",  # librarian: streaming transport for receiving data from LLM
