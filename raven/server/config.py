@@ -164,7 +164,7 @@ speech_recognition_model = "openai/whisper-large-v3-turbo"  # TODO: also this mo
 # summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"  # ~650 MB
 # summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"  # ~1.8 GB
 # summarization_model = "Falconsai/text_summarization"  # ~250 MB
-summarization_model = "Qiliang/bart-large-cnn-samsum-ChatGPT_v3"  # ~1.6 GB, performs well
+summarization_model = "philschmid/flan-t5-base-samsum"  # ~1 GB, performs well
 summarization_prefix = ""  # for all of the summarizers listed above
 
 # summarization_model = "KipperDev/bart_summarizer_model"
