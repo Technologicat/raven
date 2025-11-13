@@ -244,21 +244,39 @@ def test():
     logger.info("test: tts: list voices")
     print(api.tts_list_voices())
 
-    speech_input_text = "The quick brown fox jumps over the lazy dog."
-    prep = api.tts_prepare(text=speech_input_text,
-                           voice="af_nova",
-                           speed=1.0,
-                           get_metadata=True)  # get phoneme metadata just for code coverage purposes
+    # Round-trip some texts through TTS->STT
+    speech_input_texts = ['The quick brown fox jumps over the lazy dog.',
+                          # https://en.wikipedia.org/wiki/History_of_special_relativity
+                          'The failure of any experiment to detect motion through the aether led Hendrik Lorentz, starting in 1892, to develop a theory of electrodynamics based on an immobile luminiferous aether, physical length contraction, and a "local time" in which Maxwell\'s equations retain their form in all inertial frames of reference.',
+                          # Summary of world history by Qwen3-2507-30B-A3B.
+                          'From approximately 10,000 BCE, the Neolithic Revolution initiated humanity’s shift from nomadic hunter-gatherer societies to settled agricultural communities. This was followed by the Bronze Age, spanning from roughly 3,300 to 1,200 BCE, which fostered the emergence of early cities and empires such as Sumer and Ancient Egypt. The Iron Age began around 1,200 BCE, driven by advancements in metallurgy and extending until approximately 500 BCE, enabling the rise of powerful civilizations like Persia and the Roman Republic. The Classical Era, from about 800 BCE to 500 CE, represented the zenith of Greek philosophy, Roman law, and widespread religious diffusion. The Medieval Period, lasting from 500 to 1,500 CE, witnessed the development of feudal systems in Europe alongside the Islamic Golden Age. The Early Modern Era, from 1,500 to 1,800 CE, brought the Age of Exploration, Enlightenment ideas, and the birth of modern nation-states. The Industrial Revolution commenced in the late 18th century, triggering mechanized manufacturing and urbanization. Finally, the Modern Era, starting in the early 19th century, continues to define today’s interconnected, digitized global society.']
+    # Speech recognition prompt. Note that Whisper is essentially a base model, not an instruction-following model.
+    # Nudge the model to transcribe with punctuation, and provide some proper names that are present in the speech, to avoid "Hendrick-Lawrence" and similar.
+    # In the chat client, we'll need to do some NER to be able to throw the relevant proper names into the prompt.
+    prompt = "Hi, and welcome to my lecture about Hendrik Lorentz, the luminiferous aether, the Classical Era, the Medieval Period, the Early Modern Era, and the Enlightenment."
+    for speech_input_text in speech_input_texts:
+        print("=" * 80)
+        print("TTS:")
+        with timer() as tim:
+            prep = api.tts_prepare(text=speech_input_text,
+                                   voice="af_nova",
+                                   speed=1.0,
+                                   get_metadata=True)  # get phoneme metadata just for code coverage purposes
+        print(f"Speech synthesis done in {tim.dt:0.6g}s.")
 
-    print("=" * 80)
-
-    audio_buffer = io.BytesIO()
-    audio_buffer.write(prep["audio_bytes"])  # roundtrip test: send the audio file received from TTS into STT for transcription; bytes object -> stream
-    audio_buffer.seek(0)
-    transcribed_text = api.stt_transcribe(stream=audio_buffer,
-                                          prompt="Hi, and welcome to my lecture.")  # nudge the model to transcribe with punctuation
-    print(f"Original: '{speech_input_text}'")
-    print(f"Transcribed: {transcribed_text}")
+        print("=" * 80)
+        print("STT:")
+        audio_buffer = io.BytesIO()
+        audio_buffer.write(prep["audio_bytes"])  # send the audio file received from TTS into STT for transcription; bytes object -> stream
+        audio_buffer.seek(0)
+        with timer() as tim:
+            transcribed_text = api.stt_transcribe(stream=audio_buffer,
+                                                  prompt=prompt)
+        print(f"Speech recognition done in {tim.dt:0.6g}s.")
+        print()
+        print(f"Original text: '{speech_input_text}'")
+        print()
+        print(f"  From speech: '{transcribed_text}'")
 
     # --------------------------------------------------------------------------------
     # websearch
