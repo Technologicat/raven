@@ -1,6 +1,6 @@
 # Changelog
 
-**0.2.4** (October 2025, in progress):
+**0.2.4** (November 2025, in progress):
 
 **Added**:
 
