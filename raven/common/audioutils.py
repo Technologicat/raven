@@ -13,6 +13,8 @@ import numpy as np
 
 import av
 
+from .numutils import si_prefix
+
 def decode_audio(stream: BinaryIO,
                  target_sample_format: Optional[str] = None,
                  target_sample_rate: Optional[int] = None,
@@ -75,6 +77,12 @@ def decode_audio(stream: BinaryIO,
     input_sample_rate = None
     input_layout = None
     with av.open(audio_data) as container:
+        # According to documentation, `av.time_base` is in fractional seconds:
+        #     https://pyav.org/docs/stable/api/time.html
+        # The name isn't uppercase; correct name (lowercase) mentioned here:
+        #     https://pyav.org/docs/stable/api/container.html?highlight=time_base#av.container.InputContainer.seek
+        # print(av.time_base)  # 1000000
+        logger.info(f"decode_audio: Detected container type '{container.format.name}', bitrate {si_prefix(container.bit_rate)}bps, duration {container.duration / av.time_base:0.6g}s, size {si_prefix(container.size)}B.")
         for packet in container.demux():
             for frame in packet.decode():
                 if isinstance(frame, av.audio.frame.AudioFrame):
@@ -97,7 +105,7 @@ def decode_audio(stream: BinaryIO,
                         target_sample_format_str = f"'{target_sample_format}'" if (target_sample_format is not None) else "same as input"
                         target_sample_rate_str = f"{target_sample_rate} Hz" if (target_sample_rate is not None) else "same as input"
                         target_layout_str = f"'{target_layout}'" if (target_layout is not None) else "same as input"
-                        logger.info(f"decode_audio: Output sample format {target_sample_format_str}, sample rate {target_sample_rate_str}, layout {target_layout_str}.")
+                        logger.info(f"decode_audio: Decoding to output sample format {target_sample_format_str}, sample rate {target_sample_rate_str}, layout {target_layout_str}.")
 
                     # Initialize optional parameters
                     # TODO: Add support for specifying these as `av.audio.format.AudioFormat` and `av.audio.layout.AudioLayout`, for more fine-grained control. The question is how to detect if they match the input.
