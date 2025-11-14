@@ -1,19 +1,83 @@
 """Audio handling utilities."""
 
-__all__ = ["decode_audio"]
+__all__ = ["encode_audio", "decode_audio"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import io
-from typing import BinaryIO, Optional, Tuple
+from typing import BinaryIO, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 
 import av
 
 from .numutils import si_prefix
+
+from ..vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
+
+def encode_audio(audio_data: Union[np.array, List[np.array]],
+                 format: str,
+                 sample_rate: int,
+                 stream: bool = False) -> Union[bytes, Generator[bytes, None, None]]:
+    """Encode audio data from an in-memory array into an audio file format.
+
+    `audio_data`: Audio data in s16 format (signed 16-bit).
+
+                  One chunk:
+
+                  rank-1 `np.array` of shape `[n]` for mono,
+                  rank-2 `np.array` of shape `[n, 2]` for stereo.
+
+                  Several chunks:
+
+                  List of rank-1 arrays, each may have different length.
+                  List of rank-2 arrays, each may have different length,
+                  as long as each has two channels (last dimension is length 2).
+
+    `format`: Name of output format. Any audio format supported by PyAV, e.g. "mp3".
+
+    `sample_rate`: Sample rate used for interpreting the audio data stored in the array.
+
+    `stream`: If `False` (default), return a `bytes` object containing the encoded audio file.
+
+              If `True`, return a generator, which yields a separate `bytes` object for
+              the part of the encoded audio file that corresponds to one input array.
+              Finally, it yields one more `bytes` object, resulting from finalization.
+    """
+    if not isinstance(audio_data, list):
+        audio_data = [audio_data]
+
+    dims = np.shape(audio_data[0])
+    if len(dims) == 1:
+        channels = 1
+    elif len(dims) == 2 and dims[-1] == 1:
+        channels = 1
+    elif len(dims) == 2 and dims[-1] == 2:
+        channels = 2
+    else:
+        error_msg = f"encode_audio only supports mono (rank-1 [n] or rank-2 [n, 1]) or stereo (rank-2 [n, 2]) arrays; got `audio_data` of shape {dims}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    # TODO: Doesn't really need to be streaming here. We could just use PyAV directly, like `decode_audio` does.
+    audio_encoder = StreamingAudioWriter(format=format,
+                                         sample_rate=sample_rate,
+                                         channels=channels)
+    if stream:
+        def streamer():
+            for audio_chunk in audio_data:
+                yield audio_encoder.write_chunk(audio_chunk)
+            yield audio_encoder.write_chunk(finalize=True)
+        return streamer
+    else:
+        audio_buffer = io.BytesIO()
+        for audio_chunk in audio_data:
+            audio_buffer.write(audio_encoder.write_chunk(audio_chunk))
+        audio_buffer.write(audio_encoder.write_chunk(finalize=True))
+        audio_bytes = audio_buffer.getvalue()
+        return audio_bytes
 
 def decode_audio(stream: BinaryIO,
                  target_sample_format: Optional[str] = None,

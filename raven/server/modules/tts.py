@@ -10,7 +10,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import importlib
-import io
 import json
 import os
 import traceback
@@ -29,9 +28,8 @@ import numpy as np
 
 from unpythonic import timer
 
+from ...common import audioutils
 from ...common.hfutil import maybe_install_models
-
-from ...vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 
 modelsdir = None
 pipeline = None
@@ -160,9 +158,6 @@ def text_to_speech(voice: str,
     """
     # Side effect: validate `format` argument
     sample_rate = 24000  # Kokoro uses 24kHz sample rate
-    audio_encoder = StreamingAudioWriter(format=format,
-                                         sample_rate=sample_rate,
-                                         channels=1)
     _, tokens = pipeline.g2p(text)
     metadata = []
     audios = []
@@ -210,19 +205,14 @@ def text_to_speech(voice: str,
         output_headers["x-word-timestamps"] = json.dumps(metadata)
 
     if stream:
-        def generate():
-            for audio_chunk in audios:
-                yield audio_encoder.write_chunk(audio_chunk)
-            yield audio_encoder.write_chunk(finalize=True)
-
-        return Response(generate(), headers=output_headers)
+        streamer = audioutils.encode_audio(audio_data=audios,
+                                           format=format,
+                                           sample_rate=sample_rate,
+                                           stream=True)
+        return Response(streamer(), headers=output_headers)
     else:
-        audio_buffer = io.BytesIO()
-        for audio_chunk in audios:
-            audio_buffer.write(audio_encoder.write_chunk(audio_chunk))
-        audio_buffer.write(audio_encoder.write_chunk(finalize=True))
-        audio_bytes = audio_buffer.getvalue()
-
+        audio_bytes = audioutils.encode_audio(audio_data=audios,
+                                              format=format,
+                                              sample_rate=sample_rate)
         output_headers["Content-Length"] = len(audio_bytes)
-
         return Response(audio_bytes, headers=output_headers)
