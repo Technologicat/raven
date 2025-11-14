@@ -33,10 +33,12 @@
     - should detect token-limit-exceeded in `raven.librarian.llmclient`, and return a status flag in the metadata
 
 - Server
+  - Option: check first for local model before checking on HF
+    - Currently some modules do this (some due to using a non-default download location, in turn due to requirements of vendored code), others don't.
+    - Can be important in case the model vanishes from HF (as suddenly happened with the old/ancient summarizer).
+    - This would allow the modules of an existing Raven-server installation to start (with the locally existing model) even when that model is no longer available on HF.
   - Finish the new `stt` module (speech to text)
     - Server README / user manual / api docs
-    - Docstrings
-    - Rewrite the `stt` module implementation using the high-level pipeline API if possible
     - Test also `stt_transcribe_file` and `stt_transcribe_array`
     - whisper-large-v3-turbo needs another 1.6 GB of VRAM; check if we could use a quantized model (may need vLLM)
   - Zip the avatar characters, for ease of use
@@ -53,6 +55,7 @@
     - Avatar pose editor
 
 - Visualizer
+  - BibTeX export (must keep a copy of original full entries in the dataset file)
   - Show item slug (BibTeX identifier)
   - Add feature: author search
     - Show full author list if it fits
@@ -89,11 +92,17 @@
         - To determine which is the most recent: for each possible continuation, scan subtree for the most recent revision timestamp anywhere in descendants
       - This gives us a *very* rudimentary way to navigate the chat database.
     - STT (speech to text, speech recognition):
-      - UI: Hold Ctrl+Shift+Space or hold down a mic button in the GUI to speak to the AI.
+      - UI: Click a mic button (or press Ctrl+Shift+Space) to speak to the AI. To stop recording, press again, or wait for X seconds for silence (configurable timeout and silence level in dBFS).
+        - Or measure silence level automatically, when the button is pressed, before speaking starts?
+          - Measure from the first 0.1s or so
       - Then STT the recorded audio (using Raven-server's new `stt` module), and send it to the AI as the user's chat message.
+    - For model testing: User persona sampling / "impersonate"
+    - For model testing: Send message as AI / "prefill"
     - Long subtitle splitter (we now have the audio length).
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Recent chats list, once we implement that?
+    - Add feature: Smooth scrolling for linearized chat view
+      - Infra already exists (`raven.common.gui.animation.SmoothScrolling`), just connect it. See the info panel in `raven.visualizer.app` for an example.
 
   - Later:
     - Document database: scopes
