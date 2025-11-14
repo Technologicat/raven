@@ -49,6 +49,7 @@ def encode_audio(audio_data: Union[np.array, List[np.array]],
     if not isinstance(audio_data, list):
         audio_data = [audio_data]
 
+    # `StreamingAudioWriter` will reshape the input data array, but it needs to be of a compatible size, and something that reshapes sensibly.
     dims = np.shape(audio_data[0])
     if len(dims) == 1:
         channels = 1
