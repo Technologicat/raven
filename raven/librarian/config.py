@@ -128,12 +128,11 @@ gui_config = env(  # ----------------------------------------
                  chat_controls_h=42,
                  chat_panel_w=(1920 // 2),  # net width 960 -> gross width with borders = this + 2 * 8 = 976
                  chat_text_right_margin_w=150,  # 100 would be mostly nice, but the thinking trace toggle button needs some space too.
-                 # help_window_w=1700, help_window_h=1000,  # The help content is static, these values have been chosen to fit it.
-                 # toolbar_inner_w=36,  # Width of the content area of the "Tools" toolbar.
-                 # toolbar_separator_h=12,  # Height of a section separator spacer in the toolbar.
-                 toolbutton_w=30,  # Width of a toolbutton in the "Tools" toolbar.
-                 # toolbutton_indent=None,  # The default `None` means "centered" (the value is then computed and stored while setting up the GUI).
-                 font_size=20,  # Also in pixels.
+                 toolbar_inner_h=30,  # Width of the content area of the toolbar below the chat.
+                 toolbar_separator_w=12,  # Width of a section separator spacer in the toolbar.
+                 toolbutton_w=30,  # Width of a toolbutton in the toolbar.
+                 toolbutton_indent=None,  # The default `None` means "centered" (the value is then computed and stored while setting up the GUI).
+                 font_size=20,  # In pixels.
                  # ----------------------------------------
                  # Animations
                  acknowledgment_duration=1.0,  # seconds, for button flashes upon clicking/hotkey.

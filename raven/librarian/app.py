@@ -351,6 +351,23 @@ with timer() as tim:
                               no_scrollbar=True,
                               no_scroll_with_mouse=True):
             with dpg.group(horizontal=True):
+                def add_separator_for_horizontal_toolbar(*, width=None, line=True, line_offset_x=None):
+                    if width is None:
+                        width = gui_config.toolbar_separator_w
+                    if line_offset_x is None:
+                        line_offset_x = width // 2
+                    if line:
+                        with dpg.drawlist(width=width, height=gui_config.toolbar_inner_h):
+                            dpg.draw_line((line_offset_x, 0),
+                                          (line_offset_x, 99),
+                                          color=(140, 140, 140, 255),
+                                          thickness=1)
+                    else:
+                        dpg.add_spacer(width=width, height=gui_config.toolbar_inner_h)
+                if gui_config.toolbutton_indent is None:
+                    toolbutton_h = gui_config.toolbutton_w  # square buttons
+                    gui_config.toolbutton_indent = (gui_config.toolbar_inner_h - toolbutton_h) // 2  # pixels, to center the buttons
+
                 def start_new_chat_callback() -> None:
                     new_chat_head_node_id = app_state["new_chat_HEAD"]
                     app_state["HEAD"] = new_chat_head_node_id
@@ -420,6 +437,8 @@ with timer() as tim:
                 open_graph_tooltip = dpg.add_tooltip("chat_open_graph_button")  # tag
                 dpg.add_text("Open graph view", parent=open_graph_tooltip)
 
+                add_separator_for_horizontal_toolbar(line=False)
+
                 copy_chat_button = dpg.add_button(label=fa.ICON_COPY,
                                                   callback=copy_chatlog_to_clipboard_as_markdown_callback,
                                                   width=gui_config.toolbutton_w,
@@ -448,6 +467,8 @@ with timer() as tim:
                 dpg.bind_item_theme("chat_stop_speech_button", "disablable_button_theme")  # tag
                 stop_speech_tooltip = dpg.add_tooltip("chat_stop_speech_button")  # tag
                 stop_speech_tooltip_text = dpg.add_text("Stop speaking [Ctrl+S]", parent=stop_speech_tooltip)
+
+                add_separator_for_horizontal_toolbar(line=False)
 
                 dpg.add_button(label=fa.ICON_EXPAND,
                                callback=toggle_fullscreen,
@@ -493,7 +514,8 @@ with timer() as tim:
                 # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
 
                 n_below_chat_buttons = 7
-                ai_warning_spacer_base_size = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8) + 60
+                n_separators = 2
+                ai_warning_spacer_base_size = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8) - n_separators * (gui_config.toolbar_separator_w) + 60
                 dpg.add_spacer(width=ai_warning_spacer_base_size, tag="ai_warning_spacer")
 
                 with dpg.group(horizontal=True):
