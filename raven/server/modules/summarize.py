@@ -24,7 +24,7 @@ def init_module(model_name: str,
                 spacy_model_name: str,
                 device_string: str,
                 spacy_device_string: str,
-                torch_dtype: Union[str, torch.dtype],
+                dtype: Union[str, torch.dtype],
                 summarization_prefix: str = "") -> None:
     global summarizer
     global nlp_pipe
@@ -32,7 +32,7 @@ def init_module(model_name: str,
     try:
         summarizer = nlptools.load_summarizer(model_name,
                                               device_string,
-                                              torch_dtype,
+                                              dtype,
                                               summarization_prefix)
         nlp_pipe = nlptools.load_spacy_pipeline(spacy_model_name,
                                                 spacy_device_string)

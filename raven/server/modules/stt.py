@@ -24,16 +24,16 @@ server_config = None
 model = None
 processor = None
 # pipe = None
-device = None
-dtype = None
+loaded_model_device = None
+loaded_model_dtype = None
 
-def init_module(config_module_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> None:
+def init_module(config_module_name: str, device_string: str, dtype: Union[str, torch.dtype]) -> None:
     global server_config
     global model
     global processor
     # global pipe
-    global device
-    global dtype
+    global loaded_model_device
+    global loaded_model_dtype
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}stt{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
     try:
         server_config = importlib.import_module(config_module_name)
@@ -42,21 +42,21 @@ def init_module(config_module_name: str, device_string: str, torch_dtype: Union[
         logger.info(f"init_module: Ensuring model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}' is installed...")
         hfutil.maybe_install_models(server_config.speech_recognition_model)
 
-        logger.info(f"init_module: Loading model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}' on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' with dtype '{Fore.GREEN}{Style.BRIGHT}{torch_dtype}{Style.RESET_ALL}'...")
-        device = torch.device(device_string)
-        dtype = torch_dtype
+        logger.info(f"init_module: Loading model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}' on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
+        loaded_model_device = torch.device(device_string)
+        loaded_model_dtype = dtype
         processor = transformers.AutoProcessor.from_pretrained(model_name)
         model = transformers.AutoModelForSpeechSeq2Seq.from_pretrained(model_name,
-                                                                       torch_dtype=torch_dtype,
-                                                                       use_safetensors=True).to(device)
+                                                                       dtype=dtype,
+                                                                       use_safetensors=True).to(loaded_model_device)
     #     pipe = transformers.pipeline("automatic-speech-recognition",
     #                                  model=model,
     #                                  tokenizer=processor.tokenizer,
     #                                  feature_extractor=processor.feature_extractor,
     #                                  chunk_length_s=30,
     #                                  batch_size=16,  # batch size for inference - set based on your device
-    #                                  torch_dtype=torch_dtype,
-    #                                  device=device)
+    #                                  dtype=dtype,
+    #                                  device=loaded_model_device)
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'embeddings'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()
@@ -65,8 +65,8 @@ def init_module(config_module_name: str, device_string: str, torch_dtype: Union[
         model = None
         processor = None
         # pipe = None
-        device = None
-        dtype = None
+        loaded_model_device = None
+        loaded_model_dtype = None
 
 def is_available() -> bool:
     """Return whether this module is up and running."""
@@ -99,7 +99,7 @@ def speech_to_text(stream,
         kwargs["language"] = language
 
     if prompt is not None:  # input prompt (optional), e.g. to spell rare proper names correctly
-        prompt_ids = processor.get_prompt_ids(prompt, return_tensors="pt").to(device)  # IMPORTANT and not well documented: send the prompt tensor to the correct device, it will be used as-is.
+        prompt_ids = processor.get_prompt_ids(prompt, return_tensors="pt").to(loaded_model_device)  # IMPORTANT and not well documented: send the prompt tensor to the correct device, it will be used as-is.
         kwargs["prompt_ids"] = prompt_ids
         kwargs["prompt_condition_type"] = "all-segments"
         # kwargs["max_new_tokens"] -= (prompt_ids.shape[0] + 3)  # also the prompt tokens and "special start tokens" (TODO: whatever those are?) count toward the output limit
@@ -122,7 +122,7 @@ def speech_to_text(stream,
                        return_tensors="pt",
                        truncation=False,
                        padding="longest",
-                       return_attention_mask=True).to(device, dtype=dtype)
+                       return_attention_mask=True).to(loaded_model_device, dtype=loaded_model_dtype)
     # https://github.com/huggingface/transformers/issues/30740
     if inputs.input_features.shape[-1] < 3000:
         logger.info(f"speech_to_text: Length of feature stream is {inputs.input_features.shape[-1]}. Using short-form transcription.")
@@ -130,7 +130,7 @@ def speech_to_text(stream,
         inputs = processor(audio=numpy_audio_data,
                            sampling_rate=processor.feature_extractor.sampling_rate,
                            return_tensors="pt",
-                           return_attention_mask=True).to(device, dtype=dtype)
+                           return_attention_mask=True).to(loaded_model_device, dtype=loaded_model_dtype)
     else:
         logger.info(f"speech_to_text: Length of feature stream is {inputs.input_features.shape[-1]}. Using long-form transcription.")
 

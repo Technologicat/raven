@@ -20,7 +20,7 @@ from ...common import nlptools
 server_config = None
 embedders = {}
 
-def init_module(config_module_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> None:
+def init_module(config_module_name: str, device_string: str, dtype: Union[str, torch.dtype]) -> None:
     global server_config
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}embeddings{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
     try:
@@ -33,7 +33,7 @@ def init_module(config_module_name: str, device_string: str, torch_dtype: Union[
             logger.info(f"init_module: Loading model for role '{Fore.GREEN}{Style.BRIGHT}{role}{Style.RESET_ALL}': model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
             embedders[role] = nlptools.load_embedder(model_name,
                                                      device_string,
-                                                     torch_dtype)
+                                                     dtype)
             embedders[model_name] = embedders[role]  # also provide each model under its HuggingFace model name; this is convenient for HybridIR when it loads a database from disk.
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'embeddings'.{Style.RESET_ALL} Details follow.")

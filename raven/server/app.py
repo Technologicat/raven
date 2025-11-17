@@ -1564,23 +1564,23 @@ def init_server_modules():  # keep global namespace clean
         return spacy_device_string
 
     if (record := server_config.enabled_modules.get("avatar", None)) is not None:
-        device_string, torch_dtype = record["device_string"], record["dtype"]
+        device_string, dtype = record["device_string"], record["dtype"]
         # One of 'standard_float', 'separable_float', 'standard_half', 'separable_half'.
         # FP16 boosts the rendering performance by ~1.5x, but is only supported on GPU.
-        tha3_model_variant = "separable_half" if torch_dtype is torch.float16 else "separable_float"
+        tha3_model_variant = "separable_half" if dtype is torch.float16 else "separable_float"
         avatar.init_module(config_module_name, device_string, tha3_model_variant)
 
     if (record := server_config.enabled_modules.get("classify", None)) is not None:
-        device_string, torch_dtype = record["device_string"], record["dtype"]
-        classify.init_module(server_config.classification_model, device_string, torch_dtype)
+        device_string, dtype = record["device_string"], record["dtype"]
+        classify.init_module(server_config.classification_model, device_string, dtype)
 
     if (record := server_config.enabled_modules.get("embeddings", None)) is not None:
-        device_string, torch_dtype = record["device_string"], record["dtype"]
-        embeddings.init_module(config_module_name, device_string, torch_dtype)
+        device_string, dtype = record["device_string"], record["dtype"]
+        embeddings.init_module(config_module_name, device_string, dtype)
 
     if (record := server_config.enabled_modules.get("imagefx", None)) is not None:
-        device_string, torch_dtype = record["device_string"], record["dtype"]
-        imagefx.init_module(device_string, torch_dtype)
+        device_string, dtype = record["device_string"], record["dtype"]
+        imagefx.init_module(device_string, dtype)
 
     if (record := server_config.enabled_modules.get("natlang", None)) is not None:
         device_string = record["device_string"]  # no configurable dtype
@@ -1592,27 +1592,27 @@ def init_server_modules():  # keep global namespace clean
         sanitize.init_module(server_config.dehyphenation_model, device_string)
 
     if (record := server_config.enabled_modules.get("stt", None)) is not None:
-        device_string, torch_dtype = record["device_string"], record["dtype"]
-        stt.init_module(config_module_name, device_string, torch_dtype)
+        device_string, dtype = record["device_string"], record["dtype"]
+        stt.init_module(config_module_name, device_string, dtype)
 
     if (record := server_config.enabled_modules.get("summarize", None)) is not None:
-        device_string, torch_dtype = record["device_string"], record["dtype"]
+        device_string, dtype = record["device_string"], record["dtype"]
         spacy_device_string = get_maybe_shared_spacy_device_string("summarize")
         summarize.init_module(server_config.summarization_model,
                               server_config.spacy_model,
                               device_string,
                               spacy_device_string,
-                              torch_dtype,
+                              dtype,
                               summarization_prefix=server_config.summarization_prefix)
 
     if (record := server_config.enabled_modules.get("translate", None)) is not None:
-        device_string, torch_dtype = record["device_string"], record["dtype"]
+        device_string, dtype = record["device_string"], record["dtype"]
         spacy_device_string = get_maybe_shared_spacy_device_string("translate")
         translate.init_module(config_module_name,
                               device_string,
                               server_config.spacy_model,
                               spacy_device_string,
-                              torch_dtype)
+                              dtype)
 
     if (record := server_config.enabled_modules.get("tts", None)) is not None:
         device_string = record["device_string"]  # no configurable dtype

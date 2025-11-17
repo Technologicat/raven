@@ -282,7 +282,7 @@ def deserialize_spacy_docs(docs_bytes: bytes, lang: str) -> List[List[spacy.toke
 # NLP backend: sentiment classification
 
 _classifiers = {}
-def load_classifier(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> pipeline:
+def load_classifier(model_name: str, device_string: str, dtype: Union[str, torch.dtype]) -> pipeline:
     """Load and return a text sentiment classification model.
 
     `model_name`: HuggingFace model name. Auto-downloaded on first use.
@@ -292,16 +292,16 @@ def load_classifier(model_name: str, device_string: str, torch_dtype: Union[str,
                       https://huggingface.co/tasks/text-classification
 
     `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
-    `torch_dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
+    `dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
 
     If the specified model is already loaded on the same device (identified by `device_string`),
     with the same dtype, then return the already-loaded instance.
     """
-    cache_key = (model_name, device_string, str(torch_dtype))
+    cache_key = (model_name, device_string, str(dtype))
     if cache_key in _classifiers:
-        logger.info(f"load_classifier: '{model_name}' (with dtype '{str(torch_dtype)}') is already loaded on device '{device_string}', returning it.")
+        logger.info(f"load_classifier: '{model_name}' (with dtype '{str(dtype)}') is already loaded on device '{device_string}', returning it.")
         return _classifiers[cache_key]
-    logger.info(f"load_classifier: Loading '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    logger.info(f"load_classifier: Loading '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
 
     try:
         device = torch.device(device_string)
@@ -309,22 +309,22 @@ def load_classifier(model_name: str, device_string: str, torch_dtype: Union[str,
                               model=model_name,
                               top_k=None,
                               device=device,
-                              torch_dtype=torch_dtype)
+                              dtype=dtype)
     except RuntimeError as exc:
         logger.warning(f"load_classifier: exception while loading classifier (will try again in CPU mode): {type(exc)}: {exc}")
         try:
             device_string = "cpu"
-            torch_dtype = "float32"
-            cache_key = (model_name, device_string, str(torch_dtype))
+            dtype = "float32"
+            cache_key = (model_name, device_string, str(dtype))
             classifier = pipeline("text-classification",
                                   model=model_name,
                                   top_k=None,
                                   device=device,
-                                  torch_dtype=torch_dtype)
+                                  dtype=dtype)
         except RuntimeError as exc:
             logger.warning(f"load_classifier: failed to load classifier: {type(exc)}: {exc}")
             raise
-    logger.info(f"load_classifier: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    logger.info(f"load_classifier: Loaded model '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
     _classifiers[cache_key] = classifier
     return classifier
 
@@ -514,7 +514,7 @@ def dehyphenate(scorer: dehyphen.FlairScorer, text: Union[str, List[str]]) -> Un
 # NLP backend: semantic embeddings (vectorization)
 
 _embedders = {}
-def load_embedder(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> SentenceTransformer:
+def load_embedder(model_name: str, device_string: str, dtype: Union[str, torch.dtype]) -> SentenceTransformer:
     """Load and return a semantic embedding model (for e.g. vector storage).
 
     `model_name`: HuggingFace model name supported by the `sentence_transformers` package. Auto-downloaded on first use.
@@ -529,34 +529,34 @@ def load_embedder(model_name: str, device_string: str, torch_dtype: Union[str, t
                       https://huggingface.co/tasks/sentence-similarity
 
     `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
-    `torch_dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
+    `dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
 
     If the specified model is already loaded on the same device (identified by `device_string`),
     with the same dtype, then return the already-loaded instance.
     """
-    cache_key = (model_name, device_string, str(torch_dtype))
+    cache_key = (model_name, device_string, str(dtype))
     if cache_key in _embedders:
-        logger.info(f"load_embedder: '{model_name}' (with dtype '{str(torch_dtype)}') is already loaded on device '{device_string}', returning it.")
+        logger.info(f"load_embedder: '{model_name}' (with dtype '{str(dtype)}') is already loaded on device '{device_string}', returning it.")
         return _embedders[cache_key]
-    logger.info(f"load_embedder: Loading '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    logger.info(f"load_embedder: Loading '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
 
     try:
         embedder = SentenceTransformer(model_name,
                                        device=device_string,
-                                       model_kwargs={"torch_dtype": torch_dtype})
+                                       model_kwargs={"dtype": dtype})
     except RuntimeError as exc:
         logger.warning(f"load_embedder: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
         try:
             device_string = "cpu"
-            torch_dtype = "float32"  # probably (we need a cache key, so let's use this)
-            cache_key = (model_name, device_string, str(torch_dtype))
+            dtype = "float32"  # probably (we need a cache key, so let's use this)
+            cache_key = (model_name, device_string, str(dtype))
             embedder = SentenceTransformer(model_name,
                                            device=device_string,
-                                           model_kwargs={"torch_dtype": torch_dtype})
+                                           model_kwargs={"dtype": dtype})
         except RuntimeError as exc:
             logger.warning(f"load_embedder: failed to load SentenceTransformer: {type(exc)}: {exc}")
             raise
-    logger.info(f"load_embedder: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    logger.info(f"load_embedder: Loaded model '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
     _embedders[cache_key] = embedder
     return embedder
 
@@ -586,7 +586,7 @@ def embed_sentences(embedder: SentenceTransformer, text: Union[str, List[str]]) 
 _summarizers = {}
 def load_summarizer(model_name: str,
                     device_string: str,
-                    torch_dtype: Union[str, torch.dtype],
+                    dtype: Union[str, torch.dtype],
                     summarization_prefix: str = "") -> Tuple[pipeline, str]:
     """Load a text summarizer.
 
@@ -595,7 +595,7 @@ def load_summarizer(model_name: str,
     `model_name`: HuggingFace model name. Try e.g. "Qiliang/bart-large-cnn-samsum-ChatGPT_v3".
 
     `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
-    `torch_dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
+    `dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
 
     `summarization_prefix`: Some summarization models need input to be formatted like
          "summarize: Actual text goes here...". This sets the prefix, which in this example is "summarize: ".
@@ -603,7 +603,7 @@ def load_summarizer(model_name: str,
 
     NOTE: To use `summarize`, you also need a spaCy NLP pipeline; see `load_spacy_pipeline`.
     """
-    cache_key = (model_name, device_string, str(torch_dtype))
+    cache_key = (model_name, device_string, str(dtype))
     if cache_key in _summarizers:
         return _summarizers[cache_key]
 
@@ -612,22 +612,22 @@ def load_summarizer(model_name: str,
         summarizer = pipeline("summarization",
                               model=model_name,
                               device=device,
-                              torch_dtype=torch_dtype)
+                              dtype=dtype)
     except RuntimeError as exc:
         logger.warning(f"load_summarizer: exception while loading summarizer (will try again in CPU mode): {type(exc)}: {exc}")
         try:
             device_string = "cpu"
-            torch_dtype = "float32"  # probably (we need a cache key, so let's use this)
-            cache_key = (model_name, device_string, str(torch_dtype))
+            dtype = "float32"  # probably (we need a cache key, so let's use this)
+            cache_key = (model_name, device_string, str(dtype))
             summarizer = pipeline("summarization",
                                   model=model_name,
                                   device=device,
-                                  torch_dtype=torch_dtype)
+                                  dtype=dtype)
         except RuntimeError as exc:
             logger.warning(f"load_embedder: failed to load summarizer: {type(exc)}: {exc}")
             raise
     logger.info(f"load_summarizer: model '{model_name}' context window is {summarizer.tokenizer.model_max_length} tokens.")
-    logger.info(f"load_summarizer: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    logger.info(f"load_summarizer: Loaded model '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
     _summarizers[cache_key] = (summarizer, summarization_prefix)  # save the given prompt prefix with the cached model so they stay together
     return summarizer, summarization_prefix
 
@@ -813,7 +813,7 @@ def summarize(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
 # NLP backend: machine translation
 
 _translators = {}
-def load_translator(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> pipeline:
+def load_translator(model_name: str, device_string: str, dtype: Union[str, torch.dtype]) -> pipeline:
     """Load and return a machine translator (for one or more natural languages to another).
 
     `model_name`: HuggingFace model name. Auto-downloaded on first use.
@@ -823,40 +823,40 @@ def load_translator(model_name: str, device_string: str, torch_dtype: Union[str,
                       https://huggingface.co/tasks/translation
 
     `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
-    `torch_dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
+    `dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
 
     If the specified model is already loaded on the same device (identified by `device_string`),
     with the same dtype, then return the already-loaded instance.
 
     NOTE: To use `translate`, you also need a spaCy NLP pipeline; see `load_spacy_pipeline`.
     """
-    cache_key = (model_name, device_string, str(torch_dtype))
+    cache_key = (model_name, device_string, str(dtype))
     if cache_key in _translators:
-        logger.info(f"load_translator: '{model_name}' (with dtype '{str(torch_dtype)}') is already loaded on device '{device_string}', returning it.")
+        logger.info(f"load_translator: '{model_name}' (with dtype '{str(dtype)}') is already loaded on device '{device_string}', returning it.")
         return _translators[cache_key]
-    logger.info(f"load_translator: Loading '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    logger.info(f"load_translator: Loading '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
 
     try:
         device = torch.device(device_string)
         translator = pipeline("translation",
                               model=model_name,
                               device=device,
-                              torch_dtype=torch_dtype)
+                              dtype=dtype)
     except RuntimeError as exc:
         logger.warning(f"load_translator: exception while loading translator (will try again in CPU mode): {type(exc)}: {exc}")
         try:
             device_string = "cpu"
-            torch_dtype = "float32"
-            cache_key = (model_name, device_string, str(torch_dtype))
+            dtype = "float32"
+            cache_key = (model_name, device_string, str(dtype))
             translator = pipeline("translation",
                                   model=model_name,
                                   device=device,
-                                  torch_dtype=torch_dtype)
+                                  dtype=dtype)
         except RuntimeError as exc:
             logger.warning(f"load_translator: failed to load translator: {type(exc)}: {exc}")
             raise
     logger.info(f"load_translator: model '{model_name}' context window is {translator.tokenizer.model_max_length} tokens.")
-    logger.info(f"load_translator: Loaded model '{model_name}' (with dtype '{str(torch_dtype)}') on device '{device_string}'.")
+    logger.info(f"load_translator: Loaded model '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
     _translators[cache_key] = translator
     return translator
 

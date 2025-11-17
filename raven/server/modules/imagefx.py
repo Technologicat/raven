@@ -36,11 +36,11 @@ upscaler = None
 upscaler_settings = {}
 upscaler_lock = threading.Lock()
 
-def init_module(device_string: str, torch_dtype: Union[str, torch.dtype]) -> None:
+def init_module(device_string: str, dtype: Union[str, torch.dtype]) -> None:
     global postprocessor
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}imagefx{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
     try:
-        postprocessor = Postprocessor(device_string, torch_dtype, chain=[])
+        postprocessor = Postprocessor(device_string, dtype, chain=[])
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'imagefx'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()

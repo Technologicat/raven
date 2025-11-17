@@ -33,7 +33,6 @@
     - should detect token-limit-exceeded in `raven.librarian.llmclient`, and return a status flag in the metadata
 
 - Server
-  - Fix deprecated `torch_dtype` parameters (is now just `dtype`) after the Transformers upgrade
   - Finish the new `stt` module (speech to text)
     - Figure out what's going wrong with the end of the long example sent by `raven.client.tests.test_api` (spurious text generated after the speech in the long audio ends)
     - Server README / user manual / api docs

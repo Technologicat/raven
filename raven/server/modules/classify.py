@@ -17,13 +17,13 @@ from ...common import nlptools
 
 classifier = None
 
-def init_module(model_name: str, device_string: str, torch_dtype: Union[str, torch.dtype]) -> None:
+def init_module(model_name: str, device_string: str, dtype: Union[str, torch.dtype]) -> None:
     global classifier
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}classification{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
     try:
         classifier = nlptools.load_classifier(model_name,
                                               device_string,
-                                              torch_dtype)
+                                              dtype)
     except Exception as exc:
         print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'classify'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()

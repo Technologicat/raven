@@ -25,7 +25,7 @@ def init_module(config_module_name: str,
                 device_string: str,
                 spacy_model_name: str,
                 spacy_device_string: str,
-                torch_dtype: Union[str, torch.dtype]) -> None:
+                dtype: Union[str, torch.dtype]) -> None:
     global server_config
     global nlp_pipe
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}translate{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
@@ -44,7 +44,7 @@ def init_module(config_module_name: str,
                     translators[target_lang] = {}
                 translators[target_lang][source_lang] = nlptools.load_translator(model_name,
                                                                                  device_string,
-                                                                                 torch_dtype)
+                                                                                 dtype)
 
         nlp_pipe = nlptools.load_spacy_pipeline(spacy_model_name,
                                                 spacy_device_string)
