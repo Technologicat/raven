@@ -172,6 +172,7 @@ We provide the following server modules:
 - `summarize`: Abstractive summarization of text, using a small, specialized AI model.
   - This is **much faster** than an LLM, but the result quality may not be as good.
   - The module has an automatic internal splitter that handles input that is longer than the model's context window, which is automatically queried from the model.
+- `stt`: Speech recognition (speech to text) with locally hosted [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo).
 - `translate`: Natural language translation using a small, specialized AI model.
   - The module has an automatic internal splitter that sends one sentence at a time.
     - Many translation-specific AI models expect this format, and may fail spectacularly (even sometimes ignoring large parts of the input) if sent several sentences at a time.
@@ -289,7 +290,7 @@ Some modules have been removed:
 
 Particularly:
 
-**No STT support.** Potentially interesting. We could add STT via [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo), but this needs some consideration of the UX. *Raven-server* might run on a different machine than the client, so the audio needs to be recorded on the client, and sent to the server for transcription.
+**STT support is incompatible.** The is an `stt` module (which uses [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo)), but with UX and API redesigned to fit the Raven constellation. The client is expected to record the audio, and send the complete recording to the server for transcription.
 
 **No image captioning support.** Potentially interesting, if we expand other components of Raven to handle image analysis later.
 
@@ -499,6 +500,14 @@ API:
 
 - `summarize_summarize`: Generate an abstractive summary for text.
   - This uses a small, specialized AI model, which is not as accurate as an LLM, but is much faster.
+
+## Speech recognition (STT)
+
+Also known as *speech to text*. As of v0.2.4, uses [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo).
+
+- `stt_transcribe`: Transcribe speech from a filelike or a `bytes` object.
+- `stt_transcribe_file`: Transcribe speech from a file.
+- `stt_transcribe_array`: Transcribe speech from a NumPy array.
 
 ## Natural language translation
 
@@ -1124,6 +1133,80 @@ or
               "Some more hyphenated text."]}
 
 respectively.
+
+
+## Speech recognition
+
+### POST "/api/tts/transcribe"
+
+Transcribe speech audio into text.
+
+This uses the speech recognition model configured in `raven.server.config`.
+By default the model is `whisper-large-v3-turbo`, and this is mostly designed
+to use that, or a model with similar functionality.
+
+Input is POST, Content-Type "multipart/form-data", with two file attachments:
+
+    "file": the actual audio file (binary, any format supported by PyAV)
+    "json": the API call parameters, in JSON format.
+
+The parameters are:
+
+    {"prompt": "The following is a discussion on AI, particularly Qwen3.",
+     "language": "en"}
+
+Output is JSON:
+
+    {"text": "This is the speech transcribed as text."}
+
+The "language" field is optional. It specifies the language of the speech audio.
+If not specified, the model will autodetect, and transcribe the text in the
+same language as the input.
+
+The "prompt" field is optional. If provided, the model will be conditioned
+on the prompt.
+
+NOTE: `whisper` is NOT an instruction-following model. When writing prompts,
+it'll work best if you treat it like a base LLM (raw predictor).
+
+In other words, the prompt should "look like" the transcription result
+of speech similar to the audio to be transcribed.
+
+NOTE: `whisper` uses only the last 224 tokens of the prompt.
+
+NOTE: For `whisper`, max_new_tokens = 448. This includes also the prompt tokens,
+      so a long prompt will reduce the length of speech the model can transcribe
+      at once. (Long speeches will be auto-chunked for processing.)
+
+Below are some examples of prompts.
+
+A prompt can help with transcribing proper names correctly:
+
+    "ZyntriQix, Digique Plus, CynapseFive, VortiQore V8, EchoNix Array,
+     OrbitalLink Seven, DigiFractal Matrix, PULSE, RAPT, B.R.I.C.K.,
+     Q.U.A.R.T.Z., F.L.I.N.T."
+
+In this example, the prompt is just a comma-separated list of proper names.
+This is fine.
+
+A prompt can set the context:
+
+    "The following conversation is a lecture about the recent developments
+     around OpenAI, GPT-4.5 and the future of AI."
+
+A prompt can nudge the model toward a given transcription style:
+
+    "Hello, welcome to my lecture."
+      --> Model attempts to transcribe into complete sentences, with punctuation.
+
+    "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking."
+      --> Model transcribes also common filler words used in spoken language, such as "umm".
+
+See:
+    https://hackmd.io/@ll-24-25/r1RSCmxJxl/%2FIkddsjn9T2-dermdWP4BsQ
+    https://github.com/openai/openai-cookbook/blob/main/examples/Whisper_prompting_guide.ipynb
+    https://huggingface.co/openai/whisper-large-v3-turbo
+    https://huggingface.co/docs/transformers/en/model_doc/whisper
 
 
 ## Text summarization

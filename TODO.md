@@ -35,7 +35,6 @@
 - Server
   - Finish the new `stt` module (speech to text)
     - Figure out what's going wrong with the end of the long example sent by `raven.client.tests.test_api` (spurious text generated after the speech in the long audio ends)
-    - Server README / user manual / api docs
     - Test also `stt_transcribe_file` and `stt_transcribe_array`
     - whisper-large-v3-turbo needs another 1.6 GB of VRAM; check if we could use a quantized model (may need vLLM)
   - Option: check first for local model before checking on HF

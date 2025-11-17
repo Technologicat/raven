@@ -1049,7 +1049,7 @@ def api_stt_transcribe():
 
     Input is POST, Content-Type "multipart/form-data", with two file attachments:
 
-        "file": the actual audio file (binary, any supported format)
+        "file": the actual audio file (binary, any format supported by PyAV)
         "json": the API call parameters, in JSON format.
 
     The parameters are::
@@ -1057,9 +1057,9 @@ def api_stt_transcribe():
         {"prompt": "The following is a discussion on AI, particularly Qwen3.",
          "language": "en"}
 
-    Output is JSON, a list of texts (which might only contain one item)::
+    Output is JSON::
 
-        {"text": ["This is the speech transcribed as text."]}
+        {"text": "This is the speech transcribed as text."}
 
     The "language" field is optional. It specifies the language of the speech audio.
     If not specified, the model will autodetect, and transcribe the text in the
@@ -1078,7 +1078,7 @@ def api_stt_transcribe():
 
     NOTE: For `whisper`, max_new_tokens = 448. This includes also the prompt tokens,
           so a long prompt will reduce the length of speech the model can transcribe
-          at once.
+          at once. (Long speeches will be auto-chunked for processing.)
 
     Below are some examples of prompts.
 

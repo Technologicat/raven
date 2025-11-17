@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 import importlib
 import traceback
 import transformers
-from typing import Optional, List, Union
+from typing import Optional, Union
 
 from colorama import Fore, Style
 
@@ -28,6 +28,7 @@ loaded_model_device = None
 loaded_model_dtype = None
 
 def init_module(config_module_name: str, device_string: str, dtype: Union[str, torch.dtype]) -> None:
+    """Initialize the speech recognizer (speech to text)."""
     global server_config
     global model
     global processor
@@ -75,7 +76,24 @@ def is_available() -> bool:
 # TODO: the input is a flask.request.file.stream; what's the type of that?
 def speech_to_text(stream,
                    prompt: Optional[str],
-                   language: Optional[str]) -> List[str]:
+                   language: Optional[str]) -> str:
+    """Transcribe speech to text.
+
+    `stream`: a `flask.request.file.stream` containing an audio file
+
+    `prompt`: Can be used to list correct spellings of rare proper names,
+              and/or to nudge the model's transcription style.
+
+              See `raven.server.app.api_stt_transcribe` for a more detailed
+              explanation.
+
+    `language`: Can be used to explicitly set the input audio language,
+                such as "en" for English.
+
+                Default is to autodetect from the audio.
+
+    Output is the transcribed text.
+    """
     prompt_log_msg_str = f"'{prompt}'" if prompt is not None else None
     language_log_msg_str = f"'{language}'" if language is not None else None
     logger.info(f"speech_to_text: Request received with prompt = {prompt_log_msg_str}, language = {language_log_msg_str}.")
@@ -138,18 +156,17 @@ def speech_to_text(stream,
     # Transcription progress callback.
     #
     # NOTE: As of 11/2025, requires a recent `transformers` (4.57.1 has this).
-    #
-    # The function takes a tensor argument p of shape (n, 2), where n is the batch size.
-    # p[i, 0] contains the index of the audio frame that is currently being transcribed
-    # for batch item i. p[i, 1] contains the total number of frames for batch item i.
-    # No return value is expected.
     with tqdm(desc="Transcribing", leave=True) as pbar:
+        # The function takes a tensor argument p of shape (n, 2), where n is the batch size.
+        # p[i, 0] contains the index of the audio frame that is currently being transcribed
+        # for batch item i. p[i, 1] contains the total number of frames for batch item i.
+        # No return value is expected.
         def monitor_progress(p_batch):
             i = torch.argmax(p_batch[:, 1])
             p = p_batch[i].detach().cpu()
             pbar.total = int(p[1])
             pbar.n = int(p[0])
-            pbar.refresh()
+            pbar.refresh()  # note `refresh`, not `update` (`update` also increments the progress)
         def finish_progress():
             pbar.n = pbar.total
             pbar.refresh()
