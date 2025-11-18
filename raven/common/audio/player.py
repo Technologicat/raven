@@ -54,6 +54,10 @@ def validate_playback_device(device_name: Optional[str]) -> str:
 
     See the command-line utility `raven-check-audio-devices` to list audio devices on your system.
     """
+    if device_name == "system-default":  # magic value to tell `Player` to let the backend choose the default device
+        logger.info("validate_playback_device: Using the system's default audio playback device (will be handled by backend).")
+        return device_name
+
     device_names = get_available_devices()
     if device_name is not None:  # User-specified device name
         try:
@@ -97,8 +101,12 @@ class Player(Singleton):
         See the command-line utility `raven-check-audio-devices` to list audio devices on your system.
         """
         device_name = validate_playback_device(device_name)  # autodetect if `None`, and sanity check in any case
-        device_names = get_available_devices()
-        assert device_name in device_names  # we only get here if the validation succeeded
+        if device_name != "system-default":
+            pygame_device_name = device_name
+            device_names = get_available_devices()
+            assert device_name in device_names  # we only get here if the validation succeeded
+        else:
+            pygame_device_name = None
         self.device_name = device_name  # for information only
 
         # https://www.pygame.org/docs/ref/mixer.html
@@ -106,7 +114,7 @@ class Player(Singleton):
                           size=-16,  # minus: signed values will be used
                           channels=channels,
                           buffer=buffer_size,  # There seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it to know it.
-                          devicename=device_name)  # `None` here would mean "use the system's default playback device", but we always provide an explicit name.
+                          devicename=pygame_device_name)  # `None` here means "use the system's default playback device".
         self.channels = channels
         self.frequency = frequency
         self.buffer_size = buffer_size

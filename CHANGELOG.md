@@ -47,6 +47,9 @@
         - The chat view is re-rendered (e.g. by switching chat branches, or resizing the window).
         - The AI starts speaking (Ctrl+S, send last message to TTS).
     - Help card added.
+    - TTS audio playback device setup in `raven.client.config`:
+      - For symmetry with the new STT audio recorder, `None` now means "use the first available device as listed by `raven-check-audio-devices`, not the system's default device.
+      - To use the system's default playback device (so that the playback goes to the same device as from other apps), use the special value "system-default".
 
 - Tools:
   - *Raven-pdf2bib*: Overhauled. See updated instructions in [visualizer README](raven/visualizer/README.md).

@@ -25,7 +25,11 @@ raven_api_key_file = client_userdata_dir / "api_key.txt"
 # The special value `None` uses the first available device
 # (first in the order listed by `raven-check-audio-devices`).
 #
-tts_playback_audio_device = None
+# The special value "system-default" uses the system's default device
+# (i.e. the same one that other apps use).
+#
+tts_playback_audio_device = "system-default"  # OS's default, i.e. the same one other apps use
+# tts_playback_audio_device = None  # first available as listed by `raven-check-audio-devices`
 # tts_playback_audio_device = "Built-in Audio Analog Stereo"
 # tts_playback_audio_device = "M Audio Duo Analog Stereo"
 
@@ -39,6 +43,8 @@ tts_playback_audio_device = None
 #
 # (A monitoring capture device is a capture device that records the audio
 #  that is going to a playback device.)
+
+# This has NO system-default setting, as our recording backend doesn't support that.
 #
 stt_capture_audio_device = None
 # stt_capture_audio_device = "Built-in Audio Analog Stereo"
