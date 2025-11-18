@@ -27,7 +27,7 @@ def get_devices(capture_devices: bool = False) -> Tuple[str, ...]:
         if should_init:
             pygame.mixer.init()
         devices = tuple(sdl2_audio.get_audio_device_names(capture_devices))
-        if should_init:
+        if should_init:  # should also teardown, then
             pygame.mixer.quit()
     else:
         # `pygame` doesn't support recording (although it can *list*
