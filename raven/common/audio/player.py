@@ -3,6 +3,9 @@
 This is effectively a wrapper over `pygame`, so that we can easily switch audio playback backends later.
 """
 
+__all__ = ["get_available_devices",
+           "Player"]
+
 from typing import BinaryIO, List, Optional
 
 from unpythonic import Singleton
