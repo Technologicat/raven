@@ -22,22 +22,24 @@ import requests
 import traceback
 from typing import Optional, Union
 
-from bs4 import BeautifulSoup  # for error message prettification (strip HTML)
+from bs4 import BeautifulSoup  # for error message prettification (strip HTML from server's error response)
 
-import pygame  # for audio (text to speech) support
+import pygame  # for audio playback (text to speech) support
 
 from unpythonic import equip_with_traceback
 from unpythonic.env import env as envcls
 
+from ..common import audioutils
 from ..common import bgtask
 
 api_initialized = False
 api_config = envcls(raven_default_headers={},
-                    audio_frequency=44100,
-                    audio_buffer_size=2048)  # slightly larger than the default 512 to prevent xruns while the AI translator/subtitler is running simultaneously
+                    audio_frequency=44100,  # playback
+                    audio_buffer_size=2048)  # playback; slightly larger than the default 512 to prevent xruns while the AI translator/subtitler is running simultaneously
 def initialize_api(raven_server_url: str,
                    raven_api_key_file: Optional[Union[pathlib.Path, str]],
                    tts_playback_audio_device: Optional[str],
+                   stt_capture_audio_device: Optional[str],
                    executor: Optional[concurrent.futures.Executor] = None):
     """Set up URLs and API keys, and initialize the audio mixer.
 
@@ -45,8 +47,11 @@ def initialize_api(raven_server_url: str,
 
     Suggested values for the `raven_*` arguments are provided in `raven.client.config`.
 
-    `tts_playback_audio_device`: One of the names listed by `raven-check-audio-devices`,
+    `tts_playback_audio_device`: One of the Playback device names listed by `raven-check-audio-devices`,
                                  or `None` to use the system default.
+
+    `stt_capture_audio_device`: One of the Capture device names listed by `raven-check-audio-devices`,
+                                or `None` to use the system default.
 
     `executor`: `concurrent.futures.ThreadPoolExecutor` or something duck-compatible with it.
                 Used for playing TTS audio in the background.
@@ -86,17 +91,27 @@ def initialize_api(raven_server_url: str,
         # See `raven.server.app`.
         api_config.raven_default_headers["Authorization"] = raven_api_key.strip()
 
-    # Initialize audio mixer for playing back TTS audio
+    # Initialize audio mixer for TTS audio playback
     # https://www.pygame.org/docs/ref/mixer.html
     if tts_playback_audio_device is not None:
-        logger.info(f"initialize_api: Initializing TTS audio playback on non-default audio device '{tts_playback_audio_device}' (from `raven.client.config`).")
+        logger.info(f"initialize_api: Initializing TTS audio playback on non-default audio playback device '{tts_playback_audio_device}' (from `raven.client.config`).")
     else:
-        logger.info("initialize_api: Initializing TTS audio playback on default audio device. If you want to use a non-default device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+        logger.info("initialize_api: Initializing TTS audio playback on default audio playback device. If you want to use a non-default device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
     pygame.mixer.init(frequency=api_config.audio_frequency,
                       size=-16,  # minus: signed values will be used
                       channels=2,
                       buffer=api_config.audio_buffer_size,  # There seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it to know it.
                       devicename=tts_playback_audio_device)  # `None` is the default, and means to use the system's default playback device.
+    api_config.tts_playback_audio_device = tts_playback_audio_device  # for information only
+
+    # Validate STT audio capture device name, if set.
+    # This lets us fail fast in case the configuration is wrong (already at app startup, long before the user actually tries to record audio).
+    if stt_capture_audio_device is not None:
+        logger.info(f"initialize_api: Validating STT audio capture device '{stt_capture_audio_device}' (from `raven.client.config`).")
+    else:
+        logger.info("initialize_api: Detecting default STT audio capture device. If you want to use a non-default device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+    stt_capture_audio_device = audioutils.Recorder.validate_device(stt_capture_audio_device)
+    api_config.stt_capture_audio_device = stt_capture_audio_device  # used when instantiating an `AudioRecorder`
 
     api_initialized = True
 

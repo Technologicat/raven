@@ -37,7 +37,8 @@ def test():
     logger.info("test: initialize API")
     api.initialize(raven_server_url=client_config.raven_server_url,
                    raven_api_key_file=client_config.raven_api_key_file,
-                   tts_playback_audio_device=client_config.tts_playback_audio_device)  # let it create a default executor
+                   tts_playback_audio_device=client_config.tts_playback_audio_device,
+                   stt_capture_audio_device=client_config.stt_capture_audio_device)  # let it create a default executor
 
     logger.info(f"test: check server availability at {client_config.raven_server_url}")
     if api.raven_server_available():

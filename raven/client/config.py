@@ -27,3 +27,13 @@ raven_api_key_file = client_userdata_dir / "api_key.txt"
 tts_playback_audio_device = None
 # tts_playback_audio_device = "Built-in Audio Analog Stereo"
 # tts_playback_audio_device = "M Audio Duo Analog Stereo"
+
+# Which audio device to use for STT recording (speech to text, speech recognition).
+#
+# This is the device name as a string.
+# For available devices on your system, run `raven-check-audio-devices`.
+#
+# The special value `None` uses the first NON-monitoring audio capture device.
+#
+stt_capture_audio_device = None
+# stt_capture_audio_device = "Built-in Audio Analog Stereo"

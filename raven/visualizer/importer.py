@@ -85,7 +85,8 @@ extended_stopwords.update(x.lower() for x in visualizer_config.custom_stopwords)
 # TODO: Maybe Raven-visualizer should init the API in its main module, for consistency with the other apps. OTOH, this is a main module too, for the command-line importer.
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
-               tts_playback_audio_device=client_config.tts_playback_audio_device)
+               tts_playback_audio_device=client_config.tts_playback_audio_device,
+               stt_capture_audio_device=client_config.stt_capture_audio_device)
 
 # --------------------------------------------------------------------------------
 # Common helpers

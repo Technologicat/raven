@@ -205,14 +205,14 @@ def text_to_speech(voice: str,
         output_headers["x-word-timestamps"] = json.dumps(metadata)
 
     if stream:
-        streamer = audioutils.encode_audio(audio_data=audios,
-                                           format=format,
-                                           sample_rate=sample_rate,
-                                           stream=True)
+        streamer = audioutils.encode(audio_data=audios,
+                                     format=format,
+                                     sample_rate=sample_rate,
+                                     stream=True)
         return Response(streamer(), headers=output_headers)
     else:
-        audio_bytes = audioutils.encode_audio(audio_data=audios,
-                                              format=format,
-                                              sample_rate=sample_rate)
+        audio_bytes = audioutils.encode(audio_data=audios,
+                                        format=format,
+                                        sample_rate=sample_rate)
         output_headers["Content-Length"] = len(audio_bytes)
         return Response(audio_bytes, headers=output_headers)

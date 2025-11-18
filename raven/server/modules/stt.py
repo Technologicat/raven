@@ -122,10 +122,10 @@ def speech_to_text(stream,
         kwargs["prompt_condition_type"] = "all-segments"
         # kwargs["max_new_tokens"] -= (prompt_ids.shape[0] + 3)  # also the prompt tokens and "special start tokens" (TODO: whatever those are?) count toward the output limit
 
-    unused_metadata, numpy_audio_data = audioutils.decode_audio(stream,
-                                                                target_sample_format="fltp",  # float
-                                                                target_sample_rate=processor.feature_extractor.sampling_rate,
-                                                                target_layout="mono")
+    unused_metadata, numpy_audio_data = audioutils.decode(stream,
+                                                          target_sample_format="fltp",  # float
+                                                          target_sample_rate=processor.feature_extractor.sampling_rate,
+                                                          target_layout="mono")
 
     # # With high-level pipeline API
     # # TODO: Even the high-level API doesn't seem to return anything but the "text" field, though `return_timestamps=True`.

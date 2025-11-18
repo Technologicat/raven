@@ -13,6 +13,7 @@ from typing import Tuple
 
 from mcpyrate import colorizer
 
+import pvrecorder
 import pygame
 import pygame._sdl2.audio as sdl2_audio
 
@@ -21,12 +22,26 @@ from .. import __version__
 logger.info(f"Raven-check-audio-devices version {__version__}")
 
 def get_devices(capture_devices: bool = False) -> Tuple[str, ...]:
-    init_by_me = not pygame.mixer.get_init()
-    if init_by_me:
-        pygame.mixer.init()
-    devices = tuple(sdl2_audio.get_audio_device_names(capture_devices))
-    if init_by_me:
-        pygame.mixer.quit()
+    if not capture_devices:
+        should_init = not pygame.mixer.get_init()
+        if should_init:
+            pygame.mixer.init()
+        devices = tuple(sdl2_audio.get_audio_device_names(capture_devices))
+        if should_init:
+            pygame.mixer.quit()
+    else:
+        # `pygame` doesn't support recording (although it can *list*
+        # which capture devices it sees), so Raven uses `pvrecorder`
+        # for recording audio for its STT (speech to text) features.
+        #
+        # To get a guaranteed-correct list of devices, query with
+        # the same library that will be used for recording.
+        #
+        # There is at least one important difference in practice:
+        # `pygame` doesn't see monitoring devices (i.e. capture devices
+        # that record the audio that is going to an audio output),
+        # while `pvrecorder` does.
+        devices = tuple(pvrecorder.PvRecorder.get_available_devices())
     return devices
 
 def main():
