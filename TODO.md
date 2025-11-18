@@ -88,6 +88,7 @@
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
 
   - Maybe next:
+    - llmclient: refactor character and prompt config into `raven.librarian.config`
     - STT (speech to text, speech recognition):
       - UI: Click a mic button (or press Ctrl+Shift+Space) to speak to the AI. To stop recording, press again, or wait for X seconds for silence (configurable timeout and silence level in dBFS).
         - Or measure silence level automatically, when the button is pressed, before speaking starts?
@@ -104,6 +105,7 @@
       - What to put in the right panel when avatar is off? Recent chats list, once we implement that?
     - Add feature: Smooth scrolling for linearized chat view
       - Infra already exists (`raven.common.gui.animation.SmoothScrolling`), just connect it. See the info panel in `raven.visualizer.app` for an example.
+    - Don't crash if e.g. `tts` module isn't running
 
   - Later:
     - Document database: scopes
