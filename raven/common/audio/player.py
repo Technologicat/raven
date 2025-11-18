@@ -55,7 +55,7 @@ def validate_playback_device(device_name: Optional[str]) -> str:
     See the command-line utility `raven-check-audio-devices` to list audio devices on your system.
     """
     if device_name == "system-default":  # magic value to tell `Player` to let the backend choose the default device
-        logger.info("validate_playback_device: Using the system's default audio playback device (will be handled by backend).")
+        logger.debug("validate_playback_device: Using the system's current default audio playback device (will be handled by backend).")
         return device_name
 
     device_names = get_available_devices()
@@ -66,14 +66,14 @@ def validate_playback_device(device_name: Optional[str]) -> str:
             error_msg = f"validate_playback_device: No such audio playback device '{device_name}'."
             logger.error(error_msg)
             raise ValueError(error_msg)
-        logger.info(f"validate_playback_device: Using audio playback device '{device_name}'.")
+        logger.debug(f"validate_playback_device: Using audio playback device '{device_name}'.")
     else:  # First available device
         if not device_names:
             error_msg = "validate_playback_device: No audio playback device found on this system."
             logger.error(error_msg)
             raise ValueError(error_msg)
         device_name = device_names[0]
-        logger.info(f"validate_playback_device: Using first available audio playback device '{device_name}'.")
+        logger.debug(f"validate_playback_device: Using first available audio playback device '{device_name}'.")
     return device_name
 
 class Player(Singleton):
@@ -100,6 +100,8 @@ class Player(Singleton):
 
         See the command-line utility `raven-check-audio-devices` to list audio devices on your system.
         """
+        plural_s = "s" if channels != 1 else ""
+        logger.info(f"Player.__init__: Initializing audio player on device '{device_name}', with frequency {frequency}, {channels} channel{plural_s}, and buffer size {buffer_size} samples.")
         device_name = validate_playback_device(device_name)  # autodetect if `None`, and sanity check in any case
         if device_name != "system-default":
             pygame_device_name = device_name
@@ -120,6 +122,8 @@ class Player(Singleton):
         self.buffer_size = buffer_size
 
         self.latency = self.buffer_size / self.frequency  # seconds
+
+        logger.info("Player.__init__: Initialization complete.")
 
     def __del__(self):
         pygame.mixer.quit()

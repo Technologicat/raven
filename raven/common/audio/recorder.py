@@ -65,7 +65,7 @@ def validate_capture_device(device_name: Optional[str]) -> str:
             error_msg = f"validate_capture_device: No such audio capture device '{device_name}'."
             logger.error(error_msg)
             raise ValueError(error_msg)
-        logger.info(f"validate_capture_device: Using audio capture device '{device_name}'.")
+        logger.debug(f"validate_capture_device: Using audio capture device '{device_name}'.")
     else:  # Find first NON-monitoring audio capture device
         for device_name in device_names:
             if "monitor of" not in device_name.lower():
@@ -74,7 +74,7 @@ def validate_capture_device(device_name: Optional[str]) -> str:
             error_msg = "validate_capture_device: No NON-monitoring audio capture device found on this system. If you want to use a MONITORING device for recording, please select it explicitly."
             logger.error(error_msg)
             raise ValueError(error_msg)
-        logger.info(f"validate_capture_device: Using first available audio capture device '{device_name}'.")
+        logger.debug(f"validate_capture_device: Using first available audio capture device '{device_name}'.")
     return device_name
 
 class Recorder:
@@ -126,6 +126,9 @@ class Recorder:
                             stays under `silence_threshold` for this long (i.e. we then consider
                             that the user has stopped speaking).
         """
+        silence_threshold_msg = f"{silence_threshold:0.2f}dBFS" if silence_threshold is not None else "autodetection"
+        logger.info(f"Recorder.__init__: Initializing audio recorder on device '{device_name}', with frame length {frame_length} samples, VU meter peak hold {vu_peak_hold:0.6g}s, silence threshold {silence_threshold_msg}, and silence autostop timeout {autostop_timeout}s.")
+
         device_name = validate_capture_device(device_name)  # autodetect if `None`, and sanity check in any case
         device_names = get_available_devices()
         assert device_name in device_names  # we only get here if the validation succeeded
@@ -153,6 +156,7 @@ class Recorder:
         self._task_manager = bgtask.TaskManager(name=f"Recorder_0x{id(self):x}",
                                                 mode="concurrent",
                                                 executor=executor)
+        logger.info("Recorder.__init__: Initialization complete.")
 
     def __del__(self) -> None:
         self.recorder.delete()

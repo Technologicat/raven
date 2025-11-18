@@ -91,12 +91,13 @@ def initialize_api(raven_server_url: str,
         api_config.raven_default_headers["Authorization"] = raven_api_key.strip()
 
     # Initialize audio player for TTS audio playback
+    logger.info("initialize_api: Setting up audio player for TTS (text to speech, speech synthesizer).")
     if tts_playback_audio_device == "system-default":
-        logger.info("initialize_api: Using system's default TTS audio playback device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+        logger.info("initialize_api: TTS: Using system's current default audio playback device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
     elif tts_playback_audio_device is not None:
-        logger.info(f"initialize_api: Validating TTS audio playback device '{tts_playback_audio_device}' (from `raven.client.config`).")
+        logger.info(f"initialize_api: TTS: Validating audio playback device '{tts_playback_audio_device}' (from `raven.client.config`).")
     else:
-        logger.info("initialize_api: Using first available TTS audio playback device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+        logger.info("initialize_api: TTS: Using first available audio playback device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
     tts_playback_audio_device = audio_player.validate_playback_device(tts_playback_audio_device)
     api_config.audio_player = audio_player.Player(frequency=api_config.audio_frequency,
                                                   channels=2,
@@ -105,10 +106,11 @@ def initialize_api(raven_server_url: str,
 
     # Validate STT audio capture device name, if set.
     # This lets us fail fast in case the configuration is wrong (already at app startup, long before the user actually tries to record audio).
+    logger.info("initialize_api: Setting up audio recorder for STT (speech to text, speech recognition).")
     if stt_capture_audio_device is not None:
-        logger.info(f"initialize_api: Validating STT audio capture device '{stt_capture_audio_device}' (from `raven.client.config`).")
+        logger.info(f"initialize_api: STT: Validating audio capture device '{stt_capture_audio_device}' (from `raven.client.config`).")
     else:
-        logger.info("initialize_api: Using first available STT audio capture device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+        logger.info("initialize_api: STT: Using first available audio capture device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
     stt_capture_audio_device = audio_recorder.validate_capture_device(stt_capture_audio_device)
     api_config.audio_recorder = audio_recorder.Recorder(frame_length=512,  # TODO: need to be longer?
                                                         device_name=stt_capture_audio_device,
