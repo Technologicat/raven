@@ -127,12 +127,13 @@ class Recorder:
                             that the user has stopped speaking).
         """
         silence_threshold_msg = f"{silence_threshold:0.2f}dBFS" if silence_threshold is not None else "autodetection"
-        logger.info(f"Recorder.__init__: Initializing audio recorder on device '{device_name}', with frame length {frame_length} samples, VU meter peak hold {vu_peak_hold:0.6g}s, silence threshold {silence_threshold_msg}, and silence autostop timeout {autostop_timeout}s.")
+        logger.info("Recorder.__init__: Initializing audio recorder.")
 
         device_name = validate_capture_device(device_name)  # autodetect if `None`, and sanity check in any case
         device_names = get_available_devices()
         assert device_name in device_names  # we only get here if the validation succeeded
         self.device_name = device_name  # for information only
+        logger.info(f"Recorder.__init__: Audio capture device '{device_name}', frame length {frame_length} samples, VU meter peak hold {vu_peak_hold:0.6g}s, silence threshold {silence_threshold_msg}, silence autostop timeout {autostop_timeout}s.")
 
         self.silence_threshold = silence_threshold  # dBFS
         self.autostop_timeout = autostop_timeout  # seconds

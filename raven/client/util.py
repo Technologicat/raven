@@ -98,7 +98,6 @@ def initialize_api(raven_server_url: str,
         logger.info(f"initialize_api: TTS: Validating audio playback device '{tts_playback_audio_device}' (from `raven.client.config`).")
     else:
         logger.info("initialize_api: TTS: Using first available audio playback device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
-    tts_playback_audio_device = audio_player.validate_playback_device(tts_playback_audio_device)
     api_config.audio_player = audio_player.Player(frequency=api_config.audio_frequency,
                                                   channels=2,
                                                   buffer_size=api_config.audio_buffer_size,
@@ -111,7 +110,6 @@ def initialize_api(raven_server_url: str,
         logger.info(f"initialize_api: STT: Validating audio capture device '{stt_capture_audio_device}' (from `raven.client.config`).")
     else:
         logger.info("initialize_api: STT: Using first available audio capture device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
-    stt_capture_audio_device = audio_recorder.validate_capture_device(stt_capture_audio_device)
     api_config.audio_recorder = audio_recorder.Recorder(frame_length=512,  # TODO: need to be longer?
                                                         device_name=stt_capture_audio_device,
                                                         executor=executor)

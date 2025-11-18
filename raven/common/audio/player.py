@@ -100,8 +100,8 @@ class Player(Singleton):
 
         See the command-line utility `raven-check-audio-devices` to list audio devices on your system.
         """
-        plural_s = "s" if channels != 1 else ""
-        logger.info(f"Player.__init__: Initializing audio player on device '{device_name}', with frequency {frequency}, {channels} channel{plural_s}, and buffer size {buffer_size} samples.")
+        logger.info("Player.__init__: Initializing audio player.")
+
         device_name = validate_playback_device(device_name)  # autodetect if `None`, and sanity check in any case
         if device_name != "system-default":
             pygame_device_name = device_name
@@ -110,6 +110,8 @@ class Player(Singleton):
         else:
             pygame_device_name = None
         self.device_name = device_name  # for information only
+        plural_s = "s" if channels != 1 else ""
+        logger.info(f"Player.__init__: Audio playback device '{device_name}', frequency {frequency}, {channels} channel{plural_s}, buffer size {buffer_size} samples.")
 
         # https://www.pygame.org/docs/ref/mixer.html
         pygame.mixer.init(frequency=frequency,
