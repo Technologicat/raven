@@ -647,9 +647,9 @@ class DPGAvatarController:
             # Break into lines, and break each line into sentences.
             # TODO: This relies on the fact that LLMs don't insert newlines except as paragraph breaks.
             lines = batch_text.split("\n")
-            plural_s = "s" if len(lines) != 1 else ""
-            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: detected {len(lines)} line{plural_s}.")
             lines = [line.strip() for line in lines if line.strip() != ""]  # This (vs. doing it on the fly) buys us that we know when we are processing the last item.
+            plural_s = "s" if len(lines) != 1 else ""
+            logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}: detected {len(lines)} non-blank line{plural_s}.")
             for lineno, line in enumerate(lines, start=1):
                 if task_env.cancelled:
                     return
