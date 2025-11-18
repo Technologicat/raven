@@ -24,11 +24,10 @@ from typing import Optional, Union
 
 from bs4 import BeautifulSoup  # for error message prettification (strip HTML from server's error response)
 
-import pygame  # for audio playback (text to speech) support
-
 from unpythonic import equip_with_traceback
 from unpythonic.env import env as envcls
 
+from ..common.audio import player as audio_player
 from ..common.audio import recorder as audio_recorder
 from ..common import bgtask
 
@@ -91,18 +90,15 @@ def initialize_api(raven_server_url: str,
         # See `raven.server.app`.
         api_config.raven_default_headers["Authorization"] = raven_api_key.strip()
 
-    # Initialize audio mixer for TTS audio playback
-    # https://www.pygame.org/docs/ref/mixer.html
+    # Initialize audio player for TTS audio playback
     if tts_playback_audio_device is not None:
         logger.info(f"initialize_api: Initializing TTS audio playback on non-default audio playback device '{tts_playback_audio_device}' (from `raven.client.config`).")
     else:
         logger.info("initialize_api: Initializing TTS audio playback on default audio playback device. If you want to use a non-default device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
-    pygame.mixer.init(frequency=api_config.audio_frequency,
-                      size=-16,  # minus: signed values will be used
-                      channels=2,
-                      buffer=api_config.audio_buffer_size,  # There seems to be no way to *get* the buffer size from `pygame.mixer`, so we must *set* it to know it.
-                      devicename=tts_playback_audio_device)  # `None` is the default, and means to use the system's default playback device.
-    api_config.tts_playback_audio_device = tts_playback_audio_device  # for information only
+    api_config.audio_player = audio_player.Player(frequency=api_config.audio_frequency,
+                                                  channels=2,
+                                                  buffer_size=api_config.audio_buffer_size,
+                                                  device_name=tts_playback_audio_device)
 
     # Validate STT audio capture device name, if set.
     # This lets us fail fast in case the configuration is wrong (already at app startup, long before the user actually tries to record audio).

@@ -26,8 +26,6 @@ import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import urllib.parse
 
-import pygame  # for audio (text to speech) support
-
 from unpythonic import timer
 from unpythonic.env import env as envcls
 
@@ -249,8 +247,8 @@ def _tts_prepare(text: str,
             timestamps = clean_timestamps(timestamps)
 
         # Stream the audio from the response body.
-        # Save it in an in-memory buffer, thus obtaining a filelike that can be fed into pygame's mixer.
-        # This is not only a convenience. This facilitates LRU caching, as well as `stream_response.raw` can't be loaded into the mixer anyway, since it doesn't support seeking.
+        # Save the audio in an in-memory buffer, thus obtaining a filelike that can be fed into the audio player.
+        # This is not only a convenience. This facilitates LRU caching; as well as `stream_response.raw` can't be loaded into an audio player anyway, since it doesn't support seeking.
         it = stream_response.iter_content(chunk_size=4096)
         audio_buffer = io.BytesIO()
         try:
@@ -345,11 +343,11 @@ def tts_speak(text: str,
         audio_buffer = io.BytesIO()
         audio_buffer.write(audio_bytes)
         audio_buffer.seek(0)
-        if pygame.mixer.music.get_busy():
-            pygame.mixer.music.stop()
+        if util.api_config.audio_player.is_playing():
+            util.api_config.audio_player.stop()
         try:
-            pygame.mixer.music.load(audio_buffer)
-        except pygame.error as exc:
+            util.api_config.audio_player.load(audio_buffer)
+        except RuntimeError as exc:
             logger.error(f"tts_speak.speak: failed to load audio into mixer, reason {type(exc)}: {exc}")
             return
 
@@ -360,10 +358,10 @@ def tts_speak(text: str,
             except Exception as exc:
                 logger.error(f"tts_speak.speak: in start callback: {type(exc)}: {exc}")
                 traceback.print_exc()
-        pygame.mixer.music.play()
+        util.api_config.audio_player.start()
 
         if on_stop is not None:
-            while pygame.mixer.music.get_busy():
+            while util.api_config.audio_player.is_playing():
                 time.sleep(0.01)
                 # NOTE: At this point, we don't take cancellations from `task_env.cancelled`; but the client can explicitly call `tts_stop`,
                 # which stops the audio, thus exiting the loop. We are likely running on a different thread pool than the main app, anyway,
@@ -499,11 +497,11 @@ def tts_speak_lipsynced(instance_id: str,
             audio_buffer = io.BytesIO()
             audio_buffer.write(audio_bytes)
             audio_buffer.seek(0)
-            if pygame.mixer.music.get_busy():
-                pygame.mixer.music.stop()
+            if util.api_config.audio_player.is_playing():
+                util.api_config.audio_player.stop()
             try:
-                pygame.mixer.music.load(audio_buffer)
-            except pygame.error as exc:
+                util.api_config.audio_player.load(audio_buffer)
+            except RuntimeError as exc:
                 logger.error(f"tts_speak_lipsynced.speak: failed to load audio into mixer, reason {type(exc)}: {exc}")
                 return
 
@@ -558,10 +556,9 @@ def tts_speak_lipsynced(instance_id: str,
                     logger.error(f"tts_speak_lipsynced.speak: in start callback: {type(exc)}: {exc}")
                     traceback.print_exc()
 
-            latency = util.api_config.audio_buffer_size / util.api_config.audio_frequency  # seconds
-            pygame.mixer.music.play()
-            while pygame.mixer.music.get_busy():
-                t = pygame.mixer.music.get_pos() / 1000 - latency - video_offset
+            util.api_config.audio_player.start()
+            while util.api_config.audio_player.is_playing():
+                t = util.api_config.audio_player.get_position() - video_offset
                 apply_lipsync_at_audio_time(t)  # lipsync
                 time.sleep(0.01)
                 # NOTE: At this point, we don't take cancellations from `task_env.cancelled`; but the client can explicitly call `tts_stop`,
@@ -593,12 +590,12 @@ def tts_stop() -> None:
     if not util.api_initialized:
         raise RuntimeError("tts_stop: The `raven.client.api` module must be initialized before using the API.")
     logger.info("tts_stop: stopping audio")
-    pygame.mixer.music.stop()
+    util.api_config.audio_player.stop()
 
 def tts_speaking() -> bool:
     """Query whether the speech synthesizer is speaking."""
     if not util.api_initialized:
         raise RuntimeError("tts_stop: The `raven.client.api` module must be initialized before using the API.")
-    is_speaking = pygame.mixer.music.get_busy()
+    is_speaking = util.api_config.audio_player.is_playing()
     logger.info(f"tts_speaking: is audio playing: {is_speaking}")
     return is_speaking

@@ -1,6 +1,7 @@
 """A simple mono audio recorder for STT (speech to text), with background operation, autostop on silence, and VU metering in dBFS."""
 
-__all__ = ["validate_capture_device",
+__all__ = ["get_available_devices",
+           "validate_capture_device",
            "Recorder"]
 
 import logging
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 import concurrent.futures
 import threading
 import time
-from typing import Optional, Tuple
+from typing import Optional, List, Tuple
 
 import numpy as np
 
@@ -21,6 +22,22 @@ from unpythonic.env import env
 from .. import bgtask
 
 from . import utils as audio_utils
+
+# `pygame` doesn't support recording (although it can *list*
+# which capture devices it sees), so Raven uses `pvrecorder`
+# for recording audio for its STT (speech to text) features.
+#
+# To get a guaranteed-correct list of devices for each role (playback, capture),
+# we query with the same library that is used for that role.
+#
+# There is at least one important difference in practice:
+# `pygame` doesn't see monitoring devices (i.e. capture devices
+# that record the audio that is going to an audio output),
+# while `pvrecorder` does.
+#
+def get_available_devices() -> List[str]:
+    """Return a list of the names of available audio capture devices."""
+    return list(pvrecorder.PvRecorder.get_available_devices())
 
 def validate_capture_device(device_name: Optional[str]) -> str:
     """Validate `device_name` against list of audio capture devices detected on the system.
@@ -36,7 +53,7 @@ def validate_capture_device(device_name: Optional[str]) -> str:
     A monitoring capture device is a capture device that records the audio that is going
     to a playback device. Usually monitoring devices have "Monitor" in the device name.
 
-    See the command-line utility `raven-check-audio-devices` to see the list on your system.
+    See the command-line utility `raven-check-audio-devices` to list audio devices on your system.
     """
     device_names = pvrecorder.PvRecorder.get_available_devices()
     if device_name is not None:  # User-specified device name -> device index as used by `pvrecorder`
