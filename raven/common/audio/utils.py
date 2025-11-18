@@ -10,7 +10,9 @@ from typing import Union
 
 import numpy as np
 
-def linear_to_dBFS(level: Union[int, float]) -> float:
+# TODO: vectorize these to make them work on `np.array` inputs
+
+def linear_to_dBFS(level: Union[float, int, np.int16]) -> float:
     """Convert linear audio sample value to dBFS.
 
     `level`: one of:
@@ -32,7 +34,7 @@ def linear_to_dBFS(level: Union[int, float]) -> float:
     Returns the dBFS value corresponding to the linear audio sample `level`.
     Note that the sign of `level` is lost (this is an abs-logarithmic scale).
     """
-    if isinstance(level, int):
+    if isinstance(level, (int, np.int16)):
         fs = 32767 if level > 0 else 32768
     elif isinstance(level, float):
         fs = 1.0
@@ -43,7 +45,7 @@ def linear_to_dBFS(level: Union[int, float]) -> float:
     dB = 20 * np.log10(abs(level) / fs)  # yes, -np.inf is fine (and the correct answer) if `level` is exactly zero
     return dB
 
-def dBFS_to_linear(dB: float, format: type) -> Union[int, float]:
+def dBFS_to_linear(dB: float, format: type) -> Union[float, int]:
     """Convert dBFS value to linear scale.
 
     `dB`: the decibel level to convert, in dBFS (decibels full scale).

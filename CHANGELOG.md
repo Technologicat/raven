@@ -10,6 +10,22 @@
     - This can be useful for `pdftotext` outputs, and for text obtained from PDF files by OCR (such as with `ocrmypdf --force-ocr input.pdf output.pdf`).
     - Raven-server's `sanitize` module is used automatically, if the server is reachable and the module is loaded on the server; else the dehyphenator model is loaded locally.
 
+- *Raven-librarian*:
+  - New feature: STT (speech to text, speech recognition). Talk to the AI using your mic!
+    - To start speaking to the AI, click the mic button next to the chat text entry field (hotkey Ctrl+Shift+Enter).
+      - The mic starts glowing red, to indicate that Librarian is listening.
+      - To stop speaking, and send the spoken message to the AI, click the mic button again, or wait until the recorder detects silence and stops automatically.
+      - The mic stops glowing (and returns to its default white).
+    - Librarian then runs the recorded audio through a locally hosted [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo) speech recognizer, which lives in the `stt` module of Raven-server.
+    - The transcribed text is then sent to the AI, just as if it was typed as text to the chat text entry field.
+    - For now, this feature has certain limitations:
+      - The recorder autostop settings are hardcoded: 1.5s of input audio signal level under -40.00 dBFS.
+        - This should work under most circumstances, but if you are not in "most circumstances", you'll have to stop recording by clicking the mic button again.
+      - It is not possible to edit the transcribed text before sending.
+    - To choose your mic device, see `raven.client.config`.
+      - By default, Librarian picks the first available NON-monitoring audio capture device, in the order listed by the command-line tool `raven-check-audio-devices`.
+      - The default should work on laptops, and in general, most systems that have just one audio input device.
+      - The help card (F1) shows which mic device is active. It is also printed to the client log at app startup.
 
 **Changed**:
 
@@ -48,8 +64,9 @@
         - The AI starts speaking (Ctrl+S, send last message to TTS).
     - Help card added.
     - TTS audio playback device setup in `raven.client.config`:
-      - For symmetry with the new STT audio recorder, `None` now means "use the first available device as listed by `raven-check-audio-devices`, not the system's default device.
-      - To use the system's default playback device (so that the playback goes to the same device as from other apps), use the special value "system-default".
+      - For configuration symmetry reasons, `None` now means "use the first available playback device as listed by `raven-check-audio-devices`", not the system's default playback device.
+      - The new special value "system-default" uses the system's default playback device, so that the playback goes to the same device as from other apps. (This is what `None` did before.)
+      - The default configuration has been changed to use "system-default", so that behavior should remain the same.
 
 - Tools:
   - *Raven-pdf2bib*: Overhauled. See updated instructions in [visualizer README](raven/visualizer/README.md).

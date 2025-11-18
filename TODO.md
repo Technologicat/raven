@@ -90,10 +90,10 @@
   - Maybe next:
     - llmclient: refactor character and prompt config into `raven.librarian.config`
     - STT (speech to text, speech recognition):
-      - UI: Click a mic button (or press Ctrl+Shift+Space) to speak to the AI. To stop recording, press again, or wait for X seconds for silence (configurable timeout and silence level in dBFS).
-        - Or measure silence level automatically, when the button is pressed, before speaking starts?
-          - Measure from the first 0.1s or so
-      - Then STT the recorded audio (using Raven-server's new `stt` module), and send it to the AI as the user's chat message.
+      - Add VU meter to GUI (simple vertical bar, 2-4 pixels wide, with green/yellow/red sections and a white line for the peak hold value)
+      - Configurable silence level, autostop timeout, VU peak hold time
+      - Extract proper names from chat log (use spaCy NER), fill a comma-separated list of those into the STT prompt
+      - Edit spoken message before sending?
     - Switch to next/previous branch, when switching a message that is not currently last in the linearized view:
       - Pick the most recent continuation and show it, if any continuations exist
         - To determine which is the most recent: for each possible continuation, scan subtree for the most recent revision timestamp anywhere in descendants

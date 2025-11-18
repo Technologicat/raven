@@ -112,6 +112,9 @@ def initialize_api(raven_server_url: str,
         logger.info("initialize_api: STT: Using first available audio capture device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
     api_config.audio_recorder = audio_recorder.Recorder(frame_length=512,  # TODO: need to be longer?
                                                         device_name=stt_capture_audio_device,
+                                                        vu_peak_hold=1.0,  # seconds
+                                                        silence_threshold=-40.0,  # dBFS
+                                                        autostop_timeout=1.5,  # seconds
                                                         executor=executor)
 
     api_initialized = True

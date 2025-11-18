@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 import concurrent.futures
 import threading
 import time
-from typing import Optional, List, Tuple
+from typing import Callable, Optional, List, Tuple
 
 import numpy as np
 
@@ -100,25 +100,30 @@ class Recorder:
                        See the command-line utility `raven-check-audio-devices` to list available audio capture devices
                        on your system.
 
-        `vu_peak_hold`: seconds.
+        `vu_peak_hold`: seconds. How long to hold the peak value in VU readout.
 
-                        How long to hold the peak value in `vu` readout.
+                        Digital hold; the peak value jumps down immediately after the hold time expires.
 
-                        Digital hold; the peak value jumps down immediately after the hold timeout.
+                        You'll only need this if you want to display a VU meter (input audio level)
+                        in your GUI.
 
-                        You'll only need this if you want to display a VU meter in the GUI,
-                        for monitoring the audio input level.
+                        You can access the readout from the `vu` property (read-only),
+                        or you can use the `connect_vu_readout` method to connect an event handler.
 
-        `silence_threshold`: value in dBFS, or `None` to autodetect (preferred).
+        `silence_threshold`: value in dBFS, or `None` to autodetect.
 
-                             If `None`, autodetect background noise level from first 0.05s of audio,
+                             See `raven.common.audio.utils.linear_to_dBFS` for explanation of dBFS.
+
+                             If `None`, autodetect background noise level from start of audio,
                              and set the silence threshold to `background_noise + 6dB`.
 
                              The idea of using the first 1/20s of audio for silence level detection
                              is that when a human presses the GUI button to start recording, they
                              don't typically start speaking straight away, but after a very short pause.
 
-                             See `raven.common.audio.utils.linear_to_dBFS` for explanation of dBFS.
+                             However, if the audio input has a noise gate, so that it only actually
+                             starts capturing audio when a threshold level is exceeded (and sends zeroes
+                             until that point), then the autodetection cannot work.
 
         `autostop_timeout`: seconds, or `None` to disable.
 
@@ -146,13 +151,14 @@ class Recorder:
         self.sample_rate = None  # sample rate (Hz) of last recording
         self._start_timestamp = None  # recording start time, for initial background noise detection
 
-        self.vu_peak_hold = vu_peak_hold
-        self._vu_instant = -90.0
-        self._vu_peak = -90.0
-        self._vu_last_peak_timestamp = time.time_ns()
+        self.on_vu_update = None  # available to be populated later by user with `connect_vu_readout`
 
-        self.is_recording = False
-        self._recording_state_lock = threading.Lock()
+        self.vu_peak_hold = vu_peak_hold  # seconds
+        self._vu_last_peak_timestamp = time.time_ns()
+        self._clear_vu_readout()
+
+        self._is_recording = False
+        self._recording_state_lock = threading.RLock()
 
         self._task_manager = bgtask.TaskManager(name=f"Recorder_0x{id(self):x}",
                                                 mode="concurrent",
@@ -163,34 +169,49 @@ class Recorder:
         self.recorder.delete()
         self.recorder = None
 
-    def start(self) -> None:
-        """Start recording.
+    def start(self,
+              on_autostop: Optional[Callable] = None) -> None:
+        """Start recording audio.
 
         This automatically spawns a background task to handle the recording.
 
         If already recording, do nothing.
+
+        `on_autostop`: 0-argument callable. Return value is ignored.
+
+                       Triggers when the silence detector autostops the recorder.
+
+                       The main use case is so that the caller can do the same things
+                       it would do when the recording is manually stopped.
         """
+        logger.info("Recorder.start: Starting audio capture.")
         with self._recording_state_lock:
-            if self.is_recording:
+            if self._is_recording:
+                logger.info("Recorder.stop: This recorder is already recording. Ignoring.")
                 return
-            self.is_recording = True
+            self._is_recording = True
 
             def record_task(task_env: env) -> None:
                 try:
+                    logger.info("Recorder.start.record_task: Audio capture task starting.")
+                    autostopped = False
                     if task_env.cancelled:  # while waiting in queue
+                        logger.info("Recorder.start.record_task: Audio capture task cancelled while in queue.")
                         return
+                    logger.info("Recorder.start.record_task: Starting audio recorder.")
                     self.data = None
                     self.recorder.start()
                     self.sample_rate = self.recorder.sample_rate  # read-only property; not sure if it's available when not recording, so let's be safe.
                     silence_level_available = False
                     silence_level_dBFS = -90.0
-                    silence_measurement_timeout = 0.05  # seconds
+                    silence_measurement_timeout = 0.1  # seconds
                     self._start_timestamp = self._vu_last_peak_timestamp = last_signal_timestamp = time.time_ns()  # timestamp after the recorder is really up and running
 
+                    logger.info("Recorder.start.record_task: Entering recording loop.")
                     while self.recorder.is_recording and not task_env.cancelled:
                         frame = self.recorder.read()  # -> List[int] (s16, mono)
                         array = np.array(frame, dtype=np.int16)
-                        self._update_vu(array)
+                        self._update_vu_readout(array)
                         if self.data is not None:
                             self.data = np.concatenate([self.data, array])
                         else:
@@ -198,34 +219,72 @@ class Recorder:
 
                         time_now = time.time_ns()
                         if not silence_level_available:  # start of recording
-                            if self.silence_threshold is not None:
+                            if self.silence_threshold is not None:  # explicitly specified silence level
                                 silence_level_dBFS = self.silence_threshold
                                 silence_level_available = True
                                 logger.info(f"Recorder.start.record_task: Silence level set by caller to {silence_level_dBFS:0.2f}dBFS.")
-                            else:  # autodetect silence level at start
+                            else:  # autodetect silence level at start of recording
                                 recording_time_elapsed = (time_now - self._start_timestamp) / 10**9
                                 if recording_time_elapsed >= silence_measurement_timeout:
                                     silence_level_raw_dBFS = audio_utils.linear_to_dBFS(np.max(np.abs(self.data)))  # all data so far!
                                     silence_level_dBFS = silence_level_raw_dBFS + 6.0  # leave some margin to be safe, in case the very beginning was unusually silent
                                     silence_level_available = True
                                     logger.info(f"Recorder.start.record_task: Silence level measured from first {silence_measurement_timeout:0.6g}s of recorded audio as {silence_level_raw_dBFS:0.2f}dBFS.")
+
                         else:  # silence_level_available:  # normal operation
-                            # _vu_instant for the current audio frame is updated by `_update_vu`, above
+                            # _vu_instant for the current audio frame is updated by `_update_vu_readout`, above
                             if self._vu_instant > silence_level_dBFS:
                                 last_signal_timestamp = time_now
 
-                            # Stop recording if the audio input stays silent and the autostop timeout is exceeded
-                            time_elapsed_since_last_signal = (time_now - last_signal_timestamp) / 10**9
-                            if time_elapsed_since_last_signal >= self.autostop_timeout:
-                                self.stop(_clear_task=False)  # prevent deadlock; the task is already exiting, no need to wait until it exits.
-                                break
-
+                            # Stop recording if the audio input stays silent and the autostop timeout is (enabled and) exceeded
+                            if self.autostop_timeout is not None:
+                                time_elapsed_since_last_signal = (time_now - last_signal_timestamp) / 10**9
+                                if time_elapsed_since_last_signal >= self.autostop_timeout:
+                                    logger.info(f"Recorder.start.record_task: Silence detected, autostopping. (Audio input level less than {silence_level_dBFS:0.2f}dBFS for {self.autostop_timeout:0.6g}s.)")
+                                    autostopped = True
+                                    self.stop()
+                                    break
                 finally:
+                    logger.info("Recorder.start.record_task: Audio capture task exiting.")
                     with self._recording_state_lock:
-                        self.is_recording = False
+                        self._is_recording = False
+                    if autostopped and on_autostop is not None:
+                        logger.info("Recorder.start.record_task: Calling custom `on_autostop`.")
+                        on_autostop()  # do this last, after no longer in recording state
+                    logger.info("Recorder.start.record_task: Audio capture task exited.")
             self._task_manager.submit(record_task, env())
+            logger.info("Recorder.start: Audio capture task submitted.")
 
-    def _update_vu(self, array: np.array) -> None:
+    def connect_vu_readout(self, on_vu_update: Optional[Callable]) -> None:
+        """Connect the recorder to a VU ("voltage units"; input audio level) readout.
+
+        You'll only need this if you want to display a VU meter (input audio level)
+        in your GUI.
+
+        Also, you don't necessarily have to use this; you can also access the same values
+        in realtime from the `vu` property. This is just provided for the event-based
+        push convenience: your event handler is called automatically when the values change.
+
+        `on_vu_update`: 2-argument callable, signature `(instant: float, peak: float)`.
+                        Values are in dBFS.
+
+                            `instant` is the peak signal level from the current audio frame.
+
+                            `peak` is the held peak signal level, with the `peak_vu_hold` time.
+
+                        Return value is ignored.
+
+                        When first connected, called once for initialization purposes.
+                        While recording, called once per audio frame with the new signal level data.
+                        When recording stops, called once more (with -∞ dBFS, indicating silence).
+
+                        If you want to disconnect, use `on_vu_update=None`.
+        """
+        self.on_vu_update = on_vu_update
+        if self.on_vu_update is not None:
+            self.on_vu_update(self._vu_instant, self._vu_peak)
+
+    def _update_vu_readout(self, array: np.array) -> None:
         """Update the VU meter data. Called automatically once per audio frame when recording."""
         peak = audio_utils.linear_to_dBFS(np.max(np.abs(array)))  # latest buffer (or whatever we were received)
         self._vu_instant = peak
@@ -233,24 +292,43 @@ class Recorder:
         if (peak > self._vu_peak) or ((time_now - self._vu_last_peak_timestamp) / 10**9 >= self.vu_peak_hold):
             self._vu_peak = peak
             self._vu_last_peak_timestamp = time_now
+        if self.on_vu_update is not None:
+            self.on_vu_update(self._vu_instant, self._vu_peak)
 
-    def stop(self, _clear_task: bool = True) -> None:
+    def _clear_vu_readout(self) -> None:
+        """Clear the VU meter data, setting both instant and peak values to silence (-∞ dBFS).
+
+        Called automatically when the recorder stops.
+        """
+        self._vu_instant = -np.inf  # dBFS
+        self._vu_peak = -np.inf  # dBFS
+        if self.on_vu_update is not None:
+            self.on_vu_update(self._vu_instant, self._vu_peak)
+
+    def stop(self) -> None:
         """Stop recording.
 
         If not recording, do nothing.
 
-        When this function returns, you can `get_recorded_audio` to get your audio recording.
-
-        `_clear_task`: Internal flag used by the autostop functionality.
+        When this function returns, it may take a small amount of time for the recorder to actually stop.
+        To be sure that the recording is actually finished, `get_recorded_audio` is only safe to call
+        after the `is_recording` method returns `False`.
         """
+        logger.info("Recorder.stop: Stopping audio capture.")
         with self._recording_state_lock:
-            if not self.is_recording:
+            if not self._is_recording:
+                logger.info("Recorder.stop: This recorder is already stopped. Ignoring.")
                 return
+            logger.info("Recorder.stop: Stopping audio recorder.")
             self.recorder.stop()
-            self._vu_instant = -90.0
-            if _clear_task:
-                self._task_manager.clear(wait=True)  # cancel the recording task, and wait until it exits
-            self._vu_peak = -90.0
+            self._clear_vu_readout()
+            self._task_manager.clear()
+        logger.info("Recorder.stop: Done.")
+
+    def is_recording(self) -> bool:
+        """Return whether this audio recorder is currently capturing audio."""
+        with self._recording_state_lock:
+            return self._is_recording
 
     def get_recorded_audio(self, clear: bool = True) -> Optional[np.array]:
         """Return the recorded audio as an `np.array`.
@@ -273,11 +351,11 @@ class Recorder:
         To encode it as an audio file, pass both the data and the sample rate to `encode`, which see.
         """
         data = self.data
-        if self.data:
+        if self.data is not None:
             duration = len(data) / self.sample_rate  # -> seconds
             logger.info(f"Recorder.get_recorded_audio: returning {duration:0.6g}s of recorded audio.")
         else:
-            logger.info("Recorder.get_recorded_audio: no audio, returning `None`.")
+            logger.info("Recorder.get_recorded_audio: no audio recorded, returning `None`.")
         if clear:
             self.data = None
         return data

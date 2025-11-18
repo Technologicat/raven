@@ -135,18 +135,24 @@ class Player(Singleton):
 
         `stream`: a filelike (e.g. an `io.BytesIO` object).
         """
+        logger.info("Player.load: Loading audio stream to player.")
         try:
             pygame.mixer.music.load(stream)
         except pygame.error as exc:
             raise RuntimeError("Player.load: failed to load audio stream into player, reason {type(exc)}: {exc}") from exc
+        logger.info("Player.load: Successfully loaded.")
 
     def start(self) -> None:
         """Start playback of the loaded audio file."""
+        logger.info("Player.start: Starting audio playback.")
         pygame.mixer.music.play()
+        logger.info("Player.start: Done.")
 
     def stop(self) -> None:
         """Stop playback."""
+        logger.info("Player.stop: Stopping audio playback.")
         pygame.mixer.music.stop()
+        logger.info("Player.stop: Done.")
 
     def is_playing(self) -> bool:
         """Return whether the audio player is playing."""
