@@ -116,6 +116,7 @@ class Recorder:
         self.silence_threshold = silence_threshold  # dBFS
         self.autostop_timeout = autostop_timeout  # seconds
 
+        # `pvrecorder` is always mono ( asked the author here: https://github.com/Picovoice/pvrecorder/issues/146 )
         self.frame_length = frame_length
         self.recorder = pvrecorder.PvRecorder(frame_length=self.frame_length,
                                               device_index=self.device_index)

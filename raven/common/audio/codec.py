@@ -43,7 +43,7 @@ def encode(audio_data: Union[np.array, List[np.array]],
     `stream`: If `False` (default), return a `bytes` object containing the encoded audio file.
 
               If `True`, return a generator, which yields a separate `bytes` object for
-              the part of the encoded audio file that corresponds to one input array.
+              each part of the encoded audio file that corresponds to one input array.
               Finally, it yields one more `bytes` object, resulting from finalization.
     """
     if not isinstance(audio_data, list):
