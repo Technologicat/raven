@@ -17,8 +17,8 @@ import torch
 
 from tqdm import tqdm
 
-from ...common import audioutils
-from ...common import hfutil
+from ...common.audio import codec as audio_codec
+from ...common.hfutil import maybe_install_models
 
 server_config = None
 model = None
@@ -41,7 +41,7 @@ def init_module(config_module_name: str, device_string: str, dtype: Union[str, t
         model_name = server_config.speech_recognition_model
 
         logger.info(f"init_module: Ensuring model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}' is installed...")
-        hfutil.maybe_install_models(server_config.speech_recognition_model)
+        maybe_install_models(server_config.speech_recognition_model)
 
         logger.info(f"init_module: Loading model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}' on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
         loaded_model_device = torch.device(device_string)
@@ -122,10 +122,10 @@ def speech_to_text(stream,
         kwargs["prompt_condition_type"] = "all-segments"
         # kwargs["max_new_tokens"] -= (prompt_ids.shape[0] + 3)  # also the prompt tokens and "special start tokens" (TODO: whatever those are?) count toward the output limit
 
-    unused_metadata, numpy_audio_data = audioutils.decode(stream,
-                                                          target_sample_format="fltp",  # float
-                                                          target_sample_rate=processor.feature_extractor.sampling_rate,
-                                                          target_layout="mono")
+    unused_metadata, numpy_audio_data = audio_codec.decode(stream,
+                                                           target_sample_format="fltp",  # float
+                                                           target_sample_rate=processor.feature_extractor.sampling_rate,
+                                                           target_layout="mono")
 
     # # With high-level pipeline API
     # # TODO: Even the high-level API doesn't seem to return anything but the "text" field, though `return_timestamps=True`.

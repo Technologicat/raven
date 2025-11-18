@@ -45,11 +45,11 @@ def get_devices(capture_devices: bool = False) -> Tuple[str, ...]:
     return devices
 
 def main():
-    print(f"{colorizer.colorize('Playback', colorizer.Style.BRIGHT)} devices detected:")
+    print(f"{colorizer.colorize('▶ Playback', colorizer.Style.BRIGHT, colorizer.Fore.GREEN)} devices detected:")
     for device_name in get_devices():
         print(f"    {device_name}")
 
-    print(f"{colorizer.colorize('Capture', colorizer.Style.BRIGHT)} devices detected:")
+    print(f"{colorizer.colorize('⏺ Capture', colorizer.Style.BRIGHT, colorizer.Fore.RED)} devices detected:")
     for device_name in get_devices(capture_devices=True):
         print(f"    {device_name}")
 

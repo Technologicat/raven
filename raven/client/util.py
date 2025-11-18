@@ -29,7 +29,7 @@ import pygame  # for audio playback (text to speech) support
 from unpythonic import equip_with_traceback
 from unpythonic.env import env as envcls
 
-from ..common import audioutils
+from ..common.audio import recorder as audio_recorder
 from ..common import bgtask
 
 api_initialized = False
@@ -110,7 +110,7 @@ def initialize_api(raven_server_url: str,
         logger.info(f"initialize_api: Validating STT audio capture device '{stt_capture_audio_device}' (from `raven.client.config`).")
     else:
         logger.info("initialize_api: Detecting default STT audio capture device. If you want to use a non-default device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
-    stt_capture_audio_device = audioutils.Recorder.validate_device(stt_capture_audio_device)
+    stt_capture_audio_device = audio_recorder.validate_capture_device(stt_capture_audio_device)
     api_config.stt_capture_audio_device = stt_capture_audio_device  # used when instantiating an `AudioRecorder`
 
     api_initialized = True
