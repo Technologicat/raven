@@ -303,11 +303,11 @@ To connect *SillyTavern* to the `tts` module of *Raven-server*, to use it as ST'
 
 - Open ST, and go into _Extensions ⊳ TTS_.
 - Set the TTS provider to _OpenAI Compatible_.
-- Set the provider endpoint to `http://127.0.0.1:5100/v1/audio/speech`.
+- Set the provider endpoint to `http://localhost:5100/v1/audio/speech`.
 
 To test, you can use `af_nova` as the voice.
 
-To view a full list of available voices, point a browser to `http://127.0.0.1:5100/v1/audio/voices`.
+To view a full list of available voices, point a browser to `http://localhost:5100/v1/audio/voices`.
 
 The first letter of a voice name is the language code; the second letter is 'f' for female, 'm' for male.
 

@@ -279,7 +279,7 @@ To import PDF into BibTeX:
 
 ```bash
 $(pdm venv activate)
-raven-pdf2bib http://127.0.0.1:5000 -i some_input_directory -s success.bib -f failed.bib -l log.txt -o done_success -of done_failed
+raven-pdf2bib http://localhost:5000 -i some_input_directory -s success.bib -f failed.bib -l log.txt -o done_success -of done_failed
 ```
 
 The "*http://...*" argument is the URL of an LLM serving an OpenAI-compatible API (streaming mode).
