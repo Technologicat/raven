@@ -1,4 +1,4 @@
-"""A simple mono audio recorder for STT (speech to text), with background operation, and autostop on silence."""
+"""A simple mono audio recorder for STT (speech to text), with background operation, autostop on silence, and VU metering in dBFS."""
 
 __all__ = ["validate_capture_device",
            "Recorder"]
