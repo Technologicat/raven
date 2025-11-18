@@ -17,23 +17,28 @@ client_userdata_dir = server_config.server_userdata_dir
 raven_server_url = "http://localhost:5100"
 raven_api_key_file = client_userdata_dir / "api_key.txt"
 
-# Which audio device to use for TTS speech.
+# Which audio playback device to use for TTS (text to speech, speech synthesizer).
 #
 # This is the device name as a string.
 # For available devices on your system, run `raven-check-audio-devices`.
 #
-# The special value `None` uses the system's default device.
+# The special value `None` uses the first available device
+# (first in the order listed by `raven-check-audio-devices`).
 #
 tts_playback_audio_device = None
 # tts_playback_audio_device = "Built-in Audio Analog Stereo"
 # tts_playback_audio_device = "M Audio Duo Analog Stereo"
 
-# Which audio device to use for STT recording (speech to text, speech recognition).
+# Which audio capture device to use for STT (speech to text, speech recognition).
 #
 # This is the device name as a string.
 # For available devices on your system, run `raven-check-audio-devices`.
 #
-# The special value `None` uses the first NON-monitoring audio capture device.
+# The special value `None` uses the first NON-monitoring audio capture device
+# (first in the order listed by `raven-check-audio-devices`).
+#
+# (A monitoring capture device is a capture device that records the audio
+#  that is going to a playback device.)
 #
 stt_capture_audio_device = None
 # stt_capture_audio_device = "Built-in Audio Analog Stereo"

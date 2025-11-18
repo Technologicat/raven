@@ -92,9 +92,10 @@ def initialize_api(raven_server_url: str,
 
     # Initialize audio player for TTS audio playback
     if tts_playback_audio_device is not None:
-        logger.info(f"initialize_api: Initializing TTS audio playback on non-default audio playback device '{tts_playback_audio_device}' (from `raven.client.config`).")
+        logger.info(f"initialize_api: Validating TTS audio playback device '{tts_playback_audio_device}' (from `raven.client.config`).")
     else:
-        logger.info("initialize_api: Initializing TTS audio playback on default audio playback device. If you want to use a non-default device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+        logger.info("initialize_api: Using default TTS audio playback device. If you want to use a non-default device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+    tts_playback_audio_device = audio_player.validate_playback_device(tts_playback_audio_device)
     api_config.audio_player = audio_player.Player(frequency=api_config.audio_frequency,
                                                   channels=2,
                                                   buffer_size=api_config.audio_buffer_size,
@@ -105,9 +106,11 @@ def initialize_api(raven_server_url: str,
     if stt_capture_audio_device is not None:
         logger.info(f"initialize_api: Validating STT audio capture device '{stt_capture_audio_device}' (from `raven.client.config`).")
     else:
-        logger.info("initialize_api: Detecting default STT audio capture device. If you want to use a non-default device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+        logger.info("initialize_api: Using default STT audio capture device. If you want to use a non-default device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
     stt_capture_audio_device = audio_recorder.validate_capture_device(stt_capture_audio_device)
-    api_config.stt_capture_audio_device = stt_capture_audio_device  # used when instantiating an `AudioRecorder`
+    api_config.audio_recorder = audio_recorder.Recorder(frame_length=512,  # TODO: need to be longer?
+                                                        device_name=stt_capture_audio_device,
+                                                        executor=executor)
 
     api_initialized = True
 

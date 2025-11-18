@@ -17,6 +17,7 @@ import numpy as np
 
 import pvrecorder
 
+from unpythonic import memoize
 from unpythonic.env import env
 
 from .. import bgtask
@@ -35,6 +36,7 @@ from . import utils as audio_utils
 # that record the audio that is going to an audio output),
 # while `pvrecorder` does.
 #
+@memoize
 def get_available_devices() -> List[str]:
     """Return a list of the names of available audio capture devices."""
     return list(pvrecorder.PvRecorder.get_available_devices())
@@ -55,24 +57,24 @@ def validate_capture_device(device_name: Optional[str]) -> str:
 
     See the command-line utility `raven-check-audio-devices` to list audio devices on your system.
     """
-    device_names = pvrecorder.PvRecorder.get_available_devices()
+    device_names = get_available_devices()
     if device_name is not None:  # User-specified device name -> device index as used by `pvrecorder`
         try:
             device_names.index(device_name)  # we just want to check if it's there
         except IndexError:
-            error_msg = f"Recorder.validate_capture_device: No such audio capture device '{device_name}'."
+            error_msg = f"validate_capture_device: No such audio capture device '{device_name}'."
             logger.error(error_msg)
             raise ValueError(error_msg)
-        logger.info(f"Recorder.validate_capture_device: Using audio capture device '{device_name}'.")
+        logger.info(f"validate_capture_device: Using audio capture device '{device_name}'.")
     else:  # Find first NON-monitoring audio capture device
         for device_name in device_names:
             if "monitor of" not in device_name.lower():
                 break
         else:
-            error_msg = "Recorder.validate_capture_device: No NON-monitoring audio capture device found on this system. If you want to use a MONITORING device for recording, please select it explicitly."
+            error_msg = "validate_capture_device: No NON-monitoring audio capture device found on this system. If you want to use a MONITORING device for recording, please select it explicitly."
             logger.error(error_msg)
             raise ValueError(error_msg)
-        logger.info(f"Recorder.validate_capture_device: Using default audio capture device '{device_name}'.")
+        logger.info(f"validate_capture_device: Using first available audio capture device '{device_name}'.")
     return device_name
 
 class Recorder:
@@ -81,7 +83,7 @@ class Recorder:
                  device_name: Optional[str],
                  vu_peak_hold: float = 1.0,
                  silence_threshold: Optional[float] = None,
-                 autostop_timeout: Optional[float] = 1.0,
+                 autostop_timeout: Optional[float] = 1.5,
                  executor: Optional[concurrent.futures.Executor] = None):
         """A simple audio recorder, mainly for STT purposes.
 
@@ -125,10 +127,9 @@ class Recorder:
                             that the user has stopped speaking).
         """
         device_name = validate_capture_device(device_name)  # autodetect if `None`, and sanity check in any case
-        device_names = pvrecorder.PvRecorder.get_available_devices()
+        device_names = get_available_devices()
         assert device_name in device_names  # we only get here if the validation succeeded
         self.device_name = device_name  # for information only
-        self.device_index = device_names.index(device_name)  # map device name to device index as used by `pvrecorder`
 
         self.silence_threshold = silence_threshold  # dBFS
         self.autostop_timeout = autostop_timeout  # seconds
@@ -136,7 +137,7 @@ class Recorder:
         # `pvrecorder` is always mono ( asked the author here: https://github.com/Picovoice/pvrecorder/issues/146 )
         self.frame_length = frame_length
         self.recorder = pvrecorder.PvRecorder(frame_length=self.frame_length,
-                                              device_index=self.device_index)
+                                              device_index=device_names.index(device_name))
 
         self.sample_rate = None  # sample rate (Hz) of last recording
         self._start_timestamp = None  # recording start time, for initial background noise detection
