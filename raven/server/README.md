@@ -290,7 +290,7 @@ Some modules have been removed:
 
 Particularly:
 
-**STT support is incompatible.** The is an `stt` module (which uses [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo)), but with UX and API redesigned to fit the Raven constellation. The client is expected to record the audio, and send the complete recording to the server for transcription.
+**STT support is incompatible.** There is an `stt` module (which uses [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo)), but with UX and API redesigned to fit the Raven constellation. The client is expected to record the audio, and send the complete recording to the server for transcription.
 
 **No image captioning support.** Potentially interesting, if we expand other components of Raven to handle image analysis later.
 
