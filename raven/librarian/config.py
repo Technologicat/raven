@@ -127,6 +127,8 @@ gui_config = env(  # ----------------------------------------
                  ai_warning_h=42,
                  chat_controls_h=42,
                  chat_panel_w=(1920 // 2),  # net width 960 -> gross width with borders = this + 2 * 8 = 976
+                 vu_meter_w=8,  # mic VU meter ("voltage units", audio input level)
+                 vu_meter_h=26,  # same height as toolbuttons
                  chat_text_right_margin_w=150,  # 100 would be mostly nice, but the thinking trace toggle button needs some space too.
                  toolbar_inner_h=30,  # Width of the content area of the toolbar below the chat.
                  toolbar_separator_w=12,  # Width of a section separator spacer in the toolbar.

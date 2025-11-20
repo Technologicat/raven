@@ -49,6 +49,7 @@ with timer() as tim:
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
     from ..common.gui import utils as guiutils
+    from ..common.gui.vumeter import DPGVUMeter
 
     from . import appstate
     from .chat_controller import DPGChatController
@@ -220,8 +221,8 @@ with timer() as tim:
             w = base_w + extra_w
             h = base_h + extra_h
             return w, h
-        def _get_chat_field_base_width() -> int:
-            return gui_config.chat_panel_w - 2 * (gui_config.toolbutton_w + 8)
+        def _get_chat_field_base_width() -> int:  # This is accounting for other controls in the same section (mic button, VU meter, send button).
+            return gui_config.chat_panel_w - (2 * (gui_config.toolbutton_w + 8) + (gui_config.vu_meter_w + 8))
         def _get_chat_field_width(main_window_w: int) -> int:
             extra_w = main_window_w - gui_config.main_window_w
             base_w = _get_chat_field_base_width()
@@ -255,72 +256,63 @@ with timer() as tim:
                                       no_scrollbar=True,
                                       no_scroll_with_mouse=True):
                     with dpg.group(horizontal=True):
-                        def record_audio_message_button_callback() -> None:
+                        def send_message_to_ai_callback() -> None:
+                            user_message_text = dpg.get_value("chat_field")
+                            dpg.set_value("chat_field", "")
+                            chat_controller.chat_round(user_message_text)
+
+                        def record_audio_message_callback() -> None:
                             if not api.api_config.audio_recorder.is_recording():
-                                start_recording_audio_message_callback()
+                                start_recording_audio_message()
                             else:
-                                stop_recording_audio_message_callback()
-                        def start_recording_audio_message_callback() -> None:
+                                stop_recording_audio_message()
+                        def start_recording_audio_message() -> None:
                             # Acknowledge in GUI
                             pulsating_red_text_glow.reset()  # start new pulsation cycle
                             dpg.bind_item_theme(record_audio_message_button, "my_pulsating_red_text_theme")  # tag
                             dpg.set_value(record_audio_message_tooltip_text, "Stop speaking and send to AI [Ctrl+Shift+Enter]")
 
                             # Actually start capturing audio
-                            api.api_config.audio_recorder.start(on_autostop=stop_recording_audio_message_callback)
-                        def stop_recording_audio_message_callback() -> None:
+                            api.api_config.audio_recorder.start(on_autostop=stop_recording_audio_message)
+                        def stop_recording_audio_message() -> None:
                             # Acknowledge in GUI
                             dpg.bind_item_theme(record_audio_message_button, "disablable_button_theme")  # tag
                             dpg.set_value(record_audio_message_tooltip_text, "Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
 
                             # Stop recording (if still recording; we may have been triggered by autostop)
-                            logger.info("stop_recording_audio_message_callback: Stopping audio recorder.")
+                            logger.info("stop_recording_audio_message: Stopping audio recorder.")
                             api.api_config.audio_recorder.stop()
                             for _ in range(20):  # Wait until recording actually stops
                                 if not api.api_config.audio_recorder.is_recording():
                                     break
                                 time.sleep(0.05)
                             else:
-                                logger.error("stop_recording_audio_message_callback: Timed out while waiting for audio recorder to respond to stop command.")
+                                logger.error("stop_recording_audio_message: Timed out while waiting for audio recorder to respond to stop command.")
                                 return
 
                             # Get the captured audio
-                            logger.info("stop_recording_audio_message_callback: Getting recorded audio.")
+                            logger.info("stop_recording_audio_message: Getting recorded audio.")
                             audio = api.api_config.audio_recorder.get_recorded_audio()
                             if audio is None:
-                                logger.warning("stop_recording_audio_message_callback: Got no audio. Cancelling.")
+                                logger.warning("stop_recording_audio_message: Got no audio. Cancelling.")
                                 return
                             assert audio is not None
 
                             # Transcribe the audio
-                            logger.info("stop_recording_audio_message_callback: Transcribing recorded audio.")
+                            logger.info("stop_recording_audio_message: Transcribing recorded audio.")
                             user_message_text = api.stt_transcribe_array(audio_data=audio,
                                                                          sample_rate=api.api_config.audio_recorder.sample_rate,  # available after at least one recording has started
                                                                          prompt="This is a conversation between an AI and a user.")  # TODO: prompt-engineer the STT transcription prompt (e.g. detect proper names from chat log)
                             logger.info(f"Transcribed: '{user_message_text}'")  # TODO: privacy-sensitive log message? (The server has some, too.)
 
                             # Send the message to AI
-                            logger.info("stop_recording_audio_message_callback: Sending transcribed text to AI, as the user's message.")
-                            chat_controller.chat_round(user_message_text)
-
-                        def send_message_to_ai_callback() -> None:
-                            user_message_text = dpg.get_value("chat_field")
-                            dpg.set_value("chat_field", "")
+                            logger.info("stop_recording_audio_message: Sending transcribed text to AI, as the user's message.")
                             chat_controller.chat_round(user_message_text)
 
                         dpg.add_input_text(tag="chat_field",
                                            default_value="",
                                            hint="[ask the AI questions here] [Ctrl+Space to focus]",
                                            width=_get_chat_field_base_width())
-
-                        record_audio_message_button = dpg.add_button(label=fa.ICON_MICROPHONE,
-                                                                     callback=record_audio_message_button_callback,
-                                                                     width=gui_config.toolbutton_w,
-                                                                     tag="record_audio_message_button")  # TODO: disable this button while AI is writing
-                        dpg.bind_item_font("record_audio_message_button", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("record_audio_message_button", "disablable_button_theme")  # tag
-                        with dpg.tooltip("record_audio_message_button") as record_audio_message_tooltip:  # tag
-                            record_audio_message_tooltip_text = dpg.add_text("Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
 
                         dpg.add_button(label=fa.ICON_PAPER_PLANE,
                                        callback=send_message_to_ai_callback,
@@ -330,6 +322,25 @@ with timer() as tim:
                         dpg.bind_item_theme("chat_send_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("chat_send_button"):  # tag
                             dpg.add_text("Send to AI [Enter]")
+
+                        record_audio_message_button = dpg.add_button(label=fa.ICON_MICROPHONE,
+                                                                     callback=record_audio_message_callback,
+                                                                     width=gui_config.toolbutton_w,
+                                                                     tag="record_audio_message_button")  # TODO: disable this button while AI is writing
+                        dpg.bind_item_font("record_audio_message_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_theme("record_audio_message_button", "disablable_button_theme")  # tag
+                        with dpg.tooltip("record_audio_message_button") as record_audio_message_tooltip:  # tag
+                            record_audio_message_tooltip_text = dpg.add_text("Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
+                        mic_vu_meter = DPGVUMeter(width=gui_config.vu_meter_w,
+                                                  height=gui_config.vu_meter_h,
+                                                  border=1,
+                                                  min_value=-90.0,
+                                                  max_value=0.0,
+                                                  yellow_start=-24.0,
+                                                  red_start=-6.0,
+                                                  threshold_value=-40.0,  # TODO: configurable autostop threshold
+                                                  tooltip_text="Mic input level (dBFS)\nYellow = -24; red = -6; gray line = -40 (autostop threshold).")
+                        api.api_config.audio_recorder.connect_vu_readout(mic_vu_meter.update)
 
             with dpg.group():  # right column: AI avatar
                 avatar_panel_w, avatar_panel_h = _get_avatar_panel_base_size()
@@ -791,7 +802,7 @@ def librarian_hotkeys_callback(sender, app_data):
     # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_Return:
-            record_audio_message_button_callback()
+            record_audio_message_callback()
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:
