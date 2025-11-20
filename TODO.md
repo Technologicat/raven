@@ -86,13 +86,25 @@
   - Documentation:
     - Write Raven-Librarian user manual
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
+    - Privacy: audio recordings
+      - only recorded when the user clicks the mic button
+      - only used for STT
+      - never saved to disk
+      - transcript shown *for the user's information* in the client log
 
   - Maybe next:
     - llmclient: refactor character and prompt config into `raven.librarian.config`
     - STT (speech to text, speech recognition):
-      - Add VU meter to GUI (simple vertical bar, 2-4 pixels wide, with green/yellow/red sections and a white line for the peak hold value)
+      - `raven-transcribe`: command-line tool
+        - from audio file or from mic
+        - -p "prompt prompt prompt"
+        - write transcribed text to stdout by default, to file by  -o filename.txt
+      - do we need a GUI indicator for the autostop timeout? (mini progress bar or something)
       - Configurable silence level, autostop timeout, VU peak hold time
       - Extract proper names from chat log (use spaCy NER), fill a comma-separated list of those into the STT prompt
+      - Add voice command interface, e.g. "Raven command subtitles off"
+        - Split transcribed text to words, check the first two words; on match, scrub those two words, and trigger the command processor for the rest.
+        - Chaining commands: split to sentences?
       - Edit spoken message before sending?
     - Switch to next/previous branch, when switching a message that is not currently last in the linearized view:
       - Pick the most recent continuation and show it, if any continuations exist
