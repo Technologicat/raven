@@ -85,21 +85,33 @@
 - Librarian
   - Documentation:
     - Write Raven-Librarian user manual
-    - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
-    - Privacy: audio recordings
+    - Privacy: audio recording for STT (speech to text)
       - only recorded when the user clicks the mic button
-      - only used for STT
+      - only used for locally hosted STT, and then discarded
       - never saved to disk
+      - never sent anywhere (except to your configured Raven-server for processing)
       - transcript shown *for the user's information* in the client log
+      - see `raven.server.modules.stt`, and `stt_*` functions in `raven.client.api` (and their use sites)
+    - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
 
   - Maybe next:
+    - Fix handling of LLM greeting
+      - Currently only populated at factory reset, which is wrong
+      - Should use the message from `raven.librarian.config` whenever a *new* chat is started
+        - If the configured message text matches an existing greeting (scan the children of the system prompt node), use the existing node
+      - Keep the existing message for existing chats (no need to do anything?)
+      - Need to update:
+        - update `raven.librarian.appstate._scan_for_new_chat_head`
+        - add `raven.librarian.appstate._refresh_new_chat_head` (like `_refresh_system_prompt`)
+        - docstring of `raven.librarian.llmclient.setup` (used for new chats, not just for initializing the chat history)
+        - `raven.librarian.chat_controller` checks for `node_id != app_state["new_chat_HEAD"]` should instead check whether `node_id` is in the children of the system prompt node (if it is, it's a greeting)
     - STT (speech to text, speech recognition):
+      - Configurable silence level, autostop timeout, VU peak hold time
       - `raven-transcribe`: command-line tool
         - from audio file or from mic
         - -p "prompt prompt prompt"
         - write transcribed text to stdout by default, to file by  -o filename.txt
       - do we need a GUI indicator for the autostop timeout? (mini progress bar or something)
-      - Configurable silence level, autostop timeout, VU peak hold time
       - Extract proper names from chat log (use spaCy NER), fill a comma-separated list of those into the STT prompt
       - Add voice command interface, e.g. "Raven command subtitles off"
         - Split transcribed text to words, check the first two words; on match, scrub those two words, and trigger the command processor for the rest.
