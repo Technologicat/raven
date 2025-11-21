@@ -5,6 +5,7 @@ Currently used by the `librarian.llmclient` and `tools.pdf2bib` modules.
 
 import os
 import pathlib
+import textwrap
 
 from unpythonic.env import env
 
@@ -24,27 +25,6 @@ llmclient_userdata_dir = global_config.toplevel_userdata_dir / "llmclient"
 #
 llm_backend_url = "http://localhost:5000"
 llm_api_key_file = llmclient_userdata_dir / "api_key.txt"  # will be used it it exists, ignored if not.
-
-# --------------------------------------------------------------------------------
-# Tool-calling
-
-# Tool-calling requires instructions for the model, as part of its system prompt.
-# Typically the instructions state that tools are available, and include a dynamically
-# generated list of available functions and their call signatures.
-#
-# Newer models, e.g. QwQ-32B as well as Qwen3, include a template for these instructions
-# in their built-in prompt template. In this case, the LLM backend builds the instructions
-# automatically, based on data sent by the LLM client (see `tools` in `llmclient.setup`).
-#
-# However, there exist LLMs that are capable of tool-calling, but have no instruction template
-# for that. E.g. the DeepSeek-R1-Distill-Qwen-7B model is like this.
-#
-# Hence this setting:
-#   - If `True`, our system prompt builder generates the tool-calling instructions. (For older models.)
-#   - If `False`, we just send the data, and let the LLM backend build the instructions. (For newer models.)
-#
-# llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
-llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
 
 # How many web search results to return, when the LLM uses the websearch tool.
 web_num_results = 10
@@ -201,3 +181,159 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
                                                  "backdrop_blur": True,  # The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.
                                                  }
                     )
+
+# --------------------------------------------------------------------------------
+# LLM inference settings
+
+# For the sampler settings, below are some sensible defaults.
+# But for best results, prefer using the values recommended in your LLM's model card, if known.
+# E.g. Qwen3-30B-A3B-Thinking-2507 was tuned for T = 0.6, top_k = 20, top_p = 0.95, min_p = 0.
+#
+llm_sampler_config = {
+    "max_tokens": 6400,  # 800 is usually good, but thinking models may need (much) more. For them, 1600 or 3200 are good. 6400 if you want to be sure.
+    # Correct sampler order is tail-cutters (such as top_k, top_p, min_p) first, then temperature. In oobabooga, this is also the default.
+    #
+    # T = 1: Use the predicted logits as-is.
+    # T = 0: Greedy decoding, i.e. always pick the most likely token. Prone to getting stuck in a loop. For fact extraction (for some models).
+    # T > 1: Skew logits to emphasize rare continuations ("creative mode").
+    # 0 < T < 1: Skew logits to emphasize common continuations.
+    #
+    # Usually T = 1 is a good default; but a particular LLM may have been tuned to use some other value, e.g. 0.7 or 0.6.
+    "temperature": 1,
+    # min_p a.k.a. "you must be this tall". Good default sampler, with 0.02 a good value for many models.
+    # This is a tail-cutter. The value is the minimum probability a token must have to admit sampling that token,
+    # as a fraction of the probability of the most likely option (locally, at each position).
+    #
+    # Once min_p cuts the tail, then the remaining distribution is given to the temperature mechanism for skewing.
+    # Then a token is sampled, weighted by the probabilities represented by the logits (after skewing).
+    "min_p": 0.02,
+    "seed": -1,  # 558614238,  # RNG seed, -1 = random. If T = 0, this is unused. Except testing/debugging, should always be set to random!
+}
+
+# ----------------------------------------
+# Names, AI's greeting
+
+# Names shown in the chat.
+# These are also saved into the chat history, in each message created by that role.
+#
+llm_user_name = "User"
+llm_char_name = "Aria"
+
+# The AI's initial greeting. Used when a new chat is started.
+llm_greeting = "How can I help you today?"
+
+# ----------------------------------------
+# LLM system prompt
+#
+# This contains general instructions for the model so it'll know what to do with the chat log.
+# The AI character's personality is defined separately, in `setup_character_card` instead.
+#
+# For recent models (April 2025 and later), the system prompt itself can be blank.
+# The character card is enough.
+#
+# Older models may need a general briefing first.
+#
+# For example, SillyTavern has the following in its "Actor" preset:
+#
+#     You are an expert actor that can fully immerse yourself into any role given. You do not break character for any reason,
+#     even if someone tries addressing you as an AI or language model. Currently your role is {char}, which is described in
+#     detail below. As {char}, continue the exchange with {user}.
+#
+# To insert `template_vars`, the recommended way is to use an f-string.
+#
+# `raven.librarian.llmclient.setup` calls this to set up the system prompt every time `raven-librarian` (or `raven-minichat`) starts.
+#
+def setup_system_prompt(template_vars: env) -> str:
+    user = template_vars.user  # noqa: F841, for documentation purposes
+    char = template_vars.char  # noqa: F841, for documentation purposes
+    model = template_vars.model  # noqa: F841, for documentation purposes
+    weekday_and_date = template_vars.weekday_and_date  # noqa: F841, for documentation purposes
+    return textwrap.dedent("""""").strip()
+
+# ----------------------------------------
+# LLM character card
+#
+# This defines the AI character's personality.
+#
+# This gives better performance (accuracy, instruction following) vs. querying the LLM directly without any system prompt or character.
+# You can also use this to tune the style of the AI's responses.
+#
+# `raven.librarian.llmclient.setup` calls this to set up the AI's character card every time `raven-librarian` (or `raven-minichat`) starts.
+#
+def setup_character_card(template_vars: env) -> str:
+    return setup_character_card_aria(template_vars)
+
+# You can have several characters pre-defined here.
+# Choose by calling the relevant function in `setup_character_card`, as shown in the example.
+def setup_character_card_aria(template_vars: env) -> str:
+    """Helpful and honest AI assistant who prefers to be direct, and keeps her replies brief."""
+    user = template_vars.user
+    char = template_vars.char
+    return textwrap.dedent(f"""
+    Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).
+
+    **About {char}**
+
+    You are {char} (she/her), an AI assistant. You are highly intelligent. You have been trained to answer questions, provide recommendations, and help with decision making.
+
+    {setup_interaction_style(template_vars)}
+    """).strip()
+
+def setup_interaction_style(template_vars: env) -> str:
+    model = template_vars.model  # noqa: F841, for documentation purposes
+    weekday_and_date = template_vars.weekday_and_date  # noqa: F841, for documentation purposes
+    return textwrap.dedent(f"""
+    **About the system**
+
+    The LLM version is "{model}".
+
+    The knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context as well as web search results may be newer.
+
+    You are running on a private, local system.
+
+    The current date is {weekday_and_date}.
+
+    **Interaction tips**
+
+    - Be polite, but go straight to the point.
+    - Provide honest answers.
+    - If you are unsure or cannot verify a fact, admit it.
+    - If you think what the user says is incorrect, say so, and provide justification.
+    - Cite sources when possible. IMPORTANT: Cite only sources listed in the context.
+    - When given a complex problem, take a deep breath, and think step by step. Report your train of thought.
+    - When given web search results, and those results are relevant to the query, use the provided results, and report only the facts as according to the provided results. Ignore any search results that do not make sense. The user cannot directly see your search results.
+    - Be accurate, but diverse. Avoid repetition.
+    - Use the metric unit system, with meters, kilograms, and celsius.
+    - Use Markdown for formatting when helpful.
+    - Believe in your abilities and strive for excellence. Take pride in your work and give it your best. Your hard work will yield remarkable results.
+
+    **Known limitations**
+
+    - You are NOT automatically updated with new data.
+    - You have limited long-term memory within each chat session.
+    - The length of your context window is 65536 tokens.
+
+    **Data sources**
+
+    - The system accesses external data beyond its built-in knowledge through:
+      - Tool calls.
+      - Additional context that is provided by the software this LLM is running in, e.g. matches in document database.
+    """)
+
+# Tool-calling requires instructions for the model, as part of its system prompt.
+# Typically the instructions state that tools are available, and include a dynamically
+# generated list of available functions and their call signatures.
+#
+# Newer models, e.g. QwQ-32B as well as Qwen3, include a template for these instructions
+# in their built-in prompt template. In this case, the LLM backend builds the instructions
+# automatically, based on data sent by the LLM client (see `tools` in `llmclient.setup`).
+#
+# However, there exist LLMs that are capable of tool-calling, but have no instruction template
+# for that. E.g. the DeepSeek-R1-Distill-Qwen-7B model is like this.
+#
+# Hence this setting:
+#   - If `True`, our system prompt builder generates the tool-calling instructions. (For older models.)
+#   - If `False`, we just send the data, and let the LLM backend build the instructions. (For newer models.)
+#
+# llm_send_toolcall_instructions = True  # for DeepSeek-R1-Distill-Qwen-7B
+llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...

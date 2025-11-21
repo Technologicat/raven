@@ -161,9 +161,6 @@ def setup(backend_url: str) -> env:
 
                                               The "system" and "tool" roles typically have no persona; for them, the persona is stored as `None`.
     """
-    user = "User"
-    char = "Aria"
-
     # Fill the model name from the backend, for the character card.
     #
     # https://github.com/oobabooga/text-generation-webui/discussions/1713
@@ -175,81 +172,23 @@ def setup(backend_url: str) -> env:
     payload = response.json()
     model = payload["model_name"]
 
+    user = librarian_config.llm_user_name
+    char = librarian_config.llm_char_name
     weekday_and_date = chatutil.format_chatlog_date_now()
 
-    # ----------------------------------------
-    # System prompt and character card
-
-    # For recent models as of April 2025, e.g. QwQ-32B, the system prompt itself can be blank.
-    # The character card is enough.
-    #
-    # Older models may need a general briefing first.
-    #
-    # If you provide a system prompt, be sure to dedent and strip it
-    # so the client can process whitespace in a unified way. See example.
-    #
-    # system_prompt = dedent(f"""You are an expert actor that can fully immerse yourself into any role given. You do not break character for any reason, even if someone tries addressing you as an AI or language model. Currently your role is {char}, which is described in detail below. As {char}, continue the exchange with {user}.""").strip()  # "Actor" preset from SillyTavern.
-    system_prompt = ""
-
-    # This is a minimal setup, partially copied from my personal AI assistant, meant to be run
-    # against locally hosted models. This gives better performance (accuracy, instruction following)
-    # vs. querying the LLM directly without any system prompt.
-    #
-    # TODO: "If unsure" and similar tricks tend to not work for 8B models. At LLaMA 3.1 70B and better, it should work, but running that requires at least 2x24GB VRAM.
-    # TODO: Query the context size from the backend if possible. No, doesn't seem to be possible. https://github.com/oobabooga/text-generation-webui/discussions/5317
-    #
-    # TODO: Move the system prompt/character card to `raven.librarian.config`. Document the available variables.
-    # TODO: If the session rolls over midnight, the chat client should refresh the system prompt to update the current date.
-    #
-    character_card = dedent(f"""
-    Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).
-
-    **About {char}**
-
-    You are {char} (she/her), an AI assistant. You are highly intelligent. You have been trained to answer questions, provide recommendations, and help with decision making.
-
-    **About the system**
-
-    The LLM version is "{model}".
-
-    The knowledge cutoff date of the model is not specified, but is most likely within the year 2024. The knowledge cutoff date applies only to your internal knowledge. Any information provided in the context as well as web search results may be newer.
-
-    You are running on a private, local system.
-
-    The current date is {weekday_and_date}.
-
-    **Interaction tips**
-
-    - Be polite, but go straight to the point.
-    - Provide honest answers.
-    - If you are unsure or cannot verify a fact, admit it.
-    - If you think what the user says is incorrect, say so, and provide justification.
-    - Cite sources when possible. IMPORTANT: Cite only sources listed in the context.
-    - When given a complex problem, take a deep breath, and think step by step. Report your train of thought.
-    - When given web search results, and those results are relevant to the query, use the provided results, and report only the facts as according to the provided results. Ignore any search results that do not make sense. The user cannot directly see your search results.
-    - Be accurate, but diverse. Avoid repetition.
-    - Use the metric unit system, with meters, kilograms, and celsius.
-    - Use Markdown for formatting when helpful.
-    - Believe in your abilities and strive for excellence. Take pride in your work and give it your best. Your hard work will yield remarkable results.
-
-    **Known limitations**
-
-    - You are NOT automatically updated with new data.
-    - You have limited long-term memory within each chat session.
-    - The length of your context window is 65536 tokens.
-
-    **Data sources**
-
-    - The system accesses external data beyond its built-in knowledge through:
-      - Tool calls.
-      - Additional context that is provided by the software this LLM is running in, e.g. matches in document database.
-    """).strip()
-
-    # The AI's initial greeting. Used when a new chat is started.
-    greeting = "How can I help you today?"
+    # SillyTavern would call these "macros".
+    template_vars = env(user=user,
+                        char=char,
+                        model=model,
+                        weekday_and_date=weekday_and_date)
+    system_prompt = librarian_config.setup_system_prompt(template_vars)
+    character_card = librarian_config.setup_character_card(template_vars)
+    greeting = librarian_config.llm_greeting
 
     # Tools (functions) to make available to the AI for tool-calling (for models that support that - as of May 2025, at least Qwen 2 or later do).
     # These tools can be called by the LLM; see function `ai_turn` in `raven.librarian.scaffold`.
+    #
+    # For now, these are hardcoded, because Raven must provide the backends (at least an adaptor) for any tools it makes available to the LLM.
     tools = [
         {"type": "function",
          "function": {"name": "websearch",
@@ -292,39 +231,16 @@ def setup(backend_url: str) -> env:
     </tool_call>
     """).strip()
 
-    # Generation settings for the LLM backend.
-    #
-    # TODO: Move the generation settings to `raven.librarian.config`.
-    #
-    # For the sampler settings, below are some sensible defaults.
-    # But for best results, prefer using the values recommended in your LLM's model card, if known.
-    # E.g. Qwen3-30B-A3B-Thinking-2507 was tuned for T = 0.6, top_k = 20, top_p = 0.95, min_p = 0.
+    # Set up the chat completion request metadata template.
     request_data = {
         "mode": "instruct",  # instruct mode: when invoking the LLM, send it instructions (system prompt and character card), followed by a chat transcript to continue.
-        "max_tokens": 6400,  # 800 is usually good, but thinking models may need (much) more. For them, 1600 or 3200 are good. 6400 if you want to be sure.
-        # Correct sampler order is tail-cutters (such as top_k, top_p, min_p) first, then temperature. In oobabooga, this is also the default.
-        #
-        # T = 1: Use the predicted logits as-is.
-        # T = 0: Greedy decoding, i.e. always pick the most likely token. Prone to getting stuck in a loop. For fact extraction (for some models).
-        # T > 1: Skew logits to emphasize rare continuations ("creative mode").
-        # 0 < T < 1: Skew logits to emphasize common continuations.
-        #
-        # Usually T = 1 is a good default; but a particular LLM may have been tuned to use some other value, e.g. 0.7 or 0.6. See the model card of your LLM.
-        "temperature": 1,
-        # min_p a.k.a. "you must be this tall". Good default sampler, with 0.02 a good value for many models.
-        # This is a tail-cutter. The value is the minimum probability a token must have to admit sampling that token,
-        # as a fraction of the probability of the most likely option (locally, at each position).
-        #
-        # Once min_p cuts the tail, then the remaining distribution is given to the temperature mechanism for skewing.
-        # Then a token is sampled, weighted by the probabilities represented by the logits (after skewing).
-        "min_p": 0.02,
-        "seed": -1,  # 558614238,  # -1 = random; unused if T = 0
         "stream": True,  # When the LLM is generating text, send each token to the client as soon as it is available. For live-updating the UI.
         "messages": [],  # Chat transcript, including system messages. Populated later by `invoke`.
         "tools": tools,  # Tools available for tool-calling, for models that support that (as of 16 May 2025, need dev branch of ooba).
         "name1": user,  # Name of user's persona in the chat.
         "name2": char,  # Name of AI's persona in the chat.
     }
+    request_data.update(librarian_config.llm_sampler_config)
 
     # See `raven.librarian.chatutil.create_chat_message`.
     personas = {"user": user,
