@@ -93,7 +93,6 @@
       - transcript shown *for the user's information* in the client log
 
   - Maybe next:
-    - llmclient: refactor character and prompt config into `raven.librarian.config`
     - STT (speech to text, speech recognition):
       - `raven-transcribe`: command-line tool
         - from audio file or from mic
