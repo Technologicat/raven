@@ -63,7 +63,7 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app.
 - **Features**:
   - 100% local (when using a locally hosted LLM)
   - Natively nonlinear branching chat history - think *Loom* ([original](https://github.com/socketteer/loom); [obsidian](https://github.com/cosmicoptima/loom)) or *[SillyTavern-Timelines](https://github.com/SillyTavern/SillyTavern-Timelines)*.
-    - Chat messages are stored as nodes in a tree. A chat branch is just its HEAD pointer; the chat app follows the `parent` links to reconstruct the linear history for that branch.
+    - Chat messages are stored as nodes in a tree. A chat branch is just its HEAD pointer; the chain of `parent` nodes determines the linear history for that branch.
     - The command-line prototype can create chat branches and switch between them, but not delete them.
     - As of v0.2.4, the GUI app is still missing chat branch navigation.
   - RAG (retrieval-augmented generation) with hybrid (semantic + keyword) search.
