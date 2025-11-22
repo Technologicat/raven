@@ -9,9 +9,9 @@
 
 - [The Raven constellation](#the-raven-constellation)
     - [Raven-visualizer: Visualize research literature](#raven-visualizer-visualize-research-literature)
+    - [Raven-librarian: Scientific LLM frontend](#raven-librarian-scientific-llm-frontend)
     - [Raven-avatar: AI-animated anime avatar](#raven-avatar-ai-animated-anime-avatar)
     - [Raven-server: Web API server](#raven-server-web-api-server)
-    - [Raven-librarian: Scientific LLM frontend](#raven-librarian-scientific-llm-frontend)
 - [Install & run](#install--run)
     - [From source](#from-source)
         - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
@@ -52,6 +52,31 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app.
   - 100% local, maximum privacy, no cloud services
 - This was the original *Raven*.
 
+## Raven-librarian: Scientific LLM frontend
+
+- **Documentation**: under development
+- **Goal**: Efficiently interrogate a stack of 2k scientific papers. Talk with a local LLM for synthesis, clarifications, speculation, ...
+  - **Status**: :construction: An initial prototype of GUI app `raven-librarian` is available; as well as a command-line mini-prototype `raven-minichat` (which does not support all features the GUI app has).
+    - The GUI app is under development.
+    - For `raven-librarian`, `raven-server` must be running.
+    - For `raven-minichat`, we recommend having `raven-server` running; this allows the LLM to search the web.
+- **Features**:
+  - 100% local (when using a locally hosted LLM)
+  - Natively nonlinear branching chat history - think [Loom](https://github.com/cosmicoptima/loom) or [SillyTavern-Timelines](https://github.com/SillyTavern/SillyTavern-Timelines).
+    - Chat messages are stored as nodes in a tree. A chat branch is just its HEAD pointer; the chat app follows the `parent` links to reconstruct the linear history for that branch.
+    - The command-line prototype can create chat branches and switch between them, but not delete them.
+    - As of v0.2.4, the GUI app is still missing chat branch navigation.
+  - RAG (retrieval-augmented generation) with hybrid (semantic + keyword) search.
+    - Semantic backend: [ChromaDB](https://www.trychroma.com/) (with telemetry off, for maximum privacy).
+    - Keyword backend: [bm25s](https://huggingface.co/blog/xhluca/bm25s), which implements the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking algorithm.
+    - Results are combined with [reciprocal rank fusion](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search).
+  - Tool-calling (a.k.a. tool use)
+    - Currently, a websearch tool is provided.
+- Uses [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) as the LLM backend through its OpenAI-compatible API.
+  - We currently test our LLM functionality with the Qwen series of LLMs.
+  - Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
+
+
 ## Raven-avatar: AI-animated anime avatar
 
 <a href="raven/avatar/README.md"><img src="img/avatar-settings-editor.png" alt="Screenshot of Raven-avatar-settings-editor" height="200"/></a>
@@ -83,31 +108,6 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app.
 - Partially compatible with *SillyTavern*. Originally developed as a continuation of *SillyTavern-extras*.
 - Python bindings (client for web API) provided.
   - JS bindings possible, but not implemented yet. See [#2](https://github.com/Technologicat/raven/issues/2).
-
-
-## Raven-librarian: Scientific LLM frontend
-
-- **Documentation**: under development
-- **Goal**: Efficiently interrogate a stack of 2k scientific papers. Talk with a local LLM for synthesis, clarifications, speculation, ...
-  - **Status**: :construction: An initial prototype of GUI app `raven-librarian` is available; as well as a command-line mini-prototype `raven-minichat` (which does not support all features the GUI app has).
-    - The GUI app is under development.
-    - For `raven-librarian`, `raven-server` must be running.
-    - For `raven-minichat`, we recommend having `raven-server` running; this allows the LLM to search the web.
-- **Features**:
-  - 100% local (when using a locally hosted LLM)
-  - Natively nonlinear branching chat history - think [Loom](https://github.com/cosmicoptima/loom) or [SillyTavern-Timelines](https://github.com/SillyTavern/SillyTavern-Timelines).
-    - Chat messages are stored as nodes in a tree. A chat branch is just its HEAD pointer; the chat app follows the `parent` links to reconstruct the linear history for that branch.
-    - The command-line prototype can create chat branches and switch between them, but not delete them.
-    - As of v0.2.4, the GUI app is still missing chat branch navigation.
-  - RAG (retrieval-augmented generation) with hybrid (semantic + keyword) search.
-    - Semantic backend: [ChromaDB](https://www.trychroma.com/) (with telemetry off, for maximum privacy).
-    - Keyword backend: [bm25s](https://huggingface.co/blog/xhluca/bm25s), which implements the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking algorithm.
-    - Results are combined with [reciprocal rank fusion](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search).
-  - Tool-calling (a.k.a. tool use)
-    - Currently, a websearch tool is provided.
-- Uses [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) as the LLM backend through its OpenAI-compatible API.
-  - We currently test our LLM functionality with the Qwen series of LLMs.
-  - Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
 
 
 # Install & run
