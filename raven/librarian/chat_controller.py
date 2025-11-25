@@ -24,6 +24,7 @@ import uuid
 
 import dearpygui.dearpygui as dpg
 
+from unpythonic import flatten, memoize
 from unpythonic.env import env
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
@@ -121,6 +122,38 @@ def format_chat_message_for_clipboard(message_number: Optional[int],
                                                               text=text)
     return f"{message_heading}{message_text}"
 
+@memoize
+def _get_all_system_prompt_node_ids(datastore: chattree.Forest) -> List[str]:
+    """As it says on the tin.
+
+    As of v0.2.4, there is just one system prompt node (which is dynamically updated at app startup),
+    but this may change in the future, so we future-proof this by doing the semantically Right Thing:
+    looking up all root nodes of the chat forest.
+
+    Memoized; it's an O(n) search, which would need to run for each chat message widget created.
+    The node ID of a system prompt node doesn't change once the node has been initially created.
+
+    See also `_get_all_greeting_node_ids`.
+    """
+    system_prompt_node_ids = datastore.get_all_root_nodes()
+    return system_prompt_node_ids
+
+@memoize
+def _get_all_greeting_node_ids(datastore: chattree.Forest) -> List[str]:
+    """As it says on the tin.
+
+    Since the AI's greeting can be changed in the config, the greeting used in any given stored chat
+    is NOT necessarily the *current* greeting (`app_state["new_chat_HEAD"]`).
+
+    Hence the reliable way to detect is to see whether the node a direct child node of a root node;
+    any root node is a system prompt node.
+
+    Same remarks as for `_get_all_system_prompt_node_ids`, which see.
+    """
+    system_prompt_node_ids = _get_all_system_prompt_node_ids(datastore=datastore)
+    greeting_node_idss = [datastore.get_children(node_id) for node_id in system_prompt_node_ids]
+    greeting_node_ids = flatten(greeting_node_idss)
+    return greeting_node_ids
 
 # --------------------------------------------------------------------------------
 
@@ -522,6 +555,10 @@ class DPGChatMessage:
         copy_message_tooltip = dpg.add_tooltip(copy_message_button)
         copy_message_tooltip_text = dpg.add_text("Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID", parent=copy_message_tooltip)
 
+        # These are needed for enabling/disabling some buttons.
+        system_prompt_node_ids = _get_all_system_prompt_node_ids(datastore=self.parent_view.chat_controller.datastore)
+        greeting_node_ids = _get_all_greeting_node_ids(datastore=self.parent_view.chat_controller.datastore)
+
         # Rerolling for AI messages
         if role == "assistant":
             def reroll_message_callback():
@@ -553,7 +590,7 @@ class DPGChatMessage:
                 # Generate new AI message
                 self.parent_view.chat_controller.ai_turn(docs_query=user_message_text,
                                                          continue_=False)
-            reroll_enabled = (node_id is not None and node_id != self.parent_view.chat_controller.app_state["new_chat_HEAD"])  # The AI's initial greeting can't be rerolled
+            reroll_enabled = ((node_id is not None) and (node_id not in greeting_node_ids))  # The AI's initial greeting can't be rerolled
             if reroll_enabled:
                 self.gui_button_callbacks["reroll"] = reroll_message_callback  # stash it so we can call it from the hotkey handler
             dpg.add_button(label=fa.ICON_DICE_D20,  # fa.ICON_RECYCLE,
@@ -586,9 +623,9 @@ class DPGChatMessage:
                 self.parent_view.chat_controller.ai_turn(docs_query=user_message_text,
                                                          continue_=True)
                 # No button flash, because the button will be deleted immediately, when the chat message widget is replaced.
-            # TODO: We should enable continue only for the last message, but when we get here, this message isn't in the view yet.
-            #       We probably need to enable the button from the outside once we're done rendering the view.
-            continue_enabled = (node_id is not None and node_id != self.parent_view.chat_controller.app_state["new_chat_HEAD"])  # The AI's initial greeting can't be continued
+            # We should enable continue only for the last message, but when we get here, this message isn't in the view yet.
+            # We currently solve this by disabling continue buttons for old messages, from the outside, once we're done rendering the view.
+            continue_enabled = ((node_id is not None) and (node_id not in greeting_node_ids))  # The AI's initial greeting can't be continued
             if continue_enabled:
                 self.gui_button_callbacks["continue"] = continue_message_callback  # stash it so we can call it from the hotkey handler
             dpg.add_button(label=fa.ICON_PARAGRAPH,  # fa.ICON_RIGHT_LONG,  # fa.ICON_ARROW_RIGHT,
@@ -657,9 +694,9 @@ class DPGChatMessage:
         # Branch chat at this node
         # NOTE: We disallow branching from the system prompt, as well as from any message that is not linked to a chat node in the datastore.
         #       We also disallow using the "branch from here" feature on the AI's initial greeting, as that's an unnecessarily confusing way to say "start new chat".
-        branch_enabled = (node_id is not None and
-                          node_id not in (self.parent_view.chat_controller.app_state["system_prompt_node_id"],
-                                          self.parent_view.chat_controller.app_state["new_chat_HEAD"]))
+        branch_enabled = ((node_id is not None) and
+                          (node_id not in system_prompt_node_ids) and
+                          (node_id not in greeting_node_ids))
         def branch_chat_callback():
             self.parent_view.chat_controller.app_state["HEAD"] = node_id
             self.parent_view.build()
@@ -677,9 +714,9 @@ class DPGChatMessage:
         # Delete subtree starting from this node (requires a confirmation click)
         #
         # NOTE: We disallow deleting the system prompt and the AI's initial greeting, as well as any message that is not linked to a chat node in the datastore.
-        delete_enabled = (node_id is not None and
-                          node_id not in (self.parent_view.chat_controller.app_state["system_prompt_node_id"],
-                                          self.parent_view.chat_controller.app_state["new_chat_HEAD"]))
+        delete_enabled = ((node_id is not None) and
+                          (node_id not in system_prompt_node_ids) and
+                          (node_id not in greeting_node_ids))
         def delete_subtree_callback():
             current_time = time.time_ns()
             if self.last_delete_click_time is not None:

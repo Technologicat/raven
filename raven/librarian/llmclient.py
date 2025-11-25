@@ -144,7 +144,7 @@ def setup(backend_url: str) -> env:
 
                                        NOTE: Tool calls will not be processed if a stopping string is hit.
 
-        `greeting: str`: The AI's first message, used later for initializing the chat history.
+        `greeting: str`: The AI's first message, used for starting a new chat.
 
         `tools: List[Dict[str, Any]]`: JSON specifications of available tools (for LLMs capable of tool-calling).
 

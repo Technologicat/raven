@@ -36,40 +36,19 @@ def _reset_datastore_and_update_state(settings: env,
     state["new_chat_HEAD"] = chatutil.factory_reset_datastore(datastore, settings)
     state["HEAD"] = state["new_chat_HEAD"]  # current last node in chat; like HEAD pointer in git
 
-def _scan_for_new_chat_head(datastore: chattree.Forest) -> str:
-    """Scan for the AI greeting node that starts a new chat, and return its node ID.
-
-    This is needed if the app state file is missing or corrupted.
-    """
-    with datastore.lock:
-        root_node_ids = datastore.get_all_root_nodes()
-        if not root_node_ids:
-            raise ValueError("No system prompt nodes found in chat database, cannot proceed.")
-        if len(root_node_ids) > 1:
-            logger.warning("_scan_for_new_chat_head: Found more than one system prompt node in chat database, picking the first one.")
-        system_prompt_node_id = root_node_ids[0]
-        system_prompt_node = datastore.nodes[system_prompt_node_id]
-        n_new_chat_heads = len(system_prompt_node["children"])
-        if not n_new_chat_heads:
-            raise ValueError(f"System prompt node '{system_prompt_node_id}' has no AI greeting nodes attached to it, cannot proceed.")
-        if n_new_chat_heads > 1:
-            logger.warning(f"_scan_for_new_chat_head: Found more than one AI greeting node attached to system prompt node '{system_prompt_node_id}'; picking the first one, '{system_prompt_node['children'][0]}'.")
-        new_chat_node_id = system_prompt_node["children"][0]
-        return new_chat_node_id
-
-def _get_system_prompt_node_id(datastore: chattree.Forest,
-                               state: Dict) -> str:
+def _get_system_prompt_node_id(datastore: chattree.Forest) -> str:
     """Return the chat node ID of the system prompt.
 
-    `llm_settings`: LLM client settings; this is the return value of `llmclient.setup`.
-
-    `datastore`: `chattree.PersistentForest` containing the chat database,
-
-    `state`: `dict` containing the app state (HEAD node, various persistent settings).
+    `datastore`: `chattree.PersistentForest` containing the chat database.
     """
-    new_chat_node_id = state["new_chat_HEAD"]
-    system_prompt_node_id = datastore.get_parent(new_chat_node_id)
-    return system_prompt_node_id
+    root_node_ids = datastore.get_all_root_nodes()
+    if not root_node_ids:
+        logger.error("_get_system_prompt_node_id: No system prompt nodes found in datastore, cannot proceed.")
+        raise ValueError("No system prompt nodes found in datastore, cannot proceed.")
+    if len(root_node_ids) > 1:
+        logger.info(f"_get_system_prompt_node_id: There is more than one system prompt node in datastore, picking the first one. IDs of all system prompt nodes: {root_node_ids}")
+    logger.info(f"_get_system_prompt_node_id: System prompt node ID is '{root_node_ids[0]}'.")
+    return root_node_ids[0]
 
 def _refresh_system_prompt(llm_settings: env,
                            datastore: chattree.Forest,
@@ -78,11 +57,18 @@ def _refresh_system_prompt(llm_settings: env,
 
     A new revision is created on the system prompt node, and the previous revision is deleted.
 
-    `datastore`: `chattree.PersistentForest` containing the chat database,
+    NOTE: This is an evil mutating function that writes to `datastore`. The write happens in-memory;
+    if `datastore` is a `PersistentForest`, it persists the changes at app exit.
+
+    NOTE: This also writes to `state["system_prompt_node_id"]`, as the Raven-librarian GUI needs it too.
+
+    `llm_settings`: LLM client settings; this is the return value of `llmclient.setup`.
+
+    `datastore`: `chattree.PersistentForest` containing the chat database.
 
     `state`: `dict` containing the app state (HEAD node, various persistent settings).
     """
-    system_prompt_node_id = _get_system_prompt_node_id(datastore, state)
+    system_prompt_node_id = _get_system_prompt_node_id(datastore)
     state["system_prompt_node_id"] = system_prompt_node_id  # remember it, the GUI chat client needs it
     old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
     timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
@@ -94,10 +80,70 @@ def _refresh_system_prompt(llm_settings: env,
     datastore.delete_revision(node_id=system_prompt_node_id,
                               revision_id=old_system_prompt_revision_id)
 
+def _refresh_greeting(llm_settings: env,
+                      datastore: chattree.Forest,
+                      state: Dict) -> None:
+    """Refresh "new_chat_HEAD" so that it points to `llm_settings.greeting`.
+
+    If the current greeting is found under the system prompt node, this simply sets the "new_chat_HEAD" pointer.
+
+    Otherwise, a new node is created (under the system prompt node), the current greeting is written there,
+    and the "new_chat_HEAD" pointer is set to that new node.
+
+    NOTE: This is an evil mutating function that updates `state` (and possibly writes to `datastore`).
+
+    NOTE: This uses `state["system_prompt_node_id"]`, so that needs to be up to date first.
+          The app state loader calls `_refresh_system_prompt` first, ensuring proper initialization.
+
+    `llm_settings`: LLM client settings; this is the return value of `llmclient.setup`.
+
+    `datastore`: `chattree.PersistentForest` containing the chat database.
+
+    `state`: `dict` containing the app state (HEAD node, various persistent settings).
+    """
+    with datastore.lock:
+        # Scan AI greeting nodes under the system prompt node. Look for one that matches the currently configured greeting.
+        #
+        # The greeting must be under the system prompt node we actually use (in case there are several),
+        # so it can be used with that system prompt node, to preserve the forest structure
+        # (cannot link to an AI greeting node under a different system prompt node).
+        system_prompt_node_id = state["system_prompt_node_id"]
+        greeting_node_ids = datastore.get_children(system_prompt_node_id)
+
+        # Due to the OAI-compatible chatlog format, the actual stored message content begins with the AI character's name,
+        # e.g. "Aria: How can I help you today?".
+        #
+        # So inject the currently configured AI character's name, so that we can detect whether the datastore has this greeting for this character.
+        ai_persona = llm_settings.personas.get("assistant", None)
+        currently_configured_greeting = llm_settings.greeting.strip()
+        greeting_message_content = f"{ai_persona}: {currently_configured_greeting}"
+
+        for greeting_node_id in greeting_node_ids:
+            payload = datastore.get_payload(greeting_node_id)  # get currently active revision
+            message = payload["message"]
+            message_role = message["role"]
+            message_text = message["content"]
+            if message_role != "assistant":  # skip non-AI messages (should not happen, but let's be robust)
+                logger.warning(f"_refresh_greeting: Detected non-AI message node (role = '{message_role}') '{greeting_node_id}' under system prompt node '{system_prompt_node_id}'. Skipping.")
+                continue
+            if message_text.strip() == greeting_message_content:  # found it?
+                logger.info(f"_refresh_greeting: Found currently configured AI greeting for current AI character '{llm_settings.char}' at AI message node '{greeting_node_id}' under system prompt node '{system_prompt_node_id}'.")
+                break
+        else:  # Currently configured greeting not found under the system prompt node -> create new node for it
+            logger.info(f"_refresh_greeting: Currently configured AI greeting text (see `raven.llmclient.config`) for current AI character '{llm_settings.char}' not found under system prompt node '{system_prompt_node_id}'. Creating new AI greeting node for it.")
+            timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
+            greeting_node_id = datastore.create_node(payload={"message": currently_configured_greeting,
+                                                              "general_metadata": {"timestamp": timestamp,
+                                                                                   "datetime": f"{isodate} {isotime}",
+                                                                                   "persona": llm_settings.personas.get("assistant", None)}},
+                                                     parent_id=system_prompt_node_id)
+            logger.info(f"_refresh_greeting: Created new AI greeting node '{greeting_node_id}' for current AI character '{llm_settings.char}' under system prompt node '{system_prompt_node_id}'.")
+        logger.info(f"_refresh_greeting: Setting 'new_chat_HEAD' to {llm_settings.char}'s AI greeting node '{greeting_node_id}'.")
+        state["new_chat_HEAD"] = greeting_node_id
+
 # --------------------------------------------------------------------------------
 # API
 
-# TODO: Factory-resetting the datastore when "new_chat_HEAD" is missing is silly and dangerous. Fix this.
 def load(llm_settings: env,
          datastore_file: Union[str, pathlib.Path],
          state_file: Union[str, pathlib.Path]) -> Tuple[chattree.Forest, Dict]:
@@ -135,8 +181,8 @@ def load(llm_settings: env,
           their default values (which are defined in the source code of this function).
     """
     # Resolve paths
-    orig_datastore_file = datastore_file
-    orig_state_file = state_file
+    mayberel_datastore_file = datastore_file
+    mayberel_state_file = state_file
     datastore_file = pathlib.Path(datastore_file).expanduser().resolve()
     state_file = pathlib.Path(state_file).expanduser().resolve()
 
@@ -151,69 +197,76 @@ def load(llm_settings: env,
         with open(state_file, "r", encoding="utf-8") as json_file:
             state = json.load(json_file)
     except FileNotFoundError:
-        logger.info(f"load: App state file '{orig_state_file}' (resolved to '{state_file}') does not exist.")
+        logger.info(f"load: App state file '{mayberel_state_file}' (resolved to '{state_file}') does not exist.")
         state = {}
     else:
-        logger.info(f"load: Loaded app state from '{orig_state_file}' (resolved to '{state_file}').")
+        logger.info(f"load: Loaded app state from '{mayberel_state_file}' (resolved to '{state_file}').")
 
     # Load datastore
     datastore = chattree.PersistentForest(datastore_file)  # This autoloads and auto-persists.
     with datastore.lock:
         if datastore.nodes:
-            logger.info(f"load: Loaded chat datastore from '{orig_datastore_file}' (resolved to '{datastore_file}'). Found {len(datastore.nodes)} chat nodes in datastore.")
+            logger.info(f"load: Loaded chat datastore from '{mayberel_datastore_file}' (resolved to '{datastore_file}'). Found {len(datastore.nodes)} chat nodes in datastore.")
         else:
-            logger.info("load: No chat nodes in datastore at '{orig_datastore_file}' (resolved to '{datastore_file}'). Creating new datastore, will be saved at app exit.")
+            logger.info("load: No chat nodes in datastore at '{mayberel_datastore_file}' (resolved to '{datastore_file}'). Creating new datastore, will be saved at app exit.")
             _reset_datastore_and_update_state(llm_settings, datastore, state)
 
     # Set any missing app state to defaults
     #
-    if "new_chat_HEAD" not in state:  # New-chat start node ID missing -> reset datastore
-        logger.info(f"load: Missing key 'new_chat_HEAD' in '{orig_state_file}' (resolved to '{state_file}'). Scanning chat datastore for 'new_chat_HEAD'.")
-        state["new_chat_HEAD"] = _scan_for_new_chat_head(datastore)
-        logger.info(f"load: Scan found 'new_chat_HEAD', it is now '{state['new_chat_HEAD']}'.")
-
-    if "HEAD" not in state:  # Current chat node ID missing -> start at new chat
-        state["HEAD"] = state["new_chat_HEAD"]
-        logger.info(f"load: Missing key 'HEAD' in '{orig_state_file}' (resolved to '{state_file}'), resetting it to 'new_chat_HEAD'")
-
-    if state["HEAD"] not in datastore.nodes:
-        logger.info(f"load: Key 'HEAD' in '{orig_state_file}' (resolved to '{state_file}') points to nonexistent chat node '{state['HEAD']}', resetting it to 'new_chat_HEAD'")
-        state["HEAD"] = state["new_chat_HEAD"]
-
     if "tools_enabled" not in state:
         state["tools_enabled"] = True
-        logger.info(f"load: Missing key 'tools_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['tools_enabled']}'")
+        logger.info(f"load: Missing key 'tools_enabled' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['tools_enabled']}'")
 
     if "docs_enabled" not in state:
         state["docs_enabled"] = True
-        logger.info(f"load: Missing key 'docs_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['docs_enabled']}'")
+        logger.info(f"load: Missing key 'docs_enabled' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['docs_enabled']}'")
 
     if "speculate_enabled" not in state:
         state["speculate_enabled"] = False
-        logger.info(f"load: Missing key 'speculate_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['speculate_enabled']}'")
+        logger.info(f"load: Missing key 'speculate_enabled' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['speculate_enabled']}'")
 
     if "avatar_speech_enabled" not in state:
         state["avatar_speech_enabled"] = True
-        logger.info(f"load: Missing key 'avatar_speech_enabled' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['avatar_speech_enabled']}'")
+        logger.info(f"load: Missing key 'avatar_speech_enabled' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['avatar_speech_enabled']}'")
 
     if "avatar_subtitles_enabled" not in state:
         state["avatar_subtitles_enabled"] = True
-        logger.info(f"load: Missing key 'avatar_subtitles' in '{orig_state_file}' (resolved to '{state_file}'), using default '{state['avatar_subtitles']}'")
+        logger.info(f"load: Missing key 'avatar_subtitles' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['avatar_subtitles']}'")
 
+    # Refresh the system prompt and AI greeting to the ones configured in `raven.librarian.config`.
+    #
+    #   - The system prompt node payload is overwritten by the new version.
+    #     - A new revision of the payload is created, and the old revision is deleted.
+    #     - Refreshing the system prompt also ensures that `state["system_prompt_node_id"]` is correct (and adds it to `state`, if missing).
+    #   - The AI greeting either uses an existing node, or creates a new node.
+    #     - If there is an existing AI greeting node (under the system prompt node) that matches the configured AI greeting text *for the current AI character*, that node is selected.
+    #     - Otherwise a new node is created with the configured AI greeting text (and due to OAI-compatible chatlog format, starting the message content with the AI character name)
+    #     - Refreshing the AI greeting sets `state["new_chat_HEAD"]` (always to a valid node, so we don't need to validate it here).
+    #
     _refresh_system_prompt(llm_settings,
                            datastore,
                            state)
+    _refresh_greeting(llm_settings,
+                      datastore,
+                      state)
+
+    if "HEAD" not in state:  # Current chat node ID missing -> start at new chat
+        state["HEAD"] = state["new_chat_HEAD"]
+        logger.info(f"load: Missing key 'HEAD' in '{mayberel_state_file}' (resolved to '{state_file}'), resetting it to 'new_chat_HEAD'")
+
+    if state["HEAD"] not in datastore.nodes:
+        logger.info(f"load: Key 'HEAD' in '{mayberel_state_file}' (resolved to '{state_file}') points to nonexistent chat node '{state['HEAD']}', resetting it to 'new_chat_HEAD'")
+        state["HEAD"] = state["new_chat_HEAD"]
 
     # Migrate datastore (this updates only if needed)
     # v0.2.3+: data format change
     chatutil.upgrade_datastore(llm_settings,
                                datastore,
-                               system_prompt_node_id=_get_system_prompt_node_id(datastore,
-                                                                                state))
+                               system_prompt_node_id=state["system_prompt_node_id"])
 
     # Set up auto-persist for app state
     atexit.register(functools.partial(save,
-                                      state_file=orig_state_file,
+                                      state_file=mayberel_state_file,
                                       state=state))
 
     return datastore, state
@@ -230,17 +283,21 @@ def save(state_file: Union[str, pathlib.Path],
           using the original `state_file` and `state` arguments.
     """
     # validate
-    required_keys = ("new_chat_HEAD",
-                     "HEAD",
+    required_keys = ("new_chat_HEAD",  # HEAD node for starting a new chat
+                     "HEAD",  # current HEAD node (last message of currently open chat)
+                     # various Raven-librarian GUI state
+                     "tools_enabled",
                      "docs_enabled",
-                     "speculate_enabled")
+                     "speculate_enabled",
+                     "avatar_speech_enabled",
+                     "avatar_subtitles_enabled")
     if any(key not in state for key in required_keys):
-        raise KeyError(f"at least one required setting missing from `state`; required keys = {list(sorted(required_keys))}; got existing keys = {list(sorted(state.keys()))}")
+        raise KeyError(f"At least one required setting is missing from `state`; required keys = {list(sorted(required_keys))}; got existing keys = {list(sorted(state.keys()))}")
 
-    orig_state_file = state_file
+    mayberel_state_file = state_file
     state_file = pathlib.Path(state_file).expanduser().resolve()
 
     with open(state_file, "w", encoding="utf-8") as json_file:
         json.dump(state, json_file, indent=2)
 
-    logger.info(f"save: Saved app state to '{orig_state_file}' (resolved to '{state_file}').")
+    logger.info(f"save: Saved app state to '{mayberel_state_file}' (resolved to '{state_file}').")
