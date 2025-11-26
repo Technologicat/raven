@@ -103,9 +103,10 @@ def oneshot_llm_task(llm_settings: env,
             sys.stderr.flush()
 
     root_node_id = chatutil.factory_reset_datastore(datastore, llm_settings)  # Throwaway one-shot task, so start with an empty chat history with just the system prompt and the AI's initial greeting.
-    request_node_id = datastore.create_node(payload={"message": chatutil.create_chat_message(llm_settings,
-                                                                                             role="user",
-                                                                                             text=instruction)},
+    request_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
+                                                                            message=chatutil.create_chat_message(llm_settings=llm_settings,
+                                                                                                                 role="user",
+                                                                                                                 text=instruction)),
                                             parent_id=root_node_id)
     history = chatutil.linearize_chat(datastore, request_node_id)
     out = llmclient.invoke(llm_settings,

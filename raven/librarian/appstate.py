@@ -71,12 +71,9 @@ def _refresh_system_prompt(llm_settings: env,
     system_prompt_node_id = _get_system_prompt_node_id(datastore)
     state["system_prompt_node_id"] = system_prompt_node_id  # remember it, the GUI chat client needs it
     old_system_prompt_revision_id = datastore.get_revision(node_id=system_prompt_node_id)
-    timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
     datastore.add_revision(node_id=system_prompt_node_id,
-                           payload={"message": chatutil.create_initial_system_message(llm_settings),
-                                    "general_metadata": {"timestamp": timestamp,
-                                                         "datetime": f"{isodate} {isotime}",
-                                                         "persona": llm_settings.personas.get("system", None)}})
+                           payload=chatutil.create_payload(llm_settings=llm_settings,
+                                                           message=chatutil.create_initial_system_message(llm_settings)))
     datastore.delete_revision(node_id=system_prompt_node_id,
                               revision_id=old_system_prompt_revision_id)
 
@@ -133,11 +130,8 @@ def _refresh_greeting(llm_settings: env,
                 break
         else:  # Currently configured greeting not found under the system prompt node -> create new node for it
             logger.info(f"_refresh_greeting: Currently configured AI greeting text (see `raven.llmclient.config`) for current AI character '{llm_settings.char}' not found under system prompt node '{system_prompt_node_id}'. Creating new AI greeting node for it.")
-            timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
-            greeting_node_id = datastore.create_node(payload={"message": greeting_message,
-                                                              "general_metadata": {"timestamp": timestamp,
-                                                                                   "datetime": f"{isodate} {isotime}",
-                                                                                   "persona": llm_settings.personas.get("assistant", None)}},
+            greeting_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
+                                                                                     message=greeting_message),
                                                      parent_id=system_prompt_node_id)
             logger.info(f"_refresh_greeting: Created new AI greeting node '{greeting_node_id}' for current AI character '{llm_settings.char}' under system prompt node '{system_prompt_node_id}'.")
         logger.info(f"_refresh_greeting: Setting 'new_chat_HEAD' to {llm_settings.char}'s AI greeting node '{greeting_node_id}'.")
