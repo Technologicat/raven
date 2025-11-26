@@ -13,8 +13,9 @@
 - *Raven-librarian*:
   - New feature: STT (speech to text, speech recognition). Talk to the AI using your mic!
     - To start speaking to the AI, click the mic button next to the chat text entry field (hotkey Ctrl+Shift+Enter).
-      - The mic starts glowing red, to indicate that Librarian is listening.
+      - The mic starts glowing red, to indicate that Librarian is listening. The VU meter (audio input level) next to the mic button becomes active.
       - To stop speaking, and send the spoken message to the AI, click the mic button again, or wait until the recorder detects silence and stops automatically.
+        - The gray line on the VU meter is the silence threshold level.
       - The mic stops glowing (and returns to its default white).
     - Librarian then runs the recorded audio through a locally hosted [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo) speech recognizer, which lives in the `stt` module of Raven-server.
     - The transcribed text is then sent to the AI, just as if it was typed as text to the chat text entry field.
@@ -26,6 +27,20 @@
       - By default, Librarian picks the first available NON-monitoring audio capture device, in the order listed by the command-line tool `raven-check-audio-devices`.
       - The default should work on laptops, and in general, most systems that have just one audio input device.
       - The help card (F1) shows which mic device is active. It is also printed to the client log at app startup.
+  - Very rudimentary chat branch navigation added.
+    - In the linearized chat view, each message has buttons for next/previous sibling, jump 10 siblings, jump to first/last sibling.
+      - Hotkeys apply to the last message displayed in the view.
+    - It's easier to show than explain (try it out yourself!); but when switching siblings in the linearized chat view:
+      - The sibling node switched to becomes the candidate HEAD.
+      - If the candidate HEAD has any child nodes (i.e. chat continuations):
+        - The child node with the most recent payload (according to payload timestamp) is chosen.
+        - That child node becomes the new candidate HEAD, and the process repeats.
+      - Once no more child nodes are found (i.e. the candidate HEAD is a leaf node), the candidate HEAD becomes the final new HEAD.
+      - The linearized chat view scrolls to the sibling node that was switched to, regardless of where the final HEAD is.
+    - Contrast this with the branch button, which sets the chat HEAD to the given node, without scanning the subtree for continuations.
+  - The LLM system prompt, the AI's character card, persona names (AI and user), and the AI's greeting message can now be customized in `raven.librarian.config`.
+    - Changes take effect when Librarian is restarted.
+    - Limitation: for now, only one AI character icon is loaded. If you switch characters, old chats will show the current character's icon (the persona name is stored in the chat database, but the avatar and icon paths are not).
 
 **Changed**:
 
@@ -50,7 +65,9 @@
     - This also makes the `raven.librarian.hybridir` information retrieval backend fully client-server, allowing the AI components for this too to run on another machine.
     - Because *Librarian* requires *Raven-server* for other purposes, too, *Librarian* will not start if the server is not running.
   - The document database now ingests `.bib` files, too.
-    - This allows using the `raven-burstbib` command-line tool to mass-feed abstracts (each as a separate document) into Librarian's document database.
+    - This allows using the `raven-burstbib` command-line tool to mass-feed abstracts into Librarian's document database.
+      - The tool takes a `.bib` file and splits it into individual files, one per entry. Hence each entry becomes a separate document in Librarian's document database.
+  - The app now recovers if `state.json` is missing or corrupt.
   - Many small UI improvements, for example:
     - Window resizing implemented.
     - Collapsible thinking traces.
