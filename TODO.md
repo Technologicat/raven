@@ -95,18 +95,6 @@
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
 
   - Maybe next:
-    - Refactor chat message payload creation to a function that auto-populates the payload's `general_metadata`.
-
-      Somthing like::
-
-            timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
-            greeting_node_id = datastore.create_node(payload={"message": currently_configured_greeting,
-                                                              "general_metadata": {"timestamp": timestamp,
-                                                                                   "datetime": f"{isodate} {isotime}",
-                                                                                   "persona": llm_settings.personas.get("assistant", None)}},
-                                                     parent_id=system_prompt_node_id)
-
-
     - STT (speech to text, speech recognition):
       - Configurable silence level, autostop timeout, VU peak hold time
       - `raven-transcribe`: command-line tool
