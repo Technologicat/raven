@@ -115,10 +115,9 @@ def _refresh_greeting(llm_settings: env,
         #
         # So format the greeting as a chat message for the currently configured AI character,
         # so that we can detect whether the datastore has this greeting for this character.
-        currently_configured_greeting = llm_settings.greeting.strip()
         greeting_message = chatutil.create_chat_message(llm_settings=llm_settings,
                                                         role="assistant",
-                                                        text=currently_configured_greeting)
+                                                        text=llm_settings.greeting.strip())
         greeting_message_content = greeting_message["content"]
 
         for greeting_node_id in greeting_node_ids:
