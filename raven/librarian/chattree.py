@@ -151,9 +151,16 @@ class Forest:
     def add_revision(self, node_id: str, payload: Any, revision_name: Optional[str] = None) -> int:
         """Add a new payload revision to node `node_id`, and make the new revision active.
 
-        `payload`: the payload
+        `payload`: The payload. Semantics depend on your app.
 
-        `revision_name`: optional human-readable name for the revision.
+                   For `PersistentForest`, needs to be JSON-able to facilitate saving/loading.
+
+                   For example, in Raven-librarian, the payload is a `dict`, which contains
+                   the chat message (see `chatutil.create_chat_message`) and its metadata,
+                   such as the revision's creation timestamp, as well as AI generation
+                   metadata when applicable. See `chatutil.create_payload`.
+
+        `revision_name`: Optional human-readable name for the revision.
 
                          Most often, revisions are not named, but sometimes it can be
                          helpful if the user can set a label to help them remember
