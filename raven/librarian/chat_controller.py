@@ -22,6 +22,8 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Union
 import uuid
 
+import numpy as np
+
 import dearpygui.dearpygui as dpg
 
 from unpythonic import flatten, memoize
@@ -277,9 +279,9 @@ class DPGChatMessage:
         # --------------------------------------------------------------------------------
         # lay out the role icon and the text content areas horizontally
 
-        icon_and_text_container_group = dpg.add_group(horizontal=True,
-                                                      tag=f"chat_icon_and_text_container_group_{self.gui_uuid}",
-                                                      parent=self.gui_container_group)
+        self.top_level_group = dpg.add_group(horizontal=True,
+                                             tag=f"chat_icon_and_text_container_group_{self.gui_uuid}",
+                                             parent=self.gui_container_group)
 
         # ----------------------------------------
         # role icon
@@ -287,7 +289,7 @@ class DPGChatMessage:
         icon_drawlist = dpg.add_drawlist(width=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          height=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          tag=f"chat_icon_drawlist_{self.gui_uuid}",
-                                         parent=icon_and_text_container_group)  # empty drawlist acts as placeholder if no icon
+                                         parent=self.top_level_group)  # empty drawlist acts as placeholder if no icon
         if role in self.parent_view.chat_controller.gui_role_icons:
             dpg.draw_image(self.parent_view.chat_controller.gui_role_icons[role],
                            (gui_config.margin, gui_config.margin),
@@ -307,7 +309,7 @@ class DPGChatMessage:
 
         # adjust text vertical positioning
         text_vertical_layout_group = dpg.add_group(tag=f"chat_message_vertical_layout_group_{self.gui_uuid}",
-                                                   parent=icon_and_text_container_group)
+                                                   parent=self.top_level_group)
         dpg.add_spacer(height=gui_config.margin,
                        parent=text_vertical_layout_group)
 
@@ -772,11 +774,22 @@ class DPGChatMessage:
         # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_subtree_tooltip)
 
         def make_navigate_to_sibling(message_node_id: str, direction: str) -> Callable:
+            # Pick the most recent subtree, greedily
+            datastore = self.parent_view.chat_controller.datastore
+            def descend(start_node_id: str) -> str:
+                node_ids = datastore.get_children(start_node_id)
+                if not node_ids:
+                    return start_node_id
+                payloads = [datastore.get_payload(node_id) for node_id in node_ids]
+                timestamps = [payload["general_metadata"]["timestamp"] for payload in payloads]
+                idx = np.argmax(timestamps)
+                return descend(node_ids[idx])
             def navigate_to_sibling_callback():
                 node_id = self._get_next_or_prev_sibling_in_datastore(message_node_id, direction=direction)
                 if node_id is not None:
-                    self.parent_view.chat_controller.app_state["HEAD"] = node_id
-                    self.parent_view.build()
+                    head_node_id = descend(node_id)
+                    self.parent_view.chat_controller.app_state["HEAD"] = head_node_id
+                    self.parent_view.build(scroll_target_node_id=node_id)
             return navigate_to_sibling_callback
 
         # Only messages attached to a datastore chat node can have siblings in the datastore
@@ -934,8 +947,9 @@ class DPGLinearizedChatView:
         self.chat_messages_container_group_widget = dpg.add_group(tag=f"chat_messages_container_group_{self.gui_uuid}",
                                                                   parent=gui_parent)
 
-    def scroll_to_end(self,
-                      max_wait_frames: int = 10) -> None:
+    def scroll_view(self,
+                    max_wait_frames: int = 10,
+                    scroll_target_node_id: Optional[str] = None) -> None:
         """Scroll this linearized chat view to the end.
 
         `max_wait_frames`: If `max_wait_frames > 0`, wait at most for that may frames
@@ -943,6 +957,9 @@ class DPGLinearizedChatView:
 
                            Some waiting is usually needed at least at app startup
                            before the GUI settles.
+
+        `target_y`: y coordinate to scroll to, in coordinate system of `self.gui_parent`.
+                    If not provided (default), scroll to end.
 
         NOTE: When called from the main thread, `max_wait_frames` must be 0, as any
               attempt to wait would hang the main thread's explicit render loop.
@@ -962,8 +979,26 @@ class DPGLinearizedChatView:
         plural_s = "s" if elapsed_frames != 1 else ""
         waited_str = f" (after waiting for {elapsed_frames} frame{plural_s})" if elapsed_frames > 0 else " (no waiting was needed)"
         frames_str = f" frame {dpg.get_frame_count()}" if max_wait_frames > 0 else ""
-        logger.info(f"DPGLinearizedChatView.scroll_to_end:{frames_str}{waited_str}: max_y_scroll = {max_y_scroll}")
-        dpg.set_y_scroll(self.gui_parent, max_y_scroll)
+
+        if scroll_target_node_id is not None:
+            logger.info(f"DPGLinearizedChatView.scroll_view: Scroll target chat node is '{scroll_target_node_id}'")
+            def get_target_widget() -> Optional[Union[str, int]]:
+                for dpg_chat_message in self.chat_controller.current_chat_history:
+                    if dpg_chat_message.node_id == scroll_target_node_id:  # found?
+                        return dpg_chat_message.top_level_group
+                return None
+            if (target_message_widget := get_target_widget()) is not None:
+                x0, y0 = guiutils.get_widget_pos(target_message_widget)
+                logger.info(f"DPGLinearizedChatView.scroll_view: Position of scroll target chat node is ({x0}, {y0}) (in GUI container coordinates).")
+            else:
+                y0 = max_y_scroll
+                logger.warning(f"DPGLinearizedChatView.scroll_view: Scroll target chat node '{scroll_target_node_id}' not found in view, scrolling to end instead.")
+            y_scroll = min(y0, max_y_scroll)
+        else:
+            logger.info("DPGLinearizedChatView.scroll_view: No scroll target chat node specified, scrolling to end.")
+            y_scroll = max_y_scroll
+        logger.info(f"DPGLinearizedChatView.scroll_view:{frames_str}{waited_str}: max_y_scroll = {max_y_scroll}, scrolling to y = {y_scroll}")
+        dpg.set_y_scroll(self.gui_parent, y_scroll)
 
     def get_chatlog_as_markdown(self, include_metadata: bool) -> Optional[str]:
         """Format this linearized chat as Markdown, for e.g. copying to the clipboard or saving to a file.
@@ -1001,11 +1036,11 @@ class DPGLinearizedChatView:
 
     def add_complete_message(self,
                              node_id: str,
-                             scroll_to_end: bool = True) -> DPGCompleteChatMessage:
+                             scroll_view: bool = True) -> DPGCompleteChatMessage:
         """Append the chat node with `node_id` to the end of the linearized chat view in the GUI.
 
-        `scroll_to_end`: If `True`, then once the message has been added, wait for one frame
-                         for the message to render, and scroll the chat view to the end.
+        `scroll_view`: If `True`, then once the message has been added, wait for one frame
+                       for the message to render, and scroll the chat view to the end.
         """
         with self.chat_controller.current_chat_history_lock:
             dpg_chat_message = DPGCompleteChatMessage(gui_parent=self.chat_messages_container_group_widget,
@@ -1018,15 +1053,20 @@ class DPGLinearizedChatView:
                 if dpg_old_message.role == "assistant":  # only AI messages have a continue button
                     dpg.disable_item(f"message_continue_button_{dpg_old_message.gui_uuid}")
 
-        if scroll_to_end:
+        if scroll_view:
             dpg.split_frame()
-            self.scroll_to_end()
+            self.scroll_view()
         return dpg_chat_message
 
     # TODO: does this `build` really belong in `DPGLinearizedChatView` or in `DPGChatController`?
     def build(self,
-              head_node_id: Optional[str] = None) -> None:
+              head_node_id: Optional[str] = None,
+              scroll_target_node_id: Optional[str] = None) -> None:
         """Build the linearized chat view in the GUI, linearizing up from `head_node_id`.
+
+        `scroll_target_node_id`: If provided, scroll to this node instead of to the end.
+                                 Must be the chat node ID of a message shown in the view,
+                                 i.e. either `head_node_id`, or one of its ancestors.
 
         As side effects:
 
@@ -1043,7 +1083,7 @@ class DPGLinearizedChatView:
                             children_only=True)  # clear old content from GUI
             for node_id in node_id_history:
                 self.add_complete_message(node_id=node_id,
-                                          scroll_to_end=False)  # we scroll just once, when done
+                                          scroll_view=False)  # we scroll just once, when done
         # Update avatar emotion from the final message text (use only non-thought message content)
         role, persona, text = chatutil.get_node_message_text_without_persona(self.chat_controller.datastore, head_node_id)
         if role == "assistant":
@@ -1057,7 +1097,7 @@ class DPGLinearizedChatView:
                                                                             text=text)
         self.chat_controller.avatar_controller.ping(config=self.chat_controller.avatar_record)  # wake up the AI avatar when the chat view is re-rendered
         dpg.split_frame()
-        self.scroll_to_end()
+        self.scroll_view(scroll_target_node_id=scroll_target_node_id)
 
 # --------------------------------------------------------------------------------
 # Scaffold to GUI integration
@@ -1335,7 +1375,7 @@ class DPGChatController:
                         streaming_chat_message = DPGStreamingChatMessage(gui_parent=self.view.chat_messages_container_group_widget,
                                                                          parent_view=self.view)
                         dpg.split_frame()
-                        self.view.scroll_to_end()
+                        self.view.scroll_view()
 
                         if self.indicator_glow_animation is not None:
                             self.indicator_glow_animation.reset()  # start new pulsation cycle
@@ -1415,7 +1455,7 @@ class DPGChatController:
                                                              is_thought=task_env.inside_think_block)
                         task_env.text = io.StringIO()
                         dpg.split_frame()
-                        self.view.scroll_to_end()
+                        self.view.scroll_view()
                     # - update at least every 0.5 sec, even if the LLM is slow
                     # - update after every 10 chunks, but with a rate limit
                     elif dt >= 0.5 or (dt >= 0.25 and dchunks >= 10):  # commit changes to in-progress last paragraph
@@ -1424,7 +1464,7 @@ class DPGChatController:
                         streaming_chat_message.replace_last_paragraph(paragraph_text,
                                                                       is_thought=is_thought)  # at first paragraph, will auto-create the paragraph if not created yet
                         dpg.split_frame()
-                        self.view.scroll_to_end()
+                        self.view.scroll_view()
 
                     # Let the LLM keep generating (if it wants to).
                     return llmclient.action_ack
