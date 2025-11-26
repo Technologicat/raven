@@ -200,9 +200,29 @@ class Forest:
             node = self.nodes[node_id]
             if str(revision_id) not in node["data"]:
                 raise KeyError(f"Forest.delete_revision: node '{node_id}' has no revision '{revision_id}'")
+            revision_ids = self.get_revisions(node_id)
+            if len(revision_ids) == 1:
+                raise ValueError(f"Forest.delete_revision: cannot delete the only revision ('{revision_id}') of node '{node_id}'; if you want to delete the node, use `delete_node` or `delete_subtree` instead.")
+            assert len(revision_ids) >= 2  # before deletion
+
+            # If deleting the active revision, select another revision to set active after deletion.
+            active_revision_before_deletion = self.get_revision(node_id)
+            deleting_active_revision = (revision_id == active_revision_before_deletion)
+            if deleting_active_revision:
+                old_idx = revision_ids.index(revision_id)
+                if old_idx == len(revision_ids) - 1:
+                    revision_id_to_activate = revision_ids[-2]  # last one deleted -> select the most recent remaining one
+                else:
+                    revision_id_to_activate = revision_ids[old_idx + 1]  # else select the next newer one
+
+            # Delete.
             node["data"].pop(str(revision_id))
             if str(revision_id) in node["revision_names"]:  # when deleting a revision, delete its name too (if any)
                 node["revision_names"].pop(str(revision_id))
+
+            # Set new active revision if needed.
+            if deleting_active_revision:
+                node["active_revision"] = revision_id_to_activate
 
     def get_revisions(self, node_id: str) -> List[int]:
         """Return a list of all revision IDs of the payload revisions of node `node_id`, in numerical order."""
