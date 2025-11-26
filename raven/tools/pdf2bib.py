@@ -92,9 +92,9 @@ def oneshot_llm_task(llm_settings: env,
 
     Returns the tuple `(raw_output_text, scrubbed_output_text)`.
 
-    The scrubbed output is the LLM's final response to the task, ready for feeding into the rest of your text processing pipeline.
+    The `scrubbed_output_text` is the LLM's final response to the task, ready for feeding into the rest of your text processing pipeline.
 
-    The raw output contains the thinking trace, too (if running on a thinking model). Useful for debugging/logging.
+    The `raw_output_text` contains the thinking trace, too (if running on a thinking model). Useful for debugging/logging.
     """
     def on_progress(n_chunks: int,
                     chunk_text: str) -> None:
