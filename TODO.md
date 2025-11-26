@@ -121,6 +121,21 @@
     - Don't crash if e.g. `tts` module isn't running
 
   - Later:
+    - Add feature: tool-call access to RAG
+      - Get full document, based on its ID (the current RAG autosearch already shows the document IDs).
+      - Search database with given query, optionally disabling or enabling only given scopes.
+        - Get document IDs, which correspond to relative path (scope + filename).
+        - Titles would be nice, but we don't currently have a title field - the document content is completely arbitrary.
+      - Get topics.
+        - Auto-include, in the system message, a high-level summary of topics currently available in the document database?
+        - Simplest possible approach: scope names.
+        - One possible more sophisticated approach:
+          - Use keyword detection to identify what the documents are about.
+          - Preprocess keywords when tokenizing new/updated documents.
+            - Avoid running the full document through the NLP pipeline twice (need to mod `hybridir.HybridIR._tokenize`).
+            - Where to get the corpus data to compare against? Store the raw word frequency data for each document in the fulldocs database to avoid recomputing them each time a new document is added?
+              - We still need to aggregate across the whole database at each commit, but that's probably acceptable (AI parts as well as the reindexing step are much more expensive anyway).
+              - Ugh, we also need to update the whole database, to refresh the keyword sets for existing documents (they will change when the corpus changes).
     - Document database: scopes
       - Scope = a subdirectory of `llm_docs_dir` in `raven.librarian.config`
         - E.g. AI, hydrogen, MLP fanfics, ...
@@ -132,6 +147,7 @@
       - Scoping is needed for long-term memory, too (by chat message tags), to avoid undesired cross-contamination, e.g. between work and hobby chats, when retrieving memories.
         - How to avoid moving files around when/if the user changes the tags on an existing message?
           - Solution: make tags the primary mechanism, and make the document ingestion mechanism automatically add a tag that matches the subdirectory name.
+    - Improve user text entry: multiline input
 
     - Import tool for importing a batch of documents into the document database (useful when importing lots of documents at once)
       - Just `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Once the scan finishes, exit the tool.
@@ -254,22 +270,6 @@
       - A third RAG store, for use by the AI
       - Provide tools to store/list/search/retrieve memories (title and content)
       - A customizable system message section for the AI to store things it wants to remember in every chat?
-    - Add feature: tool-call access to RAG
-      - Get full document, based on its ID (the current RAG autosearch already shows the document IDs).
-      - Search database with given query, optionally disabling or enabling only given scopes.
-        - Get document IDs, which correspond to relative path (scope + filename).
-        - Titles would be nice, but we don't currently have a title field - the document content is completely arbitrary.
-      - Get topics.
-        - Auto-include, in the system message, a high-level summary of topics currently available in the document database?
-        - Simplest possible approach: scope names.
-        - One possible more sophisticated approach:
-          - Use keyword detection to identify what the documents are about.
-          - Preprocess keywords when tokenizing new/updated documents.
-            - Avoid running the full document through the NLP pipeline twice (need to mod `hybridir.HybridIR._tokenize`).
-            - Where to get the corpus data to compare against? Store the raw word frequency data for each document in the fulldocs database to avoid recomputing them each time a new document is added?
-              - We still need to aggregate across the whole database at each commit, but that's probably acceptable (AI parts as well as the reindexing step are much more expensive anyway).
-              - Ugh, we also need to update the whole database, to refresh the keyword sets for existing documents (they will change when the corpus changes).
-    - Improve user text entry: multiline input
     - Upgrade translator
       - HPLT consortium, new version (8April 2025) of the earlier model by Helsinki-NLP that we use currently
       - Needs new infra at the backend: Marian format (not HuggingFace format)
