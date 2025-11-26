@@ -150,6 +150,8 @@
 
     - Context fill meter
 
+    - Chat HEAD jump undo/redo
+
     - Add recent chats list view
       - This is useful to complement the functionality of the graph view (ideally, we need both); also easier to build out of existing GUI components.
       - "X chats (Y unique nodes) in database"
