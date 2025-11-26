@@ -113,10 +113,13 @@ def _refresh_greeting(llm_settings: env,
         # Due to the OAI-compatible chatlog format, the actual stored message content begins with the AI character's name,
         # e.g. "Aria: How can I help you today?".
         #
-        # So inject the currently configured AI character's name, so that we can detect whether the datastore has this greeting for this character.
-        ai_persona = llm_settings.personas.get("assistant", None)
+        # So format the greeting as a chat message for the currently configured AI character,
+        # so that we can detect whether the datastore has this greeting for this character.
         currently_configured_greeting = llm_settings.greeting.strip()
-        greeting_message_content = f"{ai_persona}: {currently_configured_greeting}"
+        greeting_message = chatutil.create_chat_message(llm_settings=llm_settings,
+                                                        role="assistant",
+                                                        text=currently_configured_greeting)
+        greeting_message_content = greeting_message["content"]
 
         for greeting_node_id in greeting_node_ids:
             payload = datastore.get_payload(greeting_node_id)  # get currently active revision
@@ -132,7 +135,7 @@ def _refresh_greeting(llm_settings: env,
         else:  # Currently configured greeting not found under the system prompt node -> create new node for it
             logger.info(f"_refresh_greeting: Currently configured AI greeting text (see `raven.llmclient.config`) for current AI character '{llm_settings.char}' not found under system prompt node '{system_prompt_node_id}'. Creating new AI greeting node for it.")
             timestamp, unused_weekday, isodate, isotime = chatutil.make_timestamp()
-            greeting_node_id = datastore.create_node(payload={"message": currently_configured_greeting,
+            greeting_node_id = datastore.create_node(payload={"message": greeting_message,
                                                               "general_metadata": {"timestamp": timestamp,
                                                                                    "datetime": f"{isodate} {isotime}",
                                                                                    "persona": llm_settings.personas.get("assistant", None)}},
