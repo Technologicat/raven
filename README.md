@@ -93,7 +93,7 @@ The vision is to help you absorb information from large volumes of text.
   - The speech recognizer is hosted by the `stt` module of your local *Raven-server*.
 - The audio recording is never saved to disk.
 - The text transcript of the audio is shown, for your own information, in the *Librarian* client log.
-  - This is the same text that goes into Librarian's chat view (and, like any chat message, is saved in the chat datastore).
+  - This is the same text that goes into *Librarian*'s chat view (and, like any chat message, is saved in the chat datastore).
   - The log is only shown in the terminal window that started `raven-librarian`, and not saved.
 - If you want to verify these claims, see `raven.server.modules.stt`, and `stt_*` functions in `raven.client.api` (and their use sites).
 
