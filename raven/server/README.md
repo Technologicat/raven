@@ -520,7 +520,7 @@ For recording audio from your mic, see [`raven.common.audio.recorder`](../common
 
 - `translate_translate`: Translate text from one natural language to another.
   - This uses a small, specialized AI model for sentence-level translation.
-  - Default configuration for English to Finnish is provided.
+  - Default configuration for English to Finnish is provided. See [the server config file](../server/config.py).
 
 ## Speech synthesizer (TTS)
 
