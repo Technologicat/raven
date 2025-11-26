@@ -101,6 +101,7 @@ def oneshot_llm_task(llm_settings: env,
         if (n_chunks == 1 or n_chunks % 10 == 0):  # in any message being written by the AI, print a progress symbol for the first chunk, and then again every 10 chunks.
             print(progress_symbol, end="", file=sys.stderr)
             sys.stderr.flush()
+        return llmclient.action_ack  # let the LLM continue generating if it wants
 
     root_node_id = chatutil.factory_reset_datastore(datastore, llm_settings)  # Throwaway one-shot task, so start with an empty chat history with just the system prompt and the AI's initial greeting.
     request_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
