@@ -34,12 +34,16 @@
 
 # The Raven constellation
 
-As of 08/2025, *Raven* is now a constellation, no longer a single app.
+*Raven* is a constellation of apps loosely related to natural language processing, with a focus on scientific use cases.
+
+The vision is to help you absorb information from large volumes of text.
+
+*Raven* is 100% local, 100% private, 100% open source.
 
 ## Raven-visualizer: Visualize research literature
 
-<a href="raven/visualizer/README.md"><img src="img/screenshot-main.png" alt="Screenshot of Raven's main window" height="200"/></a>
-<a href="raven/visualizer/README.md"><img src="img/screenshot-wordcloud.png" alt="Screenshot of Raven's wordcloud window" height="200"/></a>
+<a href="raven/visualizer/README.md"><img src="img/screenshot-main.png" alt="Screenshot of Raven-visualizer's main window" height="200"/></a>
+<a href="raven/visualizer/README.md"><img src="img/screenshot-wordcloud.png" alt="Screenshot of Raven-visualizer's wordcloud window" height="200"/></a>
 
 - **Documentation**: [Visualizer user manual](raven/visualizer/README.md)
 - **Goal**: Take 10k+ studies, find the most relevant ones.
@@ -48,34 +52,39 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app.
   - GUI app for analyzing BibTeX databases
   - Semantic clustering
   - Automatic per-cluster keyword detection
-  - Command-line converters for Web of Science (WOS) and arXiv
+  - Command-line converters for Web of Science (WOS), arXiv, conference abstract PDFs
   - 100% local, maximum privacy, no cloud services
 - This was the original *Raven*.
 
 ## Raven-librarian: Scientific LLM frontend
 
+<img src="img/screenshot-librarian.png" alt="Screenshot of Raven-librarian" height="200"/>
+
 - **Documentation**: under development
 - **Goal**: Efficiently interrogate a stack of 2k scientific papers. Talk with a local LLM for synthesis, clarifications, speculation, ...
-  - **Status**: :construction: An initial prototype of GUI app `raven-librarian` is available; as well as a command-line mini-prototype `raven-minichat` (which does not support all features the GUI app has).
+  - **Status**: :construction: An initial prototype of GUI app `raven-librarian` is available; as well as a command-line mini-prototype `raven-minichat` (note that the GUI app has more features).
     - The GUI app is under development.
-    - For `raven-librarian`, `raven-server` must be running.
-    - For `raven-minichat`, we recommend having `raven-server` running; this allows the LLM to search the web.
+    - For the GUI app `raven-librarian`, `raven-server` must be running.
+    - For the command-line `raven-minichat`, we recommend having `raven-server` running; this allows the LLM to search the web.
 - **Features**:
-  - 100% local (when using a locally hosted LLM)
+  - 100% local when using a locally hosted LLM
   - Natively nonlinear branching chat history - think *Loom* ([original](https://github.com/socketteer/loom); [obsidian](https://github.com/cosmicoptima/loom)) or *[SillyTavern-Timelines](https://github.com/SillyTavern/SillyTavern-Timelines)*.
-    - Chat messages are stored as nodes in a tree. A chat branch is just its HEAD pointer; the chain of `parent` nodes determines the linear history for that branch.
-    - The command-line prototype can create chat branches and switch between them, but not delete them.
-    - As of v0.2.4, the GUI app has very rudimentary chat branch navigation (cycle sibling nodes by clicking navigation arrows).
+    - Chat messages are stored as nodes in a tree.
+    - Branching is cheap. A chat branch is just its HEAD pointer.
+    - The chain of `parent` nodes uniquely determines the linear history for that branch, up to and including the system prompt.
   - RAG (retrieval-augmented generation) with hybrid (semantic + keyword) search.
     - Semantic backend: [ChromaDB](https://www.trychroma.com/) (with telemetry off, for maximum privacy).
     - Keyword backend: [bm25s](https://huggingface.co/blog/xhluca/bm25s), which implements the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking algorithm.
     - Results are combined with [reciprocal rank fusion](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search).
-  - Tool-calling (a.k.a. tool use)
-    - Currently, a websearch tool is provided.
+  - Tool-calling (a.k.a. tool use).
+    - Currently, a websearch tool is provided. This will be expanded later.
+  - Anime avatar for the LLM, see *Raven-avatar* below.
+    - Speech synthesizer with lipsynced animation.
+    - Subtitles with machine translation.
+    - Speech recognition.
 - Uses [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) as the LLM backend through its OpenAI-compatible API.
   - We currently test our LLM functionality with the Qwen series of LLMs.
   - Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
-
 
 ## Raven-avatar: AI-animated anime avatar
 
@@ -100,10 +109,11 @@ As of 08/2025, *Raven* is now a constellation, no longer a single app.
 
 - **Documentation**: [Server user manual](raven/server/README.md)
 - **Goal**: Run all GPU processing on the server, anywhere on the local network.
-  - **Status**: :white_check_mark: Fully operational. On the client side, `raven-importer` and the RAG subsystem of *Raven-librarian* have no server support yet.
+  - **Status**: :white_check_mark: Fully operational.
 - **Features**:
   - AI components for natural language processing (NLP).
   - Speech synthesizer (TTS), using [Kokoro-82M](https://github.com/hexgrad/kokoro).
+  - Speech recognition (STT), using [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo).
   - Server side of *Raven-avatar*.
 - Partially compatible with *SillyTavern*. Originally developed as a continuation of *SillyTavern-extras*.
 - Python bindings (client for web API) provided.
