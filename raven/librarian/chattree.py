@@ -238,7 +238,10 @@ class Forest:
             return None
 
     def set_revision(self, node_id: str, revision_id: int) -> None:
-        """Set the active payload revision of node `node_id`."""
+        """Set the active payload revision of node `node_id`.
+
+        This causes `get_payload` to return that revision as the default.
+        """
         with self.lock:
             if node_id not in self.nodes:
                 raise KeyError(f"Forest.set_revision: no such node '{node_id}'")
