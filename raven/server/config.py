@@ -209,7 +209,7 @@ talkinghead_models = "OktayAlpk/talking-head-anime-3"  # ~900 MB
 # This documents the correct ordering of the filters.
 # Feel free to improvise, but make sure to understand why your filter chain makes sense.
 #
-# For details, see `postprocessor.py`.
+# For details, see `raven.common.video.postprocessor`.
 #
 postprocessor_defaults = [
     # physical input signal
@@ -241,7 +241,7 @@ postprocessor_defaults = [
 #
 # MUST have ALL settings defined. Whenever animator settings are loaded, this is used for validating which settings exist and what their default values are.
 #
-# For details, see `animator.py`.
+# For details, see `raven.server.modules.avatar`.
 #
 animator_defaults = {
     # Attempt to render this many output frames per second. This only affects smoothness of the output (depending on the speed of the hardware).
