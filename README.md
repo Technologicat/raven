@@ -392,6 +392,8 @@ python -m pip uninstall raven-visualizer
 
 Or just delete the venv, located in the `.venv` subfolder of the Raven folder.
 
+Additionally, some of the server modules may have auto-installed AI models from *HuggingFace Hub*. These live at the default models cache location of the [`huggingface_hub` Python package](https://pypi.org/project/huggingface-hub/), which is usually `~/.cache/huggingface/hub`. Note this is shared between many different Python-based AI apps, so removing everything is not recommended.
+
 
 # Technologies
 
