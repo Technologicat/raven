@@ -86,6 +86,17 @@ The vision is to help you absorb information from large volumes of text.
   - We currently test our LLM functionality with the Qwen series of LLMs.
   - Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
 
+**Audio recording is 100% private**:
+
+- Audio is only recorded when the mic button is clicked.
+- The audio recording is only used for locally hosted STT (speech recognition), then discarded.
+  - The speech recognizer is hosted by the `stt` module of your local *Raven-server*.
+- The audio recording is never saved to disk.
+- The text transcript of the audio is shown, for your own information, in the *Librarian* client log.
+  - This is the same text that goes into Librarian's chat view (and, like any chat message, is saved in the chat datastore).
+  - The log is only shown in the terminal window that started `raven-librarian`, and not saved.
+- If you want to verify these claims, see `raven.server.modules.stt`, and `stt_*` functions in `raven.client.api` (and their use sites).
+
 ## Raven-avatar: AI-animated anime avatar
 
 <a href="raven/avatar/README.md"><img src="img/avatar-settings-editor.png" alt="Screenshot of Raven-avatar-settings-editor" height="200"/></a>
@@ -98,7 +109,7 @@ The vision is to help you absorb information from large volumes of text.
 - **Features**:
   - One static input image into realtime video (THA3 engine).
   - Talking custom anime character with 28 emotional expressions.
-  - Lipsync to *Raven-server*'s TTS. Record lipsynced speech (audio + image sequence).
+  - Lipsync to *Raven-server*'s TTS. Record TTS-generated speech with lipsync (audio + image sequence).
   - Realtime Anime4K upscaler.
   - Realtime video postprocessor with visual effects such as [bloom](https://en.wikipedia.org/wiki/Bloom_(shader_effect)), [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration), or [scanlines](https://en.wikipedia.org/wiki/Scan_line).
   - Web API to receive avatar video stream and to control the avatar.
