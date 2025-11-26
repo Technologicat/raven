@@ -37,7 +37,7 @@ import subprocess
 import sys
 from textwrap import dedent
 import traceback
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from unpythonic import sym, timer, ETAEstimator, uniqify
 from unpythonic.env import env
@@ -83,12 +83,12 @@ conference_url = "https://eccomas2024.org/"
 # TODO: `oneshot_llm_task` is useful for old-style agentic workflows, where the tool-running loop is a hardcoded script (contrast modern style, which lets the LLM decide which tools to run, as well as when to finish).
 def oneshot_llm_task(llm_settings: env,
                      instruction: str,
-                     progress_symbol: str) -> Tuple[str, str]:
+                     progress_symbol: Optional[str] = None) -> Tuple[str, str]:
     """Perform a one-shot (throwaway) task on the LLM, as if in chat mode.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
     `instruction`: Task specification and input data for the LLM. This is what the user would type in as a message to an LLM chat app.
-    `progress_symbol`: This symbol will be printed to the console every 10 tokens while the LLM is writing.
+    `progress_symbol`: If provided, this symbol will be printed to the console every 10 tokens while the LLM is writing.
 
     Returns the tuple `(raw_output_text, scrubbed_output_text)`.
 
@@ -113,7 +113,7 @@ def oneshot_llm_task(llm_settings: env,
     history = chatutil.linearize_chat(datastore, request_node_id)
     out = llmclient.invoke(llm_settings,
                            history,
-                           on_progress=on_progress,
+                           on_progress=(on_progress if progress_symbol is None else None),
                            tools_enabled=False)
     raw_output_text = out.data["content"]
     scrubbed_output_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
