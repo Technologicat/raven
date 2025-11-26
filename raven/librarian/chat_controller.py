@@ -205,21 +205,34 @@ class DPGChatMessage:
 
     def _get_next_or_prev_sibling_in_datastore(self,
                                                node_id: str,
-                                               direction: str = "next") -> Optional[str]:
+                                               direction: str = "next",
+                                               step: Optional[int] = 1) -> Optional[str]:
         """Get the next or previous sibling of `node_id` in the chat datastore.
 
+        `direction`: One of "next", "prev".
+
+        `step`: How many siblings to jump. Will jump up to as many as available in `direction`.
+                Special value `None` means "jump to end" in the given `direction`.
+
         Returns the node ID of the sibling, or `None` if no such sibling.
+
+        May return `node_id` itself.
         """
         siblings, this_node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
-        if siblings is None:
+        if siblings is None:  # can happen for root node
             return None
         if direction == "next":
-            if this_node_index < len(siblings) - 1:
-                return siblings[this_node_index + 1]
+            if step is None:  # jump to end
+                return siblings[-1]
+            elif this_node_index + step < len(siblings):
+                return siblings[this_node_index + step]
+            return siblings[-1]
         else:  # direction == "prev":
-            if this_node_index > 0:
-                return siblings[this_node_index - 1]
-        return None  # no sibling found
+            if step is None:
+                return siblings[0]
+            elif this_node_index - step >= 0:
+                return siblings[this_node_index - step]
+            return siblings[0]
 
     def get_chat_text_width(self) -> int:
         """Get the current text wrap width of the chat."""
@@ -279,9 +292,9 @@ class DPGChatMessage:
         # --------------------------------------------------------------------------------
         # lay out the role icon and the text content areas horizontally
 
-        self.top_level_group = dpg.add_group(horizontal=True,
-                                             tag=f"chat_icon_and_text_container_group_{self.gui_uuid}",
-                                             parent=self.gui_container_group)
+        icon_and_text_container_group = dpg.add_group(horizontal=True,
+                                                      tag=f"chat_icon_and_text_container_group_{self.gui_uuid}",
+                                                      parent=self.gui_container_group)
 
         # ----------------------------------------
         # role icon
@@ -289,7 +302,7 @@ class DPGChatMessage:
         icon_drawlist = dpg.add_drawlist(width=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          height=(2 * gui_config.margin + gui_config.chat_icon_size),
                                          tag=f"chat_icon_drawlist_{self.gui_uuid}",
-                                         parent=self.top_level_group)  # empty drawlist acts as placeholder if no icon
+                                         parent=icon_and_text_container_group)  # empty drawlist acts as placeholder if no icon
         if role in self.parent_view.chat_controller.gui_role_icons:
             dpg.draw_image(self.parent_view.chat_controller.gui_role_icons[role],
                            (gui_config.margin, gui_config.margin),
@@ -309,7 +322,7 @@ class DPGChatMessage:
 
         # adjust text vertical positioning
         text_vertical_layout_group = dpg.add_group(tag=f"chat_message_vertical_layout_group_{self.gui_uuid}",
-                                                   parent=self.top_level_group)
+                                                   parent=icon_and_text_container_group)
         dpg.add_spacer(height=gui_config.margin,
                        parent=text_vertical_layout_group)
 
@@ -351,7 +364,7 @@ class DPGChatMessage:
         buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
-        n_message_buttons = 9
+        n_message_buttons = 13
         chat_text_w = self.get_chat_text_width()
         dpg.add_spacer(width=chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 64 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
@@ -773,7 +786,7 @@ class DPGChatMessage:
         # c_end = '</font>'
         # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_subtree_tooltip)
 
-        def make_navigate_to_sibling(message_node_id: str, direction: str) -> Callable:
+        def make_navigate_to_sibling(message_node_id: str, direction: str, step: Optional[int]) -> Callable:
             # Pick the most recent subtree, greedily
             datastore = self.parent_view.chat_controller.datastore
             def descend(start_node_id: str) -> str:
@@ -785,7 +798,9 @@ class DPGChatMessage:
                 idx = np.argmax(timestamps)
                 return descend(node_ids[idx])
             def navigate_to_sibling_callback():
-                node_id = self._get_next_or_prev_sibling_in_datastore(message_node_id, direction=direction)
+                node_id = self._get_next_or_prev_sibling_in_datastore(message_node_id,
+                                                                      direction=direction,
+                                                                      step=step)
                 if node_id is not None:
                     head_node_id = descend(node_id)
                     self.parent_view.chat_controller.app_state["HEAD"] = head_node_id
@@ -795,43 +810,95 @@ class DPGChatMessage:
         # Only messages attached to a datastore chat node can have siblings in the datastore
         if node_id is not None:
             siblings, this_node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
-            prev_enabled = (this_node_index is not None and this_node_index > 0)
-            next_enabled = (this_node_index is not None and this_node_index < len(siblings) - 1)
-            navigate_to_prev_sibling_callback = make_navigate_to_sibling(node_id, direction="prev")
-            navigate_to_next_sibling_callback = make_navigate_to_sibling(node_id, direction="next")
+            prev_enabled = (this_node_index is not None and this_node_index - 1 >= 0)
+            next_enabled = (this_node_index is not None and this_node_index + 1 <= len(siblings) - 1)
+            navigate_to_prev1_callback = make_navigate_to_sibling(node_id, direction="prev", step=1)
+            navigate_to_next1_callback = make_navigate_to_sibling(node_id, direction="next", step=1)
+            navigate_to_prev10_callback = make_navigate_to_sibling(node_id, direction="prev", step=10)
+            navigate_to_next10_callback = make_navigate_to_sibling(node_id, direction="next", step=10)
+            navigate_to_prevend_callback = make_navigate_to_sibling(node_id, direction="prev", step=None)
+            navigate_to_nextend_callback = make_navigate_to_sibling(node_id, direction="next", step=None)
             if prev_enabled:
-                self.gui_button_callbacks["prev"] = navigate_to_prev_sibling_callback
+                self.gui_button_callbacks["prev1"] = navigate_to_prev1_callback
+                self.gui_button_callbacks["prev10"] = navigate_to_prev10_callback
+                self.gui_button_callbacks["prevend"] = navigate_to_prevend_callback
             if next_enabled:
-                self.gui_button_callbacks["next"] = navigate_to_next_sibling_callback
+                self.gui_button_callbacks["next1"] = navigate_to_next1_callback
+                self.gui_button_callbacks["next10"] = navigate_to_next10_callback
+                self.gui_button_callbacks["nextend"] = navigate_to_nextend_callback
 
-            dpg.add_button(label=fa.ICON_ANGLE_LEFT,
-                           callback=navigate_to_prev_sibling_callback,
+            dpg.add_button(label=fa.ICON_BACKWARD_FAST,
+                           callback=navigate_to_prevend_callback,
                            enabled=prev_enabled,
                            width=gui_config.toolbutton_w,
-                           tag=f"message_prev_branch_button_{self.gui_uuid}",
+                           tag=f"message_prevend_branch_button_{self.gui_uuid}",
                            parent=g)
-            dpg.bind_item_font(f"message_prev_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_prev_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
-            prev_branch_tooltip = dpg.add_tooltip(f"message_prev_branch_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Switch to previous sibling [Ctrl+Left]", parent=prev_branch_tooltip)
+            dpg.bind_item_font(f"message_prevend_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_theme(f"message_prevend_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            prevend_branch_tooltip = dpg.add_tooltip(f"message_prevend_branch_button_{self.gui_uuid}")  # tag
+            dpg.add_text("Switch to first sibling", parent=prevend_branch_tooltip)
 
-            dpg.add_button(label=fa.ICON_ANGLE_RIGHT,
-                           callback=navigate_to_next_sibling_callback,
+            dpg.add_button(label=fa.ICON_BACKWARD,
+                           callback=navigate_to_prev10_callback,
+                           enabled=prev_enabled,
+                           width=gui_config.toolbutton_w,
+                           tag=f"message_prev10_branch_button_{self.gui_uuid}",
+                           parent=g)
+            dpg.bind_item_font(f"message_prev10_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_theme(f"message_prev10_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            prev10_branch_tooltip = dpg.add_tooltip(f"message_prev10_branch_button_{self.gui_uuid}")  # tag
+            dpg.add_text("Switch 10 siblings left [Ctrl+Shift+Left]", parent=prev10_branch_tooltip)
+
+            dpg.add_button(label=fa.ICON_CARET_LEFT,
+                           callback=navigate_to_prev1_callback,
+                           enabled=prev_enabled,
+                           width=gui_config.toolbutton_w,
+                           tag=f"message_prev1_branch_button_{self.gui_uuid}",
+                           parent=g)
+            dpg.bind_item_font(f"message_prev1_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_theme(f"message_prev1_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            prev1_branch_tooltip = dpg.add_tooltip(f"message_prev1_branch_button_{self.gui_uuid}")  # tag
+            dpg.add_text("Switch to previous sibling [Ctrl+Left]", parent=prev1_branch_tooltip)
+
+            dpg.add_button(label=fa.ICON_CARET_RIGHT,
+                           callback=navigate_to_next1_callback,
                            enabled=next_enabled,
                            width=gui_config.toolbutton_w,
-                           tag=f"message_next_branch_button_{self.gui_uuid}",
+                           tag=f"message_next1_branch_button_{self.gui_uuid}",
                            parent=g)
-            dpg.bind_item_font(f"message_next_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_next_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
-            next_branch_tooltip = dpg.add_tooltip(f"message_next_branch_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Switch to next sibling [Ctrl+Right]", parent=next_branch_tooltip)
+            dpg.bind_item_font(f"message_next1_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_theme(f"message_next1_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            next1_branch_tooltip = dpg.add_tooltip(f"message_next1_branch_button_{self.gui_uuid}")  # tag
+            dpg.add_text("Switch to next sibling [Ctrl+Right]", parent=next1_branch_tooltip)
+
+            dpg.add_button(label=fa.ICON_FORWARD,
+                           callback=navigate_to_next10_callback,
+                           enabled=next_enabled,
+                           width=gui_config.toolbutton_w,
+                           tag=f"message_next10_branch_button_{self.gui_uuid}",
+                           parent=g)
+            dpg.bind_item_font(f"message_next10_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_theme(f"message_next10_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            next10_branch_tooltip = dpg.add_tooltip(f"message_next10_branch_button_{self.gui_uuid}")  # tag
+            dpg.add_text("Switch 10 siblings right [Ctrl+Shift+Right]", parent=next10_branch_tooltip)
+
+            dpg.add_button(label=fa.ICON_FORWARD_FAST,
+                           callback=navigate_to_nextend_callback,
+                           enabled=next_enabled,
+                           width=gui_config.toolbutton_w,
+                           tag=f"message_nextend_branch_button_{self.gui_uuid}",
+                           parent=g)
+            dpg.bind_item_font(f"message_nextend_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_theme(f"message_nextend_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            nextend_branch_tooltip = dpg.add_tooltip(f"message_nextend_branch_button_{self.gui_uuid}")  # tag
+            dpg.add_text("Switch to last sibling", parent=nextend_branch_tooltip)
 
             if siblings is not None:
                 dpg.add_text(f"{this_node_index + 1} / {len(siblings)}", parent=g)
         else:
-            # Add the two spacers separately so we get the same margins as with two separate buttons
-            dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
-            dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
+            # Add the spacers separately so we get the same margins as with separate buttons
+            for _ in range(6):
+                dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
 
 class DPGCompleteChatMessage(DPGChatMessage):
@@ -985,7 +1052,7 @@ class DPGLinearizedChatView:
             def get_target_widget() -> Optional[Union[str, int]]:
                 for dpg_chat_message in self.chat_controller.current_chat_history:
                     if dpg_chat_message.node_id == scroll_target_node_id:  # found?
-                        return dpg_chat_message.top_level_group
+                        return dpg_chat_message.gui_container_group
                 return None
             if (target_message_widget := get_target_widget()) is not None:
                 x0, y0 = guiutils.get_widget_pos(target_message_widget)

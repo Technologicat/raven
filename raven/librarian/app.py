@@ -625,7 +625,9 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak last AI message / stop speaking", notes=""),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+Right", action_indent=0, action="Next sibling of last message", notes=""),
+               env(key_indent=1, key="Ctrl+Shift+Right", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling of last message", notes=""),
+               env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
                helpcard.hotkey_new_column,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
                helpcard.hotkey_blank_entry,
@@ -803,6 +805,10 @@ def librarian_hotkeys_callback(sender, app_data):
     elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_Return:
             record_audio_message_callback()
+        elif key == dpg.mvKey_Left:
+            fire_event_if_exists("prev10")
+        elif key == dpg.mvKey_Right:
+            fire_event_if_exists("next10")
 
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:
@@ -825,9 +831,9 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_U:
             fire_event_if_exists("continue")
         elif key == dpg.mvKey_Left:
-            fire_event_if_exists("prev")
+            fire_event_if_exists("prev1")
         elif key == dpg.mvKey_Right:
-            fire_event_if_exists("next")
+            fire_event_if_exists("next1")
         elif key == dpg.mvKey_N:
             start_new_chat_callback()
         elif key == dpg.mvKey_S:
