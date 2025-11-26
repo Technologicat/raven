@@ -80,6 +80,7 @@ conference_url = "https://eccomas2024.org/"
 # Utilities
 
 # TODO: `oneshot_llm_task` might want to live in `raven.librarian.chatutil` or in `raven.librarian.llmclient`.
+# TODO: `oneshot_llm_task` is useful for old-style agentic workflows, where the tool-running loop is a hardcoded script (contrast modern style, which lets the LLM decide which tools to run, as well as when to finish).
 def oneshot_llm_task(llm_settings: env,
                      instruction: str,
                      progress_symbol: str) -> Tuple[str, str]:
