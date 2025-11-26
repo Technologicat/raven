@@ -505,6 +505,10 @@ API:
 
 Also known as *speech to text*. As of v0.2.4, uses [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo).
 
+The STT subsystem is a client-server architecture, with some features implemented on the client side. Particularly, audio recording is in the client. The role of the server is to generate the actual STT transcription when you feed it with audio data.
+
+For recording audio from your mic, see [`raven.common.audio.recorder`](../common/audio/recorder.py) and [`raven.common.gui.vumeter`](../common/gui/vumeter.py).
+
 - `stt_transcribe`: Transcribe speech from a filelike or a `bytes` object.
 - `stt_transcribe_file`: Transcribe speech from a file.
 - `stt_transcribe_array`: Transcribe speech from a NumPy array.
