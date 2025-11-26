@@ -126,7 +126,7 @@ The Raven constellation consists traditional desktop apps. It needs to be instal
 
 Currently, this takes the form of installing the app and dependencies into a venv (virtual environment). At least at this stage of development, app packaging into a single executable is not a priority.
 
-Raven has been developed and tested on Linux Mint. It should work in any environment that has `bash` and `pdm`.
+Raven is developed and tested on Linux Mint. It should work in any environment that has `bash` and `pdm`.
 
 It has been reported to work on Mac OS X, as well as on Windows (with [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) to provide Python).
 
