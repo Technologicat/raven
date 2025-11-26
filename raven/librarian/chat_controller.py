@@ -364,9 +364,9 @@ class DPGChatMessage:
         buttons_horizontal_layout_group = dpg.add_group(horizontal=True,
                                                         tag=f"chat_buttons_container_group_{self.gui_uuid}",
                                                         parent=text_vertical_layout_group)
-        n_message_buttons = 13
+        number_of_message_buttons = 14
         chat_text_w = self.get_chat_text_width()
-        dpg.add_spacer(width=chat_text_w - n_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 64 = some space for sibling counter
+        dpg.add_spacer(width=chat_text_w - number_of_message_buttons * (gui_config.toolbutton_w + 8) - 64,  # 8 = DPG outer margin; 64 = some space for sibling counter
                        parent=buttons_horizontal_layout_group)
 
         self.build_buttons(gui_parent=buttons_horizontal_layout_group)
@@ -524,6 +524,8 @@ class DPGChatMessage:
                       This is not simply `self.gui_parent` due to other layout performed by `build`;
                       the buttons go into a group.
         """
+        # NOTE: If you add or remove buttons here, update also `number_of_message_buttons` (search for it in this module).
+
         role = self.role
         persona = self.persona
         node_id = self.node_id
@@ -784,19 +786,19 @@ class DPGChatMessage:
         # # TODO: Meh, `raven.common.gui.animation.ButtonFlash` doesn't play together with `dpg_markdown`.
         # c_red = '<font color="(255, 96, 96)">'
         # c_end = '</font>'
-        # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants)", parent=delete_subtree_tooltip)
+        # delete_subtree_tooltip_text = dpg_markdown.add_text(f"Delete branch (this node and {c_red}**all**{c_end} descendants!)", parent=delete_subtree_tooltip)
 
+        datastore = self.parent_view.chat_controller.datastore
+        def descend(start_node_id: str) -> str:
+            node_ids = datastore.get_children(start_node_id)
+            if not node_ids:
+                return start_node_id
+            payloads = [datastore.get_payload(node_id) for node_id in node_ids]
+            timestamps = [payload["general_metadata"]["timestamp"] for payload in payloads]
+            idx = np.argmax(timestamps)
+            return descend(node_ids[idx])
         def make_navigate_to_sibling(message_node_id: str, direction: str, step: Optional[int]) -> Callable:
             # Pick the most recent subtree, greedily
-            datastore = self.parent_view.chat_controller.datastore
-            def descend(start_node_id: str) -> str:
-                node_ids = datastore.get_children(start_node_id)
-                if not node_ids:
-                    return start_node_id
-                payloads = [datastore.get_payload(node_id) for node_id in node_ids]
-                timestamps = [payload["general_metadata"]["timestamp"] for payload in payloads]
-                idx = np.argmax(timestamps)
-                return descend(node_ids[idx])
             def navigate_to_sibling_callback():
                 node_id = self._get_next_or_prev_sibling_in_datastore(message_node_id,
                                                                       direction=direction,
@@ -806,8 +808,15 @@ class DPGChatMessage:
                     self.parent_view.chat_controller.app_state["HEAD"] = head_node_id
                     self.parent_view.build(scroll_target_node_id=node_id)
             return navigate_to_sibling_callback
+        def make_show_chat_continuation(message_node_id: str) -> Callable:
+            def show_chat_continuation_callback():
+                head_node_id = descend(message_node_id)
+                if head_node_id is not None:
+                    self.parent_view.chat_controller.app_state["HEAD"] = head_node_id
+                    self.parent_view.build()  # let it scroll to end
+            return show_chat_continuation_callback
 
-        # Only messages attached to a datastore chat node can have siblings in the datastore
+        # Only messages attached to a datastore chat node can have siblings or a chat continuation in the datastore
         if node_id is not None:
             siblings, this_node_index = self.parent_view.chat_controller.datastore.get_siblings(node_id)
             prev_enabled = (this_node_index is not None and this_node_index - 1 >= 0)
@@ -826,6 +835,12 @@ class DPGChatMessage:
                 self.gui_button_callbacks["next1"] = navigate_to_next1_callback
                 self.gui_button_callbacks["next10"] = navigate_to_next10_callback
                 self.gui_button_callbacks["nextend"] = navigate_to_nextend_callback
+
+            children = self.parent_view.chat_controller.datastore.get_children(node_id)
+            show_chat_continuation_enabled = (len(children) > 0)
+            show_chat_continuation_callback = make_show_chat_continuation(node_id)
+            if show_chat_continuation_enabled:
+                self.gui_button_callbacks["show_chat_continuation"] = show_chat_continuation_callback
 
             dpg.add_button(label=fa.ICON_BACKWARD_FAST,
                            callback=navigate_to_prevend_callback,
@@ -859,6 +874,17 @@ class DPGChatMessage:
             dpg.bind_item_theme(f"message_prev1_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
             prev1_branch_tooltip = dpg.add_tooltip(f"message_prev1_branch_button_{self.gui_uuid}")  # tag
             dpg.add_text("Switch to previous sibling [Ctrl+Left]", parent=prev1_branch_tooltip)
+
+            dpg.add_button(label=fa.ICON_CARET_DOWN,
+                           callback=show_chat_continuation_callback,
+                           enabled=show_chat_continuation_enabled,
+                           width=gui_config.toolbutton_w,
+                           tag=f"message_show_chat_continuation_button_{self.gui_uuid}",
+                           parent=g)
+            dpg.bind_item_font(f"message_show_chat_continuation_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_theme(f"message_show_chat_continuation_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            show_chat_continuation_tooltip = dpg.add_tooltip(f"message_show_chat_continuation_button_{self.gui_uuid}")  # tag
+            dpg.add_text("Show chat continuation (if any) [Ctrl+Down]", parent=show_chat_continuation_tooltip)
 
             dpg.add_button(label=fa.ICON_CARET_RIGHT,
                            callback=navigate_to_next1_callback,
@@ -1115,10 +1141,12 @@ class DPGLinearizedChatView:
                                                       node_id=node_id)
             self.chat_controller.current_chat_history.append(dpg_chat_message)
 
-            # Disable the continue button on the old messages. (The new one already has it *enabled* if it should.)
+            # Disable the "continue generation" and "show chat continuation" buttons on the old messages.
+            # The latest message already has them *enabled* if it should.
             for dpg_old_message in self.chat_controller.current_chat_history[:-1]:
                 if dpg_old_message.role == "assistant":  # only AI messages have a continue button
                     dpg.disable_item(f"message_continue_button_{dpg_old_message.gui_uuid}")
+                dpg.disable_item(f"message_show_chat_continuation_button_{dpg_old_message.gui_uuid}")
 
         if scroll_view:
             dpg.split_frame()

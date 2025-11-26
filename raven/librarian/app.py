@@ -426,6 +426,7 @@ with timer() as tim:
                             subtitle_explanation_str = "Closed-caption (CC) the avatar's speech."
                         dpg.add_text(f"{subtitle_explanation_str}\nUsed when TTS is ON.\nTakes effect from the AI's next chat message onward.", parent="subtitles_enabled_tooltip")  # tag
 
+        # NOTE: If you add or remove buttons here, update also `number_of_below_chat_buttons` and/or `number_of_separators` (search for them in this module).
         with dpg.child_window(tag="chat_global_buttons",
                               height=gui_config.ai_warning_h,
                               no_scrollbar=True,
@@ -593,9 +594,9 @@ with timer() as tim:
                 # testing_tooltip = dpg.add_tooltip("chat_testing_button")  # tag
                 # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
 
-                n_below_chat_buttons = 7
-                n_separators = 2
-                ai_warning_spacer_base_size = gui_config.chat_panel_w - n_below_chat_buttons * (gui_config.toolbutton_w + 8) - n_separators * (gui_config.toolbar_separator_w) + 60
+                number_of_below_chat_buttons = 7
+                number_of_separators = 2
+                ai_warning_spacer_base_size = gui_config.chat_panel_w - number_of_below_chat_buttons * (gui_config.toolbutton_w + 8) - number_of_separators * (gui_config.toolbar_separator_w) + 60
                 dpg.add_spacer(width=ai_warning_spacer_base_size, tag="ai_warning_spacer")
 
                 with dpg.group(horizontal=True):
@@ -628,6 +629,7 @@ hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focu
                env(key_indent=1, key="Ctrl+Shift+Right", action_indent=1, action="Same, but jump 10", notes=""),
                env(key_indent=0, key="Ctrl+Left", action_indent=0, action="Previous sibling of last message", notes=""),
                env(key_indent=1, key="Ctrl+Shift+Left", action_indent=1, action="Same, but jump 10", notes=""),
+               env(key_indent=0, key="Ctrl+Down", action_indent=0, action="Show chat continuation", notes="If any exists in chat datastore"),
                helpcard.hotkey_new_column,
                env(key_indent=0, key="Ctrl+N", action_indent=0, action="Start new chat", notes=""),
                helpcard.hotkey_blank_entry,
@@ -832,6 +834,8 @@ def librarian_hotkeys_callback(sender, app_data):
             fire_event_if_exists("continue")
         elif key == dpg.mvKey_Left:
             fire_event_if_exists("prev1")
+        elif key == dpg.mvKey_Down:
+            fire_event_if_exists("show_chat_continuation")
         elif key == dpg.mvKey_Right:
             fire_event_if_exists("next1")
         elif key == dpg.mvKey_N:

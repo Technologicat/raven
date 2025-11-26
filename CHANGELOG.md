@@ -38,6 +38,9 @@
       - Once no more child nodes are found (i.e. the candidate HEAD is a leaf node), the candidate HEAD becomes the final new HEAD.
       - The linearized chat view scrolls to the sibling node that was switched to, regardless of where the final HEAD is.
     - Contrast this with the branch button, which sets the chat HEAD to the given node, without scanning the subtree for continuations.
+      - Just like in `git`, branching is cheap. Branching only sets the HEAD pointer; no data is copied.
+      - If you branch, but then change your mind, click the "Show chat continuation" button on the last message (hotkey Ctrl+Down).
+        This rescans the chat continuation just like when switching siblings.
   - The LLM system prompt, the AI's character card, persona names (AI and user), and the AI's greeting message can now be customized in `raven.librarian.config`.
     - Changes take effect when Librarian is restarted.
     - Limitation: for now, only one AI character icon is loaded. If you switch characters, old chats will show the current character's icon (the persona name is stored in the chat database, but the avatar and icon paths are not).
