@@ -76,7 +76,7 @@ dehyphenate = True
 
 # Character-level contextual embeddings by Flair-NLP. Used for dehyphenation of broken text (e.g. as extracted from a PDF file).
 #
-# NOTE: Raven uses dehyphenation mdoels in two places, and they don't have to be the same.
+# NOTE: Raven uses dehyphenation models in two places, and they don't have to be the same.
 #  - Raven-visualizer: processing of abstracts during BibTeX import (this setting)
 #  - Raven-server: served by the `sanitize` module
 #
