@@ -95,7 +95,7 @@ The vision is to help you absorb information from large volumes of text.
 - The text transcript of the audio is shown, for your own information, in the *Librarian* client log.
   - This is the same text that goes into *Librarian*'s chat view (and, like any chat message, is saved in the chat datastore).
   - The log is only shown in the terminal window that started `raven-librarian`, and not saved.
-- If you want to verify these claims, see `raven.server.modules.stt`, and `stt_*` functions in `raven.client.api` (and their use sites).
+- If you want to verify these claims, see `raven.server.modules.stt`, the function `api_stt_transcribe` in `raven.server.app`, and `stt_*` functions in `raven.client.api` (and their use sites).
 
 ## Raven-avatar: AI-animated anime avatar
 
