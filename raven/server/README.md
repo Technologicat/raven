@@ -209,7 +209,7 @@ All other modules can be used with a client written in any programming language.
 
 :exclamation: *The server config file is, technically, arbitrary Python code.* :exclamation:
 
-:exclamation: ***Never** install a server config from the internet, unless you are sure what that particular config does.* :exclamation:
+:exclamation: ***Never** install a non-default server config from the internet, unless you are sure what that particular config does.* :exclamation:
 
 The server config file is a Python module, which by default is [`raven.server.config`](../server/config.py).
 
@@ -225,9 +225,9 @@ If your machine has 8 GB or less VRAM, see [`raven.server.config_lowvram`](../se
 raven-server --config raven.server.config_lowvram
 ```
 
-This is useful e.g. if you are on the road with a laptop, and you'd like to dedicate the whole GPU for an LLM.
+This is useful e.g. if you are on the road with a laptop, and you'd like to dedicate (almost) the whole GPU for an LLM.
 
-The low-VRAM config doesn't bother loading the `avatar` module, as it's nearly useless on CPU (~2 FPS; not a typo). It loads all other modules on CPU.
+The low-VRAM config loads only the `avatar` module on GPU, and all other modules on CPU.
 
 The low-VRAM config also doubles as an example of how to make your own customized config.
 
@@ -276,7 +276,7 @@ The recommended way to add web search to ST is [SillyTavern-WebSearch-Selenium](
 
 ### Overhauled command-line options
 
-In *Raven-server*, server modules are enabled/disabled and configured **in the server config file**, not on the command line.
+In *Raven-server*, server modules are enabled/disabled and configured **in the [server config file](../server/config.py)**, not on the command line.
 
 Thus, to support environments with varying use cases, we only provide **one** command-line option for server module configuration: namely, `--config`, to load a different config file.
 
@@ -286,10 +286,10 @@ Some modules have been removed:
 
 - `caption`
 - `chromadb`: use ST's Vector Storage instead.
-- `coqui-tts`, `edge-tts`, `rvc`, `silero-tts`: replaced by the new `tts` module.
-- `streaming-stt`, `vosk-stt`, `whisper-stt`
+- `coqui-tts`, `edge-tts`, `rvc`, `silero-tts`: replaced by the new `tts` module (**is** supported by SillyTavern).
+- `streaming-stt`, `vosk-stt`, `whisper-stt`: replaced by the new `stt` module (not supported by SillyTavern).
 - `sd`
-- `talkinghead`: replaced by the new `avatar` module (currently not supported by SillyTavern).
+- `talkinghead`: replaced by the new `avatar` module (not supported by SillyTavern).
 
 Particularly:
 
