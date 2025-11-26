@@ -81,7 +81,7 @@ The vision is to help you absorb information from large volumes of text.
   - Anime avatar for the LLM, see *Raven-avatar* below.
     - Speech synthesizer with lipsynced animation.
     - Subtitles with machine translation.
-    - Speech recognition.
+    - Speech recognition. Use your mic to talk to the LLM.
 - Uses [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) as the LLM backend through its OpenAI-compatible API.
   - We currently test our LLM functionality with the Qwen series of LLMs.
   - Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
