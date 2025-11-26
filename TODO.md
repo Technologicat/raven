@@ -134,7 +134,7 @@
           - Solution: make tags the primary mechanism, and make the document ingestion mechanism automatically add a tag that matches the subdirectory name.
 
     - Import tool for importing a batch of documents into the document database (useful when importing lots of documents at once)
-      - Just instantiate a `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Once the rescan finishes, exit the tool.
+      - Just `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Once the scan finishes, exit the tool.
 
     - Context fill meter
 
