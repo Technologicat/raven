@@ -286,8 +286,8 @@ raven-pdf2bib                     →    python -m raven.tools.pdf2bib
 raven-server                      →    python -m raven.server.app
 raven-avatar-settings-editor      →    python -m raven.avatar.settings_editor.app
 raven-avatar-pose-editor          →    python -m raven.avatar.pose_editor.app
-raven-check-cuda                  →    python -m raven.raven.check_cuda
-raven-check-audio-devices         →    python -m raven.raven.check_audio_devices
+raven-check-cuda                  →    python -m raven.tools.check_cuda
+raven-check-audio-devices         →    python -m raven.tools.check_audio_devices
 raven-minichat                    →    python -m raven.librarian.minichat
 ```
 
