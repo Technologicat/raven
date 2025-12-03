@@ -127,35 +127,13 @@ print()
 # --------------------------------------------------------------------------------
 # Connect to servers, load datastores
 
-if api.raven_server_available():
-    print(f"{colorizer.Fore.GREEN}{colorizer.Style.BRIGHT}Connected to Raven-server at {client_config.raven_server_url}{colorizer.Style.RESET_ALL}")
-    print()
-else:
-    print(f"{colorizer.Fore.RED}{colorizer.Style.BRIGHT}ERROR: Cannot connect to Raven-server at {client_config.raven_server_url}.{colorizer.Style.RESET_ALL} Is Raven-server running?")
-    logger.error(f"Failed to connect to Raven-server at '{client_config.raven_server_url}'.")
+if not api.test_connection():
     sys.exit(255)
-
-try:
-    llmclient.list_models(llm_backend_url)  # just do something, to try to connect
-except requests.exceptions.ConnectionError as exc:
-    print(colorizer.colorize(f"Cannot connect to LLM backend at {llm_backend_url}.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
-    msg = f"Failed to connect to LLM backend at {llm_backend_url}, reason {type(exc)}: {exc}"
-    logger.error(msg)
+if not llmclient.test_connection(llm_backend_url):
     sys.exit(255)
-else:
-    print(colorizer.colorize(f"Connected to LLM backend at {llm_backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
-    llm_settings = llmclient.setup(backend_url=llm_backend_url)
-    print()
+print()
 
-# API key already loaded during module bootup; here, we just inform the user.
-if "Authorization" in llmclient.headers:
-    print(f"{colorizer.Fore.GREEN}{colorizer.Style.BRIGHT}Loaded LLM API key from '{str(librarian_config.llm_api_key_file)}'.{colorizer.Style.RESET_ALL}")
-    print()
-else:
-    print(f"{colorizer.Fore.YELLOW}{colorizer.Style.BRIGHT}No LLM API key configured.{colorizer.Style.RESET_ALL} If your LLM needs an API key to connect, put it into '{str(librarian_config.llm_api_key_file)}'.")
-    print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
-    print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
-    print()
+llm_settings = llmclient.setup(backend_url=llm_backend_url)
 
 logger.info("Loading chat datastore.")
 with timer() as tim:

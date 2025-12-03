@@ -46,16 +46,12 @@ from ..client import mayberemote
 
 from ..common import utils as common_utils
 
-from ..librarian import chattree
-from ..librarian import chatutil
 from ..librarian import config as librarian_config
 from ..librarian import llmclient
 from ..visualizer import config as visualizer_config
 
 # --------------------------------------------------------------------------------
 # Bootup
-
-datastore = chattree.Forest()  # NOT persistent. We'll be using the LLM to run throwaway one-shot tasks.
 
 status_success = sym("success")
 status_failed = sym("failed")
@@ -78,50 +74,6 @@ conference_url = "https://eccomas2024.org/"
 
 # --------------------------------------------------------------------------------
 # Utilities
-
-# TODO: `oneshot_llm_task` might want to live in `raven.librarian.chatutil` or in `raven.librarian.llmclient`.
-# TODO: `oneshot_llm_task` is useful for old-style agentic workflows, where the tool-running loop is a hardcoded script (contrast modern style, which lets the LLM decide which tools to run, as well as when to finish).
-def oneshot_llm_task(llm_settings: env,
-                     instruction: str,
-                     progress_symbol: Optional[str] = None) -> Tuple[str, str]:
-    """Perform a one-shot (throwaway) task on the LLM, as if in chat mode.
-
-    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
-    `instruction`: Task specification and input data for the LLM. This is what the user would type in as a message to an LLM chat app.
-    `progress_symbol`: If provided, this symbol will be printed to the console every 10 tokens while the LLM is writing.
-
-    Returns the tuple `(raw_output_text, scrubbed_output_text)`.
-
-    The `scrubbed_output_text` is the LLM's final response to the task, ready for feeding into the rest of your text processing pipeline.
-
-    The `raw_output_text` contains the thinking trace, too (if running on a thinking model). Useful for debugging/logging.
-    """
-    def on_progress(n_chunks: int,
-                    chunk_text: str) -> None:
-        """Progress indicator while the LLM is processing. Callback for `llmclient.invoke`."""
-        if (n_chunks == 1 or n_chunks % 10 == 0):  # in any message being written by the AI, print a progress symbol for the first chunk, and then again every 10 chunks.
-            print(progress_symbol, end="", file=sys.stderr)
-            sys.stderr.flush()
-        return llmclient.action_ack  # let the LLM continue generating if it wants
-
-    root_node_id = chatutil.factory_reset_datastore(datastore, llm_settings)  # Throwaway one-shot task, so start with an empty chat history with just the system prompt and the AI's initial greeting.
-    request_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
-                                                                            message=chatutil.create_chat_message(llm_settings=llm_settings,
-                                                                                                                 role="user",
-                                                                                                                 text=instruction)),
-                                            parent_id=root_node_id)
-    history = chatutil.linearize_chat(datastore, request_node_id)
-    out = llmclient.invoke(llm_settings,
-                           history,
-                           on_progress=(on_progress if progress_symbol is None else None),
-                           tools_enabled=False)
-    raw_output_text = out.data["content"]
-    scrubbed_output_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
-                                          text=raw_output_text,
-                                          thoughts_mode="discard",
-                                          markup=None,
-                                          add_persona=False)
-    return raw_output_text, scrubbed_output_text
 
 def setup_prompts(llm_settings: env,
                   n_retries: int) -> Dict:
@@ -399,9 +351,9 @@ def setup_prompts(llm_settings: env,
         # answers = collections.Counter()
         # for _ in range(3):
         #     print(_ + 1, end="", file=sys.stderr)
-        #     raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
-        #                                                              instruction=f"{prompt_check_authorlist}\n\n{text}",
-        #                                                              progress_symbol="*")
+        #     raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
+        #                                                                              instruction=f"{prompt_check_authorlist}\n\n{text}",
+        #                                                                              on_progress=llmclient.make_console_progress_handler("*"))
         #     has_author_list = scrubbed_output_text[-20:].split()[-1].strip().upper()  # Last word of output, in uppercase.
         #     has_author_list = has_author_list.translate(str.maketrans('', '', string.punctuation))  # Strip punctuation, in case of spurious formatting.
         #     answers[has_author_list] += 1
@@ -424,9 +376,9 @@ def setup_prompts(llm_settings: env,
         #         logger.info(f"Input file '{unique_id}': LLM returned unknown author list detection result '{has_author_list}', should be 'YES' or 'NO'; manual check recommended.")
 
         for retry in range(n_retries):
-            raw_output_text_1, scrubbed_output_text_1 = oneshot_llm_task(llm_settings,
-                                                                         instruction=f"{prompt_get_authors}\n-----\n\n{text}",
-                                                                         progress_symbol="A")
+            raw_output_text_1, scrubbed_output_text_1 = llmclient.perform_throwaway_task(llm_settings,
+                                                                                         instruction=f"{prompt_get_authors}\n-----\n\n{text}",
+                                                                                         on_progress=llmclient.make_console_progress_handler("A"))
             logger.debug(f"\n        EXTRACT AUTHORS    : {scrubbed_output_text_1}")
             if scrubbed_output_text_1.strip() != "":
                 break
@@ -446,9 +398,9 @@ def setup_prompts(llm_settings: env,
 
         # Here the LLM (Qwen3 2507) sometimes gets stuck overthinking.
         for retry in range(n_retries):
-            raw_output_text_2, scrubbed_output_text_2 = oneshot_llm_task(llm_settings,
-                                                                         instruction=prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1),
-                                                                         progress_symbol="a")
+            raw_output_text_2, scrubbed_output_text_2 = llmclient.perform_throwaway_task(llm_settings,
+                                                                                         instruction=prompt_drop_author_affiliations.format(author_names=scrubbed_output_text_1),
+                                                                                         on_progress=llmclient.make_console_progress_handler("a"))
             logger.debug(f"\n        DROP AFFILIATIONS  : {scrubbed_output_text_2}")
             if scrubbed_output_text_2.strip() != "":
                 break
@@ -462,9 +414,9 @@ def setup_prompts(llm_settings: env,
             return status_failed, error_info.getvalue(), ""
 
         for retry in range(n_retries):
-            raw_output_text_3, scrubbed_output_text_3 = oneshot_llm_task(llm_settings,
-                                                                         instruction=prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2),
-                                                                         progress_symbol=".")
+            raw_output_text_3, scrubbed_output_text_3 = llmclient.perform_throwaway_task(llm_settings,
+                                                                                         instruction=prompt_reformat_author_separators.format(author_names=scrubbed_output_text_2),
+                                                                                         on_progress=llmclient.make_console_progress_handler("."))
             logger.debug(f"\n        REFORMAT SEPARATORS: {scrubbed_output_text_3}")
             if scrubbed_output_text_3.strip() != "":
                 break
@@ -654,9 +606,9 @@ def setup_prompts(llm_settings: env,
         error_info = io.StringIO()
         text = strip_postamble(text)
 
-        raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
-                                                                 instruction=f"{prompt_get_title}\n-----\n\n{text}",
-                                                                 progress_symbol="T")
+        raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
+                                                                                 instruction=f"{prompt_get_title}\n-----\n\n{text}",
+                                                                                 on_progress=llmclient.make_console_progress_handler("T"))
         logger.debug(f"\n        original : {scrubbed_output_text}")
 
         title = scrubbed_output_text.strip()
@@ -728,9 +680,9 @@ def setup_prompts(llm_settings: env,
             keywords = None  # No keywords provided
         else:
             for retry in range(n_retries):
-                raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
-                                                                         instruction=f"{prompt_get_keywords}\n-----\n\n{text}",
-                                                                         progress_symbol="K")
+                raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
+                                                                                         instruction=f"{prompt_get_keywords}\n-----\n\n{text}",
+                                                                                         on_progress=llmclient.make_console_progress_handler("K"))
                 logger.debug(f"\n        original : {scrubbed_output_text}")
 
                 # Remove spurious heading and surrounding whitespace
@@ -828,9 +780,9 @@ def setup_prompts(llm_settings: env,
         text = strip_postamble(text)
 
         for retry in range(n_retries):
-            raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
-                                                                     instruction=f"{prompt_get_abstract}\n-----\n\n{text}",
-                                                                     progress_symbol=".")
+            raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
+                                                                                     instruction=f"{prompt_get_abstract}\n-----\n\n{text}",
+                                                                                     on_progress=llmclient.make_console_progress_handler("."))
             abstract = scrubbed_output_text.strip()
 
             if abstract:
@@ -901,9 +853,9 @@ def process_one(llm_settings: env,
             elif data_kind == "prompt":
                 # To keep things simple, we use a single-turn conversation for querying the LLM.
                 # Note this typically causes a full prompt rescan for every query.
-                raw_output_text, scrubbed_output_text = oneshot_llm_task(llm_settings,
-                                                                         instruction=f"{data}\n-----\n\n{text}",
-                                                                         progress_symbol="p")  # "p" for "prompt mode"
+                raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
+                                                                                         instruction=f"{data}\n-----\n\n{text}",
+                                                                                         on_progress=llmclient.make_console_progress_handler("p"))  # "p" for "prompt mode"
                 bibtex_entry.write(f"    {field_key} = {{{scrubbed_output_text}}},\n")
                 field_status = status_success
             elif data_kind == "function":
@@ -926,12 +878,9 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
     Each PDF is assumed to contain a conference abstract (the final file sent to the conference organizers in PDF format), and nothing else.
     """
     # Connect to the LLM
-    try:
-        llm_settings = llmclient.setup(backend_url=opts.backend_url)  # If this succeeds, then we know the backend is alive.
-    except Exception as exc:
-        msg = f"Failed to connect to LLM backend at {opts.backend_url}, reason {type(exc)}: {exc}"
-        logger.error(msg)
-        raise RuntimeError(msg)
+    if not llmclient.test_connection(opts.backend_url):
+        raise RuntimeError("Failed to connect to LLM backend, cannot proceed.")
+    llm_settings = llmclient.setup(backend_url=opts.backend_url)
     prompts = setup_prompts(llm_settings,
                             n_retries=opts.retries)
     logger.info(f"Connected to LLM backend at {opts.backend_url}")

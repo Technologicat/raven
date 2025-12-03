@@ -11,9 +11,11 @@ If you want to see the final prompt in instruct or chat mode, start your server 
 """
 
 __all__ = ["list_models",
+           "test_connection",
            "setup",
            "token_count",
            "invoke", "action_ack", "action_stop",
+           "perform_throwaway_task", "make_console_progress_handler",
            "perform_tool_calls"]
 
 import logging
@@ -26,8 +28,9 @@ import io
 import json
 import os
 import requests
+import sys
 from textwrap import dedent
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import sseclient  # pip install sseclient-py
 
@@ -39,6 +42,7 @@ from unpythonic.env import env
 from ..client import api
 from ..client import config as client_config
 
+from . import chattree
 from . import chatutil
 from . import config as librarian_config
 
@@ -124,8 +128,33 @@ def list_models(backend_url: str) -> List[str]:
     payload = response.json()
     return [model_name for model_name in sorted(payload["model_names"], key=lambda s: s.lower())]
 
-def setup(backend_url: str) -> env:
+def test_connection(backend_url: str,
+                    quiet: bool = False) -> bool:
+    """Test the connection to the LLM backend.
+
+    Return `True` if test successful, `False` if not (e.g. server not running or unreachable).
+
+    `quiet`: If `False` (default), print test result to stdout.
+             If `True`, don't print anything (like `-q` command-line option of many *nix tools).
+    """
+    try:
+        list_models(backend_url)  # just do something, to try to connect
+    except requests.exceptions.ConnectionError as exc:
+        print(colorizer.colorize(f"Cannot connect to LLM backend at {backend_url}.",
+                                 colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Is the LLM server running?")
+        msg = f"Failed to connect to LLM backend at {backend_url}, reason {type(exc)}: {exc}"
+        logger.error(msg)
+        return False
+    else:
+        print(colorizer.colorize(f"Connected to LLM backend at {backend_url}", colorizer.Style.BRIGHT, colorizer.Fore.GREEN))
+        return True
+
+def setup(backend_url: str,
+          quiet: bool = False) -> env:
     """Connect to LLM at `backend_url`.
+
+    `quiet`: If `False` (default), print authentication reminder to stdout.
+             If `True`, don't print anything (like `-q` command-line option of many *nix tools).
 
     Return an `unpythonic.env.env` object (a fancy namespace) populated with the following fields:
 
@@ -263,6 +292,18 @@ def setup(backend_url: str) -> env:
                    backend_url=backend_url,
                    request_data=request_data,
                    personas=personas)
+
+    if not quiet:
+        # API key already loaded during module bootup; here, we just inform the user.
+        if "Authorization" in headers:
+            print(f"{colorizer.Fore.GREEN}{colorizer.Style.BRIGHT}Loaded LLM API key from '{str(librarian_config.llm_api_key_file)}'.{colorizer.Style.RESET_ALL}")
+            print()
+        else:
+            print(f"{colorizer.Fore.YELLOW}{colorizer.Style.BRIGHT}No LLM API key configured.{colorizer.Style.RESET_ALL} If your LLM needs an API key to connect, put it into '{str(librarian_config.llm_api_key_file)}'.")
+            print("This can be any plain-text data your LLM's API accepts in the 'Authorization' field of the HTTP headers.")
+            print("For username/password, the format is 'user pass'. Do NOT use a plaintext password over an unencrypted http:// connection!")
+            print()
+
     return settings
 
 # # neutralize other samplers (copied from what SillyTavern sends)
@@ -335,6 +376,11 @@ def invoke(settings: env,
     """Invoke the LLM with the given chat history.
 
     This is typically done after adding the user's message to the chat history, to ask the LLM to generate a reply.
+
+    This is mainly meant as a low-level building block.
+
+    If you just need to script the LLM (perform a throwaway task without storing the chat history),
+    see `chatutil.oneshot_llm_task`.
 
     `settings`: Obtain this by calling `setup()` at app start time.
 
@@ -531,6 +577,92 @@ def invoke(settings: env,
                n_tokens=n_tokens,
                dt=tim.dt,
                interrupted=interrupted)
+
+# --------------------------------------------------------------------------------
+# Agentic workflow utility
+
+def perform_throwaway_task(llm_settings: env,
+                           instruction: str,
+                           on_progress: Callable = None) -> Tuple[str, str]:
+    """Perform a throwaway task on the LLM.
+
+    That is, behave as if the user sent `instruction` in chat mode as the first and only message
+    (after the system prompt and the AI's initial greeting).
+
+    This facilitates old-style agentic workflows, where the tool-running loop is a hardcoded script.
+    This way of interacting with an LLM is also known as the "workflow" LLM agent pattern.
+
+    (Contrast modern LLM agent style, which lets the LLM decide which tools to run,
+     as well as when to finish.)
+
+    `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
+
+                    The task will use the system prompt and AI character as configured
+                    in `llm_settings`.
+
+    `instruction`: The user prompt. Task specification and input data for the LLM.
+                   This is what the user would type in as a message to an LLM chat app.
+
+    `on_progress`: Passed to `invoke`, which see.
+
+    Returns the tuple `(raw_output_text, scrubbed_output_text)`, where:
+
+         `scrubbed_output_text` is the LLM's final response to the task,
+                                ready for feeding into the rest of your
+                                text processing pipeline.
+
+         `raw_output_text` contains the thinking trace, too (if running on
+                           a thinking model). Useful for debugging/logging.
+    """
+    # Start with an empty chat history (non-persistent) with just the system prompt,
+    # and the AI's initial greeting, as currently configured in `llm_settings`.
+    datastore = chattree.Forest()
+    root_node_id = chatutil.factory_reset_datastore(datastore, llm_settings)
+
+    # Add `instruction` as the user's first message.
+    request_node_id = datastore.create_node(payload=chatutil.create_payload(llm_settings=llm_settings,
+                                                                            message=chatutil.create_chat_message(llm_settings=llm_settings,
+                                                                                                                 role="user",
+                                                                                                                 text=instruction)),
+                                            parent_id=root_node_id)
+
+    # Linearize and run.
+    history = chatutil.linearize_chat(datastore, request_node_id)
+    out = invoke(llm_settings,
+                 history,
+                 on_progress=on_progress,
+                 tools_enabled=False)
+
+    # Postprocess the AI's response.
+    raw_output_text = out.data["content"]
+    scrubbed_output_text = chatutil.scrub(persona=llm_settings.personas.get("assistant", None),
+                                          text=raw_output_text,
+                                          thoughts_mode="discard",
+                                          markup=None,
+                                          add_persona=False)
+    return raw_output_text, scrubbed_output_text
+
+def make_console_progress_handler(progress_symbol: str) -> Callable:
+    """Make an `on_progress` function that prints `progress_symbol` to `sys.stderr` every 10 chunks.
+
+    The returned function works as an `on_progress` event handler in `invoke` and in
+    `perform_throwaway_task`, which see.
+
+    Note that this is a convenience function for a common use case with command-line apps,
+    where it can be important to show that the LLM is writing (i.e. that the backend has
+    not crashed or errored out, when answering the user's request takes a long time).
+
+    This progress function will never cancel the generation; it always returns `action_ack`.
+    If you need something more customized, you'll need to supply a custom `on_progress` handler.
+    """
+    def console_progress(n_chunks: int,
+                         chunk_text: str) -> sym:
+        """Progress indicator while the LLM is processing. Callback for `llmclient.invoke`."""
+        if (n_chunks == 1 or n_chunks % 10 == 0):  # in any message being written by the AI, print a progress symbol for the first chunk, and then again every 10 chunks.
+            print(progress_symbol, end="", file=sys.stderr)
+            sys.stderr.flush()
+        return action_ack  # let the LLM continue generating if it wants
+    return console_progress
 
 # --------------------------------------------------------------------------------
 # For tool-using LLMs: tool-calling

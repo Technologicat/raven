@@ -1349,10 +1349,8 @@ with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # glo
 
 logger.info("App bootup...")
 
-if api.raven_server_available():
-    print(f"{Fore.GREEN}{Style.BRIGHT}Connected to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL}")
-else:
-    print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL} Is Raven-server running?")
+# Connect to Raven-server
+if not api.test_connection():
     sys.exit(255)
 
 # IMPORTANT: `avatar_load` first before we start the GUI, to create the avatar instance.

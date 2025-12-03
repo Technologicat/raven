@@ -41,11 +41,9 @@ def test():
                    stt_capture_audio_device=client_config.stt_capture_audio_device)  # let it create a default executor
 
     logger.info(f"test: check server availability at {client_config.raven_server_url}")
-    if api.raven_server_available():
-        print(f"{Fore.GREEN}{Style.BRIGHT}Connected to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL}")
+    if api.test_connection():
         print(f"{Fore.GREEN}{Style.BRIGHT}Proceeding with self-test.{Style.RESET_ALL}")
     else:
-        print(f"{Fore.RED}{Style.BRIGHT}ERROR: Cannot connect to Raven-server at {client_config.raven_server_url}.{Style.RESET_ALL} Is Raven-server running?")
         print(f"{Fore.RED}{Style.BRIGHT}Canceling self-test.{Style.RESET_ALL}")
         return
 

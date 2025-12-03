@@ -30,7 +30,7 @@ This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["initialize",
-           "raven_server_available",
+           "raven_server_available", "test_connection",
            "tts_server_available",
            "modules",
            "avatar_load", "avatar_reload", "avatar_unload",
@@ -76,6 +76,8 @@ import qoi
 
 import numpy as np
 
+from mcpyrate import colorizer
+
 import torch  # noqa: F401: import torch before spaCy, so that spaCy finds the GPU (otherwise spaCy will complain that CuPy is not installed, which is not true)
 
 import spacy
@@ -98,6 +100,8 @@ from ..vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 def raven_server_available() -> bool:
     """Return whether Raven-server is available.
 
+    `initialize` must be called first. This will use the Raven-server URL from the init.
+
     Raven-server handles everything on the server side of Raven.
     """
     if not util.api_initialized:
@@ -114,8 +118,32 @@ def raven_server_available() -> bool:
         return False
     return True
 
+def test_connection(quiet: bool = False) -> bool:
+    """Test the connection to Raven-server.
+
+    This is essentially the same as `raven_server_available`, but also prints
+    success/failure status messages in a standard format (that also matches that of
+    `raven.librarian.llmclient.test_connection`), so is useful during app startup.
+
+    `initialize` must be called first. This will use the Raven-server URL from the init.
+
+    Return `True` if test successful, `False` if not (e.g. server not running or unreachable).
+
+    `quiet`: If `False` (default), print test result to stdout.
+             If `True`, don't print anything (like `-q` command-line option of many *nix tools).
+    """
+    if raven_server_available():
+        print(f"{colorizer.Fore.GREEN}{colorizer.Style.BRIGHT}Connected to Raven-server at {util.api_config.raven_server_url}{colorizer.Style.RESET_ALL}")
+        return True
+    else:
+        print(f"{colorizer.Fore.RED}{colorizer.Style.BRIGHT}ERROR: Cannot connect to Raven-server at {util.api_config.raven_server_url}.{colorizer.Style.RESET_ALL} Is Raven-server running?")
+        logger.error(f"Failed to connect to Raven-server at '{util.api_config.raven_server_url}'.")
+        return False
+
 def tts_server_available() -> bool:
     """Return whether the speech synthesizer is available.
+
+    `initialize` must be called first. This will use the Raven-server URL from the init.
 
     TTS uses Raven-server, but whether the "tts" module is loaded depends on the server config.
 
