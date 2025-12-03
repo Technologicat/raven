@@ -725,9 +725,10 @@ def _resize_panels() -> None:
     dpg.set_item_height("avatar_panel", avatar_panel_h)  # tag
     dpg_avatar_renderer.reposition(new_x_center=(avatar_panel_w // 2),
                                    new_y_bottom=(avatar_panel_h - 8))
+    blur_state = _animator_settings["backdrop_blur"] if _animator_settings is not None else True  # may not be initialized yet at app startup on a 1920x1080 screen (triggers immediate resize)
     dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 16,
                                            new_height=avatar_panel_h - 16,
-                                           new_blur_state=_animator_settings["backdrop_blur"])
+                                           new_blur_state=blur_state)
 
     # TODO: change upscale factor too? (need to update "upscale" in `librarian_config.avatar_config.animator_settings_overrides` and send config to server)
 
@@ -997,6 +998,7 @@ def _load_initial_animator_settings() -> None:
                                            new_height=avatar_panel_h - 16,
                                            new_blur_state=animator_settings["backdrop_blur"])
     _animator_settings = animator_settings  # for access from GUI event handlers
+    _resize_gui()  # force GUI resize just in case (app startup on 1920x1080 screen)
 
 dpg.set_frame_callback(2, _load_initial_animator_settings)
 
