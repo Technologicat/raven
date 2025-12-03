@@ -700,6 +700,7 @@ def _resize_panels() -> None:
 
     avatar_panel_w, avatar_panel_h = _get_avatar_panel_size(main_window_w=w, main_window_h=h)
     avatar_controller.subtitle_bottom_y0 = _get_subtitle_bottom_y0(avatar_panel_h)  # takes effect from next subtitle shown
+    avatar_controller.reposition_subtitle()  # apply new position to current subtitle, if any
     dpg.set_item_width("avatar_panel", avatar_panel_w)  # tag
     dpg.set_item_height("avatar_panel", avatar_panel_h)  # tag
     dpg_avatar_renderer.reposition(new_x_center=(avatar_panel_w // 2),

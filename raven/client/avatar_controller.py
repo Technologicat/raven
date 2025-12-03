@@ -760,6 +760,27 @@ class DPGAvatarController:
     # --------------------------------------------------------------------------------
     # Background task: TTS playback controller
 
+    def reposition_subtitle(self) -> None:
+        """Reposition the current subtitle, if any.
+
+        This should be done when the GUI is resized in a way that causes the
+        avatar panel to change its size.
+        """
+        try:
+            if (self.subtitle_text_gui_widget is not None) and (dpg.get_value(self.subtitle_text_gui_widget) != ""):
+                # position subtitle offscreen to measure size
+                dpg.set_item_pos(self.subtitle_text_gui_widget, (self.main_window_w,
+                                                                 self.main_window_h))
+                dpg.split_frame()
+                w, h = guiutils.get_widget_size(self.subtitle_text_gui_widget)
+
+                # position subtitle at bottom
+                dpg.set_item_pos(self.subtitle_text_gui_widget, (self.subtitle_left_x0,
+                                                                 self.subtitle_bottom_y0 - h))
+                dpg.split_frame()
+        except SystemError:  # GUI control went bye-bye (app shutdown)
+            pass
+
     def speak_task(self, task_env: env) -> None:
         """TTS, with avatar lipsync and subtitles (from AI translator)."""
         logger.info(f"speak_task: instance {task_env.task_name}: TTS playback controller starting")
@@ -787,17 +808,7 @@ class DPGAvatarController:
                     if self.subtitle_text_gui_widget is not None and subtitle is not None:
                         dpg.set_value(self.subtitle_text_gui_widget, subtitle)
                         dpg.show_item(self.subtitle_text_gui_widget)
-
-                        # position subtitle offscreen to measure size
-                        dpg.set_item_pos(self.subtitle_text_gui_widget, (self.main_window_w,
-                                                                         self.main_window_h))
-                        dpg.split_frame()
-                        w, h = guiutils.get_widget_size(self.subtitle_text_gui_widget)
-
-                        # position subtitle at bottom
-                        dpg.set_item_pos(self.subtitle_text_gui_widget, (self.subtitle_left_x0,
-                                                                         self.subtitle_bottom_y0 - h))
-                        dpg.split_frame()
+                        self.reposition_subtitle()
 
                     # Allow the user to cancel the TTS
                     if self.stop_tts_button_gui_widget is not None:
