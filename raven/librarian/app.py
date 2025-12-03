@@ -199,6 +199,8 @@ with timer() as tim:
             w = base_w + extra_w
             h = base_h + extra_h
             return w, h
+        def _get_subtitle_bottom_y0(avatar_panel_h: int):
+            return (avatar_panel_h - 24) + gui_config.subtitle_y0
         def _get_chat_field_base_width() -> int:  # This is accounting for other controls in the same section (mic button, VU meter, send button).
             return gui_config.chat_panel_w - (2 * (gui_config.toolbutton_w + 8) + (gui_config.vu_meter_w + 8))
         def _get_chat_field_width(main_window_w: int) -> int:
@@ -353,11 +355,9 @@ with timer() as tim:
                         dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
                         dpg.add_text("WEB", tag="web_access_text")
 
-                    global subtitle_bottom_y0
-                    subtitle_bottom_y0 = (avatar_panel_h - 24) + gui_config.subtitle_y0
                     dpg.add_text("",
                                  pos=(gui_config.subtitle_x0,
-                                      subtitle_bottom_y0),  # Position doesn't really matter; the text is empty for now, and will be re-positioned when subtitles are generated.
+                                      _get_subtitle_bottom_y0(avatar_panel_h)),  # Position doesn't really matter; the text is empty for now, and will be re-positioned when subtitles are generated.
                                  color=gui_config.subtitle_color,
                                  wrap=(avatar_panel_w - 16) - gui_config.subtitle_x0 - gui_config.subtitle_text_wrap_margin,
                                  tag="avatar_subtitle_text")
@@ -699,6 +699,7 @@ def _resize_panels() -> None:
     dpg.set_item_width("ai_warning_spacer", ai_warning_spacer_base_size + extra_w)  # tag
 
     avatar_panel_w, avatar_panel_h = _get_avatar_panel_size(main_window_w=w, main_window_h=h)
+    avatar_controller.subtitle_bottom_y0 = _get_subtitle_bottom_y0(avatar_panel_h)  # takes effect from next subtitle shown
     dpg.set_item_width("avatar_panel", avatar_panel_w)  # tag
     dpg.set_item_height("avatar_panel", avatar_panel_h)  # tag
     dpg_avatar_renderer.reposition(new_x_center=(avatar_panel_w // 2),
@@ -884,7 +885,7 @@ avatar_controller = DPGAvatarController(stop_tts_button_gui_widget="chat_stop_sp
                                         subtitles_enabled=app_state["avatar_subtitles_enabled"],
                                         subtitle_text_gui_widget="avatar_subtitle_text",  # tag
                                         subtitle_left_x0=gui_config.subtitle_x0,
-                                        subtitle_bottom_y0=subtitle_bottom_y0,
+                                        subtitle_bottom_y0=_get_subtitle_bottom_y0(avatar_panel_h),
                                         translator_source_lang=gui_config.translator_source_lang,
                                         translator_target_lang=gui_config.translator_target_lang,
                                         main_window_w=gui_config.main_window_w,
