@@ -703,7 +703,11 @@ def _resize_panels() -> None:
     dpg.set_item_height("avatar_panel", avatar_panel_h)  # tag
     dpg_avatar_renderer.reposition(new_x_center=(avatar_panel_w // 2),
                                    new_y_bottom=(avatar_panel_h - 8))
-    blur_state = _animator_settings["backdrop_blur"] if _animator_settings is not None else True  # may not be initialized yet at app startup on a 1920x1080 screen (triggers immediate resize)
+    if _animator_settings is not None:  # may not be initialized yet at app startup on a 1920x1080 screen (triggers immediate resize)
+        blur_state = _animator_settings["backdrop_blur"]
+    else:
+        logger.warning("_resize_panels: `_animator_settings` not initialized, assuming `backdrop_blur=True`. Maybe GUI was resized before the app has finished booting up?")
+        blur_state = True
     dpg_avatar_renderer.configure_backdrop(new_width=avatar_panel_w - 16,
                                            new_height=avatar_panel_h - 16,
                                            new_blur_state=blur_state)
