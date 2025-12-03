@@ -4,6 +4,8 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import textwrap
+
 import torch
 
 from unpythonic.env import env
@@ -47,13 +49,70 @@ embedding_model = "Snowflake/snowflake-arctic-embed-l"
 # vis_method = "umap"  # best quality, slow
 vis_method = "tsne"  # good quality, fast (recommended)
 
-# Whether to detect keywords, for visualizing common terms in clusters.
+# Whether to detect keywords, for visualizing per-cluster topics.
 #
 # Keyword extraction is somewhat expensive (requires NLP), so this can be disabled.
 # It's useful when browsing the semantic map, so we recommend keeping it enabled.
 #
 extract_keywords = True
 # extract_keywords = False
+
+# Which method to use to decide keywords for clusters.
+#
+# These keywords will be shown in Visualizer, in the info panel header for each cluster,
+# as well as in the mouseover tooltip in the semantic map.
+#
+# One of:
+#
+#     "frequencies": Perform a frequency analysis of aggregated per-item data (after stopwording,
+#                    stemming, and named entity recognition), and pick words that are not too common
+#                    between different clusters, but not uselessly rare either (e.g. appearing in
+#                    just a few items).
+#
+#                    Fast, but not very accurate.
+#
+#     "llm":         Send the title/abstract pairs for each cluster (one cluster at a time)
+#                    to a language model, and ask it what it thinks are the common themes
+#                    between the items in the cluster.
+#
+#                    Slow, accurate, requires an LLM backend to be available.
+#
+#                    This uses the LLM settings from Librarian's configuration
+#                    (including also the system prompt and the AI character;
+#                     the configured character will be asked to perform the task).
+#                    See `raven.librarian.config`.
+#
+# clusters_keyword_method = "frequencies"
+clusters_keyword_method = "llm"
+
+clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
+    **Instructions**
+
+    Look at the titles (and abstracts where available) provided below, after these instructions.
+
+    All of these items belong to a single cluster of a larger dataset, as grouped by an automatic
+    clustering algorithm. Although the algorithm occasionally makes a mistake, at least almost all
+    of the items should share a common theme, or possibly several common themes.
+
+    Please identify the common theme(s), and suggest up to six keywords accordingly.
+
+    The keywords can be any nouns, noun phrases, or proper names that you think describe this set of items.
+    The keywords will be shown in a visualizer app, to show the cluster topics to the user.
+
+    As your response, after you are done thinking, write only a comma-separated list of keywords.
+
+    IMPORTANT: The result will be read by a computer program, so it needs to be in a standard format.
+
+    Use only commas as separators (do NOT use the word "and").
+
+    If you find just one common theme, that is fine. In that case, write just that one keyword (no commas).
+
+    If you cannot discern a common theme, that is also fine. In that case, as your response,
+    after you are done thinking, write ONLY the exact string "keyword extraction failed"
+    (without the quotes), so that the program can detect this case.
+
+    The set of items to be analyzed is below.
+""").strip()
 
 # NLP model for spaCy, used in keyword extraction.
 #

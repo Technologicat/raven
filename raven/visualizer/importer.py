@@ -39,7 +39,7 @@ with timer() as tim:
     import bibtexparser
 
     from unpythonic.env import env
-    from unpythonic import box, dyn, islice, make_dynvar, sym, timer, uniqify
+    from unpythonic import box, dyn, ETAEstimator, islice, make_dynvar, sym, timer, uniqify
 
     # # To connect to the live REPL:  python -m unpythonic.net.client localhost
     # from unpythonic.net import server
@@ -63,6 +63,15 @@ with timer() as tim:
 
     from . import config as visualizer_config
 logger.info(f"    Done in {tim.dt:0.6g}s.")
+
+if visualizer_config.clusters_keyword_method == "llm":
+    logger.info("Clusters keyword method is 'llm'. Setting up connection to LLM backend.")
+    from ..librarian import config as librarian_config
+    from ..librarian import llmclient
+    llm_backend_url = librarian_config.llm_backend_url
+    if not llmclient.test_connection(llm_backend_url):
+        sys.exit(255)
+    llm_settings = llmclient.setup(backend_url=llm_backend_url)
 
 # --------------------------------------------------------------------------------
 # Inits that must run before we proceed any further
@@ -547,6 +556,36 @@ def cluster_lowdim_data(input_data, lowdim_data):
     return vis_data, vis_clusterer.labels_, n_vis_clusters, n_vis_outliers
 
 
+def format_entry_for_keyword_extraction(entry: env) -> str:
+    """Format a BibTeX entry into plain text for the keyword extraction step.
+
+    Output format:
+
+        If the entry has an abstract:
+
+            Entry title here.
+
+            Blah blah blah...
+            Blah blah...
+
+        The full-stop and the two newlines after the title are added.
+        Both the title and the abstract are pasted as-is.
+
+        If the entry does NOT have an abstract:
+
+            Entry title here
+
+        The title is pasted as-is.
+
+    Note that in either case, authors and year are not mentioned.
+    This is because they are not relevant for keyword extraction.
+    """
+    # return entry.title
+    if entry.abstract:
+        return entry.title + ".\n\n" + entry.abstract
+    else:
+        return entry.title
+
 def extract_keywords(input_data, max_vis_kw=6):
     """Extract keywords for the dataset.
 
@@ -616,13 +655,6 @@ def extract_keywords(input_data, max_vis_kw=6):
                                       model_name=visualizer_config.spacy_model,
                                       device_string=visualizer_config.devices["nlp"]["device_string"])
                 update_status_and_log(f"[{j} out of {len(input_data.parsed_data_by_filename)}] NLP analysis for {filename}...", log_indent=1)  # restore old message  # TODO: DRY log messages
-
-            def format_entry_for_keyword_extraction(entry: env) -> str:
-                # return entry.title
-                if entry.abstract:
-                    return entry.title + ".\n\n" + entry.abstract
-                else:
-                    return entry.title
 
             logger.info("        Computing keyword set...")
             logger.info(f"            Running NLP pipeline for data from {filename}...")
@@ -774,33 +806,77 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
 
     `vis_data`: output of `cluster_lowdim_data`, which see.
     `n_vis_clusters`: output of `cluster_lowdim_data`, which see.
-    `all_keywords`: output of `extract_keywords`, which see.
+
+    `all_keywords`: Used when `config.clusters_keyword_method == "frequencies"`.
+
+                    Output of `extract_keywords`, which see.
 
     `max_vis_kw`: how many keywords to keep for each cluster.
 
-    `fraction`: IMPORTANT. The source of the keyword suggestion magic. See `nlptools.suggest_keywords`.
+    `fraction`: Used when `config.clusters_keyword_method == "frequencies"`.
+
+                IMPORTANT. The source of the keyword suggestion magic. See `nlptools.suggest_keywords`.
 
     Returns `vis_keywords_by_cluster`, a list, where the `k`th item is a list of keywords (`str`) for cluster ID `k`.
     For each cluster, the keywords are sorted by number of occurrences (descending) across the whole dataset.
     """
     update_status_and_log("Extracting keywords for each cluster...", log_indent=1)
-    with timer() as tim:
-        logger.info("        Collecting keywords from data points in each cluster (`suggest_keywords` will treat each cluster as a 'document')...")
-        keywords_by_cluster = [collections.Counter() for _ in range(n_vis_clusters)]
+
+    if visualizer_config.clusters_keyword_method == "frequencies":
+        with timer() as tim:
+            logger.info("        Collecting keywords from data points in each cluster (`suggest_keywords` will treat each cluster as a 'document')...")
+            keywords_by_cluster = [collections.Counter() for _ in range(n_vis_clusters)]
+            for entry in vis_data:
+                if entry.cluster_id >= 0:  # not an outlier
+                    # Update cluster keyword counters from this entry.
+                    # NOTE: We operate on the already-filtered data that excludes stopwords (see `extract_keywords` for details).
+                    # TODO: We could also use `entry.cluster_probability` for something here.
+                    # TODO: Including entities would be nice, but they don't currently have frequency information.
+                    keywords_by_cluster[entry.cluster_id].update(entry.keywords)  # inject keywords of this entry to the keywords of the cluster this entry belongs to
+
+            # Here, each cluster is a "document" for the purposes of suggesting keywords.
+            vis_keywords_by_cluster = nlptools.suggest_keywords(per_document_frequencies=keywords_by_cluster,
+                                                                corpus_frequencies=all_keywords,
+                                                                threshold_fraction=fraction,
+                                                                max_keywords=max_vis_kw)
+        logger.info(f"        Done in {tim.dt:0.6g}s.")
+    elif visualizer_config.clusters_keyword_method == "llm":
+        # First, group entries by cluster
+        entries_by_cluster = collections.defaultdict(list)  # {cluster_id0: [entry0, ...], ...}
         for entry in vis_data:
             if entry.cluster_id >= 0:  # not an outlier
-                # Update cluster keyword counters from this entry.
-                # NOTE: We operate on the already-filtered data that excludes stopwords (see `extract_keywords` for details).
-                # TODO: We could also use `entry.cluster_probability` for something here.
-                # TODO: Including entities would be nice, but they don't currently have frequency information.
-                keywords_by_cluster[entry.cluster_id].update(entry.keywords)  # inject keywords of this entry to the keywords of the cluster this entry belongs to
+                entries_by_cluster[entry.cluster_id].append(entry)
 
-        # Here, each cluster is a "document" for the purposes of suggesting keywords.
-        vis_keywords_by_cluster = nlptools.suggest_keywords(per_document_frequencies=keywords_by_cluster,
-                                                            corpus_frequencies=all_keywords,
-                                                            threshold_fraction=fraction,
-                                                            max_keywords=max_vis_kw)
-    logger.info(f"        Done in {tim.dt:0.6g}s.")
+        eta_estimator = ETAEstimator(total=len(entries_by_cluster), keep_last=50)
+        vis_keywords_by_cluster = []
+        for cluster_id, entries in sorted(entries_by_cluster.items()):  # default sort is fine, since the key is the cluster ID
+            logger.info(f"        Extracting keywords for cluster #{cluster_id} (number of clusters: {len(entries_by_cluster.items())}); {eta_estimator.formatted_eta}")
+            # Use two blank lines as an entry separator (works also when the abstract has paragraph breaks; also clearly associates which title goes with which abstract).
+            cluster_texts = "\n\n\n".join(format_entry_for_keyword_extraction(entry).strip() for entry in entries)
+            prompt = f"{visualizer_config.clusters_llm_keyword_extraction_prompt}\n-----\n\n{cluster_texts}"
+
+            logger.info(f"        LLM prompt for cluster #{cluster_id}:\n{prompt}")
+
+            # Ask the LLM to provide keywords
+            raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
+                                                                                     instruction=prompt,
+                                                                                     on_progress=llmclient.make_console_progress_handler("."))
+
+            logger.info(f"        LLM output (raw) for cluster #{cluster_id}:\n{raw_output_text}")
+            logger.info(f"        LLM output (final answer) for cluster #{cluster_id}:\n{scrubbed_output_text}")
+
+            # TODO: wrap this in a retry mechanism (up to 3 times?)
+            if scrubbed_output_text.strip().lower() == "keyword extraction failed":
+                logger.warning(f"        The LLM could not identify a common theme for cluster #{cluster_id}.")
+                cluster_keywords = ["<unknown topic>"]
+            else:
+                cluster_keywords = [keyword.strip() for keyword in scrubbed_output_text.split(",")]
+            vis_keywords_by_cluster.append(cluster_keywords)
+            eta_estimator.tick()
+    else:
+        error_msg = f"Unknown cluster keyword method '{visualizer_config.clusters_keyword_method}'; valid: 'frequencies', 'llm'. Please check your `raven.visualizer.config`."
+        logger.error(f"collect_cluster_keywords: {error_msg}")
+        raise ValueError(error_msg)
 
     return vis_keywords_by_cluster
 
@@ -1203,7 +1279,7 @@ def main() -> None:
     opts = parser.parse_args()
 
     if opts.output_filename.endswith(".bib"):
-        print(f"Output filename '{opts.output_filename}' looks like an input filename. Cancelling. Please check usage summary by running this prorgram with the '-h' (or '--help') option.")
+        print(f"Output filename '{opts.output_filename}' looks like an input filename. Cancelling. Please check usage summary by running this program with the '-h' (or '--help') option.")
         sys.exit(1)
 
     try:
