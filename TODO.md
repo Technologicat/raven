@@ -54,6 +54,9 @@
     - Avatar settings editor
     - Avatar pose editor
 
+- For clarity, `deviceinfo` at app bootup should report whether the reported device configuration is for the client or for the server.
+  - Add a parameter?
+
 - Visualizer
   - Excel or CSV import to BibTeX
   - BibTeX export (must keep a copy of original full entries in the dataset file)
@@ -72,8 +75,19 @@
     - Info tooltip another good candidate, and needs many of the same data sources to be passed in. (Do these two need to work together?)
   - Make the layout switchable left/right (which side of the screen the info panel is on, for on-site collaboration accounting for physical placement constraints for laptop and users)
   - Improve keyword autodetection
-    - Preprocess text by LLM before handing over to the simple keyword detector algorithm?
-    - Invert embedding?
+    - Alternative 1: LLM based keyword detection (prototyping this now)
+      - analyze the overall topic of the dataset from the full (or subsampled?) dataset, titles only
+      - ask LLM to normalize letter case (only proper names spelled as-is)
+      - save analysis logs, including thinking traces
+      - make keyword sets cacheable
+      - also cache partial results (some clusters done), LLM analysis is slow
+      - show keyword detection progress in GUI (cluster number)
+      - clean up logging
+      - update docs: when keyword extraction mode is "llm", Visualizer needs the LLM backend to be running.
+        - Warn and change the mode if LLM backend not available?
+        - Also show a warning in the import dialog GUI.
+    - Alternative 2: preprocess text by LLM before handing over to the simple keyword detector algorithm?
+    - Alternative 3: Invert the embedding to find word/sentence that describes the text best?
   - Account for BibTeX entry type: article, inproceedings, book, patent, ...
     - Show entry type for each entry
     - Show count by type in selection
