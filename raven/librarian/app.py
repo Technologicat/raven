@@ -705,6 +705,7 @@ def _resize_panels() -> None:
                                    new_y_bottom=(avatar_panel_h - 8))
     if _animator_settings is not None:  # may not be initialized yet at app startup on a 1920x1080 screen (triggers immediate resize)
         blur_state = _animator_settings["backdrop_blur"]
+        logger.info(f"_resize_panels: `_animator_settings` exists, got `backdrop_blur={blur_state}`.")
     else:
         logger.warning("_resize_panels: `_animator_settings` not initialized, assuming `backdrop_blur=True`. Maybe GUI was resized before the app has finished booting up?")
         blur_state = True
