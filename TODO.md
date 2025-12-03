@@ -121,6 +121,7 @@
         - Split transcribed text to words, check the first two words; on match, scrub those two words, and trigger the command processor for the rest.
         - Chaining commands: split to sentences?
       - Edit spoken message before sending?
+      - The `whisper-large-v3-turbo` model is ~1.6 GB. Look into quantized variants to save VRAM. May need to change the backend to the vLLM library to run those.
     - For model testing: User persona sampling / "impersonate"
     - For model testing: Send message as AI / "prefill"
     - Long subtitle splitter (we now have the audio length).

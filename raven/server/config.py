@@ -147,7 +147,9 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 #
 # https://huggingface.co/openai/whisper-large-v3-turbo
 #
-speech_recognition_model = "openai/whisper-large-v3-turbo"  # TODO: also this model is ~1.6 GB; look into quantized variants to save VRAM (may need to change the backend to the vLLM library to run those)
+# speech_recognition_model = "openai/whisper-large-v3-turbo"  # 800M parameters
+speech_recognition_model = "openai/whisper-base"  # 74M parameters, for CPU, multilingual model
+# speech_recognition_model = "openai/whisper-base.en"  # 74M parameters, for CPU, English-only model
 
 # AI model used by the `summarize` module, for abstractive summarization.
 #
