@@ -10,6 +10,15 @@
     - This can be useful for `pdftotext` outputs, and for text obtained from PDF files by OCR (such as with `ocrmypdf --force-ocr input.pdf output.pdf`).
     - Raven-server's `sanitize` module is used automatically, if the server is reachable and the module is loaded on the server; else the dehyphenator model is loaded locally.
 
+- *Raven-visualizer*:
+  - Importer: New keyword detection mode "llm".
+    - This uses the LLM backend configured for *Librarian*.
+      - When this mode is used, the LLM backend must be running when *Visualizer* (or the command-line tool `raven-importer`) is started.
+    - To initialize the task, this uses the same system prompt and AI character as *Librarian* uses for its chat.
+      - This gives results consistent with what *Librarian* would say, because the LLM operations are handled by the same AI simulacrum.
+      - See `raven.librarian.config`.
+    - The AI analyzes the titles and abstracts for each cluster (separately), and suggests keywords. These keywords are recorded as the cluster keywords for *Visualizer*.
+
 - *Raven-librarian*:
   - New feature: STT (speech to text, speech recognition). Talk to the AI using your mic!
     - To start speaking to the AI, click the mic button next to the chat text entry field (hotkey Ctrl+Shift+Enter).
@@ -90,6 +99,9 @@
 
 - Tools:
   - *Raven-pdf2bib*: Overhauled. See updated instructions in [visualizer README](raven/visualizer/README.md).
+    - To initialize each LLM task, this uses the same system prompt and AI character as *Librarian* uses for its chat.
+      - This gives results consistent with what *Librarian* would say, because the LLM operations are handled by the same AI simulacrum.
+      - See `raven.librarian.config`.
 
 
 **Fixed**:
@@ -107,6 +119,9 @@
 
 - *Raven-avatar*:
   - Fix bug: Also the background image is now hidden while the avatar is paused.
+
+- *Raven-librarian*:
+  - Fix bug: The avatar's subtitle now re-positions itself correctly when the GUI is resized while the avatar is speaking.
 
 
 ---
