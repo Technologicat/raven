@@ -374,8 +374,10 @@ class DPGAvatarController:
         If `avatar_renderer` is provided in `config`: resume the avatar video, if currently paused.
         """
         config._idle_detector_t0 = time.time_ns()
-        if (config.avatar_renderer is not None) and (not config.avatar_renderer.animator_running):
-            config.avatar_renderer.pause(action="resume")
+        if config.avatar_renderer is not None:
+            connected = (config.avatar_renderer.avatar_instance_id is not None)
+            if connected and (not config.avatar_renderer.animator_running):
+                config.avatar_renderer.pause(action="resume")
 
     @contextlib.contextmanager
     def idle_override(self,
