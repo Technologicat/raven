@@ -16,7 +16,7 @@ from mcpyrate import colorizer
 
 from .. import __version__
 
-filename_safe_nonalphanum = " -_',"
+filename_safe_nonalphanum = " -_',."
 
 def clean_arxiv_id(arxiv_id: str) -> str:
     """Remove version suffix (e.g., 'v1') from arXiv ID."""
