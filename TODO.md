@@ -76,6 +76,7 @@
     - Refactoring the info panel (~2k SLOC, half of the app) would help a lot.
     - Info tooltip another good candidate, and needs many of the same data sources to be passed in. (Do these two need to work together?)
   - Make the layout switchable left/right (which side of the screen the info panel is on, for on-site collaboration accounting for physical placement constraints for laptop and users)
+  - Word cloud window: move the toolbar to the top (to make it remain on-screen even if the word cloud image is too large to fit the viewport)
   - Improve keyword autodetection
     - Alternative 1: LLM based keyword detection (prototyping this now)
       - analyze the overall topic of the dataset from the full (or subsampled?) dataset, titles only
@@ -86,8 +87,9 @@
       - show keyword detection progress in GUI (cluster number)
       - clean up logging
       - update docs: when keyword extraction mode is "llm", Visualizer needs the LLM backend to be running.
-        - Warn and change the mode if LLM backend not available?
-        - Also show a warning in the import dialog GUI.
+        - Add low VRAM mode: the LLM backend might not be available
+          - Warn and change the mode if LLM backend not available?
+        - Also show a warning in the import dialog GUI when the current mode is different from the one configured.
     - Alternative 2: preprocess text by LLM before handing over to the simple keyword detector algorithm?
     - Alternative 3: Invert the embedding to find word/sentence that describes the text best?
   - Account for BibTeX entry type: article, inproceedings, book, patent, ...
