@@ -224,6 +224,14 @@ This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into 
 
 If you want the fulltexts (e.g. to feed them into *Raven-librarian*'s document database), we provide a `raven-arxiv-download` tool, which takes a list of arXiv IDs on the command line, and downloads and names the corresponding PDFs automatically.
 
+If you have a file of arXiv IDs, one per line, then to download all those papers:
+
+```bash
+xargs -a arxiv_ids.txt raven-arxiv-download
+```
+
+This will save the PDFs into the default directory (which is `papers` under the CWD).
+
 #### Installing the external arxiv2bib tool
 
 **NOTE**: If you have hundreds or more of arXiv papers in the same directory, `arxiv2bib` may fail with an HTTP 414 error (URI too long). In that case, splitting the input into smaller filesets (about 100 each) helps.
