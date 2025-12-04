@@ -22,6 +22,7 @@
     - [Good to know](#good-to-know)
     - [Importing from other formats](#importing-from-other-formats)
         - [arXiv](#arxiv)
+            - [Installing the external arxiv2bib tool](#installing-the-external-arxiv2bib-tool)
         - [WOS (Web of Science)](#wos-web-of-science)
         - [PDF (human-readable abstracts)](#pdf-human-readable-abstracts)
             - [How the PDF importer works](#how-the-pdf-importer-works)
@@ -220,6 +221,10 @@ arxiv2bib <arxiv_ids.txt >arxiv_papers.bib
 ```
 
 This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into Raven.
+
+If you want the fulltexts (e.g. to feed them into *Raven-librarian*'s document database), we provide a `raven-arxiv-download` tool, which takes a list of arXiv IDs on the command line, and downloads and names the corresponding PDFs automatically.
+
+#### Installing the external arxiv2bib tool
 
 **NOTE**: If you have hundreds or more of arXiv papers in the same directory, `arxiv2bib` may fail with an HTTP 414 error (URI too long). In that case, splitting the input into smaller filesets (about 100 each) helps.
 

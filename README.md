@@ -279,6 +279,7 @@ raven-visualizer                  →    python -m raven.visualizer.app
 raven-importer                    →    python -m raven.visualizer.importer
 raven-librarian                   →    python -m raven.librarian.app
 raven-arxiv2id                    →    python -m raven.tools.arxiv2id
+raven-arxiv-download              →    python -m raven.tools.arxiv_download
 raven-burstbib                    →    python -m raven.tools.burstbib
 raven-dehyphenate                 →    python -m raven.tools.dehyphenate
 raven-wos2bib                     →    python -m raven.tools.wos2bib
