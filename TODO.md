@@ -61,6 +61,8 @@
   - Excel or CSV import to BibTeX
   - BibTeX export (must keep a copy of original full entries in the dataset file)
   - Show item slug (BibTeX identifier)
+  - Add feature: select cluster by number
+    - Useful for datasets with few clusters, to look at the clusters one at a time
   - Add feature: author search
     - Show full author list if it fits
     - How to show author list if "Aaltonen et al." and the user is searching for "Virtanen" (200 names later in the same author list)
@@ -124,7 +126,8 @@
       - The `whisper-large-v3-turbo` model is ~1.6 GB. Look into quantized variants to save VRAM. May need to change the backend to the vLLM library to run those.
     - For model testing: User persona sampling / "impersonate"
     - For model testing: Send message as AI / "prefill"
-    - Long subtitle splitter (we now have the audio length).
+    - Add feature: Adjustable semantic search match strictness in HybridIR search engine (by configuring the cosine similarity threshold below which results are dropped)
+    - Long subtitle splitter (we now have the audio length for each sentence).
     - Add feature: Avatar on/off (for low VRAM)
       - What to put in the right panel when avatar is off? Recent chats list, once we implement that?
     - Add feature: Smooth scrolling for linearized chat view
@@ -132,6 +135,9 @@
     - Don't crash if e.g. `tts` module isn't running
 
   - Later:
+    - Fix bug: handling of incomplete thought block (in first response) after Continue.
+      - Continuing should just continue the incomplete thought block.
+      - May need changes in how the complete message is turned back into an incomplete one, when the rendering starts again?
     - Add feature: tool-call access to RAG
       - Get full document, based on its ID (the current RAG autosearch already shows the document IDs).
       - Search database with given query, optionally disabling or enabling only given scopes.
