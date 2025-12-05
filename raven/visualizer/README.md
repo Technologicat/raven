@@ -278,7 +278,7 @@ If you have a file of arXiv IDs, one per line (as above), then to download the f
 xargs -a arxiv_ids.txt raven-arxiv-download
 ```
 
-This will save the PDFs into the current working directory. Use the `-o some_output_dir` option to customize the output path.
+This will save the PDFs into the current working directory. Use the `-o some_output_dir` option to customize the output path (which can be relative or absolute).
 
 If an ID specifies a version, that version of the paper is downloaded; otherwise the latest version is downloaded. Each unique PDF file is downloaded only once.
 
