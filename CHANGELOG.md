@@ -11,14 +11,8 @@
     - Raven-server's `sanitize` module is used automatically, if the server is reachable and the module is loaded on the server; else the dehyphenator model is loaded locally.
 
   - New tool: *Raven-arxiv-download*.
-    - This takes arXiv paper IDs from the command line (e.g. 2511.22570, 2411.17075, cond-mat/0207270, math/0501001v2), and downloads the corresponding PDFs.
-      - Currently, this tool always downloads the most recent version of the paper, ignoring the version in the ID if it was specified.
-    - The PDF files are named automatically using the metadata downloaded from the arXiv API.
-      - Output filename format is "Author and Coauthor et al. (2024, revised 2025) - Paper Title Goes Here - yymm.xxxxxvx.pdf"
-        - "yymm.xxxxxvx" is the arXiv ID, including the version (as determined from the API metadata).
-    - To then create a BibTeX database of the same papers (e.g. for importing into *Raven-visualizer*), use the external `arxiv2bib` tool.
-    - If you already have a bunch of arXiv PDF files that include the ID in the filename, see also `raven-arxiv2id`.
-      - This can help combine your existing collection with papers downloaded with `raven-arxiv-download` into one big list of IDs, which you can then feed into `arxiv2bib`.
+    - This takes arXiv paper IDs from the command line (e.g. 2511.22570, 2411.17075v5, cond-mat/0207270, math/0501001v2), and downloads the corresponding PDFs.
+    - For instructions, see the [visualizer README](raven/visualizer/README.md).
 
 - *Raven-visualizer*:
   - Importer: New keyword detection mode "llm".

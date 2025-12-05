@@ -22,7 +22,9 @@
     - [Good to know](#good-to-know)
     - [Importing from other formats](#importing-from-other-formats)
         - [arXiv](#arxiv)
-            - [Installing the external arxiv2bib tool](#installing-the-external-arxiv2bib-tool)
+            - [Converting a list of arXiv IDs into a BibTeX file](#converting-a-list-of-arxiv-ids-into-a-bibtex-file)
+            - [Extracting arXiv IDs from PDF filenames](#extracting-arxiv-ids-from-pdf-filenames)
+            - [Auto-downloading arXiv fulltexts by IDs](#auto-downloading-arxiv-fulltexts-by-ids)
         - [WOS (Web of Science)](#wos-web-of-science)
         - [PDF (human-readable abstracts)](#pdf-human-readable-abstracts)
             - [How the PDF importer works](#how-the-pdf-importer-works)
@@ -208,33 +210,21 @@ We plan to add more importers in the future.
 
 Useful especially for AI/CS topics.
 
-The external [arxiv2bib](https://github.com/nathangrigg/arxiv2bib) tool produces a BibTeX bibliography, when given a list of arXiv document IDs. It will pull the relevant data from arXiv.
+#### Converting a list of arXiv IDs into a BibTeX file
 
-If you have a directory full of PDFs downloaded from arXiv, with the identifier somewhere in the filename, see the `raven-arxiv2id` command-line tool provided with Raven. This tool can extract the arXiv identifiers from the filenames, in a format suitable for handing over to `arxiv2bib`. Only unique identifiers will be returned. For a short help message, run `raven-arxiv2id -h`.
+Given arXiv IDs, the external [`arxiv2bib`](https://github.com/nathangrigg/arxiv2bib) will pull the relevant metadata from arXiv, and write a BibTeX file.
 
 Usage:
 
 ```bash
-$(pdm venv activate)
-raven-arxiv2id >arxiv_ids.txt  # run this in a directory that has arXiv PDF files
 arxiv2bib <arxiv_ids.txt >arxiv_papers.bib
 ```
 
-This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into Raven.
+where `arxiv_ids.txt` is a text file containing arXiv identifiers, one per line.
 
-If you want the fulltexts (e.g. to feed them into *Raven-librarian*'s document database), we provide a `raven-arxiv-download` tool, which takes a list of arXiv IDs on the command line, and downloads and names the corresponding PDFs automatically.
+This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into *Raven-visualizer*.
 
-If you have a file of arXiv IDs, one per line, then to download all those papers:
-
-```bash
-xargs -a arxiv_ids.txt raven-arxiv-download
-```
-
-This will save the PDFs into the default directory (which is `papers` under the CWD).
-
-#### Installing the external arxiv2bib tool
-
-**NOTE**: If you have hundreds or more of arXiv papers in the same directory, `arxiv2bib` may fail with an HTTP 414 error (URI too long). In that case, splitting the input into smaller filesets (about 100 each) helps.
+**:exclamation: If your list has hundreds of arXiv identifiers, `arxiv2bib` may fail with an HTTP 414 error (URI too long).**
 
 The issue has been fixed in the `arxiv2bib` source code, but the updated package has not been released yet. In the meantime, it is preferred to install the tool from [the `arxiv2bib` GitHub repo](https://github.com/nathangrigg/arxiv2bib).
 
@@ -252,6 +242,55 @@ To do that, make sure that Raven's venv is **not** active, and then run the inst
 ```bash
 python -m pip install git+https://github.com/nathangrigg/arxiv2bib.git@master
 ```
+
+#### Extracting arXiv IDs from PDF filenames
+
+In case you have a directory full of PDFs downloaded from arXiv, with the identifier somewhere in the filename, we provide `raven-arxiv2id`, which extracts arXiv identifiers from filenames, in a format suitable for handing over to [`arxiv2bib`](https://github.com/nathangrigg/arxiv2bib).
+
+Only unique identifiers will be returned. For a short help message, run `raven-arxiv2id -h`.
+
+Usage:
+
+```bash
+$(pdm venv activate)
+raven-arxiv2id >arxiv_ids.txt  # run this in a directory that has arXiv PDF files
+```
+
+Then you can proceed as above:
+
+```bash
+arxiv2bib <arxiv_ids.txt >arxiv_papers.bib
+```
+
+and import the resulting `.bib` file into *Raven-visualizer*.
+
+#### Auto-downloading arXiv fulltexts by IDs
+
+If you have a list of arXiv identifiers and you want to download the corresponding fulltexts from arXiv, we provide `raven-arxiv-download`.
+
+This tool takes a list of arXiv IDs on the command line, and downloads and names the corresponding PDFs automatically. For a short help message, run `raven-arxiv-download -h`.
+
+If you have a file of arXiv IDs, one per line (as above), then to download the fulltexts:
+
+```bash
+xargs -a arxiv_ids.txt raven-arxiv-download
+```
+
+This will save the PDFs into the current working directory. Use the `-o some_output_dir` option to customize the output path.
+
+If an ID specifies a version, that version of the paper is downloaded; otherwise the latest version is downloaded. Each unique PDF file is downloaded only once.
+
+The PDF files are named automatically using the metadata from the arXiv API. Output filename format for papers with 1, 2, and ≥ 3 authors are:
+
+```
+Author (2024) - Paper Title - yymm.xxxxxvx.pdf
+Author and Coauthor (2024) - Another Paper Title - yymm.xxxxxvx.pdf
+Author and Coauthor et al. (2024, revised 2025) - Yet Another Paper Title - yymm.xxxxxvx.pdf
+```
+
+In the filename, *yymm.xxxxxvx* is the arXiv ID, including the version. In old-format (pre-2007) IDs (e.g. `cond-mat/0207270`, `math/0501001v2`), in the filename, the "/" is replaced by "_".
+
+The version included in the filename is always automatically determined from the API metadata, regardless of whether a version was specified for that paper on the command line.
 
 
 ### WOS (Web of Science)
