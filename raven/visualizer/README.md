@@ -27,8 +27,8 @@
             - [Auto-downloading arXiv fulltexts by IDs](#auto-downloading-arxiv-fulltexts-by-ids)
         - [WOS (Web of Science)](#wos-web-of-science)
         - [PDF (human-readable abstracts)](#pdf-human-readable-abstracts)
-            - [How the PDF importer works](#how-the-pdf-importer-works)
-            - [LLM requirements for PDF import](#llm-requirements-for-pdf-import)
+            - [How the PDF converter works](#how-the-pdf-converter-works)
+            - [LLM requirements for the PDF converter](#llm-requirements-for-the-pdf-converter)
 - [Visualize](#visualize)
     - [Load a dataset file in the GUI](#load-a-dataset-file-in-the-gui)
     - [Load a dataset file from the command line, when starting the app](#load-a-dataset-file-from-the-command-line-when-starting-the-app)
@@ -73,32 +73,32 @@ We believe that at the end of 2024, AI- and NLP-powered literature filtering too
 Raven uses the following workflow:
 
 ```
-+-------+             +--------+                 +---------+
-|  any  | --import--> | BibTeX | --preprocess--> | dataset | --> interactive visualization
-+-------+             +--------+                 +---------+
++-------+              +--------+             +---------+
+|  any  | --convert--> | BibTeX | --import--> | dataset | --> interactive visualization
++-------+              +--------+             +---------+
 ```
 
-where the `import` step is optional; BibTeX, widely used in the engineering sciences, is considered the native input format of Raven.
+where the `convert` step is optional; BibTeX, widely used in the engineering sciences, is considered the native input format of Raven.
 
 The input does not strictly have to be research literature. Anything that can be defined to have `title`, `authors`, and `year` fields, and optionally an `abstract` field (where *abstract* is any kind of human-readable short text summary), can be used as input. That said, the titles are used for linguistic analysis, so having precise titles (as is common in scientific papers) is likely to produce a more accurate semantic map.
 
-Note that even BibTeX data needs to be preprocessed before it can be visualized.
+Note that even BibTeX data needs to be imported before it can be visualized.
 
-The preprocessing step typically takes some time, so it is performed either offline (in the sense of a batch job) or in the background. All computationally expensive procedures, such as semantic embedding, clustering, keyword analysis, and training the dimension reduction for the dataset, are performed during preprocessing. Some of these, particularly the semantic embedding, support GPU acceleration.
+The import step typically takes some time, so it is performed either offline (in the sense of a batch job) or in the background. All computationally expensive procedures, such as semantic embedding, clustering, keyword analysis, and training the dimension reduction for the dataset, are performed during import. Some of these, particularly the semantic embedding, support GPU acceleration.
 
 The data is clustered automatically, and each cluster of data has its keywords automatically determined by an automated linguistic analysis. It is not possible to edit the clusters or keywords. If something is detected incorrectly, it is more in the spirit of Raven to improve the algorithms rather than hand-edit each dataset. Raven is intended to operate in an environment that has too much data, and where the data updates too quickly, for any kind of manual editing to be feasible at all.
 
-The preprocessing step produces a **dataset file**, which can then be opened and explored in the GUI.
+The import step produces a **dataset file**, which can then be opened and explored in the GUI.
 
-You can preprocess BibTeX files into dataset files in Raven's GUI, as well as from the command line. How to do this is described in more detail below.
+You can import BibTeX files into dataset files in Raven's GUI, as well as from the command line. How to do this is described in more detail below.
 
 ## In the GUI
 
-To preprocess one or more BibTeX databases into a dataset file, click on the *Import BibTeX files* button, or press Ctrl+I. Doing so opens the following **BibTeX import window**:
+To import one or more BibTeX databases into a dataset file, click on the *Import BibTeX files* button, or press Ctrl+I. Doing so opens the following **BibTeX import window**:
 
 <p align="center">
 <img src="../../img/screenshot-import-bibtex.png" alt="Screenshot of Raven's BibTeX importer" width="630"/> <br/>
-<i>The preprocessor. This functionality converts BibTeX files into a Raven dataset.</i>
+<i>The importer. This functionality converts BibTeX files into a Raven dataset.</i>
 </p>
 
 Importing several *input BibTeX files* at once combines the data from all of them into the same *output dataset file*.
@@ -171,26 +171,26 @@ The import process runs in the background, so you can continue working while you
 
 **:exclamation: Some tools used internally by the importer have no way to report on their ongoing progress. It is normal for the progress bar to seem stuck for several minutes, particularly while the importer is training or applying the dimension reduction. :exclamation:**
 
-**:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, depending on how much data you have. :exclamation:**
+**:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, and how the importer has been configured in [`raven/visualizer/config.py`](raven/visualizer/config.py). :exclamation:**
 
 ## From the command line
 
 You can also run BibTeX imports without opening the Raven GUI (e.g. on a headless server). Raven provides a command-line tool for this task. It uses the exact same mechanism as the GUI importer; only the user interface is different.
 
-To preprocess one or more BibTeX files into a dataset file named `mydata.pickle`:
+To import one or more BibTeX files into a dataset file named `mydata.pickle`:
 
 ```bash
 $(pdm venv activate)
-raven-preprocess mydata.pickle file1.bib file2.bib ...
+raven-importer mydata.pickle file1.bib file2.bib ...
 ```
 
 Status messages are printed into the terminal window.
 
-**:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, depending on how much data you have. :exclamation:**
+**:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, depending on how much data you have, and how the importer has been configured in [`raven/visualizer/config.py`](raven/visualizer/config.py). :exclamation:**
 
 ## Good to know
 
-The BibTeX preprocessor caches its intermediate data per input file, so you can include e.g. `file1.bib` into multiple different dataset files, and the expensive computations specific to `file1.bib` will only happen once, unless `file1.bib` itself changes. The caching mechanism checks the timestamps; when e.g. `file1.bib` is processed, computations are re-done if `file1.bib` has changed after the cache was last updated.
+The BibTeX importer caches its intermediate data per input file, so you can include e.g. `file1.bib` into multiple different dataset files, and the expensive computations specific to `file1.bib` will only happen once, unless `file1.bib` itself changes. The caching mechanism checks the timestamps; when e.g. `file1.bib` is processed, computations are re-done if `file1.bib` has changed after the cache was last updated.
 
 Currently, the dimension reduction that produces the 2D semantic map is trained using up to 10k data items, picked at random if the input data contains more.
 
@@ -199,18 +199,18 @@ Currently, it is not possible to add new data into an existing Raven-visualizer 
 
 ## Importing from other formats
 
-First import your data into BibTeX format, then preprocess the BibTeX data into a dataset as explained above.
+First convert your data into BibTeX format, then import the BibTeX data into a dataset as explained above.
 
-Available importers are described in more detail below.
+Available converters are described in more detail below.
 
-We plan to add more importers in the future.
+We plan to add more converters in the future.
 
 
 ### arXiv
 
 Useful especially for AI/CS topics.
 
-**:exclamation: Raven is third-party software, NOT affiliated with arXiv. The relevant command-line tools have `arxiv` in the command name only for discoverability reasons.**
+**:exclamation: Raven is third-party software, NOT affiliated with arXiv. The relevant command-line tools have `arxiv` in the command name only for discoverability reasons. :exclamation:**
 
 #### Converting a list of arXiv IDs into a BibTeX file
 
@@ -226,7 +226,7 @@ where `arxiv_ids.txt` is a text file containing arXiv identifiers, one per line.
 
 This gives you a BibTeX bibliography (`arxiv_papers.bib`) that be imported into *Raven-visualizer*.
 
-**:exclamation: If your list has hundreds of arXiv identifiers, `arxiv2bib` may fail with an HTTP 414 error (URI too long).**
+**:exclamation: If your list has hundreds of arXiv identifiers, `arxiv2bib` may fail with an HTTP 414 error (URI too long). :exclamation:**
 
 The issue has been fixed in the `arxiv2bib` source code, but the updated package has not been released yet. In the meantime, it is preferred to install the tool from [the `arxiv2bib` GitHub repo](https://github.com/nathangrigg/arxiv2bib).
 
@@ -299,7 +299,7 @@ The version included in the filename is always automatically determined from the
 
 Useful for the engineering sciences.
 
-To import WOS into BibTeX, see the `raven-wos2bib` command-line tool provided with Raven. Usage:
+To convert WOS into BibTeX, see the `raven-wos2bib` command-line tool provided with Raven. Usage:
 
 ```bash
 $(pdm venv activate)
@@ -309,6 +309,8 @@ raven-wos2bib input1.txt ... inputn.txt 1>output.bib 2>log.txt
 where the input `.txt` files are WOS files exported from Web of Science.
 
 In the example, the output is written to `output.bib`, and any log messages (such as warnings for broken input data) are written to `log.txt`.
+
+You can then import the resulting `.bib` file into *Raven-visualizer*.
 
 
 ### PDF (human-readable abstracts)
@@ -320,16 +322,16 @@ So if you are a conference organizer, and would like to semantically visualize t
 - The text content of the PDF is analyzed via an LLM (large language model).
 - The PDF must have its text content readable by `pdftotext` (from `poppler-utils`).
 - Each PDF should contain one abstract. Multiple abstracts are fed in as separate PDF files.
-- The importer does not enforce a length limit, but its intended use case is a typical conference abstract, 1-2 pages in length.
+- The converter does not enforce a length limit, but its intended use case is a typical conference abstract, 1-2 pages in length.
 - The abstract should have a human-recognizable title, authors, and main text. Exact formatting does not matter.
 - Starting with v0.2.4, the extracted abstract text is sanitized with the dehyphenator before it is written to the "abstract" field of the output BibTeX record.
-- If the abstract contains a line beginning with "*keywords:*" or "*key words:*", the importer will attempt to also extract keywords.
+- If the abstract contains a line beginning with "*keywords:*" or "*key words:*", the converter will attempt to also extract keywords.
 
 **:exclamation: This functionality is currently in beta. :exclamation:**
 
-**:exclamation: This functionality requires a locally hosted LLM. :exclamation:**
+**:exclamation: This functionality requires an LLM. :exclamation:**
 
-To import PDF into BibTeX:
+To convert conference abstract PDFs into BibTeX:
 
 ```bash
 $(pdm venv activate)
@@ -338,7 +340,7 @@ raven-pdf2bib http://localhost:5000 -i some_input_directory -s success.bib -f fa
 
 The "*http://...*" argument is the URL of an LLM serving an OpenAI-compatible API (streaming mode).
 
-The command imports all PDF files in `some_input_directory` (which can be a relative or absolute path), automatically descending into subdirectories. The files are processed one directory at a time, in Unicode lexicographical order by filename. Successful outputs are written to `success.bib`, failed outputs to `failed.bib`, and log messages to `log.txt`.
+The command converts all PDF files in `some_input_directory` (which can be a relative or absolute path), automatically descending into subdirectories. The files are processed one directory at a time, in Unicode lexicographical order by filename. Successful outputs are written to `success.bib`, failed outputs to `failed.bib`, and log messages to `log.txt`.
 
 The input directory (`-i some_input_directory`) is optional; if not provided, the current working directory of the terminal will be used.
 
@@ -354,33 +356,33 @@ The `-of done_failed` moves failed items similarly.
 
 The directory specified by `-o` (as well as that by `-of`) is ignored while descending into subdirectories of the input directory, so it is possible to use e.g. `-o some_input_directory/done_success`.
 
-To continue a partial import (with some files already having been moved into the done-directories, and some remaining), just run the same command again - all the output files (success and failure bibs, and the log) are appended to automatically.
+To continue a partial conversion (with some files already having been moved into the done-directories, and some remaining), just run the same command again - all the output files (success and failure bibs, and the log) are appended to automatically.
 
-#### How the PDF importer works
+#### How the PDF converter works
 
-The PDF importer analyzes the human-readable text content of the PDF via an LLM. If the text contains a section title *"References"*, anything after that point is discarded before processing. This is done to prevent cross-contamination, which would otherwise be an issue especially when extracting the title and the author list.
+The PDF converter analyzes the human-readable text content of the PDF via an LLM. If the text contains a section title *"References"*, anything after that point is discarded before processing. This is done to prevent cross-contamination, which would otherwise be an issue especially when extracting the title and the author list.
 
 To improve reliability, the fields are processed one at a time. Some prompt engineering has gone both into the system prompt as well as each individual data-extracting prompt. The prompts have been engineered manually; we have not looked at automatic prompt optimization.
 
 The extracted data is automatically double-checked via heuristics, for fields for which this is reasonably possible. Any suspicious-looking LLM responses are flagged with a warning. It is **very strongly recommended** to manually double-check any entries that were flagged by comparing the generated BibTeX entry to the human-readable content of the original PDF file, because any flagged entries are **very likely** to be incorrect in one or more ways.
 
-Note that people do actually sometimes submit PDF abstracts with no author list, or even no title. The importer attempts to catch such cases, but is not always successful at doing so.
+Note that people do actually sometimes submit PDF abstracts with no author list, or even no title. The converter attempts to catch such cases, but is not always successful at doing so.
 
-As is well known, LLMs may make things up, may respond incorrectly, or may occasionally fail to follow instructions correctly. Hence this functionality is in beta.
+As is well known, LLMs may make things up (confabulate / "hallucinate"), may respond incorrectly, or may occasionally fail to follow instructions correctly. Hence this functionality is in beta.
 
-#### LLM requirements for PDF import
+#### LLM requirements for the PDF converter
 
 Note that `raven-pdf2bib` has only been tested with a locally hosted LLM. Here "locally hosted" means "on the same LAN as Raven" (can even be on the same machine). A cloud LLM with an OpenAI compatible API *might* work if you put an API key to `~/.config/raven/llmclient/api_key.txt`, and set the URL in `raven.librarian.config`. This is however not a development priority.
 
-For locally hosting an LLM, we recommend [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui), which Raven is tested with. Other LLM backends such as [AnythingLLM](https://anythingllm.com/) might also work.
+For locally hosting an LLM, we recommend [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui), which Raven is tested with. Other LLM backends such as [AnythingLLM](https://anythingllm.com/) might also work, but have not been tested. We use the OpenAI-compatible API of `text-generation-webui`. However, in general, there are different dialects that consider themselves *OAI compatible*, so it may be that some features do not work with other backends.
 
-In 2024, `raven-pdf2bib` was originally tested on a local Llama 3.1 8B instance running on Oobabooga. This model fits into a laptop's 8 GB VRAM at 4 bits, e.g. in a Q4_K_M quantized format, while leaving enough VRAM for 24576 (24k) tokens of context. Based on our own testing, accuracy with this LLM is ~80%, or in other words, on average, 8 out of 10 abstracts import without warnings (and also look correct by manual inspection).
+In 2024, `raven-pdf2bib` was originally tested on a local Llama 3.1 8B instance running on Oobabooga. This model fits into a laptop's 8 GB VRAM at 4 bits, e.g. in a Q4_K_M quantized format, while leaving enough VRAM for 24576 (24k) tokens of context. Based on our own testing, accuracy with this LLM is ~80%, or in other words, on average, 8 out of 10 abstracts convert without warnings (and also look correct by manual inspection).
 
-In **February 2025**, support for thinking LLMs was added. This was originally tested on a Q4_K_M quant of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), with 65536 (64k) tokens of context, running the model on an eGPU with 24GB of VRAM. This increases the accuracy by a couple of percentage points, but makes the import much slower. The newer [QwQ 32B](https://huggingface.co/Qwen/QwQ-32B) model (March 2025, Alibaba, *Qwen with Questions*) can run with similar specs.
+In **February 2025**, support for thinking LLMs was added. This was originally tested on a Q4_K_M quant of [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B), with 65536 (64k) tokens of context, running the model on an eGPU with 24GB of VRAM. This increases the accuracy by a couple of percentage points, but makes the converter much slower. The newer [QwQ 32B](https://huggingface.co/Qwen/QwQ-32B) model (March 2025, Alibaba, *Qwen with Questions*) can run with similar specs.
 
-As of **October 2025**, `raven-pdf2bib` is tested with [Qwen3 2507 30B A3B Thinking](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507). This is **the currently recommended LLM**. This can also run on a 24GB eGPU at 4bit, and as it's a MoE (*Mixture of Experts*) with 3B active parameters per token, it's much faster than earlier models. With 24GB, the model loads fine with 131072 (128k) context, and works as expected at least up to ~50k, but I have not tested filling up the whole context. The model itself supports up to 262144 (256k), but then 24GB VRAM is not enough (the model fails to load). This model seems much smarter than earlier ones.
+As of **December 2025**, `raven-pdf2bib` is tested with [Qwen3 2507 30B A3B Thinking](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507). This is **the currently recommended LLM**. This can also run on a 24GB eGPU at 4bit, and as it's a MoE (*Mixture of Experts*) with 3B active parameters per token, it's much faster than earlier models. With 24GB, the model loads fine with 131072 (128k) context, and works as expected at least up to ~50k, but I have not tested filling up the whole context. The model itself supports up to 262144 (256k), but then 24GB VRAM is not enough (the model fails to load). This model seems much smarter than earlier ones. In our informal tests, accuracy is ~88%.
 
-If you must run with limited VRAM, then [Qwen3 2507 4B Thinking](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507) is worth a try. Obviously, compared to the 30B of the same model series, it's not nearly as intelligent; but it punches way above its size class. I think this one is strictly better than LLaMa 3.1 8B or DeepSeek-R1-Distill-Qwen-7B, despite half the size.
+If you must run with limited VRAM (8 GB), then [Qwen3 2507 4B Thinking](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507) is worth a try. Obviously, compared to the 30B of the same model series, it's not nearly as intelligent; but it punches way above its size class. I think this one is strictly better than LLaMa 3.1 8B or DeepSeek-R1-Distill-Qwen-7B, despite half the size.
 
 
 # Visualize
@@ -453,10 +455,10 @@ The file extension (`.png`) is added automatically to the filename you specify.
 - Scalability? Beta version tested up to 12k entries, but datasets can be 100k entries in size.
 - Hardware requirements, especially GPU. Tested on a laptop with an NVIDIA RTX 3070 Ti mobile, 8 GB VRAM.
 - Clustering in high-dimensional spaces is an open problem in data science. Semantic vectors have upwards of 1k dimensions. This causes many entries to be placed into a catch-all "*Misc*" cluster.
-- Hyperparameters of the clustering algorithm in the preprocessor may be dataset-dependent, but are not yet configurable. This will change in the future.
+- Hyperparameters of the clustering algorithm in the BibTeX importer may be dataset-dependent, but are not yet configurable. This will change in the future.
 - Dataset files are currently **not** portable across different Python versions.
 - We attempt to provide keyboard access to GUI features whenever reasonably possible, but there are currently some features where this is not reasonably possible; notably the plotter, and navigation within the *Open dataset* dialog window.
-- Configuration is currently hardcoded. See [`raven/visualizer/config.py`](raven/visualizer/config.py). We believe that `.py` files are as good a plaintext configuration format as any, but in the long term, we aim to have a GUI to configure at least the most important parts.
+- Configuration is currently fed in as a Python module. See [`raven/visualizer/config.py`](raven/visualizer/config.py). We believe that `.py` files are as good a plaintext configuration format as any, but in the long term, we aim to have a GUI to configure at least the most important parts.
 
 
 # Other similar tools
