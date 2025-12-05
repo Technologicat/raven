@@ -40,6 +40,8 @@ The vision is to help you absorb information from large volumes of text.
 
 *Raven* is 100% local, 100% private, 100% open source.
 
+Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
+
 ## Raven-visualizer: Visualize research literature
 
 <a href="raven/visualizer/README.md"><img src="img/screenshot-main.png" alt="Screenshot of Raven-visualizer's main window" height="200"/></a>
