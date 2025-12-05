@@ -210,6 +210,8 @@ We plan to add more importers in the future.
 
 Useful especially for AI/CS topics.
 
+**:exclamation: Raven is third-party software, NOT affiliated with arXiv. The relevant command-line tools have `arxiv` in the command name only for discoverability reasons.**
+
 #### Converting a list of arXiv IDs into a BibTeX file
 
 Given arXiv IDs, the external [`arxiv2bib`](https://github.com/nathangrigg/arxiv2bib) will pull the relevant metadata from arXiv, and write a BibTeX file.
