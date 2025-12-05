@@ -214,7 +214,7 @@ Useful especially for AI/CS topics.
 
 #### Converting a list of arXiv IDs into a BibTeX file
 
-Given arXiv IDs, the external [`arxiv2bib`](https://github.com/nathangrigg/arxiv2bib) will pull the relevant metadata from arXiv, and write a BibTeX file.
+For this use case, Raven itself does not provide a tool; rather, we recommend the external tool [`arxiv2bib`](https://github.com/nathangrigg/arxiv2bib). It will pull the relevant metadata from arXiv, and write a BibTeX file.
 
 Usage:
 
