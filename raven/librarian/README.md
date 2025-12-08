@@ -5,7 +5,7 @@
 -----
 
 <p align="center">
-<img src="img/screenshot-librarian.png" alt="Screenshot of Raven-librarian" width="800"/> <br/>
+<img src="../../img/screenshot-librarian.png" alt="Screenshot of Raven-librarian" width="800"/> <br/>
 <i>Raven-librarian is an LLM frontend with natively nonlinear chat history, a document database, and a talking AI avatar.</i>
 </p>
 
