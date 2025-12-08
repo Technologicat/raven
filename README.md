@@ -400,7 +400,7 @@ In the meantime: each part of the Raven constellation has its own configuration 
 In the documentation as well as in the source code docstrings and comments, we refer to these files by their dotted module names. The most important ones are:
 
 - `raven.visualizer.config` → [`raven/visualizer/config.py`](raven/visualizer/config.py)
-  - *Raven-visualizer* settings.
+  - *Raven-visualizer* settings, including plotter and word cloud colors, and word cloud image size.
   - Local AI model loading settings. Used if *Visualizer* is started when *Server* is not running.
 - `raven.librarian.config` → [`raven/librarian/config.py`](raven/librarian/config.py)
   - *Raven-librarian* settings, including the AI avatar.
