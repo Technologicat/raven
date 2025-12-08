@@ -171,7 +171,7 @@ The import process runs in the background, so you can continue working while you
 
 **:exclamation: Some tools used internally by the importer have no way to report on their ongoing progress. It is normal for the progress bar to seem stuck for several minutes, particularly while the importer is training or applying the dimension reduction. :exclamation:**
 
-**:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, and how the importer has been configured in [`raven/visualizer/config.py`](raven/visualizer/config.py). :exclamation:**
+**:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, and how the importer has been configured in [`raven.visualizer.config`](config.py). :exclamation:**
 
 ## From the command line
 
@@ -186,7 +186,7 @@ raven-importer mydata.pickle file1.bib file2.bib ...
 
 Status messages are printed into the terminal window.
 
-**:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, depending on how much data you have, and how the importer has been configured in [`raven/visualizer/config.py`](raven/visualizer/config.py). :exclamation:**
+**:exclamation: The BibTeX import process may take a very long time, from several minutes to hours, depending on how much data you have, and how the importer has been configured in [`raven.visualizer.config`](config.py). :exclamation:**
 
 ## Good to know
 
@@ -458,7 +458,7 @@ The file extension (`.png`) is added automatically to the filename you specify.
 - Hyperparameters of the clustering algorithm in the BibTeX importer may be dataset-dependent, but are not yet configurable. This will change in the future.
 - Dataset files are currently **not** portable across different Python versions.
 - We attempt to provide keyboard access to GUI features whenever reasonably possible, but there are currently some features where this is not reasonably possible; notably the plotter, and navigation within the *Open dataset* dialog window.
-- Configuration is currently fed in as a Python module. See [`raven/visualizer/config.py`](raven/visualizer/config.py). We believe that `.py` files are as good a plaintext configuration format as any, but in the long term, we aim to have a GUI to configure at least the most important parts.
+- As explained in the main README, configuration is currently fed in as a Python module, [`raven.visualizer.config`](config.py), which exists specifically as a configuration file.
 
 
 # Other similar tools

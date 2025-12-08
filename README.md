@@ -25,8 +25,10 @@
         - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
         - [Choose which GPU to use (optional)](#choose-which-gpu-to-use-optional)
         - [Exit from the Raven venv (optional, to end the session)](#exit-from-the-raven-venv-optional-to-end-the-session)
+- [Configuration](#configuration)
 - [Uninstall](#uninstall)
 - [Technologies](#technologies)
+- [Privacy](#privacy)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
@@ -38,7 +40,7 @@
 
 The vision is to help you absorb information from large volumes of text.
 
-*Raven* is 100% local, 100% private, 100% open source.
+*Raven* is 100% local, 100% privacy-first, 100% open source.
 
 Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
 
@@ -75,7 +77,7 @@ Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
     - Branching is cheap. A chat branch is just its HEAD pointer.
     - The chain of `parent` nodes uniquely determines the linear history for that branch, up to and including the system prompt.
   - RAG (retrieval-augmented generation) with hybrid (semantic + keyword) search.
-    - Semantic backend: [ChromaDB](https://www.trychroma.com/) (with telemetry off, for maximum privacy).
+    - Semantic backend: [Chroma](https://www.trychroma.com/) (with telemetry off, for maximum privacy).
     - Keyword backend: [bm25s](https://huggingface.co/blog/xhluca/bm25s), which implements the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking algorithm.
     - Results are combined with [reciprocal rank fusion](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search).
   - Tool-calling (a.k.a. tool use).
@@ -387,6 +389,44 @@ After this command completes, `python` again points to the Python in your Python
 If you want to also exit your terminal session, you can just close the terminal window as usual; there is no need to deactivate the venv unless you want to continue working in the same terminal session.
 
 
+# Configuration
+
+Raven is currently mostly configured via text files - more specifically, Python modules (`.py`) that exist specifically as configuration files.
+
+We believe that `.py` files are as good a plaintext configuration format as any, but in the long term, we aim to have a GUI to configure at least the most important parts.
+
+In the meantime: each part of the Raven constellation has its own configuration file. Each configuration file is named `config.py`.
+
+In the documentation as well as in the source code docstrings and comments, we refer to these files by their dotted module names. The most important ones are:
+
+- `raven.visualizer.config` → [`raven/visualizer/config.py`](raven/visualizer/config.py)
+  - *Raven-visualizer* settings.
+  - Local AI model loading settings. Used if *Visualizer* is started when *Server* is not running.
+- `raven.librarian.config` → [`raven/librarian/config.py`](raven/librarian/config.py)
+  - *Raven-librarian* settings, including the AI avatar.
+  - LLM configuration for the whole Raven constellation: server URL, system prompt, AI personality settings, text generation sampler settings.
+  - The AI avatar has some more separate configuration:
+    - Avatar video postprocessor settings are configured separately, in `raven/avatar/assets/settings/animator.json`.
+      - Since finding nice-looking settings for the postprocessor requires interactive experimentation, we provide a GUI app for this. Use `raven-avatar-settings-editor` to edit `animator.json`.
+    - Avatar emotion templates are shared between all characters and configured separately, in [`raven/avatar/assets/emotions/*.json`](raven/avatar/assets/emotions/).
+      - There is usually no need to edit the emotion templates. But if you really want to, you can use the GUI app `raven-avatar-pose-editor`.
+    - Avatar image assets are loaded from [`raven/avatar/assets/characters/`](raven/avatar/assets/characters/).
+      - The default character (*Aria*, main image [aria1.png](raven/avatar/assets/characters/aria1.png)), contains an example of the additional cels needed to support all optional features of the animator, as well as the optional chat icon for *Raven-librarian*.
+    - The backdrop image is loaded from [`raven/avatar/assets/backdrops/`](raven/avatar/assets/backdrops).
+- `raven.server.config` → [`raven/server/config.py`](raven/server/config.py)
+  - AI model settings, except LLM.
+  - A low-VRAM variant is also available, for systems with 8 GB or less VRAM.
+    - `raven.server.config_lowvram` → [`raven/server/config_lowvram.py`](raven/server/config_lowvram.py)
+    - To use it, start *Raven-server* as `raven-server --config raven.server.config_lowvram`
+- `raven.client.config` → [`raven/client/config.py`](raven/client/config.py)
+  - *Raven-server* URL, shared between all client apps.
+  - Audio device selection for voice mode (TTS/STT, i.e. speech synthesizer and speech recognition).
+
+The paths are relative to the top level of the `raven` repository (i.e. to the directory this README is in).
+
+For more, see the documentation for the individual constellation components (Visualizer, Librarian, Server).
+
+
 # Uninstall
 
 ```bash
@@ -440,6 +480,29 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
   - Word cloud renderer: [word_cloud](https://github.com/amueller/word_cloud).
 
 Note that installing Raven will auto-install dependencies into the same venv (virtual environment). This list is here just to provide a flavor of the kinds of parts needed to build a constellation like this.
+
+
+# Privacy
+
+We believe in the principle of *privacy first*. Raven is 100% local, and never collects any user data.
+
+Some components store data on your local computer for the purpose of providing Raven's services. For example, *Raven-librarian*'s document database indexes the documents you insert into the database for the purpose of providing the search capability. The data remains in the index as long as the document is in the database. If you remove a document, the index deletes all of its references to that document.
+
+AI components live on your local installation of *Raven-server*. In general, any data that needs to be processed by an AI component is sent to your local *Raven-server*, and the response is sent back to the client. Communication between the client and the server is **not encrypted**.
+
+It is preferable to run both the client and the server on the same machine, so that your data is never sent over the network. Alternatively, if you can trust the devices on your local network (LAN), you can run *Raven-server* on another machine on that LAN. **Never** connect to *Raven-server* over the internet. Doing so is **not** secure; the server is simply not designed to support that use case.
+
+When Raven is installed, like any Python software, it pulls the Python packages it depends on from [PyPI](https://pypi.org/), using standard Python software installation methods. See the [PyPI privacy notice](https://policies.python.org/pypi.org/Privacy-Notice/).
+
+AI models are downloaded from HuggingFace and self-hosted locally. HuggingFace may collect data (e.g. download statistics) when a model is installed; this is beyond our control. See the [HuggingFace privacy policy](https://huggingface.co/privacy).
+
+We run the [Chroma](https://www.trychroma.com/) local search engine backend in its *telemetry off* mode.
+
+To the best of our knowledge, any other packages we use do not collect any telemetry data.
+
+For Librarian, we **strongly recommend** self-hosting a local LLM via [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui), which can run quantized GGUF models on your GPU, also with partial offloading for low-VRAM environments. It comes with several backends out of the box, including Llama.cpp. It's easy, 100% local, and works well.
+
+However, at your choice, Raven should be able to connect to an OpenAI-compatible cloud LLM API (opt-in via `raven.librarian.config`). We do **not** recommend doing so, for privacy reasons; nor is supporting this use case a priority for development. Several different dialects of "*OpenAI compatible*" exist, so some Librarian features (such as token count and continuing the AI's message) might not work on backends Raven has not been tested with.
 
 
 # License
