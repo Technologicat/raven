@@ -37,14 +37,16 @@
     - Figure out what's going wrong with the end of the long example sent by `raven.client.tests.test_api` (spurious text generated after the speech in the long audio ends)
     - Test also `stt_transcribe_file` and `stt_transcribe_array`
     - whisper-large-v3-turbo needs another 1.6 GB of VRAM; check if we could use a quantized model (may need vLLM)
-  - Option: check first for local model before checking on HF
-    - Currently some modules do this (some due to using a non-default download location, in turn due to requirements of vendored code), others don't.
-    - Can be important in case the model vanishes from HF (as suddenly happened with the old/ancient summarizer).
-    - This would allow the modules of an existing Raven-server installation to start (with the locally existing model) even when that model is no longer available on HF.
   - Zip the avatar characters, for ease of use
     - Include all extra cels in the zip, as well as optional animator/postprocessor settings, and optional emotion templates
     - Implement zip loading on server side, add a new web API endpoint
   - `summarize`: add LLM summarization mode, with a configurable prompt. Allow using a separate small LLM for speed.
+  - Add feature: check first for local model before checking on HF
+    - Currently some modules do this (some due to using a non-default download location, in turn due to requirements of vendored code), others don't.
+    - Can be important in case the model vanishes from HF (as suddenly happened with the old/ancient summarizer).
+    - This would allow the modules of an existing Raven-server installation to start (with the locally existing model) even when that model is no longer available on HF.
+    - Also better for privacy.
+    - Allow disabling this (where possible) for convenience (automatic model updates, if the HF repo is updated).
 
 - Avatar
   - Update assets for all characters (add at least eye-waver effect, maybe other cel-blending cels too)
@@ -167,6 +169,7 @@
         - How to avoid moving files around when/if the user changes the tags on an existing message?
           - Solution: make tags the primary mechanism, and make the document ingestion mechanism automatically add a tag that matches the subdirectory name.
     - Improve user text entry: multiline input
+    - Document database: from, [the front page](https://www.trychroma.com/), it seems Chroma has a BM25 backend too now? We could migrate to this (from BM25s) to simplify `raven.librarian.hybridir`.
 
     - Import tool for importing a batch of documents into the document database (useful when importing lots of documents at once)
       - Just `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Once the scan finishes, exit the tool.
