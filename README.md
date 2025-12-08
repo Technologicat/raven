@@ -411,7 +411,7 @@ In the documentation as well as in the source code docstrings and comments, we r
     - Avatar emotion templates are shared between all characters and configured separately, in [`raven/avatar/assets/emotions/*.json`](raven/avatar/assets/emotions/).
       - There is usually no need to edit the emotion templates. But if you really want to, you can use the GUI app `raven-avatar-pose-editor`.
     - Avatar image assets are loaded from [`raven/avatar/assets/characters/`](raven/avatar/assets/characters/).
-      - The default character (*Aria*, main image [aria1.png](raven/avatar/assets/characters/aria1.png)), contains an example of the additional cels needed to support all optional features of the animator, as well as the optional chat icon for *Raven-librarian*.
+      - The default character (*Aria*, main image [aria1.png](raven/avatar/assets/characters/other/aria1.png)), contains an example of the additional cels needed to support all optional features of the animator, as well as the optional chat icon for *Raven-librarian*.
     - The backdrop image is loaded from [`raven/avatar/assets/backdrops/`](raven/avatar/assets/backdrops).
 - `raven.server.config` → [`raven/server/config.py`](raven/server/config.py)
   - AI model settings, except LLM.
