@@ -55,9 +55,9 @@
 
 **Raven is NOT a search engine.** Rather, for its input, it uses research literature metadata (title, authors, year, abstract) for thousands of papers, as returned by a search engine, and plots that data in an interactive semantic visualization.
 
-**:exclamation: Raven is currently in beta. :exclamation:**
+**:exclamation: *Raven-visualizer* is currently in beta. :exclamation:**
 
-The basic functionality is complete, the codebase should be in a semi-maintainable state, and most bugs have been squashed. If you find a bug that is not listed in [TODO.md](TODO.md), please open an issue.
+The basic functionality is complete, the codebase should be in a semi-maintainable state, and most bugs have been squashed. If you find a bug that is not listed in [TODO.md](TODO.md), please [open an issue](https://github.com/Technologicat/raven/issues).
 
 We still plan to add important features later, such as filtering by time range to help discover trends, and abstractive AI summaries of a user-selected subset of data (based on the author-provided abstracts).
 

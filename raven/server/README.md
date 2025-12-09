@@ -537,7 +537,7 @@ The TTS subsystem is a client-server architecture, with some features implemente
 
 - `websearch_search`: Perform a web search and parse the [SERP](https://en.wikipedia.org/wiki/Search_engine_results_page).
   - As a new feature over what *SillyTavern-Extras* did, you'll now get the results in a structured format that preserves the information of which link belongs to which search result.
-  - Search engines change things over time, so this is likely to break at some point. If you notice it doesn't work, please open an issue.
+  - Search engines change things over time, so this is likely to break at some point. If you notice it doesn't work, please [open an issue](https://github.com/Technologicat/raven/issues).
 
 
 # Web API endpoints

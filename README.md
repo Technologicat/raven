@@ -64,7 +64,7 @@ Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
 
 <img src="img/screenshot-librarian.png" alt="Screenshot of Raven-librarian" height="200"/>
 
-- **Documentation**: under development
+- **Documentation**: [Librarian user manual](raven/librarian/README.md) (under development)
 - **Goal**: Efficiently interrogate a stack of 2k scientific papers. Talk with a local LLM for synthesis, clarifications, speculation, ...
   - **Status**: :construction: An initial prototype of GUI app `raven-librarian` is available; as well as a command-line mini-prototype `raven-minichat` (note that the GUI app has more features).
     - The GUI app is under development.
