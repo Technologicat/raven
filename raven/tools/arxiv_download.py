@@ -29,11 +29,29 @@ GLOBE = "🌐"  # for progress messages indicating internet access
 # arXiv API TOS requires waiting a minimum of 3 seconds between requests
 #     https://info.arxiv.org/help/api/tou.html
 class RateLimiter:
-    def __init__(self, delay: float = 3.0):  # delay: seconds
+    def __init__(self, delay: float = 3.0):
+        """Rate-limit an action.
+
+        For single-threaded use only.
+
+        `delay`: minimum required delay between actions, seconds
+        """
         self.delay = delay
         self.timestamp = 0  # can use any value that causes the first `wait()` to return immediately
 
-    def wait(self, show_progress: bool = True):
+    def wait(self, show_progress: bool = True) -> None:
+        """Wait until `self.delay` seconds of wall time has elapsed since the last action.
+
+        `show_progress`: If `True`, show a `tqdm` progress bar while waiting.
+                         If `False`, wait silently.
+
+        Call this just before performing the actual action to honor the rate limit for that action.
+
+        When the `RateLimiter` starts up, the first `wait` returns immediately,
+        so that no special handling is needed for the first action at the calling end.
+
+        Further calls to `wait` the time from when the previous call to `wait` finished.
+        """
         t = time.time_ns()
         delay_ns = self.delay * 10**9
         wait_duration_ns = delay_ns - (t - self.timestamp)
