@@ -160,8 +160,11 @@ def download_papers(arxiv_ids: List[str],
     # Scan for existing arXiv PDFs to omit them from processing.
     #
     # This is used to skip downloading duplicates when there are manually named files (not downloaded by this tool) that contain a matching arXiv ID in the filename.
-    # Note the ID must include the version number.
-    arxiv_pdf_files_in_output_dir = arxiv2id.get_arxiv_identifiers_from_filenames(arxiv2id.list_pdf_files(output_dir))
+    #
+    # Filenames where the ID has no paper version part (e.g. "v2") are assumed to refer to "v1" - this is the filename convention used by arXiv when you manually download a paper that has only one version.
+    #
+    arxiv_pdf_files_in_output_dir = arxiv2id.get_arxiv_identifiers_from_filenames(arxiv2id.list_pdf_files(output_dir),
+                                                                                  canonize=True)
     output_dir_existing_arxiv_ids = [arxiv_id for arxiv_id, unused_filename in arxiv_pdf_files_in_output_dir]
 
     rate_limiter = RateLimiter()

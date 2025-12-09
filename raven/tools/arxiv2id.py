@@ -44,9 +44,23 @@ def get_arxiv_identifier(path: str) -> str:
         return matches[0]
     return None
 
-def get_arxiv_identifiers_from_filenames(filenames: List[str]) -> List[Tuple[str, str]]:
-    """[filename0, ...] -> [(arxiv_id0, filename0), ...]"""
-    return [(raw_id, p) for p in filenames if (raw_id := get_arxiv_identifier(p))]
+# The `canonize` feature is used by `raven.tools.arxiv_download`, which see.
+def get_arxiv_identifiers_from_filenames(filenames: List[str],
+                                         canonize: bool = False) -> List[Tuple[str, str]]:
+    """[filename0, ...] -> [(arxiv_id0, filename0), ...]
+
+    `canonize`: add the implicit "v1" to IDs that have no version part.
+    """
+    ids_and_paths = [(raw_id, p) for p in filenames if (raw_id := get_arxiv_identifier(p))]
+    if canonize:
+        final_ids_and_paths = []
+        for raw_id, p in ids_and_paths:
+            base, version = split_arxiv_identifier(raw_id)
+            canonized_id = f"{base}v{version}"
+            final_ids_and_paths.append((canonized_id, p))
+    else:
+        final_ids_and_paths = ids_and_paths
+    return final_ids_and_paths
 
 def split_arxiv_identifier(raw_identifier: str) -> int:
     splitted = raw_identifier.split("v")
