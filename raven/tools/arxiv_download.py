@@ -12,10 +12,11 @@ import pathlib
 import requests
 import threading
 import time
-from tqdm import tqdm
 import traceback
 from typing import Dict, List
 import xml.etree.ElementTree as ET
+
+from tqdm import tqdm
 
 from mcpyrate import colorizer
 
