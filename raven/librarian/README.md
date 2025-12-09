@@ -100,7 +100,7 @@ Furthermore, rerolling is useful for **epistemic analysis**:
   - If the LLM states the same thing over and over when rerolled, it believes in what it said (regardless of whether what it said is actually true or not).
   - If the LLM gives a wildly different response each time when rerolled, then it didn't actually know, didn't notice that it didn't know, and confabulated (a.k.a. "*hallucinated*") something random.
 
-And finally, sometimes it is interesting or useful to **visit alternative branches**. (Or, in sci-fi terminology, alternative timelines in the multiverse of discourse.) This allows a discussion to take multiple, mutually exclusive paths, which facilitates a more complete exploration of a topic than a linear chat does.
+And finally, sometimes it is interesting or useful to **visit alternative branches**. (Or, in sci-fi terminology, alternative timelines in the multiverse of discourse.) This allows a discussion to become a garden of forking paths, facilitating a more complete exploration of a topic than a simple linear chat.
 
 A tree structure, and a GUI to match that, facilitates this curation, analysis, and exploration.
 
