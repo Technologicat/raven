@@ -49,7 +49,7 @@ def get_arxiv_identifiers_from_filenames(filenames: List[str],
                                          canonize: bool = False) -> List[Tuple[str, str]]:
     """[filename0, ...] -> [(arxiv_id0, filename0), ...]
 
-    `canonize`: add the implicit "v1" to IDs that have no version part.
+    `canonize`: add an implicit "v1" to IDs that have no version part.
     """
     ids_and_paths = [(raw_id, p) for p in filenames if (raw_id := get_arxiv_identifier(p))]
     if canonize:
