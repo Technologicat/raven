@@ -10,6 +10,7 @@ import math
 import os
 import pathlib
 import requests
+import threading
 import time
 from tqdm import tqdm
 import traceback
@@ -32,12 +33,17 @@ class RateLimiter:
     def __init__(self, delay: float = 3.0):
         """Rate-limit an action.
 
-        For single-threaded use only.
-
         `delay`: minimum required delay between actions, seconds
+
+        Instantiate one `RateLimiter` per set-of-things-that-share-the-same-rate-limit.
+
+        Thread-safe. Multiple threads resolve in the order in which they entered `wait`.
+        Each time a thread finishes waiting, the time counter resets (before the next thread
+        is allowed to start waiting), so that each thread waits for the correct amount of time.
         """
         self.delay = delay
         self.timestamp = 0  # can use any value that causes the first `wait()` to return immediately
+        self.lock = threading.RLock()
 
     def wait(self, show_progress: bool = True) -> None:
         """Wait until `self.delay` seconds of wall time has elapsed since the last action.
@@ -52,20 +58,21 @@ class RateLimiter:
 
         Further calls to `wait` the time from when the previous call to `wait` finished.
         """
-        t = time.time_ns()
-        delay_ns = self.delay * 10**9
-        wait_duration_ns = delay_ns - (t - self.timestamp)
-        if wait_duration_ns > 0:
-            if show_progress:
-                with tqdm(desc="Waiting for API rate limit", leave=False) as pbar:
-                    pbar.total = math.ceil((wait_duration_ns / 10**9) * 10)  # segments of 0.1 seconds (last one may be shorter)
-                    pbar.n = 0
-                    while (time.time_ns() - t) < wait_duration_ns:
-                        time.sleep(min(0.1, wait_duration_ns / 10**9))
-                        pbar.update()
-            else:
-                time.sleep(wait_duration_ns / 10**9)
-        self.timestamp = time.time_ns()
+        with self.lock:
+            t = time.time_ns()
+            delay_ns = self.delay * 10**9
+            wait_duration_ns = delay_ns - (t - self.timestamp)
+            if wait_duration_ns > 0:
+                if show_progress:
+                    with tqdm(desc="Waiting for API rate limit", leave=False) as pbar:
+                        pbar.total = math.ceil((wait_duration_ns / 10**9) * 10)  # segments of 0.1 seconds (last one may be shorter)
+                        pbar.n = 0
+                        while (time.time_ns() - t) < wait_duration_ns:
+                            time.sleep(min(0.1, wait_duration_ns / 10**9))
+                            pbar.update()
+                else:
+                    time.sleep(wait_duration_ns / 10**9)
+            self.timestamp = time.time_ns()
 
 def clean_arxiv_id(arxiv_id: str) -> str:
     """Remove version suffix (e.g., 'v1') from arXiv ID."""
