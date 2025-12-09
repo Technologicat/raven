@@ -161,7 +161,9 @@ def download_papers(arxiv_ids: List[str],
     #
     # This is used to skip downloading duplicates when there are manually named files (not downloaded by this tool) that contain a matching arXiv ID in the filename.
     #
-    # Filenames where the ID has no paper version part (e.g. "v2") are assumed to refer to "v1" - this is the filename convention used by arXiv when you manually download a paper that has only one version.
+    # Filenames where the ID has no paper version part (e.g. "v2") are assumed to refer to "v1". In 2025, arXiv started always adding the version to the suggested filename
+    # when manually downloading a paper, even when "v1" is the only existing version. However, old downloads might not have a version in the filename. To be safe, we assume
+    # that any such old downloads refer to the first version of the paper.
     #
     arxiv_pdf_files_in_output_dir = arxiv2id.get_arxiv_identifiers_from_filenames(arxiv2id.list_pdf_files(output_dir),
                                                                                   canonize=True)
