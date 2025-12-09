@@ -448,8 +448,9 @@
   - We currently have:
     - Web of Science (working).
       - Fix a bug with character escapes (quotes, braces, etc.) that's currently breaking the import for several files in our test set.
-    - PDF conference abstracts (WIP, in beta).
-      - Improve robustness. Maybe needs a bigger LLM?
+    - arXiv (working).
+    - PDF conference abstracts (in beta).
+      - Improve robustness. Maybe needs a yet more capable LLM?
   - Could be useful:
     - Semantic Scholar
     - Scopus
