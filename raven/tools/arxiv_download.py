@@ -27,6 +27,7 @@ filename_safe_nonalphanum = " -_',."
 GLOBE = "🌐"  # for progress messages indicating internet access
 
 # arXiv API TOS requires waiting a minimum of 3 seconds between requests
+#     https://info.arxiv.org/help/api/tou.html
 class RateLimiter:
     def __init__(self, delay: float = 3.0):  # delay: seconds
         self.delay = delay
