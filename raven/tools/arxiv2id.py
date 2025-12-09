@@ -12,7 +12,7 @@ import argparse
 import os
 import pathlib
 import re
-from typing import List
+from typing import List, Tuple, Union
 
 from unpythonic import uniqify
 
@@ -31,7 +31,7 @@ def list_subfolders(path: str) -> List[str]:
     paths = list(sorted(uniqify(str(pathlib.Path(p).expanduser().resolve()) for p in paths)))
     return paths
 
-def list_pdf_files(path):
+def list_pdf_files(path: Union[pathlib.Path, str]) -> List[str]:
     return list(sorted(filename for filename in os.listdir(path) if filename.lower().endswith(".pdf")))
 
 arxiv_identifier = re.compile(r"\b(\d\d\d\d\.\d\d\d\d\d)(v\d+)?\b")
@@ -43,6 +43,10 @@ def get_arxiv_identifier(path: str) -> str:
         assert len(matches) == 1
         return matches[0]
     return None
+
+def get_arxiv_identifiers_from_filenames(filenames: List[str]) -> List[Tuple[str, str]]:
+    """[filename0, ...] -> [(arxiv_id0, filename0), ...]"""
+    return [(raw_id, p) for p in filenames if (raw_id := get_arxiv_identifier(p))]
 
 def split_arxiv_identifier(raw_identifier: str) -> int:
     splitted = raw_identifier.split("v")
@@ -68,7 +72,7 @@ def main() -> None:
         pdf_files = list_pdf_files(path)
         if not pdf_files:
             continue
-        arxiv_pdf_files_in_this_dir = [(raw_id, p) for p in pdf_files if (raw_id := get_arxiv_identifier(p))]
+        arxiv_pdf_files_in_this_dir = get_arxiv_identifiers_from_filenames(pdf_files)
         base_ids_and_versions = [split_arxiv_identifier(raw_id) for raw_id, p in arxiv_pdf_files_in_this_dir]
 
         # Pick the latest version for each identifier discovered so far

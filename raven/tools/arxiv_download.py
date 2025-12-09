@@ -6,9 +6,13 @@ Thanks to Qwen3-30B-A3B-Thinking-2507 and the documentation:
 """
 
 import argparse
+import math
 import os
 import pathlib
 import requests
+import time
+from tqdm import tqdm
+import traceback
 from typing import Dict, List
 import xml.etree.ElementTree as ET
 
@@ -16,8 +20,33 @@ from mcpyrate import colorizer
 
 from .. import __version__
 
+from . import arxiv2id
+
 # Here "." is important for `raven-arxiv2id` to handle the downloaded files correctly.
 filename_safe_nonalphanum = " -_',."
+GLOBE = "🌐"  # for progress messages indicating internet access
+
+# arXiv API TOS requires waiting a minimum of 3 seconds between requests
+class RateLimiter:
+    def __init__(self, delay: float = 3.0):  # delay: seconds
+        self.delay = delay
+        self.timestamp = 0  # can use any value that causes the first `wait()` to return immediately
+
+    def wait(self, show_progress: bool = True):
+        t = time.time_ns()
+        delay_ns = self.delay * 10**9
+        wait_duration_ns = delay_ns - (t - self.timestamp)
+        if wait_duration_ns > 0:
+            if show_progress:
+                with tqdm(desc="Waiting for API rate limit", leave=False) as pbar:
+                    pbar.total = math.ceil((wait_duration_ns / 10**9) * 10)  # segments of 0.1 seconds (last one may be shorter)
+                    pbar.n = 0
+                    while (time.time_ns() - t) < wait_duration_ns:
+                        time.sleep(min(0.1, wait_duration_ns / 10**9))
+                        pbar.update()
+            else:
+                time.sleep(wait_duration_ns / 10**9)
+        self.timestamp = time.time_ns()
 
 def clean_arxiv_id(arxiv_id: str) -> str:
     """Remove version suffix (e.g., 'v1') from arXiv ID."""
@@ -128,31 +157,50 @@ def download_papers(arxiv_ids: List[str],
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    # Scan for existing arXiv PDFs to omit them from processing.
+    #
+    # This is used to skip downloading duplicates when there are manually named files (not downloaded by this tool) that contain a matching arXiv ID in the filename.
+    # Note the ID must include the version number.
+    arxiv_pdf_files_in_output_dir = arxiv2id.get_arxiv_identifiers_from_filenames(arxiv2id.list_pdf_files(output_dir))
+    output_dir_existing_arxiv_ids = [arxiv_id for arxiv_id, unused_filename in arxiv_pdf_files_in_output_dir]
+
+    rate_limiter = RateLimiter()
     seen = set()
     for arxiv_id in arxiv_ids:
         try:
+            # TODO: We could reduce total wait time by batching the metadata fetch into sets of up to 100 IDs each, needing just one metadata request per set (instead of per paper as now). For how, see the external `arxiv2bib` tool.
+            print(f"{colorizer.colorize(GLOBE, colorizer.Style.BRIGHT, colorizer.Fore.BLUE)} {arxiv_id}: fetching metadata")
+            rate_limiter.wait()
             metadata = get_paper_metadata(arxiv_id)
             resolved_id = metadata["resolved_id"]
             resolved_id_str = f" (→ {resolved_id})" if resolved_id != arxiv_id else ""
             if resolved_id not in seen:
                 seen.add(resolved_id)
-                save_path = os.path.join(output_dir, metadata["filename"])
-                if not os.path.exists(save_path):
-                    pdf_url = metadata["pdf_url"]
-                    if pdf_url is not None:
-                        pdf_response = requests.get(pdf_url)
-                        pdf_response.raise_for_status()
-                        with open(save_path, "wb") as f:
-                            f.write(pdf_response.content)
-                        print(f"{colorizer.colorize('✓', colorizer.Style.BRIGHT, colorizer.Fore.GREEN)} {arxiv_id}{resolved_id_str} PDF saved as '{save_path}'")
-                    else:
-                        print(f"{colorizer.colorize('✗', colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id}{resolved_id_str} no PDF found")
-                else:
-                    print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already downloaded as '{save_path}'")
-            else:
-                print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already processed, skipping")
-        except Exception as e:
+                if resolved_id not in output_dir_existing_arxiv_ids:
+                    save_path = os.path.join(output_dir, metadata["filename"])
+                    if not os.path.exists(save_path):
+                        pdf_url = metadata["pdf_url"]
+                        if pdf_url is not None:
+                            print(f"{colorizer.colorize(GLOBE, colorizer.Style.BRIGHT, colorizer.Fore.BLUE)} {arxiv_id}{resolved_id_str}: downloading PDF")
+                            rate_limiter.wait()
+                            pdf_response = requests.get(pdf_url)
+                            pdf_response.raise_for_status()
+                            with open(save_path, "wb") as f:
+                                f.write(pdf_response.content)
+                            print(f"{colorizer.colorize('✓', colorizer.Style.BRIGHT, colorizer.Fore.GREEN)} {arxiv_id}{resolved_id_str} PDF saved as '{save_path}'")
+                        else:  # could not get URL
+                            print(f"{colorizer.colorize('✗', colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id}{resolved_id_str} no PDF found")
+                    else:  # existing file downloaded by this tool
+                        print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already downloaded (by this tool) as '{save_path}'")
+                else:  # existing file from some other source
+                    idx = output_dir_existing_arxiv_ids.index(resolved_id)
+                    save_path = arxiv_pdf_files_in_output_dir[idx][1]
+                    print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already exists as '{save_path}'")
+            else:  # duplicate IDs from the command line that resolve to the same version of the same paper
+                print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already processed (during this session), skipping")
+        except Exception as e:  # general failure, e.g. error during HTTP request
             print(f"{colorizer.colorize('✗', colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id} failed: {str(e)}")
+            traceback.print_exc()  # useful if the error was actually triggered by a bug in this program
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="""Download arXiv papers by their IDs, and name the files automatically using the metadata. If an ID specifies a version, that version of the paper is downloaded; otherwise the latest version is downloaded.""",
