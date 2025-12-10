@@ -9,7 +9,7 @@
    id="svg5"
    inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
    sodipodi:docname="raven-search.svg"
-   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/explanation_figures_biology/raven-search.png"
+   inkscape:export-filename="/home/jje/Documents/JAMK/gH2ADDVA_ja_AI/raven/img/raven-search.png"
    inkscape:export-xdpi="300"
    inkscape:export-ydpi="300"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -32,8 +32,8 @@
      inkscape:object-paths="true"
      inkscape:snap-global="true"
      inkscape:zoom="1.8288288"
-     inkscape:cx="832.5"
-     inkscape:cy="209.97044"
+     inkscape:cx="825.66504"
+     inkscape:cy="209.97045"
      inkscape:window-width="3840"
      inkscape:window-height="2088"
      inkscape:window-x="0"
@@ -362,8 +362,8 @@
            sodipodi:role="line"
            id="tspan15145"
            style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:sans-serif;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.2;stroke-miterlimit:4;stroke-dasharray:none"
-           x="12.145404"
-           y="-26.040571">stopwording, stemming</tspan></text>
+           x="12.145403"
+           y="-26.040571">stopwording, lemmatization</tspan></text>
     </g>
     <g
        id="g16402"
