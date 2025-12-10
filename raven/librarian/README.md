@@ -189,7 +189,7 @@ For configuring the AI's voice, see [configuration](#configuration) below.
 
 The AI avatar can optionally display machine-translated subtitles for its speech. The language can be configured in [`raven.librarian.config`](config.py). The machine translation model from English (LLM output) to the subtitle language is configured in [`raven.server.config`](../server/config.py).
 
-Currently (v0.2.4), the subtitles are translated one sentence at a time. This loses broader context, but is a technical limitations of many currently (12/2025) available machine translation models, which are sentence-based translators.
+Currently (v0.2.4), the subtitles are translated one sentence at a time. This loses broader context, but is a technical limitation of many currently (12/2025) available machine translation models, which are sentence-based translators.
 
 To speak to the AI, click the **mic button**. Once you are done talking, click again, or wait until the automatic silence detector ends the recording.
 
