@@ -255,7 +255,7 @@ The AI's voice is configured in the AI avatar configuration.
 Overall targets:
 
 - 100% local, personal co-researcher
-- Intelligence amplification (IA) rather than replacement for the human user
+- Intelligence amplification (IA) for the user, rather than replacement of humans
 
 Areas to improve:
 
