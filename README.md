@@ -9,7 +9,7 @@
 
 - [The Raven constellation](#the-raven-constellation)
     - [Raven-visualizer: Visualize research literature](#raven-visualizer-visualize-research-literature)
-    - [Raven-librarian: Scientific LLM frontend](#raven-librarian-scientific-llm-frontend)
+    - [Raven-librarian: Multiversal LLM frontend](#raven-librarian-multiversal-llm-frontend)
     - [Raven-avatar: AI-animated anime avatar](#raven-avatar-ai-animated-anime-avatar)
     - [Raven-server: Web API server](#raven-server-web-api-server)
 - [Install & run](#install--run)
@@ -60,7 +60,7 @@ Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
   - 100% local, maximum privacy, no cloud services
 - This was the original *Raven*.
 
-## Raven-librarian: Scientific LLM frontend
+## Raven-librarian: Multiversal LLM frontend
 
 <img src="img/screenshot-librarian.png" alt="Screenshot of Raven-librarian" height="200"/>
 
