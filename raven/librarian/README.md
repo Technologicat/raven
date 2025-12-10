@@ -277,10 +277,10 @@ Areas to improve:
       - Other types of memory, especially those requiring internalization of knowledge, may require model training
   - [Executive function](https://en.wikipedia.org/wiki/Executive_functions) (in the neuropsychology sense of the word)?
     - See [Seth Herd (2025): System 2 Alignment: Deliberation, Review, and Thought Management](https://www.lesswrong.com/posts/cus5CGmLrjBRgcPSF/system-2-alignment-deliberation-review-and-thought)
-    - If implemented in the scaffold (see `raven.librarian.scaffold`), could be used to automatically break out of situations where the LLM becomes stuck (retracing the same thoughts over and over, without actually finishing).
+    - If implemented in the scaffold (see [`raven.librarian.scaffold`](scaffold.py)), could be used to automatically break out of situations where the LLM becomes stuck (retracing the same thoughts over and over, without actually finishing).
   - [Continual learning](https://www.ibm.com/think/topics/continual-learning)?
     - Need to mitigate catastropic forgetting
-    - Need to run on a single workstation
+    - Need to be runnable on a single workstation, at most 24GB VRAM per GPU, usually just one GPU
       - QLoRA tuning ([Dettmers et al., 2023](https://arxiv.org/abs/2305.14314))?
     - For a review of old continual learning techniques, see [Wang et al. (2023)](https://arxiv.org/abs/2302.00487)
 - Improve **GUI to access old chats**
