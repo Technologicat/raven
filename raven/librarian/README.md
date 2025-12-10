@@ -230,8 +230,11 @@ The AI's voice is configured in the AI avatar configuration.
 
 - TTS is part of avatar config in [`raven.librarian.config`](config.py)
 - STT model is configured in [`raven.server.config`](../server/config.py)
-- for subtitles, machine translation model is selected in [`raven.server.config`](../server/config.py)
-- audio devices are selected in [`raven.client.config`](../client/config.py); see also `raven-check-audio-devices` command-line tool to list devices present on your system
+- for subtitles:
+  - subtitle language is selected in [`raven.librarian.config`](config.py)
+  - machine translation model from English to each possible subtitle language is selected in [`raven.server.config`](../server/config.py)
+    - CAUTION: Server will load all of them into VRAM! So only set up what you actually need.
+- audio devices (both input and output) are selected in [`raven.client.config`](../client/config.py); see also `raven-check-audio-devices` command-line tool to list audio devices present on your system
 
 ## System prompt, AI character personality, communication style
 
