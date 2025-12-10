@@ -299,7 +299,8 @@ As explained in the main README, configuration is currently fed in as several Py
 ## Server connections
 
 - LLM backend URL and API key: [`raven.librarian.config`](../librarian/config.py)
-  - Whether you need an API key depends on your LLM. By default, a local installation of [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) does **not** use an API key.
+  - Whether you need an API key depends on your LLM.
+  - By default, a local installation of [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) does **not** use an API key.
 
 - Raven-server URL and API key: [`raven.client.config`](../client/config.py)
   - By default, *Raven-server* does **not** use an API key.
