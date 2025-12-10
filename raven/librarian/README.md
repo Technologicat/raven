@@ -193,7 +193,7 @@ The scaffold app performs the actual tool call, and writes the tool output to th
 
 Once the LLM is satisfied with the information it has, it proceeds to write its reply without making more tool calls. Finally, control returns to the user.
 
-The LLM receives tool specifications in JSON format, as part of its system prompt. A tool specification includes the function name, a short human-readable (LLM-readable!) docstring of what it does, and a parameter specification (with docstrings), if the function needs arguments. The tool specifications are typically injected by the LLM backend software (such as [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)), so they are not visible in the user-provided system prompt.
+The LLM receives tool specifications in JSON format, as part of its system prompt. A tool specification includes the function name, a short human-readable (LLM-readable!) docstring of what it does, and a parameter specification (with docstrings), if the function needs arguments. While the tool specifications are provided by the scaffold app, they are typically injected into the system prompt by the LLM backend software (such as [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)), so they are not visible in the user-provided system prompt.
 
 Modern approaches to tool use include [MCP](https://modelcontextprotocol.io/docs/getting-started/intro), which allows tool discovery on external servers; and LLM skills, [pioneered by Anthropic's Claude](https://simonwillison.net/2025/Oct/16/claude-skills/). The latter requires giving the AI access to a full, sandboxed virtual machine.
 
