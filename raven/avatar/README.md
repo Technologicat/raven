@@ -325,6 +325,8 @@ The module [`raven.common.video.upscaler`](../common/video/upscaler.py) is licen
 
 Image assets original to *Raven-avatar* (located in [`raven/avatar/assets/`](../avatar/assets/)) are licensed under CC-BY-SA 4.0.
 
+The default characters original to *Raven-avatar* ([`raven/avatar/assets/characters`](../avatar/assets/characters)) were drawn with the help of an AI (*Illustrious-XL*), but with curation (inpainting) as well as old-fashioned manual editing.
+
 
 # Acknowledgements
 

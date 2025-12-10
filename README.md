@@ -86,20 +86,10 @@ Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
     - Speech synthesizer with lipsynced animation.
     - Subtitles with machine translation.
     - Speech recognition. Use your mic to talk to the LLM.
+      - Voice mode is 100% privacy-first; audio is never recorded to disk, and never sent anywhere except your local *Raven-server* for transcription.
 - Uses [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) as the LLM backend through its OpenAI-compatible API.
   - We currently test our LLM functionality with the Qwen series of LLMs.
   - Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
-
-**Audio recording is 100% private**:
-
-- Audio is only recorded when the mic button is clicked.
-- The audio recording is only used for locally hosted STT (speech recognition), then discarded.
-  - The speech recognizer is hosted by the `stt` module of your local *Raven-server*.
-- The audio recording is never saved to disk.
-- The text transcript of the audio is shown, for your own information, in the *Librarian* client log.
-  - This is the same text that goes into *Librarian*'s chat view (and, like any chat message, is saved in the chat datastore).
-  - The log is only shown in the terminal window that started `raven-librarian`, and not saved.
-- If you want to verify these claims, see `raven.server.modules.stt`, the function `api_stt_transcribe` in `raven.server.app`, and `stt_*` functions in `raven.client.api` (and their use sites).
 
 ## Raven-avatar: AI-animated anime avatar
 
