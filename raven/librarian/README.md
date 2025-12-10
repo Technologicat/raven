@@ -187,7 +187,7 @@ If the search index ever becomes corrupted - or if you need to force a full rebu
 <i>An LLM-based AI agent <a href="https://simonwillison.net/2025/Sep/18/agents/">runs tools in a loop</a>. (Images created with Qwen-Image.)</i>
 </p>
 
-The idea is to give the LLM partial control over engineering its own context. When the LLM notices that in order to reply to the user's request, it needs information that a tool could provide, it can tell its surrounding scaffold app (such as *Librarian*) to invoke the tool. A tool can be anything that produces text, for example: websearch, calculators, weather services, database access, file access, shell access, or a programming environment.
+The idea is to give the LLM partial control over engineering its own context. When the LLM notices that in order to reply to the user's request, it needs information that a tool could provide, the LLM can tell its surrounding scaffold app (such as *Librarian*) to invoke the tool. A tool can be anything that produces text, for example: websearch, calculators, weather services, database access, file access, shell access, or a programming environment.
 
 The scaffold app performs the actual tool call, and writes the tool output to the LLM's context. Control then returns to the LLM, so that it can interpret the results and continue writing. The LLM may make more tool calls if it deems necessary to do so, and the process repeats.
 
