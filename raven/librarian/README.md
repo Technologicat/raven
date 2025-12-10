@@ -294,7 +294,7 @@ Areas to improve:
     - use the local search engine here, too (since we need to search-index chats for the memory feature, anyway)
 - Improve **document database**
   - Scopes (AI research, engineering sciences, My Little Pony fanfics, ...)
-    - Allows the AI to search the right umbrella topics, and actually act as a librarian
+    - Allows the AI to search the right umbrella topics, actually acting as a *librarian*
   - PDF import
 - Add **more tools** for the AI to call
   - Explicit access to document database (not just RAG autosearch as it is now)
