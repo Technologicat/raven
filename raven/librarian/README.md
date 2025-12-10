@@ -53,7 +53,7 @@ That said, some important features are still missing, and others will be expande
 
 # Features
 
-The main features are the natively nonlinear chat history for natural, branching AI conversations; the document database and tool use for fact grounding; and the talking AI avatar for a futuristic touch on the UI.
+The main features are a natively nonlinear chat history for natural, branching AI conversations; a document database and tool use for fact grounding; and a talking AI avatar for a futuristic touch on the UI.
 
 ## Nonlinear history
 
