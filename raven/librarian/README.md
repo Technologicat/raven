@@ -124,7 +124,7 @@ Conversely, the LLM can be made to write on behalf of the user (this is known as
 
 Tools (as in *tool use*) also extend the context by writing responses there.
 
-Finally, sometimes it is interesting or useful to **visit alternative branches**, or in sci-fi terminology, alternative timelines in the multiverse of discourse. This allows a discussion to become a garden of forking paths, facilitating a more complex and complete exploration of a topic than one linear chat.
+Finally, sometimes it is interesting or useful to **visit alternative branches**, or in sci-fi terminology, alternative timelines in the multiverse of discourse. This allows a discussion to become a [garden of forking paths](https://en.wikipedia.org/wiki/The_Garden_of_Forking_Paths), facilitating a more complex and complete exploration of a topic than one linear chat.
 
 All such curation, analysis and exploration is facilitated by the natural abstraction that fits best here - a tree structure - and a GUI to navigate it.
 
