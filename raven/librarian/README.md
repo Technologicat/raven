@@ -47,7 +47,7 @@
 
 **:exclamation: *Raven-librarian* is currently under development. :exclamation:**
 
-Much (but not all) of the basic functionality is complete, the codebase should be in a semi-maintainable state, and most bugs have been squashed. If you find a bug that is not listed in [TODO.md](TODO.md), please [open an issue](https://github.com/Technologicat/raven/issues).
+Much (but not all) of the basic functionality is complete, the codebase should be in a semi-maintainable state, and most bugs have been squashed. If you find a bug that is not listed in [TODO.md](../../TODO.md), please [open an issue](https://github.com/Technologicat/raven/issues).
 
 That said, some important features are still missing, and others will be expanded upon, schedule and funding permitting.
 
