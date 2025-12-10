@@ -38,11 +38,11 @@
 
 - **Graphical user interface** (GUI). Easy to use.
 - **Multiversal**. The chat history is natively nonlinear, respecting the natural shape of conversation between a user and an LLM.
-- **Animated AI avatar** with emotional reactions, lipsynced speech (English), and optional machine-translated subtitles (in a language of your choice).
+- **Animated AI avatar** with emotional reactions based on LLM text output, lipsynced speech (English), and optional machine-translated subtitles (in a language of your choice).
 - **Voice mode**. Talk with the AI using your mic. (English only for now.)
 - **Fully local**, if you have a local LLM.
 - **Document database** for fact grounding. Talk with the AI about the content of your documents. Powered by a local hybrid semantic and keyword search engine for optimal results.
-- **Tool-calling**. The AI has access to tools provided by the *Librarian* software. (Websearch only for now; we plan to extend this later.)
+- **Tool use** (tool-calling). The AI has access to tools provided by the *Librarian* software. (Websearch only for now; we plan to extend this later.)
 - **Open source**. 2-clause BSD license.
 
 **:exclamation: *Raven-librarian* is currently under development. :exclamation:**
@@ -53,7 +53,7 @@ That said, some important features are still missing, and others will be expande
 
 # Features
 
-- nonlinear history, RAG, tools
+The main features are the natively nonlinear chat history for natural, branching AI conversations; the document database and tool use for fact grounding; and the talking AI avatar for a futuristic touch on the UI.
 
 ## Nonlinear history
 
@@ -112,34 +112,74 @@ A tree structure, and a GUI to match that, facilitates this curation, analysis, 
 
 **Notes**
 
-*As someone on the internet pointed out, the term "hallucination" is misleading, since in humans, it refers to **inputs** that are not grounded in external reality - or as WordNet puts it, "a sensory perception of something that does not exist". However, the common usage of "LLM hallucination" refers to ungrounded **outputs**. A better semantic match here is "a fabricated memory believed to be true", which is termed a "confabulation".*
+As someone on the internet pointed out, the term *hallucination* is misleading, since in humans, it refers to **inputs** that are not grounded in external reality - or as WordNet puts it, "*a sensory perception of something that does not exist*". However, the common usage of *LLM hallucination* refers to ungrounded **outputs**. A better semantic match here is "*a fabricated memory believed to be true*", hence a *confabulation*.
 
-As of 12/2025, many AI chat apps still operate in the paradigm of a traditional linear history. Many have some form of branching, but none seem to have taken the idea to its logical conclusion yet. *SillyTavern* offers swipes and arbitrary branching, but uses a linear storage format ([*Timelines*](https://github.com/SillyTavern/SillyTavern-Timelines) is a hack on top of that). Loom ([original](https://github.com/socketteer/loom); [obsidian](https://github.com/cosmicoptima/loom)) is probably still the only natively nonlinear LLM GUI (that predates *Raven-librarian*); and it is focused on text completion via base models, not chat.
+As of 12/2025, many LLM frontends still operate in the paradigm of a traditional linear chat history. Many support some form of branching, but no AI chat app seems to have taken the idea to its logical conclusion yet. *SillyTavern* offers swipes and arbitrary branching, but uses a linear storage format ([*Timelines*](https://github.com/SillyTavern/SillyTavern-Timelines) is a hack on top of that). Loom ([original](https://github.com/socketteer/loom); [obsidian](https://github.com/cosmicoptima/loom)) is probably still the only natively nonlinear LLM GUI (that predates *Raven-librarian*); and it is focused on text completion via base models, not chat.
 
 ## Document database
 
-- for now, plain text only
-  - Any plain text format that your LLM can read is fine (e.g. `.txt`, `.md`, `.bib`)
-  - To extract text from PDF files, use `pdftotext`; or failing that, `ocrmypdf`
-  - We plan to integrate PDF and HTML importers later
-- where to put documents, what Librarian does with them
-  - can be configured in `raven.librarian.config`
-  - default is `~/.config/raven/llmclient/documents`
-- search index auto-update mechanism (offline & online update)
+The document database gives the LLM fact grounding via retrieval-augmented generation (RAG). Currently (v0.2.4), the RAG mechanism engineers the context via an automatic search, with the user's latest message as the search query. The search results are injected into the LLM's context before the AI replies.
 
-The search index automatically reflects the current state of the document database. Removing the documents from the document database also automatically removes them from the index.
+The number of search results to return can be configured in `raven.librarian.config`. This allows trading off speed vs. [recall](https://en.wikipedia.org/wiki/Precision_and_recall). Note that a higher number of search results will also take up more space in the LLM's context.
 
-It is possible to manually force rebuilding the index, by deleting the whole index while *Raven-librarian* is not running, and then starting *Raven-librarian*.
+In the search index, the documents are **chunked**. The chunk (not a full document!) is the basic unit of a search match. To avoid context loss at the chunk seams, *Librarian* uses a sliding window chunker with overlap (thus trading off storage space and speed for improved recall). If the search results include adjacent chunks from the same document, these are automatically merged into one contiguous search result (with smart removal of the overlap), which is scored with the highest score of any of the component chunks.
+
+The search engine is local, and has a hybrid design that uses both semantic embeddings as well as BM25 keyword search. The semantic embedder used by the search engine (by default) is a QA-type model, which has been trained to map questions and their answers near each other in the high-dimensional vector space. For the keyword search, the query is lowercased, [lemmatized](https://en.wikipedia.org/wiki/Lemmatization) (using spaCy), and [stopworded](https://en.wikipedia.org/wiki/Stop_word). The results of the two searches are combined via [reciprocal rank fusion (RRF)](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search), to yield better results than either algorithm gives alone. See the figures.
+
+<p align="center">
+<img src="../../img/raven-search.png" alt="Raven has a hybrid, local search engine with semantic and keyword components." height="400"/> <br/>
+<i>Overview of Raven's search engine.</i>
+</p>
+
+<p align="center">
+<img src="../../img/raven-qa.png" alt="Illustration of a QA-type embedding model." height="200"/> <br/>
+<i>A QA-type semantic embedding model maps questions and their answers near each other in the high-dimensional space (which usually has roughly 1000 dimensions). Schematic illustration in 3 dimensions.</i>
+</p>
+
+As of v0.2.4, the document database accepts only **plain text** documents - **no** binaries (so no PDF). Beside classical plain text `.txt`, markup languages that LLMs understand are fine - e.g. `.md`, `.bib`, and `.tex` are acceptable inputs. The full list of recognized file extensions is maintained in the search engine implementation [`raven.librarian.hybridir`](hybridir.py), specifically in `HybridIRFileSystemEventHandler`.
+
+Until we get PDF import, you can use `pdftotext` (from `poppler-utils`) and [`ocrmypdf`](https://github.com/ocrmypdf/OCRmyPDF) to extract the plain text. We will likely automate this step later.
+
+**To manage the content of the document database**, use a file manager: just put the files in the document database directory. By default, *Librarian* looks for documents in `~/.config/raven/llmclient/documents`. The path can be configured in `raven.librarian.config`.
+
+The document database directory can have subdirectories - so feel free to create them to organize your document collection. This is useful for splitting the DB into broad umbrella topics (AI research, engineering sciences, ...). As of v0.2.4, all documents still live in the same search namespace. We plan to add scoping support later, to allow limiting the search to a given topic.
+
+The search index syncs automatically:
+
+- When *Librarian* is started, it scans the document database directory for changes made after the last time *Librarian* saw it, and automatically updates the index if necessary.
+  - New files are indexed.
+  - Updated files are re-indexed. Updates are detected from each document file's mtime (*last-modified* time).
+  - Deleted files are removed from the index.
+
+- While *Librarian* is running, the directory is monitored for changes. Any changes take effect immediately.
+  - The same rules apply as for the startup scan: new, updated and deleted files are detected, and processed accordingly.
+
+- As of v0.2.4, the search index update progress can be viewed in the terminal window from which *Librarian* was started.
+  - Note that the update may take some time if there are many (hundreds) of files.
+  - The semantic embedding uses the `embeddings` module of *Raven-server*, so it can benefit from GPU acceleration.
+
+If the search index ever becomes corrupted - or if you need to force a full rebuild for any reason - you can simply delete the search index directory while *Librarian* is not running. A full index rebuild will then automatically take place when *Librarian* is started. By default, the index is stored in `~/.config/raven/llmclient/rag_index`.
 
 ## Tools
 
-- Tool use = function-calling
-- JSON specs in system prompt
-- LLM calls those functions when it feels like it, and interprets the results
-- This allows the LLM to automatically retrieve useful material into its context
-- Tools provided
-  - Websearch
-  - We plan to expand this later
+*Tool use* (a.k.a. *tool-calling* or *function-calling*) is a feature of many LLMs published since early 2025. Integrated into a chatbot, this yields a lightweight form of AI agent functionality.
+
+<p align="center">
+<img src="../../img/ai-agent.png" alt="An LLM-based AI agent runs tools in a loop." width="800"/> <br/>
+<i>An LLM-based AI agent <a href="https://simonwillison.net/2025/Sep/18/agents/">runs tools in a loop</a>. (Images created with Qwen-Image.)</i>
+</p>
+
+The idea is to allow the LLM partial control over engineering its own context. When the LLM notices that in order to reply to the user's request, it needs information that a tool could provide, it can tell its surrounding scaffold app (such as *Librarian*) to invoke the tool. A tool can be anything that produces text, for example: websearch, calculators, weather services, database access, file access, shell access, or a programming environment.
+
+The scaffold app performs the actual tool call, and writes the tool output to the LLM's context. Control then returns to the LLM, so that it can interpret the results and continue writing. The LLM may make more tool calls if it deems necessary to do so, and the process repeats.
+
+Once the LLM is satisfied with the information it has, it proceeds to write its reply without making more tool calls. Finally, control returns to the user.
+
+The LLM receives tool specifications in JSON format, as part of its system prompt. A tool specification includes the function name, a short human-readable (LLM-readable!) docstring of what it does, and a parameter specification (with docstrings), if the function needs arguments.
+
+Modern approaches to tool use include [MCP](https://modelcontextprotocol.io/docs/getting-started/intro), which allows tool discovery on external servers; and LLM skills, [pioneered by Anthropic's Claude](https://simonwillison.net/2025/Oct/16/claude-skills/). The latter requires giving the AI access to a full, sandboxed virtual machine.
+
+We don't currently take things this far; we only provide a set of hardcoded tools. If interested in the details, see `tools` in the `setup` function in [`raven.librarian.llmclient`](llmclient.py), and the agent loop in [`raven.librarian.scaffold`](scaffold.py). As of v0.2.4, *Librarian* only provides websearch, but we intend to expand this later.
 
 # Voice mode
 
@@ -207,47 +247,69 @@ The AI's voice is configured in the AI avatar configuration.
 
 # Future vision
 
-Overall target: *100% local, personal co-researcher*
+Overall targets:
+
+- 100% local, personal co-researcher
+- Intelligence amplification (IA) rather than replacement for the human user
 
 Areas to improve:
 
-- **Long-term memory** for LLM
-  - context engineering based
-  - essentially a second document database instance, where a document = a chat message (with its node ID so we can walk links)
-    - the DB's local search engine is very useful here
-  - semiautomatic, but also with explicit tool access for the AI
-  - undecided if we also need a third document database instance as an explicit memory storage place (read/write) for the LLM
+- Extend **the AI backend**
+  - As of 2025, LLMs are (mostly) [system-1](https://en.wikipedia.org/wiki/Thinking%2C_Fast_and_Slow) thinkers
+  - Intelligence has other components, too.
+    - Cattell-Horn-Carroll theory suggests ten core cognitive domains, including e.g. reasoning, memory, and perception ([Hendrycks et al., 2025](https://arxiv.org/abs/2510.18212)).
+    - Maybe also useful [[1]](https://ai-frontiers.org/articles/agis-last-bottlenecks), [[2]](https://medium.com/@sevakavakians/the-9-components-of-general-intelligence-to-model-for-agi-aa13526b7b38)
+  - Perception: add support for VLMs (vision-language models) and multimodal LLMs
+    - E.g. Qwen3-VL, Qwen3-Omni, GLM-4.6V
+  - **Long-term memory**
+    - Context engineering based implementation
+    - Essentially a second document database instance, where a document = a chat message (with its node ID so that we can walk the tree)
+      - the DB's local search engine is very useful here as a retrieval mechanism
+    - Semiautomatic (autosearch like document DB), but also with explicit tool access for the AI
+    - We could also have a third document database instance as an explicit memory storage (read/write) for the LLM
+    - Limitations:
+      - This yields only [episodic memory](https://en.wikipedia.org/wiki/Episodic_memory)
+      - Other types of memory, especially those requiring internalization of knowledge, may require model training
+  - [Executive function](https://en.wikipedia.org/wiki/Executive_functions) (in the neuropsychology sense of the word)?
+    - See [Seth Herd (2025): System 2 Alignment: Deliberation, Review, and Thought Management](https://www.lesswrong.com/posts/cus5CGmLrjBRgcPSF/system-2-alignment-deliberation-review-and-thought)
+    - If implemented in the scaffold (see `raven.librarian.scaffold`), could be used to automatically break out of situations where the LLM becomes stuck (retracing the same thoughts over and over, without actually finishing).
+  - [Continual learning](https://www.ibm.com/think/topics/continual-learning)?
+    - Need to mitigate catastropic forgetting
+    - Need to run on a single workstation
+      - QLoRA tuning ([Dettmers et al., 2023](https://arxiv.org/abs/2305.14314))?
+    - For a review of old continual learning techniques, see [Wang et al. (2023)](https://arxiv.org/abs/2302.00487)
 - Improve **GUI to access old chats**
-  - add recent chats list
-    - as mentioned, "recent chat" is not really defined with the natively nonlinear format; maybe "user's first message" is a good enough splitting point
-  - add tree view
+  - Add recent chats list
+    - As mentioned, "recent chat" is not really defined with the natively nonlinear format; maybe "user's first message" is a good enough splitting point
+  - Add tree view
     - N levels around chosen point, to keep rendering relatively fast
-    - currently missing a suitable GUI widget in DPG; seems we'll have to roll our own (let's port [xdottir](https://github.com/Technologicat/xdottir) to DPG)
-  - add search
+    - Currently missing a suitable GUI widget in DPG; seems we'll have to roll our own (let's port [xdottir](https://github.com/Technologicat/xdottir) to DPG)
+  - Add search
     - incremental fragment search (like in *Raven-visualizer*)
     - use the local search engine here, too (since we need to search-index chats for the memory feature, anyway)
 - Improve **document database**
-  - scopes (AI research, engineering sciences, My Little Pony fanfics, ...)
+  - Scopes (AI research, engineering sciences, My Little Pony fanfics, ...)
+    - Allows the AI to search the right umbrella topics, and actually act as a librarian
   - PDF import
 - Add **more tools** for the AI to call
-  - explicit access to document database (not just RAG autosearch as it is now)
-  - explicit access to memory (once the memory feature is added)
-  - web download access to read web pages?
-    - convenient for inputting recent talking points in fast-moving fields such as AI
-    - potentially [dangerous](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/)
-      - trusted link sources? User's messages only? Websearch results... a careful maybe?
-      - untrusted link: always ask user, do not provide an option to disable the confirmation. (Provide option to auto-disallow all untrusted links, though.)
-  - not sure if Librarian needs these:
-    - calculator with [simpleeval](https://github.com/danthedeckie/simpleeval) sandbox?
-    - weather with [open-meteo](https://open-meteo.com/en/docs)?
+  - Explicit access to document database (not just RAG autosearch as it is now)
+  - Explicit access to memory (once the memory feature is added)
+  - Web download access to read web pages?
+    - Convenient for inputting recent talking points in fast-moving fields such as AI
+    - Potentially [dangerous](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/)
+      - Trusted link sources? User's messages only? Websearch results... a careful maybe?
+      - Untrusted link: always ask user, do not provide an option to disable the confirmation. (Provide option to auto-disallow all untrusted links, though.)
+  - Maybe (not sure if *Librarian* needs these):
+    - Calculator with [simpleeval](https://github.com/danthedeckie/simpleeval) sandbox?
+    - Weather with [open-meteo](https://open-meteo.com/en/docs)?
   - Keep It Simple Stupid: too many tools → confused LLM
 - Add **source attribution** for Librarian's replies
-  - for determinism and 100% reliability, handle this in the scaffold, not in the LLM
-  - which documents or links the LLM saw when writing the response (even if the final reply didn't use all of the sources; this is the best this approach can do?)
-    - maybe needs heuristic filtering; there can be e.g. 200 document database autosearch results if configured so
-    - we could scan for document IDs (already stored in RAG autosearches) in the LLM's reply text, and then auto-cite any matching ones
+  - For determinism and 100% reliability, handle this in the scaffold, not in the LLM
+  - Which documents or links the LLM saw when writing the response (even if the final reply didn't use all of the sources; this is the best this approach can do?)
+    - Maybe needs heuristic filtering; there can be e.g. 200 document database autosearch results if configured so
+    - We could scan for document IDs (already stored in RAG autosearches) in the LLM's reply text, and then auto-cite any matching ones
 - **Chat tagging**
-  - tag a subtree as work, hobby, etc.
+  - Tag a subtree as work, hobby, etc.
 - **Message editing**
   - E.g. to fix typos before exporting a linearized chatlog
 - Integration with *Raven-visualizer*

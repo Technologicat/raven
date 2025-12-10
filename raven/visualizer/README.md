@@ -14,6 +14,7 @@
 
 - [Introduction](#introduction)
 - [Import](#import)
+    - [What the semantic map is](#what-the-semantic-map-is)
     - [In the GUI](#in-the-gui)
         - [Save imported dataset as](#save-imported-dataset-as)
         - [Select input BibTeX files](#select-input-bibtex-files)
@@ -91,6 +92,20 @@ The data is clustered automatically, and each cluster of data has its keywords a
 The import step produces a **dataset file**, which can then be opened and explored in the GUI.
 
 You can import BibTeX files into dataset files in Raven's GUI, as well as from the command line. How to do this is described in more detail below.
+
+## What the semantic map is
+
+The technology is roughly explained by the following figures.
+
+<p align="center">
+<img src="../../img/embedding_space_ai.png" alt="Semantic embedding maps text into high-dimensional vectors." height="200"/> <br/>
+<i>The semantic embedding model is a pretrained AI component that transforms text into high-dimensional vectors (default: Snowflake/snowflake-arctic-embed-l, d = 1024). Normalization brings the vectors onto a d-1 dimensional hypersphere surface. (a) A concept (here "hot") and its opposite ("cold") map to opposite directions. Other, unrelated concepts ("cat", "democracy") map to orthogonal directions. (b) Concepts that are semantically near each other (e.g. "physics" is a field of "science") map in directions near to each other. For any chosen pair of concepts, semantic similarity can be measured via the <a href="https://en.wikipedia.org/wiki/Cosine_similarity">cosine similarity</a> of the embedding vectors.</i>
+</p>
+
+<p align="center">
+<img src="../../img/raven-data-processing-pipeline-ai.png" alt="Raven-visualizer's data processing pipeline." height="400"/> <br/>
+<i>Raven-visualizer's data processing pipeline. (a) Semantic embedding onto the high-dimensional hypersphere. (b) <a href="https://scikit-learn.org/stable/modules/generated/sklearn.cluster.HDBSCAN.html">HDBSCAN</a> in the high-dimensional space detects initial clusters. (c) The initial clusters are mapped dimension-reduced 2D via fitting a <a href="https://en.wikipedia.org/wiki/T-distributed_stochastic_neighbor_embedding">t-SNE</a> model. Then the full dataset is mapped through the fitted model. (d) HDBSCAN in 2D produces the final clusters, shown on the <b>semantic map</b> in Raven-visualizer.</i>
+</p>
 
 ## In the GUI
 
