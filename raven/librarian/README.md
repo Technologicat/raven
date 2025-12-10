@@ -181,7 +181,7 @@ The search index syncs automatically:
 
 If the search index ever becomes corrupted - or if you need to force a full rebuild for any reason - you can simply delete the search index directory while *Librarian* is not running. A full search index rebuild will then automatically take place when *Librarian* is started. By default, the index is stored in `~/.config/raven/llmclient/rag_index`.
 
-**Tip**: If you have a BibTeX full of scientific abstracts, and would like to feed those into *Librarian* as separate documents, see the `raven-burstbib` command-line tool. It splits your huge `.bib` file into individual entry `.bib` files. These files can then be copied/moved into *Librarian*'s document database folder, and *Librarian* will then pick them up as individual documents. Better forms of integration with *Visualizer* datasets are planned to be added later.
+**Tip**: If you have a BibTeX file full of scientific abstracts, and would like to feed those into *Librarian* as separate documents, see the `raven-burstbib` command-line tool. It splits your huge `.bib` file into individual entry `.bib` files. These files can then be copied/moved into *Librarian*'s document database folder, and *Librarian* will then pick them up as individual documents. Better forms of integration with *Visualizer* datasets are planned to be added later.
 
 ## Tools
 
