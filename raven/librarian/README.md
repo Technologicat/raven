@@ -328,6 +328,7 @@ Areas to improve:
 - strongly recommended for privacy
 - needs a fast GPU, more VRAM better
   - 24GB → 30B, 4-bit, with 128k tokens context feasible, when Flash-attention enabled to bring memory cost down to O(n) (ooba has this out of the box)
-  - 8GB → 7 ... 8B, 4bit, but won't have any VRAM left over
+  - 8GB → 7 ... 8B, 4bit, but won't have any VRAM left over, can't run avatar
+    - 4B, 4bit, 64k context possible, enough VRAM left over for avatar too
 - [Unsloth dynamic](https://docs.unsloth.ai/basics/unsloth-dynamic-2.0-ggufs) Q4_K_XL quants are very good in practice
 - setting up a local LLM with text-generation-webui (where to find install instructions; links to recommended models on HF; important command-line options)
