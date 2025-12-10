@@ -14,8 +14,8 @@
 
 - [Introduction](#introduction)
 - [Features](#features)
-    - [Nonlinear history](#nonlinear-history)
-        - [Why a nonlinear history?](#why-a-nonlinear-history)
+    - [Multiversal history](#multiversal-history)
+        - [Why?](#why)
     - [Document database](#document-database)
     - [Tools](#tools)
 - [Voice mode](#voice-mode)
@@ -37,12 +37,12 @@
 **Raven-librarian** is a multiversal LLM (large language model) frontend, mainly meant for working with local AI.
 
 - **Graphical user interface** (GUI). Easy to use.
-- **Multiversal**. The chat history is natively nonlinear, respecting the natural shape of conversation between a user and an LLM.
+- **Multiversal**. The chat history is natively a branching tree structure, respecting the natural shape of conversation between a user and an LLM.
 - **Animated AI avatar** with emotional reactions based on LLM text output, lipsynced speech (English), and optional machine-translated subtitles (in a language of your choice).
 - **Voice mode**. Talk with the AI using your mic. (English only for now.)
 - **Fully local**, if you have a local LLM.
 - **Document database** for fact grounding. Talk with the AI about the content of your documents. Powered by a local hybrid semantic and keyword search engine for optimal results.
-- **Tool use** (tool-calling). The AI has access to tools provided by the *Librarian* software. (Websearch only for now; we plan to extend this later.)
+- **Tool use** (tool-calling) for more fact grounding. The AI has access to tools provided by the *Librarian* software. (Websearch only for now; we plan to extend this later.)
 - **Open source**. 2-clause BSD license.
 
 **:exclamation: *Raven-librarian* is currently under development. :exclamation:**
@@ -53,11 +53,11 @@ That said, some important features are still missing, and others will be expande
 
 # Features
 
-The main features are a natively nonlinear chat history for natural, branching AI conversations; a document database and tool use for fact grounding; and a talking AI avatar for a futuristic touch on the UI.
+The main features are a multiversal chat history for natural, branching AI conversations; document database and tool use features for fact grounding; and a talking AI avatar for a futuristic touch on the user interface.
 
-## Nonlinear history
+## Multiversal history
 
-*Raven-librarian* stores chats in a tree format. The system prompt forms the root node. The AI's initial greeting, which forms the start point of a new chat, is immediately below the system prompt. The conversations then branch out from there.
+*Raven-librarian* stores its chat database in a tree format. All chats are part of the same tree. The system prompt forms the root node. The AI's initial greeting, which forms the start point of a new chat, is immediately below the system prompt. The conversations then branch out from there.
 
 Importantly, *there is no linear history*. The concept of "a chat" (as in "recent chats" or "chat files") is not even defined. A *linearized* history is built dynamically whenever needed, by following the parent link chain up the tree, starting from the tip of the current branch.
 
@@ -68,7 +68,7 @@ See the figure for a schematic illustration.
 <i>Raven-librarian stores chats in a tree format. Here <b>SYS</b> is the system prompt node, <b>NEW</b> is the start node for a new chat, and <b>HEAD</b> is the tip of the current branch. Linearized history (highlighted in green for the <b>HEAD</b> shown) is built dynamically, by following the parent link chain up the tree. Any AI response can be rerolled, creating a new sibling node.</i>
 </p>
 
-With this storage scheme, a chat branch is just its **HEAD** pointer; roughly, like in `git`. This makes some actions cheap. For example, starting a new chat only resets the **HEAD** pointer to the AI's greeting.
+With this storage scheme, a chat branch is just its **HEAD** pointer; roughly, like in `git`. This makes some actions cheap. For example, starting a new chat only resets the **HEAD** pointer to the AI's greeting (labeled **NEW** in the figure).
 
 The nodes are versioned, for an upcoming editing feature for fixing typos and making similar small edits that don't change the flow of the chat (i.e. meant for use in cases where any messages downstream of the edit still make sense as-is). By design, each version is immutable.
 
@@ -82,33 +82,51 @@ It is possible to permanently forget a subtree by **deleting** it. This will als
 
 The chat tree is stored (by default) in `~/.config/raven/llmclient/data.json`.
 
-### Why a nonlinear history?
+The **SYS** node is updated each time *Librarian* starts, using the currently configured system prompt from [`raven.librarian.config`](config.py). The node is updated in-place, via the node versioning mechanism: a new revision of the content is created, and the old one is deleted.
+
+When *Librarian* starts, it sets the **NEW** pointer to the appropriate node. First, the **SYS** node's existing child nodes are scanned for a match, by comparing the text content to the currently configured AI greeting from [`raven.librarian.config`](config.py). If a match is found, that node is set as the **NEW** node for the session; otherwise, a new node is created with the new greeting text, and that node is set as the **NEW** node for the session.
+
+Note that *Librarian* only supports one-on-one chats (one user, one AI), but the AI character as well as the user's persona name can be changed between sessions (when *Librarian* is not running).
+
+**AI greeting nodes are character-specific.** Different AI characters using the exact same wording for the greeting message will nevertheless cause independent greeting nodes to be created. This both follows from the OpenAI compatible storage format for the message content (which includes the character name at the beginning of each message, like *"Aria: How can I help you today?"*), but is also the Right Thing, as it makes chats started with different AI characters independent of each other.
+
+### Why?
 
 In short, this is a better conceptual fit for working with LLMs.
 
 An LLM is essentially a stochastic model conditioned on the prefix: the text so far. Used autoregressively, it is a discrete time evolution operator, roughly in the same sense as the (continuous) time evolution operator in quantum mechanics. The LLM sampler collapses the probability distribution for the next token, reifying one possible textual future one token at a time. Thus the sampler plays the role of the observer in the Copenhagen interpretation of QM. (Paraphrased from [Janus, 2021](https://generative.ink/posts/language-models-are-multiverse-generators/).)
+
+The analogy immediately suggests that the obvious way to think of LLM chat histories is not a linear timeline, but a branching multiverse.
 
 From a practical perspective, keep in mind that an LLM only "remembers" in two ways:
 
 - Static knowledge stored in weights, from training, and
 - The text in the context.
 
-Insofar as the LLM's thread of thought can be said to be "at" a place in the latent space at any given point of time (more specifically, at a given *token*), that place - and thus also the likely destinations to which the conversation leads - is fully determined by the context.
+Insofar as the LLM's thread of thought can be said to be "at" a place in the model's latent space at any given point of time (more specifically, at a given *token*), that place - and thus also the likely destinations to which the conversation leads - is fully determined by the context.
 
 That context can be rewound, extended, **engineered**.
 
-For example, it often happens that the LLM's first response to a question is not perfect. There is always variance in an LLM's output. Rerolling sometimes helps.
+Retrieval-augmented generation (RAG; [Lewis et al., 2020](https://arxiv.org/abs/2005.11401); see also survey by [Gao et al., 2023](https://arxiv.org/abs/2312.10997)) was an early form of context engineering: injecting search results to the context provides explicit facts to ground the generation on. This technique remains useful and popular.
 
-But also the old responses may contain useful parts. To improve upon further, one can perform *synthesis* - that is, combine several replies by manual editing before continuing the conversation. This is a form of context engineering.
+Sometimes context engineering is performed manually, for example to curate the perfect LLM reply to base further discussion on. Rerolling and *synthesis* (manual editing to combine several LLM replies) help here.
+
+Rerolling and chat branching are forms of rewinding.
 
 Rerolling also comes in useful for **epistemic analysis**. When the AI's reply is rerolled:
 
 - If the LLM states the same thing over and over, it believes in what it said (regardless of whether what it said is actually true or not).
 - If the LLM gives a wildly different response each time, then it didn't actually know, didn't notice that it didn't know, and confabulated (a.k.a. "*hallucinated*") something random.
 
+Context extension can be, for example, a *prefill* - writing the start of the AI's response manually, and then letting the LLM take over.
+
+Conversely, the LLM can be made to write on behalf of the user (this is known as *user persona sampling*), to see what the model thinks the user is likely to say next.
+
+Tools (as in *tool use*) also extend the context by writing responses there.
+
 Finally, sometimes it is interesting or useful to **visit alternative branches**, or in sci-fi terminology, alternative timelines in the multiverse of discourse. This allows a discussion to become a garden of forking paths, facilitating a more complex and complete exploration of a topic than one linear chat.
 
-A tree structure, and a GUI to match that, facilitates this curation, analysis, and exploration.
+All such curation, analysis and exploration is facilitated by the natural abstraction that fits best here - a tree structure - and a GUI to navigate it.
 
 **Notes**
 
@@ -309,15 +327,19 @@ Areas to improve:
     - Calculator with [simpleeval](https://github.com/danthedeckie/simpleeval) sandbox?
     - Weather with [open-meteo](https://open-meteo.com/en/docs)?
   - Keep It Simple Stupid: too many tools → confused LLM
-- Add **source attribution** for Librarian's replies
+- Add **source attribution** (a.k.a. *citations*) for Librarian's replies
   - For determinism and 100% reliability, handle this in the scaffold, not in the LLM
   - Which documents or links the LLM saw when writing the response (even if the final reply didn't use all of the sources; this is the best this approach can do?)
     - Maybe needs heuristic filtering; there can be e.g. 200 document database autosearch results if configured so
     - We could scan for document IDs (already stored in RAG autosearches) in the LLM's reply text, and then auto-cite any matching ones
-- **Chat tagging**
+- Add **chat tagging**
   - Tag a subtree as work, hobby, etc.
-- **Message editing**
-  - E.g. to fix typos before exporting a linearized chatlog
+- Add **message editing**
+  - E.g. to fix typos or to make small editorial changes before exporting a linearized chatlog for external consumption
+- Add **chat attachments**
+  - Whole-file context injection, showing the complete document to the LLM
+    - Contrast the document database, which search-indexes the document and shows only snippets matching the current search
+  - E.g. to discuss an individual PDF document (or two) in more detail
 - Integration with *Raven-visualizer*
   - Integrate the document database with the semantic map visualization
   - Select data points in Visualizer, talk about those studies in Librarian
