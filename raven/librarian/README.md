@@ -271,6 +271,7 @@ Areas to improve:
     - Essentially a second document database instance, where a document = a chat message (with its node ID so that we can walk the tree)
       - the DB's local search engine is very useful here as a retrieval mechanism
     - Semiautomatic (autosearch like document DB), but also with explicit tool access for the AI
+    - Search all (risk recalling confabulations), or user's messages only (worse recall)?
     - We could also have a third document database instance as an explicit memory storage (read/write) for the LLM
     - Limitations:
       - This yields only [episodic memory](https://en.wikipedia.org/wiki/Episodic_memory)
@@ -324,5 +325,9 @@ Areas to improve:
 
 # Appendix: Brief notes on how to set up a local LLM
 
-- recommended for privacy
+- strongly recommended for privacy
+- needs a fast GPU, more VRAM better
+  - 24GB → 30B, 4-bit, with 128k tokens context feasible, when Flash-attention enabled to bring memory cost down to O(n) (ooba has this out of the box)
+  - 8GB → 7 ... 8B, 4bit, but won't have any VRAM left over
+- [Unsloth dynamic](https://docs.unsloth.ai/basics/unsloth-dynamic-2.0-ggufs) Q4_K_XL quants are very good in practice
 - setting up a local LLM with text-generation-webui (where to find install instructions; links to recommended models on HF; important command-line options)
