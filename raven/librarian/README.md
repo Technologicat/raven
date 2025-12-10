@@ -93,7 +93,7 @@ From a practical perspective, keep in mind that an LLM only "remembers" in two w
 - Static knowledge stored in weights, from training, and
 - The text in the context.
 
-Insofar as the LLM's thread of thought can be said to be "at" a place in the latent space, that place - and thus also the likely destinations to which the conversation leads - is fully determined by the context.
+Insofar as the LLM's thread of thought can be said to be "at" a place in the latent space at any given point of time (more specifically, at a given *token*), that place - and thus also the likely destinations to which the conversation leads - is fully determined by the context.
 
 That context can be rewound, extended, **engineered**.
 
@@ -106,7 +106,7 @@ Rerolling also comes in useful for **epistemic analysis**. When the AI's reply i
 - If the LLM states the same thing over and over, it believes in what it said (regardless of whether what it said is actually true or not).
 - If the LLM gives a wildly different response each time, then it didn't actually know, didn't notice that it didn't know, and confabulated (a.k.a. "*hallucinated*") something random.
 
-Finally, sometimes it is interesting or useful to **visit alternative branches**. (Or, in sci-fi terminology, alternative timelines in the multiverse of discourse.) This allows a discussion to become a garden of forking paths, facilitating a more complex and complete exploration of a topic than one linear chat.
+Finally, sometimes it is interesting or useful to **visit alternative branches**, or in sci-fi terminology, alternative timelines in the multiverse of discourse. This allows a discussion to become a garden of forking paths, facilitating a more complex and complete exploration of a topic than one linear chat.
 
 A tree structure, and a GUI to match that, facilitates this curation, analysis, and exploration.
 
@@ -114,17 +114,17 @@ A tree structure, and a GUI to match that, facilitates this curation, analysis, 
 
 As someone on the internet pointed out, the term *hallucination* is misleading, since in humans, it refers to **inputs** that are not grounded in external reality - or as WordNet puts it, "*a sensory perception of something that does not exist*". However, the common usage of *LLM hallucination* refers to ungrounded **outputs**. A better semantic match here is "*a fabricated memory believed to be true*", hence a *confabulation*.
 
-As of 12/2025, many LLM frontends still operate in the paradigm of a traditional linear chat history. Many support some form of branching, but no AI chat app seems to have taken the idea to its logical conclusion yet. *SillyTavern* offers swipes and arbitrary branching, but uses a linear storage format ([*Timelines*](https://github.com/SillyTavern/SillyTavern-Timelines) is a hack on top of that). Loom ([original](https://github.com/socketteer/loom); [obsidian](https://github.com/cosmicoptima/loom)) is probably still the only natively nonlinear LLM GUI (that predates *Raven-librarian*); and it is focused on text completion via base models, not chat.
+As of 12/2025, many LLM frontends still operate in the paradigm of a traditional linear chat history. Many support some form of branching, but no AI chat app seems to have taken the idea to its logical conclusion yet. *SillyTavern* offers swipes and arbitrary branching, but uses a linear storage format ([*Timelines*](https://github.com/SillyTavern/SillyTavern-Timelines) is a hack on top of that). Loom ([original](https://github.com/socketteer/loom); [obsidian](https://github.com/cosmicoptima/loom)) is probably still the only natively nonlinear LLM GUI (predating *Raven-librarian*); and it is focused on text completion via base models, not chat.
 
 ## Document database
 
 The document database gives the LLM fact grounding via retrieval-augmented generation (RAG). Currently (v0.2.4), the RAG mechanism engineers the context via an automatic search, with the user's latest message as the search query. The search results are injected into the LLM's context before the AI replies.
 
-The number of search results to return can be configured in `raven.librarian.config`. This allows trading off speed vs. [recall](https://en.wikipedia.org/wiki/Precision_and_recall). Note that a higher number of search results will also take up more space in the LLM's context.
+The number of search results to return can be configured in [`raven.librarian.config`](config.py). This allows trading off speed vs. [recall](https://en.wikipedia.org/wiki/Precision_and_recall). Note that a higher number of search results will also take up more space in the LLM's context.
 
-In the search index, the documents are **chunked**. The chunk (not a full document!) is the basic unit of a search match. To avoid context loss at the chunk seams, *Librarian* uses a sliding window chunker with overlap (thus trading off storage space and speed for improved recall). If the search results include adjacent chunks from the same document, these are automatically merged into one contiguous search result (with smart removal of the overlap), which is scored with the highest score of any of the component chunks.
+In the search index, the documents are **chunked**. The chunk (not a full document!) is the basic unit of search. To avoid context loss at the chunk seams, *Librarian* uses a sliding window chunker with overlap, thus trading off storage space and speed for improved recall. If the search results include adjacent chunks from the same document, these are automatically merged into one contiguous search result, with smart removal of the overlap. The merged result is scored with the highest score of any of its component chunks.
 
-The search engine is local, and has a hybrid design that uses both semantic embeddings as well as BM25 keyword search. The semantic embedder used by the search engine (by default) is a QA-type model, which has been trained to map questions and their answers near each other in the high-dimensional vector space. For the keyword search, the query is lowercased, [lemmatized](https://en.wikipedia.org/wiki/Lemmatization) (using spaCy), and [stopworded](https://en.wikipedia.org/wiki/Stop_word). The results of the two searches are combined via [reciprocal rank fusion (RRF)](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search), to yield better results than either algorithm gives alone. See the figures.
+The search engine is local, and uses a hybrid algorithm with both semantic embeddings as well as BM25 keyword search. The semantic embedder used by the search engine (by default) is a QA-type model, which has been trained to map questions and their answers near each other in the high-dimensional vector space. For the keyword search, the query is lowercased, [lemmatized](https://en.wikipedia.org/wiki/Lemmatization) (using [spaCy](https://spacy.io/)), and [stopworded](https://en.wikipedia.org/wiki/Stop_word). The results of the two searches are combined via [reciprocal rank fusion (RRF)](https://www.assembled.com/blog/better-rag-results-with-reciprocal-rank-fusion-and-hybrid-search), to yield better results than either algorithm gives alone. See the figures.
 
 <p align="center">
 <img src="../../img/raven-search.png" alt="Raven has a hybrid, local search engine with semantic and keyword components." height="400"/> <br/>
@@ -138,27 +138,27 @@ The search engine is local, and has a hybrid design that uses both semantic embe
 
 As of v0.2.4, the document database accepts only **plain text** documents - **no** binaries (so no PDF). Beside classical plain text `.txt`, markup languages that LLMs understand are fine - e.g. `.md`, `.bib`, and `.tex` are acceptable inputs. The full list of recognized file extensions is maintained in the search engine implementation [`raven.librarian.hybridir`](hybridir.py), specifically in `HybridIRFileSystemEventHandler`.
 
-Until we get PDF import, you can use `pdftotext` (from `poppler-utils`) and [`ocrmypdf`](https://github.com/ocrmypdf/OCRmyPDF) to extract the plain text. We will likely automate this step later.
+Until we get PDF import, you can use `pdftotext` (from `poppler-utils`) and [`ocrmypdf`](https://github.com/ocrmypdf/OCRmyPDF) to extract the plain text from your PDFs. We will likely automate this step later.
 
-**To manage the content of the document database**, use a file manager: just put the files in the document database directory. By default, *Librarian* looks for documents in `~/.config/raven/llmclient/documents`. The path can be configured in `raven.librarian.config`.
+**To manage the content of the document database**, use a file manager: just put your document files in the document database directory. By default, *Librarian* looks for documents in `~/.config/raven/llmclient/documents`. The path can be configured in [`raven.librarian.config`](config.py).
 
 The document database directory can have subdirectories - so feel free to create them to organize your document collection. This is useful for splitting the DB into broad umbrella topics (AI research, engineering sciences, ...). As of v0.2.4, all documents still live in the same search namespace. We plan to add scoping support later, to allow limiting the search to a given topic.
 
 The search index syncs automatically:
 
-- When *Librarian* is started, it scans the document database directory for changes made after the last time *Librarian* saw it, and automatically updates the index if necessary.
-  - New files are indexed.
-  - Updated files are re-indexed. Updates are detected from each document file's mtime (*last-modified* time).
-  - Deleted files are removed from the index.
+- When *Librarian* is started, the document database directory is scanned for changes made after the last time *Librarian* saw it. If necessary, the index is updated automatically.
+  - New documents are indexed.
+  - Updated documents are re-indexed. Updates are detected from each document file's mtime (*last-modified* time).
+  - Deleted documents are removed from the index.
 
 - While *Librarian* is running, the directory is monitored for changes. Any changes take effect immediately.
-  - The same rules apply as for the startup scan: new, updated and deleted files are detected, and processed accordingly.
+  - The same rules apply as for the startup scan: new, updated and deleted documents are detected, and processed accordingly.
 
 - As of v0.2.4, the search index update progress can be viewed in the terminal window from which *Librarian* was started.
-  - Note that the update may take some time if there are many (hundreds) of files.
+  - The update may take some time if there are many (hundreds) of documents.
   - The semantic embedding uses the `embeddings` module of *Raven-server*, so it can benefit from GPU acceleration.
 
-If the search index ever becomes corrupted - or if you need to force a full rebuild for any reason - you can simply delete the search index directory while *Librarian* is not running. A full index rebuild will then automatically take place when *Librarian* is started. By default, the index is stored in `~/.config/raven/llmclient/rag_index`.
+If the search index ever becomes corrupted - or if you need to force a full rebuild for any reason - you can simply delete the search index directory while *Librarian* is not running. A full search index rebuild will then automatically take place when *Librarian* is started. By default, the index is stored in `~/.config/raven/llmclient/rag_index`.
 
 ## Tools
 
@@ -169,17 +169,17 @@ If the search index ever becomes corrupted - or if you need to force a full rebu
 <i>An LLM-based AI agent <a href="https://simonwillison.net/2025/Sep/18/agents/">runs tools in a loop</a>. (Images created with Qwen-Image.)</i>
 </p>
 
-The idea is to allow the LLM partial control over engineering its own context. When the LLM notices that in order to reply to the user's request, it needs information that a tool could provide, it can tell its surrounding scaffold app (such as *Librarian*) to invoke the tool. A tool can be anything that produces text, for example: websearch, calculators, weather services, database access, file access, shell access, or a programming environment.
+The idea is to give the LLM partial control over engineering its own context. When the LLM notices that in order to reply to the user's request, it needs information that a tool could provide, it can tell its surrounding scaffold app (such as *Librarian*) to invoke the tool. A tool can be anything that produces text, for example: websearch, calculators, weather services, database access, file access, shell access, or a programming environment.
 
 The scaffold app performs the actual tool call, and writes the tool output to the LLM's context. Control then returns to the LLM, so that it can interpret the results and continue writing. The LLM may make more tool calls if it deems necessary to do so, and the process repeats.
 
 Once the LLM is satisfied with the information it has, it proceeds to write its reply without making more tool calls. Finally, control returns to the user.
 
-The LLM receives tool specifications in JSON format, as part of its system prompt. A tool specification includes the function name, a short human-readable (LLM-readable!) docstring of what it does, and a parameter specification (with docstrings), if the function needs arguments.
+The LLM receives tool specifications in JSON format, as part of its system prompt. A tool specification includes the function name, a short human-readable (LLM-readable!) docstring of what it does, and a parameter specification (with docstrings), if the function needs arguments. The tool specifications are typically injected by the LLM backend software (such as [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)), so they are not visible in the user-provided system prompt.
 
 Modern approaches to tool use include [MCP](https://modelcontextprotocol.io/docs/getting-started/intro), which allows tool discovery on external servers; and LLM skills, [pioneered by Anthropic's Claude](https://simonwillison.net/2025/Oct/16/claude-skills/). The latter requires giving the AI access to a full, sandboxed virtual machine.
 
-We don't currently take things this far; we only provide a set of hardcoded tools. If interested in the details, see `tools` in the `setup` function in [`raven.librarian.llmclient`](llmclient.py), and the agent loop in [`raven.librarian.scaffold`](scaffold.py). As of v0.2.4, *Librarian* only provides websearch, but we intend to expand this later.
+We don't currently take things this far; we only provide a set of hardcoded tools. If interested in the details, see `tools` in the `setup` function in [`raven.librarian.llmclient`](llmclient.py), the related mechanisms in the `invoke` function in the same module, and the agent loop in [`raven.librarian.scaffold`](scaffold.py). As of v0.2.4, *Librarian* only provides websearch, but we intend to expand this later.
 
 # Voice mode
 
@@ -187,7 +187,9 @@ Librarian features a lipsynced talking AI avatar, as well as speech recognition 
 
 For configuring the AI's voice, see [configuration](#configuration) below.
 
-The AI avatar can optionally display machine-translated subtitles for its speech.
+The AI avatar can optionally display machine-translated subtitles for its speech. The language can be configured in [`raven.librarian.config`](config.py). The machine translation model from English (LLM output) to the subtitle language is configured in [`raven.server.config`](../server/config.py).
+
+Currently (v0.2.4), the subtitles are translated one sentence at a time. This loses broader context, but is a technical limitations of many currently (12/2025) available machine translation models, which are sentence-based translators.
 
 To speak to the AI, click the **mic button**. Once you are done talking, click again, or wait until the automatic silence detector ends the recording.
 
