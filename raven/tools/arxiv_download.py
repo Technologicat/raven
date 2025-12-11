@@ -22,10 +22,10 @@ from mcpyrate import colorizer
 
 from .. import __version__
 
+from ..common import stringmaps
+
 from . import arxiv2id
 
-# Here "." is important for `raven-arxiv2id` to handle the downloaded files correctly.
-filename_safe_nonalphanum = " -_',."
 GLOBE = "🌐"  # for progress messages indicating internet access
 
 # arXiv API TOS requires waiting a minimum of 3 seconds between requests
@@ -151,7 +151,7 @@ def get_paper_metadata(arxiv_id: str,
         version_year_str = f", revised {version_year}"
 
     title = title.replace(": ", " - ")
-    safe_title = "".join(c for c in title if c.isalnum() or c in filename_safe_nonalphanum)
+    safe_title = "".join(c for c in title if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)
     safe_title = safe_title[:title_length_limit] + ("..." if len(title) > title_length_limit else "")
 
     # Canonize ID to always include the version
@@ -159,7 +159,7 @@ def get_paper_metadata(arxiv_id: str,
     resolved_id = f"{clean_id}{version}"
 
     safe_resolved_id = resolved_id.replace("/", "_")
-    safe_resolved_id = "".join(c for c in safe_resolved_id if c.isalnum() or c in filename_safe_nonalphanum)
+    safe_resolved_id = "".join(c for c in safe_resolved_id if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)
 
     filename = f"{author_str} ({original_year}{version_year_str}) - {safe_title} - {safe_resolved_id}.pdf"
 
