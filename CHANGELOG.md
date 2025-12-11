@@ -5,14 +5,32 @@
 **Added**:
 
 - Tools:
-  - New tool: *Raven-dehyphenate*.
-    - This uses the `dehyphen` package to sanitize text bro-ken by hyp-he-na-tion.
-    - This can be useful for `pdftotext` outputs, and for text obtained from PDF files by OCR (such as with `ocrmypdf --force-ocr input.pdf output.pdf`).
-    - Raven-server's `sanitize` module is used automatically, if the server is reachable and the module is loaded on the server; else the dehyphenator model is loaded locally.
-
-  - New tool: *Raven-arxiv-download*.
+  - New command-line tool: *Raven-arxiv-download*.
     - This takes arXiv paper IDs from the command line (e.g. 2511.22570, 2411.17075v5, cond-mat/0207270, math/0501001v2), and downloads the corresponding PDFs.
-    - For instructions, see the [visualizer README](raven/visualizer/README.md).
+      - Main use case is: people have recommended a bunch of interesting arXiv papers, hence you have dozens of URLs or arXiv IDs on your phone, and you'd like to download the fulltexts on your PC.
+      - The files are automatically named based on the metadata record queried from the arXiv API.
+      - You can download either the latest version of each paper (default) or a specific version (just specify e.g. "v2" at the end of the ID, in the usual arXiv notation).
+      - Duplicates are not downloaded.
+        - The tool checks the specified output directory (default: current working directory) whether there is already a PDF file with a matching (versioned) arXiv ID in the filename.
+      - The tool automatically respects the one-request-per-three-seconds-of-wall-time limit of the arXiv API TOS.
+    - For instructions, see the [visualizer user manual](raven/visualizer/README.md).
+
+  - New command-line tool: *Raven-burstbib*.
+    - This takes a BibTex `.bib` file, and splits it into many `.bib` files, each containing one individual entry from the input file.
+      - The files are automatically named based on the slug (BibTeX item ID), omitting any characters that are not valid in a filename.
+      - If the output file already exists, the tool appends "_2", "_3", ... to the filename until it finds a filename that is not in use.
+    - This is convenient to turn a huge BibTeX file (full of scientific abstracts) into individual documents for *Raven-librarian*'s document database, so that you can synthesize information over them with your LLM.
+      - Run `raven-burstbib -o my_topic my_references.bib` and then copy/move the `my_topic` subdirectory to `~/.config/raven/llmclient/documents/`.
+      - Raven-librarian will pick them up at next start, or immediately (if already running).
+        - Note that Librarian's search indexing may take a while. For progress messages, see the terminal window from which you started *Raven-librarian*.
+    - The current implementation of `raven-burstbib` is hacky. It doesn't actually parse the file properly, but only splits at BibTeX item headers.
+      - It will handle invalid slugs properly, but other types of invalid input may cause crashes or unexpected behavior. It does work if your input file is valid BibTeX. :)
+      - If you encounter a bug, please [open an issue](https://github.com/Technologicat/raven/issues).
+
+  - New command-line tool: *Raven-dehyphenate*.
+    - This uses the `dehyphen` Python package to sanitize text bro-ken by hyp-he-na-tion.
+    - This is useful for `pdftotext` outputs, and for text obtained from PDF files by OCR (such as with `ocrmypdf --force-ocr input.pdf output.pdf`).
+    - Raven-server's `sanitize` module is used automatically, if the server is reachable and the module is loaded on the server; else the dehyphenator model is loaded locally.
 
 - *Raven-visualizer*:
   - Importer: New keyword detection mode "llm".
@@ -102,7 +120,7 @@
       - The default configuration has been changed to use "system-default", so that behavior should remain the same.
 
 - Tools:
-  - *Raven-pdf2bib*: Overhauled. See updated instructions in [visualizer README](raven/visualizer/README.md).
+  - *Raven-pdf2bib*: Overhauled. See updated instructions in the [visualizer user manual](raven/visualizer/README.md).
     - To initialize each LLM task, this uses the same system prompt and AI character as *Librarian* uses for its chat.
       - This gives results consistent with what *Librarian* would say, because the LLM operations are handled by the same AI simulacrum.
       - See `raven.librarian.config`.
