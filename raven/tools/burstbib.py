@@ -13,6 +13,7 @@ import io
 import pathlib
 from typing import Union
 
+from ..common import stringmaps
 from ..common import utils as common_utils
 
 def main() -> None:
@@ -50,7 +51,24 @@ def main() -> None:
                 if start_of_slug == -1 or end_of_slug == -1:
                     assert False
                 slug = headerline[(start_of_slug + 1):end_of_slug]
+                # Make safe for filename, to tolerate broken `.bib` files (users not familiar with BibTeX may have used e.g. a DOI or an URL as the slug)
+                slug = "".join(c for c in slug if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)
                 return slug
+
+            def get_output_path(slug):
+                primary_output_path = output_dir / f"{slug}.bib"
+                output_path = primary_output_path
+
+                # make unique path
+                counter = 2
+                while output_path.exists():
+                    output_path = output_dir / f"{slug}_{counter}.bib"
+                    counter += 1
+
+                if counter > 2:
+                    print(f"    '{str(primary_output_path)}' already exists, writing to '{str(output_path)}' instead.")
+
+                return output_path
 
             def sync():
                 """Find first BibTeX record header."""
@@ -73,7 +91,7 @@ def main() -> None:
             while True:
                 line = input_file.readline()
                 if line == "":  # EOF
-                    output_path = output_dir / f"{slug}.bib"
+                    output_path = get_output_path(slug)
                     if opts.verbose:
                         print(f"    Writing '{str(output_path)}'")
                     with open(output_path, "w") as output_file:
@@ -81,7 +99,7 @@ def main() -> None:
                     break
 
                 if is_headerline(line):  # start of next record
-                    output_path = output_dir / f"{slug}.bib"
+                    output_path = get_output_path(slug)
                     if opts.verbose:
                         print(f"    Writing '{str(output_path)}'")
                     with open(output_path, "w") as output_file:
