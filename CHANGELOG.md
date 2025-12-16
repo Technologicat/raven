@@ -1,6 +1,13 @@
 # Changelog
 
-**0.2.4** (December 2025, in progress):
+**0.2.5** (December 2025, in progress):
+
+*No user-visible changes yet.*
+
+
+---
+
+**0.2.4** (16 December 2025):
 
 **Added**:
 
