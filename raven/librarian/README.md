@@ -19,10 +19,15 @@
         - [Notes](#notes)
     - [Document database](#document-database)
     - [Tools](#tools)
+        - [Security warning](#security-warning)
+        - [Notes](#notes-1)
 - [AI avatar and voice mode](#ai-avatar-and-voice-mode)
     - [100% privacy-first](#100-privacy-first)
-    - [Notes](#notes-1)
+    - [Notes](#notes-2)
 - [GUI walkthrough](#gui-walkthrough)
+    - [Global actions](#global-actions)
+    - [Chat message actions](#chat-message-actions)
+    - [Mode toggles](#mode-toggles)
 - [Configuration](#configuration)
     - [Server connections](#server-connections)
     - [Voice mode](#voice-mode)
@@ -185,24 +190,62 @@ If the search index ever becomes corrupted - or if you need to force a full rebu
 
 ## Tools
 
-*Tool use* (a.k.a. *tool-calling* or *function-calling*) is a feature of many LLMs published since early 2025. Integrated into a chatbot, this yields a lightweight form of AI agent functionality.
+*Tool use* (a.k.a. *tool-calling* or *function-calling*) is a feature of many LLMs published since early 2025. The idea is to give the LLM partial control over engineering its own context. When the LLM notices that in order to respond to the user's request, it needs to use an external tool, the LLM can tell its surrounding scaffold app (such as *Librarian*) to invoke that tool. A tool can be anything that produces text, for example: websearch, calculators, weather services, database access, file access, shell access, or a programming environment. As the last few examples suggest, tools may also trigger actions in the external world, just like any computer software. For example, a tool call could cause a document to be sent to a printer, or a meeting to be scheduled for the user. Effectively, tool use allows the LLM to control a (predefined set of services on a) computer.
+
+Modern approaches to tool use include [MCP](https://modelcontextprotocol.io/docs/getting-started/intro), which allows dynamic tool discovery on external servers; and LLM skills, [pioneered by Anthropic's Claude](https://simonwillison.net/2025/Oct/16/claude-skills/). The latter requires giving the AI access to a full, sandboxed virtual machine, with a software development environment (such as a Python interpreter).
+
+When tool use technology is integrated into a chatbot, this yields a lightweight form of AI agent functionality. The system remains primarily a chatbot, but it can use tools to gather information from external data sources.
 
 <p align="center">
 <img src="../../img/ai-agent.png" alt="An LLM-based AI agent runs tools in a loop." width="800"/> <br/>
 <i>An LLM-based AI agent <a href="https://simonwillison.net/2025/Sep/18/agents/">runs tools in a loop</a>. (Images created with Qwen-Image.)</i>
 </p>
 
-The idea is to give the LLM partial control over engineering its own context. When the LLM notices that in order to reply to the user's request, it needs information that a tool could provide, the LLM can tell its surrounding scaffold app (such as *Librarian*) to invoke the tool. A tool can be anything that produces text, for example: websearch, calculators, weather services, database access, file access, shell access, or a programming environment.
+How tool use works:
 
-The scaffold app performs the actual tool call, and writes the tool output to the LLM's context. Control then returns to the LLM, so that it can interpret the results and continue writing. The LLM may make more tool calls if it deems necessary to do so, and the process repeats.
+- As part of the system prompt, the LLM receives specifications about available tools, in JSON format.
+  - Each tool specification includes the function name, a short human-readable (*LLM-readable!*) docstring of what it does, and a parameter specification (with docstrings), if the function takes arguments (as well as which arguments are required and which are optional).
+  - While the tool specifications are provided by the scaffold app, they are typically injected into the system prompt by the LLM backend software (such as [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)), so they are not visible in the user-provided system prompt.
+- When the LLM thinks it needs to use tools, it requests one or more tool calls by writing a specially formatted chat message.
+  - For each tool call, the LLM writes which function to call as well as the parameters (if any) in JSON notation. Modern LLMs have been trained to do this.
+  - These tool call requests are detected in, and parsed from, the LLM output by the LLM backend software.
+- The parsed tool call request is handed over to the scaffold app.
+- The scaffold app performs the actual tool call, and writes a machine-formatted message in JSON notation, containing the tool output (or error message, if any).
+- Control then returns to the LLM, so that it can interpret the results returned by the tool, as well as continue writing.
+- The LLM may make another round of tool calls if it deems necessary to do so, and the process repeats.
+- Once the LLM is satisfied with the information it has, it proceeds to write its reply without making more tool calls.
+- Control returns to the user.
 
-Once the LLM is satisfied with the information it has, it proceeds to write its reply without making more tool calls. Finally, control returns to the user.
+### Security warning
 
-The LLM receives tool specifications in JSON format, as part of its system prompt. A tool specification includes the function name, a short human-readable (LLM-readable!) docstring of what it does, and a parameter specification (with docstrings), if the function needs arguments. While the tool specifications are provided by the scaffold app, they are typically injected into the system prompt by the LLM backend software (such as [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)), so they are not visible in the user-provided system prompt.
+To keep tool use safe, there are [certain important considerations](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/). In short, giving an LLM access to all three of:
 
-Modern approaches to tool use include [MCP](https://modelcontextprotocol.io/docs/getting-started/intro), which allows tool discovery on external servers; and LLM skills, [pioneered by Anthropic's Claude](https://simonwillison.net/2025/Oct/16/claude-skills/). The latter requires giving the AI access to a full, sandboxed virtual machine.
+1. Private data (your local, non-public documents),
+2. Access to untrusted sources of text (e.g. downloading arbitrary webpages), and
+3. Ability to communicate with the external world (e.g. sending arbitrary HTTP requests)
 
-We don't currently take things this far; we only provide a set of hardcoded tools. If interested in the details, see `tools` in the `setup` function in [`raven.librarian.llmclient`](../librarian/llmclient.py), the related mechanisms in the `invoke` function in the same module, and the agent loop in [`raven.librarian.scaffold`](scaffold.py). As of v0.2.4, *Librarian* only provides websearch, but we intend to expand this later.
+is generally a very bad idea.
+
+
+**As of H2/2025, the level of LLM information security is next to nonexistent.**
+
+PDFs or webpages can be poisoned by an adversary to make an LLM do what the adversary wants when the LLM reads that document or webpage.
+
+The classic invisible white print is a well-known technique, e.g. to make automated LLM reviewers give glowing reviews to a "scientific paper" that is actually AI slop.
+
+One more advanced and harder-to-casually-detect approach is [Unicode poisoning](https://embracethered.com/blog/posts/2025/google-jules-invisible-prompt-injection/); see [ASCII Smuggler](https://embracethered.com/blog/ascii-smuggler.html).
+
+Be aware that private data can be leaked simply via sending an HTTP GET request, because the attacker can just place all your private information in the URL as a query string (e.g. in a base64-encoded form for obfuscation).
+
+These techniques are well known, and even trivial, so spelling them out here is not an infohazard. Real attackers probably have access to many more advanced ones.
+
+### Notes
+
+Currently, Librarian only provides a set of hardcoded tools, and does **not** support MCP or skills.
+
+As of v0.2.4, *Librarian* only provides websearch, but we intend to expand this later.
+
+If interested in the details, see `tools` in the `setup` function in [`raven.librarian.llmclient`](../librarian/llmclient.py), the related mechanisms in the `invoke` function in the same module, and the agent loop in [`raven.librarian.scaffold`](scaffold.py).
 
 # AI avatar and voice mode
 
@@ -282,17 +325,110 @@ The default character (Aria) comes with a full set of extra cels, for documentat
 
 # GUI walkthrough
 
-- where features are
-  - why some buttons are at the bottom
-  - why some buttons are below every chat message
-    - why some buttons only appear for certain types of chat message
-  - normally, the user sends a message, to which the AI then replies
-    - Agent loop: the AI may call tools. If it does, once the tool call completes, control returns to the AI, and it can resume writing another message. Once there are no more tool calls, and the AI has written its final response, control returns to the user.
-    - But you can send an empty message. This omits the user's turn, asking the AI to take that turn instead.
-    - You can interrupt the AI generation, and resume (continue) it
-      - Continuing can be useful also if the output token limit ran out before the AI was done replying
-- what the GUI toggles below the avatar do
-  - the toggles are persistent, default place to store the app state is `~/.config/raven/llmclient/state.json`
+The Librarian main window is split in two main parts: the linearized chat view on the left, and the AI avatar (and mode toggles) on the right:
+
+<p align="center">
+<img src="../../img/screenshot-librarian.png" alt="Screenshot of Raven-librarian" width="800"/> <br/>
+<i>The main window of Raven-librarian.</i>
+</p>
+
+Basic **conversation flow** in Librarian works like in many LLM chatbot applications:
+
+- You send a message to the AI. The AI replies.
+  - You can write in the message entry field at the bottom and click the **send button**, or click the **mic button** to speak to the AI in voice mode.
+  - **LLM agent loop**: the AI may call tools to gather information needed for composing its reply. For details, see [Tools](#tools) above.
+- You can send an empty message.
+  - Just leave the message entry field blank and click the **send button**.
+  - Doing so omits the user's turn, asking the AI to take the next turn instead.
+    - How the AI behaves in this situation depends on your particular LLM.
+- You can interrupt the AI generation, and resume (continue) it later.
+    - Continuing can be useful also if the output token limit ran out before the AI was done replying.
+
+## Global actions
+
+The toolbar at the bottom contains **global actions**:
+
+- Start new chat (Ctrl+N)
+  - Starting a new chat does not make any changes to the chat datastore - it only sets the **HEAD** pointer.
+  - Changes occur only when you then send a message to the AI; that message is saved under the AI's greeting, and the chat continues.
+- Chat tree view *(placeholder button; feature to be added later)*
+- Copy linearized chatlog to clipboard (F8)
+- Stop the AI's text generation, if in progress (Ctrl+G)
+- Stop the AI avatar's speaking (Ctrl+S)
+- Toggle fullscreen (F11)
+- Built-in Help card (F1)
+
+## Chat message actions
+
+In the linearized chat view on the left, there are buttons below each chat message, for **chat message actions**:
+
+- Copy chat message to clipboard
+- Reroll (AI messages only) (Ctrl+R)
+- Continue generating (Ctrl+U)
+  - Last message of linearized view only; and only if it is an AI message.
+- Speak (AI messages only) (Ctrl+S)
+  - Upon clicking this, the avatar speaks the message through the TTS subsystem if **Speech** is enabled in the mode toggles.
+  - If additionally **Subtitles** is enabled in the mode toggles, the avatar's speech is subtitled (or closed-captioned) in the language set in [`raven.librarian.config`](../librarian/config.py).
+- Edit *(placeholder button; feature to be added later)*
+- Branch
+  - Set this message as the current **HEAD**.
+    - Branching does not make any changes to the chat datastore - it only sets the **HEAD** pointer.
+  - You can use this to roll back the conversation, while preserving the previous content in the chat datastore.
+- Delete
+  - Permanently destroy the subtree starting at this message (this message and all messages below it, in any branch).
+  - Requires two clicks to prevent accidental deletion.
+- Navigate chat tree
+  - Switch to first sibling
+    - Switch to the oldest sibling node at this position (numbered "1")
+  - Switch 10 siblings left
+  - Switch to previous sibling
+  - Show chat continuation (last message of linearized view only)
+    - If any messages exist below this one in the chat datastore, descend into the tree.
+    - At each level, pick the most recently modified child node. Repeat automatically until a leaf node is reached. Select that leaf node as the current **HEAD**.
+    - In a sense, this is opposite of the *branch* action. While *branch* selects a node further up the tree as **HEAD**, this selects a node at the leaf level as **HEAD**.
+  - Switch to next sibling
+  - Switch 10 siblings right
+  - Switch to last sibling
+    - Switch to the most recently created sibling node at this position.
+
+For the chat message actions, the **hotkeys affect the most recent message** in the chat.
+
+## Mode toggles
+
+Below the avatar panel at the right, there are **mode toggles**:
+
+- **Tools**
+  - Whether to allow tool use. See [Tools](#tools) above.
+  - If **ON**, allow the LLM to use the tools provided by Librarian.
+  - If **OFF**, automatically strip tool specifications before sending the chatlog to the LLM, so that no tools are available for the LLM.
+- **Documents**
+  - If **ON**, autosearch the document database each time you send a message to the AI, and inject the search results into the LLM's context.
+    - As of v0.2.4, this feature is rather rudimentary; the search query is always automatically set to the user's latest message (in the current linearized view, after sending the current message if any).
+    - This may make the LLM's prompt processing time much longer, especially if you have set up a high limit for the number of search results.
+      - A **SYSTEM** indicator will glow at the upper left corner of the avatar panel while the LLM is processing the prompt.
+        - Progress information for this is not available via the OpenAI-compatible web API, so it's a generic glowing indicator only.
+        - See the terminal window where your LLM backend is running if you want to see the progress and processing speed.
+    - This may also derail your discussion (depending on your particular LLM), if the document database does not cover the topic you are discussing with the AI.
+  - If **OFF**, do not autosearch the document database.
+    - This is useful when you know your topic doesn't need information from the documents you have fed into Librarian's document database, for shorter processing times and less potential confusion.
+- **Speculation**
+  - Works together with the **Documents** mode toggle. An element for *defence in depth* in truthfulness.
+  - If **Documents** is **OFF**, then **Speculation** has no effect.
+  - If **Documents** is **ON**, and **Speculation** is **OFF**:
+    - If there is at least one match (whether real or spurious) from the autosearch, automatically remind the LLM to base its answer on the context only. (This reminder is not shown in the GUI.)
+    - If the autosearch returns zero matches, bypass the LLM, and instead write a machine-formatted message stating that there were no matches in the document database.
+      - Some other AI chatbots with RAG offer a similar feature.
+      - Spurious matches are still possible, and may trip up your LLM.
+        - E.g. *"What does your knowledge base say about whether cats can jump?"* may find matches in e.g. AI research literature due to the phrase *"knowledge base"*.
+        - Whether the AI notices the case where all results are spurious and don't actually contain the requested information, depends on your particular LLM.
+          - *Qwen3 30B A3B Thinking 2507* is pretty good at this (and will e.g. tell you that the search results were about AI, not cats), but as of 12/2025, anything smaller than 30B generally isn't.
+  - If both **Documents** and **Speculation** are **ON**, the LLM is free to respond as it wants. Anything goes!
+    - Most AI chatbots with RAG always operate like this.
+- **Speech**
+- **Subtitles**
+  - The **Speech** and **Subtitles** mode toggles control features of the AI avatar. They are explained in the [AI avatar and voice mode](#ai-avatar-and-voice-mode) section above.
+
+The toggles persist across sessions. They are stored in the app state file, which by default is saved in `~/.config/raven/llmclient/state.json`. The file is loaded at app startup, and saved at app exit.
 
 # Configuration
 
