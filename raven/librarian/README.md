@@ -509,6 +509,23 @@ Areas to improve:
     - Need to be runnable on a single workstation, at most 24GB VRAM per GPU, usually just one GPU
       - QLoRA tuning ([Dettmers et al., 2023](https://arxiv.org/abs/2305.14314))?
     - For a review of old continual learning techniques, see [Wang et al. (2023)](https://arxiv.org/abs/2302.00487)
+  - Context compaction
+    - As of v0.2.4, *Librarian* has **no** context management when the LLM's context fills up. The LLM will just fail to generate if the context is already full.
+      - This hasn't been an issue in testing *Librarian*, because my own LLM chat sessions tend to be rather short.
+    - Standard solution: invoke the LLM itself to summarize the context so far, and then replace the start of the chat with that summary.
+      - This yields a "logarithmic time axis" for the context.
+        - Recent context is fully available.
+        - Previous context (that no longer fits) is summarized first once.
+        - Then, the context containing that summary (as well as the next context-ful of new messages) gets summarized...
+      - We intend to add this later.
+        - Implementation will be slightly complicated due to the tree storage format, if one round of summarization is not enough.
+        - Generating summaries is slow, so they should be cached.
+          - Maybe store summaries as special nodes in the chat datastore, collected under a new, "summaries" top-level node?
+            - Then, during linearized view building, check if a summary is available (and up to date) for the node being processed, and if so, use that and terminate instead of walking further up.
+          - Each summary needs to store metadata about which HEAD it was generated for, as well as the IDs of the summarized nodes (so that we can check the timestamps to detect whether the summary needs to be re-generated).
+    - *SillyTavern* uses another solution: old chat messages are fed into the RAG document database.
+      - The memory feature will provide a form of this.
+        - The memory autosearch will need to omit those messages that are currently visible in the context.
 - Improve **GUI to access old chats**
   - Add recent chats list
     - As mentioned, "recent chat" is not really defined with the natively nonlinear format; maybe "user's first message" is a good enough splitting point
@@ -558,10 +575,49 @@ Areas to improve:
 
 # Appendix: Brief notes on how to set up a local LLM
 
-- strongly recommended for privacy
-- needs a fast GPU, more VRAM better
-  - 24GB → 30B, 4-bit, with 128k tokens context feasible, when Flash-attention enabled to bring memory cost down to O(n) (ooba has this out of the box)
-  - 8GB → 7 ... 8B, 4bit, but won't have any VRAM left over, can't run avatar
-    - 4B, 4bit, 64k context possible, enough VRAM left over for avatar too
-- [Unsloth dynamic](https://docs.unsloth.ai/basics/unsloth-dynamic-2.0-ggufs) Q4_K_XL quants are very good in practice, recommend those
-- setting up a local LLM with text-generation-webui (where to find install instructions; links to recommended models on HF; important command-line options)
+:exclamation: *This needs a fast GPU, with as much VRAM as possible.* :exclamation:
+
+If you have the hardware, self-hosting a local LLM instance is strongly recommended for privacy. Then the content of your AI conversations never leaves your workstation, or your LAN if you run the LLM backend on another machine.
+
+[**Flash-attention**](https://arxiv.org/abs/2205.14135) should be enabled to bring the memory cost of the LLM's context down to *O(n)* (where *n* is the context length). Many LLM backends have an option to do this.
+
+When self-hosting, LLMs are usually quantized to make the VRAM requirements manageable at all. [Unsloth dynamic](https://docs.unsloth.ai/basics/unsloth-dynamic-2.0-ggufs) quants are very good in practice. We recommend the **Q4_K_XL** variant.
+
+In practice, with flash-attention and a 4-bit quant:
+
+- A **24GB** GPU can fit:
+  - A **30B** model with **128k context** (131072 tokens).
+- A **8GB** GPU can fit:
+  - A **4B** model with **64k context** (65536 tokens). Enough VRAM is left over for the avatar too.
+  - A **7B** or **8B** model with maybe up to 64k context, but the GPU won't have VRAM left over for the avatar; so as of Raven v0.2.4, *Librarian* won't run.
+
+How much 64k tokens is in pages, depends on the type of text. Some people on the internet claim that it can fit a 300-page novel, but in my own tests, one scientific paper with about 40 pages already takes over 50k tokens.
+
+Also, be aware that LLM accuracy tends to suffer (the model becomes inattentive) for long contexts. As of H2/2025, models are commonly trained on short-context data, and then extrapolation techniques are used to enable support for longer contexts. Even if the model can find a [needle in a haystack](https://labelbox.com/guides/unlocking-precision-the-needle-in-a-haystack-test-for-llm-evaluation/) in a very long context, that test doesn't really say anything else about the model's abilities. The ability to answer open-ended questions as well as to keep up a high-quality chat conversation usually suffer as the context fills up.
+
+Recommendations:
+
+- LLM backend: [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui).
+  - It is easy to install; see the instructions on its frontpage.
+  - You'll want to start it with the `--api --listen` command-line options, so that it will listen for incoming connections, and serve the OpenAI-compatible API (which *Librarian* uses).
+- Model:
+  - 24GB: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507)
+  - 8GB: [Qwen3-4B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507)
+
+**Multiple GPU** and **GPU/CPU splitting** considerations:
+
+- *text-generation-webui* can split the LLM across many devices.
+  - Useful if you have multiple GPUs, and the LLM won't fit in the VRAM of one GPU, but will fit if split across them.
+    - The GPUs are used in series, so this will **not** speed up inference.
+  - It can also partially offload a model to GPU, running the rest on CPU, if you have one GPU and there is not enough VRAM for the LLM.
+    - This is much slower than running the whole model on GPU, but makes larger models runnable at all when there is not enough VRAM.
+- *Raven-server* can use several devices.
+  - Most modules that serve an AI model can be configured to run on any GPU, or on CPU.
+    - Only the `avatar` module absolutely needs the GPU, because it needs realtime speed, and the THA3 AI poser model is too large to run in realtime on CPU.
+    - All the rest can run on CPU; they will be slow, but they will work.
+    - See [`raven.server.config`](../server/config.py).
+  - However, no splitting - in *Raven-server*, each module must run fully on one device.
+  - If you are low on VRAM, you can run most of *Raven-server*'s modules on CPU.
+    - To do this, start *Raven-server* as `raven-server --config raven.server.config_lowvram`.
+  - If you have two GPUs, it is particularly useful that you can run *Raven-server*'s AI models on a GPU different from the one the LLM backend is using.
+    - E.g. if you have a laptop with an eGPU, you can dedicate the eGPU (with its larger VRAM) to the LLM, and run *Raven-server* on the laptop's internal NVIDIA GPU.
