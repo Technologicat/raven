@@ -579,45 +579,46 @@ Areas to improve:
 
 If you have the hardware, self-hosting a local LLM instance is strongly recommended for privacy. Then the content of your AI conversations never leaves your workstation, or your LAN if you run the LLM backend on another machine.
 
-[**Flash-attention**](https://arxiv.org/abs/2205.14135) should be enabled to bring the memory cost of the LLM's context down to *O(n)* (where *n* is the context length). Many LLM backends have an option to do this.
+[**Flash-attention**](https://arxiv.org/abs/2205.14135) should be enabled to bring the memory cost of the LLM's context down to *O(n)*, where *n* is the context length. Many LLM backends have an option to do this.
 
 When self-hosting, LLMs are usually quantized to make the VRAM requirements manageable at all. [Unsloth dynamic](https://docs.unsloth.ai/basics/unsloth-dynamic-2.0-ggufs) quants are very good in practice. We recommend the **Q4_K_XL** variant.
 
 In practice, with flash-attention and a 4-bit quant:
 
 - A **24GB** GPU can fit:
-  - A **30B** model with **128k context** (131072 tokens).
+  - A **30B** model with **128k context** (131072 tokens), or a slightly smaller context to leave some VRAM for the avatar.
 - A **8GB** GPU can fit:
   - A **4B** model with **64k context** (65536 tokens). Enough VRAM is left over for the avatar too.
   - A **7B** or **8B** model with maybe up to 64k context, but the GPU won't have VRAM left over for the avatar; so as of Raven v0.2.4, *Librarian* won't run.
 
-How much 64k tokens is in pages, depends on the type of text. Some people on the internet claim that it can fit a 300-page novel, but in my own tests, one scientific paper with about 40 pages already takes over 50k tokens.
+How much 64k tokens is in pages, depends on the type of text. Some people on the internet claim that it can fit a 300-page novel, but in my own tests, one scientific paper with about 40 A4 pages already takes over 50k tokens.
 
-Also, be aware that LLM accuracy tends to suffer (the model becomes inattentive) for long contexts. As of H2/2025, models are commonly trained on short-context data, and then extrapolation techniques are used to enable support for longer contexts. Even if the model can find a [needle in a haystack](https://labelbox.com/guides/unlocking-precision-the-needle-in-a-haystack-test-for-llm-evaluation/) in a very long context, that test doesn't really say anything else about the model's abilities. The ability to answer open-ended questions as well as to keep up a high-quality chat conversation usually suffer as the context fills up.
+Be aware that LLM accuracy tends to suffer (the model becomes inattentive) for long contexts. As of H2/2025, models are commonly trained on short-context data, and then extrapolation techniques are used to enable support for longer contexts. Even if the model can find a [needle in a haystack](https://labelbox.com/guides/unlocking-precision-the-needle-in-a-haystack-test-for-llm-evaluation/) in a very long context, that test doesn't really say anything else about the model's abilities. The ability to answer questions accurately as well as to keep up a high-quality chat conversation usually suffer as the context fills up.
 
 Recommendations:
 
 - LLM backend: [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui).
+  - *Librarian* is tested with this backend.
   - It is easy to install; see the instructions on its frontpage.
   - You'll want to start it with the `--api --listen` command-line options, so that it will listen for incoming connections, and serve the OpenAI-compatible API (which *Librarian* uses).
 - Model:
   - 24GB: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507)
   - 8GB: [Qwen3-4B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507)
 
-**Multiple GPU** and **GPU/CPU splitting** considerations:
+**Multiple-device** considerations:
 
 - *text-generation-webui* can split the LLM across many devices.
-  - Useful if you have multiple GPUs, and the LLM won't fit in the VRAM of one GPU, but will fit if split across them.
+  - Useful if you have multiple GPUs, when the LLM won't fit in the VRAM of one GPU, but will fit in total if split across them.
     - The GPUs are used in series, so this will **not** speed up inference.
   - It can also partially offload a model to GPU, running the rest on CPU, if you have one GPU and there is not enough VRAM for the LLM.
     - This is much slower than running the whole model on GPU, but makes larger models runnable at all when there is not enough VRAM.
 - *Raven-server* can use several devices.
   - Most modules that serve an AI model can be configured to run on any GPU, or on CPU.
-    - Only the `avatar` module absolutely needs the GPU, because it needs realtime speed, and the THA3 AI poser model is too large to run in realtime on CPU.
+    - Only the `avatar` module absolutely needs GPU, because it needs realtime speed, and the THA3 AI poser model is too large to run in realtime on CPU.
     - All the rest can run on CPU; they will be slow, but they will work.
-    - See [`raven.server.config`](../server/config.py).
+    - See [`raven.server.config`](../server/config.py) and [`raven.server.config_lowvram`](../server/config_lowvram.py).
   - However, no splitting - in *Raven-server*, each module must run fully on one device.
   - If you are low on VRAM, you can run most of *Raven-server*'s modules on CPU.
     - To do this, start *Raven-server* as `raven-server --config raven.server.config_lowvram`.
-  - If you have two GPUs, it is particularly useful that you can run *Raven-server*'s AI models on a GPU different from the one the LLM backend is using.
+  - If you have two GPUs, it is particularly useful to run *Raven-server*'s AI models on a GPU different from the one the LLM backend is using.
     - E.g. if you have a laptop with an eGPU, you can dedicate the eGPU (with its larger VRAM) to the LLM, and run *Raven-server* on the laptop's internal NVIDIA GPU.
