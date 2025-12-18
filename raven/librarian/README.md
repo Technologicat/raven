@@ -577,9 +577,9 @@ Areas to improve:
 
 :exclamation: *This needs a fast GPU, with as much VRAM as possible.* :exclamation:
 
-If you have the hardware, self-hosting a local LLM instance is strongly recommended for privacy. Then the content of your AI conversations never leaves your workstation, or your LAN if you run the LLM backend on another machine.
+:exclamation: *[**Flash-attention**](https://arxiv.org/abs/2205.14135) should be enabled to bring the memory cost of the LLM's context down to O(n), where n is the context length. Many LLM backends have an option to do this.* :exclamation:
 
-[**Flash-attention**](https://arxiv.org/abs/2205.14135) should be enabled to bring the memory cost of the LLM's context down to *O(n)*, where *n* is the context length. Many LLM backends have an option to do this.
+If you have the hardware, self-hosting a local LLM instance is strongly recommended for privacy. Then the content of your AI conversations never leaves your workstation, or your LAN if you run the LLM backend on another machine.
 
 When self-hosting, LLMs are usually quantized to make the VRAM requirements manageable at all. [Unsloth dynamic](https://docs.unsloth.ai/basics/unsloth-dynamic-2.0-ggufs) quants are very good in practice. We recommend the **Q4_K_XL** variant.
 
