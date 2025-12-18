@@ -579,10 +579,15 @@ Areas to improve:
 
 If you have the hardware, self-hosting a local LLM instance is strongly recommended for privacy. Then the content of your AI conversations never leaves your workstation, or your LAN if you run the LLM backend on another machine.
 
-When self-hosting, two things are done to make the VRAM requirements manageable at all:
+When self-hosting, certain things are done to reduce the LLM's VRAM usage to a level that makes this feasible at all:
 
-- LLMs are quantized. [Unsloth dynamic](https://docs.unsloth.ai/basics/unsloth-dynamic-2.0-ggufs) quants are very good in practice. We recommend the **Q4_K_XL** variant.
+- The LLM is quantized. [Unsloth dynamic](https://docs.unsloth.ai/basics/unsloth-dynamic-2.0-ggufs) quants are very good in practice. We recommend the **Q4_K_XL** variant.
+  - That is, the LLM's weights are quantized. The result is the `some_model_q4_k_xl.gguf` file you download when you install an LLM.
 - [**Flash-attention**](https://arxiv.org/abs/2205.14135) is used to bring the memory cost of the LLM's context down to *O(n)*, where *n* is the context length. Many LLM backends have an option to do this.
+- Some backends optionally quantize the attention mechanism's KV cache, thus enabling larger context lengths.
+  - This is completely separate from weight quantization, and is done at runtime in the LLM backend software.
+    - Some backends have separate quantization settings for K and V, while some use the same quantization for both.
+  - On whether to quantize the KV cache and how tightly, [opinions vary](https://www.reddit.com/r/LocalLLaMA/comments/1mhlj69/whats_the_verdict_on_using_quantized_kv_cache/).
 
 In practice, with flash-attention and a 4-bit quant:
 
