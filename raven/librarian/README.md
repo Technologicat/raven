@@ -259,7 +259,7 @@ When the **Speech** toggle in the *Librarian* window (below the avatar video pan
 
 When both the **Speech** and the **Subtitles** toggles are **ON**, the speech is machine-translated and subtitled one sentence at a time. The subtitle for each sentence is shown while that sentence is being spoken.
 
-For configuring the AI's voice and the subtitles, see [configuration](#configuration) below.
+For configuring the AI's voice and the subtitles, see [Configuration](#configuration).
 
 The avatar has an optional, configurable timeout, after which the avatar video will turn off if there is no activity (to save GPU and CPU compute resources, as well as to eliminate unnecessary fan noise when running on a laptop). The avatar wakes up immediately when there is activity (e.g. navigating the chat tree, rerolling a message, sending a new message to the AI, or asking the avatar to speak a previous message again).
 
@@ -336,6 +336,7 @@ Basic **conversation flow** in *Librarian* works like in many LLM chatbot applic
 
 - You send a message to the AI. The AI replies.
   - You can write in the message entry field at the bottom and click the **send button**, or click the **mic button** to speak to the AI in voice mode.
+    - For voice mode, see [AI avatar and voice mode](#ai-avatar-and-voice-mode).
   - **LLM agent loop**: the AI may call tools to gather information needed for composing its reply. For details, see [Tools](#tools) above.
 - You can send an empty message.
   - Just leave the message entry field blank and click the **send button**.
@@ -367,8 +368,9 @@ In the linearized chat view on the left, there are buttons below each chat messa
 - Continue generating (Ctrl+U)
   - Last message of linearized view only; and only if it is an AI message.
 - Speak (AI messages only) (Ctrl+S)
-  - Upon clicking this, the avatar speaks the message through the TTS subsystem if **Speech** is enabled in the mode toggles.
+  - Only works when **Speech** is enabled in the mode toggles. Upon clicking this, the avatar speaks the message through the TTS subsystem.
   - If additionally **Subtitles** is enabled in the mode toggles, the avatar's speech is subtitled (or closed-captioned) in the language set in [`raven.librarian.config`](../librarian/config.py).
+  - See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
 - Edit *(placeholder button; feature to be added later)*
 - Branch
   - Set this message as the current **HEAD**.
@@ -426,7 +428,7 @@ Below the avatar panel at the right, there are **mode toggles**:
     - Most AI chatbots with RAG always operate like this.
 - **Speech**
 - **Subtitles**
-  - The **Speech** and **Subtitles** mode toggles control features of the AI avatar. They are explained in the [AI avatar and voice mode](#ai-avatar-and-voice-mode) section above.
+  - The **Speech** and **Subtitles** mode toggles control features of the AI avatar. See [AI avatar and voice mode](#ai-avatar-and-voice-mode).
 
 The toggles persist across sessions. They are stored in the app state file, which by default is saved in `~/.config/raven/llmclient/state.json`. The file is loaded at app startup, and saved at app exit.
 
