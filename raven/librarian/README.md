@@ -34,7 +34,7 @@
     - [System prompt, AI character personality, communication style](#system-prompt-ai-character-personality-communication-style)
     - [AI avatar](#ai-avatar)
 - [Future vision](#future-vision)
-- [Appendix: Brief notes on how to set up a local LLM](#appendix-brief-notes-on-how-to-set-up-a-local-llm)
+- [Appendix: Getting started in setting up a local LLM](#appendix-getting-started-in-setting-up-a-local-llm)
 
 <!-- markdown-toc end -->
 
@@ -573,7 +573,7 @@ Areas to improve:
   - Select data points in *Visualizer*, talk about those studies in *Librarian*
   - Ask *Librarian* a free-form question, let it highlight useful studies in *Visualizer* (based on document database search results)
 
-# Appendix: Brief notes on how to set up a local LLM
+# Appendix: Getting started in setting up a local LLM
 
 :exclamation: *This needs a fast GPU, with as much VRAM as possible.* :exclamation:
 
