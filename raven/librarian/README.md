@@ -241,7 +241,7 @@ These techniques are well known, and even trivial, so spelling them out here is 
 
 ### Notes
 
-Currently, Librarian only provides a set of hardcoded tools, and does **not** support MCP or skills.
+Currently, *Librarian* only provides a set of hardcoded tools, and does **not** support MCP or skills.
 
 As of v0.2.4, *Librarian* only provides websearch, but we intend to expand this later.
 
@@ -249,7 +249,7 @@ If interested in the details, see `tools` in the `setup` function in [`raven.lib
 
 # AI avatar and voice mode
 
-Librarian features an anime-style, **animated, lipsynced, talking AI avatar**, with optional machine-translated **subtitles**, or alternatively, optional **closed-captioning** without translation.
+*Librarian* features an anime-style, **animated, lipsynced, talking AI avatar**, with optional machine-translated **subtitles**, or alternatively, optional **closed-captioning** without translation.
 
 We also provide **speech recognition**, so that at your option, you can use your mic to talk with the AI.
 
@@ -332,7 +332,7 @@ The Librarian main window is split in two main parts: the linearized chat view o
 <i>The main window of Raven-librarian.</i>
 </p>
 
-Basic **conversation flow** in Librarian works like in many LLM chatbot applications:
+Basic **conversation flow** in *Librarian* works like in many LLM chatbot applications:
 
 - You send a message to the AI. The AI replies.
   - You can write in the message entry field at the bottom and click the **send button**, or click the **mic button** to speak to the AI in voice mode.
@@ -399,7 +399,7 @@ Below the avatar panel at the right, there are **mode toggles**:
 
 - **Tools**
   - Whether to allow tool use. See [Tools](#tools) above.
-  - If **ON**, allow the LLM to use the tools provided by Librarian.
+  - If **ON**, allow the LLM to use the tools provided by *Librarian*.
   - If **OFF**, automatically strip tool specifications before sending the chatlog to the LLM, so that no tools are available for the LLM.
 - **Documents**
   - If **ON**, autosearch the document database each time you send a message to the AI, and inject the search results into the LLM's context.
@@ -410,7 +410,7 @@ Below the avatar panel at the right, there are **mode toggles**:
         - See the terminal window where your LLM backend is running if you want to see the progress and processing speed.
     - This may also derail your discussion (depending on your particular LLM), if the document database does not cover the topic you are discussing with the AI.
   - If **OFF**, do not autosearch the document database.
-    - This is useful when you know your topic doesn't need information from the documents you have fed into Librarian's document database, for shorter processing times and less potential confusion.
+    - This is useful when you know your topic doesn't need information from the documents you have fed into *Librarian*'s document database, for shorter processing times and less potential confusion.
 - **Speculation**
   - Works together with the **Documents** mode toggle. An element for *defence in depth* in truthfulness.
   - If **Documents** is **OFF**, then **Speculation** has no effect.
@@ -532,7 +532,7 @@ Areas to improve:
     - Calculator with [simpleeval](https://github.com/danthedeckie/simpleeval) sandbox?
     - Weather with [open-meteo](https://open-meteo.com/en/docs)?
   - Keep It Simple Stupid: too many tools → confused LLM
-- Add **source attribution** (a.k.a. *citations*) for Librarian's replies
+- Add **source attribution** (a.k.a. *citations*) for *Librarian*'s replies
   - For determinism and 100% reliability, handle this in the scaffold, not in the LLM
   - Which documents or links the LLM saw when writing the response (even if the final reply didn't use all of the sources; this is the best this approach can do?)
     - Maybe needs heuristic filtering; there can be e.g. 200 document database autosearch results if configured so
@@ -551,8 +551,8 @@ Areas to improve:
   - When fed a scientific paper, strip the reference list or not? Maybe an option during uploading?
 - Integration with *Raven-visualizer*
   - Integrate the document database with the semantic map visualization
-  - Select data points in Visualizer, talk about those studies in Librarian
-  - Ask Librarian a free-form question, let it highlight useful studies in Visualizer (based on document database search results)
+  - Select data points in *Visualizer*, talk about those studies in *Librarian*
+  - Ask *Librarian* a free-form question, let it highlight useful studies in *Visualizer* (based on document database search results)
 
 # Appendix: Brief notes on how to set up a local LLM
 
