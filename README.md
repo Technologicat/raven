@@ -505,5 +505,8 @@ However, at your choice, Raven should be able to connect to an OpenAI-compatible
 This work was financially supported by the [gH2ADDVA](https://www.jamk.fi/en/research-and-development/rdi-projects/adding-value-by-clean-hydrogen-production) (Adding Value by Clean Hydrogen production) project at JAMK, co-funded by the EU and the Regional Council of Central Finland.
 
 <p align="center">
-<img src="img/jamk_new_industry_fi_blue.png" alt="JAMK Institute of New Industry" height="200"/> <br/>
+<img src="img/jamk_new_industry_en_blue.png" alt="JAMK Institute of New Industry" height="200"/> <br/>
+<!-- <img src="img/JYU-logo-en.jpg" alt="University of Jyväskylä" height="200"/> <br/> -->
+<img src="img/KSL-logo-en.png" alt="Regional Council of Central Finland" height="200"/> <br/>
+<img src="img/co-funded-EU-horizontal.png" alt="Co-funded by the European Union" height="200"/> <br/>
 </p>
