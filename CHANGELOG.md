@@ -1,9 +1,25 @@
 # Changelog
 
-**0.2.5** (December 2025, in progress):
+**0.2.5** (January 2026, in progress):
 
-*No user-visible changes yet.*
+**Added**:
 
+- Tools:
+  - New command-line tool: *Raven-csv2bib*.
+    - This converts comma-separated values (`.csv`) to BibTeX.
+    - The first row of the `.csv` file must consist of column headers. Fields with these names will be populated in the BibTeX output.
+      - For use with *Raven-visualizer*, the fields *Author*, *Year*, *Title* are required, and the field *Abstract* is optional.
+        - If your dataset has no meaningful text descriptions beyond an item title, you can omit the whole *Abstract* column.
+        - But if you have text descriptions, including them should improve the accuracy of the semantic map, by making it easier for Raven to detect which items are semantically similar.
+      - Arbitrary other fields can be included and will be transcribed into the output BibTeX.
+    - Author names use BibTeX format.
+      - If an item has multiple authors, separate them with the lowercase literal word "and".
+      - Each author name can have up to four parts (first, von, jr., last).
+      - Each author name must be in one of three formats:
+        - First von Last ("First Last" if no "von" part)
+        - von Last, First ("Last, First" if no "von" part)
+        - von Last, Jr., First
+      - For more details, see: https://www.bibtex.com/f/author-field/
 
 ---
 
