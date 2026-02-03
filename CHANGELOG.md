@@ -21,6 +21,24 @@
         - von Last, Jr., First
       - For more details, see: https://www.bibtex.com/f/author-field/
 
+**Changed**:
+
+- Bump minimum **Python** version to **3.11**.
+  - **Upgrading to Raven 0.2.5 requires a fresh reinstall**.
+    - To do this, delete the `.venv` hidden subdirectory inside your top-level Raven directory, then `pdm install`.
+    - It should still remember if you had CUDA enabled, and if so, automatically install the NVIDIA packages.
+  - Raven requires [`av`](http://pyav.org/docs/stable/) for its audio handling.
+    - Particularly, the audio encoder for transporting TTS audio over the network from *Raven-server* to *Raven-librarian* needs `av`.
+    - Recent versions of `av` may require installing some upgrades.
+      - FFMPEG 7 is now required. Older versions (4, 5, 6) are no longer supported.
+        - To see which version you have, `ffmpeg -version` (note only one dash).
+        - For Ubuntu 22.04 based systems (e.g. Linux Mint 21.3), there is a PPA; for how to add it, see e.g. [here](https://blog.programster.org/install-ffmpeg-7-on-ubuntu-22).
+      - To be able to build `av`:
+        - Beside `ffmpeg` itself, you will need the various related `lib*-dev` packages from the same repository. You can use the `synaptic` GUI to locate them easily (filter the view by *Origin*).
+        - From the distro's default repositories, you'll need `clang`.
+        - You'll also need `cython`. For this, `pip install cython` (in the environment where you're running `pdm`) should work.
+  - The Python upgrade was needed to support the [Hindsight](https://hindsight.vectorize.io/) AI agent memory system that will be later used by *Raven-librarian*.
+
 ---
 
 **0.2.4** (16 December 2025):
