@@ -82,8 +82,8 @@ extract_keywords = True
 #                     the configured character will be asked to perform the task).
 #                    See `raven.librarian.config`.
 #
-# clusters_keyword_method = "frequencies"
-clusters_keyword_method = "llm"
+clusters_keyword_method = "frequencies"
+# clusters_keyword_method = "llm"
 
 clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
     **Instructions**
