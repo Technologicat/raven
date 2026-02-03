@@ -1,4 +1,9 @@
+# Vendored code (read-only, don't modify)
+raven/vendor/tha3/
+raven/vendor/anime4k/
+raven/vendor/kokoro_fastapi/
+
+# Local stuff
 00_workfiles/
 parody/
 scientists/
-raven/vendor/tha3/models/
