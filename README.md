@@ -89,7 +89,7 @@ Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
       - Voice mode is 100% privacy-first; audio is never recorded to disk, and never sent anywhere except your local *Raven-server* for transcription.
 - Uses [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) as the LLM backend through its OpenAI-compatible API.
   - We currently test our LLM functionality with the Qwen series of LLMs.
-  - Recommended model: [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507).
+  - Recommended model: [Qwen3-VL-30B-A3B-Thinking](https://huggingface.co/Qwen/Qwen3-VL-30B-A3B-Thinking).
 
 ## Raven-avatar: AI-animated anime avatar
 
@@ -450,13 +450,13 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
 - AI-powered PDF import
   - A large language model (LLM), such as:
     - For machines with at least 24 GB VRAM:
-      - [Qwen3-30B-A3B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507) (**recommended** as of 08/2025)
-      - [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B)
-      - [Sky-T1 32B](https://huggingface.co/NovaSky-AI/Sky-T1-32B-Preview)
+      - [Qwen3-VL-30B-A3B-Thinking](https://huggingface.co/Qwen/Qwen3-VL-30B-A3B-Thinking) (**recommended** as of 01/2026)
+      - [DeepSeek-R1-Distill-Qwen-32B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B) (old)
+      - [Sky-T1 32B](https://huggingface.co/NovaSky-AI/Sky-T1-32B-Preview) (old)
     - For machines with 8 GB VRAM (e.g. a laptop with an internal NVIDIA GPU):
-      - [Qwen3-4B-Thinking-2507](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507) (**recommended** as of 08/2025; punches well above its size class)
-      - [Deepseek-R1-Distill-Qwen-7B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B)
-      - [Llama 3.1 8B](https://huggingface.co/meta-llama/Llama-3.1-8B)
+      - [Qwen3-VL-4B-Thinking](https://huggingface.co/Qwen/Qwen3-VL-4B-Thinking) (**recommended** as of 01/2026; punches well above its size class)
+      - [Deepseek-R1-Distill-Qwen-7B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B) (old)
+      - [Llama 3.1 8B](https://huggingface.co/meta-llama/Llama-3.1-8B) (old)
   - LLM inference server; we recommend [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) (start it with the `--api` option to let Raven see it).
   - Communication with the LLM inference server: [sseclient-py](https://github.com/mpetazzoni/sseclient).
 - File format support
