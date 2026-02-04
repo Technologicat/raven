@@ -121,6 +121,8 @@ def init_module(config_module_name: str, device: str, model: str) -> None:
         logger.info("init_module: loading the Talking Head Anime 3 (THA3) posing engine")
         modelsdir = str(talkinghead_path / "tha3" / "models")
         _poser = load_poser(model, device, modelsdir=modelsdir)
+        logger.info("init_module: eagerly loading THA3 neural network modules")
+        _poser.get_modules()  # Force eager load; otherwise happens lazily on first pose() call.
         _device = device
         _model = model
         module_initialized = True
@@ -869,6 +871,20 @@ class Animator:
                 self.data_eyes_celnames.append(celname)
             plural_s = "s" if len(self.data_eyes_celnames) != 1 else ""
             logger.info(f"load_image: This character has {len(self.data_eyes_celnames)} cel{plural_s} for the scifi 'data eyes' effect.")
+
+            # Warmup: run one forward pass to prime CUDA kernels and allocate intermediate tensors.
+            # This shifts the cold-start cost from the first visible animation frame to the
+            # (non-interactive) image loading phase.
+            logger.info("load_image: warming up THA3 pipeline")
+            with timer() as tim:
+                with torch.no_grad():
+                    warmup_image = self.source_image * 2.0 - 1.0  # [0, 1] -> [-1, 1], same transform as render pipeline
+                    warmup_pose = torch.zeros(self.poser.get_num_parameters(), device=self.device, dtype=self.poser.get_dtype())
+                    warmup_output = self.poser.pose(warmup_image, warmup_pose)[0]
+                    warmup_output.add_(1.0)
+                    warmup_output.mul_(0.5)  # [-1, 1] -> [0, 1]
+                    self.postprocessor.render_into(warmup_output)  # also prime the postprocessor's meshgrid cache
+            logger.info(f"load_image: warmup complete in {tim.dt:0.6g}s")
         except Exception as exc:
             self.source_image = None
             self.torch_cels = {}
