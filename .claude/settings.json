@@ -12,6 +12,7 @@
       "Bash(sort:*)",
       "Bash(grep:*)",
       "Bash(tr:*)",
+      "Bash(tree:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git status:*)",
