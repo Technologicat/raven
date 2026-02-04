@@ -435,11 +435,6 @@
 
 ### Large new features
 
-- AMD GPU support.
-  - We only use GPU compute via Torch and via some other libraries such as `sentence_transformers` and `spaCy`.
-  - What needs to be done here?
-    - What packages should be installed? (I don't have an AMD environment to test/develop in.)
-
 - Visualizer: visualize links between documents if link/reference information available in data?
 
 - **More import sources**.
