@@ -102,7 +102,7 @@ Each layer only imports from layers below it. No circular dependencies.
 
 ```
 app.py       (4427 lines) — GUI app: plotter, info panel, tooltip, selection, search, word cloud, events
-importer.py  (1295 lines) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, summarize
+importer.py  (1295 lines) — BibTeX import pipeline: parse, embed, cluster, reduce, keywords, LLM summarize
 config.py    (425 lines)  — Configuration-as-code (devices, import settings, stopwords, GUI settings)
 ```
 
@@ -171,7 +171,7 @@ Both also render a help/legend section at the bottom of the tooltip.
 
 #### importer.py Structure
 
-Pipeline architecture with caching. Stages: parse BibTeX → compute semantic vectors (cached per file+mtime) → HDBSCAN cluster (high-dim) → dimension reduce (t-SNE/UMAP) → cluster (2D) → extract keywords (NLP, cached) → collect cluster keywords (frequency or LLM) → optional summarize → save dataset.
+Pipeline architecture with caching. Stages: parse BibTeX → compute semantic vectors (cached per file+mtime) → HDBSCAN cluster (high-dim) → dimension reduce (t-SNE/UMAP) → cluster (2D) → extract keywords (NLP, cached) → collect cluster keywords (frequency or LLM) → optional LLM summarize → save dataset.
 
 Uses `unpythonic.dyn` for injecting status update callbacks. Progress tracked via macro/microstep counter with ETA. Background execution via `bgtask.TaskManager`. Optionally connects to raven-server for NLP; falls back to local models via `mayberemote`.
 
