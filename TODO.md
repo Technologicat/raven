@@ -168,7 +168,12 @@
         - How to avoid moving files around when/if the user changes the tags on an existing message?
           - Solution: make tags the primary mechanism, and make the document ingestion mechanism automatically add a tag that matches the subdirectory name.
     - Improve user text entry: multiline input
-    - Document database: from, [the front page](https://www.trychroma.com/), it seems Chroma has a BM25 backend too now? We could migrate to this (from BM25s) to simplify `raven.librarian.hybridir`.
+    - Migrate BM25 keyword search from `bm25s` to ChromaDB's built-in full-text search (SQLite FTS5)
+      - `bm25s` has two significant limitations: no metadata filtering (always searches the whole corpus), and each commit requires a full index rebuild.
+      - Filtering is needed for the scopes feature (see above). Full rebuild scales badly.
+      - ChromaDB's BM25 supports incremental updates and metadata filtering via `where` clauses — scopes, pedigree, etc. become straightforward.
+      - Also simplifies `hybridir.py`: removes the parallel index management, pending-edit queue duplication, and one dependency.
+      - Tokenization quality: current pipeline does spaCy lemmatization + stopword removal, which is better for scientific text than FTS5's built-in tokenizers. Mitigate by lemmatizing at ingestion time and storing the lemmatized text in a dedicated ChromaDB field for full-text search (spaCy preprocessing already happens for keyword extraction).
 
     - Import tool for importing a batch of documents into the document database (useful when importing lots of documents at once)
       - Just `hybridir.setup` in the same datastore that Librarian uses, and wait for the scanner to finish updating. Once the scan finishes, exit the tool.
