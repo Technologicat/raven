@@ -11,4 +11,5 @@ pdm.lock
 .spyproject
 .venv
 *.egg-info
+*.mypy_cache
 .python-version
