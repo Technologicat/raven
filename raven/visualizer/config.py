@@ -25,8 +25,6 @@ devices = {
                    "dtype": torch.float16},
     "nlp": {"device_string": "cuda:0"},  # no configurable dtype
     "sanitize": {"device_string": "cuda:0"},  # used for dehyphenation; no configurable dtype
-    "summarization": {"device_string": "cuda:0",
-                      "dtype": torch.float16}
 }
 
 # --------------------------------------------------------------------------------
@@ -119,8 +117,7 @@ clusters_llm_keyword_extraction_prompt = textwrap.dedent("""
 # NOTE: Raven uses spaCy models in three places, and they don't have to be the same.
 #  - Raven-visualizer: keyword extraction (this setting)
 #  - Raven-librarian: tokenization for keyword search
-#  - Raven-server: breaking text into sentences in the `summarize` module
-#                  and served by the `nlp` module
+#  - Raven-server: served by the `nlp` module
 #
 # Auto-downloaded on first use. Uses's spaCy's own auto-download mechanism. See https://spacy.io/models
 #
@@ -154,28 +151,29 @@ dehyphenate = True
 #
 dehyphenation_model = "multi"
 
-summarize = False  # Shorten abstracts using AI? VERY slow; experimental, the results are not used yet.
+# Summarize abstracts using an LLM? Requires an LLM backend to be available.
+# Uses the LLM settings from Librarian's configuration (see `raven.librarian.config`).
+summarize = False
 
-# AI model used by the `summarize` module, for abstractive summarization.
-#
-# This is a small AI model specialized to the task of summarization ONLY, not a general-purpose LLM.
-#
-# NOTE: Raven uses a summarizer model in two places, and they don't have to be the same.
-#  - Raven-visualizer: tldr AI summarization of abstracts in importer (this setting)
-#  - Raven-server: `summarize` module
-#
-# `summarization_prefix`: Some summarization models need input to be formatted like
-#     "summarize: Actual text goes here...". This sets the prefix, which in this example is "summarize: ".
-#     For whether you need this and what the value should be, see the model card for your particular model.
-#
-# summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"  # ~650 MB
-# summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"  # ~1.8 GB
-# summarization_model = "Falconsai/text_summarization"  # ~250 MB
-summarization_model = "Qiliang/bart-large-cnn-samsum-ChatGPT_v3"  # ~1.6 GB, performs well
-summarization_prefix = ""  # for all of the summarizers listed above
+summarize_llm_prompt = textwrap.dedent("""
+    **Instructions**
 
-# summarization_model = "KipperDev/bart_summarizer_model"
-# summarization_prefix = "summarize: "
+    You are given the title and abstract of a scientific publication, provided below after these instructions.
+
+    Your task is to write a concise summary of the abstract in 1 to 3 sentences. The summary should
+    capture the main contribution and key findings of the paper.
+
+    IMPORTANT: The result will be read by a computer program, so it needs to be in a standard format.
+
+    Rules:
+    - Write plain text only. Do NOT use any markup, bullet points, or formatting.
+    - Do NOT include any preamble, introduction, or commentary. Start directly with the summary.
+    - Do NOT start with phrases like "This paper" or "The authors". Start with the actual content.
+    - If the abstract is very short (one or two sentences), return it as-is.
+    - If no abstract is provided, write ONLY the exact string "summarization failed" (without the quotes).
+
+    The publication to summarize is below.
+""").strip()
 
 # --------------------------------------------------------------------------------
 # Stopword list for importer

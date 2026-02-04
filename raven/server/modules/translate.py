@@ -44,7 +44,9 @@ def init_module(config_module_name: str,
                     translators[target_lang] = {}
                 translators[target_lang][source_lang] = nlptools.load_translator(model_name,
                                                                                  device_string,
-                                                                                 dtype)
+                                                                                 dtype,
+                                                                                 source_lang=source_lang,
+                                                                                 target_lang=target_lang)
 
         nlp_pipe = nlptools.load_spacy_pipeline(spacy_model_name,
                                                 spacy_device_string)

@@ -35,8 +35,6 @@ enabled_modules = {
     "sanitize": {"device_string": "cuda:0"},  # this module has no dtype setting
     "stt": {"device_string": "cuda:0",
             "dtype": torch.float16},
-    "summarize": {"device_string": "cuda:0",  # device settings used for the simple summarizer
-                  "dtype": torch.float16},
     "translate": {"device_string": "cuda:0",
                   "dtype": torch.float16},
     "tts": {"device_string": "cuda:0"},
@@ -125,13 +123,12 @@ embedding_models = {
 #
 kokoro_models = "hexgrad/Kokoro-82M"  # ~360 MB
 
-# NLP model for spaCy, used for breaking text into sentences in the `summarize` module.
+# NLP model for spaCy, served by the `nlp` module.
 #
 # NOTE: Raven uses spaCy models in three places, and they don't have to be the same.
 #  - Raven-visualizer: keyword extraction
 #  - Raven-librarian: tokenization for keyword search
-#  - Raven-server: breaking text into sentences in the `summarize` module (this setting)
-#                  and served by the `nlp` module
+#  - Raven-server: served by the `nlp` module (this setting)
 #
 # This is NOT a HuggingFace model name, but is auto-downloaded (by spaCy) on first use.
 # For available models, see:
@@ -150,27 +147,6 @@ spacy_model = "en_core_web_sm"  # Small pipeline; fast, runs fine on CPU, but ca
 # speech_recognition_model = "openai/whisper-large-v3-turbo"  # 800M parameters
 speech_recognition_model = "openai/whisper-base"  # 74M parameters, for CPU, multilingual model
 # speech_recognition_model = "openai/whisper-base.en"  # 74M parameters, for CPU, English-only model
-
-# AI model used by the `summarize` module, for abstractive summarization.
-#
-# This is a small AI model specialized to the task of summarization ONLY, not a general-purpose LLM.
-#
-# NOTE: Raven uses a summarizer model in two places, and they don't have to be the same.
-#  - Raven-visualizer: tldr AI summarization of abstracts in importer
-#  - Raven-server: `summarize` module (this setting)
-#
-# `summarization_prefix`: Some summarization models need input to be formatted like
-#     "summarize: Actual text goes here...". This sets the prefix, which in this example is "summarize: ".
-#     For whether you need this and what the value should be, see the model card for your particular model.
-#
-# summarization_model = "ArtifactAI/led_base_16384_arxiv_summarization"  # ~650 MB
-# summarization_model = "ArtifactAI/led_large_16384_arxiv_summarization"  # ~1.8 GB
-# summarization_model = "Falconsai/text_summarization"  # ~250 MB
-summarization_model = "philschmid/flan-t5-base-samsum"  # ~1 GB, performs well
-summarization_prefix = ""  # for all of the summarizers listed above
-
-# summarization_model = "KipperDev/bart_summarizer_model"
-# summarization_prefix = "summarize: "
 
 # Machine translation AI models.
 #

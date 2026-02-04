@@ -134,12 +134,9 @@ def test():
         print(f"  {sent}")
 
     # --------------------------------------------------------------------------------
-    # dehyphenate, summarize
+    # dehyphenate
 
     print("=" * 80)
-
-    logger.info("test: summarize")
-    print(api.summarize_summarize(" The quick brown fox jumped over the lazy dog.  This is the second sentence! What?! This incomplete sentence"))
 
     # Neumann & Gros 2023, https://arxiv.org/abs/2210.00849
     scientific_abstract = textwrap.dedent("""
@@ -166,11 +163,6 @@ def test():
     print(f"dehyphenate scientific abstract 1: {tim.dt:0.6g}s")
     print("=" * 80)
     print(scientific_abstract)
-    print("-" * 80)
-    with timer() as tim:
-        scientific_abstract = api.summarize_summarize(scientific_abstract)
-        print(scientific_abstract)
-    print(f"summarize scientific abstract 1: {tim.dt:0.6g}s")
 
     # Brown et al. 2020, p. 40, https://arxiv.org/abs/2005.14165
     input_text = textwrap.dedent("""
@@ -206,12 +198,6 @@ def test():
     print(f"dehyphenate scientific abstract 2: {tim.dt:0.6g}s")
     print("=" * 80)
     print(input_text)
-    print("-" * 80)
-    with timer() as tim:
-        input_text = api.summarize_summarize(input_text)
-        print(input_text)
-    print(f"summarize scientific abstract 2: {tim.dt:0.6g}s")
-
     # --------------------------------------------------------------------------------
     # translate
 

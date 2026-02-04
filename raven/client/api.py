@@ -18,7 +18,6 @@ We support all modules served by `raven.server.app`:
   - natlang     - low-level NLP analysis (part-of-speech tagging, lemmatization, named entity recognition, ...)
   - sanitize    - sanitize text (currently, dehyphenate broken text extracted from PDF)
   - stt         - speech-to-text, transcribe spoken audio into text
-  - summarize   - write an abstractive summary of given text (using a small specialized AI model)
   - tts         - text-to-speech with and without lipsyncing the AI avatar
   - websearch   - search the web, and parse results for consumption by an LLM
 
@@ -49,7 +48,6 @@ __all__ = ["initialize",
            "natlang_analyze",
            "sanitize_dehyphenate",
            "stt_transcribe", "stt_transcribe_file", "stt_transcribe_array",
-           "summarize_summarize",
            "translate_translate",
            "tts_list_voices",
            "tts_prepare",
@@ -742,23 +740,6 @@ def stt_transcribe_array(audio_data: np.array,
     audio_buffer.seek(0)
 
     return stt_transcribe(audio_buffer, prompt, language)
-
-# --------------------------------------------------------------------------------
-# Summarize
-
-def summarize_summarize(text: str) -> str:
-    """Return an abstractive summary of input text."""
-    if not util.api_initialized:
-        raise RuntimeError("summarize_summarize: The `raven.client.api` module must be initialized before using the API.")
-    headers = copy.copy(util.api_config.raven_default_headers)
-    headers["Content-Type"] = "application/json"
-    input_data = {"text": text}
-    response = requests.post(f"{util.api_config.raven_server_url}/api/summarize", json=input_data, headers=headers)
-    util.yell_on_error(response)
-    output_data = response.json()
-
-    summary = output_data["summary"]
-    return summary
 
 # --------------------------------------------------------------------------------
 # Translate

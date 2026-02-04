@@ -16,8 +16,7 @@ from ...common import nlptools
 dehyphenator = None
 
 def init_module(model_name: str,
-                device_string: str,
-                summarization_prefix: str = "") -> None:
+                device_string: str) -> None:
     global dehyphenator
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}sanitize{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
     try:

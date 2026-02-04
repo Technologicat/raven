@@ -40,7 +40,6 @@
   - Zip the avatar characters, for ease of use
     - Include all extra cels in the zip, as well as optional animator/postprocessor settings, and optional emotion templates
     - Implement zip loading on server side, add a new web API endpoint
-  - `summarize`: add LLM summarization mode, with a configurable prompt. Allow using a separate small LLM for speed.
   - Add feature: check first for local model before checking on HF
     - Currently some modules do this (some due to using a non-default download location, in turn due to requirements of vendored code), others don't.
     - Can be important in case the model vanishes from HF (as suddenly happened with the old/ancient summarizer).
@@ -481,7 +480,7 @@
 - **AI summarize**: call an LLM to generate a summary report of items currently shown in info panel (or of the full selection).
   - Preprocess the per-datapoint summarization.
     - Condense each abstract into one sentence with just the most important main point.
-    - Is it better to make abstractive summaries with an LLM, or a summarization-specific AI?
+    - Per-datapoint LLM summarization is now implemented in `raven.visualizer.importer` (see `visualizer_config.summarize`).
     - To evaluate summary accuracy, `seahorse-large` based on `mT5-Large` (6 models, 5 GB each)? https://github.com/google-research-datasets/seahorse
   - Scaffold to produce guaranteed-correct citations.
     - In AI summarization, process each document separately to eliminate cross-contamination.

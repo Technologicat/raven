@@ -34,7 +34,6 @@
     - [Image processing](#image-processing)
     - [Server-side spaCy NLP](#server-side-spacy-nlp)
     - [Text cleanup](#text-cleanup)
-    - [Text summarization](#text-summarization)
     - [Speech recognition (STT)](#speech-recognition-stt)
     - [Natural language translation](#natural-language-translation)
     - [Speech synthesizer (TTS)](#speech-synthesizer-tts)
@@ -73,8 +72,6 @@
         - [POST "/api/sanitize/dehyphenate"](#post-apisanitizedehyphenate)
     - [Speech recognition](#speech-recognition)
         - [POST "/api/tts/transcribe"](#post-apittstranscribe)
-    - [Text summarization](#text-summarization-1)
-        - [POST "/api/summarize"](#post-apisummarize)
     - [Natural language translation](#natural-language-translation-1)
         - [POST "/api/translate"](#post-apitranslate)
     - [Speech synthesizer (TTS)](#speech-synthesizer-tts-1)
@@ -163,6 +160,7 @@ We provide the following server modules:
 - `embeddings`: Semantic embeddings, a.k.a. vector embeddings. Supports several *roles* that may each use a different embedding model.
   - The `"default"` role is useful e.g. for sentence similarity and for semantic visualization.
   - The `"qa"` role maps questions and their answers near each other, so it is useful e.g. as RAG vector DB keys.
+  - **Note**: Some embedding models (e.g. `multi-qa-mpnet-base-cos-v1`) may show an `UNEXPECTED` load warning for `embeddings.position_ids` at server startup. This is harmless — older checkpoints saved `position_ids` as a buffer, while newer versions of `transformers` compute them on the fly. The key is safely ignored and has no effect on model output.
 - `imagefx`: server-side Anime4K upscaling and image filters for still images. No relation to the Google product.
   - Essentially, `imagefx` exposes the parts used by the avatar's postprocessor.
   - Used by `raven-avatar-settings-editor` to blur the background.
@@ -172,9 +170,6 @@ We provide the following server modules:
   - Just like calling spaCy locally in the client process, but the model runs on the server's GPU.
   - Supports e.g. part-of-speech (POS) tagging, lemmatization, named entity recognition, and splitting into sentences.
 - `sanitize`: Fix text broken by hyphenation, such as that extracted from scientific paper PDFs.
-- `summarize`: Abstractive summarization of text, using a small, specialized AI model.
-  - This is **much faster** than an LLM, but the result quality may not be as good.
-  - The module has an automatic internal splitter that handles input that is longer than the model's context window, which is automatically queried from the model.
 - `stt`: Speech recognition (speech to text) with locally hosted [whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo).
 - `translate`: Natural language translation using a small, specialized AI model.
   - The module has an automatic internal splitter that sends one sentence at a time.
@@ -198,7 +193,7 @@ We provide the following server modules:
   - Continuation of the `websearch` module of *SillyTavern-Extras*, with improvements ported from the newer extension [SillyTavern-WebSearch-Selenium](https://github.com/SillyTavern/SillyTavern-WebSearch-Selenium).
   - We also provide a custom web API endpoint that returns structured search results (to easily keep each link with the corresponding search result).
 
-Many of the NLP modules have an automatic CPU fallback in their loader: `classify`, `embeddings`, `natlang`, `sanitize`, `summarize`, and `translate`. If loading on GPU fails, these modules will note this in the server log, and auto-retry on the CPU. The rule of thumb is that, for a given module, if a slow response won't completely break the UX, then that module has a loader with a CPU fallback.
+Many of the NLP modules have an automatic CPU fallback in their loader: `classify`, `embeddings`, `natlang`, `sanitize`, and `translate`. If loading on GPU fails, these modules will note this in the server log, and auto-retry on the CPU. The rule of thumb is that, for a given module, if a slow response won't completely break the UX, then that module has a loader with a CPU fallback.
 
 The `natlang` module is the only one that only works with Python clients. It needs a compatible instance of spaCy on the client side, to read the internal binary format (which is essentially a Python *pickle*). It was felt this is necessary to support arbitrary use cases of spaCy without overcomplicating the web API, or increasing *Raven-server*'s need of maintenance too much.
 
@@ -260,7 +255,6 @@ The following modules work as drop-in replacements for the module with the same 
 
   - `classify`
   - `embeddings`
-  - `summarize`
   - `websearch`
 
 Additionally, the `tts` module provides an OpenAI compatible TTS endpoint (`/v1/audio/speech`) you can use as a speech synthesizer in ST ([see below](#raven-server-tts-for-sillytavern)).
@@ -498,11 +492,6 @@ API:
 ## Text cleanup
 
 - `sanitize_dehyphenate`: Fix text broken by hyphenation, such as that extracted from scientific paper PDFs.
-
-## Text summarization
-
-- `summarize_summarize`: Generate an abstractive summary for text.
-  - This uses a small, specialized AI model, which is not as accurate as an LLM, but is much faster.
 
 ## Speech recognition (STT)
 
@@ -1214,24 +1203,6 @@ See:
     https://github.com/openai/openai-cookbook/blob/main/examples/Whisper_prompting_guide.ipynb
     https://huggingface.co/openai/whisper-large-v3-turbo
     https://huggingface.co/docs/transformers/en/model_doc/whisper
-
-
-## Text summarization
-
-### POST "/api/summarize"
-
-Summarize the text posted in the request. Return the summary.
-
-This uses a small, specialized AI model (not an LLM) plus some
-heuristics to clean up its output.
-
-Input is JSON:
-
-    {"text": "Blah blah blah."}
-
-Output is also JSON:
-
-    {"summary": "Blah."}
 
 
 ## Natural language translation

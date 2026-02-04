@@ -20,7 +20,6 @@ All ML inference in `raven/server/modules/`:
 - `stt.py` - Whisper speech recognition
 - `embeddings.py` - Sentence embeddings (snowflake-arctic)
 - `translate.py` - Neural machine translation
-- `summarize.py` - Text summarization
 - `classify.py` - Sentiment/emotion classification, to control avatar's facial expression
 - `sanitize.py` - Text cleanup (dehyphenation etc.)
 - `natlang.py` - spaCy NLP analysis

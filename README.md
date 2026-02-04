@@ -463,7 +463,7 @@ Raven builds upon several AI, NLP, statistical, numerical and software engineeri
   - BibTeX: [BibtexParser](https://bibtexparser.readthedocs.io/en/main/).
   - Web of Science: [wosfile](https://github.com/rafguns/wosfile).
 - Avatar AI animator: THA3 [[code](https://github.com/pkhungurn/talking-head-anime-3-demo)], [[models](https://huggingface.co/OktayAlpk/talking-head-anime-3/tree/main)], [[tech report](https://web.archive.org/web/20220606125507/https://pkhungurn.github.io/talking-head-anime-3/full.html)].
-- Many more open-weight small, specialized AI models for tasks such as summarization, sentiment classification, dehyphenation, and natural language translation; see [`raven.server.config`](raven/server/config.py) for details.
+- Many more open-weight small, specialized AI models for tasks such as sentiment classification, dehyphenation, and natural language translation; see [`raven.server.config`](raven/server/config.py) for details.
 - Graphical user interface: [DearPyGUI](https://github.com/hoffstadt/DearPyGui/).
   - "Open"/"Save as" dialog: [file_dialog](https://github.com/totallynotdrait/file_dialog), but customized for Raven, bugs fixed, and some features added (sortable view, overwrite confirmation with animated OK button, ...).
   - Markdown renderer: [DearPyGui-Markdown](https://github.com/IvanNazaruk/DearPyGui-Markdown), but robustified for multithreaded dynamic use (programmatic creation/deletion of MD text widgets, possibly concurrently).

@@ -54,7 +54,6 @@ with timer() as tim:
     from .modules import natlang
     from .modules import sanitize
     from .modules import stt
-    from .modules import summarize
     from .modules import translate
     from .modules import tts
     from .modules import websearch
@@ -173,8 +172,6 @@ def get_modules():
         modules.append("sanitize")
     if stt.is_available():
         modules.append("stt")
-    if summarize.is_available():
-        modules.append("summarize")
     if translate.is_available():
         modules.append("translate")
     if tts.is_available():
@@ -1130,43 +1127,6 @@ def api_stt_transcribe():
     return jsonify({"text": result})
 
 # ----------------------------------------
-# module: summarize
-
-@app.route("/api/summarize", methods=["POST"])
-def api_summarize():
-    """Summarize the text posted in the request. Return the summary.
-
-    This uses a small, specialized AI model (not an LLM) plus some
-    heuristics to clean up its output.
-
-    Input is JSON::
-
-        {"text": "Blah blah blah."}
-
-    Output is also JSON::
-
-        {"summary": "Blah."}
-    """
-    if not summarize.is_available():
-        abort(403, "Module 'summarize' not running")
-
-    data = request.get_json()
-
-    if "text" not in data:
-        abort(400, 'api_summarize: "text" is required')
-
-    text = data["text"]
-    if not isinstance(text, str):
-        abort(400, 'api_summarize: "text" must be a string')
-
-    try:
-        summary = summarize.summarize_text(text)
-        return jsonify({"summary": summary})
-    except Exception as exc:
-        traceback.print_exc()
-        abort(400, f"api_summarize: failed, reason: {type(exc)}: {exc}")
-
-# ----------------------------------------
 # module: translate
 
 @app.route("/api/translate", methods=["POST"])
@@ -1594,16 +1554,6 @@ def init_server_modules():  # keep global namespace clean
     if (record := server_config.enabled_modules.get("stt", None)) is not None:
         device_string, dtype = record["device_string"], record["dtype"]
         stt.init_module(config_module_name, device_string, dtype)
-
-    if (record := server_config.enabled_modules.get("summarize", None)) is not None:
-        device_string, dtype = record["device_string"], record["dtype"]
-        spacy_device_string = get_maybe_shared_spacy_device_string("summarize")
-        summarize.init_module(server_config.summarization_model,
-                              server_config.spacy_model,
-                              device_string,
-                              spacy_device_string,
-                              dtype,
-                              summarization_prefix=server_config.summarization_prefix)
 
     if (record := server_config.enabled_modules.get("translate", None)) is not None:
         device_string, dtype = record["device_string"], record["dtype"]

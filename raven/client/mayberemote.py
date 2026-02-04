@@ -8,8 +8,7 @@ NOTE: Before using this module, you must `raven.client.api.initialize` first.
 __all__ = ["MaybeRemoteService",
            "Dehyphenator",
            "Embedder",
-           "NLP",
-           "Summarizer"]
+           "NLP"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -231,61 +230,3 @@ class NLP(MaybeRemoteService):
         return docs
 
 
-class Summarizer(MaybeRemoteService):
-    def __init__(self,
-                 allow_local: bool,
-                 model_name: Optional[str],
-                 device_string: Optional[str],
-                 dtype: Optional[Union[str, torch.dtype]],
-                 summarization_prefix: Optional[str],
-                 spacy_model_name: Optional[str],
-                 spacy_device_string: Optional[str]):
-        """Abstractive summary of input text.
-
-        `allow_local`: See `MaybeRemoteService`.
-
-        All `Optional` arguments are required, and used only, if `allow_local=True`.
-
-        `model_name`: HuggingFace model name of the summarizer model to load.
-
-        `device_string`: If local mode triggers, passed to `raven.common.nlptools`.
-
-        `dtype`: If local mode triggers, passed to `raven.common.nlptools`.
-
-        `summarization_prefix`: Some summarization models need input to be formatted like
-             "summarize: Actual text goes here...". This sets the prefix, which in this example is "summarize: ".
-             For whether you need this and what the value should be, see the model card for your particular model.
-
-        `spacy_model_name`: spaCy model name to load, e.g. "en_web_core_sm".
-
-        `spacy_device_string`: If local mode triggers, passed to `raven.common.nlptools`.
-        """
-        super().__init__(allow_local)
-        self.model_name = model_name
-        self.device_string = device_string
-        self.dtype = dtype
-        self.summarization_prefix = summarization_prefix
-        self.spacy_model_name = spacy_model_name
-        self.spacy_device_string = spacy_device_string
-
-        if "summarize" in self.server_modules:
-            logger.info(f"Summarizer.__init__: Using `summarize` module on Raven-server at '{client_config.raven_server_url}'.")
-        else:
-            if self.server_available:
-                logger.info(f"Summarizer.__init__: No `summarize` module loaded on Raven-server at '{client_config.raven_server_url}', loading summarizer model locally.")
-            self._local_model = nlptools.load_summarizer(model_name,
-                                                         device_string,
-                                                         dtype,
-                                                         summarization_prefix)
-            self._nlp_pipe = nlptools.load_spacy_pipeline(spacy_model_name,
-                                                          spacy_device_string)
-
-    def summarize(self,
-                  text: str) -> str:
-        if self._local_model is None:
-            summary = api.summarize_summarize(text)
-        else:
-            summary = nlptools.summarize(self._local_model,
-                                         self._nlp_pipe,
-                                         text)
-        return summary

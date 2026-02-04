@@ -11,7 +11,7 @@ Backends:
   - classification (text sentiment)
   - dehyphenation of broken text (e.g. as extracted from a PDF)
   - embeddings (semantic embedding of sentences for use as vector DB keys)
-  - summarization via specialized AI model
+  - machine translation (seq2seq models)
 """
 
 __all__ = {"default_stopwords",
@@ -21,7 +21,6 @@ __all__ = {"default_stopwords",
            "load_classifier", "classify",
            "load_dehyphenator", "dehyphenate",
            "load_embedder", "embed_sentences",
-           "load_summarizer", "summarize",
            "load_translator", "translate",
            "count_frequencies", "detect_named_entities",
            "suggest_keywords"}
@@ -41,7 +40,7 @@ import numpy as np
 
 import torch  # import torch before spaCy, so that spaCy finds the GPU (otherwise spaCy will complain that CuPy is not installed, which is not true)
 
-from transformers import pipeline
+from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
 from sentence_transformers import SentenceTransformer
 
 import spacy
@@ -581,240 +580,36 @@ def embed_sentences(embedder: SentenceTransformer, text: Union[str, List[str]]) 
     return vectors
 
 # --------------------------------------------------------------------------------
-# NLP backend: summarization
-
-_summarizers = {}
-def load_summarizer(model_name: str,
-                    device_string: str,
-                    dtype: Union[str, torch.dtype],
-                    summarization_prefix: str = "") -> Tuple[pipeline, str]:
-    """Load a text summarizer.
-
-    This is a small AI model specialized to the task of summarization ONLY, not a general-purpose LLM.
-
-    `model_name`: HuggingFace model name. Try e.g. "Qiliang/bart-large-cnn-samsum-ChatGPT_v3".
-
-    `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
-    `dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
-
-    `summarization_prefix`: Some summarization models need input to be formatted like
-         "summarize: Actual text goes here...". This sets the prefix, which in this example is "summarize: ".
-         For whether you need this and what the value should be, see the model card for your particular model.
-
-    NOTE: To use `summarize`, you also need a spaCy NLP pipeline; see `load_spacy_pipeline`.
-    """
-    cache_key = (model_name, device_string, str(dtype))
-    if cache_key in _summarizers:
-        return _summarizers[cache_key]
-
-    try:
-        device = torch.device(device_string)
-        summarizer = pipeline("summarization",
-                              model=model_name,
-                              device=device,
-                              dtype=dtype)
-    except RuntimeError as exc:
-        logger.warning(f"load_summarizer: exception while loading summarizer (will try again in CPU mode): {type(exc)}: {exc}")
-        try:
-            device_string = "cpu"
-            dtype = "float32"  # probably (we need a cache key, so let's use this)
-            cache_key = (model_name, device_string, str(dtype))
-            summarizer = pipeline("summarization",
-                                  model=model_name,
-                                  device=device,
-                                  dtype=dtype)
-        except RuntimeError as exc:
-            logger.warning(f"load_embedder: failed to load summarizer: {type(exc)}: {exc}")
-            raise
-    logger.info(f"load_summarizer: model '{model_name}' context window is {summarizer.tokenizer.model_max_length} tokens.")
-    logger.info(f"load_summarizer: Loaded model '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
-    _summarizers[cache_key] = (summarizer, summarization_prefix)  # save the given prompt prefix with the cached model so they stay together
-    return summarizer, summarization_prefix
-
-def _summarize_chunk(summarizer: Tuple[pipeline, str], text: str) -> str:
-    """Internal function. Summarize a piece of text that fits into the summarization model's context window.
-
-    If the text does not fit, raises `IndexError`. See `_summarize_chunked` to handle arbitrary length texts.
-    """
-    text_summarization_pipe, text_summarization_prefix = summarizer
-    text = f"{text_summarization_prefix}{text}"  # some summarizer AIs require a prompt (e.g. "summarize: The actual text to be summarized...")
-
-    tokens = text_summarization_pipe.tokenizer.tokenize(text)  # may be useful for debug...
-    length_in_tokens = len(tokens)  # ...but this is what we actually need to set up the summarization lengths semsibly
-    logger.info(f"_summarize_chunk: Input text length is {len(text)} characters, {length_in_tokens} tokens.")
-
-    if length_in_tokens > text_summarization_pipe.tokenizer.model_max_length:
-        logger.info(f"_summarize_chunk: Text to be summarized does not fit into model's context window (text length {len(text)} characters, {length_in_tokens} tokens; model limit {text_summarization_pipe.tokenizer.model_max_length} tokens).")
-        raise IndexError  # and let `_summarize_chunked` handle it
-    if length_in_tokens <= 20:  # too short to summarize?
-        return text
-
-    # TODO: summary length: sensible limits that work for very short (one sentence) and very long (several pages) texts. This is optimized for a paragraph or a few at most.
-    lower_limit = min(20, length_in_tokens)  # try to always use at least this many tokens in the summary
-    upper_limit = min(120, length_in_tokens)  # and always try to stay under this limit
-    max_length = numutils.clamp(length_in_tokens // 2, ell=lower_limit, u=upper_limit)
-    min_length = numutils.clamp(length_in_tokens // 10, ell=lower_limit, u=upper_limit)
-    logger.info(f"_summarize_chunk: Setting summary length guidelines as min = {min_length} tokens, max = {max_length} tokens.")
-
-    summary = text_summarization_pipe(
-        text,
-        truncation=False,
-        min_length=min_length,
-        max_length=max_length,
-    )[0]["summary_text"]
-    return summary
-
-def _summarize_chunked(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
-    """Internal function. Summarize a text that may require chunking before it fits into the summarization model's context window."""
-    try:
-        return _summarize_chunk(summarizer, text)
-    except IndexError:
-        logger.info(f"_summarize_chunked: input text (length {len(text)} characters) is long; cutting text in half at a sentence boundary and summarizing the halves separately.")
-
-        docs = spacy_analyze(nlp_pipe,
-                             text,
-                             pipes=['tok2vec', "parser", "senter"])
-        assert len(docs) == 1
-        doc = docs[0]
-
-        sents = list(doc.sents)
-        mid = len(sents) // 2
-        firsthalf = " ".join(str(sent).strip() for sent in sents[:mid])
-        secondhalf = " ".join(str(sent).strip() for sent in sents[mid:])
-        # print("=" * 80)
-        # print("Splitting long text:")
-        # print("-" * 80)
-        # print(firsthalf)
-        # print("-" * 80)
-        # print(secondhalf)
-        # print("-" * 80)
-        return " ".join(
-            [_summarize_chunked(summarizer, nlp_pipe, firsthalf),
-             _summarize_chunked(summarizer, nlp_pipe, secondhalf)]
-        )
-
-        # # Sentence-splitting the output of the general sliding-window chunkifier doesn't seem to work that well here. It's easier to correctly split into sentences when we have all the text available at once.
-        #
-        # def full_sentence_trimmer(overlap, mode, text):
-        #     @memoize  # from `unpythonic`
-        #     def get_sentences(text):
-        #         docs = spacy_analyze(nlp_pipe,
-        #                              text,
-        #                              pipes=['tok2vec', "parser", "senter"])
-        #         assert len(docs) == 1
-        #         doc = docs[0]
-        #         return list(doc.sents)
-        #
-        #     offset = 0
-        #     tmp = text.strip()  # ignore whitespace at start/end of chunk when detecting incomplete sentences
-        #     if mode != "first":  # allowed to trim beginning?
-        #         # Lowercase letter at the start of the chunk -> probably not the start of a sentence.
-        #         if tmp[0].upper() != tmp[0]:
-        #             sents = get_sentences(text)
-        #             first_sentence_len = len(sents[0])
-        #             offset = min(overlap, first_sentence_len)  # Prefer to keep incomplete sentence when there's not enough chunk overlap to trim it without losing text.
-        #             text = text[offset:]
-        #     if mode != "last":  # allowed to trim end?
-        #         # No punctuation mark at the end of the chunk -> probably not a complete sentence.
-        #         if tmp[-1] not in (".", "!", "?"):
-        #             sents = get_sentences(text)
-        #             last_sentence_len = len(sents[-1])
-        #             text = text[:-last_sentence_len]
-        #     return text, offset
-        #
-        # chunks = common_utils.chunkify_text(text,
-        #                                     chunk_size=len(text) // 2,
-        #                                     overlap=0,
-        #                                     extra=0.2,
-        #                                     trimmer=full_sentence_trimmer)
-        # summary = " ".join(_summarize_chunked(summarizer, nlp_pipe, chunk["text"]) for chunk in chunks)
-        # return summary
-
-def summarize(summarizer: Tuple[pipeline, str], nlp_pipe, text: str) -> str:
-    """Return an abstractive summary of input text.
-
-    This uses an AI summarization model (see `raven.server.config.summarization_model`),
-    plus some heuristics to minimally clean up the result.
-
-    `summarizer`: return value of `load_summarizer`
-    `nlp_pipe`: return value of `load_spacy_pipeline` (used for sentence-boundary splitting during chunking)
-    """
-    def normalize_sentence(sent: str) -> str:
-        """Given a sentence, remove surrounding whitespace and capitalize the first word."""
-        sent = str(sent).strip()  # `sent` might actually originally be a spaCy output
-        sent = sent[0].upper() + sent[1:]
-        return sent
-    def sanitize(text: str) -> str:
-        """Preprocess `text` for summarization.
-
-        Specifically:
-          - Normalize Unicode representation to NFKC
-          - Normalize whitespace at sentence boundaries (as detected by the loaded spaCy NLP model)
-          - Capitalize start of each sentence
-          - Drop incomplete last sentence if any, but only if there's more than one sentence in total.
-        """
-        text = common_utils.normalize_unicode(text)
-        text = text.strip()
-
-        # Detect possible incomplete sentence at the end.
-        #   - Summarizer AIs sometimes do that, especially if they run into the user-specified output token limit too soon.
-        #   - The input text may have been cut off before it reaches us. When this happens, some summarizer AIs become confused.
-        #     (E.g. Qiliang/bart-large-cnn-samsum-ChatGPT_v3, given the input:
-        #          " The quick brown fox jumped over the lazy dog.  This is the second sentence! What?! This incomplete sentence"
-        #      focuses only on the fact that the last sentence is incomplete, and reports that as the summary.)
-        end = -1 if text[-1] not in (".", "!", "?") else None
-
-        # Split into sentences via NLP. (This is the sane approach.)
-        docs = spacy_analyze(nlp_pipe,
-                             text,
-                             pipes=['tok2vec', "parser", "senter"])
-        assert len(docs) == 1
-        doc = docs[0]
-        sents = list(doc.sents)
-        if end is not None and len(sents) == 1:  # If only one sentence, keep it even if incomplete.
-            end = None
-        text = " ".join(normalize_sentence(sent) for sent in sents[:end])
-        return text
-
-    # Prompt the summarizer to write the raw summary (AI magic happens here)
-    text = sanitize(text)
-    summary = _summarize_chunked(summarizer, nlp_pipe, text)
-
-    # Rudimentary check against AI hallucination: summarizing a very short text sometimes fails with the AI making up more text than there is in the original.
-    if len(summary) > len(text):
-        return text
-
-    # Postprocess the summary
-    summary = sanitize(summary)
-
-    # At this point, depending on the AI model, we still sometimes have the spacing for the punctuation as "Blah blah blah . Bluh bluh..."
-
-    # Normalize whitespace at full-stops (periods)
-    parts = summary.split(".")
-    has_period_at_end = summary.endswith(".")  # might have "!" or "?" instead
-    parts = [x.strip() for x in parts]
-    parts = [x for x in parts if len(x)]
-    summary = ". ".join(parts) + ("." if has_period_at_end else "")
-    summary = re.sub(r"(\d)\. (\d)", r"\1.\2", summary)  # Fix decimal numbers broken by the punctuation fix
-
-    # Normalize whitespace at commas
-    parts = summary.split(",")
-    parts = [x.strip() for x in parts]
-    parts = [x for x in parts if len(x)]
-    summary = ", ".join(parts)
-    summary = re.sub(r"(\d)\, (\d)", r"\1,\2", summary)  # Fix numbers with American thousands separators, broken by the punctuation fix
-
-    # Convert some very basic markup (e.g. superscripts/subscripts) into their Unicode equivalents.
-    summary = common_utils.unicodize_basic_markup(summary)
-
-    return summary
-
-# --------------------------------------------------------------------------------
 # NLP backend: machine translation
 
+class _Translator:
+    """Callable wrapper for a seq2seq translation model.
+
+    Provides the same interface as the old ``TranslationPipeline`` (removed in
+    transformers 5.0): call with a ``str`` or ``list[str]``, get back a list of
+    ``{"translation_text": ...}`` dicts.
+    """
+    def __init__(self, model: AutoModelForSeq2SeqLM, tokenizer: AutoTokenizer, device: torch.device):
+        self.model = model
+        self.tokenizer = tokenizer
+        self.device = device
+
+    def __call__(self, texts: Union[str, List[str]]) -> List[dict]:
+        single = isinstance(texts, str)
+        if single:
+            texts = [texts]
+        inputs = self.tokenizer(texts, return_tensors="pt", padding=True, truncation=True).to(self.device)
+        output_ids = self.model.generate(**inputs)
+        translations = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+        return [{"translation_text": t} for t in translations]
+
 _translators = {}
-def load_translator(model_name: str, device_string: str, dtype: Union[str, torch.dtype]) -> pipeline:
-    """Load and return a machine translator (for one or more natural languages to another).
+def load_translator(model_name: str, device_string: str, dtype: Union[str, torch.dtype],
+                    source_lang: str, target_lang: str) -> _Translator:
+    """Load and return a machine translator (for one natural language to another).
+
+    ``transformers`` 5.0 removed the ``TranslationPipeline``, so we load the model and tokenizer
+    directly, and wrap them in a ``_Translator`` that provides the same callable interface.
 
     `model_name`: HuggingFace model name. Auto-downloaded on first use.
                   Try e.g. "Helsinki-NLP/opus-mt-tc-big-en-fi" for English to Finnish.
@@ -825,6 +620,9 @@ def load_translator(model_name: str, device_string: str, dtype: Union[str, torch
     `device_string`: as in Torch, e.g. "cpu", "cuda", or "cuda:0".
     `dtype`: e.g. "float32", "float16" (on GPU), or `torch.float16` (same thing).
 
+    `source_lang`: Source language code, e.g. "en". Currently only used for logging.
+    `target_lang`: Target language code, e.g. "fi". Currently only used for logging.
+
     If the specified model is already loaded on the same device (identified by `device_string`),
     with the same dtype, then return the already-loaded instance.
 
@@ -834,24 +632,25 @@ def load_translator(model_name: str, device_string: str, dtype: Union[str, torch
     if cache_key in _translators:
         logger.info(f"load_translator: '{model_name}' (with dtype '{str(dtype)}') is already loaded on device '{device_string}', returning it.")
         return _translators[cache_key]
-    logger.info(f"load_translator: Loading '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
+    logger.info(f"load_translator: Loading '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}' for '{source_lang}' -> '{target_lang}'.")
 
     try:
         device = torch.device(device_string)
-        translator = pipeline("translation",
-                              model=model_name,
-                              device=device,
-                              dtype=dtype)
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name,
+                                                      dtype=dtype).to(device)
+        translator = _Translator(model, tokenizer, device)
     except RuntimeError as exc:
         logger.warning(f"load_translator: exception while loading translator (will try again in CPU mode): {type(exc)}: {exc}")
         try:
             device_string = "cpu"
             dtype = "float32"
             cache_key = (model_name, device_string, str(dtype))
-            translator = pipeline("translation",
-                                  model=model_name,
-                                  device=device,
-                                  dtype=dtype)
+            device = torch.device(device_string)
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            model = AutoModelForSeq2SeqLM.from_pretrained(model_name,
+                                                          torch_dtype=dtype).to(device)
+            translator = _Translator(model, tokenizer, device)
         except RuntimeError as exc:
             logger.warning(f"load_translator: failed to load translator: {type(exc)}: {exc}")
             raise
@@ -860,7 +659,7 @@ def load_translator(model_name: str, device_string: str, dtype: Union[str, torch
     _translators[cache_key] = translator
     return translator
 
-# # TODO: Add support for "translation prefix" like `summarize` has? This would e.g. allow using t5-base as a translator.
+# # TODO: Add support for "translation prefix"? This would e.g. allow using t5-base as a translator.
 # def _translate_chunk(translator: pipeline, text: str) -> str:
 #     """Internal function. Translate a piece of text that fits into the translation model's context window.
 #
@@ -879,7 +678,7 @@ def load_translator(model_name: str, device_string: str, dtype: Union[str, torch
 #     translation = output[0]["translation_text"]
 #     return translation
 
-def _translate_chunked(translator: pipeline, nlp_pipe, text: str) -> str:
+def _translate_chunked(translator: _Translator, nlp_pipe, text: str) -> str:
     """Internal function. Translate a text that may require chunking before it fits into the translation model's context window."""
     # Translate one sentence at a time (reliable and keeps the chunks short).
     # TODO: Can sometimes give bad results:
@@ -915,7 +714,7 @@ def _translate_chunked(translator: pipeline, nlp_pipe, text: str) -> str:
     #          _translate_chunked(translator, nlp_pipe, secondhalf)]
     #     )
 
-def translate(translator: pipeline, nlp_pipe, text: Union[str, List[str]]) -> Union[str, List[str]]:
+def translate(translator: _Translator, nlp_pipe, text: Union[str, List[str]]) -> Union[str, List[str]]:
     """Translate `text` to another natural language.
 
     `translator`: return value of `load_translator`

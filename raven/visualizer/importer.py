@@ -64,8 +64,8 @@ with timer() as tim:
     from . import config as visualizer_config
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
-if visualizer_config.clusters_keyword_method == "llm":
-    logger.info("Clusters keyword method is 'llm'. Setting up connection to LLM backend.")
+if visualizer_config.clusters_keyword_method == "llm" or visualizer_config.summarize:
+    logger.info("LLM backend needed (for cluster keywords and/or summarization). Setting up connection.")
     from ..librarian import config as librarian_config
     from ..librarian import llmclient
     llm_backend_url = librarian_config.llm_backend_url
@@ -112,28 +112,6 @@ def update_status_and_log(msg, *, log_indent=0):
     dyn.maybe_update_status(msg)  # see the `make_dynvar` call further below; the default behavior is a no-op
     logger.info((4 * log_indent * " ") + msg)
 
-# --------------------------------------------------------------------------------
-# TL;DR: AI-based summarization
-
-if visualizer_config.summarize:
-    summarizer = mayberemote.Summarizer(allow_local=True,
-                                        model_name=visualizer_config.summarization_model,
-                                        device_string=visualizer_config.devices["summarization"]["device_string"],
-                                        dtype=visualizer_config.devices["summarization"]["dtype"],
-                                        summarization_prefix=visualizer_config.summarization_prefix,
-                                        spacy_model_name=visualizer_config.spacy_model,
-                                        spacy_device_string="cpu")
-else:
-    summarizer = None
-
-def tldr(text: str) -> str:
-    """Return AI-based abstractive summary of `text`.
-
-    If `text` does not fit into the loaded model's context window, the summarizer automatically uses chunked mode.
-    """
-    if summarizer is None:
-        raise RuntimeError("tldr: Summarization is not enabled in `raven.visualizer.config`, so the summarizer is not loaded.")
-    return summarizer.summarize(text)
 
 # # https://github.com/sciunto-org/python-bibtexparser/issues/467
 # from bibtexparser.library import Library
@@ -882,9 +860,9 @@ def collect_cluster_keywords(vis_data, n_vis_clusters, all_keywords, max_vis_kw=
 
 
 def summarize(input_data):
-    """Summarize each item of the dataset, using an AI model for abstractive summarization.
+    """Summarize each item of the dataset, using an LLM.
 
-    NOTE: For a large dataset, this will take a long, long time!
+    Requires an LLM backend and `visualizer_config.summarize = True`.
 
     `input_data`: output of `parse_input_files`, which see.
 
@@ -894,7 +872,7 @@ def summarize(input_data):
         - `str`, the summary, if there was an abstract (so a summary could be created).
         - `None`, if there was no abstract (so a summary could not be created).
     """
-    logger.info("Summarizing abstracts using AI...")
+    logger.info("Summarizing abstracts using LLM...")
     n_total_entries = sum(len(entries) for entries in input_data.parsed_data_by_filename.values())
     progress.set_micro_count(n_total_entries)
     for k, (filename, entries) in enumerate(input_data.parsed_data_by_filename.items(), start=1):
@@ -907,7 +885,21 @@ def summarize(input_data):
                 if entry.abstract:
                     update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Summarizing entry {j} out of {len(entries)}: {entry.author} ({entry.year}): {entry.title}",
                                           log_indent=2)
-                    summary = tldr(entry.abstract)
+                    entry_text = f"Title: {entry.title}\n\nAbstract: {entry.abstract}"
+                    prompt = f"{visualizer_config.summarize_llm_prompt}\n-----\n\n{entry_text}"
+
+                    raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
+                                                                                             instruction=prompt,
+                                                                                             on_progress=llmclient.make_console_progress_handler("."))
+
+                    logger.info(f"        LLM output (raw):\n{raw_output_text}")
+                    logger.info(f"        LLM output (final answer):\n{scrubbed_output_text}")
+
+                    if scrubbed_output_text.strip().lower() == "summarization failed":
+                        logger.warning(f"        The LLM could not summarize entry: {entry.author} ({entry.year}): {entry.title}")
+                        summary = None
+                    else:
+                        summary = scrubbed_output_text.strip()
                 else:
                     update_status_and_log(f"[input file {k} out of {len(input_data.parsed_data_by_filename)}] Skipping entry {j} out of {len(entries)} (no abstract to summarize): {entry.author} ({entry.year}): {entry.title}",
                                           log_indent=2)
@@ -936,7 +928,7 @@ class Progress:
     def reset(self) -> None:
         """Reset the progress counter."""
         self._macrosteps_done = 0
-        self._macrosteps_count = 8  # parse, hiD vectors, hiD cluster, reduce, 2D cluster, entry keywords, cluster keywords, summarize.
+        self._macrosteps_count = 8  # parse, hiD vectors, hiD cluster, reduce, 2D cluster, entry keywords, cluster keywords, LLM summarize.
 
         # Microsteps take place within the current macrostep.
         self._microsteps_done = 0
@@ -1220,12 +1212,12 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
             return False
 
         # --------------------------------------------------------------------------------
-        # Write AI summary for each item (EXPERIMENTAL / EXPENSIVE)
+        # Write LLM summary for each item
 
         if visualizer_config.summarize:
             summarize(input_data)  # mutates its input
         else:
-            logger.info("AI summarization disabled, skipping.")
+            logger.info("LLM summarization disabled, skipping.")
         progress.tock()
 
         # Do not need to allow cancellation after this point, because all that is left is to save the results.
@@ -1268,8 +1260,7 @@ def main() -> None:
     logger.info(f"        Dimension reduction method: {visualizer_config.vis_method}")
     logger.info(f"    Extract keywords: {visualizer_config.extract_keywords}")
     logger.info(f"        NLP model (spaCy): {visualizer_config.spacy_model}")
-    logger.info(f"    Summarize via AI: {visualizer_config.summarize}")
-    logger.info(f"        AI summarization model: {visualizer_config.summarization_model}")
+    logger.info(f"    Summarize via LLM: {visualizer_config.summarize}")
 
     parser = argparse.ArgumentParser(description="""Convert BibTeX file(s) into a Raven-visualizer dataset file.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)

@@ -621,7 +621,7 @@ class DPGAvatarController:
         logger.info(f"preprocess_task: instance {task_env.task_name}: TTS input preprocessor starting")
 
         def strip_emoji(text: str) -> str:
-            return emoji.get_emoji_regexp().sub(r"", text)
+            return emoji.replace_emoji(text, replace="")
 
         def process_item(input_record: Dict[str, Any]) -> None:
             batch_uuid = input_record["batch_uuid"]
