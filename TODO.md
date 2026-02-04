@@ -33,8 +33,8 @@
     - should detect token-limit-exceeded in `raven.librarian.llmclient`, and return a status flag in the metadata
 
 - Server
-  - Finish the new `stt` module (speech to text)
-    - Figure out what's going wrong with the end of the long example sent by `raven.client.tests.test_api` (spurious text generated after the speech in the long audio ends)
+  - `stt` module (speech to text): known issues
+    - Spurious text generated after speech ends in long audio (see `raven.client.tests.test_api`)
     - Test also `stt_transcribe_file` and `stt_transcribe_array`
     - whisper-large-v3-turbo needs another 1.6 GB of VRAM; check if we could use a quantized model (may need vLLM)
   - Zip the avatar characters, for ease of use
@@ -59,7 +59,7 @@
   - Add a parameter?
 
 - Visualizer
-  - Excel or CSV import to BibTeX
+  - Excel import to BibTeX (CSV import exists as `raven-csv2bib` CLI tool; Excel not yet supported)
   - BibTeX export (must keep a copy of original full entries in the dataset file)
   - Show item slug (BibTeX identifier)
   - Add feature: select cluster by number
@@ -79,10 +79,9 @@
   - Make the layout switchable left/right (which side of the screen the info panel is on, for on-site collaboration accounting for physical placement constraints for laptop and users)
   - Word cloud window: move the toolbar to the top (to make it remain on-screen even if the word cloud image is too large to fit the viewport)
   - Improve keyword autodetection
-    - Alternative 1: LLM based keyword detection (prototyping this now)
+    - Alternative 1: LLM based keyword detection (core implementation done in `raven.visualizer.importer`; analysis logs saved)
       - analyze the overall topic of the dataset from the full (or subsampled?) dataset, titles only
       - ask LLM to normalize letter case (only proper names spelled as-is)
-      - save analysis logs, including thinking traces
       - make keyword sets cacheable
       - also cache partial results (some clusters done), LLM analysis is slow
       - show keyword detection progress in GUI (cluster number)
@@ -382,7 +381,7 @@
       - spaCy NLP model
       - QA embedder (for upcoming intelligent search features)
   - BibTeX import:
-    - handle umlauts Å, Ä, Ö, Ü, å, ä, ö, ü: e.g. {\"o} -> ö
+    - handle BibTeX-encoded umlauts: e.g. {\"o} -> ö, {\"u} -> ü (HTML entity variants like &auml; are already handled by `unicodize_basic_markup`)
     - drop BibTeX's "verbatim" braces: {GPU} clusters -> GPU clusters
 
   - Misc items: assign to closest cluster in 2D view?
