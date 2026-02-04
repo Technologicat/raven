@@ -82,6 +82,11 @@ classifiers = [
 # This is currently configured for CUDA 12.x.
 #
 # The NVIDIA packages will be installed into `.venv/lib/python3.10/site-packages/nvidia*`.
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
 [project.optional-dependencies]
 cuda = [
     "cupy-cuda12x>=13.2.0",

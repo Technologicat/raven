@@ -419,13 +419,10 @@ class Forest:
         """
         original_node = self.nodes[node_id]  # look up first to raise KeyError if needed, before we create any nodes
         new_node_id = self.copy_node(node_id, new_parent_id)
-        new_node = self.nodes[new_node_id]
         for original_child_node_id in original_node["children"]:
             try:
-                new_child_node_id = self.copy_subtree(node_id=original_child_node_id,
-                                                      new_parent_id=new_node_id)
-                # The parent of each child node is set during node creation, so we only need to update the links on the parent side.
-                new_node["children"].append(new_child_node_id)
+                self.copy_subtree(node_id=original_child_node_id,
+                                  new_parent_id=new_node_id)
             except KeyError:
                 logger.warning(f"Forest.copy_subtree: while recursively copying node '{node_id}': one of the child nodes, '{original_child_node_id}', does not exist. Ignoring error.")
         return new_node_id
