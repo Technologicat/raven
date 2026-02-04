@@ -299,7 +299,6 @@
         - https://huggingface.co/HPLT/translate-en-fi-v2.0-hplt_opus
     - Add feature: Switch chat (from all leaf nodes in datastore)
     - Add feature: Avatar: optional digital glitch effect when switching chat branches (change postprocessor config on the fly)
-    - Add websearch toggle? (Need to regenerate system prompt with/without tools)
     - Improve chat panel
       - Add double-buffering for rebuilding, like in Raven-visualizer
     - Add feature: save full prompt with each AI message (get it from the `on_prompt_ready` event of `raven.librarian.scaffold.ai_turn`)
@@ -363,13 +362,10 @@
       - Keep a dynamic texture copy that is shown in the GUI
       - Lanczos-scale the data in the GUI texture in a bgtask (Lanczos scale to target size, then nearest-neighbor scale the result to the fixed texture size)
     - Selectable color scheme (for white background, for export to papers)
-  - Toggle fullscreen -> Fullscreen mode / Exit fullscreen mode, with icons
   - Full report of all selected items that doesn't care whether the items fit into the info panel
-  - Make the text headings clickable in the import window (same as clicking the corresponding button)
   - Make highlight visualization clearer, now it obscures which cluster each data point belongs to
     - Maybe just an outline, not a filled circle?
     - Brighten the data point's own color, don't use a separate color? (Difficult, DPG needs one data series per color)
-  - Add a screenful of spacer at end of info panel, to be able to scroll to last cluster
   - Make the "Search" heading brighter to make it stand out
   - Highlight/color data points by year, so that newer research is brighter
     - What to do with Misc items which are scattered all over the semantic map? Toggle for show/hide them?
@@ -422,7 +418,6 @@
       - I'd use Python restricted to the `math` module, but `eval` itself is unsafe: e.g. ().__class__.__base__.__subclasses__()[-1].__init__.__globals__['__builtins__']['__import__']('os').system('install ransomware or something')
         https://stackoverflow.com/questions/64618043/safely-using-eval-to-calculate-using-the-math-module-in-python
       - Maybe https://github.com/danthedeckie/simpleeval
-  - Fix RAG document IDs so that they are unique across subdirectories of the RAG datastore
   - Add a pedigree field to `HybridIR` documents, so that the automatic rescan can auto-remove only documents added by that scanner (name the scanner instances).
     - There may be occasions we need to programmatically send data into the RAG index, e.g. web pages from websearch.
   - Source attribution for RAG search and websearch results.
@@ -530,9 +525,6 @@
   - Need a document type field, and GUI support for showing different kinds of assets in the annotation tooltip and in the info panel.
   - Large files (images, audio, full PDFs) shouldn't be embedded into the dataset file, but rather just linked to.
 
-- Chatbot integration.
-  - Would be useful to have a RAG-enabled LLM to "talk with the dataset". Needs major GUI work, though (to have usability on par with existing solutions such as SillyTavern).
-
 - PDF import: OCR. Shop around for AI models.
 
 
@@ -617,7 +609,6 @@
 
 - Possible NLP tools for cleaning up documents, if needed:
   - SaT: https://github.com/segment-any-text/wtpsplit
-  - dehyphen: https://github.com/pd3f/dehyphen/
 
 - "Detailed debug" logging level.
   - Some debug loggings are particularly spammy, but would be nice to have when specifically needed.
