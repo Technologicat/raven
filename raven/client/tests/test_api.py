@@ -1,330 +1,391 @@
-"""Exercise the API endpoints.
+"""Integration tests for raven.client.api — the Raven-server REST API.
 
-!!! Start `raven.server.app` first before running these tests! !!!
+!!! Requires a running raven-server !!!
+
+All tests in this module are automatically skipped when the server is
+unreachable. Start `raven-server` before running these tests.
 """
-
-# TODO: Now this is a demo. Convert this to a proper test module, checking outputs and everything. Could use `unpythonic.test.fixtures` as the framework.
-# TODO: test *all* endpoints.
-
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 import io
 import os
 import pathlib
 import textwrap
 
+import numpy as np
 import PIL.Image
+import pytest
 
-from colorama import Fore, Style, init as colorama_init
+from raven.client import api
+from raven.client import config as client_config
 
-from unpythonic import timer
 
-from .. import api
-from .. import config as client_config
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
-def test():
-    """DEBUG/TEST - exercise each of the API endpoints."""
+@pytest.fixture(scope="module")
+def initialized_api():
+    """Initialize the API and check server availability.
 
-    # --------------------------------------------------------------------------------
-    # Initialize
-
-    colorama_init()
-
-    print("=" * 80)
-
-    logger.info("test: initialize API")
+    If the server is not running, the entire module is skipped.
+    """
     api.initialize(raven_server_url=client_config.raven_server_url,
                    raven_api_key_file=client_config.raven_api_key_file,
                    tts_playback_audio_device=client_config.tts_playback_audio_device,
-                   stt_capture_audio_device=client_config.stt_capture_audio_device)  # let it create a default executor
+                   stt_capture_audio_device=client_config.stt_capture_audio_device)
+    if not api.test_connection():
+        pytest.skip("raven-server is not running")
 
-    logger.info(f"test: check server availability at {client_config.raven_server_url}")
-    if api.test_connection():
-        print(f"{Fore.GREEN}{Style.BRIGHT}Proceeding with self-test.{Style.RESET_ALL}")
-    else:
-        print(f"{Fore.RED}{Style.BRIGHT}Canceling self-test.{Style.RESET_ALL}")
-        return
 
-    # --------------------------------------------------------------------------------
-    # list modules
+@pytest.fixture(scope="module")
+def assets_base():
+    """Path to the avatar assets directory."""
+    return pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets")).expanduser().resolve()
 
-    print("=" * 80)
 
-    print("Modules loaded on server:")
-    print(api.modules())
+# Reusable sample text for classify/embeddings/etc.
+SAMPLE_TEXT = "What is the airspeed velocity of an unladen swallow?"
 
-    # --------------------------------------------------------------------------------
-    # classify
+# Neumann & Gros 2023, https://arxiv.org/abs/2210.00849
+SCIENTIFIC_ABSTRACT_1 = textwrap.dedent("""
+    The recent observation of neural power-law scaling relations has made a signifi-
+    cant impact in the field of deep learning. A substantial amount of attention has
+    been dedicated as a consequence to the description of scaling laws, although
+    mostly for supervised learning and only to a reduced extent for reinforcement
+    learning frameworks. In this paper we present an extensive study of performance
+    scaling for a cornerstone reinforcement learning algorithm, AlphaZero. On the ba-
+    sis of a relationship between Elo rating, playing strength and power-law scaling,
+    we train AlphaZero agents on the games Connect Four and Pentago and analyze
+    their performance. We find that player strength scales as a power law in neural
+    network parameter count when not bottlenecked by available compute, and as a
+    power of compute when training optimally sized agents. We observe nearly iden-
+    tical scaling exponents for both games. Combining the two observed scaling laws
+    we obtain a power law relating optimal size to compute similar to the ones ob-
+    served for language models. We find that the predicted scaling of optimal neural
+    network size fits our data for both games. We also show that large AlphaZero
+    models are more sample efficient, performing better than smaller models with the
+    same amount of training data.
+""").strip()
 
-    print("=" * 80)
+# Brown et al. 2020, p. 40, https://arxiv.org/abs/2005.14165
+SCIENTIFIC_ABSTRACT_2 = textwrap.dedent("""
+    Giving multi-task models instructions in natural language was first formalized in a supervised setting with [MKXS18]
+    and utilized for some tasks (such as summarizing) in a language model with [RWC+ 19]. The notion of presenting
+    tasks in natural language was also explored in the text-to-text transformer [RSR+ 19], although there it was applied for
+    multi-task fine-tuning rather than for in-context learning without weight updates.
 
-    logger.info("test: classify")
-    print(f"Emotions supported by the classifier model currently loaded on the server: {api.classify_labels()}")  # get available emotion names from server
+    Another approach to increasing generality and transfer-learning capability in language models is multi-task learning
+    [Car97], which fine-tunes on a mixture of downstream tasks together, rather than separately updating the weights for
+    each one. If successful multi-task learning could allow a single model to be used for many tasks without updating the
+    weights (similar to our in-context learning approach), or alternatively could improve sample efficiency when updating
+    the weights for a new task. Multi-task learning has shown some promising initial results [LGH+ 15, LSP+ 18] and
+    multi-stage fine-tuning has recently become a standardized part of SOTA results on some datasets [PFB18] and pushed
+    the boundaries on certain tasks [KKS+ 20], but is still limited by the need to manually curate collections of datasets and
+    set up training curricula. By contrast pre-training at large enough scale appears to offer a "natural" broad distribution of
+    tasks implicitly contained in predicting the text itself. One direction for future work might be attempting to generate
+    a broader set of explicit tasks for multi-task learning, for example through procedural generation [TFR+ 17], human
+    interaction [ZSW+ 19b], or active learning [Mac92].
 
-    text = "What is the airspeed velocity of an unladen swallow?"
-    classification = api.classify(text)
-    print(f"Sentiment analysis for '{text}': {classification}")
+    Algorithmic innovation in language models over the last two years has been enormous, including denoising-based
+    bidirectionality [DCLT18], prefixLM [DL15] and encoder-decoder architectures [LLG+ 19, RSR+ 19], random permu-
+    tations during training [YDY+ 19], architectures that improve the efficiency of sampling [DYY+ 19], improvements in
+    data and training procedures [LOG+ 19], and efficiency increases in the embedding parameters [LCG+ 19]. Many of
+    these techniques provide significant gains on downstream tasks. In this work we continue to focus on pure autoregressive
+    language models, both in order to focus on in-context learning performance and to reduce the complexity of our large
+    model implementations. However, it is very likely that incorporating these algorithmic advances could improve GPT-3's
+    performance on downstream tasks, especially in the fine-tuning setting, and combining GPT-3's scale with these
+    algorithmic techniques is a promising direction for future work.
+""").strip()
 
-    # --------------------------------------------------------------------------------
-    # imagefx
 
-    print("=" * 80)
+# ---------------------------------------------------------------------------
+# Server connection
+# ---------------------------------------------------------------------------
 
-    logger.info("test: imagefx")
+class TestConnection:
+    def test_connection_succeeds(self, initialized_api):
+        assert api.test_connection()
 
-    print(api.avatar_get_available_filters())  # this API function is common between imagefx and avatar modules
 
-    processed_png_bytes = api.imagefx_process_file(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve(),
-                                                   output_format="png",
-                                                   filters=[["analog_lowres", {"sigma": 3.0}],  # maximum sigma is 3.0 due to convolution kernel size
-                                                            ["analog_lowres", {"sigma": 3.0}],  # how to blur more: unrolled loop
-                                                            ["analog_lowres", {"sigma": 3.0}],
-                                                            ["analog_lowres", {"sigma": 3.0}],
-                                                            ["analog_lowres", {"sigma": 3.0}]])
-    image = PIL.Image.open(io.BytesIO(processed_png_bytes))
-    print(image.size, image.mode)
-    # image.save("study_blurred.png")  # DEBUG so we can see it (but not useful to run every time the self-test runs)
+# ---------------------------------------------------------------------------
+# Modules
+# ---------------------------------------------------------------------------
 
-    processed_png_bytes = api.imagefx_upscale_file(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "backdrops", "study.png")).expanduser().resolve(),
-                                                   output_format="png",
-                                                   upscaled_width=3840,
-                                                   upscaled_height=2160,
-                                                   preset="C",
-                                                   quality="high")
-    image = PIL.Image.open(io.BytesIO(processed_png_bytes))
-    print(image.size, image.mode)
-    # image.save("study_upscaled_4k.png")  # DEBUG so we can see it (but not useful to run every time the self-test runs)
+class TestModules:
+    def test_returns_nonempty_list(self, initialized_api):
+        result = api.modules()
+        assert isinstance(result, list)
+        assert len(result) > 0
 
-    # --------------------------------------------------------------------------------
-    # natlang
+    def test_contains_expected_modules(self, initialized_api):
+        result = api.modules()
+        # At minimum, classify and natlang should be available.
+        assert "classify" in result
+        assert "natlang" in result
 
-    print("=" * 80)
 
-    logger.info("test: natlang")
-    docs = api.natlang_analyze("This is a test document for NLP analysis.")
-    assert len(docs) == 1
-    doc = docs[0]
-    print("Tokens in analyzed document:")
-    for token in doc:
-        print(f"  {token.text} [{token.lemma_}] {token.pos_}")
-    print("Named entities in analyzed document:")
-    for ent in doc.ents:
-        print(f"  {ent}")
-    print("Sentences in analyzed document:")
-    for sent in list(doc.sents):
-        print(f"  {sent}")
+# ---------------------------------------------------------------------------
+# Classify
+# ---------------------------------------------------------------------------
 
-    docs = api.natlang_analyze(["The quick brown fox jumps over the lazy dog.",
-                                "This is another document."])
-    assert len(docs) == 2
-    for doc in docs:
-        print("Tokens in analyzed document:")
+class TestClassify:
+    def test_labels_returns_nonempty_list(self, initialized_api):
+        labels = api.classify_labels()
+        assert isinstance(labels, list)
+        assert len(labels) > 0
+
+    def test_classify_returns_dict(self, initialized_api):
+        result = api.classify(SAMPLE_TEXT)
+        assert isinstance(result, dict)
+        assert len(result) > 0
+
+    def test_classify_scores_are_floats(self, initialized_api):
+        result = api.classify(SAMPLE_TEXT)
+        for label, score in result.items():
+            assert isinstance(label, str)
+            assert isinstance(score, (int, float))
+
+    def test_classify_labels_match(self, initialized_api):
+        """The classify result keys should be a subset of the known labels."""
+        labels = set(api.classify_labels())
+        result = api.classify(SAMPLE_TEXT)
+        assert set(result.keys()).issubset(labels)
+
+
+# ---------------------------------------------------------------------------
+# ImageFX
+# ---------------------------------------------------------------------------
+
+class TestImagefx:
+    def test_available_filters_returns_list(self, initialized_api):
+        filters = api.avatar_get_available_filters()
+        assert isinstance(filters, list)
+
+    def test_process_file_returns_valid_png(self, initialized_api, assets_base):
+        processed_bytes = api.imagefx_process_file(
+            assets_base / "backdrops" / "study.png",
+            output_format="png",
+            filters=[["analog_lowres", {"sigma": 3.0}]])
+        assert isinstance(processed_bytes, bytes)
+        assert len(processed_bytes) > 0
+        image = PIL.Image.open(io.BytesIO(processed_bytes))
+        assert image.size[0] > 0 and image.size[1] > 0
+
+    def test_upscale_file_returns_4k_png(self, initialized_api, assets_base):
+        processed_bytes = api.imagefx_upscale_file(
+            assets_base / "backdrops" / "study.png",
+            output_format="png",
+            upscaled_width=3840,
+            upscaled_height=2160,
+            preset="C",
+            quality="high")
+        assert isinstance(processed_bytes, bytes)
+        image = PIL.Image.open(io.BytesIO(processed_bytes))
+        assert image.size == (3840, 2160)
+
+
+# ---------------------------------------------------------------------------
+# Natlang (NLP analysis)
+# ---------------------------------------------------------------------------
+
+class TestNatlang:
+    def test_single_document(self, initialized_api):
+        docs = api.natlang_analyze("This is a test document for NLP analysis.")
+        assert len(docs) == 1
+
+    def test_tokens_have_attributes(self, initialized_api):
+        docs = api.natlang_analyze("The quick brown fox.")
+        doc = docs[0]
         for token in doc:
-            print(f"  {token.text} [{token.lemma_}] {token.pos_}")
+            assert hasattr(token, "text")
+            assert hasattr(token, "lemma_")
+            assert hasattr(token, "pos_")
 
-    # optional "pipes" argument: only enable specified pipes (to run a partial analysis faster)
-    docs = api.natlang_analyze("This is a multi-sentence document. It has two sentences, see.",
-                               pipes=["tok2vec", "parser", "senter"])
-    assert len(docs) == 1
-    doc = docs[0]
-    print("Sentences in analyzed document:")
-    for sent in list(doc.sents):
-        print(f"  {sent}")
+    def test_multiple_documents(self, initialized_api):
+        docs = api.natlang_analyze(["The quick brown fox jumps over the lazy dog.",
+                                    "This is another document."])
+        assert len(docs) == 2
 
-    # --------------------------------------------------------------------------------
-    # dehyphenate
+    def test_pipe_selection(self, initialized_api):
+        docs = api.natlang_analyze("This is a multi-sentence document. It has two sentences, see.",
+                                   pipes=["tok2vec", "parser", "senter"])
+        assert len(docs) == 1
+        doc = docs[0]
+        sents = list(doc.sents)
+        assert len(sents) == 2
 
-    print("=" * 80)
+    def test_named_entities(self, initialized_api):
+        docs = api.natlang_analyze("Albert Einstein was born in Germany.")
+        doc = docs[0]
+        # The NER should find at least one entity.
+        assert hasattr(doc, "ents")
 
-    # Neumann & Gros 2023, https://arxiv.org/abs/2210.00849
-    scientific_abstract = textwrap.dedent("""
-                 The recent observation of neural power-law scaling relations has made a signifi-
-                 cant impact in the field of deep learning. A substantial amount of attention has
-                 been dedicated as a consequence to the description of scaling laws, although
-                 mostly for supervised learning and only to a reduced extent for reinforcement
-                 learning frameworks. In this paper we present an extensive study of performance
-                 scaling for a cornerstone reinforcement learning algorithm, AlphaZero. On the ba-
-                 sis of a relationship between Elo rating, playing strength and power-law scaling,
-                 we train AlphaZero agents on the games Connect Four and Pentago and analyze
-                 their performance. We find that player strength scales as a power law in neural
-                 network parameter count when not bottlenecked by available compute, and as a
-                 power of compute when training optimally sized agents. We observe nearly iden-
-                 tical scaling exponents for both games. Combining the two observed scaling laws
-                 we obtain a power law relating optimal size to compute similar to the ones ob-
-                 served for language models. We find that the predicted scaling of optimal neural
-                 network size fits our data for both games. We also show that large AlphaZero
-                 models are more sample efficient, performing better than smaller models with the
-                 same amount of training data.
-    """).strip()
-    with timer() as tim:
-        scientific_abstract = api.sanitize_dehyphenate(scientific_abstract)
-    print(f"dehyphenate scientific abstract 1: {tim.dt:0.6g}s")
-    print("=" * 80)
-    print(scientific_abstract)
 
-    # Brown et al. 2020, p. 40, https://arxiv.org/abs/2005.14165
-    input_text = textwrap.dedent("""
-        Giving multi-task models instructions in natural language was first formalized in a supervised setting with [MKXS18]
-        and utilized for some tasks (such as summarizing) in a language model with [RWC+ 19]. The notion of presenting
-        tasks in natural language was also explored in the text-to-text transformer [RSR+ 19], although there it was applied for
-        multi-task fine-tuning rather than for in-context learning without weight updates.
+# ---------------------------------------------------------------------------
+# Sanitize (dehyphenate)
+# ---------------------------------------------------------------------------
 
-        Another approach to increasing generality and transfer-learning capability in language models is multi-task learning
-        [Car97], which fine-tunes on a mixture of downstream tasks together, rather than separately updating the weights for
-        each one. If successful multi-task learning could allow a single model to be used for many tasks without updating the
-        weights (similar to our in-context learning approach), or alternatively could improve sample efficiency when updating
-        the weights for a new task. Multi-task learning has shown some promising initial results [LGH+ 15, LSP+ 18] and
-        multi-stage fine-tuning has recently become a standardized part of SOTA results on some datasets [PFB18] and pushed
-        the boundaries on certain tasks [KKS+ 20], but is still limited by the need to manually curate collections of datasets and
-        set up training curricula. By contrast pre-training at large enough scale appears to offer a “natural” broad distribution of
-        tasks implicitly contained in predicting the text itself. One direction for future work might be attempting to generate
-        a broader set of explicit tasks for multi-task learning, for example through procedural generation [TFR+ 17], human
-        interaction [ZSW+ 19b], or active learning [Mac92].
+class TestSanitize:
+    def test_dehyphenate_joins_broken_words(self, initialized_api):
+        result = api.sanitize_dehyphenate(SCIENTIFIC_ABSTRACT_1)
+        assert isinstance(result, str)
+        # "signifi-\ncant" should become "significant".
+        assert "significant" in result
+        assert "signifi-" not in result
 
-        Algorithmic innovation in language models over the last two years has been enormous, including denoising-based
-        bidirectionality [DCLT18], prefixLM [DL15] and encoder-decoder architectures [LLG+ 19, RSR+ 19], random permu-
-        tations during training [YDY+ 19], architectures that improve the efficiency of sampling [DYY+ 19], improvements in
-        data and training procedures [LOG+ 19], and efficiency increases in the embedding parameters [LCG+ 19]. Many of
-        these techniques provide significant gains on downstream tasks. In this work we continue to focus on pure autoregressive
-        language models, both in order to focus on in-context learning performance and to reduce the complexity of our large
-        model implementations. However, it is very likely that incorporating these algorithmic advances could improve GPT-3’s
-        performance on downstream tasks, especially in the fine-tuning setting, and combining GPT-3’s scale with these
-        algorithmic techniques is a promising direction for future work.
-    """).strip()
-    with timer() as tim:
-        input_text = api.sanitize_dehyphenate(input_text)
-    print(f"dehyphenate scientific abstract 2: {tim.dt:0.6g}s")
-    print("=" * 80)
-    print(input_text)
-    # --------------------------------------------------------------------------------
-    # translate
+    def test_dehyphenate_preserves_real_hyphens(self, initialized_api):
+        result = api.sanitize_dehyphenate(SCIENTIFIC_ABSTRACT_1)
+        # "power-law" is a real hyphenated compound and should be preserved.
+        assert "power-law" in result
 
-    print("=" * 80)
+    def test_dehyphenate_second_abstract(self, initialized_api):
+        result = api.sanitize_dehyphenate(SCIENTIFIC_ABSTRACT_2)
+        assert isinstance(result, str)
+        assert len(result) > 0
 
-    with timer() as tim:
-        print(api.translate_translate(scientific_abstract, source_lang="en", target_lang="fi"))
-    print(f"translate summary of scientific abstract 1: {tim.dt:0.6g}s")
 
-    with timer() as tim:
-        print(api.translate_translate(input_text, source_lang="en", target_lang="fi"))
-    print(f"translate summary of scientific abstract 2: {tim.dt:0.6g}s")
+# ---------------------------------------------------------------------------
+# Translate
+# ---------------------------------------------------------------------------
 
-    with timer() as tim:
-        # https://en.wikipedia.org/wiki/History_of_special_relativity
-        print(api.translate_translate('The failure of any experiment to detect motion through the aether led Hendrik Lorentz, starting in 1892, to develop a theory of electrodynamics based on an immobile luminiferous aether, physical length contraction, and a "local time" in which Maxwell\'s equations retain their form in all inertial frames of reference.', source_lang="en", target_lang="fi"))
-    print(f"translate history of theory of special relativity: {tim.dt:0.6g}s")
+class TestTranslate:
+    def test_translate_returns_string(self, initialized_api):
+        result = api.translate_translate(
+            "The quick brown fox jumps over the lazy dog.",
+            source_lang="en", target_lang="fi")
+        assert isinstance(result, str)
+        assert len(result) > 0
 
-    with timer() as tim:
-        # https://otakuusamagazine.com/macross-meet-the-idols/
-        print(api.translate_translate("Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, and sings tunes by legendary composer Yoko Kanno. Sharon wasn't entirely artificially intelligent, though: the unfinished program required Myung to patch in emotions during her concerts.", source_lang="en", target_lang="fi"))
-    print(f"translate fandom text on Sharon Apple: {tim.dt:0.6g}s")
+    def test_translate_scientific_text(self, initialized_api):
+        # Use the dehyphenated version for cleaner translation input.
+        clean_text = api.sanitize_dehyphenate(SCIENTIFIC_ABSTRACT_1)
+        result = api.translate_translate(clean_text, source_lang="en", target_lang="fi")
+        assert isinstance(result, str)
+        assert len(result) > 0
 
-    # --------------------------------------------------------------------------------
-    # tts, stt
+    def test_translate_fandom_text(self, initialized_api):
+        text = ("Sharon Apple. Before Hatsune Miku, before VTubers, there was Sharon Apple. "
+                "The digital diva of Macross Plus hailed from the in-universe mind of Myung Fang Lone, "
+                "and sings tunes by legendary composer Yoko Kanno.")
+        result = api.translate_translate(text, source_lang="en", target_lang="fi")
+        assert isinstance(result, str)
+        assert len(result) > 0
 
-    print("=" * 80)
 
-    logger.info("test: tts: list voices")
-    print(api.tts_list_voices())
+# ---------------------------------------------------------------------------
+# TTS + STT round-trip
+# ---------------------------------------------------------------------------
 
-    # Round-trip some texts through TTS->STT
-    speech_input_texts = ['The quick brown fox jumps over the lazy dog.',
-                          # https://en.wikipedia.org/wiki/History_of_special_relativity
-                          'The failure of any experiment to detect motion through the aether led Hendrik Lorentz, starting in 1892, to develop a theory of electrodynamics based on an immobile luminiferous aether, physical length contraction, and a "local time" in which Maxwell\'s equations retain their form in all inertial frames of reference.',
-                          # Summary of world history by Qwen3-2507-30B-A3B.
-                          'From approximately 10,000 BCE, the Neolithic Revolution initiated humanity’s shift from nomadic hunter-gatherer societies to settled agricultural communities. This was followed by the Bronze Age, spanning from roughly 3,300 to 1,200 BCE, which fostered the emergence of early cities and empires such as Sumer and Ancient Egypt. The Iron Age began around 1,200 BCE, driven by advancements in metallurgy and extending until approximately 500 BCE, enabling the rise of powerful civilizations like Persia and the Roman Republic. The Classical Era, from about 800 BCE to 500 CE, represented the zenith of Greek philosophy, Roman law, and widespread religious diffusion. The Medieval Period, lasting from 500 to 1,500 CE, witnessed the development of feudal systems in Europe alongside the Islamic Golden Age. The Early Modern Era, from 1,500 to 1,800 CE, brought the Age of Exploration, Enlightenment ideas, and the birth of modern nation-states. The Industrial Revolution commenced in the late 18th century, triggering mechanized manufacturing and urbanization. Finally, the Modern Era, starting in the early 19th century, continues to define today’s interconnected, digitized global society.']
-    # Speech recognition prompt. Note that Whisper is essentially a base model, not an instruction-following model.
-    # Nudge the model to transcribe with punctuation, and provide some proper names that are present in the speech, to avoid "Hendrick-Lawrence" and similar.
-    # In the chat client, we'll need to do some NER to be able to throw the relevant proper names into the prompt.
-    prompt = "Hi, and welcome to my lecture about Hendrik Lorentz, the luminiferous aether, the Classical Era, the Medieval Period, the Early Modern Era, and the Enlightenment."
-    for speech_input_text in speech_input_texts:
-        print("=" * 80)
-        print("TTS:")
-        with timer() as tim:
-            prep = api.tts_prepare(text=speech_input_text,
-                                   voice="af_nova",
-                                   speed=1.0,
-                                   get_metadata=True)  # get phoneme metadata just for code coverage purposes
-        print(f"Speech synthesis done in {tim.dt:0.6g}s.")
+class TestTts:
+    def test_list_voices_returns_nonempty(self, initialized_api):
+        voices = api.tts_list_voices()
+        assert isinstance(voices, list)
+        assert len(voices) > 0
 
-        print("=" * 80)
-        print("STT:")
-        audio_buffer = io.BytesIO()
-        audio_buffer.write(prep["audio_bytes"])  # send the audio file received from TTS into STT for transcription; bytes object -> stream
-        audio_buffer.seek(0)
-        with timer() as tim:
-            transcribed_text = api.stt_transcribe(stream=audio_buffer,
-                                                  prompt=prompt)
-        print(f"Speech recognition done in {tim.dt:0.6g}s.")
-        print()
-        print(f"Original text: '{speech_input_text}'")
-        print()
-        print(f"  From speech: '{transcribed_text}'")
+    def test_prepare_returns_audio_bytes(self, initialized_api):
+        prep = api.tts_prepare(text="The quick brown fox jumps over the lazy dog.",
+                               voice="af_nova",
+                               speed=1.0,
+                               get_metadata=False)
+        assert prep is not None
+        assert "audio_bytes" in prep
+        assert isinstance(prep["audio_bytes"], bytes)
+        assert len(prep["audio_bytes"]) > 0
 
-    # --------------------------------------------------------------------------------
-    # websearch
+    def test_prepare_with_metadata(self, initialized_api):
+        prep = api.tts_prepare(text="Hello world.",
+                               voice="af_nova",
+                               speed=1.0,
+                               get_metadata=True)
+        assert prep is not None
+        assert "audio_bytes" in prep
+        assert "timestamps" in prep
+        assert isinstance(prep["timestamps"], list)
 
-    # logger.info("test: websearch")
-    # print(f"{text}\n")
-    # out = api.websearch_search(text, max_links=3)
-    # for item in out["data"]:
-    #     if "title" in item and "link" in item:
-    #         print(f"{item['title']}\n{item['link']}\n")
-    #     elif "title" in item:
-    #         print(f"{item['title']}\n")
-    #     elif "link" in item:
-    #         print(f"{item['link']}\n")
-    #     print(f"{item['text']}\n")
-    # # There's also out["results"] with preformatted text only.
 
-    # --------------------------------------------------------------------------------
-    # embeddings
+class TestStt:
+    def test_tts_stt_roundtrip(self, initialized_api):
+        """Synthesize speech from text, then transcribe it back. The transcription should
+        resemble the original."""
+        original = "The quick brown fox jumps over the lazy dog."
+        prep = api.tts_prepare(text=original, voice="af_nova", speed=1.0, get_metadata=False)
+        assert prep is not None
 
-    print("=" * 80)
+        audio_buffer = io.BytesIO(prep["audio_bytes"])
+        transcribed = api.stt_transcribe(stream=audio_buffer, prompt=original)
+        assert isinstance(transcribed, str)
+        assert len(transcribed) > 0
+        # The transcription should contain at least some of the original words.
+        transcribed_lower = transcribed.lower()
+        assert "fox" in transcribed_lower or "dog" in transcribed_lower
 
-    logger.info("test: embeddings")
-    print(api.embeddings_compute(text).shape)
-    print(api.embeddings_compute([text, "Testing, 1, 2, 3."]).shape)
 
-    # --------------------------------------------------------------------------------
-    # avatar
+# ---------------------------------------------------------------------------
+# Embeddings
+# ---------------------------------------------------------------------------
 
-    print("=" * 80)
+class TestEmbeddings:
+    def test_single_text_returns_1d(self, initialized_api):
+        embedding = api.embeddings_compute(SAMPLE_TEXT)
+        assert isinstance(embedding, np.ndarray)
+        assert embedding.ndim == 1
+        assert embedding.shape[0] > 0
 
-    logger.info("test: initialize avatar")
-    # send an avatar - mandatory
-    avatar_instance_id = api.avatar_load(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "characters", "other", "example.png")).expanduser().resolve())
-    try:
-        # send animator config - optional, server defaults used if not sent
-        api.avatar_load_animator_settings_from_file(avatar_instance_id,
-                                                    pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "settings", "animator.json")).expanduser().resolve())
-        # send the morph parameters for emotions - optional, server defaults used if not sent
-        api.avatar_load_emotion_templates_from_file(avatar_instance_id,
-                                                    pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets", "emotions", "_defaults.json")).expanduser().resolve())
-        api.avatar_start(avatar_instance_id)  # start the animator
-        gen = api.avatar_result_feed(avatar_instance_id)  # start receiving animation frames (call this *after* you have started the animator)
-        api.avatar_start_talking(avatar_instance_id)  # start "talking right now" animation (generic, non-lipsync, random mouth)
+    def test_batch_returns_2d(self, initialized_api):
+        embedding = api.embeddings_compute([SAMPLE_TEXT, "Testing, 1, 2, 3."])
+        assert isinstance(embedding, np.ndarray)
+        assert embedding.ndim == 2
+        assert embedding.shape[0] == 2
+        assert embedding.shape[1] > 0
 
-        logger.info("test: more avatar tests")
-        api.avatar_set_emotion(avatar_instance_id, "surprise")  # manually update emotion
-        for _ in range(5):  # get a few frames
-            image_format, image_data = next(gen)  # next-gen lol
-            print(image_format, len(image_data))
-            image_file = io.BytesIO(image_data)
-            image = PIL.Image.open(image_file)  # noqa: F841, we're only interested in testing whether the transport works.
-        api.avatar_stop_talking(avatar_instance_id)  # stop "talking right now" animation
-        api.avatar_stop(avatar_instance_id)  # pause animating the avatar
-        api.avatar_start(avatar_instance_id)  # resume animating the avatar
-    finally:
-        api.avatar_unload(avatar_instance_id)  # this closes the connection too
+    def test_single_and_batch_same_dimension(self, initialized_api):
+        single = api.embeddings_compute(SAMPLE_TEXT)
+        batch = api.embeddings_compute([SAMPLE_TEXT])
+        assert single.shape[0] == batch.shape[1]
 
-    # --------------------------------------------------------------------------------
 
-    print("=" * 80)
+# ---------------------------------------------------------------------------
+# Avatar
+# ---------------------------------------------------------------------------
 
-    logger.info("test: all done")
+class TestAvatar:
+    def test_avatar_lifecycle(self, initialized_api, assets_base):
+        """Exercise the full avatar lifecycle: load, configure, start, render, stop, unload."""
+        character_path = assets_base / "characters" / "other" / "example.png"
+        animator_settings_path = assets_base / "settings" / "animator.json"
+        emotion_templates_path = assets_base / "emotions" / "_defaults.json"
 
-if __name__ == "__main__":
-    test()
+        instance_id = api.avatar_load(character_path)
+        assert isinstance(instance_id, str)
+        assert len(instance_id) > 0
+
+        try:
+            # Load optional settings.
+            api.avatar_load_animator_settings_from_file(instance_id, animator_settings_path)
+            api.avatar_load_emotion_templates_from_file(instance_id, emotion_templates_path)
+
+            # Start the animator and begin receiving frames.
+            api.avatar_start(instance_id)
+            gen = api.avatar_result_feed(instance_id)
+
+            # Start talking animation.
+            api.avatar_start_talking(instance_id)
+
+            # Set an emotion.
+            api.avatar_set_emotion(instance_id, "surprise")
+
+            # Receive a few frames.
+            for _ in range(5):
+                image_format, image_data = next(gen)
+                assert isinstance(image_data, bytes)
+                assert len(image_data) > 0
+                # Verify the frame is a valid image.
+                image = PIL.Image.open(io.BytesIO(image_data))
+                assert image.size[0] > 0 and image.size[1] > 0
+
+            # Stop talking, pause, resume.
+            api.avatar_stop_talking(instance_id)
+            api.avatar_stop(instance_id)
+            api.avatar_start(instance_id)
+        finally:
+            api.avatar_unload(instance_id)
