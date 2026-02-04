@@ -615,6 +615,7 @@ class Animator:
         self.output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
 
         self.animation_running = False  # used in initial bootup state, while loading a new image, and while explicitly paused
+        self._warmup_pending = False  # set True by `load_image`; cleared by the first `render_animation_frame` call
 
         self.reset_animation_state()
         self.load_emotion_templates()
@@ -871,20 +872,7 @@ class Animator:
                 self.data_eyes_celnames.append(celname)
             plural_s = "s" if len(self.data_eyes_celnames) != 1 else ""
             logger.info(f"load_image: This character has {len(self.data_eyes_celnames)} cel{plural_s} for the scifi 'data eyes' effect.")
-
-            # Warmup: run one forward pass to prime CUDA kernels and allocate intermediate tensors.
-            # This shifts the cold-start cost from the first visible animation frame to the
-            # (non-interactive) image loading phase.
-            logger.info("load_image: warming up THA3 pipeline")
-            with timer() as tim:
-                with torch.no_grad():
-                    warmup_image = self.source_image * 2.0 - 1.0  # [0, 1] -> [-1, 1], same transform as render pipeline
-                    warmup_pose = torch.zeros(self.poser.get_num_parameters(), device=self.device, dtype=self.poser.get_dtype())
-                    warmup_output = self.poser.pose(warmup_image, warmup_pose)[0]
-                    warmup_output.add_(1.0)
-                    warmup_output.mul_(0.5)  # [-1, 1] -> [0, 1]
-                    self.postprocessor.render_into(warmup_output)  # also prime the postprocessor's meshgrid cache
-            logger.info(f"load_image: warmup complete in {tim.dt:0.6g}s")
+            self._warmup_pending = True
         except Exception as exc:
             self.source_image = None
             self.torch_cels = {}
@@ -1549,6 +1537,25 @@ class Animator:
             return
         if self.new_frame_available:  # if no one has retrieved the latest rendered frame yet, do nothing.
             return
+
+        # Warmup: on the first frame after loading a new image, run one forward pass through the
+        # full pipeline to prime CUDA kernels and allocate intermediate tensors. We do this here
+        # (not in `load_image`) so that it runs on the animator thread (correct per-thread CUDA state)
+        # and after `load_animator_settings` (correct upscale target size).
+        if self._warmup_pending:
+            self._warmup_pending = False
+            logger.info("render_animation_frame: warming up render pipeline")
+            with timer() as tim:
+                with torch.no_grad():
+                    warmup_image = self.source_image * 2.0 - 1.0  # [0, 1] -> [-1, 1], same transform as render pipeline
+                    warmup_pose = torch.zeros(self.poser.get_num_parameters(), device=self.device, dtype=self.poser.get_dtype())
+                    warmup_output = self.poser.pose(warmup_image, warmup_pose)[0]
+                    warmup_output.add_(1.0)
+                    warmup_output.mul_(0.5)  # [-1, 1] -> [0, 1]
+                    if self.upscaler is not None:
+                        warmup_output = self.upscaler.upscale(warmup_output)
+                    self.postprocessor.render_into(warmup_output)
+            logger.info(f"render_animation_frame: warmup complete in {tim.dt:0.6g}s")
 
         do_crop = any(self._settings[key] != 0 for key in ("crop_left", "crop_right", "crop_top", "crop_bottom"))
 
