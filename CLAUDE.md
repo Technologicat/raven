@@ -217,6 +217,8 @@ Uses `unpythonic.dyn` for injecting status update callbacks. Progress tracked vi
 - `IconsFontAwesome6.py` - Icon font (note: outdated version)
 
 ## Code Style
+All new and modified code must follow `raven-style-guide.md` (in the project root).
+
 - Impure functional, Lispy (closures, `unpythonic` patterns)
 - `unpythonic` used for: `env` (namespace), `Timer` (benchmarking), occasionally `@call`
 - OOP where appropriate (GUI components, stateful objects)
