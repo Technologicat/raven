@@ -769,6 +769,8 @@ class Animator:
 
         def typecheck(settings: Dict[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
             for field, default_value in _server_config.animator_defaults.items():
+                if default_value is None:  # Can't infer expected type from a None default; skip.
+                    continue
                 type_match = (int, float) if isinstance(default_value, (int, float)) else type(default_value)
                 if field in settings and not isinstance(settings[field], type_match):
                     logger.warning(f"load_animator_settings: in {context}: incorrect type for '{field}': got {type(settings[field])} with value '{settings[field]}', expected {type_match}")
