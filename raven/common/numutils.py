@@ -18,14 +18,18 @@ import numpy as np
 # --------------------------------------------------------------------------------
 # Numerical utilities
 
-def clamp(x, ell=0.0, u=1.0):  # not the manga studio
+def clamp(x: float, ell: float = 0.0, u: float = 1.0) -> float:  # not the manga studio
     """Clamp value `x` between `ell` and `u`. Return clamped value."""
     return min(max(ell, x), u)
 
-def nonanalytic_smooth_transition(x, m=1.0):  # from `extrafeathers.pdes.numutil`
+def nonanalytic_smooth_transition(x: Union[float, np.array], m: float = 1.0) -> Union[float, np.array]:  # from `extrafeathers.pdes.numutil`
     """Non-analytic smooth transition from 0 to 1, on interval x ∈ [0, 1].
 
+    Here "non-analytic" = "does not have a single global Taylor series".
+    The function is smooth, as in "an element of the class C∞".
+
     The transition is reflection-symmetric through the point (1/2, 1/2).
+    This is essentially a type of an S-curve.
 
     Outside the interval:
         s(x, m) = 0  for x < 0
@@ -37,10 +41,11 @@ def nonanalytic_smooth_transition(x, m=1.0):  # from `extrafeathers.pdes.numutil
 
     `m` is passed to `psi`, which see.
     """
+    # Here `psi` is constructed so that we don't need bounds checking.
     p = psi(x, m)
     return p / (p + psi(1.0 - x, m))
 
-def psi(x, m=1.0):  # from `extrafeathers.pdes.numutil`
+def psi(x: Union[float, np.array], m: float = 1.0) -> Union[float, np.array]:  # from `extrafeathers.pdes.numutil`
     """Building block for non-analytic smooth functions.
 
         psi(x, m) := exp(-1 / x^m) χ(0, ∞)(x)
@@ -60,7 +65,7 @@ def psi(x, m=1.0):  # from `extrafeathers.pdes.numutil`
                                 module="__main__")
         try:
             return np.exp(-1.0 / x**m) * (x > 0.0)
-        except ZeroDivisionError:  # for scalar x
+        except (ZeroDivisionError, OverflowError):  # for scalar x
             return 0.0
 
 # TODO: si_prefix: very general utility, move to `unpythonic`
