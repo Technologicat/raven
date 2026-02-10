@@ -1108,7 +1108,7 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
 def setup(docs_dir: Union[pathlib.Path, str],
           recursive: bool,
           db_dir: Union[pathlib.Path, str],
-          exts=[".txt", ".md", ".rst", ".org"],
+          exts=[".txt", ".md", ".rst", ".org", ".bib", ".tex"],
           callback: Optional[Callable] = None,
           embedding_model_name: str = "sentence-transformers/multi-qa-mpnet-base-cos-v1",
           local_model_loader_fallback: bool = True,
