@@ -129,7 +129,10 @@ def _on_hover(node_id: Optional[str]) -> None:
 
 def _on_click(node_id: str, button: int) -> None:
     """Handle click callback."""
-    _set_status(f"Clicked: {node_id} (button {button})")
+    # TODO: add follow-edge-on-click feature, if clicking an edge. Currently, `XDotWidget` only calls us when a node is clicked. Need to add another handler with "source" and "target" params, as well as which one is closer to mouse.
+    _set_status(f"Zooming to node: {node_id}")
+    widget = _app_state["widget"]
+    widget.zoom_to_node(node_id)
 
 
 def _do_search(*_args) -> None:
@@ -150,14 +153,16 @@ def _do_search(*_args) -> None:
     results = widget.search(query)
 
     if not query:
+        widget.clear_highlights()
         _set_status("")
         dpg.set_value(search_input_text_color, (255, 255, 255))  # no search active
     else:
         if len(results):
+            widget.set_highlighted_nodes(set(results))
             _set_status(f"Found {len(results)} matches")
-            widget.next_match()  # jump the view to the first match
             dpg.set_value(search_input_text_color, (180, 255, 180))  # found, green
         else:
+            widget.clear_highlights()
             _set_status("No matches found")
             dpg.set_value(search_input_text_color, (255, 128, 128))  # not found, red
 
@@ -239,8 +244,8 @@ def _on_key(sender, app_data) -> None:
     if dpg.is_item_focused("search_input"):
         if key == dpg.mvKey_Return:  # accept and unfocus
             dpg.focus_item(widget.get_dpg_widget_id())
-        elif key == dpg.mvKey_Escape:  # unfocus
-            # TODO: revert to last search field content, update search
+            widget.next_match()  # jump the view to the first match
+        elif key == dpg.mvKey_Escape:  # unfocus and cancel current search edit (handled by the text input internally, by sending a change event; but we need to handle the keyboard focus)
             dpg.focus_item(widget.get_dpg_widget_id())
     elif ctrl_pressed:
         if key == dpg.mvKey_F:
@@ -333,21 +338,6 @@ def main() -> int:
             with dpg.tooltip("zoom_out_button"):  # tag
                 dpg.add_text("Zoom out [-]")
 
-            dpg.add_separator()
-            dpg.add_text("Search:")
-            _app_state["search_input"] = dpg.add_input_text(
-                default_value="",
-                tag="search_input",
-                hint="[Ctrl+F] [incremental fragment search; 'cat photo' matches 'photocatalytic'; lowercase = case-insensitive]",
-                callback=_do_search,  # DPG passes (sender, app_data, user_data); _do_search accepts and discards via *_args.
-                width=200,
-            )
-            with dpg.theme(tag="search_input_theme"):
-                with dpg.theme_component(dpg.mvInputText):
-                    _app_state["search_input_text_color"] = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255))
-                    dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, (140, 140, 140))
-            dpg.bind_item_theme("search_input", "search_input_theme")  # tag
-
             dpg.add_button(label=fa.ICON_CIRCLE_UP, tag="prev_match_button", callback=_prev_match, width=30)
             dpg.bind_item_font("prev_match_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("prev_match_button"):  # tag
@@ -357,6 +347,21 @@ def main() -> int:
             dpg.bind_item_font("next_match_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("next_match_button"):  # tag
                 dpg.add_text("Next search match [F3]")
+
+            dpg.add_separator()
+            dpg.add_text("Search:")
+            _app_state["search_input"] = dpg.add_input_text(
+                default_value="",
+                tag="search_input",
+                hint="[Ctrl+F] [incremental fragment search; 'cat photo' matches 'photocatalytic'; lowercase = case-insensitive]",
+                callback=_do_search,  # DPG passes (sender, app_data, user_data); _do_search accepts and discards via *_args.
+                width=-1,  # last item, fill
+            )
+            with dpg.theme(tag="search_input_theme"):
+                with dpg.theme_component(dpg.mvInputText):
+                    _app_state["search_input_text_color"] = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255))
+                    dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, (140, 140, 140))
+            dpg.bind_item_theme("search_input", "search_input_theme")  # tag
 
         # Graph view
         # TODO: These sizes don't track viewport resizes. Wire up a resize callback,
