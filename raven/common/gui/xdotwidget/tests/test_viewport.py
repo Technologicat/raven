@@ -26,7 +26,7 @@ class TestSmoothValue:
     - Monotonic approach toward target (no overshoot).
     - Eventually reaches the target.
     - Higher rate converges faster.
-    The tests don't assume exponential decay or any specific interpolation.
+    The tests don't assume any specific interpolation.
     """
 
     def test_initial_value(self):
