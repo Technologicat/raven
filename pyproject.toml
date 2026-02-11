@@ -123,6 +123,7 @@ raven-avatar-pose-editor = "raven.avatar.pose_editor.app:main"  # AI avatar pose
 raven-avatar-settings-editor = "raven.avatar.settings_editor.app:main"  # AI avatar postprocessor config editor / character tester
 raven-importer = "raven.visualizer.importer:main"
 raven-visualizer = "raven.visualizer.app:main"  # the main app!
+raven-xdot-viewer = "raven.xdot_viewer.app:main"  # xdot graph viewer
 
 [build-system]
 requires = ["pdm-backend"]

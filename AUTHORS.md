@@ -55,6 +55,7 @@ Anime4K contributors:
 
 Claude Opus, 4.5 & 4.6:
 
+- `raven.common.gui.xdotwidget`, `raven-xdot-viewer`.
 - Unit tests.
 - Refactoring.
 

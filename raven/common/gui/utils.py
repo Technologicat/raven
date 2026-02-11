@@ -5,7 +5,8 @@ This module is licensed under the 2-clause BSD license, to facilitate integratio
 
 __all__ = ["get_font_path", "bootup",
            "maybe_delete_item", "has_child_items",
-           "get_widget_pos", "get_widget_size", "get_widget_relative_pos", "is_mouse_inside_widget",
+           "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
+           "get_mouse_relative_pos", "is_mouse_inside_widget",
            "recenter_window",
            "wait_for_resize",
            "compute_tooltip_position_scalar",
@@ -331,6 +332,12 @@ def get_widget_relative_pos(widget: Union[str, int],
     x0_local = x0 - x0_c
     y0_local = y0 - y0_c
     return x0_local, y0_local
+
+def get_mouse_relative_pos(widget: Union[str, int]) -> Tuple[int, int]:
+    """Return the mouse cursor's position, measured relative to the origin of `widget` (DPG tag or ID)."""
+    x0, y0 = get_widget_pos(widget)
+    m = dpg.get_mouse_pos(local=False)  # in viewport coordinates
+    return (m[0] - x0, m[1] - y0)
 
 def is_mouse_inside_widget(widget: Union[str, int]) -> bool:
     """Return whether the mouse cursor is inside `widget` (DPG ID or tag)."""
