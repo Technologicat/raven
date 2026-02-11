@@ -129,6 +129,13 @@ class XDotWidget(gui_animation.Animation):
         """Return the current Graph, or None."""
         return self._graph
 
+    def get_dpg_widget_id(self):
+        """Return the DPG ID of the actual DPG widget at the top level of this graph widget.
+
+        Useful e.g. for programmatically focusing the graph view.
+        """
+        return self.drawlist
+
     # -------------------------------------------------------------------------
     # Public API: View control
 
@@ -163,6 +170,11 @@ class XDotWidget(gui_animation.Animation):
     def zoom_out(self, factor: float = 1.2) -> None:
         """Zoom out by a factor."""
         self._viewport.zoom_by(1.0 / factor)
+        self._needs_render = True
+
+    def pan_by(self, dx, dy):
+        """Pan the view by (dx, dy) pixels."""
+        self._viewport.pan_by(dx, dy)
         self._needs_render = True
 
     # -------------------------------------------------------------------------
@@ -407,9 +419,7 @@ class XDotWidget(gui_animation.Animation):
             self._dragging = True
             return
 
-        # Pan the view
-        self._viewport.pan_by(dx, dy)
-        self._needs_render = True
+        self.pan_by(dx, dy)
 
     def _on_mouse_release(self, sender, app_data) -> None:
         """Handle mouse release."""
