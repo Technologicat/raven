@@ -263,7 +263,7 @@ def _on_key(sender, app_data) -> None:
             _zoom_in()
         elif key == dpg.mvKey_Minus:
             _zoom_out()
-        elif key == ord("0"):
+        elif key == dpg.mvKey_0:
             _zoom_to_fit()
         elif key == dpg.mvKey_Up:
             widget.pan_by(dx=0, dy=-PAN_AMOUNT)
