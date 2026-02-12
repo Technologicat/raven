@@ -236,7 +236,46 @@ class Viewport:
             self.pan_y.set_immediate(new_pan_y)
             self.zoom.set_immediate(new_zoom)
 
-    def zoom_to_point(self, gx: float, gy: float, animate: bool = True) -> None:
+    def zoom_to_bbox(self, x1: float, y1: float, x2: float, y2: float,
+                     margin: int = 20, animate: bool = True) -> None:
+        """Adjust pan and zoom to fit a bounding box in the viewport.
+
+        `x1`, `y1`, `x2`, `y2`: Bounding box in graph coordinates.
+        `margin`: Margin in pixels around the content.
+        `animate`: If True, animate the transition.
+        """
+        gw = abs(x2 - x1)
+        gh = abs(y2 - y1)
+
+        available_w = self.width - 2 * margin
+        available_h = self.height - 2 * margin
+
+        if gw > 0 and gh > 0:
+            zoom_w = available_w / gw
+            zoom_h = available_h / gh
+            new_zoom = min(zoom_w, zoom_h)
+        elif gw > 0:
+            new_zoom = available_w / gw
+        elif gh > 0:
+            new_zoom = available_h / gh
+        else:
+            new_zoom = self.zoom.current  # degenerate bbox, keep current zoom
+
+        new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
+
+        new_pan_x = (x1 + x2) / 2
+        new_pan_y = (y1 + y2) / 2
+
+        if animate:
+            self.pan_x.target = new_pan_x
+            self.pan_y.target = new_pan_y
+            self.zoom.target = new_zoom
+        else:
+            self.pan_x.set_immediate(new_pan_x)
+            self.pan_y.set_immediate(new_pan_y)
+            self.zoom.set_immediate(new_zoom)
+
+    def pan_to_point(self, gx: float, gy: float, animate: bool = True) -> None:
         """Center the viewport on a specific graph point.
 
         `gx`, `gy`: Point in graph coordinates.

@@ -168,7 +168,7 @@ class XDotWidget(gui_animation.Animation):
 
         node = self._graph.get_node_by_name(node_id)
         if node is not None:
-            self._viewport.zoom_to_point(node.x, node.y, animate=animate)
+            self._viewport.pan_to_point(node.x, node.y, animate=animate)
             self._needs_render = True
 
     def zoom_in(self, factor: float = 1.2) -> None:
@@ -266,16 +266,20 @@ class XDotWidget(gui_animation.Animation):
                 self._edge_click_cycle = 0
 
             if self._edge_click_cycle == 0:
-                # Midpoint between source and destination
-                mx = (element.src.x + element.dst.x) / 2
-                my = (element.src.y + element.dst.y) / 2
-                self._viewport.zoom_to_point(mx, my, animate=True)
+                # Zoom to fit the whole edge (both endpoints visible)
+                bbox = element.get_bounding_box()
+                if bbox is not None:
+                    self._viewport.zoom_to_bbox(*bbox, animate=True)
+                else:
+                    mx = (element.src.x + element.dst.x) / 2
+                    my = (element.src.y + element.dst.y) / 2
+                    self._viewport.pan_to_point(mx, my, animate=True)
             elif self._edge_click_cycle == 1:
                 # Source node
-                self._viewport.zoom_to_point(element.src.x, element.src.y, animate=True)
+                self._viewport.pan_to_point(element.src.x, element.src.y, animate=True)
             else:
                 # Destination node
-                self._viewport.zoom_to_point(element.dst.x, element.dst.y, animate=True)
+                self._viewport.pan_to_point(element.dst.x, element.dst.y, animate=True)
             self._needs_render = True
         return self._describe_element(element)
 
