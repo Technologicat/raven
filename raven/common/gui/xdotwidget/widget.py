@@ -232,7 +232,7 @@ class XDotWidget(gui_animation.Animation):
         or None if no results. Also centers the view on the match.
         """
         element = self._search.next_match()
-        return self._zoom_to_element(element)
+        return self._pan_to_element(element)
 
     def prev_match(self) -> Optional[str]:
         """Navigate to the previous search match.
@@ -241,13 +241,32 @@ class XDotWidget(gui_animation.Animation):
         or None if no results. Also centers the view on the match.
         """
         element = self._search.prev_match()
-        return self._zoom_to_element(element)
+        return self._pan_to_element(element)
+
+    def _pan_to_element(self, element) -> Optional[str]:
+        """Pan the view to center on `element` (Node or Edge).
+
+        Pan only — does not change the zoom level.
+
+        Returns a human-readable description of the element, or None.
+        """
+        if element is None:
+            return None
+        if isinstance(element, Node):
+            if element.internal_name:
+                self.zoom_to_node(element.internal_name)
+        elif isinstance(element, Edge):
+            mx = (element.src.x + element.dst.x) / 2
+            my = (element.src.y + element.dst.y) / 2
+            self._viewport.pan_to_point(mx, my, animate=True)
+            self._needs_render = True
+        return self._describe_element(element)
 
     def _zoom_to_element(self, element) -> Optional[str]:
         """Zoom the view to center on `element` (Node or Edge).
 
         For edges, repeated clicks on the same edge cycle through:
-        midpoint → src node → dst node → midpoint → ...
+        midpoint (zoom to fit) → src node → dst node → midpoint → ...
 
         Returns a human-readable description of the element, or None.
         """
