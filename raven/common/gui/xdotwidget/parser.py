@@ -556,7 +556,7 @@ class XDotAttrParser:
             elif op == "F":
                 size = self.read_float()
                 self.pen.fontsize = size
-                # Font family - skip for now.
+                # Font family - must consume from buffer even though we don't use it.
                 #
                 # DPG requires registering font families from a TTF file with `dpg.font`.
                 # Raven currently does that in `raven.common.gui.utils`, function `bootup`.
@@ -564,9 +564,7 @@ class XDotAttrParser:
                 # not the font family.
                 #
                 # TODO: implement font loading later?
-                logger.warning("XDotAttrParser.parse: font families are currently not supported; setting font size only.")
-                # name = self.read_text()
-                # self.pen.fontname = name
+                _name = self.read_text()  # noqa: F841
             elif op == "T":
                 x, y = self.read_point()
                 j = self.read_number()
