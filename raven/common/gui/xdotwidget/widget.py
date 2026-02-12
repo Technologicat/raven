@@ -205,10 +205,16 @@ class XDotWidget(gui_animation.Animation):
 
         `query`: Search string (space-separated fragments).
 
-        Returns a list of matching node IDs.
+        Returns a list of matching node IDs (for backward compat).
         """
         self._search.search(query)
         return self._search.get_result_ids()
+
+    def highlight_search_results(self) -> None:
+        """Highlight all current search results (nodes and edges)."""
+        results = self._search.get_results()
+        self._highlight.set_highlighted(set(results))
+        self._needs_render = True
 
     def next_match(self) -> Optional[str]:
         """Navigate to the next search match.

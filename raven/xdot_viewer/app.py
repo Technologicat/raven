@@ -170,15 +170,16 @@ def _do_search(*_args) -> None:
 
     query = dpg.get_value(search_input)
     results = widget.search(query)
+    count = widget.get_search_count()  # includes both nodes and edges
 
     if not query:
         widget.clear_highlights()
         _set_status("")
         dpg.set_value(search_input_text_color, (255, 255, 255))  # no search active
     else:
-        if len(results):
-            widget.set_highlighted_nodes(set(results))
-            _set_status(f"Found {len(results)} matches")
+        if count:
+            widget.highlight_search_results()  # highlights both nodes and edges
+            _set_status(f"Found {count} matches")
             dpg.set_value(search_input_text_color, (180, 255, 180))  # found, green
         else:
             widget.clear_highlights()
