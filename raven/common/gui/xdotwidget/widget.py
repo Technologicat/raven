@@ -347,13 +347,15 @@ class XDotWidget(gui_animation.Animation):
     def _on_mouse_move(self, sender, app_data) -> None:
         """Handle mouse movement, updating highlights, and triggering the custom callback if set."""
         if not self._is_mouse_inside():
-            # Mouse left widget - clear hover
+            # Mouse left widget - always clear hover on the highlight state
+            # (set_hover has its own early-return if already None, so this is cheap).
+            # The _last_hover_id guard only controls the user callback.
+            self._highlight.set_hover(None)
             if self._last_hover_id is not None:
-                self._highlight.set_hover(None)
                 self._last_hover_id = None
                 if self._on_hover:
                     self._on_hover(None)
-                self._needs_render = True
+            self._needs_render = True
             return
         if self._graph is None:
             return
