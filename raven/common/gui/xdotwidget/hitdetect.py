@@ -6,9 +6,9 @@ This module provides functions for determining which graph element
 
 __all__ = ["hit_test", "hit_test_screen"]
 
-from typing import Optional
+from typing import List, Optional
 
-from .graph import Graph, Element, Node, Edge
+from .graph import Graph, Element, Node, Edge, PolygonShape
 from .viewport import Viewport
 
 # --------------------------------------------------------------------------------
@@ -56,19 +56,47 @@ def _point_to_segment_dist_sq(px: float, py: float,
     return (px - proj_x) ** 2 + (py - proj_y) ** 2
 
 
+def _point_in_polygon(px: float, py: float, polygon: List[tuple]) -> bool:
+    """Ray-casting point-in-polygon test.
+
+    Returns True if (px, py) is inside the polygon defined by the vertex list.
+    """
+    n = len(polygon)
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i]
+        xj, yj = polygon[j]
+        # Check if the ray from (px, py) going rightward crosses this edge
+        if ((yi > py) != (yj > py)) and (px < (xj - xi) * (py - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
 def get_edge(graph: Graph, gx: float, gy: float,
              radius_sq: float = _EDGE_HIT_RADIUS_PX ** 2) -> Optional[Edge]:
     """Find an edge near point (gx, gy).
 
+    Checks proximity to the edge path (polyline/bezier control points)
+    and also whether the point is inside any filled polygon shapes
+    (e.g. arrowheads).
+
     `radius_sq`: Squared hit radius, in the same coordinate system as (gx, gy).
     """
     for edge in graph.edges:
+        # Check proximity to edge path
         pts = edge.points
         for i in range(len(pts) - 1):
             if _point_to_segment_dist_sq(gx, gy,
                                           pts[i][0], pts[i][1],
                                           pts[i + 1][0], pts[i + 1][1]) <= radius_sq:
                 return edge
+        # Check if point is inside any filled polygon (arrowheads)
+        for shape in edge.shapes:
+            if isinstance(shape, PolygonShape) and shape.filled and shape.points:
+                if _point_in_polygon(gx, gy, shape.points):
+                    return edge
     return None
 
 # --------------------------------------------------------------------------------
