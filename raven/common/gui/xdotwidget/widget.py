@@ -324,22 +324,18 @@ class XDotWidget(gui_animation.Animation):
                 dpg.delete_item(self.drawlist, children_only=True)
                 return
 
+            # Build per-element intensity dict for the renderer.
             highlighted = self._highlight.get_all_highlighted(self._graph)
-
-            # Calculate average highlight intensity for animation
-            if highlighted:
-                intensities = [self._highlight.get_intensity(e, self._graph)
-                               for e in highlighted]
-                highlight_t = sum(intensities) / len(intensities)
-            else:
-                highlight_t = 1.0
+            highlight_intensities = {
+                e: self._highlight.get_intensity(e, self._graph)
+                for e in highlighted
+            }
 
             render_graph(
                 self.drawlist,
                 self._graph,
                 self._viewport,
-                highlighted=highlighted,
-                highlight_t=highlight_t,
+                highlight_intensities=highlight_intensities,
                 text_compaction_cb=self._text_compaction_callback
             )
 

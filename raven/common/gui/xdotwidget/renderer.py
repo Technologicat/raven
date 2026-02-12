@@ -6,7 +6,7 @@ DearPyGUI's drawlist primitives.
 
 __all__ = ["render_graph", "color_to_dpg"]
 
-from typing import Callable, List, Optional, Set, Union
+from typing import Callable, Dict, List, Optional, Union
 
 import dearpygui.dearpygui as dpg
 
@@ -27,14 +27,12 @@ def color_to_dpg(color: Color) -> DPGColor:  # TODO: move to a utility module, m
 
 def _get_effective_pen(shape: Shape,
                        element: Optional[Element],
-                       highlighted: Set[Element],
-                       highlight_t: float) -> Pen:
+                       highlight_intensities: Dict[Element, float]) -> Pen:
     """Get the effective pen for rendering, accounting for highlighting.
 
     `shape`: The shape being rendered.
     `element`: The element (Node/Edge) containing this shape, if any.
-    `highlighted`: Set of currently highlighted elements.
-    `highlight_t`: Animation progress [0,1] for highlight transition.
+    `highlight_intensities`: Maps highlighted elements to their intensity [0,1].
 
     Returns the Pen to use for rendering.
     """
@@ -44,11 +42,11 @@ def _get_effective_pen(shape: Shape,
         pen = shape.pen
 
     # Check if the containing element is highlighted
-    if element is not None and element in highlighted:
-        # Blend toward highlight color based on animation progress
+    if element is not None and element in highlight_intensities:
+        intensity = highlight_intensities[element]
         highlighted_pen = pen.highlighted_final()
         result = pen.copy()
-        Pen.mix(result, pen, highlighted_pen, highlight_t)
+        Pen.mix(result, pen, highlighted_pen, intensity)
         return result
 
     return pen
@@ -231,11 +229,10 @@ def _render_shape(drawlist: Union[int, str],
                   shape: Shape,
                   viewport: Viewport,
                   element: Optional[Element],
-                  highlighted: Set[Element],
-                  highlight_t: float,
+                  highlight_intensities: Dict[Element, float],
                   text_compaction_cb: Optional[Callable]) -> None:
     """Render a single shape."""
-    pen = _get_effective_pen(shape, element, highlighted, highlight_t)
+    pen = _get_effective_pen(shape, element, highlight_intensities)
 
     if isinstance(shape, TextShape):
         _render_text_shape(drawlist, shape, viewport, pen, text_compaction_cb)
@@ -250,7 +247,7 @@ def _render_shape(drawlist: Union[int, str],
     elif isinstance(shape, CompoundShape):
         for child in shape.shapes:
             _render_shape(drawlist, child, viewport, element,
-                          highlighted, highlight_t, text_compaction_cb)
+                          highlight_intensities, text_compaction_cb)
 
 
 def _is_element_visible(element: Element, viewport: Viewport) -> bool:
@@ -264,21 +261,19 @@ def _is_element_visible(element: Element, viewport: Viewport) -> bool:
 def render_graph(drawlist: Union[int, str],
                  graph: Graph,
                  viewport: Viewport,
-                 highlighted: Optional[Set[Element]] = None,
-                 highlight_t: float = 1.0,
+                 highlight_intensities: Optional[Dict[Element, float]] = None,
                  text_compaction_cb: Optional[Callable] = None) -> None:
     """Render a graph to a DPG drawlist.
 
     `drawlist`: DPG drawlist ID or tag.
     `graph`: The Graph to render.
     `viewport`: Viewport for coordinate transforms.
-    `highlighted`: Set of elements to highlight.
-    `highlight_t`: Highlight animation progress [0,1].
+    `highlight_intensities`: Per-element highlight intensity {element: [0,1]}.
     `text_compaction_cb`: Optional callback for text compaction.
                           Signature: (text: str, available_width: float) -> str
     """
-    if highlighted is None:
-        highlighted = set()
+    if highlight_intensities is None:
+        highlight_intensities = {}
 
     # Clear the drawlist
     dpg.delete_item(drawlist, children_only=True)
@@ -286,7 +281,7 @@ def render_graph(drawlist: Union[int, str],
     # Render background shapes
     for shape in graph.shapes:
         _render_shape(drawlist, shape, viewport, None,
-                      highlighted, highlight_t, text_compaction_cb)
+                      highlight_intensities, text_compaction_cb)
 
     # Render edges (before nodes so nodes appear on top)
     for edge in graph.edges:
@@ -294,7 +289,7 @@ def render_graph(drawlist: Union[int, str],
             continue
         for shape in edge.shapes:
             _render_shape(drawlist, shape, viewport, edge,
-                          highlighted, highlight_t, text_compaction_cb)
+                          highlight_intensities, text_compaction_cb)
 
     # Render nodes
     for node in graph.nodes:
@@ -302,4 +297,4 @@ def render_graph(drawlist: Union[int, str],
             continue
         for shape in node.shapes:
             _render_shape(drawlist, shape, viewport, node,
-                          highlighted, highlight_t, text_compaction_cb)
+                          highlight_intensities, text_compaction_cb)
