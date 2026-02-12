@@ -145,12 +145,13 @@ def _on_hover(description: Optional[str]) -> None:
         _set_status("")
 
 
-def _on_click(node_id: str, button: int) -> None:
-    """Handle click callback."""
-    # TODO: add follow-edge-on-click feature, if clicking an edge. Currently, `XDotWidget` only calls us when a node is clicked. Need to add another handler with "source" and "target" params, as well as which one is closer to mouse.
-    _set_status(f"Zooming to node: {node_id}")
-    widget = _app_state["widget"]
-    widget.zoom_to_node(node_id)
+def _on_click(description: str, button: int) -> None:
+    """Handle click callback.
+
+    The widget handles zoom-to-element internally; the app just
+    updates the status bar.
+    """
+    _set_status(f"Clicked: {description}")
 
 
 def _do_search(*_args) -> None:

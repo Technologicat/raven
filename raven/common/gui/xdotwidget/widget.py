@@ -419,7 +419,7 @@ class XDotWidget(gui_animation.Animation):
                 self._on_hover(new_hover_desc)
 
     def _on_mouse_click(self, sender, app_data) -> None:
-        """Handle mouse click, triggering the custom callback if set."""
+        """Handle mouse click: zoom to element, then trigger callback."""
         if not self._is_mouse_inside():
             return
         if self._graph is None:
@@ -430,9 +430,11 @@ class XDotWidget(gui_animation.Animation):
         sx, sy = self._get_local_mouse_pos()
         element = hit_test_screen(self._graph, self._viewport, sx, sy)
 
-        if isinstance(element, Node) and element.internal_name:
+        if element is not None:
+            self._zoom_to_element(element)
             if self._on_click:
-                self._on_click(element.internal_name, button)
+                desc = self._describe_element(element)
+                self._on_click(desc, button)
 
     def _on_mouse_wheel(self, sender, app_data) -> None:
         """Handle mouse wheel for zooming."""
