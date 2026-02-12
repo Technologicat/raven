@@ -1,0 +1,57 @@
+// Test graph for the XDot viewer.
+// Exercises: diamond dependency, cycle, disconnected node,
+// cluster subgraph, edge labels, varied node shapes.
+//
+// Convert to xdot:  dot -Txdot test_graph.dot > test_graph.xdot
+
+digraph test_graph {
+    rankdir=TB;
+    node [style=filled, fillcolor="#e8e8e8"];
+
+    // --- Diamond dependency ---
+    start [label="start", shape=ellipse, fillcolor="#a8d8a8"];
+    left  [label="left path"];
+    right [label="right path"];
+    merge [label="merge", shape=diamond, fillcolor="#d8d8a8"];
+
+    start -> left  [label="option A"];
+    start -> right [label="option B"];
+    left  -> merge;
+    right -> merge;
+
+    // --- Cycle ---
+    merge -> loop_a [label="enter loop"];
+    loop_a [label="loop α"];
+    loop_b [label="loop β"];
+    loop_c [label="loop γ"];
+
+    loop_a -> loop_b;
+    loop_b -> loop_c;
+    loop_c -> loop_a [style=dashed, label="repeat"];
+
+    // --- Exit from cycle ---
+    loop_b -> done [label="exit"];
+    done [label="done", shape=doubleoctagon, fillcolor="#a8a8d8"];
+
+    // --- Disconnected node (should be visible but unreachable) ---
+    orphan [label="orphan node\n(disconnected)", shape=box,
+            fillcolor="#d8a8a8", style="filled,dashed"];
+
+    // --- Cluster subgraph ---
+    subgraph cluster_utils {
+        label="utility functions";
+        style=filled;
+        fillcolor="#f0f0f0";
+        color="#888888";
+
+        util_a [label="parse()"];
+        util_b [label="validate()"];
+        util_c [label="transform()"];
+
+        util_a -> util_b -> util_c;
+    }
+
+    // --- Cross-cluster edges ---
+    start -> util_a [style=dotted, label="setup"];
+    util_c -> merge  [style=dotted, label="result"];
+}

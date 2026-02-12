@@ -1,0 +1,92 @@
+// Simulated call graph for search and navigation testing.
+// ~30 nodes with realistic-ish function names for fragment search.
+// "cat photo" should match "photocatalytic_reactor" (fragment search test).
+//
+// Convert to xdot:  dot -Txdot test_callgraph.dot > test_callgraph.xdot
+
+digraph call_graph {
+    rankdir=LR;
+    node [shape=box, style=filled, fillcolor="#e8e8f0", fontname="monospace"];
+    edge [color="#666666"];
+
+    // --- Entry points ---
+    main [label="main()", fillcolor="#a8d8a8"];
+    cli_parse [label="cli_parse()"];
+    app_init  [label="app_init()"];
+
+    main -> cli_parse;
+    main -> app_init;
+
+    // --- Data loading ---
+    load_config    [label="load_config()"];
+    load_database  [label="load_database()"];
+    validate_schema [label="validate_schema()"];
+    parse_json     [label="parse_json()"];
+
+    app_init -> load_config;
+    app_init -> load_database;
+    load_config -> parse_json;
+    load_database -> validate_schema;
+    load_database -> parse_json;
+
+    // --- Processing pipeline ---
+    process_batch        [label="process_batch()"];
+    filter_items         [label="filter_items()"];
+    transform_data       [label="transform_data()"];
+    normalize_values     [label="normalize_values()"];
+    compute_statistics   [label="compute_statistics()"];
+    aggregate_results    [label="aggregate_results()"];
+
+    app_init -> process_batch;
+    process_batch -> filter_items;
+    process_batch -> transform_data;
+    transform_data -> normalize_values;
+    filter_items -> compute_statistics;
+    compute_statistics -> aggregate_results;
+    normalize_values -> aggregate_results;
+
+    // --- Chemistry simulation subsystem (for fragment search testing) ---
+    subgraph cluster_chemistry {
+        label="chemistry simulation";
+        style=filled;
+        fillcolor="#f8f0f0";
+
+        photocatalytic_reactor [label="photocatalytic_reactor()"];
+        catalyst_optimizer     [label="catalyst_optimizer()"];
+        reaction_kinetics      [label="reaction_kinetics()"];
+        spectral_analysis      [label="spectral_analysis()"];
+        hydrogen_yield         [label="hydrogen_yield()"];
+    }
+
+    process_batch -> photocatalytic_reactor;
+    photocatalytic_reactor -> catalyst_optimizer;
+    photocatalytic_reactor -> reaction_kinetics;
+    catalyst_optimizer -> spectral_analysis;
+    reaction_kinetics -> hydrogen_yield;
+    hydrogen_yield -> aggregate_results;
+
+    // --- Output ---
+    render_report   [label="render_report()"];
+    export_csv      [label="export_csv()"];
+    export_pdf      [label="export_pdf()"];
+    send_email      [label="send_email()"];
+
+    aggregate_results -> render_report;
+    render_report -> export_csv;
+    render_report -> export_pdf;
+    export_pdf -> send_email [style=dashed, label="optional"];
+
+    // --- Error handling (cross-cutting) ---
+    error_handler   [label="error_handler()", fillcolor="#d8a8a8"];
+    log_error       [label="log_error()"];
+    retry_operation [label="retry_operation()"];
+
+    error_handler -> log_error;
+    error_handler -> retry_operation;
+    retry_operation -> process_batch [style=dashed, label="retry"];
+
+    // --- Disconnected utilities ---
+    deprecated_func [label="deprecated_func()\n[unused]",
+                     style="filled,dashed", fillcolor="#d0d0d0",
+                     fontcolor="#888888"];
+}
