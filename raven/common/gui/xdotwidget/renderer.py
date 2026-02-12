@@ -122,15 +122,19 @@ def _render_ellipse_shape(drawlist: Union[int, str],
     rx = shape.w * zoom
     ry = shape.h * zoom
 
+    # DPG's draw_ellipse takes a bounding box (pmin, pmax), not center+radius.
+    pmin = (cx - rx, cy - ry)
+    pmax = (cx + rx, cy + ry)
+
     if shape.filled:
         fill_color = color_to_dpg(pen.fillcolor)
-        dpg.draw_ellipse(center=(cx, cy), radius=(rx, ry),
+        dpg.draw_ellipse(pmin, pmax,
                          color=(0, 0, 0, 0), fill=fill_color,
                          parent=drawlist)
     else:
         stroke_color = color_to_dpg(pen.color)
         thickness = max(1, pen.linewidth * zoom)
-        dpg.draw_ellipse(center=(cx, cy), radius=(rx, ry),
+        dpg.draw_ellipse(pmin, pmax,
                          color=stroke_color, thickness=thickness,
                          parent=drawlist)
 
