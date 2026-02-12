@@ -31,7 +31,7 @@ class HighlightState:
     The highlight intensity for each element is available via get_intensity().
     """
 
-    def __init__(self, fade_duration: float = 0.5):
+    def __init__(self, fade_duration: float = 2.0):
         """Initialize highlight state.
 
         `fade_duration`: Duration of fade-out animation in seconds.
