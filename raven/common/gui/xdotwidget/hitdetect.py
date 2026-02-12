@@ -37,7 +37,7 @@ def get_node(graph: Graph, gx: float, gy: float) -> Optional[Node]:
             return node
     return None
 
-_EDGE_HIT_RADIUS_SQ = 5.0 ** 2  # squared detection radius in graph coordinates
+_EDGE_HIT_RADIUS_PX = 10  # detection radius in screen pixels
 
 
 def _point_to_segment_dist_sq(px: float, py: float,
@@ -56,14 +56,18 @@ def _point_to_segment_dist_sq(px: float, py: float,
     return (px - proj_x) ** 2 + (py - proj_y) ** 2
 
 
-def get_edge(graph: Graph, gx: float, gy: float) -> Optional[Edge]:
+def get_edge(graph: Graph, gx: float, gy: float,
+             radius_sq: float = _EDGE_HIT_RADIUS_PX ** 2) -> Optional[Edge]:
+    """Find an edge near point (gx, gy).
+
+    `radius_sq`: Squared hit radius, in the same coordinate system as (gx, gy).
+    """
     for edge in graph.edges:
-        # Check distance to each segment of the edge path
         pts = edge.points
         for i in range(len(pts) - 1):
             if _point_to_segment_dist_sq(gx, gy,
                                           pts[i][0], pts[i][1],
-                                          pts[i + 1][0], pts[i + 1][1]) <= _EDGE_HIT_RADIUS_SQ:
+                                          pts[i + 1][0], pts[i + 1][1]) <= radius_sq:
                 return edge
     return None
 
@@ -83,7 +87,19 @@ def hit_test_screen(graph: Graph,
     Returns the topmost Element (Node or Edge) at the point, or None.
     """
     gx, gy = viewport.screen_to_graph(sx, sy)
-    return hit_test(graph, gx, gy)
+    # Check nodes first (they appear on top)
+    if node := get_node(graph, gx, gy):
+        return node
+    # Check edges with zoom-corrected pixel radius.
+    # Convert pixel radius to graph coordinates: graph_dist = px_dist / zoom.
+    z = viewport.zoom.current
+    if z > 0:
+        graph_radius = _EDGE_HIT_RADIUS_PX / z
+    else:
+        graph_radius = _EDGE_HIT_RADIUS_PX
+    if edge := get_edge(graph, gx, gy, radius_sq=graph_radius ** 2):
+        return edge
+    return None
 
 
 def get_node_screen(graph: Graph,
@@ -112,7 +128,12 @@ def get_edge_screen(graph: Graph,
     `viewport`: Viewport for coordinate transformation.
     `sx`, `sy`: Point in screen coordinates (pixels).
 
-    Returns the Edge at the point (near endpoints), or None.
+    Returns the Edge near the point (within pixel radius), or None.
     """
     gx, gy = viewport.screen_to_graph(sx, sy)
-    return get_edge(graph, gx, gy)
+    z = viewport.zoom.current
+    if z > 0:
+        graph_radius = _EDGE_HIT_RADIUS_PX / z
+    else:
+        graph_radius = _EDGE_HIT_RADIUS_PX
+    return get_edge(graph, gx, gy, radius_sq=graph_radius ** 2)

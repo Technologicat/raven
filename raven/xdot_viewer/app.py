@@ -294,13 +294,13 @@ def _on_key(sender, app_data) -> None:
         elif key == dpg.mvKey_0:
             _zoom_to_fit()
         elif key == dpg.mvKey_Up:
-            widget.pan_by(dx=0, dy=-PAN_AMOUNT)
-        elif key == dpg.mvKey_Down:
             widget.pan_by(dx=0, dy=+PAN_AMOUNT)
+        elif key == dpg.mvKey_Down:
+            widget.pan_by(dx=0, dy=-PAN_AMOUNT)
         elif key == dpg.mvKey_Left:
-            widget.pan_by(dx=-PAN_AMOUNT, dy=0)
-        elif key == dpg.mvKey_Right:
             widget.pan_by(dx=+PAN_AMOUNT, dy=0)
+        elif key == dpg.mvKey_Right:
+            widget.pan_by(dx=-PAN_AMOUNT, dy=0)
 
 
 def _gui_shutdown() -> None:

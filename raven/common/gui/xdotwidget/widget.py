@@ -84,7 +84,7 @@ class XDotWidget(gui_animation.Animation):
         # Mouse state
         self._dragging = False
         self._last_mouse_pos = (0.0, 0.0)
-        self._last_hover_id: Optional[str] = None
+        self._last_hover_desc: Optional[str] = None
 
         # Build DPG structure
         kwargs = {"parent": parent}
@@ -390,10 +390,10 @@ class XDotWidget(gui_animation.Animation):
         if not self._is_mouse_inside():
             # Mouse left widget - always clear hover on the highlight state
             # (set_hover has its own early-return if already None, so this is cheap).
-            # The _last_hover_id guard only controls the user callback.
+            # The _last_hover_desc guard only controls the user callback.
             self._highlight.set_hover(None)
-            if self._last_hover_id is not None:
-                self._last_hover_id = None
+            if self._last_hover_desc is not None:
+                self._last_hover_desc = None
                 if self._on_hover:
                     self._on_hover(None)
             self._needs_render = True
@@ -410,13 +410,13 @@ class XDotWidget(gui_animation.Animation):
 
         # Notify callback if hover changed.
         # Build a human-readable description (using labels, not internal names).
-        new_hover_id = self._describe_element(element)
+        new_hover_desc = self._describe_element(element)
 
-        if new_hover_id != self._last_hover_id:
-            self._last_hover_id = new_hover_id
+        if new_hover_desc != self._last_hover_desc:
+            self._last_hover_desc = new_hover_desc
             self._needs_render = True
             if self._on_hover:
-                self._on_hover(new_hover_id)
+                self._on_hover(new_hover_desc)
 
     def _on_mouse_click(self, sender, app_data) -> None:
         """Handle mouse click, triggering the custom callback if set."""
