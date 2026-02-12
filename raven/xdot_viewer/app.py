@@ -247,6 +247,16 @@ def _on_key(sender, app_data) -> None:
             widget.next_match()  # jump the view to the first match
         elif key == dpg.mvKey_Escape:  # unfocus and cancel current search edit (handled by the text input internally, by sending a change event; but we need to handle the keyboard focus)
             dpg.focus_item(widget.get_dpg_widget_id())
+    elif ctrl_pressed and shift_pressed:
+        # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
+        if key == dpg.mvKey_M:
+            dpg.show_metrics()
+        elif key == dpg.mvKey_R:
+            dpg.show_item_registry()
+        elif key == dpg.mvKey_T:
+            dpg.show_font_manager()
+        elif key == dpg.mvKey_L:
+            dpg.show_style_editor()
     elif ctrl_pressed:
         if key == dpg.mvKey_F:
             if _app_state["search_input"] is not None:
