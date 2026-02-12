@@ -130,11 +130,11 @@ class XDotWidget(gui_animation.Animation):
         return self._graph
 
     def get_dpg_widget_id(self):
-        """Return the DPG ID of the actual DPG widget at the top level of this graph widget.
+        """Return the DPG ID of the top-level group of this graph widget.
 
         Useful e.g. for programmatically focusing the graph view.
         """
-        return self.drawlist
+        return self.group
 
     # -------------------------------------------------------------------------
     # Public API: View control
