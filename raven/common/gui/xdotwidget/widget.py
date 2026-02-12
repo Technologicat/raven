@@ -409,7 +409,12 @@ class XDotWidget(gui_animation.Animation):
         self._needs_render = True
 
     def _on_mouse_drag(self, sender, app_data) -> None:
-        """Handle mouse drag for panning."""
+        """Handle mouse drag for panning.
+
+        DPG's drag handler reports *cumulative* delta from the drag start
+        point, not per-frame delta. We track the previous cumulative value
+        and compute the per-frame increment.
+        """
         if not self._is_mouse_inside() and not self._dragging:
             return
 
@@ -417,9 +422,15 @@ class XDotWidget(gui_animation.Animation):
 
         if not self._dragging:
             self._dragging = True
+            self._drag_cumulative = (dx, dy)
             return
 
-        self.pan_by(dx, dy)
+        # Per-frame delta from cumulative
+        frame_dx = dx - self._drag_cumulative[0]
+        frame_dy = dy - self._drag_cumulative[1]
+        self._drag_cumulative = (dx, dy)
+
+        self.pan_by(frame_dx, frame_dy)
 
     def _on_mouse_release(self, sender, app_data) -> None:
         """Handle mouse release."""
