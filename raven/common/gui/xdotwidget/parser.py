@@ -455,8 +455,8 @@ class XDotAttrParser:
         return float(self.read_code())
 
     def read_point(self) -> Point:
-        x = self.read_number()
-        y = self.read_number()
+        x = self.read_float()
+        y = self.read_float()
         return self.transform(x, y)
 
     def read_text(self) -> str:
@@ -568,20 +568,20 @@ class XDotAttrParser:
             elif op == "T":
                 x, y = self.read_point()
                 j = self.read_number()
-                w = self.read_number()
+                w = self.read_float()
                 t = self.read_text()
                 self.shapes.append(TextShape(self.pen, x, y, j, w, t))
             elif op == "E":
                 x0, y0 = self.read_point()
-                w = self.read_number()
-                h = self.read_number()
+                w = self.read_float()
+                h = self.read_float()
                 # Filled ellipse: draw fill first, then outline
                 self.shapes.append(EllipseShape(self.pen, x0, y0, w, h, filled=True))
                 self.shapes.append(EllipseShape(self.pen, x0, y0, w, h, filled=False))
             elif op == "e":
                 x0, y0 = self.read_point()
-                w = self.read_number()
-                h = self.read_number()
+                w = self.read_float()
+                h = self.read_float()
                 self.shapes.append(EllipseShape(self.pen, x0, y0, w, h, filled=False))
             elif op == "L":
                 points = self.read_polygon()
