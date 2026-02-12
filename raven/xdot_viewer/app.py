@@ -50,8 +50,23 @@ _app_state = {
 
 # Layout constants for the main window.
 # These account for the toolbar and status bar around the graph widget.
-_WIDGET_H_PADDING = 20   # horizontal padding (scrollbar + margins)
-_WIDGET_V_PADDING = 100  # vertical: toolbar + status bar + margins
+#
+# DPG (ImGui) default style values used in the calculation:
+_FONT_SIZE = 20
+_DPG_WINDOW_PADDING_Y = 8   # mvStyleVar_WindowPadding[1]
+_DPG_FRAME_PADDING_Y = 3    # mvStyleVar_FramePadding[1]
+_DPG_ITEM_SPACING_Y = 4     # mvStyleVar_ItemSpacing[1]
+_DPG_SCROLLBAR_SIZE = 14     # mvStyleVar_ScrollbarSize
+
+_TOOLBAR_H = _FONT_SIZE + 2 * _DPG_FRAME_PADDING_Y  # tallest toolbar item (button/input)
+_STATUS_H = _FONT_SIZE                                # text line
+
+_WIDGET_H_PADDING = _DPG_SCROLLBAR_SIZE + 2 * _DPG_WINDOW_PADDING_Y
+_WIDGET_V_PADDING = (2 * _DPG_WINDOW_PADDING_Y    # top + bottom window margin
+                     + _TOOLBAR_H                  # toolbar row
+                     + 4 * _DPG_ITEM_SPACING_Y     # gaps: toolbar group↔widget, widget↔status,
+                                                   #        + 2 empirical (ImGui internal leading/rounding)
+                     + _STATUS_H)                  # status bar
 
 
 def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
@@ -319,7 +334,7 @@ def main() -> int:
     # Order matters: create_context -> bootup (fonts/themes) -> create_viewport -> setup. See `guiutils.bootup`.
     dpg.create_context()
 
-    themes_and_fonts = guiutils.bootup(font_size=14)
+    themes_and_fonts = guiutils.bootup(font_size=_FONT_SIZE)
 
     dpg.create_viewport(
         title=f"Raven XDot Viewer {__version__}",

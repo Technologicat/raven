@@ -18,7 +18,7 @@ from unpythonic import sym
 from .. import animation as gui_animation
 from .. import utils as gui_utils
 
-from .graph import Graph, Node
+from .graph import Graph, Node, Edge
 from .highlight import HighlightState
 from .hitdetect import hit_test_screen
 from .parser import parse_xdot
@@ -213,27 +213,41 @@ class XDotWidget(gui_animation.Animation):
     def next_match(self) -> Optional[str]:
         """Navigate to the next search match.
 
-        Returns the node ID of the next match, or None.
-        Also centers the view on the match.
+        Returns a description of the match (node ID, or "edge: src → dst"),
+        or None if no results. Also centers the view on the match.
         """
         element = self._search.next_match()
-        if element is not None:
-            if isinstance(element, Node) and element.internal_name:
-                self.zoom_to_node(element.internal_name)
-                return element.internal_name
-        return None
+        return self._zoom_to_element(element)
 
     def prev_match(self) -> Optional[str]:
         """Navigate to the previous search match.
 
-        Returns the node ID of the previous match, or None.
-        Also centers the view on the match.
+        Returns a description of the match (node ID, or "edge: src → dst"),
+        or None if no results. Also centers the view on the match.
         """
         element = self._search.prev_match()
-        if element is not None:
-            if isinstance(element, Node) and element.internal_name:
+        return self._zoom_to_element(element)
+
+    def _zoom_to_element(self, element) -> Optional[str]:
+        """Zoom the view to center on `element` (Node or Edge).
+
+        Returns a human-readable description of the element, or None.
+        """
+        if element is None:
+            return None
+        if isinstance(element, Node):
+            if element.internal_name:
                 self.zoom_to_node(element.internal_name)
                 return element.internal_name
+        elif isinstance(element, Edge):
+            # Zoom to midpoint between source and destination
+            mx = (element.src.x + element.dst.x) / 2
+            my = (element.src.y + element.dst.y) / 2
+            self._viewport.zoom_to_point(mx, my, animate=True)
+            self._needs_render = True
+            src_name = element.src.internal_name or "?"
+            dst_name = element.dst.internal_name or "?"
+            return f"edge: {src_name} -> {dst_name}"
         return None
 
     def clear_search(self) -> None:
