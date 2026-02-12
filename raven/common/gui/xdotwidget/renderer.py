@@ -13,7 +13,7 @@ import dearpygui.dearpygui as dpg
 from .graph import (
     Graph, Element, Shape, Pen,
     TextShape, EllipseShape, PolygonShape, LineShape, BezierShape,
-    CompoundShape
+    CompoundShape, tessellate_bezier
 )
 from .constants import Color, DPGColor, Point
 from .viewport import Viewport
@@ -195,17 +195,16 @@ def _render_bezier_shape(drawlist: Union[int, str],
     if len(shape.points) < 4:
         return
 
-    points = _transform_points(shape.points, viewport)
-    zoom = viewport.zoom.current
-
     if shape.filled:
-        # TODO: DPG has no filled Bezier support. Tessellate the bezier segments into polyline points and then fill that polygon. Possibly rare case in xdot files.
-        # For filled beziers, approximate with polygon
-        # (DPG doesn't have filled bezier support)
+        # DPG has no filled bezier support, so tessellate into a polygon.
+        tess_graph = tessellate_bezier(shape.points)
+        tess_screen = _transform_points(tess_graph, viewport)
         fill_color = color_to_dpg(pen.fillcolor)
-        dpg.draw_polygon(points, color=(0, 0, 0, 0), fill=fill_color,
+        dpg.draw_polygon(tess_screen, color=(0, 0, 0, 0), fill=fill_color,
                          parent=drawlist)
     else:
+        points = _transform_points(shape.points, viewport)
+        zoom = viewport.zoom.current
         stroke_color = color_to_dpg(pen.color)
         thickness = max(1, pen.linewidth * zoom)
 

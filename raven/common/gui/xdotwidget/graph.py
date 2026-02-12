@@ -14,7 +14,7 @@ __all__ = ["Pen", "Shape", "TextShape", "EllipseShape", "PolygonShape",
            "LineShape", "BezierShape", "CompoundShape",
            "Element", "Node", "Edge", "Graph",
            "Url", "Jump",
-           "mix_colors", "square_distance"]
+           "mix_colors", "square_distance", "tessellate_bezier"]
 
 from itertools import chain
 from typing import Dict, List, Optional, Set, Tuple
@@ -49,6 +49,40 @@ def square_distance(x1: float, y1: float, x2: float, y2: float) -> float:
     deltax = x2 - x1
     deltay = y2 - y1
     return deltax * deltax + deltay * deltay
+
+
+def tessellate_bezier(points: List["Point"], n: int = 10) -> List["Point"]:
+    """Tessellate cubic bezier segments into a polyline.
+
+    `points`: Bezier control points [P0, C1, C2, P1, C1, C2, P1, ...].
+    `n`: Number of line segments per cubic bezier segment.
+
+    Returns a list of points along the curve.
+    """
+    if len(points) < 4:
+        return list(points)
+    result = []
+    p0 = points[0]
+    for i in range(1, len(points), 3):
+        if i + 2 >= len(points):
+            break
+        c1 = points[i]
+        c2 = points[i + 1]
+        p1 = points[i + 2]
+        # B(t) = (1-t)^3 P0 + 3(1-t)^2 t C1 + 3(1-t) t^2 C2 + t^3 P1
+        start = 0 if not result else 1  # skip first point if continuing
+        for j in range(start, n + 1):
+            t = j / n
+            mt = 1 - t
+            mt2 = mt * mt
+            mt3 = mt2 * mt
+            t2 = t * t
+            t3 = t2 * t
+            x = mt3 * p0[0] + 3 * mt2 * t * c1[0] + 3 * mt * t2 * c2[0] + t3 * p1[0]
+            y = mt3 * p0[1] + 3 * mt2 * t * c1[1] + 3 * mt * t2 * c2[1] + t3 * p1[1]
+            result.append((x, y))
+        p0 = p1
+    return result
 
 
 # Default highlight color (GNOME 2.30.2 blue)

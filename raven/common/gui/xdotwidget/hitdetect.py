@@ -9,7 +9,9 @@ __all__ = ["hit_test", "hit_test_screen"]
 from typing import List, Optional
 
 from .constants import Point
-from .graph import Graph, Element, Node, Edge, PolygonShape, BezierShape, LineShape
+from .graph import (Graph, Element, Node, Edge,
+                    PolygonShape, BezierShape, LineShape,
+                    tessellate_bezier)
 from .viewport import Viewport
 
 # --------------------------------------------------------------------------------
@@ -57,29 +59,6 @@ def _point_to_segment_dist_sq(px: float, py: float,
     return (px - proj_x) ** 2 + (py - proj_y) ** 2
 
 
-_BEZIER_TESSELLATION_N = 10  # line segments per cubic bezier segment
-
-
-def _tessellate_cubic_bezier(p0: Point, c1: Point, c2: Point, p1: Point,
-                             n: int = _BEZIER_TESSELLATION_N) -> List[Point]:
-    """Tessellate a cubic bezier segment into `n` line segments.
-
-    Returns n+1 points along the curve B(t) = (1-t)^3 P0 + 3(1-t)^2 t C1 + 3(1-t) t^2 C2 + t^3 P1.
-    """
-    points = []
-    for i in range(n + 1):
-        t = i / n
-        mt = 1 - t
-        mt2 = mt * mt
-        mt3 = mt2 * mt
-        t2 = t * t
-        t3 = t2 * t
-        x = mt3 * p0[0] + 3 * mt2 * t * c1[0] + 3 * mt * t2 * c2[0] + t3 * p1[0]
-        y = mt3 * p0[1] + 3 * mt2 * t * c1[1] + 3 * mt * t2 * c2[1] + t3 * p1[1]
-        points.append((x, y))
-    return points
-
-
 def _check_polyline_dist(px: float, py: float,
                          points: List[Point],
                          radius_sq: float) -> bool:
@@ -123,16 +102,9 @@ def get_edge(graph: Graph, gx: float, gy: float,
         for shape in edge.shapes:
             if isinstance(shape, BezierShape) and not shape.filled:
                 # Tessellate bezier segments and check distance to the curve
-                pts = shape.points
-                if len(pts) >= 4:
-                    p0 = pts[0]
-                    for i in range(1, len(pts), 3):
-                        if i + 2 >= len(pts):
-                            break
-                        tess = _tessellate_cubic_bezier(p0, pts[i], pts[i + 1], pts[i + 2])
-                        if _check_polyline_dist(gx, gy, tess, radius_sq):
-                            return edge
-                        p0 = pts[i + 2]
+                tess = tessellate_bezier(shape.points)
+                if _check_polyline_dist(gx, gy, tess, radius_sq):
+                    return edge
             elif isinstance(shape, LineShape):
                 if _check_polyline_dist(gx, gy, shape.points, radius_sq):
                     return edge
