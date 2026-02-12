@@ -287,11 +287,11 @@ def _on_key(sender, app_data) -> None:
                 _prev_match()
             else:
                 _next_match()
-        # TODO: Verify +/= handling on non-US keyboard layouts (Nordic etc.).
-        # DPG key handling may or may not be layout-aware.
-        elif key in (dpg.mvKey_Plus, ord("=")):
+        # Regular +/- are unreliable on non-US layouts (DPG maps physical
+        # keys as if US layout). Numpad +/- always work.
+        elif key in (dpg.mvKey_Plus, dpg.mvKey_Add):
             _zoom_in()
-        elif key == dpg.mvKey_Minus:
+        elif key in (dpg.mvKey_Minus, dpg.mvKey_Subtract):
             _zoom_out()
         elif key == dpg.mvKey_0:
             _zoom_to_fit()
