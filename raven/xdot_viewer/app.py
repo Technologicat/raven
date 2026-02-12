@@ -62,11 +62,11 @@ _TOOLBAR_H = _FONT_SIZE + 2 * _DPG_FRAME_PADDING_Y  # tallest toolbar item (butt
 _STATUS_H = _FONT_SIZE                                # text line
 
 _WIDGET_H_PADDING = _DPG_SCROLLBAR_SIZE + 2 * _DPG_WINDOW_PADDING_Y
-_WIDGET_V_PADDING = (2 * _DPG_WINDOW_PADDING_Y    # top + bottom window margin
-                     + _TOOLBAR_H                  # toolbar row
-                     + 4 * _DPG_ITEM_SPACING_Y     # gaps: toolbar group↔widget, widget↔status,
+_WIDGET_V_PADDING = (2 * _DPG_WINDOW_PADDING_Y +   # top + bottom window margin
+                     _TOOLBAR_H +                  # toolbar row
+                     4 * _DPG_ITEM_SPACING_Y +     # gaps: toolbar group↔widget, widget↔status,
                                                    #        + 2 empirical (ImGui internal leading/rounding)
-                     + _STATUS_H)                  # status bar
+                     _STATUS_H)                    # status bar
 
 
 def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
@@ -123,7 +123,7 @@ def _open_file(filepath: str) -> None:
         widget.zoom_to_fit(animate=False)
 
     filename = os.path.basename(filepath)
-    dpg.set_viewport_title(f"Raven XDot Viewer - {filename}")
+    dpg.set_viewport_title(f"Raven XDot Viewer {__version__} - {filename}")
 
     _set_status(f"Loaded: {filepath}")
 
@@ -134,10 +134,13 @@ def _set_status(text: str) -> None:
         dpg.set_value(_app_state["status_text"], text)
 
 
-def _on_hover(node_id: Optional[str]) -> None:
-    """Handle hover callback."""
-    if node_id:
-        _set_status(f"Node: {node_id}")
+def _on_hover(description: Optional[str]) -> None:
+    """Handle hover callback.
+
+    `description`: Human-readable element description from the widget, or None.
+    """
+    if description:
+        _set_status(description)
     else:
         _set_status("")
 

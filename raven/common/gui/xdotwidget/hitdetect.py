@@ -37,11 +37,34 @@ def get_node(graph: Graph, gx: float, gy: float) -> Optional[Node]:
             return node
     return None
 
+_EDGE_HIT_RADIUS_SQ = 5.0 ** 2  # squared detection radius in graph coordinates
+
+
+def _point_to_segment_dist_sq(px: float, py: float,
+                               x1: float, y1: float,
+                               x2: float, y2: float) -> float:
+    """Squared distance from point (px, py) to line segment (x1,y1)-(x2,y2)."""
+    dx = x2 - x1
+    dy = y2 - y1
+    len_sq = dx * dx + dy * dy
+    if len_sq == 0:
+        return (px - x1) ** 2 + (py - y1) ** 2
+    # Project point onto segment, clamped to [0, 1]
+    t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / len_sq))
+    proj_x = x1 + t * dx
+    proj_y = y1 + t * dy
+    return (px - proj_x) ** 2 + (py - proj_y) ** 2
+
+
 def get_edge(graph: Graph, gx: float, gy: float) -> Optional[Edge]:
     for edge in graph.edges:
-        jump = edge.get_jump(gx, gy)
-        if jump is not None:
-            return edge
+        # Check distance to each segment of the edge path
+        pts = edge.points
+        for i in range(len(pts) - 1):
+            if _point_to_segment_dist_sq(gx, gy,
+                                          pts[i][0], pts[i][1],
+                                          pts[i + 1][0], pts[i + 1][1]) <= _EDGE_HIT_RADIUS_SQ:
+                return edge
     return None
 
 # --------------------------------------------------------------------------------

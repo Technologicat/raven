@@ -91,13 +91,15 @@ def _render_text_shape(drawlist: Union[int, str],
         if not text:
             return
 
-    # Calculate position based on justification
+    # Calculate position based on justification.
+    # `shape.w` is the text width in graph coordinates (from GraphViz).
+    # DPG's draw_text is always left-aligned, so we offset manually.
     if shape.j == TextShape.LEFT:
         x = sx
-    elif shape.j == TextShape.CENTER:  # TODO: center justification not supported for now
-        x = sx  # DPG text is left-aligned, we'd need to measure to center
-    else:  # RIGHT  # TODO: right justification not supported for now
-        x = sx  # Same issue
+    elif shape.j == TextShape.CENTER:
+        x = sx - screen_width / 2
+    else:  # RIGHT
+        x = sx - screen_width
 
     # Adjust y position (DPG draws from top-left, xdot uses baseline)
     # Approximate adjustment based on font size

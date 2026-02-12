@@ -348,6 +348,33 @@ class XDotWidget(gui_animation.Animation):
         self._needs_render = True
 
     # -------------------------------------------------------------------------
+    # Element descriptions (for status bar, callbacks)
+
+    @staticmethod
+    def _describe_element(element) -> Optional[str]:
+        """Return a human-readable description of a graph element, or None.
+
+        Uses the display label text (from TextShapes), not the internal graph ID.
+        """
+        if element is None:
+            return None
+        if isinstance(element, Node):
+            texts = element.get_texts()
+            label = ", ".join(texts) if texts else element.internal_name
+            return f"Node: {label}"
+        elif isinstance(element, Edge):
+            src_texts = element.src.get_texts()
+            dst_texts = element.dst.get_texts()
+            src_label = ", ".join(src_texts) if src_texts else (element.src.internal_name or "?")
+            dst_label = ", ".join(dst_texts) if dst_texts else (element.dst.internal_name or "?")
+            edge_texts = element.get_texts()
+            label = f"{src_label} -> {dst_label}"
+            if edge_texts:
+                label += f" ({', '.join(edge_texts)})"
+            return f"Edge: {label}"
+        return None
+
+    # -------------------------------------------------------------------------
     # Mouse handling
 
     def _is_mouse_inside(self) -> bool:
@@ -381,10 +408,9 @@ class XDotWidget(gui_animation.Animation):
         # Update hover
         self._highlight.set_hover(element)
 
-        # Notify callback if hover changed
-        new_hover_id = None
-        if isinstance(element, Node) and element.internal_name:
-            new_hover_id = element.internal_name
+        # Notify callback if hover changed.
+        # Build a human-readable description (using labels, not internal names).
+        new_hover_id = self._describe_element(element)
 
         if new_hover_id != self._last_hover_id:
             self._last_hover_id = new_hover_id
