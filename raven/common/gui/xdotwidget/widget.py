@@ -90,6 +90,11 @@ class XDotWidget(gui_animation.Animation):
         # Follow-edge indicator: screen coords of the endpoint to highlight, or None
         self._follow_indicator_pos: Optional[Point] = None
 
+        # Edge click cycle: repeated clicks on same edge body cycle
+        # through midpoint → src → dst → midpoint → ...
+        self._edge_click_edge: Optional[Edge] = None
+        self._edge_click_cycle: int = 0  # 0=midpoint, 1=src, 2=dst
+
         # Build DPG structure
         kwargs = {"parent": parent}
         if tag is not None:
@@ -241,18 +246,36 @@ class XDotWidget(gui_animation.Animation):
     def _zoom_to_element(self, element) -> Optional[str]:
         """Zoom the view to center on `element` (Node or Edge).
 
+        For edges, repeated clicks on the same edge cycle through:
+        midpoint → src node → dst node → midpoint → ...
+
         Returns a human-readable description of the element, or None.
         """
         if element is None:
             return None
         if isinstance(element, Node):
+            self._edge_click_edge = None  # reset edge cycle
             if element.internal_name:
                 self.zoom_to_node(element.internal_name)
         elif isinstance(element, Edge):
-            # Zoom to midpoint between source and destination
-            mx = (element.src.x + element.dst.x) / 2
-            my = (element.src.y + element.dst.y) / 2
-            self._viewport.zoom_to_point(mx, my, animate=True)
+            # Advance cycle if clicking the same edge again
+            if element is self._edge_click_edge:
+                self._edge_click_cycle = (self._edge_click_cycle + 1) % 3
+            else:
+                self._edge_click_edge = element
+                self._edge_click_cycle = 0
+
+            if self._edge_click_cycle == 0:
+                # Midpoint between source and destination
+                mx = (element.src.x + element.dst.x) / 2
+                my = (element.src.y + element.dst.y) / 2
+                self._viewport.zoom_to_point(mx, my, animate=True)
+            elif self._edge_click_cycle == 1:
+                # Source node
+                self._viewport.zoom_to_point(element.src.x, element.src.y, animate=True)
+            else:
+                # Destination node
+                self._viewport.zoom_to_point(element.dst.x, element.dst.y, animate=True)
             self._needs_render = True
         return self._describe_element(element)
 
