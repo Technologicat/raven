@@ -150,7 +150,6 @@ class XDotWidget(gui_animation.Animation):
         """
         if self._graph is not None:
             self._viewport.zoom_to_fit(self._graph, animate=animate)
-            self._follow_indicator_pos = None
             self._needs_render = True
 
     def zoom_to_node(self, node_id: str, animate: bool = True) -> None:
@@ -165,25 +164,21 @@ class XDotWidget(gui_animation.Animation):
         node = self._graph.get_node_by_name(node_id)
         if node is not None:
             self._viewport.zoom_to_point(node.x, node.y, animate=animate)
-            self._follow_indicator_pos = None
             self._needs_render = True
 
     def zoom_in(self, factor: float = 1.2) -> None:
         """Zoom in by a factor."""
         self._viewport.zoom_by(factor)
-        self._follow_indicator_pos = None
         self._needs_render = True
 
     def zoom_out(self, factor: float = 1.2) -> None:
         """Zoom out by a factor."""
         self._viewport.zoom_by(1.0 / factor)
-        self._follow_indicator_pos = None
         self._needs_render = True
 
     def pan_by(self, dx, dy):
         """Pan the view by (dx, dy) pixels."""
         self._viewport.pan_by(dx, dy)
-        self._follow_indicator_pos = None
         self._needs_render = True
 
     # -------------------------------------------------------------------------
@@ -350,7 +345,14 @@ class XDotWidget(gui_animation.Animation):
                 text_compaction_cb=self._text_compaction_callback
             )
 
-            # Draw follow-edge indicator ring
+            # Draw follow-edge indicator ring.
+            # Recalculate from current mouse position so the indicator
+            # stays correct during zoom/pan (screen coords shift).
+            if self._is_mouse_inside():
+                sx, sy = self._get_local_mouse_pos()
+                self._follow_indicator_pos = self._get_follow_indicator_pos(sx, sy)
+            else:
+                self._follow_indicator_pos = None
             if self._follow_indicator_pos is not None:
                 ix, iy = self._follow_indicator_pos
                 base_color, _light = get_highlight_colors()
@@ -412,8 +414,6 @@ class XDotWidget(gui_animation.Animation):
                 self._last_hover_desc = None
                 if self._on_hover:
                     self._on_hover(None)
-            if self._follow_indicator_pos is not None:
-                self._follow_indicator_pos = None
             self._needs_render = True
             return
         if self._graph is None:
@@ -504,18 +504,20 @@ class XDotWidget(gui_animation.Animation):
         for edge in self._graph.edges:
             if len(edge.points) < 2:
                 continue
-            src_sx, src_sy = self._viewport.graph_to_screen(*edge.points[0])
-            dst_sx, dst_sy = self._viewport.graph_to_screen(*edge.points[-1])
+            for which in ("src", "dst"):
+                # Use arrowhead centroid as the detection point when available,
+                # so the clickable region matches the indicator ring position.
+                centroid = self._arrowhead_centroid(edge, which)
+                if centroid is not None:
+                    pt_sx, pt_sy = self._viewport.graph_to_screen(*centroid)
+                else:
+                    pt = edge.points[0] if which == "src" else edge.points[-1]
+                    pt_sx, pt_sy = self._viewport.graph_to_screen(*pt)
 
-            d_src = (sx - src_sx) ** 2 + (sy - src_sy) ** 2
-            if d_src <= best_dist_sq:
-                best_dist_sq = d_src
-                best = (edge, "src")
-
-            d_dst = (sx - dst_sx) ** 2 + (sy - dst_sy) ** 2
-            if d_dst <= best_dist_sq:
-                best_dist_sq = d_dst
-                best = (edge, "dst")
+                d = (sx - pt_sx) ** 2 + (sy - pt_sy) ** 2
+                if d <= best_dist_sq:
+                    best_dist_sq = d
+                    best = (edge, which)
 
         return best
 
@@ -591,7 +593,6 @@ class XDotWidget(gui_animation.Animation):
         else:
             self._viewport.zoom_by(1.0 / 1.1, sx, sy)
 
-        self._follow_indicator_pos = None
         self._needs_render = True
 
     def _on_mouse_drag(self, sender, app_data) -> None:
@@ -609,7 +610,6 @@ class XDotWidget(gui_animation.Animation):
         if not self._dragging:
             self._dragging = True
             self._drag_cumulative = (dx, dy)
-            self._follow_indicator_pos = None
             return
 
         # Per-frame delta from cumulative
