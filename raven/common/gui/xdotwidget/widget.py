@@ -18,11 +18,12 @@ from unpythonic import sym
 from .. import animation as gui_animation
 from .. import utils as gui_utils
 
-from .graph import Graph, Node, Edge
+from .constants import Point
+from .graph import Graph, Node, Edge, get_highlight_colors
 from .highlight import HighlightState
 from .hitdetect import hit_test_screen
 from .parser import parse_xdot
-from .renderer import render_graph
+from .renderer import render_graph, color_to_dpg
 from .search import SearchState
 from .viewport import Viewport
 
@@ -85,6 +86,9 @@ class XDotWidget(gui_animation.Animation):
         self._dragging = False
         self._last_mouse_pos = (0.0, 0.0)
         self._last_hover_desc: Optional[str] = None
+
+        # Follow-edge indicator: screen coords of the endpoint to highlight, or None
+        self._follow_indicator_pos: Optional[Point] = None
 
         # Build DPG structure
         kwargs = {"parent": parent}
@@ -341,6 +345,15 @@ class XDotWidget(gui_animation.Animation):
                 text_compaction_cb=self._text_compaction_callback
             )
 
+            # Draw follow-edge indicator ring
+            if self._follow_indicator_pos is not None:
+                ix, iy = self._follow_indicator_pos
+                base_color, _light = get_highlight_colors()
+                ring_color = color_to_dpg(base_color)
+                r = self._EDGE_ENDPOINT_RADIUS_PX
+                dpg.draw_circle((ix, iy), r, color=ring_color,
+                                thickness=2, parent=self.drawlist)
+
     def request_render(self) -> None:
         """Request (force) a re-render on the next update."""
         self._needs_render = True
@@ -394,6 +407,8 @@ class XDotWidget(gui_animation.Animation):
                 self._last_hover_desc = None
                 if self._on_hover:
                     self._on_hover(None)
+            if self._follow_indicator_pos is not None:
+                self._follow_indicator_pos = None
             self._needs_render = True
             return
         if self._graph is None:
@@ -405,6 +420,13 @@ class XDotWidget(gui_animation.Animation):
 
         # Update hover
         self._highlight.set_hover(element)
+
+        # Update follow-edge indicator: show ring near the endpoint
+        # that would be the follow origin (i.e. the end you're near).
+        old_indicator = self._follow_indicator_pos
+        self._follow_indicator_pos = self._get_follow_indicator_pos(element, sx, sy)
+        if self._follow_indicator_pos != old_indicator:
+            self._needs_render = True
 
         # Notify callback if hover changed.
         # Build a human-readable description (using labels, not internal names).
@@ -435,6 +457,9 @@ class XDotWidget(gui_animation.Animation):
         sx, sy = self._get_local_mouse_pos()
         element = hit_test_screen(self._graph, self._viewport, sx, sy)
 
+        # Clear follow indicator on click (we're about to navigate away)
+        self._follow_indicator_pos = None
+
         if element is not None:
             # For edges: check if clicking near an endpoint → follow to other node
             target = self._get_edge_follow_target(element, sx, sy)
@@ -445,6 +470,43 @@ class XDotWidget(gui_animation.Animation):
                 desc = self._describe_element(element)
                 self._on_click(desc, button)
 
+    def _nearest_edge_endpoint(self, element, sx: float, sy: float) -> Optional[str]:
+        """Check if (sx, sy) is near an endpoint of `element` (an Edge).
+
+        Returns ``"src"`` or ``"dst"`` for the nearest endpoint within
+        the follow radius, or None if `element` is not an Edge or the
+        cursor isn't near either endpoint.
+        """
+        if not isinstance(element, Edge) or len(element.points) < 2:
+            return None
+
+        r_sq = self._EDGE_ENDPOINT_RADIUS_PX ** 2
+
+        src_sx, src_sy = self._viewport.graph_to_screen(*element.points[0])
+        dst_sx, dst_sy = self._viewport.graph_to_screen(*element.points[-1])
+
+        dist_to_src_sq = (sx - src_sx) ** 2 + (sy - src_sy) ** 2
+        dist_to_dst_sq = (sx - dst_sx) ** 2 + (sy - dst_sy) ** 2
+
+        if dist_to_src_sq <= r_sq and dist_to_dst_sq <= r_sq:
+            return "src" if dist_to_src_sq <= dist_to_dst_sq else "dst"
+        elif dist_to_src_sq <= r_sq:
+            return "src"
+        elif dist_to_dst_sq <= r_sq:
+            return "dst"
+        return None
+
+    def _get_follow_indicator_pos(self, element, sx: float, sy: float) -> Optional[Point]:
+        """Return the screen position of the nearby edge endpoint, or None.
+
+        Used to draw the follow-edge indicator ring.
+        """
+        which = self._nearest_edge_endpoint(element, sx, sy)
+        if which is None:
+            return None
+        pt = element.points[0] if which == "src" else element.points[-1]
+        return self._viewport.graph_to_screen(*pt)
+
     def _get_edge_follow_target(self, element, sx: float, sy: float) -> Optional[Node]:
         """If `element` is an Edge and the click is near an endpoint,
         return the node at the *other* end (for follow-edge navigation).
@@ -452,27 +514,11 @@ class XDotWidget(gui_animation.Animation):
         Returns None if `element` is not an Edge or the click isn't
         near an endpoint.
         """
-        if not isinstance(element, Edge) or len(element.points) < 2:
+        which = self._nearest_edge_endpoint(element, sx, sy)
+        if which is None:
             return None
-
-        r_sq = self._EDGE_ENDPOINT_RADIUS_PX ** 2
-
-        # Transform edge endpoints to screen coordinates
-        src_sx, src_sy = self._viewport.graph_to_screen(*element.points[0])
-        dst_sx, dst_sy = self._viewport.graph_to_screen(*element.points[-1])
-
-        dist_to_src_sq = (sx - src_sx) ** 2 + (sy - src_sy) ** 2
-        dist_to_dst_sq = (sx - dst_sx) ** 2 + (sy - dst_sy) ** 2
-
         # Near src end → follow to dst; near dst end → follow to src.
-        # If near both (short edge), pick whichever is closer.
-        if dist_to_src_sq <= r_sq and dist_to_dst_sq <= r_sq:
-            return element.dst if dist_to_src_sq <= dist_to_dst_sq else element.src
-        elif dist_to_src_sq <= r_sq:
-            return element.dst
-        elif dist_to_dst_sq <= r_sq:
-            return element.src
-        return None
+        return element.dst if which == "src" else element.src
 
     def _on_mouse_wheel(self, sender, app_data) -> None:
         """Handle mouse wheel for zooming."""
