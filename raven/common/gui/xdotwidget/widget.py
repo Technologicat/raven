@@ -238,17 +238,13 @@ class XDotWidget(gui_animation.Animation):
         if isinstance(element, Node):
             if element.internal_name:
                 self.zoom_to_node(element.internal_name)
-                return element.internal_name
         elif isinstance(element, Edge):
             # Zoom to midpoint between source and destination
             mx = (element.src.x + element.dst.x) / 2
             my = (element.src.y + element.dst.y) / 2
             self._viewport.zoom_to_point(mx, my, animate=True)
             self._needs_render = True
-            src_name = element.src.internal_name or "?"
-            dst_name = element.dst.internal_name or "?"
-            return f"edge: {src_name} -> {dst_name}"
-        return None
+        return self._describe_element(element)
 
     def clear_search(self) -> None:
         """Clear the current search."""

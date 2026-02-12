@@ -190,20 +190,20 @@ def _next_match(*_args) -> None:
     """Navigate to next search match."""
     widget = _app_state["widget"]
     if widget is not None:
-        node_id = widget.next_match()
-        if node_id:
+        desc = widget.next_match()
+        if desc:
             count = widget.get_search_count()
-            _set_status(f"Match: {node_id} ({count} total)")
+            _set_status(f"Match: {desc} ({count} total)")
 
 
 def _prev_match(*_args) -> None:
     """Navigate to previous search match."""
     widget = _app_state["widget"]
     if widget is not None:
-        node_id = widget.prev_match()
-        if node_id:
+        desc = widget.prev_match()
+        if desc:
             count = widget.get_search_count()
-            _set_status(f"Match: {node_id} ({count} total)")
+            _set_status(f"Match: {desc} ({count} total)")
 
 
 def _zoom_to_fit(*_args) -> None:
