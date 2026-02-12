@@ -209,32 +209,7 @@ class Viewport:
         gw, gh = graph.get_size()
         self._graph_width = gw
         self._graph_height = gh
-
-        # Calculate zoom to fit
-        available_w = self.width - 2 * margin
-        available_h = self.height - 2 * margin
-
-        if gw > 0 and gh > 0:
-            zoom_w = available_w / gw
-            zoom_h = available_h / gh
-            new_zoom = min(zoom_w, zoom_h)
-        else:
-            new_zoom = 1.0
-
-        new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
-
-        # Center on graph
-        new_pan_x = gw / 2
-        new_pan_y = gh / 2
-
-        if animate:
-            self.pan_x.target = new_pan_x
-            self.pan_y.target = new_pan_y
-            self.zoom.target = new_zoom
-        else:
-            self.pan_x.set_immediate(new_pan_x)
-            self.pan_y.set_immediate(new_pan_y)
-            self.zoom.set_immediate(new_zoom)
+        self.zoom_to_bbox(0, 0, gw, gh, margin=margin, animate=animate)
 
     def zoom_to_bbox(self, x1: float, y1: float, x2: float, y2: float,
                      margin: int = 20, animate: bool = True) -> None:
