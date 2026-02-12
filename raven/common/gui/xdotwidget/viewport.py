@@ -42,11 +42,11 @@ class SmoothValue:
     CALIBRATION_FPS = 25  # FPS for which `rate` was calibrated
     EPSILON = 1e-3  # Range from which to snap to target; denormal guard
 
-    def __init__(self, value: float = 0.0, rate: float = 0.8):
+    def __init__(self, value: float = 0.0, rate: float = 0.3):
         """Initialize with a starting value.
 
         `value`: Initial value.
-        `rate`: Animation rate, in (0, 1]. Higher = faster. Default 0.8.
+        `rate`: Animation rate, in (0, 1]. Higher = faster. Default 0.3.
         """
         self._current = value
         self._target = value
@@ -67,6 +67,11 @@ class SmoothValue:
     @target.setter
     def target(self, value: float) -> None:
         """Set a new target value."""
+        # Reset the time reference so the first animation frame has a
+        # reasonable dt, not a stale delta from the last update() call
+        # (which may have been seconds/minutes ago if nothing was animating).
+        if not self.is_animating():
+            self._last_time = time.time()
         self._target = value
 
     def set_immediate(self, value: float) -> None:
