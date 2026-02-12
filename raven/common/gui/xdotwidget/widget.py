@@ -418,8 +418,15 @@ class XDotWidget(gui_animation.Animation):
             if self._on_hover:
                 self._on_hover(new_hover_desc)
 
+    _EDGE_ENDPOINT_RADIUS_PX = 15  # pixel radius for follow-edge-on-click
+
     def _on_mouse_click(self, sender, app_data) -> None:
-        """Handle mouse click: zoom to element, then trigger callback."""
+        """Handle mouse click: zoom to element, then trigger callback.
+
+        For edges, clicking near an endpoint follows the edge to the node
+        at the other end (xdottir-style navigation). Clicking elsewhere
+        on the edge centers on the edge midpoint.
+        """
         if not self._is_mouse_inside():
             return
         if self._graph is None:
@@ -431,10 +438,43 @@ class XDotWidget(gui_animation.Animation):
         element = hit_test_screen(self._graph, self._viewport, sx, sy)
 
         if element is not None:
+            # For edges: check if clicking near an endpoint → follow to other node
+            target = self._get_edge_follow_target(element, sx, sy)
+            if target is not None:
+                element = target  # redirect to the target node
             self._zoom_to_element(element)
             if self._on_click:
                 desc = self._describe_element(element)
                 self._on_click(desc, button)
+
+    def _get_edge_follow_target(self, element, sx: float, sy: float) -> Optional[Node]:
+        """If `element` is an Edge and the click is near an endpoint,
+        return the node at the *other* end (for follow-edge navigation).
+
+        Returns None if `element` is not an Edge or the click isn't
+        near an endpoint.
+        """
+        if not isinstance(element, Edge) or len(element.points) < 2:
+            return None
+
+        r_sq = self._EDGE_ENDPOINT_RADIUS_PX ** 2
+
+        # Transform edge endpoints to screen coordinates
+        src_sx, src_sy = self._viewport.graph_to_screen(*element.points[0])
+        dst_sx, dst_sy = self._viewport.graph_to_screen(*element.points[-1])
+
+        dist_to_src_sq = (sx - src_sx) ** 2 + (sy - src_sy) ** 2
+        dist_to_dst_sq = (sx - dst_sx) ** 2 + (sy - dst_sy) ** 2
+
+        # Near src end → follow to dst; near dst end → follow to src.
+        # If near both (short edge), pick whichever is closer.
+        if dist_to_src_sq <= r_sq and dist_to_dst_sq <= r_sq:
+            return element.dst if dist_to_src_sq <= dist_to_dst_sq else element.src
+        elif dist_to_src_sq <= r_sq:
+            return element.dst
+        elif dist_to_dst_sq <= r_sq:
+            return element.src
+        return None
 
     def _on_mouse_wheel(self, sender, app_data) -> None:
         """Handle mouse wheel for zooming."""
