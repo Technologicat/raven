@@ -11,6 +11,7 @@
     - [Raven-visualizer: Visualize research literature](#raven-visualizer-visualize-research-literature)
     - [Raven-librarian: Multiversal LLM frontend](#raven-librarian-multiversal-llm-frontend)
     - [Raven-avatar: AI-animated anime avatar](#raven-avatar-ai-animated-anime-avatar)
+    - [Raven-xdot-viewer: Small standalone GraphViz graph viewer](#raven-xdot-viewer-small-standalone-graphviz-graph-viewer)
     - [Raven-server: Web API server](#raven-server-web-api-server)
 - [Install & run](#install--run)
     - [From source](#from-source)
@@ -109,6 +110,19 @@ Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
   - Realtime Anime4K upscaler.
   - Realtime video postprocessor with visual effects such as [bloom](https://en.wikipedia.org/wiki/Bloom_(shader_effect)), [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration), or [scanlines](https://en.wikipedia.org/wiki/Scan_line).
   - Web API to receive avatar video stream and to control the avatar.
+
+## Raven-xdot-viewer: Small standalone GraphViz graph viewer
+
+*Added in v0.2.5.*
+
+- **Documentation**: WIP
+- **Goal**: View your `.dot` (`.gv`) and `.xdot` files in a GUI app with a focus on usability
+  - **Status**: :white_check_mark: Fully operational prototype, usage: `raven-xdot-viewer myfile.xdot`
+- **Features**:
+  - Animated GUI, easy for pair work.
+  - Click on the end of an edge to follow it.
+  - Incremental fragment search for node/edge labels, like in *Visualizer*.
+
 
 ## Raven-server: Web API server
 
