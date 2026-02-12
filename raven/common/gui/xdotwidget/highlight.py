@@ -160,7 +160,7 @@ class HighlightState:
             # Check fading
             if element in self._fading:
                 start_time, initial_intensity = self._fading[element]
-                elapsed = (time.time_ns() - start_time) // 10**9
+                elapsed = (time.time_ns() - start_time) / 10**9
                 progress = elapsed / self.fade_duration
 
                 if progress >= 1.0:
@@ -181,7 +181,7 @@ class HighlightState:
 
         with self._fading_lock:
             for element, (start_time, initial_intensity) in self._fading.items():
-                elapsed = (now - start_time) // 10**9
+                elapsed = (now - start_time) / 10**9
                 if elapsed >= self.fade_duration:
                     finished.append(element)
 
