@@ -56,9 +56,11 @@ Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
   - GUI app for analyzing BibTeX databases
   - Semantic clustering
   - Automatic per-cluster keyword detection
-  - Command-line converters for Web of Science (WOS), arXiv, conference abstract PDFs
+  - Command-line converters for Web of Science (WOS), arXiv, conference abstract PDFs, CSV files
   - 100% local, maximum privacy, no cloud services
 - This was the original *Raven*.
+
+*Added in v0.2.5: CSV import.*
 
 ## Raven-librarian: Multiversal LLM frontend
 
