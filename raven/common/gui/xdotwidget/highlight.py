@@ -51,6 +51,10 @@ class HighlightState:
         self._programmatic_node_ids: Set[str] = set()  # by node ID
         self._programmatic_lock = threading.RLock()
 
+        # Link highlights (Shift/Ctrl+hover: outgoing/incoming edges + connected nodes)
+        self._link_highlights: Set[Element] = set()
+        # Protected by _programmatic_lock (same lock, since they're both modifier-key state)
+
     def set_hover(self, element: Optional[Element]) -> None:
         """Set the currently hovered element.
 
@@ -103,6 +107,20 @@ class HighlightState:
         """Return the set of programmatically highlighted elements."""
         return set(self._programmatic)
 
+    def set_link_highlights(self, elements: Set[Element]) -> None:
+        """Set link-highlight elements (shown during Shift/Ctrl+hover)."""
+        with self._programmatic_lock:
+            self._link_highlights = set(elements)
+
+    def clear_link_highlights(self) -> None:
+        """Clear link-highlight elements."""
+        with self._programmatic_lock:
+            self._link_highlights.clear()
+
+    def has_link_highlights(self) -> bool:
+        """Return True if any link highlights are active."""
+        return len(self._link_highlights) > 0
+
     def clear_programmatic(self) -> None:
         """Clear all programmatic highlights, both direct element reference and ID-based."""
         with self._programmatic_lock:
@@ -115,7 +133,7 @@ class HighlightState:
         `element`: The element to check.
         `graph`: Optional Graph, used to check programmatic node IDs.
 
-        Returns True if the element is hovered, fading, or programmatic.
+        Returns True if the element is hovered, fading, programmatic, or link-highlighted.
         """
         with self._fading_lock, self._programmatic_lock:
             if element == self._hover:
@@ -123,6 +141,8 @@ class HighlightState:
             if element in self._fading:
                 return True
             if element in self._programmatic:
+                return True
+            if element in self._link_highlights:
                 return True
 
             # Check programmatic node IDs
@@ -139,7 +159,7 @@ class HighlightState:
         `graph`: Optional Graph, used to check programmatic node IDs.
 
         Returns a value in [0, 1] where:
-        - 1.0 = fully highlighted (hovered or programmatic)
+        - 1.0 = fully highlighted (hovered, programmatic, or link-highlighted)
         - 0.0 = not highlighted
         - (0, 1) = fading out
         """
@@ -152,6 +172,10 @@ class HighlightState:
             if isinstance(element, Node) and element.internal_name:
                 if element.internal_name in self._programmatic_node_ids:
                     return 1.0
+
+            # Link highlights are full intensity
+            if element in self._link_highlights:
+                return 1.0
 
             # Hover is full intensity
             if element == self._hover:
@@ -195,7 +219,7 @@ class HighlightState:
 
         `graph`: Optional Graph, used to resolve programmatic node IDs.
 
-        Returns the union of hover, fading, and programmatic highlights.
+        Returns the union of hover, fading, programmatic, and link highlights.
         """
         result = set()
         if self._hover is not None:
@@ -204,6 +228,7 @@ class HighlightState:
         with self._fading_lock, self._programmatic_lock:
             result.update(self._fading.keys())
             result.update(self._programmatic)
+            result.update(self._link_highlights)
 
             # Resolve programmatic node IDs
             if graph is not None and self._programmatic_node_ids:

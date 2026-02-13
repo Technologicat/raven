@@ -9,7 +9,7 @@ The widget registers itself with Raven's GUI animator for smooth animations.
 __all__ = ["XDotWidget"]
 
 import threading
-from typing import Callable, List, Optional, Set, Tuple, Union
+from typing import Callable, List, Optional, Sequence, Set, Tuple, Union
 
 import dearpygui.dearpygui as dpg
 
@@ -54,7 +54,9 @@ class XDotWidget(gui_animation.Animation):
                  tag: Optional[str] = None,
                  on_hover: Optional[Callable[[Optional[str]], None]] = None,
                  on_click: Optional[Callable[[str, int], None]] = None,
-                 text_compaction_callback: Optional[Callable[[str, float], str]] = None):
+                 text_compaction_callback: Optional[Callable[[str, float], str]] = None,
+                 highlight_fade_duration: float = 2.0,
+                 graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None):
         """Create an XDotWidget.
 
         `parent`: DPG parent (child window, group, etc.)
@@ -73,10 +75,11 @@ class XDotWidget(gui_animation.Animation):
         self._on_hover = on_hover
         self._on_click = on_click
         self._text_compaction_callback = text_compaction_callback
+        self._graph_text_fonts = graph_text_fonts
 
         self._graph: Optional[Graph] = None
         self._viewport = Viewport(width, height)
-        self._highlight = HighlightState()
+        self._highlight = HighlightState(fade_duration=highlight_fade_duration)
         self._search = SearchState()
 
         self._render_lock = threading.RLock()
@@ -86,6 +89,10 @@ class XDotWidget(gui_animation.Animation):
         self._dragging = False
         self._last_mouse_pos = (0.0, 0.0)
         self._last_hover_desc: Optional[str] = None
+
+        # Modifier key state for link highlights (tracked to detect changes per-frame)
+        self._last_shift = False
+        self._last_ctrl = False
 
         # Follow-edge indicator: screen coords of the endpoint to highlight, or None
         self._follow_indicator_pos: Optional[Point] = None
@@ -157,8 +164,10 @@ class XDotWidget(gui_animation.Animation):
             self._viewport.zoom_to_fit(self._graph, animate=animate)
             self._needs_render = True
 
-    def zoom_to_node(self, node_id: str, animate: bool = True) -> None:
-        """Center the view on a specific node.
+    def pan_to_node(self, node_id: str, animate: bool = True) -> None:
+        """Pan the view to center on a specific node.
+
+        Pan only — does not change the zoom level.
 
         `node_id`: The internal name of the node.
         `animate`: If True, animate the transition.
@@ -254,7 +263,7 @@ class XDotWidget(gui_animation.Animation):
             return None
         if isinstance(element, Node):
             if element.internal_name:
-                self.zoom_to_node(element.internal_name)
+                self.pan_to_node(element.internal_name)
         elif isinstance(element, Edge):
             mx = (element.src.x + element.dst.x) / 2
             my = (element.src.y + element.dst.y) / 2
@@ -262,11 +271,12 @@ class XDotWidget(gui_animation.Animation):
             self._needs_render = True
         return self._describe_element(element)
 
-    def _zoom_to_element(self, element) -> Optional[str]:
-        """Zoom the view to center on `element` (Node or Edge).
+    def _navigate_to_element(self, element) -> Optional[str]:
+        """Navigate the view to center on `element` (Node or Edge).
 
+        For nodes, pans to center on the node.
         For edges, repeated clicks on the same edge cycle through:
-        midpoint (zoom to fit) → src node → dst node → midpoint → ...
+        zoom-to-fit → src node → dst node → zoom-to-fit → ...
 
         Returns a human-readable description of the element, or None.
         """
@@ -275,7 +285,7 @@ class XDotWidget(gui_animation.Animation):
         if isinstance(element, Node):
             self._edge_click_edge = None  # reset edge cycle
             if element.internal_name:
-                self.zoom_to_node(element.internal_name)
+                self.pan_to_node(element.internal_name)
         elif isinstance(element, Edge):
             # Advance cycle if clicking the same edge again
             if element is self._edge_click_edge:
@@ -362,6 +372,12 @@ class XDotWidget(gui_animation.Animation):
             animating = True
             self._needs_render = True
 
+        # Re-evaluate link highlights when modifier keys change (without mouse move)
+        shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+        ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+        if shift != self._last_shift or ctrl != self._last_ctrl:
+            self._update_link_highlights()
+
         # Render if needed
         if self._needs_render:
             self._render()
@@ -388,7 +404,8 @@ class XDotWidget(gui_animation.Animation):
                 self._graph,
                 self._viewport,
                 highlight_intensities=highlight_intensities,
-                text_compaction_cb=self._text_compaction_callback
+                text_compaction_cb=self._text_compaction_callback,
+                graph_text_fonts=self._graph_text_fonts
             )
 
             # Draw follow-edge indicator ring.
@@ -449,13 +466,36 @@ class XDotWidget(gui_animation.Animation):
         """Get mouse position relative to this widget."""
         return gui_utils.get_mouse_relative_pos(self.drawlist)
 
+    def _update_link_highlights(self) -> None:
+        """Update Shift/Ctrl link highlights based on current hover and modifier state."""
+        element = self._highlight.get_hover()
+        shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+        ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+
+        if isinstance(element, Node) and shift and not ctrl:
+            linked = self._graph.get_linked_elements(element, "outgoing")
+            linked.add(element)
+            self._highlight.set_link_highlights(linked)
+            self._needs_render = True
+        elif isinstance(element, Node) and ctrl and not shift:
+            linked = self._graph.get_linked_elements(element, "incoming")
+            linked.add(element)
+            self._highlight.set_link_highlights(linked)
+            self._needs_render = True
+        elif self._highlight.has_link_highlights():
+            self._highlight.clear_link_highlights()
+            self._needs_render = True
+
+        self._last_shift = shift
+        self._last_ctrl = ctrl
+
     def _on_mouse_move(self, sender, app_data) -> None:
         """Handle mouse movement, updating highlights, and triggering the custom callback if set."""
         if not self._is_mouse_inside():
-            # Mouse left widget - always clear hover on the highlight state
-            # (set_hover has its own early-return if already None, so this is cheap).
-            # The _last_hover_desc guard only controls the user callback.
+            # Mouse left widget - clear hover and link highlights.
             self._highlight.set_hover(None)
+            if self._highlight.has_link_highlights():
+                self._highlight.clear_link_highlights()
             if self._last_hover_desc is not None:
                 self._last_hover_desc = None
                 if self._on_hover:
@@ -471,6 +511,9 @@ class XDotWidget(gui_animation.Animation):
 
         # Update hover
         self._highlight.set_hover(element)
+
+        # Shift/Ctrl hover: highlight outgoing/incoming edges + connected nodes
+        self._update_link_highlights()
 
         # Update follow-edge indicator: show ring near the endpoint
         # that would be the follow origin (i.e. the end you're near).
@@ -516,7 +559,7 @@ class XDotWidget(gui_animation.Animation):
         # even when a node's bounding box overlaps the edge endpoint).
         follow_target = self._get_edge_follow_target(sx, sy)
         if follow_target is not None:
-            self._zoom_to_element(follow_target)
+            self._navigate_to_element(follow_target)
             if self._on_click:
                 desc = self._describe_element(follow_target)
                 self._on_click(desc, button)
@@ -525,7 +568,7 @@ class XDotWidget(gui_animation.Animation):
         # Normal hit test
         element = hit_test_screen(self._graph, self._viewport, sx, sy)
         if element is not None:
-            self._zoom_to_element(element)
+            self._navigate_to_element(element)
             if self._on_click:
                 desc = self._describe_element(element)
                 self._on_click(desc, button)

@@ -14,7 +14,7 @@ digraph G {
     graph [bb="0,0,300,200"];
     photocatalytic [pos="50,150", width="1.5", height="0.5",
        _draw_="c 7 -#000000 e 50 150 54 18 ",
-       _ldraw_="F 14 11 -Times-Roman c 7 -#000000 T 50 150 0 100 13 -photocatalytic "];
+       _ldraw_="F 14 11 -Times-Roman c 7 -#000000 T 50 150 0 100 14 -photocatalytic "];
     reaction [pos="150,150", width="1.0", height="0.5",
        _draw_="c 7 -#000000 e 150 150 36 18 ",
        _ldraw_="F 14 11 -Times-Roman c 7 -#000000 T 150 150 0 60 8 -reaction "];

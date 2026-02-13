@@ -552,6 +552,29 @@ class Graph:
         """Return node by its internal name, or None."""
         return self.nodes_by_name.get(name)
 
+    def get_linked_elements(self, node: Node, direction: str) -> Set[Element]:
+        """Return elements linked to `node` via edges.
+
+        `node`: The node to find links for.
+        `direction`: "outgoing" (edges where `node` is src, plus dst nodes)
+                     or "incoming" (edges where `node` is dst, plus src nodes).
+
+        Returns a set of Elements (edges and their endpoint nodes),
+        not including the queried node itself.
+        """
+        result: Set[Element] = set()
+        if direction == "outgoing":
+            for edge in self.edges:
+                if edge.src is node:
+                    result.add(edge)
+                    result.add(edge.dst)
+        elif direction == "incoming":
+            for edge in self.edges:
+                if edge.dst is node:
+                    result.add(edge)
+                    result.add(edge.src)
+        return result
+
     def get_all_elements(self) -> List[Element]:
         """Return all nodes and edges."""
         return list(chain(self.nodes, self.edges))

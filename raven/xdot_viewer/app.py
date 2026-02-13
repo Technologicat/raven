@@ -36,6 +36,9 @@ with timer() as tim:
     from ..common.gui.xdotwidget import XDotWidget
     from ..common.gui import utils as guiutils
     from ..common.gui import animation as gui_animation
+    from ..vendor.file_dialog.fdialog import FileDialog
+
+    from . import config
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 
@@ -48,25 +51,19 @@ _app_state = {
     "file_mtime": None,
 }
 
-# Layout constants for the main window.
-# These account for the toolbar and status bar around the graph widget.
-#
-# DPG (ImGui) default style values used in the calculation:
-_FONT_SIZE = 20
-_DPG_WINDOW_PADDING_Y = 8   # mvStyleVar_WindowPadding[1]
-_DPG_FRAME_PADDING_Y = 3    # mvStyleVar_FramePadding[1]
-_DPG_ITEM_SPACING_Y = 4     # mvStyleVar_ItemSpacing[1]
-_DPG_SCROLLBAR_SIZE = 14     # mvStyleVar_ScrollbarSize
+_filedialog_open = None  # initialized after DPG setup
 
-_TOOLBAR_H = _FONT_SIZE + 2 * _DPG_FRAME_PADDING_Y  # tallest toolbar item (button/input)
-_STATUS_H = _FONT_SIZE                                # text line
 
-_WIDGET_H_PADDING = _DPG_SCROLLBAR_SIZE + 2 * _DPG_WINDOW_PADDING_Y
-_WIDGET_V_PADDING = (2 * _DPG_WINDOW_PADDING_Y +   # top + bottom window margin
-                     _TOOLBAR_H +                  # toolbar row
-                     4 * _DPG_ITEM_SPACING_Y +     # gaps: toolbar group↔widget, widget↔status,
-                                                   #        + 2 empirical (ImGui internal leading/rounding)
-                     _STATUS_H)                    # status bar
+def _open_file_dialog_callback(selected_files):
+    """Callback for the file dialog. `selected_files` is a list of Path objects."""
+    if selected_files:
+        _open_file(str(selected_files[0]))
+
+
+def _show_open_dialog(*_args) -> None:
+    """Show the file open dialog."""
+    if _filedialog_open is not None:
+        _filedialog_open.show_file_dialog()
 
 
 def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
@@ -246,6 +243,7 @@ def _check_file_reload() -> None:
 def _on_key(sender, app_data) -> None:
     """Handle keyboard shortcuts.
 
+    Ctrl+O: Open file dialog
     Ctrl+F: Focus search field (Esc to unfocus)
     F3 / Shift+F3: Next / previous search match (like old DOS apps; consistency with rest of Raven)
     +/=: Zoom in
@@ -253,8 +251,6 @@ def _on_key(sender, app_data) -> None:
     0: Zoom to fit
     Arrow keys: Pan view
     """
-    PAN_AMOUNT = 10  # pixels
-
     key = app_data
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
     shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
@@ -278,7 +274,9 @@ def _on_key(sender, app_data) -> None:
         elif key == dpg.mvKey_L:
             dpg.show_style_editor()
     elif ctrl_pressed:
-        if key == dpg.mvKey_F:
+        if key == dpg.mvKey_O:
+            _show_open_dialog()
+        elif key == dpg.mvKey_F:
             if _app_state["search_input"] is not None:
                 dpg.focus_item(_app_state["search_input"])
     else:  # BARE KEYS - BE VERY CAREFUL HERE
@@ -296,13 +294,13 @@ def _on_key(sender, app_data) -> None:
         elif key in (dpg.mvKey_0, dpg.mvKey_NumPad0):
             _zoom_to_fit()
         elif key == dpg.mvKey_Up:
-            widget.pan_by(dx=0, dy=+PAN_AMOUNT)
+            widget.pan_by(dx=0, dy=+config.PAN_AMOUNT)
         elif key == dpg.mvKey_Down:
-            widget.pan_by(dx=0, dy=-PAN_AMOUNT)
+            widget.pan_by(dx=0, dy=-config.PAN_AMOUNT)
         elif key == dpg.mvKey_Left:
-            widget.pan_by(dx=+PAN_AMOUNT, dy=0)
+            widget.pan_by(dx=+config.PAN_AMOUNT, dy=0)
         elif key == dpg.mvKey_Right:
-            widget.pan_by(dx=-PAN_AMOUNT, dy=0)
+            widget.pan_by(dx=-config.PAN_AMOUNT, dy=0)
 
 
 def _gui_shutdown() -> None:
@@ -324,14 +322,14 @@ def main() -> int:
     parser.add_argument(
         "--width",
         type=int,
-        default=1200,
-        help="Window width (default: 1200)"
+        default=config.DEFAULT_WIDTH,
+        help=f"Window width (default: {config.DEFAULT_WIDTH})"
     )
     parser.add_argument(
         "--height",
         type=int,
-        default=1000,
-        help="Window height (default: 1000)"
+        default=config.DEFAULT_HEIGHT,
+        help=f"Window height (default: {config.DEFAULT_HEIGHT})"
     )
     args = parser.parse_args()
 
@@ -339,7 +337,7 @@ def main() -> int:
     # Order matters: create_context -> bootup (fonts/themes) -> create_viewport -> setup. See `guiutils.bootup`.
     dpg.create_context()
 
-    themes_and_fonts = guiutils.bootup(font_size=_FONT_SIZE)
+    themes_and_fonts = guiutils.bootup(font_size=config.FONT_SIZE)
 
     dpg.create_viewport(
         title=f"Raven XDot Viewer {__version__}",
@@ -349,10 +347,36 @@ def main() -> int:
 
     dpg.setup_dearpygui()
 
+    # Load extra fonts for graph text at various zoom levels.
+    # The renderer picks whichever atlas size is closest to the rendered size.
+    graph_text_fonts = []
+    for size in config.GRAPH_TEXT_FONT_SIZES:
+        _key, font_id = guiutils.load_extra_font(
+            themes_and_fonts, size, "OpenSans", "Regular")
+        graph_text_fonts.append((size, font_id))
+
+    # Initialize file dialog (must be after dpg.setup_dearpygui)
+    global _filedialog_open
+    cwd = os.getcwd()
+    _filedialog_open = FileDialog(title="Open graph file",
+                                  tag="open_file_dialog",
+                                  callback=_open_file_dialog_callback,
+                                  modal=True,
+                                  filter_list=[".xdot", ".dot", ".gv"],
+                                  file_filter=".xdot",
+                                  multi_selection=False,
+                                  allow_drag=False,
+                                  default_path=cwd)
+
     # --- Build GUI ---
     with dpg.window(tag="main_window"):
         # Toolbar
         with dpg.group(horizontal=True):
+            dpg.add_button(label=fa.ICON_FOLDER_OPEN, tag="open_file_button", callback=_show_open_dialog, width=30)
+            dpg.bind_item_font("open_file_button", themes_and_fonts.icon_font_solid)  # tag
+            with dpg.tooltip("open_file_button"):  # tag
+                dpg.add_text("Open file [Ctrl+O]")
+
             dpg.add_button(label=fa.ICON_SQUARE, tag="zoom_to_fit_button", callback=_zoom_to_fit, width=30)
             dpg.bind_item_font("zoom_to_fit_button", themes_and_fonts.icon_font_regular)  # tag
             with dpg.tooltip("zoom_to_fit_button"):  # tag
@@ -398,10 +422,12 @@ def main() -> int:
         # or find a DPG fill-parent mechanism.
         _app_state["widget"] = XDotWidget(
             parent="main_window",
-            width=args.width - _WIDGET_H_PADDING,
-            height=args.height - _WIDGET_V_PADDING,
+            width=args.width - config.WIDGET_H_PADDING,
+            height=args.height - config.WIDGET_V_PADDING,
             on_hover=_on_hover,
-            on_click=_on_click
+            on_click=_on_click,
+            highlight_fade_duration=config.HIGHLIGHT_FADE_DURATION,
+            graph_text_fonts=graph_text_fonts
         )
 
         # Status bar
@@ -421,12 +447,11 @@ def main() -> int:
         _open_file(args.file)
 
     # --- Render loop ---
-    # TODO: Add Ctrl+O / file dialog for opening files interactively. See the Avatar pose editor for the cleanest example of how Raven does it (customized file dialog that hooks into Raven's GUI animation system).
     last_check = time.time()
     def _poll_reload():
         nonlocal last_check
         now = time.time()
-        if now - last_check > 2.0:
+        if now - last_check > config.FILE_RELOAD_POLL_INTERVAL:
             _check_file_reload()
             last_check = now
     try:

@@ -6,7 +6,7 @@ DearPyGUI's drawlist primitives.
 
 __all__ = ["render_graph", "color_to_dpg"]
 
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import dearpygui.dearpygui as dpg
 
@@ -67,7 +67,8 @@ def _render_text_shape(drawlist: Union[int, str],
                        shape: TextShape,
                        viewport: Viewport,
                        pen: Pen,
-                       text_compaction_cb: Optional[Callable] = None) -> None:
+                       text_compaction_cb: Optional[Callable] = None,
+                       graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None) -> None:
     """Render a text shape."""
     # Transform position
     sx, sy = viewport.graph_to_screen(shape.x, shape.y)
@@ -106,7 +107,14 @@ def _render_text_shape(drawlist: Union[int, str],
     color = color_to_dpg(pen.color)
 
     # DPG's draw_text size parameter is in pixels
-    dpg.draw_text((x, y), text, size=font_size_px, color=color, parent=drawlist)
+    item = dpg.draw_text((x, y), text, size=font_size_px, color=color, parent=drawlist)
+
+    # Bind the font whose atlas size is closest to the rendered size.
+    # DPG uses bilinear filtering on font atlas textures, so minimal
+    # scaling ratio → sharpest text.
+    if graph_text_fonts:
+        best_font = min(graph_text_fonts, key=lambda sf: abs(sf[0] - font_size_px))[1]
+        dpg.bind_item_font(item, best_font)
 
 
 def _render_ellipse_shape(drawlist: Union[int, str],
@@ -229,12 +237,13 @@ def _render_shape(drawlist: Union[int, str],
                   viewport: Viewport,
                   element: Optional[Element],
                   highlight_intensities: Dict[Element, float],
-                  text_compaction_cb: Optional[Callable]) -> None:
+                  text_compaction_cb: Optional[Callable],
+                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None) -> None:
     """Render a single shape."""
     pen = _get_effective_pen(shape, element, highlight_intensities)
 
     if isinstance(shape, TextShape):
-        _render_text_shape(drawlist, shape, viewport, pen, text_compaction_cb)
+        _render_text_shape(drawlist, shape, viewport, pen, text_compaction_cb, graph_text_fonts)
     elif isinstance(shape, EllipseShape):
         _render_ellipse_shape(drawlist, shape, viewport, pen)
     elif isinstance(shape, PolygonShape):
@@ -246,7 +255,7 @@ def _render_shape(drawlist: Union[int, str],
     elif isinstance(shape, CompoundShape):
         for child in shape.shapes:
             _render_shape(drawlist, child, viewport, element,
-                          highlight_intensities, text_compaction_cb)
+                          highlight_intensities, text_compaction_cb, graph_text_fonts)
 
 
 def _is_element_visible(element: Element, viewport: Viewport) -> bool:
@@ -261,7 +270,8 @@ def render_graph(drawlist: Union[int, str],
                  graph: Graph,
                  viewport: Viewport,
                  highlight_intensities: Optional[Dict[Element, float]] = None,
-                 text_compaction_cb: Optional[Callable] = None) -> None:
+                 text_compaction_cb: Optional[Callable] = None,
+                 graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None) -> None:
     """Render a graph to a DPG drawlist.
 
     `drawlist`: DPG drawlist ID or tag.
@@ -270,6 +280,9 @@ def render_graph(drawlist: Union[int, str],
     `highlight_intensities`: Per-element highlight intensity {element: [0,1]}.
     `text_compaction_cb`: Optional callback for text compaction.
                           Signature: (text: str, available_width: float) -> str
+    `graph_text_fonts`: Optional list of (atlas_size_px, dpg_font_id) tuples.
+                         The renderer picks the font whose atlas size is closest
+                         to the rendered text size, for sharpest results.
     """
     if highlight_intensities is None:
         highlight_intensities = {}
@@ -280,7 +293,7 @@ def render_graph(drawlist: Union[int, str],
     # Render background shapes
     for shape in graph.shapes:
         _render_shape(drawlist, shape, viewport, None,
-                      highlight_intensities, text_compaction_cb)
+                      highlight_intensities, text_compaction_cb, graph_text_fonts)
 
     # Render edges (before nodes so nodes appear on top)
     for edge in graph.edges:
@@ -288,7 +301,7 @@ def render_graph(drawlist: Union[int, str],
             continue
         for shape in edge.shapes:
             _render_shape(drawlist, shape, viewport, edge,
-                          highlight_intensities, text_compaction_cb)
+                          highlight_intensities, text_compaction_cb, graph_text_fonts)
 
     # Render nodes
     for node in graph.nodes:
@@ -296,4 +309,4 @@ def render_graph(drawlist: Union[int, str],
             continue
         for shape in node.shapes:
             _render_shape(drawlist, shape, viewport, node,
-                          highlight_intensities, text_compaction_cb)
+                          highlight_intensities, text_compaction_cb, graph_text_fonts)

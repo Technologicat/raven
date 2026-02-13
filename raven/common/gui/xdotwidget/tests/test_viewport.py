@@ -349,3 +349,55 @@ class TestViewport:
         vp.set_size(800, 600)
         assert vp.width == 800
         assert vp.height == 600
+
+    # --- zoom_to_bbox ---
+
+    def test_zoom_to_bbox_centers(self):
+        """zoom_to_bbox centers the pan on the bbox midpoint."""
+        vp = Viewport(width=400, height=300)
+        vp.zoom_to_bbox(20, 30, 80, 90, margin=0, animate=False)
+        assert _approx(vp.pan_x.current, 50)   # (20 + 80) / 2
+        assert _approx(vp.pan_y.current, 60)    # (30 + 90) / 2
+
+    def test_zoom_to_bbox_correct_zoom(self):
+        """zoom_to_bbox computes the correct zoom level.
+
+        Viewport 400×300, bbox 60×60, margin=0.
+        Zoom = min(400/60, 300/60) = min(6.67, 5.0) = 5.0.
+        """
+        vp = Viewport(width=400, height=300)
+        vp.zoom_to_bbox(20, 30, 80, 90, margin=0, animate=False)
+        assert _approx(vp.zoom.current, 5.0)
+
+    def test_zoom_to_bbox_degenerate_zero_area(self):
+        """zoom_to_bbox with zero-area bbox doesn't crash and keeps current zoom."""
+        vp = Viewport(width=400, height=300)
+        vp.zoom.set_immediate(2.0)
+        vp.zoom_to_bbox(50, 50, 50, 50, margin=0, animate=False)
+        # Degenerate → zoom should not change
+        assert _approx(vp.zoom.current, 2.0)
+        # But pan should center on the point
+        assert _approx(vp.pan_x.current, 50)
+        assert _approx(vp.pan_y.current, 50)
+
+    # --- pan_to_point ---
+
+    def test_pan_to_point_immediate(self):
+        """pan_to_point with animate=False sets current immediately."""
+        vp = Viewport(width=100, height=100)
+        vp.pan_to_point(75.0, 25.0, animate=False)
+        assert _approx(vp.pan_x.current, 75.0)
+        assert _approx(vp.pan_y.current, 25.0)
+
+    def test_pan_to_point_animated(self):
+        """pan_to_point with animate=True sets target only (current unchanged)."""
+        vp = Viewport(width=100, height=100)
+        vp.pan_x.set_immediate(0)
+        vp.pan_y.set_immediate(0)
+        vp.pan_to_point(75.0, 25.0, animate=True)
+        # Target set
+        assert _approx(vp.pan_x.target, 75.0)
+        assert _approx(vp.pan_y.target, 25.0)
+        # Current unchanged
+        assert _approx(vp.pan_x.current, 0)
+        assert _approx(vp.pan_y.current, 0)
