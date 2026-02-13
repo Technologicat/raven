@@ -144,5 +144,8 @@ name = "nvidia"
 url = "https://pypi.org/simple"
 verify_ssl = true
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
 [tool.mypy]
 show_error_codes = true
