@@ -85,6 +85,9 @@ class XDotWidget(gui_animation.Animation):
         self._render_lock = threading.RLock()
         self._needs_render = True
 
+        # Input suppression (e.g. while a modal dialog is open)
+        self._input_enabled = True
+
         # Mouse state
         self._dragging = False
         self._last_mouse_pos = (0.0, 0.0)
@@ -336,6 +339,18 @@ class XDotWidget(gui_animation.Animation):
         """Return (width, height) in pixels."""
         return self._width, self._height
 
+    @property
+    def input_enabled(self) -> bool:
+        """Whether mouse/keyboard input is processed.
+
+        Set to False to suppress input (e.g. while a modal dialog is open).
+        """
+        return self._input_enabled
+
+    @input_enabled.setter
+    def input_enabled(self, value: bool) -> None:
+        self._input_enabled = value
+
     # -------------------------------------------------------------------------
     # Animation and rendering
 
@@ -373,10 +388,11 @@ class XDotWidget(gui_animation.Animation):
             self._needs_render = True
 
         # Re-evaluate link highlights when modifier keys change (without mouse move)
-        shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-        ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
-        if shift != self._last_shift or ctrl != self._last_ctrl:
-            self._update_link_highlights()
+        if self._input_enabled:
+            shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+            ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+            if shift != self._last_shift or ctrl != self._last_ctrl:
+                self._update_link_highlights()
 
         # Render if needed
         if self._needs_render:
@@ -491,7 +507,7 @@ class XDotWidget(gui_animation.Animation):
 
     def _on_mouse_move(self, sender, app_data) -> None:
         """Handle mouse movement, updating highlights, and triggering the custom callback if set."""
-        if not self._is_mouse_inside():
+        if not self._input_enabled or not self._is_mouse_inside():
             # Mouse left widget - clear hover and link highlights.
             self._highlight.set_hover(None)
             if self._highlight.has_link_highlights():
@@ -543,7 +559,7 @@ class XDotWidget(gui_animation.Animation):
         at the other end (xdottir-style navigation). Clicking elsewhere
         on the edge centers on the edge midpoint.
         """
-        if not self._is_mouse_inside():
+        if not self._input_enabled or not self._is_mouse_inside():
             return
         if self._graph is None:
             return
@@ -670,7 +686,7 @@ class XDotWidget(gui_animation.Animation):
 
     def _on_mouse_wheel(self, sender, app_data) -> None:
         """Handle mouse wheel for zooming."""
-        if not self._is_mouse_inside():
+        if not self._input_enabled or not self._is_mouse_inside():
             return
 
         delta = app_data  # positive = scroll up (zoom in)
@@ -691,6 +707,8 @@ class XDotWidget(gui_animation.Animation):
         point, not per-frame delta. We track the previous cumulative value
         and compute the per-frame increment.
         """
+        if not self._input_enabled:
+            return
         if not self._is_mouse_inside() and not self._dragging:
             return
 

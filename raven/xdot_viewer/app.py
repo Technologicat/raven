@@ -56,6 +56,7 @@ _filedialog_open = None  # initialized after DPG setup
 
 def _open_file_dialog_callback(selected_files):
     """Callback for the file dialog. `selected_files` is a list of Path objects."""
+    _app_state["widget"].input_enabled = True
     if selected_files:
         _open_file(str(selected_files[0]))
 
@@ -63,6 +64,7 @@ def _open_file_dialog_callback(selected_files):
 def _show_open_dialog(*_args) -> None:
     """Show the file open dialog."""
     if _filedialog_open is not None:
+        _app_state["widget"].input_enabled = False
         _filedialog_open.show_file_dialog()
 
 
