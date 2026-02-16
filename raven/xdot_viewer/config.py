@@ -21,8 +21,9 @@ WIDGET_V_PADDING = (2 * DPG_WINDOW_PADDING_Y +     # top + bottom window margin
                     STATUS_H)                       # status bar
 
 # Default viewport dimensions (also used as argparse defaults).
-DEFAULT_WIDTH = 1200
-DEFAULT_HEIGHT = 1000
+# Fits onto a 1080p screen in Linux Mint (same as Librarian/Visualizer).
+DEFAULT_WIDTH = 1920
+DEFAULT_HEIGHT = 1040
 
 # Arrow key pan amount (pixels per keypress).
 PAN_AMOUNT = 10
@@ -46,3 +47,7 @@ HIGHLIGHT_FADE_DURATION = 2.0
 # Font atlas sizes (px) for graph text rendering.
 # The renderer picks whichever is closest to the rendered text size.
 GRAPH_TEXT_FONT_SIZES = [4, 8, 16, 32, 64]
+
+# Help card dimensions (pixels). Chosen to fit the content.
+HELP_WINDOW_W = 1400
+HELP_WINDOW_H = 750

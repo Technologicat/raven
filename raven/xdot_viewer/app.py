@@ -33,10 +33,14 @@ with timer() as tim:
 
     from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
 
+    from unpythonic.env import env
+
     from ..common import utils as common_utils
     from ..common.gui.xdotwidget import XDotWidget
     from ..common.gui import utils as guiutils
+    from ..common.gui import helpcard
     from ..common.gui import animation as gui_animation
+    from ..vendor import DearPyGui_Markdown as dpg_markdown
     from ..vendor.file_dialog.fdialog import FileDialog
 
     from . import config
@@ -53,6 +57,7 @@ _app_state = {
 }
 
 _filedialog_open = None  # initialized after DPG setup
+_help_window = None  # initialized after DPG setup
 
 
 def _open_file_dialog_callback(selected_files):
@@ -294,22 +299,15 @@ def _check_file_reload() -> None:
 
 
 def _on_key(sender, app_data) -> None:
-    """Handle keyboard shortcuts.
-
-    Ctrl+O: Open file dialog
-    Ctrl+F: Focus search field (then Enter to search, or Esc to unfocus and revert changes to search terms)
-    F3 / Shift+F3: Next / previous search match (like old DOS apps; consistency with rest of Raven)
-    F11: Toggle fullscreen
-    F12: Toggle dark mode
-    +/=: Zoom in
-    -: Zoom out
-    0: Zoom to fit
-    Arrow keys: Pan view
-    """
+    """Handle keyboard shortcuts."""
     key = app_data
 
     widget = _app_state["widget"]
     if widget is not None and not widget.input_enabled:
+        return
+
+    # Help card handles its own hotkeys (Escape to close)
+    if _help_window is not None and _help_window.is_visible():
         return
 
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
@@ -359,6 +357,9 @@ def _on_key(sender, app_data) -> None:
             widget.pan_by(dx=+config.PAN_AMOUNT, dy=0)
         elif key == dpg.mvKey_Right:
             widget.pan_by(dx=-config.PAN_AMOUNT, dy=0)
+        elif key == dpg.mvKey_F1:
+            if _help_window is not None:
+                _help_window.show()
         elif key == dpg.mvKey_F11:
             toggle_fullscreen()
         elif key == dpg.mvKey_F12:
@@ -466,6 +467,11 @@ def main() -> int:
             with dpg.tooltip("fullscreen_button"):  # tag
                 dpg.add_text("Toggle fullscreen [F11]")
 
+            dpg.add_button(label=fa.ICON_CIRCLE_QUESTION, tag="help_button", width=30)
+            dpg.bind_item_font("help_button", themes_and_fonts.icon_font_regular)  # tag
+            with dpg.tooltip("help_button"):  # tag
+                dpg.add_text("Help [F1]")
+
             dpg.add_button(label=fa.ICON_CIRCLE_UP, tag="prev_match_button", callback=_prev_match, width=30)
             dpg.bind_item_font("prev_match_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("prev_match_button"):  # tag
@@ -511,6 +517,76 @@ def main() -> int:
     # Keyboard handler (global — applies to entire viewport)
     with dpg.handler_registry():
         dpg.add_key_press_handler(callback=_on_key)
+
+    # --- Help card ---
+    hotkey_info = (
+        # Column 1: search & file
+        env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open file", notes=""),
+        env(key_indent=0, key="Ctrl+F", action_indent=0, action="Focus search field", notes=""),
+        env(key_indent=1, key="Enter", action_indent=0, action="Accept and jump to first match", notes="When focused"),
+        env(key_indent=1, key="Esc", action_indent=0, action="Unfocus and revert", notes="When focused"),
+        env(key_indent=0, key="F3", action_indent=0, action="Next search match", notes=""),
+        env(key_indent=0, key="Shift+F3", action_indent=0, action="Previous search match", notes=""),
+
+        helpcard.hotkey_new_column,
+
+        # Column 2: navigation & app
+        env(key_indent=0, key="+  / Numpad +", action_indent=0, action="Zoom in", notes=""),
+        env(key_indent=0, key="-  / Numpad -", action_indent=0, action="Zoom out", notes=""),
+        env(key_indent=0, key="0  / Numpad 0", action_indent=0, action="Zoom to fit", notes=""),
+        env(key_indent=0, key="Arrow keys", action_indent=0, action="Pan view", notes=""),
+        env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at cursor", notes=""),
+        env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan view", notes=""),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="F1", action_indent=0, action="Open this Help card", notes=""),
+        env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
+        env(key_indent=0, key="F12", action_indent=0, action="Toggle dark mode", notes=""),
+    )
+
+    def render_help_extras(self: helpcard.HelpWindow,
+                           gui_parent) -> None:
+        """Render app-specific extra information into the help card."""
+        dpg_markdown.add_text(f"{self.c_hed}**Interaction modes**{self.c_end}", parent=gui_parent)
+        g = dpg.add_group(parent=gui_parent)
+        dpg_markdown.add_text(f"{self.c_txt}**Click** a node or edge to focus the view on it. Clicking an edge cycles: zoom-to-fit -> source -> destination -> zoom-to-fit.{self.c_end}",
+                              parent=g)
+        dpg_markdown.add_text(f"{self.c_txt}**Right-click** a node to open its URL (if it has one) in the browser.{self.c_end}",
+                              parent=g)
+        dpg_markdown.add_text(f"{self.c_txt}**Shift+hover** (**Ctrl+hover**) over a node to highlight its outgoing (incoming) connections, respectively.{self.c_end}",
+                              parent=g)
+
+        dpg.add_spacer(width=1, height=themes_and_fonts.font_size // 2, parent=gui_parent)
+        dpg_markdown.add_text(f"{self.c_hed}**How search works**{self.c_end}", parent=gui_parent)
+        g = dpg.add_group(parent=gui_parent)
+        dpg_markdown.add_text(f"{self.c_txt}Each space-separated search term is a **fragment**. For a match, **all** fragments must match. Order does not matter. Results live-update as you type.{self.c_end}",
+                              parent=g)
+        dpg_markdown.add_text(f'- {self.c_txt}A **lowercase** fragment matches {self.c_end}{self.c_hig}case-insensitively{self.c_end}{self.c_txt}. E.g. *"cat photo"* matches *"photocatalytic"*.{self.c_end}',
+                              parent=g)
+        dpg_markdown.add_text(f'- {self.c_txt}A fragment with **at least one uppercase** letter matches {self.c_end}{self.c_hig}case-sensitively{self.c_end}{self.c_txt}. E.g. *"TiO"* matches titanium oxide, not *"bastion"*.{self.c_end}',
+                              parent=g)
+
+        dpg.add_spacer(width=1, height=themes_and_fonts.font_size // 2, parent=gui_parent)
+        dpg_markdown.add_text(f"{self.c_hed}**Auto-reload**{self.c_end}", parent=gui_parent)
+        g = dpg.add_group(parent=gui_parent)
+        dpg_markdown.add_text(f"{self.c_txt}The currently open file is polled for changes and reloaded automatically.{self.c_end}",
+                              parent=g)
+
+    def _help_on_show():
+        _app_state["widget"].input_enabled = False
+
+    def _help_on_hide():
+        _app_state["widget"].input_enabled = True
+
+    global _help_window
+    _help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
+                                       width=config.HELP_WINDOW_W,
+                                       height=config.HELP_WINDOW_H,
+                                       reference_window="main_window",
+                                       themes_and_fonts=themes_and_fonts,
+                                       on_render_extras=render_help_extras,
+                                       on_show=_help_on_show,
+                                       on_hide=_help_on_hide)
+    dpg.set_item_callback("help_button", _help_window.show)  # tag
 
     # --- Start app ---
     dpg.set_primary_window("main_window", True)
