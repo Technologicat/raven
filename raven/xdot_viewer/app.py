@@ -433,7 +433,10 @@ def main() -> int:
             on_click=_on_click,
             highlight_fade_duration=config.HIGHLIGHT_FADE_DURATION,
             graph_text_fonts=graph_text_fonts,
-            mouse_wheel_zoom_factor=config.MOUSE_WHEEL_ZOOM_FACTOR
+            mouse_wheel_zoom_factor=config.MOUSE_WHEEL_ZOOM_FACTOR,
+            dark_mode=config.DARK_MODE,
+            dark_bg_color=config.DARK_MODE_BACKGROUND,
+            light_bg_color=config.LIGHT_MODE_BACKGROUND
         )
 
         # Status bar

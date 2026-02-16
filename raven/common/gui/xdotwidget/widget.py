@@ -18,12 +18,12 @@ from unpythonic import sym
 from .. import animation as gui_animation
 from .. import utils as gui_utils
 
-from .constants import Point
+from .constants import DPGColor, Point
 from .graph import Graph, Node, Edge, PolygonShape, get_highlight_colors
 from .highlight import HighlightState
 from .hitdetect import hit_test_screen
 from .parser import parse_xdot
-from .renderer import render_graph, color_to_dpg
+from .renderer import render_graph, color_to_dpg, set_dark_mode
 from .search import SearchState
 from .viewport import Viewport
 
@@ -57,7 +57,10 @@ class XDotWidget(gui_animation.Animation):
                  text_compaction_callback: Optional[Callable[[str, float], str]] = None,
                  highlight_fade_duration: float = 2.0,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
-                 mouse_wheel_zoom_factor: float = 1.1):
+                 mouse_wheel_zoom_factor: float = 1.1,
+                 dark_mode: bool = False,
+                 dark_bg_color: DPGColor = (45, 45, 48, 255),
+                 light_bg_color: DPGColor = (255, 255, 255, 255)):
         """Create an XDotWidget.
 
         `parent`: DPG parent (child window, group, etc.)
@@ -71,6 +74,9 @@ class XDotWidget(gui_animation.Animation):
                                      Receives (text, available_width_px).
                                      Must return compacted text.
         `mouse_wheel_zoom_factor`: Zoom factor per mouse wheel notch.
+        `dark_mode`: If True, invert graph lightness for dark backgrounds.
+        `dark_bg_color`: Background color in dark mode (DPG format, [0,255]).
+        `light_bg_color`: Background color in light mode (DPG format, [0,255]).
         """
         self._width = width
         self._height = height
@@ -79,6 +85,11 @@ class XDotWidget(gui_animation.Animation):
         self._text_compaction_callback = text_compaction_callback
         self._graph_text_fonts = graph_text_fonts
         self._mouse_wheel_zoom_factor = mouse_wheel_zoom_factor
+        self._dark_mode = dark_mode
+        self._dark_bg_color = dark_bg_color
+        self._light_bg_color = light_bg_color
+
+        set_dark_mode(dark_mode)
 
         self._graph: Optional[Graph] = None
         self._viewport = Viewport(width, height)
@@ -354,6 +365,17 @@ class XDotWidget(gui_animation.Animation):
     def input_enabled(self, value: bool) -> None:
         self._input_enabled = value
 
+    @property
+    def dark_mode(self) -> bool:
+        """Whether dark mode (HSL lightness inversion) is active."""
+        return self._dark_mode
+
+    @dark_mode.setter
+    def dark_mode(self, value: bool) -> None:
+        self._dark_mode = value
+        set_dark_mode(value)
+        self._needs_render = True
+
     # -------------------------------------------------------------------------
     # Animation and rendering
 
@@ -418,13 +440,16 @@ class XDotWidget(gui_animation.Animation):
                 for e in highlighted
             }
 
+            bg_color = self._dark_bg_color if self._dark_mode else self._light_bg_color
+
             render_graph(
                 self.drawlist,
                 self._graph,
                 self._viewport,
                 highlight_intensities=highlight_intensities,
                 text_compaction_cb=self._text_compaction_callback,
-                graph_text_fonts=self._graph_text_fonts
+                graph_text_fonts=self._graph_text_fonts,
+                background_color=bg_color
             )
 
             # Draw follow-edge indicator ring.

@@ -32,6 +32,11 @@ ZOOM_IN_FACTOR = 1.2           # per keypress / toolbar button click
 ZOOM_OUT_FACTOR = 1.2          # applied as 1/factor
 MOUSE_WHEEL_ZOOM_FACTOR = 1.1  # per wheel notch (finer than keyboard)
 
+# Dark mode — invert graph lightness for DPG's dark theme.
+DARK_MODE = True
+DARK_MODE_BACKGROUND = (45, 45, 48, 255)     # DPG default dark gray
+LIGHT_MODE_BACKGROUND = (255, 255, 255, 255)  # white
+
 # Interval (seconds) between file modification checks for auto-reload.
 FILE_RELOAD_POLL_INTERVAL = 2.0
 

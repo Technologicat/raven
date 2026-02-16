@@ -4,8 +4,9 @@ This module provides rendering functions that draw graph shapes using
 DearPyGUI's drawlist primitives.
 """
 
-__all__ = ["render_graph", "color_to_dpg"]
+__all__ = ["render_graph", "color_to_dpg", "set_dark_mode", "get_dark_mode"]
 
+import colorsys
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import dearpygui.dearpygui as dpg
@@ -19,8 +20,42 @@ from .constants import Color, DPGColor, Point
 from .viewport import Viewport
 
 
+# Dark mode state — module-level because we have a single XDotWidget instance
+# and dark mode is an app-wide display concern. If multiple widget instances
+# are ever needed, this should move into the widget or renderer instance.
+_dark_mode: bool = False
+
+
+def set_dark_mode(enabled: bool) -> None:
+    """Enable or disable dark mode (HSL lightness inversion)."""
+    global _dark_mode
+    _dark_mode = enabled
+
+
+def get_dark_mode() -> bool:
+    """Return whether dark mode is enabled."""
+    return _dark_mode
+
+
+def _invert_lightness(color: Color) -> Color:
+    """Invert the lightness of an RGBA color (all channels [0,1]).
+
+    RGB → HLS, invert L (1−L), HLS → RGB. Alpha passthrough.
+    Maps black↔white while preserving hue and saturation.
+    """
+    r, g, b, a = color
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    r2, g2, b2 = colorsys.hls_to_rgb(h, 1.0 - l, s)
+    return (r2, g2, b2, a)
+
+
 def color_to_dpg(color: Color) -> DPGColor:  # TODO: move to a utility module, maybe `raven.common.video.colorspace`? OTOH, not video, but GUI, and we don't have a colorspace module in that namespace.
-    """Convert RGBA color from [0,1] to DPG format [0,255]."""
+    """Convert RGBA color from [0,1] to DPG format [0,255].
+
+    If dark mode is enabled, applies lightness inversion first.
+    """
+    if _dark_mode:
+        color = _invert_lightness(color)
     r, g, b, a = color
     return (int(r * 255), int(g * 255), int(b * 255), int(a * 255))
 
@@ -271,7 +306,8 @@ def render_graph(drawlist: Union[int, str],
                  viewport: Viewport,
                  highlight_intensities: Optional[Dict[Element, float]] = None,
                  text_compaction_cb: Optional[Callable] = None,
-                 graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None) -> None:
+                 graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
+                 background_color: Optional[DPGColor] = None) -> None:
     """Render a graph to a DPG drawlist.
 
     `drawlist`: DPG drawlist ID or tag.
@@ -283,12 +319,20 @@ def render_graph(drawlist: Union[int, str],
     `graph_text_fonts`: Optional list of (atlas_size_px, dpg_font_id) tuples.
                          The renderer picks the font whose atlas size is closest
                          to the rendered text size, for sharpest results.
+    `background_color`: Optional DPG color for the graph background rectangle.
     """
     if highlight_intensities is None:
         highlight_intensities = {}
 
     # Clear the drawlist
     dpg.delete_item(drawlist, children_only=True)
+
+    # Draw background rectangle
+    if background_color is not None:
+        w = viewport.width
+        h = viewport.height
+        dpg.draw_rectangle((0, 0), (w, h), color=(0, 0, 0, 0),
+                           fill=background_color, parent=drawlist)
 
     # Render background shapes
     for shape in graph.shapes:
