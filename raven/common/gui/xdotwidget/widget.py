@@ -406,6 +406,10 @@ class XDotWidget(gui_animation.Animation):
         if self._viewport.update():
             animating = True
             self._needs_render = True
+            # Viewport moved — what's under the cursor changed even though
+            # the mouse didn't move.  Re-evaluate hover so the old highlight
+            # starts fading instead of staying stuck at full intensity.
+            self._refresh_hover()
 
         # Update highlight animations
         if self._highlight.update():
@@ -533,10 +537,15 @@ class XDotWidget(gui_animation.Animation):
         self._last_shift = shift
         self._last_ctrl = ctrl
 
-    def _on_mouse_move(self, sender, app_data) -> None:
-        """Handle mouse movement, updating highlights, and triggering the custom callback if set."""
+    def _refresh_hover(self) -> None:
+        """Re-evaluate hover state from current mouse position.
+
+        Updates the hover highlight, follow-edge indicator, and notifies
+        the hover callback. Called by `_on_mouse_move` (mouse moved) and
+        by `update` (viewport moved during pan/zoom animation).
+        """
         if not self._input_enabled or not self._is_mouse_inside():
-            # Mouse left widget - clear hover and link highlights.
+            # Mouse left widget or input suppressed — clear hover.
             self._highlight.set_hover(None)
             if self._highlight.has_link_highlights():
                 self._highlight.clear_link_highlights()
@@ -556,9 +565,6 @@ class XDotWidget(gui_animation.Animation):
         # Update hover
         self._highlight.set_hover(element)
 
-        # Shift/Ctrl hover: highlight outgoing/incoming edges + connected nodes
-        self._update_link_highlights()
-
         # Update follow-edge indicator: show ring near the endpoint
         # that would be the follow origin (i.e. the end you're near).
         # This is independent of the hit test, so the indicator works
@@ -577,6 +583,11 @@ class XDotWidget(gui_animation.Animation):
             self._needs_render = True
             if self._on_hover:
                 self._on_hover(new_hover_desc)
+
+    def _on_mouse_move(self, sender, app_data) -> None:
+        """Handle mouse movement, updating highlights, and triggering the custom callback if set."""
+        self._refresh_hover()
+        self._update_link_highlights()
 
     _EDGE_ENDPOINT_RADIUS_PX = 15  # pixel radius for follow-edge-on-click
 
