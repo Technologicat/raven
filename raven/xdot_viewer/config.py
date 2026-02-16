@@ -13,7 +13,7 @@ DPG_SCROLLBAR_SIZE = 14     # mvStyleVar_ScrollbarSize
 TOOLBAR_H = FONT_SIZE + 2 * DPG_FRAME_PADDING_Y   # tallest toolbar item (button/input)
 STATUS_H = FONT_SIZE                                # text line
 
-WIDGET_H_PADDING = DPG_SCROLLBAR_SIZE + 2 * DPG_WINDOW_PADDING_Y
+WIDGET_H_PADDING = DPG_SCROLLBAR_SIZE + 2 * DPG_WINDOW_PADDING_Y - 13  # -13: empirical fudge to align with toolbar search field
 WIDGET_V_PADDING = (2 * DPG_WINDOW_PADDING_Y +     # top + bottom window margin
                     TOOLBAR_H +                     # toolbar row
                     4 * DPG_ITEM_SPACING_Y +        # gaps: toolbar group↔widget, widget↔status,
