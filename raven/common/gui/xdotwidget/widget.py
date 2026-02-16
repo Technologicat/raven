@@ -620,8 +620,6 @@ class XDotWidget(gui_animation.Animation):
         if button == 1 and self._on_open_url is not None:
             element = hit_test_screen(self._graph, self._viewport, sx, sy)
             if isinstance(element, Node) and element.url:
-                self._highlight.set_hover(None)  # browser steals focus, so no mouse-leave event
-                self._needs_render = True
                 self._on_open_url(element.url)
                 return
 
