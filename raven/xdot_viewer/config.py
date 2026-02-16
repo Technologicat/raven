@@ -27,6 +27,11 @@ DEFAULT_HEIGHT = 1000
 # Arrow key pan amount (pixels per keypress).
 PAN_AMOUNT = 10
 
+# Zoom factors.
+ZOOM_IN_FACTOR = 1.2           # per keypress / toolbar button click
+ZOOM_OUT_FACTOR = 1.2          # applied as 1/factor
+MOUSE_WHEEL_ZOOM_FACTOR = 1.1  # per wheel notch (finer than keyboard)
+
 # Interval (seconds) between file modification checks for auto-reload.
 FILE_RELOAD_POLL_INTERVAL = 2.0
 

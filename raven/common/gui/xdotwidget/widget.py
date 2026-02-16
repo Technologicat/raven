@@ -56,7 +56,8 @@ class XDotWidget(gui_animation.Animation):
                  on_click: Optional[Callable[[str, int], None]] = None,
                  text_compaction_callback: Optional[Callable[[str, float], str]] = None,
                  highlight_fade_duration: float = 2.0,
-                 graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None):
+                 graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
+                 mouse_wheel_zoom_factor: float = 1.1):
         """Create an XDotWidget.
 
         `parent`: DPG parent (child window, group, etc.)
@@ -69,6 +70,7 @@ class XDotWidget(gui_animation.Animation):
                                      a node won't fit inside that node visually.
                                      Receives (text, available_width_px).
                                      Must return compacted text.
+        `mouse_wheel_zoom_factor`: Zoom factor per mouse wheel notch.
         """
         self._width = width
         self._height = height
@@ -76,6 +78,7 @@ class XDotWidget(gui_animation.Animation):
         self._on_click = on_click
         self._text_compaction_callback = text_compaction_callback
         self._graph_text_fonts = graph_text_fonts
+        self._mouse_wheel_zoom_factor = mouse_wheel_zoom_factor
 
         self._graph: Optional[Graph] = None
         self._viewport = Viewport(width, height)
@@ -693,10 +696,11 @@ class XDotWidget(gui_animation.Animation):
 
         sx, sy = self._get_local_mouse_pos()
 
+        f = self._mouse_wheel_zoom_factor
         if delta > 0:
-            self._viewport.zoom_by(1.1, sx, sy)
+            self._viewport.zoom_by(f, sx, sy)
         else:
-            self._viewport.zoom_by(1.0 / 1.1, sx, sy)
+            self._viewport.zoom_by(1.0 / f, sx, sy)
 
         self._needs_render = True
 

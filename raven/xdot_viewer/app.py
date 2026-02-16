@@ -217,14 +217,14 @@ def _zoom_in(*_args) -> None:
     """Zoom in."""
     widget = _app_state["widget"]
     if widget is not None:
-        widget.zoom_in()
+        widget.zoom_in(factor=config.ZOOM_IN_FACTOR)
 
 
 def _zoom_out(*_args) -> None:
     """Zoom out."""
     widget = _app_state["widget"]
     if widget is not None:
-        widget.zoom_out()
+        widget.zoom_out(factor=config.ZOOM_OUT_FACTOR)
 
 
 def _check_file_reload() -> None:
@@ -432,7 +432,8 @@ def main() -> int:
             on_hover=_on_hover,
             on_click=_on_click,
             highlight_fade_duration=config.HIGHLIGHT_FADE_DURATION,
-            graph_text_fonts=graph_text_fonts
+            graph_text_fonts=graph_text_fonts,
+            mouse_wheel_zoom_factor=config.MOUSE_WHEEL_ZOOM_FACTOR
         )
 
         # Status bar
