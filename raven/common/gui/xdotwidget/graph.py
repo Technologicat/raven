@@ -13,8 +13,7 @@ which in turn was adapted from XDot by José Fonseca.
 __all__ = ["Pen", "Shape", "TextShape", "EllipseShape", "PolygonShape",
            "LineShape", "BezierShape", "CompoundShape",
            "Element", "Node", "Edge", "Graph",
-           "Url", "Jump",
-           "mix_colors", "square_distance", "tessellate_bezier"]
+           "mix_colors", "tessellate_bezier"]
 
 from itertools import chain
 from typing import Dict, List, Optional, Set, Tuple
@@ -42,13 +41,6 @@ def mix_colors(rgb1: Color, rgb2: Color, t: float) -> Color:
     B = (1.0 - t) * B1 + t * B2
     A = (1.0 - t) * A1 + t * A2
     return (R, G, B, A)
-
-
-def square_distance(x1: float, y1: float, x2: float, y2: float) -> float:
-    """Return squared Euclidean distance between two points."""
-    deltax = x2 - x1
-    deltay = y2 - y1
-    return deltax * deltax + deltay * deltay
 
 
 def tessellate_bezier(points: List["Point"], n: int = 10) -> List["Point"]:
@@ -327,42 +319,11 @@ class CompoundShape(Shape):
         return (x1, y1, x2, y2)
 
 
-class Url:
-    """URL associated with a graph element."""
-
-    def __init__(self, item: "Element", url: str, highlight: Optional[Set["Element"]] = None):
-        self.item = item
-        self.url = url
-        if highlight is None:
-            highlight = {item}
-        self.highlight = highlight
-
-
-class Jump:
-    """Jump target for graph navigation."""
-
-    def __init__(self, item: "Element", x: float, y: float, highlight: Optional[Set["Element"]] = None):
-        self.item = item
-        self.x = x
-        self.y = y
-        if highlight is None:
-            highlight = {item}
-        self.highlight = highlight
-
-
 class Element(CompoundShape):
     """Base class for graph nodes and edges."""
 
     def __init__(self, shapes: List[Shape]):
         super().__init__(shapes)
-
-    def get_url(self, x: float, y: float) -> Optional[Url]:
-        """Return URL if point (x, y) is inside this element, else None."""
-        return None
-
-    def get_jump(self, x: float, y: float, **kwargs) -> Optional[Jump]:
-        """Return Jump target if point (x, y) is inside this element, else None."""
-        return None
 
     def get_texts(self) -> List[str]:
         """Return text content of any TextShapes in this element."""
@@ -397,18 +358,6 @@ class Node(Element):
         """Return whether point (x, y) is inside this node's bounding box."""
         return self.x1 <= x <= self.x2 and self.y1 <= y <= self.y2
 
-    def get_url(self, x: float, y: float) -> Optional[Url]:
-        if self.url is None:
-            return None
-        if self.is_inside(x, y):
-            return Url(self, self.url)
-        return None
-
-    def get_jump(self, x: float, y: float, **kwargs) -> Optional[Jump]:
-        if self.is_inside(x, y):
-            return Jump(self, self.x, self.y)
-        return None
-
     def get_bounding_box(self) -> Tuple[float, float, float, float]:
         return (self.x1, self.y1, self.x2, self.y2)
 
@@ -423,26 +372,11 @@ class Edge(Element):
         shapes: Drawing shapes (line, arrows, labels).
     """
 
-    CLICK_RADIUS = 10  # Click detection radius for endpoints
-
     def __init__(self, src: Node, dst: Node, points: List[Point], shapes: List[Shape]):
         super().__init__(shapes)
         self.src = src
         self.dst = dst
         self.points = points
-
-    def get_jump(self, x: float, y: float, **kwargs) -> Optional[Jump]:
-        """Return Jump to connected node if clicking near an endpoint."""
-        if self.points:
-            # Click near start -> jump to destination
-            if square_distance(x, y, *self.points[0]) <= self.CLICK_RADIUS * self.CLICK_RADIUS:
-                return Jump(self, self.dst.x, self.dst.y,
-                            highlight={self, self.dst})
-            # Click near end -> jump to source
-            if square_distance(x, y, *self.points[-1]) <= self.CLICK_RADIUS * self.CLICK_RADIUS:
-                return Jump(self, self.src.x, self.src.y,
-                            highlight={self, self.src})
-        return None
 
 
 class Graph:
@@ -482,52 +416,6 @@ class Graph:
     def get_size(self) -> Tuple[float, float]:
         """Return (width, height) of the graph."""
         return self.width, self.height
-
-    def get_url(self, x: float, y: float) -> Optional[Url]:
-        """Return URL at point (x, y), or None."""
-        for node in self.nodes:
-            url = node.get_url(x, y)
-            if url is not None:
-                return url
-        return None
-
-    def get_jump(self, x: float, y: float,
-                 highlight_linked_nodes: Optional[str] = None) -> Optional[Jump]:
-        """Return Jump target at point (x, y), or None.
-
-        `highlight_linked_nodes`: One of None, "from", "to", "to_links_only".
-            Controls which linked nodes/edges to include in the highlight set
-            of the Jump.
-        """
-        # Check edges first (for endpoint clicks)
-        for edge in self.edges:
-            jump = edge.get_jump(x, y)
-            if jump is not None:
-                return jump
-
-        # Check nodes
-        for node in self.nodes:
-            jump = node.get_jump(x, y)
-            if jump is not None:
-                # Optionally highlight linked edges
-                if highlight_linked_nodes is None:
-                    pass
-                elif highlight_linked_nodes == "from":
-                    linked_edges = [e for e in self.edges if e.src == node]
-                else:  # "to" or "to_links_only"
-                    linked_edges = [e for e in self.edges if e.dst == node]
-                jump.highlight.update(linked_edges)
-
-                # Optionally highlight linked nodes
-                if highlight_linked_nodes == "from":
-                    linked_nodes = [e.dst for e in linked_edges]
-                    jump.highlight.update(linked_nodes)
-                elif highlight_linked_nodes == "to":
-                    linked_nodes = [e.src for e in linked_edges]
-                    jump.highlight.update(linked_nodes)
-
-                return jump
-        return None
 
     def filter_items_by_text(self, text: str) -> List[Element]:
         """Return nodes/edges containing all fragments of the search text.
