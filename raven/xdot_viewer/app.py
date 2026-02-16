@@ -251,10 +251,10 @@ def _update_dark_mode_button() -> None:
         return
     if widget.dark_mode:
         dpg.set_item_label("dark_mode_button", fa.ICON_SUN)
-        dpg.set_value("dark_mode_tooltip_text", "Switch to light mode")
+        dpg.set_value("dark_mode_tooltip_text", "Switch to light mode [F12]")
     else:
         dpg.set_item_label("dark_mode_button", fa.ICON_MOON)
-        dpg.set_value("dark_mode_tooltip_text", "Switch to dark mode")
+        dpg.set_value("dark_mode_tooltip_text", "Switch to dark mode [F12]")
 
 
 def _check_file_reload() -> None:
@@ -433,7 +433,7 @@ def main() -> int:
             dpg.add_button(label=_dark_mode_initial_icon, tag="dark_mode_button", callback=_toggle_dark_mode, width=30)
             dpg.bind_item_font("dark_mode_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("dark_mode_button"):  # tag
-                _dark_mode_initial_tip = "Switch to light mode" if config.DARK_MODE else "Switch to dark mode"
+                _dark_mode_initial_tip = "Switch to light mode [F12]" if config.DARK_MODE else "Switch to dark mode [F12]"
                 dpg.add_text(_dark_mode_initial_tip, tag="dark_mode_tooltip_text")
 
             dpg.add_button(label=fa.ICON_CIRCLE_UP, tag="prev_match_button", callback=_prev_match, width=30)

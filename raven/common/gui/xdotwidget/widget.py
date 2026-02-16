@@ -134,7 +134,7 @@ class XDotWidget(gui_animation.Animation):
         with dpg.handler_registry() as self._handler_registry:
             dpg.add_mouse_move_handler(callback=self._on_mouse_move)
             dpg.add_mouse_click_handler(callback=self._on_mouse_click)
-            dpg.add_mouse_double_click_handler(callback=self._on_mouse_double_click)
+
             dpg.add_mouse_wheel_handler(callback=self._on_mouse_wheel)
             dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Left,
                                        callback=self._on_mouse_drag)
@@ -496,7 +496,7 @@ class XDotWidget(gui_animation.Animation):
             texts = element.get_texts()
             label = ", ".join(texts) if texts else element.internal_name
             if element.url:
-                return f"Node: {label}  —  {element.url} (double-click to open)"
+                return f"Node: {label}  —  {element.url} (right-click to open)"
             return f"Node: {label}"
         elif isinstance(element, Edge):
             src_texts = element.src.get_texts()
@@ -614,6 +614,13 @@ class XDotWidget(gui_animation.Animation):
 
         sx, sy = self._get_local_mouse_pos()
 
+        # Right-click on a URL node: open in browser, don't navigate.
+        if button == 1 and self._on_open_url is not None:
+            element = hit_test_screen(self._graph, self._viewport, sx, sy)
+            if isinstance(element, Node) and element.url:
+                self._on_open_url(element.url)
+                return
+
         # Clear follow indicator on click (we're about to navigate away)
         self._follow_indicator_pos = None
 
@@ -634,18 +641,6 @@ class XDotWidget(gui_animation.Animation):
             if self._on_click:
                 desc = self._describe_element(element)
                 self._on_click(desc, button)
-
-    def _on_mouse_double_click(self, sender, app_data) -> None:
-        """Handle double-click: open URL if the node has one."""
-        if not self._input_enabled or not self._is_mouse_inside():
-            return
-        if self._graph is None or self._on_open_url is None:
-            return
-
-        sx, sy = self._get_local_mouse_pos()
-        element = hit_test_screen(self._graph, self._viewport, sx, sy)
-        if isinstance(element, Node) and element.url:
-            self._on_open_url(element.url)
 
     def _nearest_edge_endpoint(self, sx: float, sy: float) -> Optional[Tuple[Edge, str]]:
         """Find the nearest edge endpoint within follow radius.
