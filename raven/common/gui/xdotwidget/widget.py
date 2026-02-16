@@ -411,10 +411,12 @@ class XDotWidget(gui_animation.Animation):
         if self._viewport.update():
             animating = True
             self._needs_render = True
-            # Viewport moved — what's under the cursor changed even though
-            # the mouse didn't move.  Re-evaluate hover so the old highlight
-            # starts fading instead of staying stuck at full intensity.
-            self._refresh_hover()
+
+        # Re-evaluate hover each frame. Needed because several situations
+        # change what's under the cursor without a mouse-move event:
+        # viewport animation, Alt+Tab back from another window, and
+        # right-click-to-open-URL clearing the hover.
+        self._refresh_hover()
 
         # Update highlight animations
         if self._highlight.update():
@@ -618,6 +620,8 @@ class XDotWidget(gui_animation.Animation):
         if button == 1 and self._on_open_url is not None:
             element = hit_test_screen(self._graph, self._viewport, sx, sy)
             if isinstance(element, Node) and element.url:
+                self._highlight.set_hover(None)  # browser steals focus, so no mouse-leave event
+                self._needs_render = True
                 self._on_open_url(element.url)
                 return
 
