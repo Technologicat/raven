@@ -297,8 +297,10 @@ def _on_key(sender, app_data) -> None:
     """Handle keyboard shortcuts.
 
     Ctrl+O: Open file dialog
-    Ctrl+F: Focus search field (Esc to unfocus)
+    Ctrl+F: Focus search field (then Enter to search, or Esc to unfocus and revert changes to search terms)
     F3 / Shift+F3: Next / previous search match (like old DOS apps; consistency with rest of Raven)
+    F11: Toggle fullscreen
+    F12: Toggle dark mode
     +/=: Zoom in
     -: Zoom out
     0: Zoom to fit
