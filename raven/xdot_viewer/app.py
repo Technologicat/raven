@@ -254,10 +254,13 @@ def _on_key(sender, app_data) -> None:
     Arrow keys: Pan view
     """
     key = app_data
-    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
-    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
 
     widget = _app_state["widget"]
+    if widget is not None and not widget.input_enabled:
+        return
+
+    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
+    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
 
     if dpg.is_item_focused("search_input"):
         if key == dpg.mvKey_Return:  # accept and unfocus
