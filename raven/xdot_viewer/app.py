@@ -336,6 +336,8 @@ def _on_key(sender, app_data) -> None:
             widget.pan_by(dx=+config.PAN_AMOUNT, dy=0)
         elif key == dpg.mvKey_Right:
             widget.pan_by(dx=-config.PAN_AMOUNT, dy=0)
+        elif key == dpg.mvKey_F12:
+            _toggle_dark_mode()
 
 
 def _gui_shutdown() -> None:

@@ -495,6 +495,8 @@ class XDotWidget(gui_animation.Animation):
         if isinstance(element, Node):
             texts = element.get_texts()
             label = ", ".join(texts) if texts else element.internal_name
+            if element.url:
+                return f"Node: {label}  —  {element.url} (double-click to open)"
             return f"Node: {label}"
         elif isinstance(element, Edge):
             src_texts = element.src.get_texts()
