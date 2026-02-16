@@ -37,15 +37,24 @@ def get_dark_mode() -> bool:
     return _dark_mode
 
 
-def _invert_lightness(color: Color) -> Color:
-    """Invert the lightness of an RGBA color (all channels [0,1]).
+# Dark mode lightness remap endpoints (in [0,1] lightness space).
+# Original L=0 (black) maps to L_MAX; original L=1 (white) maps to L_MIN.
+# Tuned so black text becomes light gray (not blinding white) and white
+# backgrounds become DPG's dark gray (not pitch black).
+_DARK_MODE_L_MAX = 220 / 255  # brightest output — light gray, not white
+_DARK_MODE_L_MIN = 45 / 255   # darkest output — DPG dark gray, not black
 
-    RGB → HLS, invert L (1−L), HLS → RGB. Alpha passthrough.
-    Maps black↔white while preserving hue and saturation.
+
+def _invert_lightness(color: Color) -> Color:
+    """Remap the lightness of an RGBA color for dark mode (all channels [0,1]).
+
+    RGB → HLS, linearly remap L from [0,1] to [L_MAX, L_MIN], HLS → RGB.
+    Alpha passthrough. Preserves hue and saturation.
     """
     r, g, b, a = color
     h, l, s = colorsys.rgb_to_hls(r, g, b)
-    r2, g2, b2 = colorsys.hls_to_rgb(h, 1.0 - l, s)
+    new_l = _DARK_MODE_L_MAX - l * (_DARK_MODE_L_MAX - _DARK_MODE_L_MIN)
+    r2, g2, b2 = colorsys.hls_to_rgb(h, new_l, s)
     return (r2, g2, b2, a)
 
 
