@@ -50,4 +50,4 @@ GRAPH_TEXT_FONT_SIZES = [4, 8, 16, 32, 64]
 
 # Help card dimensions (pixels). Chosen to fit the content.
 HELP_WINDOW_W = 1400
-HELP_WINDOW_H = 750
+HELP_WINDOW_H = 760

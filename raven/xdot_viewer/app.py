@@ -554,6 +554,8 @@ def main() -> int:
                               parent=g)
         dpg_markdown.add_text(f"{self.c_txt}**Shift+hover** (**Ctrl+hover**) over a node to highlight its outgoing (incoming) connections, respectively.{self.c_end}",
                               parent=g)
+        dpg_markdown.add_text(f"{self.c_txt}**Hover near an edge endpoint** to reveal a follow indicator; **click** it to jump to the node at the other end.{self.c_end}",
+                              parent=g)
 
         dpg.add_spacer(width=1, height=themes_and_fonts.font_size // 2, parent=gui_parent)
         dpg_markdown.add_text(f"{self.c_hed}**How search works**{self.c_end}", parent=gui_parent)
