@@ -474,8 +474,6 @@ def main() -> int:
             with dpg.tooltip("next_match_button"):  # tag
                 dpg.add_text("Next search match [F3]")
 
-            dpg.add_separator()
-            dpg.add_text("Search:")
             _app_state["search_input"] = dpg.add_input_text(
                 default_value="",
                 tag="search_input",
