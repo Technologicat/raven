@@ -235,6 +235,27 @@ def _zoom_out(*_args) -> None:
         widget.zoom_out(factor=config.ZOOM_OUT_FACTOR)
 
 
+def toggle_fullscreen(*_args) -> None:
+    """Toggle fullscreen and resize the graph widget to match."""
+    dpg.toggle_viewport_fullscreen()
+    resize_gui()
+
+
+def resize_gui(*_args) -> None:
+    """Wait for viewport size to settle, then resize the graph widget."""
+    if guiutils.wait_for_resize("main_window"):
+        _resize_gui()
+
+
+def _resize_gui(*_args) -> None:
+    """Resize the graph widget to fill the main window."""
+    w, h = guiutils.get_widget_size("main_window")
+    widget = _app_state["widget"]
+    if widget is not None:
+        widget.set_size(w - config.WIDGET_H_PADDING,
+                        h - config.WIDGET_V_PADDING)
+
+
 def _toggle_dark_mode(*_args) -> None:
     """Toggle dark mode and update the toolbar button."""
     widget = _app_state["widget"]
@@ -336,6 +357,8 @@ def _on_key(sender, app_data) -> None:
             widget.pan_by(dx=+config.PAN_AMOUNT, dy=0)
         elif key == dpg.mvKey_Right:
             widget.pan_by(dx=-config.PAN_AMOUNT, dy=0)
+        elif key == dpg.mvKey_F11:
+            toggle_fullscreen()
         elif key == dpg.mvKey_F12:
             _toggle_dark_mode()
 
@@ -436,6 +459,11 @@ def main() -> int:
                 _dark_mode_initial_tip = "Switch to light mode [F12]" if config.DARK_MODE else "Switch to dark mode [F12]"
                 dpg.add_text(_dark_mode_initial_tip, tag="dark_mode_tooltip_text")
 
+            dpg.add_button(label=fa.ICON_EXPAND, tag="fullscreen_button", callback=toggle_fullscreen, width=30)
+            dpg.bind_item_font("fullscreen_button", themes_and_fonts.icon_font_solid)  # tag
+            with dpg.tooltip("fullscreen_button"):  # tag
+                dpg.add_text("Toggle fullscreen [F11]")
+
             dpg.add_button(label=fa.ICON_CIRCLE_UP, tag="prev_match_button", callback=_prev_match, width=30)
             dpg.bind_item_font("prev_match_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("prev_match_button"):  # tag
@@ -462,8 +490,6 @@ def main() -> int:
             dpg.bind_item_theme("search_input", "search_input_theme")  # tag
 
         # Graph view
-        # TODO: These sizes don't track viewport resizes. Wire up a resize callback,
-        # or find a DPG fill-parent mechanism.
         _app_state["widget"] = XDotWidget(
             parent="main_window",
             width=args.width - config.WIDGET_H_PADDING,
@@ -488,6 +514,7 @@ def main() -> int:
 
     # --- Start app ---
     dpg.set_primary_window("main_window", True)
+    dpg.set_viewport_resize_callback(_resize_gui)
     dpg.set_exit_callback(_gui_shutdown)
     dpg.show_viewport()
 
