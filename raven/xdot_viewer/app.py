@@ -181,7 +181,7 @@ def _do_search(*_args) -> None:
         return
 
     query = dpg.get_value(search_input)
-    results = widget.search(query)
+    results = widget.search(query)  # noqa: F841: kept for documentation purposes; you could access the result set from here
     count = widget.get_search_count()  # includes both nodes and edges
 
     if not query:
