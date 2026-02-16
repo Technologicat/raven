@@ -54,6 +54,7 @@ class XDotWidget(gui_animation.Animation):
                  tag: Optional[str] = None,
                  on_hover: Optional[Callable[[Optional[str]], None]] = None,
                  on_click: Optional[Callable[[str, int], None]] = None,
+                 on_open_url: Optional[Callable[[str], None]] = None,
                  text_compaction_callback: Optional[Callable[[str, float], str]] = None,
                  highlight_fade_duration: float = 2.0,
                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
@@ -74,6 +75,8 @@ class XDotWidget(gui_animation.Animation):
                                      Receives (text, available_width_px).
                                      Must return compacted text.
         `mouse_wheel_zoom_factor`: Zoom factor per mouse wheel notch.
+        `on_open_url`: Callback when a node with a URL is double-clicked.
+                        Receives the URL string.
         `dark_mode`: If True, invert graph lightness for dark backgrounds.
         `dark_bg_color`: Background color in dark mode (DPG format, [0,255]).
         `light_bg_color`: Background color in light mode (DPG format, [0,255]).
@@ -82,6 +85,7 @@ class XDotWidget(gui_animation.Animation):
         self._height = height
         self._on_hover = on_hover
         self._on_click = on_click
+        self._on_open_url = on_open_url
         self._text_compaction_callback = text_compaction_callback
         self._graph_text_fonts = graph_text_fonts
         self._mouse_wheel_zoom_factor = mouse_wheel_zoom_factor
@@ -130,6 +134,7 @@ class XDotWidget(gui_animation.Animation):
         with dpg.handler_registry() as self._handler_registry:
             dpg.add_mouse_move_handler(callback=self._on_mouse_move)
             dpg.add_mouse_click_handler(callback=self._on_mouse_click)
+            dpg.add_mouse_double_click_handler(callback=self._on_mouse_double_click)
             dpg.add_mouse_wheel_handler(callback=self._on_mouse_wheel)
             dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Left,
                                        callback=self._on_mouse_drag)
@@ -627,6 +632,18 @@ class XDotWidget(gui_animation.Animation):
             if self._on_click:
                 desc = self._describe_element(element)
                 self._on_click(desc, button)
+
+    def _on_mouse_double_click(self, sender, app_data) -> None:
+        """Handle double-click: open URL if the node has one."""
+        if not self._input_enabled or not self._is_mouse_inside():
+            return
+        if self._graph is None or self._on_open_url is None:
+            return
+
+        sx, sy = self._get_local_mouse_pos()
+        element = hit_test_screen(self._graph, self._viewport, sx, sy)
+        if isinstance(element, Node) and element.url:
+            self._on_open_url(element.url)
 
     def _nearest_edge_endpoint(self, sx: float, sy: float) -> Optional[Tuple[Edge, str]]:
         """Find the nearest edge endpoint within follow radius.

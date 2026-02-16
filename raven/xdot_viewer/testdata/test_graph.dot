@@ -54,4 +54,12 @@ digraph test_graph {
     // --- Cross-cluster edges ---
     start -> util_a [style=dotted, label="setup"];
     util_c -> merge  [style=dotted, label="result"];
+
+    // --- Nodes with URLs (double-click to open in browser) ---
+    graphviz [label="GraphViz docs", shape=box,
+              fillcolor="#a8c8e8", URL="https://graphviz.org/doc/info/lang.html"];
+    xdot_fmt [label="xdot format", shape=box,
+              fillcolor="#a8c8e8", URL="https://graphviz.org/docs/outputs/canon/#xdot"];
+    graphviz -> xdot_fmt [label="outputs"];
+    done -> graphviz [style=dotted, label="see also"];
 }

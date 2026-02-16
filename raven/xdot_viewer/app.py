@@ -26,6 +26,7 @@ with timer() as tim:
     import sys
     import time
     import pathlib
+    import webbrowser
     from typing import Optional, Union
 
     import dearpygui.dearpygui as dpg
@@ -151,6 +152,13 @@ def _on_click(description: str, button: int) -> None:
     updates the status bar.
     """
     _set_status(f"Clicked: {description}")
+
+
+def _on_open_url(url: str) -> None:
+    """Handle double-click on a node with a URL attribute."""
+    logger.info(f"Opening URL: {url}")
+    _set_status(f"Opening: {url}")
+    webbrowser.open(url)
 
 
 def _do_search(*_args) -> None:
@@ -460,6 +468,7 @@ def main() -> int:
             height=args.height - config.WIDGET_V_PADDING,
             on_hover=_on_hover,
             on_click=_on_click,
+            on_open_url=_on_open_url,
             highlight_fade_duration=config.HIGHLIGHT_FADE_DURATION,
             graph_text_fonts=graph_text_fonts,
             mouse_wheel_zoom_factor=config.MOUSE_WHEEL_ZOOM_FACTOR,
