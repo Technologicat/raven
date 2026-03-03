@@ -790,17 +790,15 @@ class PostprocessorSettingsEditorGUI:
 
     def _resize_gui(self) -> None:
         """Window resize handler."""
-        try:
+        with guiutils.nonexistent_ok() as nok:
             w, h = guiutils.get_widget_size(self.window)
-        except SystemError:  # main window does not exist
+        if nok.errored:  # main window does not exist
             return
         if w == 0 or h == 0:  # no meaningful main window size yet?
             return
 
-        try:
+        with guiutils.nonexistent_ok():
             dpg.set_item_height("avatar_child_window", h - 16)
-        except SystemError:  # main window or live image widget does not exist
-            pass
 
         self.dpg_avatar_renderer.reposition(new_y_bottom=h)
         self.dpg_avatar_renderer.configure_backdrop(new_width=1024,

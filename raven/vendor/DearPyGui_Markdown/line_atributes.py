@@ -5,6 +5,8 @@ from . import CallInNextFrame
 from .attribute_types import LineAttribute, AttributeConnector
 from .font_attributes import Default
 
+from ...common.gui import utils as guiutils
+
 
 class Separator(LineAttribute):
     @staticmethod
@@ -43,7 +45,7 @@ class Blockquote(LineAttribute):
 
     @CallInNextFrame
     def self_post_render(self, text_height: int | float, spacer_group: int, parent=0, attributes_group=0):
-        try:
+        with guiutils.nonexistent_ok():
             group_width, group_height = dpg.get_item_rect_size(parent)
             pos = dpg.get_item_pos(spacer_group)
             x, y = pos
@@ -66,8 +68,6 @@ class Blockquote(LineAttribute):
                           parent=drawlist, color=self.color, thickness=thickness)
 
             self.attribute_connector.append(self)
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
-            return
 
 
 class List(LineAttribute):
@@ -158,7 +158,7 @@ class List(LineAttribute):
             dpg.add_spacer(width=get_text_size(' ' * 2, font=Default.get_font())[0], parent=self.spacer_group)
 
     def ordered_render(self, attributes_group=0):
-        try:
+        with guiutils.nonexistent_ok():
             text = f'{str(self.index)[-4::]}.  '
             render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
             x, y = dpg.get_item_pos(self.spacer_group)
@@ -168,11 +168,9 @@ class List(LineAttribute):
 
             dpg_text = dpg.add_text(text, pos=(x, y), parent=attributes_group)
             dpg.bind_item_font(dpg_text, font=Default.get_font())
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
-            return
 
     def unordered_render(self, attributes_group=0):
-        try:
+        with guiutils.nonexistent_ok():
             text = '0.  '
             render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
             x, y = dpg.get_item_pos(self.spacer_group)
@@ -216,5 +214,3 @@ class List(LineAttribute):
                                   parent=drawlist,
                                   thickness=thickness,
                                   fill=(0, 0, 0, 0))
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
-            return

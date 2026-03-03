@@ -3,7 +3,8 @@
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["get_font_path", "bootup",
+__all__ = ["get_font_path", "bootup", "load_extra_font",
+           "nonexistent_ok",
            "maybe_delete_item", "has_child_items",
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
            "get_mouse_relative_pos", "is_mouse_inside_widget",
@@ -280,13 +281,48 @@ def load_extra_font(themes_and_fonts: env,
 
     return key, themes_and_fonts[key]
 
+def _is_dpg_item_not_found(exc):
+    """Check exception chain for DPG 'item not found' error."""
+    # The string check on "Item not found" is ugly but necessary
+    # given DPG's refusal to use a proper exception subclass.
+    # TODO: tighten to a specific exception type if DPG ever provides one
+    while exc is not None:
+        if "Item not found" in str(exc):
+            return True
+        exc = exc.__cause__
+    return False
+
+class nonexistent_ok:
+    """Silently ignore DPG 'item not found' errors, exiting the context at the first one.
+
+    DPG raises either `SystemError` (older versions) or `Exception` (newer)
+    when operating on a nonexistent item. This wrapper catches both, using
+    EAFP to avoid TOCTTOU that would occur if we checked for item existence
+    beforehand.
+
+    Usage::
+
+        with nonexistent_ok() as nok:
+            dpg.show_item(x)
+        print(nok.errored)  # whether the context exited due to an exception
+    """
+    def __init__(self):
+        self.errored = False
+    def __enter__(self):
+        return self
+    def __exit__(self, exctype, excvalue, traceback):
+        if exctype is not None:
+            logger.info(excvalue)
+            self.errored = True
+            if _is_dpg_item_not_found(excvalue):
+                return True  # handled, suppress it
+            return False
+
 def maybe_delete_item(item: Union[str, int]) -> None:
     """Delete `item` (DPG ID or tag), if it exists. If not, the error is ignored."""
     logger.info(f"maybe_delete_item: Deleting old GUI item '{item}', if it exists.")
-    try:
+    with nonexistent_ok():
         dpg.delete_item(item)
-    except SystemError:  # does not exist
-        pass
 
 def has_child_items(widget: Union[str, int]) -> bool:
     """Return whether `widget` (DPG tag or ID) has child items in any of its slots."""

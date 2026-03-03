@@ -460,7 +460,7 @@ class DPGChatMessage:
                     if isinstance(self, DPGCompleteChatMessage) and paragraph["is_thought"]:  # make think blocks in complete messages collapsible (they are populated as a single paragraph)
                         widget = dpg.add_group(horizontal=True, parent=self.gui_text_group)
                         def toggle_message_think_callback():
-                            try:
+                            with guiutils.nonexistent_ok() as nok:
                                 v = dpg.is_item_visible(text_content)
                                 if v:
                                     logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: hiding thinking trace for chat node '{self.node_id}'")
@@ -468,7 +468,7 @@ class DPGChatMessage:
                                 else:
                                     logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: showing thinking trace for chat node '{self.node_id}'")
                                     dpg.show_item(text_content)
-                            except SystemError:  # does not exist
+                            if nok.errored:
                                 logger.info(f"DPGCompleteChatMessage._render_text.toggle_message_think_callback: GUI widget for chat node '{self.node_id}' does not exist, ignoring.")
                         self.gui_button_callbacks["toggle_thinking_trace"] = toggle_message_think_callback  # stash it so we can call it from the hotkey handler
                         dpg.add_button(label=fa.ICON_CLOUD,
@@ -510,10 +510,8 @@ class DPGChatMessage:
             self.paragraphs = []
             self.gui_text_group = None
             self.gui_button_callbacks = {}  # deleting all GUI widgets, so clear the stashed callbacks too.
-            try:
+            with guiutils.nonexistent_ok():
                 dpg.delete_item(self.gui_container_group, children_only=True)  # clear old GUI content (needed if rebuilding)
-            except SystemError:  # the group went bye-bye (app shutdown)
-                pass
 
     def build_buttons(self,
                       gui_parent: Union[str, int]) -> None:

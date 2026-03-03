@@ -13,6 +13,8 @@ import dearpygui.dearpygui as dpg
 
 from .. import numutils
 
+from . import utils as guiutils
+
 class DPGVUMeter:
     def __init__(self,
                  width: int,
@@ -186,7 +188,7 @@ class DPGVUMeter:
         yellow_start_y = self._height - self._yellow_start_pixels
         red_start_y = self._height - self._red_start_pixels
 
-        try:
+        with guiutils.nonexistent_ok():
             with self._render_lock:
                 dpg.delete_item(self.drawlist, children_only=True)  # clear old content
                 dpg.draw_rectangle((0, 0), (self._width, self._height), color=bgcolor, fill=bgcolor, parent=self.drawlist)
@@ -243,5 +245,3 @@ class DPGVUMeter:
                 if self._peak is not None:
                     dpg.draw_line((b, peak_y), (w, peak_y),
                                   color=peak_color, thickness=1, parent=self.drawlist)
-        except SystemError:  # GUI widget no longer exists; may happen during app shutdown
-            pass

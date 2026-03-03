@@ -16,7 +16,7 @@ import dearpygui.dearpygui as dpg
 from unpythonic import sym
 
 from .. import animation as gui_animation
-from .. import utils as gui_utils
+from .. import utils as guiutils
 
 from .constants import DPGColor, Point
 from .graph import Graph, Node, Edge, PolygonShape, get_highlight_colors
@@ -517,11 +517,11 @@ class XDotWidget(gui_animation.Animation):
 
     def _is_mouse_inside(self) -> bool:
         """Check if the mouse is inside this widget."""
-        return gui_utils.is_mouse_inside_widget(self.drawlist)
+        return guiutils.is_mouse_inside_widget(self.drawlist)
 
     def _get_local_mouse_pos(self) -> tuple:
         """Get mouse position relative to this widget."""
-        return gui_utils.get_mouse_relative_pos(self.drawlist)
+        return guiutils.get_mouse_relative_pos(self.drawlist)
 
     def _update_link_highlights(self) -> None:
         """Update Shift/Ctrl link highlights based on current hover and modifier state."""
@@ -791,12 +791,8 @@ class XDotWidget(gui_animation.Animation):
 
     def destroy(self) -> None:
         """Clean up resources."""
-        try:
+        with guiutils.nonexistent_ok():
             dpg.delete_item(self._handler_registry)
-        except SystemError:
-            pass
 
-        try:
+        with guiutils.nonexistent_ok():
             dpg.delete_item(self.group)
-        except SystemError:
-            pass

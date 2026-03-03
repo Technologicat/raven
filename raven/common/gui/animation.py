@@ -22,6 +22,8 @@ import dearpygui.dearpygui as dpg
 
 from .. import numutils
 
+from . import utils as guiutils
+
 # --------------------------------------------------------------------------------
 # Animation mechanism
 
@@ -251,17 +253,13 @@ class Dimmer(Overlay):
     def show(self) -> None:
         """Dim the target window (e.g. to show that it is updating)."""
         self.build()
-        try:  # EAFP to avoid TOCTTOU
+        with guiutils.nonexistent_ok():
             dpg.show_item(self.window)
-        except SystemError:  # does not exist
-            pass
 
     def hide(self) -> None:
         """Un-dim the target window."""
-        try:  # EAFP to avoid TOCTTOU
+        with guiutils.nonexistent_ok():
             dpg.hide_item(self.window)
-        except SystemError:  # does not exist
-            pass
 
 # --------------------------------------------------------------------------------
 # Animations
@@ -415,22 +413,16 @@ class ButtonFlash(Animation):
                         self.highlight_disabled_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color, category=dpg.mvThemeCat_Core)
                 type(self).id_counter += 1
 
-                try:
+                with guiutils.nonexistent_ok():
                     dpg.bind_item_theme(self.target_button, self.theme)
-                except SystemError:  # gone -> no-op
-                    pass
                 if self.target_tooltip is not None:
-                    try:
+                    with guiutils.nonexistent_ok():
                         dpg.bind_item_theme(self.target_tooltip, self.theme)
-                    except SystemError:
-                        pass
                 if self.target_text is not None:
                     self.original_message = dpg.get_value(self.target_text)
-                    try:
+                    with guiutils.nonexistent_ok():
                         dpg.set_value(self.target_text, self.message)
                         dpg.bind_item_theme(self.target_text, self.theme)
-                    except SystemError:
-                        pass
 
                 type(self).instances[self.target_button] = self
                 self.reified = True  # This is the instance that animates `self.target_button`.
@@ -438,28 +430,20 @@ class ButtonFlash(Animation):
     def finish(self) -> None:
         """Clean up resources upon the end of the animation."""
         with self.instance_lock:
-            try:
+            with guiutils.nonexistent_ok():
                 dpg.bind_item_theme(self.target_button, "disablable_button_theme")  # tag
-            except SystemError:  # didn't exist (a transient GUI element that has already been deleted, e.g. message-specific chat buttons)
-                pass  # it's fine
 
-            try:
-                if self.target_tooltip is not None:
+            if self.target_tooltip is not None:
+                with guiutils.nonexistent_ok():
                     dpg.bind_item_theme(self.target_tooltip, self.original_theme)
-            except SystemError:
-                pass
 
             if self.target_text is not None:
-                try:
+                with guiutils.nonexistent_ok():
                     dpg.set_value(self.target_text, self.original_message)
                     dpg.bind_item_theme(self.target_text, self.original_theme)
-                except SystemError:
-                    pass
 
-            try:
+            with guiutils.nonexistent_ok():
                 dpg.delete_item(self.theme)
-            except SystemError:  # might happen during app shutdown
-                pass
 
             self.theme = None
             self.reified = False

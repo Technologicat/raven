@@ -3,13 +3,16 @@ from .attribute_types import Attribute, AttributeConnector, CallInNextFrame, Hov
 
 import dearpygui.dearpygui as dpg
 
+from ...common.gui import utils as guiutils
+
+
 class Underline(Attribute):
     @staticmethod
     def render(dpg_text: int, dpg_text_group: int, font=None, parent=0, color=(255, 255, 255, 255)):
         '''
         :return: [drawlist, draw_line]
         '''
-        try:
+        with guiutils.nonexistent_ok() as nok:
             pos = dpg.get_item_pos(dpg_text_group)
             x, y = pos
             group_width, group_height = dpg.get_item_rect_size(dpg_text_group)
@@ -21,7 +24,7 @@ class Underline(Attribute):
             line_y = text_height - thickness + thickness / 5
             line = dpg.draw_line([0, line_y], [group_width, line_y], parent=drawlist, color=color, thickness=thickness)
             return drawlist, line
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+        if nok.errored:  # does not exist (most likely, container deleted in another thread while still rendering)
             return None, None
 
 
@@ -31,7 +34,7 @@ class Strike(Attribute):
         '''
         :return: [drawlist, draw_line]
         '''
-        try:
+        with guiutils.nonexistent_ok() as nok:
             pos = dpg.get_item_pos(dpg_text_group)
             x, y = pos
             group_width, group_height = dpg.get_item_rect_size(dpg_text_group)
@@ -43,7 +46,7 @@ class Strike(Attribute):
             line_y = text_height / 2 + thickness / 2 + text_height / 20
             line = dpg.draw_line([0, line_y], [group_width, line_y], parent=drawlist, color=color, thickness=thickness)
             return drawlist, line
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+        if nok.errored:  # does not exist (most likely, container deleted in another thread while still rendering)
             return None, None
 
 
@@ -53,7 +56,7 @@ class Code(Attribute):
 
     @classmethod
     def render(cls, dpg_text_group: int):
-        try:
+        with guiutils.nonexistent_ok() as nok:
             width, height = dpg.get_item_rect_size(dpg_text_group)
             pos = dpg.get_item_pos(dpg_text_group)
             child = dpg.get_item_children(dpg_text_group, 1)[0]
@@ -64,7 +67,7 @@ class Code(Attribute):
                           fill=cls.color,
                           color=cls.border_color,
                           parent=drawlist)
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+        if nok.errored:  # does not exist (most likely, container deleted in another thread while still rendering)
             return
 
 
@@ -80,7 +83,7 @@ class Pre(Attribute):
         self.attribute_connector.used_y = []
 
     def render(self, dpg_text_group: int):
-        try:
+        with guiutils.nonexistent_ok() as nok:
             self.width, self.height = dpg.get_item_rect_size(dpg_text_group)
             pos = dpg.get_item_pos(dpg_text_group)
             self.dpg_text_group = dpg_text_group
@@ -100,12 +103,12 @@ class Pre(Attribute):
                 a_c.x1 = pos_end[0]
             if a_c.y1 < pos_end[1]:
                 a_c.y1 = pos_end[1]
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+        if nok.errored:  # does not exist (most likely, container deleted in another thread while still rendering)
             return
 
     @CallInNextFrame
     def post_render(self, attributes_group=0):
-        try:
+        with guiutils.nonexistent_ok() as nok:
             width, height = dpg.get_item_rect_size(self.dpg_text_group)
             pos = dpg.get_item_pos(self.dpg_text_group)
             child = dpg.get_item_children(self.dpg_text_group, 1)[0]
@@ -130,7 +133,7 @@ class Pre(Attribute):
                           fill=self.color,
                           color=self.color,
                           parent=drawlist)
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+        if nok.errored:  # does not exist (most likely, container deleted in another thread while still rendering)
             return
 
 
@@ -155,30 +158,30 @@ class Url(HoverAttribute):
         super().render()
         self.add_item_to_handler(dpg_text)
         self.dpg_text_objects.append(dpg_text)
-        try:
+        with guiutils.nonexistent_ok() as nok:
             dpg.configure_item(dpg_text, color=self.color)
             # Raven customization: show the linked URL as a tooltip
             url_tooltip = dpg.add_tooltip(parent=dpg_text)
             dpg.add_text(self.url, parent=url_tooltip)
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+        if nok.errored:  # does not exist (most likely, container deleted in another thread while still rendering)
             return
 
     def hover(self):
-        try:
+        with guiutils.nonexistent_ok() as nok:
             for item in self.dpg_text_objects:
                 dpg.configure_item(item, color=self.hover_color)
             for item in self.underline_objects:
                 dpg.configure_item(item, color=self.hover_color)
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+        if nok.errored:  # does not exist (most likely, container deleted in another thread while still rendering)
             return
 
     def unhover(self):
-        try:
+        with guiutils.nonexistent_ok() as nok:
             for item in self.dpg_text_objects:
                 dpg.configure_item(item, color=self.color)
             for item in self.underline_objects:
                 dpg.configure_item(item, color=self.line_color)
-        except SystemError:  # does not exist (most likely, container deleted in another thread while still rendering)
+        if nok.errored:  # does not exist (most likely, container deleted in another thread while still rendering)
             return
 
     def click(self, mouse_button):

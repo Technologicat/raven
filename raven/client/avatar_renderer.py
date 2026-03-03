@@ -166,15 +166,14 @@ class DPGAvatarRenderer:
         If `show is None`, toggle the state.
         """
         try:
-            if show is None:
-                show = not dpg.is_item_visible(self.fps_text_gui_widget)
+            with guiutils.nonexistent_ok():
+                if show is None:
+                    show = not dpg.is_item_visible(self.fps_text_gui_widget)
 
-            if show:
-                dpg.show_item(self.fps_text_gui_widget)
-            else:
-                dpg.hide_item(self.fps_text_gui_widget)
-        except SystemError:  # DPG widget does not exist (can happen at app shutdown)
-            pass
+                if show:
+                    dpg.show_item(self.fps_text_gui_widget)
+                else:
+                    dpg.hide_item(self.fps_text_gui_widget)
         except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
             pass
 
@@ -326,11 +325,8 @@ class DPGAvatarRenderer:
 
         if not first_time:
             dpg.split_frame()  # For some reason, waiting for a frame here eliminates flicker when the texture object is replaced.
-        try:
+        with guiutils.nonexistent_ok():
             dpg.hide_item(f"avatar_live_image_{old_texture_id}")  # tag
-        except SystemError:  # does not exist
-            pass
-        else:
             dpg.split_frame()  # Only safe after startup, once the GUI render loop is running. At startup, the old image widget doesn't exist, so we detect the situation from that.
         # Now the old image widget is guaranteed to be hidden, so we can delete it without breaking GUI render
         guiutils.maybe_delete_item(f"avatar_live_image_{old_texture_id}")  # tag
@@ -373,12 +369,12 @@ class DPGAvatarRenderer:
 
         x_left = self.avatar_x_center - (self.image_size // 2)
         y_top = self.avatar_y_bottom - self.image_size
-        try:
+        with guiutils.nonexistent_ok() as nok:
             dpg.set_item_pos(self.live_image_widget, (x_left, y_top))
 
             if not self.animator_running:
                 self._reposition_paused_text()
-        except SystemError:  # window or live image widget does not exist
+        if nok.errored:  # window or live image widget does not exist
             logger.info("DPGAvatarRenderer.reposition: GUI widget doesn't exist; ignoring. (This is normal at app shutdown.)")
         else:
             logger.info("DPGAvatarRenderer.reposition: success")
@@ -414,7 +410,7 @@ class DPGAvatarRenderer:
 
         if action == "pause":
             # center the paused indicator on the video feed in the GUI
-            try:
+            with guiutils.nonexistent_ok() as nok:
                 # position offscreen and render, to compute size
                 dpg.set_item_pos(self.paused_text_gui_widget, (0, -100))
                 dpg.show_item(self.paused_text_gui_widget)
@@ -424,7 +420,7 @@ class DPGAvatarRenderer:
                 dpg.hide_item(self.backdrop_drawlist_gui_widget)
                 api.avatar_stop(self.avatar_instance_id)
                 self.animator_running = False
-            except SystemError:  # window or live image widget does not exist
+            if nok.errored:  # window or live image widget does not exist
                 logger.info(f"DPGAvatarRenderer.pause (avatar instance '{self.avatar_instance_id}', action '{action}'): Pause text GUI widget doesn't exist.")
         else:  # action == "resume":
             api.avatar_start(self.avatar_instance_id)
@@ -518,11 +514,9 @@ class DPGAvatarRenderer:
                 return f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({video_width}x{video_height}, {si_prefix(pixels)}px, {video_format})"
 
             def maybe_set_fps_counter(text):
-                try:
+                with guiutils.nonexistent_ok():
                     dpg.set_value(self.fps_text_gui_widget,
                                   text)
-                except SystemError:  # DPG widget does not exist (can happen at app shutdown)
-                    pass
 
             reader = ResultFeedReader(avatar_instance_id)
             reader.start()
@@ -549,13 +543,13 @@ class DPGAvatarRenderer:
                         if on_frame_received is not None:
                             on_frame_received(timestamp, mimetype, image_data)
 
-                    try:  # EAFP to avoid TOCTTOU
+                    with guiutils.nonexistent_ok() as nok:
                         # Before blitting, make sure the texture is of the expected size. When an upscale change is underway, it will be temporarily of the wrong size.
                         tex = self.live_texture  # Get the reference only once, since it could change in another thread at any time (by the user calling `configure_live_texture`), if the user changes the upscaler settings.
                         config = dpg.get_item_configuration(tex)
                         expected_w = config["width"]
                         expected_h = config["height"]
-                    except SystemError:  # does not exist (can happen at least during app shutdown, or during a texture object swap)
+                    if nok.errored:  # does not exist (can happen at least during app shutdown, or during a texture object swap)
                         time.sleep(0.04)   # 1/25 s
                         continue  # can't do anything without a texture to blit to, so discard this frame
 
@@ -589,9 +583,9 @@ class DPGAvatarRenderer:
                     # Blit the new frame
                     image_rgba = np.array(image_rgba, dtype=np.float32) / 255
                     raw_data = image_rgba.ravel()  # shape [h, w, c] -> linearly indexed
-                    try:  # EAFP to avoid TOCTTOU
+                    with guiutils.nonexistent_ok() as nok:
                         dpg.set_value(tex, raw_data)  # to GUI
-                    except SystemError:  # does not exist (might have gone bye-bye while we were decoding)
+                    if nok.errored:  # does not exist (might have gone bye-bye while we were decoding)
                         continue  # can't do anything without a texture to blit to, so discard this frame
 
                     # Update FPS counter.
