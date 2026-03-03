@@ -600,6 +600,18 @@ def main() -> int:
     if args.file:
         _open_file(args.file)
 
+    # The widget was created with the *requested* viewport size, but the window
+    # manager may have constrained the window (e.g. on a 1080p screen with a
+    # taskbar). Sync the widget to the realized window size once DPG has
+    # settled its layout (needs several frames). Re-fit the graph too, since
+    # _open_file's zoom_to_fit used the old (pre-correction) dimensions.
+    def _initial_resize(*_args):
+        _resize_gui()
+        widget = _app_state["widget"]
+        if widget is not None and _app_state["current_file"] is not None:
+            widget.zoom_to_fit(animate=False)
+    dpg.set_frame_callback(10, _initial_resize)
+
     # --- Render loop ---
     last_check = time.time()
     def _poll_reload():
