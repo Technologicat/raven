@@ -202,7 +202,7 @@ Now the installation should be complete.
 
 #### Install with GPU compute support
 
-:exclamation: *Currently this requires an NVIDIA GPU and CUDA.* :exclamation:
+:exclamation: *Currently GPU compute support requires an NVIDIA GPU and CUDA.* :exclamation:
 
 :exclamation: *Using CUDA requires the proprietary NVIDIA drivers, also on Linux.* :exclamation:
 
