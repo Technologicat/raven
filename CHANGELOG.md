@@ -1,5 +1,14 @@
 # Changelog
 
+**0.2.6** (March 2026, in progress):
+
+**Fixed**:
+
+- Compatibility: detect "Item not found" across different Python/DPG versions, needed in GUI code.
+
+
+---
+
 **0.2.5** (3 March 2026):
 
 **Added**:
