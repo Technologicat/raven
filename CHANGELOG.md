@@ -1,8 +1,13 @@
 # Changelog
 
-**0.2.5** (January 2026, in progress):
+**0.2.5** (3 March 2026):
 
 **Added**:
+
+- New GUI app: *Raven-xdot-viewer*.
+  - This is a utility app for viewing GraphViz graphs (`.dot`, `.gv`, `.xdot`).
+  - Start with `raven-xdot-viewer`.
+  - In a future version, this technology will be deployed in Librarian for navigating the nonlinear chat history.
 
 - Tools:
   - New command-line tool: *Raven-csv2bib*.
