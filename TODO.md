@@ -11,6 +11,11 @@
 
 - Fdialog use site boilerplate reduction? We have lots of these dialogs in Raven.
 
+- minichat: remove deprecation note, it'll be maintained with Claude. Minimal example client, plus usable over a bare SSH terminal.
+- fdialog: add "go up to parent directory" button. Change the "go to default directory" icon to something less confusing.
+- csv2bib: add documentation (main README + Visualizer README, section on importing data).
+- Visualizer importer: `import_bibtex`: check that there is at least one item before proceeding. Throw a sensible error message if not (currently just crashes). Currently triggered by BibTeX files with the Author field missing.
+
 - Word boundary mark (\b) for search. What's a good UX here? Use what character as a word boundary?
 
 - App icon. `small_icon` and `large_icon` parameters of `create_viewport` (png or ico format).
@@ -113,6 +118,8 @@
     - Mention empirical observation: start LLM first (before Raven-server) to make it run faster. Possibly due to GPU memory management. Or start avatar first, to make stuttering less likely on a single GPU?
 
   - Maybe next:
+    - Think blocks: parse properly (no regex hack), we get one token at a time already.
+    - Webfetch tool.
     - STT (speech to text, speech recognition):
       - Configurable silence level, autostop timeout, VU peak hold time
       - `raven-transcribe`: command-line tool
@@ -411,7 +418,7 @@
         - Persist the documents to the RAG database to avoid unnecessary re-downloading.
           - Set an expiry timeout for each downloaded page.
           - How to decide in which contexts the search result pages should be enabled as RAG data sources?
-    - Add a "download web page" tool?
+    - Add a "download web page" (webfetch) tool?
       - Infosec needs some consideration here.
         - Some web pages are not documents, but actions (e.g. wikipedia "Edit" link). Some pages may contain viruses that could corrupt or hijack the web driver.
         - User-provided links might be considered safe? ("Here, take a look at this: [URL]" -> allow the AI to download that page if it wants to)
