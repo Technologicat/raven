@@ -312,7 +312,6 @@ class nonexistent_ok:
         return self
     def __exit__(self, exctype, excvalue, traceback):
         if exctype is not None:
-            logger.info(excvalue)
             self.errored = True
             if _is_dpg_item_not_found(excvalue):
                 return True  # handled, suppress it
