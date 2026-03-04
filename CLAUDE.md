@@ -12,6 +12,24 @@ Local research assistant constellation. Privacy-first, 100% local.
 - **Common** (`raven/common/`): Shared utilities (video processing, audio, GUI widgets, networking). BSD-licensed; Server and Avatar pose editor are AGPL.
 - **Tools** (`raven/tools/`): CLI utilities (format converters, system checks).
 
+## Build and Development
+
+Uses PDM with `pdm-backend`. Python 3.11–3.12 (3.13/3.14 blocked by unpythonic/mcpyrate compatibility; see `pyproject.toml`). Optional CUDA extras via `pdm install -G cuda`.
+
+```bash
+pdm install              # creates .venv/ and installs deps
+pdm use --venv in-project
+source .venv/bin/activate
+```
+
+Entry points defined in `pyproject.toml` under `[project.scripts]` — main apps are `raven-visualizer`, `raven-librarian`, `raven-server`, `raven-importer`, `raven-minichat`, `raven-xdot-viewer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`.
+
+### Running Tests
+
+```bash
+pytest                   # runs all tests (currently minimal coverage)
+```
+
 ## Architecture
 
 ### Server/Client Split
