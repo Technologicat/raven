@@ -162,19 +162,19 @@ def load(llm_settings: env,
           to work correctly, you should modify the original `state` dict in-place;
           that object is what gets auto-persisted at exit.
 
-    NOTE: The state file is important; without it, it is impossible to know
-          which chat node to use as the HEAD of a new chat session.
+    NOTE: Recovery procedure for corrupted state:
 
-          Hence if the state file is missing or does not contain "new_chat_HEAD",
-          this will **FACTORY-RESET** the chat datastore, thus deleting all chats.
+      - Empty datastore (no nodes) -> factory reset.
+      - Missing state file -> empty dict, but datastore is preserved. Missing keys get defaults.
+      - Dangling HEAD (points to nonexistent node) -> reset to new_chat_HEAD, so that when the
+                                                      app opens, it opens into a new chat session.
+      - Missing HEAD -> set to new_chat_HEAD.
 
-          Otherwise, the chat datastore is loaded normally.
+    new_chat_HEAD is always computed at startup.
 
-          If "HEAD" is missing in the state file, it will be set to "new_chat_HEAD",
-          so that when the app opens, it opens into a new chat session.
-
-          If any settings are missing in the state file, they are initialized to
-          their default values (which are defined in the source code of this function).
+    If any settings are missing in the state file (e.g. state file from an older version
+    of Librarian that doesn't yet have a particular setting), they are initialized to their
+    default values (which are defined in the source code of this function).
     """
     # Resolve paths
     mayberel_datastore_file = datastore_file
