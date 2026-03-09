@@ -2,6 +2,11 @@
 
 **0.2.6** (March 2026, in progress):
 
+**Changed**:
+
+- Raven-xdot-viewer:
+  - GUI: Add a combobox to choose which GraphViz layout engine to use, re-rendering the current graph with the chosen engine.
+
 **Fixed**:
 
 - Compatibility: detect "Item not found" across different Python/DPG versions, needed in GUI code.
