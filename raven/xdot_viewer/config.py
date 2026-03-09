@@ -48,6 +48,11 @@ HIGHLIGHT_FADE_DURATION = 2.0
 # The renderer picks whichever is closest to the rendered text size.
 GRAPH_TEXT_FONT_SIZES = [4, 8, 16, 32, 64]
 
+# GraphViz layout engines for the filter selector.
+# "[as-is]" shows the original layout (fast path for .xdot files,
+# falls back to GRAPHVIZ_ENGINES[1] for .dot/.gv files).
+GRAPHVIZ_ENGINES = ["[as-is]", "dot", "neato", "fdp", "sfdp", "circo", "twopi"]
+
 # Help card dimensions (pixels). Chosen to fit the content.
 HELP_WINDOW_W = 1400
 HELP_WINDOW_H = 760

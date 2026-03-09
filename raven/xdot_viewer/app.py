@@ -21,6 +21,7 @@ logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
     import argparse
+    import math
     import os
     import subprocess
     import sys
@@ -37,6 +38,8 @@ with timer() as tim:
 
     from ..common import utils as common_utils
     from ..common.gui.xdotwidget import XDotWidget
+    from ..common.gui.xdotwidget.parser import (DotScanner, ID, STR_ID, HTML_ID,
+                                                 LSQUARE, RSQUARE, EQUAL, COMMA, SEMI, EOF, SKIP)
     from ..common.gui import utils as guiutils
     from ..common.gui import helpcard
     from ..common.gui import animation as gui_animation
@@ -54,6 +57,9 @@ _app_state = {
     "search_input": None,
     "status_text": None,
     "file_mtime": None,
+    "dot_source": None,           # layout-stripped DOT source (str)
+    "original_xdotcode": None,    # original file contents for .xdot fast path (str or None)
+    "current_filter": "[as-is]",  # active layout engine selection
 }
 
 _filedialog_open = None  # initialized after DPG setup
@@ -74,12 +80,145 @@ def _show_open_dialog(*_args) -> None:
         _filedialog_open.show_file_dialog()
 
 
-def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
-    """Load an xdot or dot file and return xdot code.
+# Layout attributes to strip from xdot code before re-layout.
+# These are all attributes that GraphViz layout engines produce;
+# stripping them gives clean DOT that any engine can process from scratch.
+_XDOT_LAYOUT_ATTRS = frozenset({
+    "bb", "pos", "lp", "rects", "_background",
+    "_draw_", "_ldraw_", "_hdraw_", "_tdraw_", "_hldraw_", "_tldraw_",
+})
 
-    For .dot files, runs GraphViz to convert to xdot format.
+_dot_scanner = DotScanner()
+
+
+def _strip_xdot_layout_attrs(xdotcode: str) -> str:
+    """Remove layout-related attributes from xdot/dot source.
+
+    Uses the existing DotScanner to correctly handle quoted strings,
+    HTML labels, and comments. Works from the original buffer (not
+    reconstructed token text) to preserve quoting and formatting.
     """
-    # Resolve to absolute path so mtime checks remain valid if CWD changes.
+    buf = xdotcode
+    pos = 0
+    bracket_depth = 0
+
+    # Byte ranges to delete: list of (start, end) tuples.
+    deletions = []
+
+    # State machine for tracking `name = value` inside attribute lists.
+    # States: None (idle), "saw_name" (name token matched a layout attr),
+    #         "saw_equal" (saw `=` after a matching name).
+    attr_state = None
+    attr_start = 0  # start position of the name token
+
+    while True:
+        tok_type, tok_text, end_pos = _dot_scanner.next(buf, pos)
+        tok_start = end_pos - len(tok_text)
+
+        if tok_type == EOF:
+            break
+
+        if tok_type == SKIP:
+            pos = end_pos
+            continue
+
+        if tok_type == LSQUARE:
+            bracket_depth += 1
+            attr_state = None
+            pos = end_pos
+            continue
+
+        if tok_type == RSQUARE:
+            bracket_depth = max(0, bracket_depth - 1)
+            attr_state = None
+            pos = end_pos
+            continue
+
+        if bracket_depth > 0:
+            # Inside an attribute list — run the name=value state machine.
+            if attr_state is None:
+                # Expecting an attribute name.
+                if tok_type in (ID, STR_ID, HTML_ID):
+                    # Strip quotes/brackets for name comparison (scanner
+                    # returns raw text, unlike the lexer's _filter).
+                    name = tok_text
+                    if tok_type == STR_ID and len(name) >= 2:
+                        name = name[1:-1]
+                    elif tok_type == HTML_ID and len(name) >= 2:
+                        name = name[1:-1]
+                    if name.lower() in _XDOT_LAYOUT_ATTRS:
+                        attr_state = "saw_name"
+                        attr_start = tok_start
+                    # else: not a layout attr, ignore
+            elif attr_state == "saw_name":
+                if tok_type == EQUAL:
+                    attr_state = "saw_equal"
+                else:
+                    # Not a `name = value` pair (e.g. bare attribute flag).
+                    attr_state = None
+            elif attr_state == "saw_equal":
+                # This token is the value — mark the whole name=value for deletion.
+                delete_end = end_pos
+                # Also consume any trailing separator (comma, semicolon, whitespace).
+                probe_pos = delete_end
+                while probe_pos < len(buf) and buf[probe_pos] in " \t\r\n":
+                    probe_pos += 1
+                if probe_pos < len(buf) and buf[probe_pos] in ",;":
+                    probe_pos += 1
+                    # Eat whitespace after the separator too.
+                    while probe_pos < len(buf) and buf[probe_pos] in " \t\r\n":
+                        probe_pos += 1
+                delete_end = probe_pos
+                # Also consume leading whitespace before the attribute name.
+                while attr_start > 0 and buf[attr_start - 1] in " \t":
+                    attr_start -= 1
+                deletions.append((attr_start, delete_end))
+                attr_state = None
+        else:
+            attr_state = None
+
+        pos = end_pos
+
+    if not deletions:
+        return buf
+
+    # Build output by copying everything except deletion ranges.
+    parts = []
+    prev = 0
+    for start, end in deletions:
+        if start > prev:
+            parts.append(buf[prev:start])
+        prev = end
+    if prev < len(buf):
+        parts.append(buf[prev:])
+    return "".join(parts)
+
+
+def _run_graphviz(dot_source: str, engine: str = "dot") -> Optional[str]:
+    """Run a GraphViz layout engine on DOT source, return xdot code."""
+    try:
+        result = subprocess.run(
+            [engine, "-Txdot"],
+            input=dot_source,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout
+    except FileNotFoundError:
+        logger.error(f"_run_graphviz: `{engine}` command not found. Please install GraphViz.")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
+        return None
+    except subprocess.CalledProcessError as e:
+        logger.error(f"_run_graphviz: Error running `{engine}`: {e.stderr}")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
+        return None
+
+
+def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
+    """Load a graph file, store stripped DOT source, and return xdot code.
+
+    For .xdot files with [as-is] filter, returns the original contents directly.
+    Otherwise runs the selected (or fallback) GraphViz engine.
+    """
     filepath = common_utils.absolutize_filename(filepath)
 
     if not os.path.exists(filepath):
@@ -87,26 +226,25 @@ def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
         return None
 
     ext = os.path.splitext(filepath)[1].lower()
+    current_filter = _app_state["current_filter"]
 
-    if ext == ".xdot":  # has pre-rendered layout
+    if ext == ".xdot":
         with open(filepath, "r", encoding="utf-8") as f:
-            return f.read()
+            raw = f.read()
+        _app_state["original_xdotcode"] = raw
+        _app_state["dot_source"] = _strip_xdot_layout_attrs(raw)
+        if current_filter == "[as-is]":
+            return raw  # fast path
+        else:
+            return _run_graphviz(_app_state["dot_source"], current_filter)
 
-    elif ext in (".dot", ".gv"):  # needs GraphViz rendering
-        try:
-            result = subprocess.run(
-                ["dot", "-Txdot", filepath],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            return result.stdout
-        except FileNotFoundError:
-            logger.error("_load_file: `dot` command not found, cannot render `.dot` or `.gv` files. Please install GraphViz.")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
-            return None
-        except subprocess.CalledProcessError as e:
-            logger.error(f"_load_file: Error running the `dot` command: {e.stderr}")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
-            return None
+    elif ext in (".dot", ".gv"):
+        with open(filepath, "r", encoding="utf-8") as f:
+            raw = f.read()
+        _app_state["original_xdotcode"] = None
+        _app_state["dot_source"] = _strip_xdot_layout_attrs(raw)
+        engine = current_filter if current_filter != "[as-is]" else config.GRAPHVIZ_ENGINES[1]
+        return _run_graphviz(_app_state["dot_source"], engine)
 
     else:
         logger.error(f"_load_file: Unsupported file type: '{ext}'. Supported: `.xdot`, `.dot`, `.gv`.")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
@@ -130,7 +268,17 @@ def _open_file(filepath: str) -> None:
     filename = os.path.basename(filepath)
     dpg.set_viewport_title(f"Raven XDot Viewer {__version__} - {filename}")
 
-    _set_status(f"Loaded: {filepath}")
+    _set_status(_format_load_status(filepath))
+
+
+def _format_load_status(filepath: str) -> str:
+    """Format the status bar message after loading or re-rendering."""
+    current_filter = _app_state["current_filter"]
+    if current_filter == "[as-is]" and _app_state["original_xdotcode"] is not None:
+        return f"Original layout: {filepath}"
+    else:
+        engine = current_filter if current_filter != "[as-is]" else config.GRAPHVIZ_ENGINES[1]
+        return f"Rendered with {engine}: {filepath}"
 
 
 def _set_status(text: str) -> None:
@@ -283,6 +431,138 @@ def _update_dark_mode_button() -> None:
         dpg.set_value("dark_mode_tooltip_text", "Switch to dark mode [F12]")
 
 
+def _get_focus_anchor() -> tuple[Optional[str], Optional[float]]:
+    """Determine whether the viewport is centered on a specific node.
+
+    Returns ``(node_name, zoom)`` if anchored, or ``(None, None)`` if not.
+    The anchor condition requires one clearly nearest node within 25% of
+    the viewport half-extent.
+    """
+    widget = _app_state["widget"]
+    if widget is None:
+        return None, None
+    graph = widget.get_graph()
+    if graph is None or not graph.nodes:
+        return None, None
+
+    cx, cy = widget.get_view_center()
+    saved_zoom = widget.get_zoom()
+    vx1, vy1, vx2, vy2 = widget.get_visible_bounds()
+    threshold = 0.25 * min(vx2 - vx1, vy2 - vy1) / 2
+
+    # Find two nearest nodes by Euclidean distance from viewport center.
+    distances = []
+    for node in graph.nodes:
+        d = math.hypot(node.x - cx, node.y - cy)
+        distances.append((d, node))
+    distances.sort(key=lambda pair: pair[0])
+
+    d1, nearest = distances[0]
+    d2 = distances[1][0] if len(distances) > 1 else float("inf")
+
+    if d1 <= threshold and (d2 > 1.5 * d1 or len(distances) == 1):
+        return nearest.internal_name, saved_zoom
+    return None, None
+
+
+def _restore_focus(anchor_name: Optional[str], saved_zoom: Optional[float]) -> None:
+    """Restore focus after re-layout. Falls back to zoom-to-fit."""
+    widget = _app_state["widget"]
+    if widget is None:
+        return
+
+    graph = widget.get_graph()
+    if anchor_name is not None and graph is not None:
+        node = graph.nodes_by_name.get(anchor_name)
+        if node is not None:
+            widget.pan_to_node(anchor_name, animate=False)
+            widget.set_zoom(saved_zoom, animate=False)
+            widget.request_render()
+            return
+
+    widget.zoom_to_fit(animate=False)
+
+
+def _apply_filter(engine: str) -> None:
+    """Re-render the current graph with a different layout engine."""
+    dot_source = _app_state["dot_source"]
+    if dot_source is None:
+        return
+
+    anchor_name, saved_zoom = _get_focus_anchor()
+
+    # Determine xdot code to use.
+    if engine == "[as-is]" and _app_state["original_xdotcode"] is not None:
+        xdotcode = _app_state["original_xdotcode"]
+    elif engine == "[as-is]":
+        xdotcode = _run_graphviz(dot_source, config.GRAPHVIZ_ENGINES[1])
+    else:
+        xdotcode = _run_graphviz(dot_source, engine)
+
+    if xdotcode is None:
+        return
+
+    widget = _app_state["widget"]
+    if widget is not None:
+        widget.set_xdotcode(xdotcode)
+
+    _restore_focus(anchor_name, saved_zoom)
+
+    _app_state["current_filter"] = engine
+
+    filepath = _app_state["current_file"]
+    if filepath:
+        _set_status(_format_load_status(filepath))
+
+
+def _on_filter_changed(sender, app_data, user_data=None):
+    """Callback for the layout engine combo."""
+    _apply_filter(app_data)
+
+
+# Combobox keyboard navigation map: {widget_tag: (choices_list, callback)}
+_combobox_choice_map = {"filter_combo": (config.GRAPHVIZ_ENGINES, _on_filter_changed)}
+
+
+def _browse_combo(combo_tag, key):
+    """Handle Up/Down/Home/End/Esc for a focused combo widget.
+
+    Returns True if the key was consumed.
+    """
+    if combo_tag not in _combobox_choice_map:
+        return False
+
+    choices, callback = _combobox_choice_map[combo_tag]
+
+    if key == dpg.mvKey_Escape:
+        widget = _app_state["widget"]
+        if widget is not None:
+            dpg.focus_item(widget.get_dpg_widget_id())
+        return True
+
+    current = dpg.get_value(combo_tag)
+    try:
+        index = choices.index(current)
+    except ValueError:
+        index = 0
+
+    if key == dpg.mvKey_Down:
+        new_index = min(index + 1, len(choices) - 1)
+    elif key == dpg.mvKey_Up:
+        new_index = max(index - 1, 0)
+    elif key == dpg.mvKey_Home:
+        new_index = 0
+    elif key == dpg.mvKey_End:
+        new_index = len(choices) - 1
+    else:
+        return False
+
+    dpg.set_value(combo_tag, choices[new_index])
+    if callback is not None:
+        callback(combo_tag, choices[new_index])
+    return True
+
+
 def _check_file_reload() -> None:
     """Check if the current file has been modified and reload if so."""
     filepath = _app_state["current_file"]
@@ -293,7 +573,7 @@ def _check_file_reload() -> None:
         current_mtime = os.path.getmtime(filepath)
         if current_mtime > _app_state["file_mtime"]:
             _open_file(filepath)
-            _set_status(f"Reloaded: {filepath}")
+            _set_status(f"Reloaded: {_format_load_status(filepath)}")
     except OSError:
         pass
 
@@ -335,7 +615,14 @@ def _on_key(sender, app_data) -> None:
         elif key == dpg.mvKey_F:
             if _app_state["search_input"] is not None:
                 dpg.focus_item(_app_state["search_input"])
+        elif key == dpg.mvKey_E:
+            dpg.focus_item("filter_combo")
     else:  # BARE KEYS - BE VERY CAREFUL HERE
+        # Combo keyboard navigation (Up/Down/Home/End/Esc while combo focused)
+        focused_alias = dpg.get_item_alias(dpg.get_focused_item())
+        if focused_alias in _combobox_choice_map:
+            if _browse_combo(focused_alias, key):
+                return
         if key == dpg.mvKey_F3:
             if shift_pressed:
                 _prev_match()
@@ -462,6 +749,16 @@ def main() -> int:
                 _dark_mode_initial_tip = "Switch to light mode [F12]" if config.DARK_MODE else "Switch to dark mode [F12]"
                 dpg.add_text(_dark_mode_initial_tip, tag="dark_mode_tooltip_text")
 
+            dpg.add_combo(
+                items=config.GRAPHVIZ_ENGINES,
+                default_value=config.GRAPHVIZ_ENGINES[0],
+                tag="filter_combo",  # tag
+                callback=_on_filter_changed,
+                width=80,
+            )
+            with dpg.tooltip("filter_combo"):  # tag
+                dpg.add_text("GraphViz layout engine\n(Ctrl+E; then Up, Down, Home, End to jump; Esc to return)")
+
             dpg.add_button(label=fa.ICON_EXPAND, tag="fullscreen_button", callback=toggle_fullscreen, width=30)
             dpg.bind_item_font("fullscreen_button", themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("fullscreen_button"):  # tag
@@ -527,6 +824,10 @@ def main() -> int:
         env(key_indent=1, key="Esc", action_indent=0, action="Unfocus and revert", notes="When focused"),
         env(key_indent=0, key="F3", action_indent=0, action="Next search match", notes=""),
         env(key_indent=0, key="Shift+F3", action_indent=0, action="Previous search match", notes=""),
+        env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus layout engine selector", notes=""),
+        env(key_indent=1, key="Up / Down", action_indent=0, action="Previous / next engine", notes="While focused"),
+        env(key_indent=1, key="Home / End", action_indent=0, action="First / last engine", notes="While focused"),
+        env(key_indent=1, key="Esc", action_indent=0, action="Focus graph view", notes="While engine selector focused"),
 
         helpcard.hotkey_new_column,
 

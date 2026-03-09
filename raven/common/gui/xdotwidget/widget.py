@@ -370,6 +370,33 @@ class XDotWidget(gui_animation.Animation):
     def input_enabled(self, value: bool) -> None:
         self._input_enabled = value
 
+    # -------------------------------------------------------------------------
+    # Public API: Viewport state
+
+    def get_view_center(self) -> Tuple[float, float]:
+        """Return the viewport center in graph coordinates as ``(pan_x, pan_y)``."""
+        return self._viewport.pan_x.current, self._viewport.pan_y.current
+
+    def get_zoom(self) -> float:
+        """Return the current zoom level."""
+        return self._viewport.zoom.current
+
+    def set_zoom(self, zoom: float, animate: bool = True) -> None:
+        """Set the zoom level.
+
+        `zoom`: Target zoom level.
+        `animate`: If True, animate the transition.
+        """
+        if animate:
+            self._viewport.zoom.target = zoom
+        else:
+            self._viewport.zoom.set_immediate(zoom)
+        self._needs_render = True
+
+    def get_visible_bounds(self) -> Tuple[float, float, float, float]:
+        """Return the visible area in graph coordinates as ``(x1, y1, x2, y2)``."""
+        return self._viewport.get_visible_bounds()
+
     @property
     def dark_mode(self) -> bool:
         """Whether dark mode (HSL lightness inversion) is active."""
