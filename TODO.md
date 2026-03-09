@@ -390,7 +390,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ## XDot Viewer (`raven-xdot-viewer`)
 
-- **[Medium]** Add support for re-rendering `.dot` files through different Graphviz layout engines (dot, fdp, neato, sfdp, ...). Pyan3 call graphs typically benefit from `fdp`. The viewer exists; this is a missing feature.
+- (currently no items)
 
 
 ---
