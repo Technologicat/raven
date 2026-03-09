@@ -123,6 +123,12 @@ class XDotWidget(gui_animation.Animation):
         self._edge_click_edge: Optional[Edge] = None
         self._edge_click_cycle: int = 0  # 0=midpoint, 1=src, 2=dst
 
+        # Intentional focus: the node the user last navigated to
+        # (click, search match, follow-edge). Cleared by manual pan/zoom.
+        # Used by the app layer to decide whether to preserve focus
+        # across layout engine switches.
+        self._focus_node_name: Optional[str] = None
+
         # Build DPG structure
         kwargs = {"parent": parent}
         if tag is not None:
@@ -183,6 +189,7 @@ class XDotWidget(gui_animation.Animation):
         `animate`: If True, animate the transition.
         """
         if self._graph is not None:
+            self._focus_node_name = None
             self._viewport.zoom_to_fit(self._graph, animate=animate)
             self._needs_render = True
 
@@ -199,6 +206,7 @@ class XDotWidget(gui_animation.Animation):
 
         node = self._graph.get_node_by_name(node_id)
         if node is not None:
+            self._focus_node_name = node_id
             self._viewport.pan_to_point(node.x, node.y, animate=animate)
             self._needs_render = True
 
@@ -214,6 +222,7 @@ class XDotWidget(gui_animation.Animation):
 
     def pan_by(self, dx, dy):
         """Pan the view by (dx, dy) pixels."""
+        self._focus_node_name = None
         self._viewport.pan_by(dx, dy)
         self._needs_render = True
 
@@ -318,6 +327,7 @@ class XDotWidget(gui_animation.Animation):
 
             if self._edge_click_cycle == 0:
                 # Zoom to fit the whole edge (both endpoints visible)
+                self._focus_node_name = None
                 bbox = element.get_bounding_box()
                 if bbox is not None:
                     self._viewport.zoom_to_bbox(*bbox, animate=True)
@@ -327,9 +337,11 @@ class XDotWidget(gui_animation.Animation):
                     self._viewport.pan_to_point(mx, my, animate=True)
             elif self._edge_click_cycle == 1:
                 # Source node
+                self._focus_node_name = element.src.internal_name
                 self._viewport.pan_to_point(element.src.x, element.src.y, animate=True)
             else:
                 # Destination node
+                self._focus_node_name = element.dst.internal_name
                 self._viewport.pan_to_point(element.dst.x, element.dst.y, animate=True)
             self._needs_render = True
         return self._describe_element(element)
@@ -396,6 +408,14 @@ class XDotWidget(gui_animation.Animation):
     def get_visible_bounds(self) -> Tuple[float, float, float, float]:
         """Return the visible area in graph coordinates as ``(x1, y1, x2, y2)``."""
         return self._viewport.get_visible_bounds()
+
+    def get_focus_node(self) -> Optional[str]:
+        """Return the internal name of the intentionally focused node, or None.
+
+        Set by navigation actions (click, search match, follow-edge).
+        Cleared by manual pan/zoom.
+        """
+        return self._focus_node_name
 
     @property
     def dark_mode(self) -> bool:
@@ -774,6 +794,8 @@ class XDotWidget(gui_animation.Animation):
         delta = app_data  # positive = scroll up (zoom in)
 
         sx, sy = self._get_local_mouse_pos()
+
+        self._focus_node_name = None
 
         f = self._mouse_wheel_zoom_factor
         if delta > 0:

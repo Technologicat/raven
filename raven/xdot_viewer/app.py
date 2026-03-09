@@ -21,7 +21,6 @@ logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
     import argparse
-    import math
     import os
     import subprocess
     import sys
@@ -432,36 +431,17 @@ def _update_dark_mode_button() -> None:
 
 
 def _get_focus_anchor() -> tuple[Optional[str], Optional[float]]:
-    """Determine whether the viewport is centered on a specific node.
+    """Return the intentionally focused node and zoom level, if any.
 
-    Returns ``(node_name, zoom)`` if anchored, or ``(None, None)`` if not.
-    The anchor condition requires one clearly nearest node within 25% of
-    the viewport half-extent.
+    Returns ``(node_name, zoom)`` if the user navigated to a node
+    (click, search match, follow-edge), or ``(None, None)`` otherwise.
     """
     widget = _app_state["widget"]
     if widget is None:
         return None, None
-    graph = widget.get_graph()
-    if graph is None or not graph.nodes:
-        return None, None
-
-    cx, cy = widget.get_view_center()
-    saved_zoom = widget.get_zoom()
-    vx1, vy1, vx2, vy2 = widget.get_visible_bounds()
-    threshold = 0.25 * min(vx2 - vx1, vy2 - vy1) / 2
-
-    # Find two nearest nodes by Euclidean distance from viewport center.
-    distances = []
-    for node in graph.nodes:
-        d = math.hypot(node.x - cx, node.y - cy)
-        distances.append((d, node))
-    distances.sort(key=lambda pair: pair[0])
-
-    d1, nearest = distances[0]
-    d2 = distances[1][0] if len(distances) > 1 else float("inf")
-
-    if d1 <= threshold and (d2 > 1.5 * d1 or len(distances) == 1):
-        return nearest.internal_name, saved_zoom
+    focus = widget.get_focus_node()
+    if focus is not None:
+        return focus, widget.get_zoom()
     return None, None
 
 
