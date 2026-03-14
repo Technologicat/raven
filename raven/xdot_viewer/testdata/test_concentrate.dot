@@ -1,0 +1,21 @@
+digraph G {
+    graph [rankdir=TB, ranksep=0.5, layout=dot, concentrate=true];
+    subgraph "cluster_G" {
+
+        graph [style="filled,rounded", fillcolor="#80808018", label=""];
+        "pkg_a____init__" [label="__init__", style="filled", fillcolor="#ffffffb2", fontcolor="#000000", group="0"];
+        "pkg_a__alpha" [label="alpha", style="filled", fillcolor="#ffffffb2", fontcolor="#000000", group="0"];
+        "pkg_b____init__" [label="__init__", style="filled", fillcolor="#ffffffb2", fontcolor="#000000", group="1"];
+        "pkg_b__beta" [label="beta", style="filled", fillcolor="#ffffffb2", fontcolor="#000000", group="1"];
+        "pkg_b__gamma" [label="gamma", style="filled", fillcolor="#ffffffb2", fontcolor="#000000", group="1"];
+    }
+        "pkg_a____init__" -> "pkg_a__alpha" [style="solid",  color="#000000"];
+        "pkg_a__alpha" -> "pkg_b____init__" [style="solid",  color="#000000"];
+        "pkg_a__alpha" -> "pkg_b__beta" [style="solid",  color="#000000"];
+        "pkg_a__alpha" -> "pkg_b__gamma" [style="solid",  color="#000000"];
+        "pkg_b____init__" -> "pkg_b__beta" [style="solid",  color="#000000"];
+        "pkg_b__beta" -> "pkg_b____init__" [style="solid",  color="#000000"];
+        "pkg_b__beta" -> "pkg_b__gamma" [style="solid",  color="#000000"];
+        "pkg_b__gamma" -> "pkg_a____init__" [style="solid",  color="#000000"];
+        "pkg_b__gamma" -> "pkg_a__alpha" [style="solid",  color="#000000"];
+    }
