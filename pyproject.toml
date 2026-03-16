@@ -4,7 +4,7 @@ description = "Semantic visualizer and analyzer"
 authors = [
     { name = "Juha Jeronen and JAMK University of Applied Sciences", email = "juha.jeronen@jamk.fi" },
 ]
-requires-python = "<3.13,>=3.11"  # TODO: add support for Python 3.13, 3.14 in unpythonic and mcpyrate (its dependency)
+requires-python = "<3.15,>=3.11"  # mcpyrate 4.0.0 and unpythonic 2.0.0 support 3.10–3.14
 
 readme = "README.md"
 
@@ -18,7 +18,7 @@ dynamic = ["version"]
 dependencies = [
     "bibtexparser>=2.0.0b8",
     "dearpygui>=2.0.0",
-    "mcpyrate>=3.6.4",  # we only use the colorizer utility for now
+    "mcpyrate>=4.0.0",  # we only use the colorizer utility for now
     "mistletoe>=1.4.0",  # vendored dpg-markdown
     "numpy>=1.26.4,<2.0",  # NOTE: spaCy doesn't support NumPy 2.0 yet (August 2024), so staying with NumPy 1.26 for now.
     "openTSNE>=1.0.2",  # BibTeX importer: dimension reduction from high-D to 2D
@@ -31,7 +31,7 @@ dependencies = [
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",  # spaCy
     "sseclient-py>=1.8.0",  # librarian: streaming transport for receiving data from LLM
     "torch>=2.4.0",
-    "unpythonic>=0.15.3",
+    "unpythonic>=2.0.0",
     "wordcloud>=1.9.3",  # visualizer
     "wosfile>=0.6",  # wos2bib
     "chromadb>=1.0.8",  # RAG semantic search
