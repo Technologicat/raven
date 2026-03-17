@@ -56,7 +56,8 @@ dependencies = [
     "strip-markdown>=1.3",  # TTS
     "emoji>=1.7.0",  # TTS, emoji stripping
     "accelerate>=1.11.0",  # faster loading of `whisper-large-v3-turbo`, according to model card
-    "pvrecorder>=1.2.7"
+    "pvrecorder>=1.2.7",
+    "PyTurboJPEG<2"
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]
