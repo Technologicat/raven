@@ -32,3 +32,18 @@ Raven uses a mix of `time.time_ns()`, `time.monotonic()`, and `time.perf_counter
 Audit all duration-measuring call sites and verify the correct timer type is used. The xdot widget session notes mention a `time.time_ns()` with `//` truncation bug — there may be more subtle issues.
 
 Discovered during raven-cherrypick loader bench review.
+
+## Consolidate numpy/tensor/DPG image conversions
+
+`raven/common/imageutil.py` now provides canonical conversion functions (`np_to_tensor`, `tensor_to_np`, `tensor_to_dpg_flat`). Several existing modules have their own inline versions of these conversions, with slight variations (some `.detach()`, some don't; some clamp, some don't):
+
+- `raven/server/modules/avatarutil.py` — lines 269, 290, 309
+- `raven/server/modules/imagefx.py` — lines 144, 150, 152, 191, 217, 219
+- `raven/server/modules/avatar.py` — line 1681, 1686
+- `raven/avatar/pose_editor/app.py` — line 1052, 1054
+- `raven/client/avatar_renderer.py` — lines 229, 301, 468, 566, 576
+- `raven/vendor/tha3/util.py` — line 92 (vendored, lower priority)
+
+Migrate these to use the common functions where possible.
+
+Discovered during raven-cherrypick imageutil extraction.

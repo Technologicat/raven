@@ -1,7 +1,4 @@
-"""raven-cherrypick configuration.
-
-This module is licensed under the 2-clause BSD license.
-"""
+"""raven-cherrypick configuration."""
 
 import torch
 

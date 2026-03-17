@@ -33,8 +33,8 @@ import numpy as np
 import torch
 from PIL import Image
 
-from raven.cherrypick.triage import IMAGE_EXTENSIONS
-from raven.common.lanczos import lanczos_resize
+from raven.common.image.utils import IMAGE_EXTENSIONS
+from raven.common.image.lanczos import lanczos_resize
 
 
 def _ns_to_s(ns: int) -> float:

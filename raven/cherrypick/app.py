@@ -1,8 +1,6 @@
 """raven-cherrypick — fast image triage tool.
 
 Main application module: startup, GUI layout, render loop, hotkey dispatch.
-
-This module is licensed under the 2-clause BSD license.
 """
 
 # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.

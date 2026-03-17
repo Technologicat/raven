@@ -1,11 +1,11 @@
-"""Tests for raven.common.lanczos — GPU-accelerated Lanczos resize."""
+"""Tests for raven.common.image.lanczos — GPU-accelerated Lanczos resize."""
 
 import pytest
 import numpy as np
 import torch
 from PIL import Image
 
-from raven.common.lanczos import lanczos_resize, lanczos_mipchain
+from raven.common.image.lanczos import lanczos_resize, lanczos_mipchain
 
 
 # ---------------------------------------------------------------------------

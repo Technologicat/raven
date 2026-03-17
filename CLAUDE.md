@@ -33,7 +33,7 @@ pytest                   # runs all tests (currently minimal coverage)
 ### Linting
 
 ```bash
-flake8                   # lint check
+flake8 --config=flake8rc  # lint check (note: non-standard config filename)
 ```
 
 ## Architecture

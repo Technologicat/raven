@@ -3,8 +3,6 @@
 Manages the three-state triage system (neutral/cherry/lemon) and the
 virtual directory that merges ``base/``, ``base/cherries/``, and
 ``base/lemons/`` into a single sorted image list.
-
-This module is licensed under the 2-clause BSD license.
 """
 
 __all__ = ["TriageState", "ImageEntry", "TriageManager"]
@@ -15,11 +13,9 @@ import shutil
 from enum import Enum
 from typing import Optional, Union
 
-logger = logging.getLogger(__name__)
+from ..common.image.utils import IMAGE_EXTENSIONS
 
-# Supported image extensions (lowercase, with dot).
-IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".qoi",
-                              ".bmp", ".tiff", ".tif", ".webp"})
+logger = logging.getLogger(__name__)
 
 CHERRY_DIR = "cherries"
 LEMON_DIR = "lemons"

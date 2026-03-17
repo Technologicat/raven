@@ -31,7 +31,6 @@ What to look for:
 
 import argparse
 import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -39,7 +38,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-from raven.common.lanczos import lanczos_resize
+from raven.common.image.lanczos import lanczos_resize
 
 
 def to_tensor(img, device="cuda"):
