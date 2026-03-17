@@ -30,6 +30,12 @@ Entry points defined in `pyproject.toml` under `[project.scripts]` — main apps
 pytest                   # runs all tests (currently minimal coverage)
 ```
 
+### Linting
+
+```bash
+flake8                   # lint check
+```
+
 ## Architecture
 
 ### Server/Client Split
