@@ -11,14 +11,16 @@ Coordinate system:
 
 See `raven.common.gui.utils.content_to_screen` for the transform formula.
 
-Mip textures are loaded **progressively**: small levels are created
-immediately (cheap), and one larger level is promoted per frame. This
-avoids blocking the render loop when switching to large images.
+Mip textures are loaded in a background thread (smallest levels first).
+The render loop shows the best available mip at each frame, so the image
+appears quickly at reduced quality and sharpens as larger mips complete.
 """
 
 __all__ = ["ImageView"]
 
+import concurrent.futures
 import logging
+import threading
 import time
 from typing import Callable, Optional
 
@@ -26,6 +28,9 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 import torch
 
+from unpythonic.env import env
+
+from ..common.bgtask import TaskManager
 from ..common.gui import utils as guiutils
 from ..common.image import lanczos
 from ..common.image import utils as imageutils
@@ -33,14 +38,16 @@ from . import config
 
 logger = logging.getLogger(__name__)
 
-# Counter for unique DPG tags.
+# Counter for unique DPG tags (thread-safe).
 _tag_counter = 0
+_tag_lock = threading.Lock()
 
 
 def _next_tag(prefix: str) -> str:
     global _tag_counter
-    _tag_counter += 1
-    return f"imageview_{prefix}_{_tag_counter}"
+    with _tag_lock:
+        _tag_counter += 1
+        return f"imageview_{prefix}_{_tag_counter}"
 
 
 class ImageView:
@@ -82,10 +89,13 @@ class ImageView:
         self._img_w = 0
         self._img_h = 0
         self._mips: list[tuple[float, int | str]] = []  # (scale, dpg_texture_tag)
+        self._mips_lock = threading.Lock()
 
-        # Progressive mip loading: GPU tensors waiting for DPG texture creation.
-        # Sorted largest-first (level 0 = full res, created last).
-        self._pending_mips: list[tuple[float, torch.Tensor]] = []
+        # Background mip loading.
+        self._mip_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="cherrypick_mip")
+        self._mip_task_mgr = TaskManager("mip_loader", "sequential",
+                                         self._mip_executor)
 
         # Interaction state.
         self.input_enabled: bool = True
@@ -116,81 +126,29 @@ class ImageView:
     def set_image(self, rgba: np.ndarray) -> None:
         """Load a new image from an ``(H, W, 4)`` RGBA uint8 numpy array.
 
-        Generates a Lanczos mip chain on the GPU. Creates DPG textures
-        for the small mip levels immediately (cheap). Larger levels are
-        promoted progressively, one per frame, via `update`.
+        Returns immediately. Mip chain generation and DPG texture creation
+        happen in a background thread. The render loop shows the best
+        available mip at each frame.
         """
+        # Cancel any in-progress mip loading and clear old textures.
+        self._mip_task_mgr.clear(wait=True)
         self._clear_textures()
-        self._pending_mips.clear()
+
         self._img_h, self._img_w = rgba.shape[:2]
-
-        t0 = time.perf_counter_ns()
-
-        # Generate mip chain on GPU.
-        tensor = imageutils.np_to_tensor(rgba, self._device)
-        if self._device.type == "cuda":
-            torch.cuda.synchronize(self._device)
-        t_upload = time.perf_counter_ns() - t0
-
-        t1 = time.perf_counter_ns()
-        mip_tensors = lanczos.lanczos_mipchain(tensor,
-                                               min_size=self._mip_min_size,
-                                               order=self._order)
-        if self._device.type == "cuda":
-            torch.cuda.synchronize(self._device)
-        t_mipgen = time.perf_counter_ns() - t1
-
-        # Determine which mip level is needed for the current zoom.
-        # For zoom-to-fit, that's the smallest mip >= displayed size.
-        fit_zoom = min(self._view_w / self._img_w,
-                       self._view_h / self._img_h) if self._img_w > 0 and self._img_h > 0 else 1.0
-        needed_zoom = self._zoom if not self._zoom_is_fit else fit_zoom
-
-        # Create DPG textures from smallest upward. Stop once we've
-        # created one level that covers the needed zoom (plus one extra
-        # for safety). Queue the rest for progressive loading.
-        scale = 1.0
-        mip_data = []  # (scale, tensor) sorted largest-first
-        for mip_t in mip_tensors:
-            mip_data.append((scale, mip_t))
-            scale *= 0.5
-
-        # Process smallest-first (reverse order).
-        created_count = 0
-        sufficient = False
-        for scale, mip_t in reversed(mip_data):
-            if not sufficient or created_count < 2:
-                # Create this level's DPG texture now.
-                self._create_mip_texture(scale, mip_t)
-                created_count += 1
-                if scale >= needed_zoom:
-                    sufficient = True
-            else:
-                # Queue for progressive loading (keep GPU tensor alive).
-                self._pending_mips.append((scale, mip_t.clone()))
-
-        # Pending mips are largest-first; we'll pop from the end (smallest first).
-        # Actually we want to promote the next-largest, so reverse:
-        # they're already largest-first from the loop above.
-
-        if self._debug:
-            mip_sizes = [f"{mt.shape[3]}x{mt.shape[2]}" for mt in mip_tensors]
-            logger.info(f"ImageView.set_image: upload={t_upload / 1e6:.0f}ms "
-                        f"mipgen={t_mipgen / 1e6:.0f}ms "
-                        f"levels={mip_sizes} "
-                        f"created={created_count} "
-                        f"pending={len(self._pending_mips)}")
-
-        del tensor, mip_tensors
-        if not self._pending_mips and self._device.type == "cuda":
-            torch.cuda.empty_cache()
-
         self._needs_render = True
+
+        # Start background mip generation.
+        task_env = env(rgba=rgba,
+                       device=self._device,
+                       order=self._order,
+                       mip_min_size=self._mip_min_size,
+                       debug=self._debug)
+        self._mip_task_mgr.submit(self._bg_mip_task, task_env)
 
     def clear(self) -> None:
         """Remove the current image."""
+        self._mip_task_mgr.clear(wait=True)
         self._clear_textures()
-        self._pending_mips.clear()
         self._img_w = 0
         self._img_h = 0
         self._needs_render = True
@@ -277,12 +235,10 @@ class ImageView:
     def update(self) -> None:
         """Call from the render loop every frame.
 
-        Promotes one pending mip level per frame (progressive loading),
-        then redraws if needed.
+        Checks for newly available mip levels (from background thread)
+        and redraws if needed.
         """
-        if self._pending_mips:
-            self._promote_one_mip()
-
+        # The background thread sets _needs_render when a new mip is ready.
         if self._needs_render:
             self._render()
             self._needs_render = False
@@ -293,59 +249,115 @@ class ImageView:
 
     def destroy(self) -> None:
         """Remove DPG items and handlers. Call on app shutdown."""
+        self._mip_task_mgr.clear(wait=True)
+        self._mip_executor.shutdown(wait=True)
         self._clear_textures()
-        self._pending_mips.clear()
         dpg.delete_item(self._handler_tag)
         dpg.delete_item(self._drawlist_tag)
 
     # ------------------------------------------------------------------
-    # Internal: progressive mip loading
+    # Internal: background mip loading
     # ------------------------------------------------------------------
 
-    def _create_mip_texture(self, scale: float, mip_tensor: torch.Tensor) -> None:
-        """Create a DPG texture for one mip level and insert into self._mips."""
-        _, _, mh, mw = mip_tensor.shape
-        flat = imageutils.tensor_to_dpg_flat(mip_tensor)
-        tex_tag = _next_tag("mip")
-        with dpg.texture_registry():
-            dpg.add_dynamic_texture(mw, mh,
-                                    default_value=flat,
-                                    tag=tex_tag)
-        # Insert sorted: _mips is largest-first.
-        inserted = False
-        for i, (s, _tag) in enumerate(self._mips):
-            if scale > s:
-                self._mips.insert(i, (scale, tex_tag))
-                inserted = True
-                break
-        if not inserted:
-            self._mips.append((scale, tex_tag))
+    def _bg_mip_task(self, e: env) -> None:
+        """Background thread: upload, generate mip chain, create DPG textures.
 
-    def _promote_one_mip(self) -> None:
-        """Create one pending mip texture (called once per frame)."""
-        if not self._pending_mips:
+        Creates textures from smallest to largest, so the image appears
+        quickly at reduced quality and sharpens progressively.
+        """
+        t_total_start = time.perf_counter_ns()
+
+        # Upload to GPU.
+        t0 = time.perf_counter_ns()
+        tensor = imageutils.np_to_tensor(e.rgba, e.device)
+        if e.device.type == "cuda":
+            torch.cuda.synchronize(e.device)
+        t_upload = time.perf_counter_ns() - t0
+
+        if e.cancelled:
             return
 
-        # Pop the last entry (smallest pending = next size up from what we have).
-        scale, mip_tensor = self._pending_mips.pop()
+        # Generate mip chain on GPU.
+        t0 = time.perf_counter_ns()
+        mip_tensors = lanczos.lanczos_mipchain(tensor,
+                                               min_size=e.mip_min_size,
+                                               order=e.order)
+        if e.device.type == "cuda":
+            torch.cuda.synchronize(e.device)
+        t_mipgen = time.perf_counter_ns() - t0
 
-        if self._debug:
+        # Build (scale, tensor) list, largest-first.
+        scale = 1.0
+        mip_data = []
+        for mip_t in mip_tensors:
+            mip_data.append((scale, mip_t))
+            scale *= 0.5
+
+        # Create DPG textures from smallest to largest.
+        # Only trigger a render at meaningful quality transitions to avoid
+        # visible flickering from 6 rapid mip switches.
+        current_zoom = self._zoom
+        rendered_preview = False
+        rendered_target = False
+
+        for mip_scale, mip_t in reversed(mip_data):
+            if e.cancelled:
+                break
+
+            _, _, mh, mw = mip_t.shape
             t0 = time.perf_counter_ns()
+            flat = imageutils.tensor_to_dpg_flat(mip_t)
+            t_xfer = time.perf_counter_ns() - t0
 
-        self._create_mip_texture(scale, mip_tensor)
+            t0 = time.perf_counter_ns()
+            tex_tag = _next_tag("mip")
+            with dpg.texture_registry():
+                dpg.add_dynamic_texture(mw, mh,
+                                        default_value=flat,
+                                        tag=tex_tag)
+            t_tex = time.perf_counter_ns() - t0
 
-        if self._debug:
-            elapsed = (time.perf_counter_ns() - t0) / 1e6
-            _, _, mh, mw = mip_tensor.shape
-            logger.info(f"ImageView._promote_one_mip: {mw}x{mh} "
-                        f"scale={scale:.3f} took {elapsed:.0f}ms "
-                        f"remaining={len(self._pending_mips)}")
+            # Wait for DPG to process the texture before the render loop
+            # tries to use it. Eliminates flicker from half-uploaded textures.
+            # (split_frame is safe from background threads; it waits for the
+            # main thread's render loop to complete one frame.)
+            dpg.split_frame()
 
-        del mip_tensor
-        if not self._pending_mips and self._device.type == "cuda":
+            # Insert into _mips sorted (largest-first).
+            with self._mips_lock:
+                inserted = False
+                for i, (s, _t) in enumerate(self._mips):
+                    if mip_scale > s:
+                        self._mips.insert(i, (mip_scale, tex_tag))
+                        inserted = True
+                        break
+                if not inserted:
+                    self._mips.append((mip_scale, tex_tag))
+
+            # Render at two points: first usable preview, and target quality.
+            if not rendered_preview and mip_scale >= max(0.125, current_zoom * 0.25):
+                self._needs_render = True
+                rendered_preview = True
+            if not rendered_target and mip_scale >= current_zoom:
+                self._needs_render = True
+                rendered_target = True
+
+            if e.debug:
+                logger.info(f"ImageView._bg_mip_task: {mw}x{mh} "
+                            f"scale={mip_scale:.3f} "
+                            f"xfer={t_xfer / 1e6:.0f}ms "
+                            f"tex={t_tex / 1e6:.0f}ms")
+
+        t_total = (time.perf_counter_ns() - t_total_start) / 1e6
+        if e.debug:
+            sizes = [f"{mt.shape[3]}x{mt.shape[2]}" for mt in mip_tensors]
+            logger.info(f"ImageView._bg_mip_task: done. upload={t_upload / 1e6:.0f}ms "
+                        f"mipgen={t_mipgen / 1e6:.0f}ms "
+                        f"levels={sizes} total={t_total:.0f}ms")
+
+        del tensor, mip_tensors
+        if e.device.type == "cuda":
             torch.cuda.empty_cache()
-
-        self._needs_render = True
 
     # ------------------------------------------------------------------
     # Internal: rendering
@@ -386,7 +398,7 @@ class ImageView:
                           f"img={self._img_w}x{self._img_h} "
                           f"fit={self._zoom_is_fit} "
                           f"mip={mip_scale:.3f} "
-                          f"pending={len(self._pending_mips)}",
+                          f"mips={len(self._mips)}",
                           color=(0, 255, 0, 200), size=config.FONT_SIZE,
                           parent=self._drawlist_tag)
 
@@ -421,12 +433,13 @@ class ImageView:
 
     def _clear_textures(self) -> None:
         """Delete all mip DPG textures."""
-        for _scale, tex_tag in self._mips:
-            try:
-                dpg.delete_item(tex_tag)
-            except Exception:
-                pass
-        self._mips.clear()
+        with self._mips_lock:
+            for _scale, tex_tag in self._mips:
+                try:
+                    dpg.delete_item(tex_tag)
+                except Exception:
+                    pass
+            self._mips.clear()
 
     # ------------------------------------------------------------------
     # Internal: zoom helpers
