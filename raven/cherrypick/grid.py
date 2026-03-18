@@ -62,6 +62,7 @@ class ThumbnailGrid:
                  tile_size: int = config.DEFAULT_TILE_SIZE,
                  icon_font=None,
                  on_current_changed=None,
+                 on_selection_changed=None,
                  on_double_click=None,
                  debug: bool = False):
         """
@@ -70,6 +71,7 @@ class ThumbnailGrid:
         *tile_size*: thumbnail tile size (square, pixels).
         *icon_font*: DPG font ID for FontAwesome icons (optional).
         *on_current_changed*: callback ``f(idx)`` when the current image changes.
+        *on_selection_changed*: callback ``f()`` when the multi-selection changes.
         *on_double_click*: callback ``f(idx)`` on double-click.
         *debug*: show click position logging.
         """
@@ -79,6 +81,7 @@ class ThumbnailGrid:
         self._tile_size = tile_size
         self._icon_font = icon_font
         self._on_current_changed = on_current_changed
+        self._on_selection_changed = on_selection_changed
         self._on_double_click = on_double_click
         self._debug = debug
 
@@ -280,10 +283,15 @@ class ThumbnailGrid:
     # Selection
     # ------------------------------------------------------------------
 
+    def _notify_selection_changed(self) -> None:
+        if self._on_selection_changed is not None:
+            self._on_selection_changed()
+
     def select_all(self) -> None:
         """Select all visible images."""
         self._selected = set(self._visible)
         self._needs_rebuild = True  # many tiles changed
+        self._notify_selection_changed()
 
     def deselect_all(self) -> None:
         """Clear multi-selection."""
@@ -291,12 +299,14 @@ class ThumbnailGrid:
             return
         self._selected.clear()
         self._needs_rebuild = True
+        self._notify_selection_changed()
 
     def invert_selection(self) -> None:
         """Invert selection among visible images."""
         visible_set = set(self._visible)
         self._selected = visible_set - self._selected
         self._needs_rebuild = True
+        self._notify_selection_changed()
 
     def toggle_select(self, idx: int) -> None:
         """Toggle *idx* in/out of the multi-selection (Ctrl+click)."""
@@ -305,6 +315,7 @@ class ThumbnailGrid:
         else:
             self._selected.add(idx)
         self._redraw_tile_by_idx(idx)
+        self._notify_selection_changed()
 
     # ------------------------------------------------------------------
     # Frame update
@@ -604,14 +615,16 @@ class ThumbnailGrid:
             lo, hi = min(a, b), max(a, b)
             self._selected = set(self._visible[lo:hi + 1])
             self._needs_rebuild = True  # many tiles changed
+            self._notify_selection_changed()
         elif ctrl:
-            self.toggle_select(idx)
+            self.toggle_select(idx)  # already notifies
         else:
             # Bare click: set current and replace selection with this one image.
             old_selected = self._selected
             self._selected = {idx}
             if old_selected != self._selected:
                 self._needs_rebuild = True
+                self._notify_selection_changed()
             self.set_current(idx)
 
         self._last_click_idx = idx

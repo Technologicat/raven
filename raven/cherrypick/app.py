@@ -727,6 +727,7 @@ def main() -> int:
                 tile_size=args.tile_size,
                 icon_font=themes_and_fonts.icon_font_solid,
                 on_current_changed=_on_current_changed,
+                on_selection_changed=_update_status,
                 on_double_click=_on_double_click,
                 debug=_debug,
             )
