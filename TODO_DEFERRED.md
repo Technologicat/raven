@@ -103,6 +103,14 @@ Could refactor as classes (cleaner than the current FP closures for stateful DPG
 
 Discovered during raven-cherrypick test drive.
 
+## VHS noise loading placeholder
+
+When switching images, the texture briefly shows a stride-mismatch glitch. For PNGs (fast decode) this looks like a brief cyberpunk glitch; for large JPEGs it lingers and looks broken. Idea: intentionally fill the texture with VHS-style noise as a loading placeholder, wait one frame for it to stabilize, then swap in the real data. The noise reads as "loading" rather than "broken."
+
+The video postprocessor (`raven/common/video/postprocessor.py`) already has VHS noise generation code (grain, horizontal bands). Extract a `generate_noise_frame(width, height, style="vhs")` utility into `raven/common/image/` or `raven/common/video/` for reuse.
+
+Discovered during raven-cherrypick test drive.
+
 ## Faster PNG decoder
 
 PIL's PNG decode via libpng is slow (~59 ms for a 1 MP image). Unlike JPEG (where turbojpeg provides scaled decode), libpng has no equivalent fast path. Options to investigate:
