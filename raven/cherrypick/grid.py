@@ -138,7 +138,7 @@ class ThumbnailGrid:
         self._triage_states = list(triage_states)
         self._n_images = len(filenames)
         self._current = 0 if self._n_images > 0 else -1
-        self._selected = {0} if self._n_images > 0 else set()
+        self._selected = set()  # no auto-select; user selects explicitly
         self._last_click_idx = -1
         self._clear_textures()
         self._recompute_visible()

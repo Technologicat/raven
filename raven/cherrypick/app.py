@@ -17,6 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import pathlib
+import time
 
 from .. import __version__
 
@@ -165,13 +166,27 @@ def _load_current_image() -> None:
     entry = triage[idx]
     try:
         old_size = iv.image_size
+
+        t0 = time.perf_counter_ns()
         rgba = imageutils.decode_image(entry.path)
+        t_decode = time.perf_counter_ns() - t0
+
         new_size = (rgba.shape[1], rgba.shape[0])  # (W, H)
+
+        t1 = time.perf_counter_ns()
         iv.set_image(rgba)
+        t_mip = time.perf_counter_ns() - t1
+
         # Keep zoom/pan when switching between same-size images (e.g. variants
         # of the same shot). Otherwise zoom to fit.
         if new_size != old_size:
             iv.zoom_to_fit()
+
+        if _debug:
+            logger.info(f"app._load_current_image: {entry.filename} "
+                        f"decode={t_decode / 1e6:.0f}ms "
+                        f"mip={t_mip / 1e6:.0f}ms "
+                        f"total={(t_decode + t_mip) / 1e6:.0f}ms")
     except Exception as exc:
         logger.warning("app._load_current_image: failed to load %s: %s",
                        entry.filename, exc)
@@ -391,6 +406,11 @@ def _on_key(sender, app_data) -> None:
     elif key == dpg.mvKey_1:
         if iv is not None:
             iv.zoom_to_actual()
+
+    # Selection toggle for current image (keyboard equivalent of Ctrl+click).
+    elif key == dpg.mvKey_Spacebar:
+        if grid is not None and grid.current >= 0:
+            grid.toggle_select(grid.current)
 
     # Focus toggle.
     elif key == dpg.mvKey_Tab:
@@ -701,12 +721,13 @@ def main() -> int:
         env(key_indent=0, key="L", action_indent=0, action="Mark lemon", notes=""),
         env(key_indent=0, key="N", action_indent=0, action="Clear mark (Neutral)", notes=""),
         helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="Left / Right", action_indent=0, action="Prev / next image", notes=""),
-        env(key_indent=0, key="Up / Down", action_indent=0, action="Prev / next row", notes=""),
+        env(key_indent=0, key="Left / Right", action_indent=0, action="Prev / next image", notes="Navigate only"),
+        env(key_indent=0, key="Up / Down", action_indent=0, action="Prev / next row", notes="Navigate only"),
         env(key_indent=0, key="Home / End", action_indent=0, action="First / last image", notes=""),
         env(key_indent=0, key="Page Up / Down", action_indent=0, action="Scroll by page", notes=""),
         helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="Click", action_indent=0, action="Select image", notes=""),
+        env(key_indent=0, key="Click", action_indent=0, action="Navigate and select", notes=""),
+        env(key_indent=0, key="Space", action_indent=0, action="Toggle select current", notes=""),
         env(key_indent=0, key="Ctrl+Click", action_indent=0, action="Toggle in selection", notes=""),
         env(key_indent=0, key="Shift+Click", action_indent=0, action="Range select", notes=""),
         env(key_indent=0, key="Ctrl+A", action_indent=0, action="Select all", notes=""),
