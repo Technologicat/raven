@@ -87,6 +87,14 @@ Many code style conventions currently in Raven's `CLAUDE.md` apply to all of Juh
 
 Discovered during raven-cherrypick development.
 
+## Robust public API auditing tool
+
+A tool that checks all public symbols are listed in `__all__` (PEP 8 compliance). The simple AST approach works for straightforward modules but misses re-exports, macro-generated symbols, and barrel `__init__.py` patterns. See mcpyrate's troubleshooting docs for the full complexity: https://github.com/Technologicat/mcpyrate/blob/master/doc/troubleshooting.md#how-to-list-the-whole-public-api-and-only-the-public-api
+
+Could be a useful addition to pyan3 (static call graph generator already understands Python module structure).
+
+Discovered during raven-cherrypick development.
+
 ## Move SmoothValue to raven.common.gui
 
 `SmoothValue` (framerate-independent exponential decay animation) is currently defined inside `raven/common/gui/xdotwidget/viewport.py` but is a general-purpose GUI utility. Move it to `raven/common/gui/` as its own module (e.g. `smoothvalue.py`) so that any DPG widget can use it for animated transitions.

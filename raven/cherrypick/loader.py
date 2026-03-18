@@ -67,9 +67,10 @@ class ThumbnailPipeline:
             max_workers=2, thread_name_prefix="cherrypick_thumb")
         self._task_mgr = TaskManager("thumbnails", "concurrent", self._executor)
 
-        # Inter-thread queues.  maxsize=1 on decode_queue gives triple buffering:
-        # decode thread working on N+2, queue holds N+1, GPU thread working on N.
-        self._decode_queue: queue.Queue = queue.Queue(maxsize=1)
+        # Inter-thread queues.  A small decode queue keeps the GPU fed even when
+        # individual image decode times vary.  At small tile sizes the GPU is much
+        # faster than decode, so a deeper queue prevents GPU idle stalls.
+        self._decode_queue: queue.Queue = queue.Queue(maxsize=4)
         self._result_queue: queue.Queue = queue.Queue()
 
         self._total: int = 0

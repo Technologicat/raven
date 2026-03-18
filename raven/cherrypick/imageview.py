@@ -69,6 +69,7 @@ class ImageView:
         self._zoom = 1.0
         self._pan_cx = 0.0  # image x at view center
         self._pan_cy = 0.0  # image y at view center
+        self._zoom_is_fit = False  # True when last zoom was zoom_to_fit
 
         # Image state.
         self._img_w = 0
@@ -147,7 +148,10 @@ class ImageView:
         self._view_w = width
         self._view_h = height
         dpg.configure_item(self._drawlist_tag, width=width, height=height)
-        self._needs_render = True
+        if self._zoom_is_fit:
+            self.zoom_to_fit()
+        else:
+            self._needs_render = True
 
     @property
     def focused(self) -> bool:
@@ -185,11 +189,13 @@ class ImageView:
         self._zoom = z
         self._pan_cx = cx
         self._pan_cy = cy
+        self._zoom_is_fit = True
         self._on_zoom_update()
 
     def zoom_to_actual(self) -> None:
         """Zoom to 1:1 (100%), keeping the current center."""
         self._zoom = 1.0
+        self._zoom_is_fit = False
         self._on_zoom_update()
 
     def zoom_in(self) -> None:
@@ -209,6 +215,7 @@ class ImageView:
             return
         self._pan_cx -= dx / self._zoom
         self._pan_cy -= dy / self._zoom
+        self._clamp_pan()
         self._needs_render = True
 
     # ------------------------------------------------------------------
@@ -252,6 +259,12 @@ class ImageView:
         pmax = guiutils.content_to_screen(self._img_w, self._img_h,
                                           self._pan_cx, self._pan_cy,
                                           self._zoom, self._view_w, self._view_h)
+
+        # At 1:1 zoom, snap to pixel grid to avoid subpixel blur.
+        # Round pmin, then derive pmax exactly so the texture maps 1:1.
+        if self._zoom == 1.0:
+            pmin = (round(pmin[0]), round(pmin[1]))
+            pmax = (pmin[0] + self._img_w, pmin[1] + self._img_h)
 
         dpg.draw_image(tex_tag, pmin=pmin, pmax=pmax,
                        parent=self._drawlist_tag)
@@ -299,6 +312,7 @@ class ImageView:
 
     def _zoom_at_screen(self, factor: float, sx: float, sy: float) -> None:
         """Zoom by *factor*, keeping the image point under (sx, sy) stationary."""
+        self._zoom_is_fit = False
         new_zoom = max(0.01, min(100.0, self._zoom * factor))
         self._pan_cx, self._pan_cy = guiutils.zoom_keep_point(
             self._zoom, new_zoom, sx, sy,
@@ -309,13 +323,22 @@ class ImageView:
 
     def _zoom_at_center(self, factor: float) -> None:
         """Zoom by *factor*, centered on the view."""
+        self._zoom_is_fit = False
         new_zoom = self._zoom * factor
         new_zoom = max(0.01, min(100.0, new_zoom))
         self._zoom = new_zoom
         self._on_zoom_update()
 
+    def _clamp_pan(self) -> None:
+        """Keep the viewport center within the image bounds."""
+        if not self.has_image:
+            return
+        self._pan_cx = max(0, min(self._img_w, self._pan_cx))
+        self._pan_cy = max(0, min(self._img_h, self._pan_cy))
+
     def _on_zoom_update(self) -> None:
         """Common handling after any zoom change."""
+        self._clamp_pan()
         self._needs_render = True
         if self._on_zoom_changed is not None:
             self._on_zoom_changed(self._zoom)

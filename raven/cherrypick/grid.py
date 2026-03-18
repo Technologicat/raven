@@ -324,13 +324,29 @@ class ThumbnailGrid:
         dpg.delete_item(self._child_window_tag)
 
     # ------------------------------------------------------------------
+    # Internal: texture management
+    # ------------------------------------------------------------------
+
+    def _clear_textures(self) -> None:
+        """Delete all thumbnail DPG textures."""
+        for tex_tag in self._textures.values():
+            try:
+                dpg.delete_item(tex_tag)
+            except Exception:
+                pass
+        self._textures.clear()
+
+    # ------------------------------------------------------------------
     # Internal: layout
     # ------------------------------------------------------------------
 
     def _compute_layout(self) -> None:
         """Compute grid layout parameters from current width and tile size."""
         ts = self._tile_size
-        self._col_width = ts + _TILE_SPACING
+        # DPG horizontal groups add item_spacing (8px) between children,
+        # which is the actual inter-tile gap regardless of _TILE_SPACING.
+        dpg_item_spacing_x = 8
+        self._col_width = ts + dpg_item_spacing_x
         self._row_height = ts + _LABEL_HEIGHT + _TILE_SPACING
         usable = self._width - config.DPG_SCROLLBAR_SIZE
         self._n_cols = max(1, int(usable / self._col_width))
@@ -354,8 +370,7 @@ class ThumbnailGrid:
 
             # Tile group.
             tile_tag = _next_tag("tile")
-            dpg.add_group(parent=row_tag, tag=tile_tag,
-                          width=int(self._col_width))
+            dpg.add_group(parent=row_tag, tag=tile_tag)
 
             # Drawlist for image + borders + icons.
             dl_tag = _next_tag("tile_dl")
@@ -363,16 +378,18 @@ class ThumbnailGrid:
                              parent=tile_tag, tag=dl_tag)
             self._tile_drawlists[vis_pos] = dl_tag
 
-            # Filename label.
+            # Filename label — truncate to fit tile width.
+            # At font size 20, ~9px average character width (variable-width font).
+            max_chars = max(4, ts // 9)
             name = self._filenames[idx]
-            if len(name) > config.TILE_LABEL_MAX_CHARS:
-                name = name[:config.TILE_LABEL_MAX_CHARS - 1] + "\u2026"
+            if len(name) > max_chars:
+                name = name[:max_chars - 1] + "\u2026"
             label_tag = _next_tag("label")
-            dpg.add_text(name, parent=tile_tag, tag=label_tag)
+            dpg.add_text(name, parent=tile_tag, tag=label_tag, wrap=ts)
             self._tile_labels[vis_pos] = label_tag
 
-            # Add tooltip with full filename.
-            with dpg.tooltip(dl_tag):
+            # Add tooltip with full filename (on the tile group, not the drawlist).
+            with dpg.tooltip(tile_tag):
                 dpg.add_text(self._filenames[idx])
 
             # Draw tile contents.
@@ -497,11 +514,12 @@ class ThumbnailGrid:
 
         # Scroll so the row is visible (with some margin).
         scroll_y = dpg.get_y_scroll(self._child_window_tag)
+        max_scroll = dpg.get_y_scroll_max(self._child_window_tag)
         if row_y < scroll_y:
             dpg.set_y_scroll(self._child_window_tag, max(0, row_y - _TILE_SPACING))
         elif row_y + self._row_height > scroll_y + self._height:
-            dpg.set_y_scroll(self._child_window_tag,
-                             row_y + self._row_height - self._height + _TILE_SPACING)
+            target = row_y + self._row_height - self._height + _TILE_SPACING
+            dpg.set_y_scroll(self._child_window_tag, min(target, max_scroll))
 
     def _redraw_tile_by_idx(self, idx: int) -> None:
         """Redraw a single tile (if it's visible) after state change."""
@@ -571,7 +589,10 @@ class ThumbnailGrid:
         elif ctrl:
             self.toggle_select(idx)
         else:
+            had_selection = bool(self._selected)
             self._selected.clear()
+            if had_selection:
+                self._needs_rebuild = True  # redraw all previously selected tiles
             self.set_current(idx)
 
         self._last_click_idx = idx
