@@ -816,9 +816,12 @@ def main() -> int:
     # --- Help card ---
     hotkey_info = (
         env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open folder", notes=""),
-        env(key_indent=0, key="C / Ctrl+C", action_indent=0, action="Mark cherry", notes="Ctrl = selected"),
-        env(key_indent=0, key="X / Ctrl+X", action_indent=0, action="Mark lemon", notes="Ctrl = selected"),
-        env(key_indent=0, key="V / Ctrl+V", action_indent=0, action="Clear mark", notes="Ctrl = selected"),
+        env(key_indent=0, key="C", action_indent=0, action="Mark cherry", notes=""),
+        env(key_indent=1, key="Ctrl+C", action_indent=1, action="Same, but all selected", notes=""),
+        env(key_indent=0, key="X", action_indent=0, action="Mark lemon", notes=""),
+        env(key_indent=1, key="Ctrl+X", action_indent=1, action="Same, but all selected", notes=""),
+        env(key_indent=0, key="V", action_indent=0, action="Clear mark", notes=""),
+        env(key_indent=1, key="Ctrl+V", action_indent=1, action="Same, but all selected", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="G", action_indent=0, action="Cycle filter forward", notes="All/Cherries/Lemons/Neutral"),
         env(key_indent=0, key="Shift+G", action_indent=0, action="Cycle filter backward", notes=""),
