@@ -112,6 +112,10 @@ class ImageView:
         self._drag_pan_start = (0.0, 0.0)
         self._needs_render = True
 
+        # Tracked draw items — _render creates new items first, then deletes
+        # the old batch.  The drawlist is never empty, eliminating blank flashes.
+        self._drawn_items: list[int | str] = []
+
         # Create DPG drawlist.
         self._drawlist_tag = _next_tag("drawlist")
         dpg.add_drawlist(width=width, height=height,
@@ -329,12 +333,6 @@ class ImageView:
             scale *= 0.5
 
         # Create DPG textures from smallest to largest.
-        # Only trigger a render at meaningful quality transitions to avoid
-        # visible flickering from 6 rapid mip switches.
-        current_zoom = self._zoom
-        rendered_preview = False
-        rendered_target = False
-
         for mip_scale, mip_t in reversed(mip_data):
             if e.cancelled:
                 break
@@ -379,13 +377,8 @@ class ImageView:
                             pass
                     self._old_mips.clear()
 
-            # Render at two points: first usable preview, and target quality.
-            if not rendered_preview and mip_scale >= max(0.125, current_zoom * 0.25):
-                self._needs_render = True
-                rendered_preview = True
-            if not rendered_target and mip_scale >= current_zoom:
-                self._needs_render = True
-                rendered_target = True
+            # Trigger a render for every new mip (progressive sharpening).
+            self._needs_render = True
 
             if e.debug:
                 logger.info(f"ImageView._bg_mip_task: {mw}x{mh} "
@@ -413,9 +406,13 @@ class ImageView:
     # ------------------------------------------------------------------
 
     def _render(self) -> None:
-        """Redraw the drawlist."""
-        dpg.delete_item(self._drawlist_tag, children_only=True)
+        """Redraw the drawlist.
 
+        Creates new draw items first, then deletes the previous batch.
+        The drawlist is never empty — eliminates blank-frame glitches
+        that occur when ``delete_item(children_only=True)`` clears the
+        drawlist before new items are added.
+        """
         # Use new mips if available, otherwise show old image until ready.
         # When showing old mips, also use the old zoom/pan/dimensions so the
         # old image isn't distorted by the new image's aspect ratio.
@@ -449,20 +446,25 @@ class ImageView:
             pmin = (round(pmin[0]), round(pmin[1]))
             pmax = (pmin[0] + img_w, pmin[1] + img_h)
 
-        dpg.draw_image(tex_tag, pmin=pmin, pmax=pmax,
-                       parent=self._drawlist_tag)
+        # --- Create new draw items ---
+        new_items = []
+
+        item = dpg.draw_image(tex_tag, pmin=pmin, pmax=pmax,
+                              parent=self._drawlist_tag)
+        new_items.append(item)
 
         # Debug overlay: pan/zoom coordinates.
         if self._debug:
-            dpg.draw_text((4, 4),
-                          f"pan=({self._pan_cx:.1f}, {self._pan_cy:.1f}) "
-                          f"zoom={self._zoom:.3f} "
-                          f"img={self._img_w}x{self._img_h} "
-                          f"fit={self._zoom_is_fit} "
-                          f"mip={mip_scale:.3f} "
-                          f"mips={len(self._mips)}",
-                          color=(0, 255, 0, 200), size=config.FONT_SIZE,
-                          parent=self._drawlist_tag)
+            item = dpg.draw_text((4, 4),
+                                 f"pan=({self._pan_cx:.1f}, {self._pan_cy:.1f}) "
+                                 f"zoom={self._zoom:.3f} "
+                                 f"img={self._img_w}x{self._img_h} "
+                                 f"fit={self._zoom_is_fit} "
+                                 f"mip={mip_scale:.3f} "
+                                 f"mips={len(self._mips)}",
+                                 color=(0, 255, 0, 200), size=config.FONT_SIZE,
+                                 parent=self._drawlist_tag)
+            new_items.append(item)
 
         # Loading indicator — shown while background mip generation is running.
         if self._mip_loading:
@@ -471,23 +473,34 @@ class ImageView:
             ty = self._view_h - config.FONT_SIZE - 8
             # Dark background pill for readability over any image content.
             pad_x, pad_y = 6, 2
-            dpg.draw_rectangle(pmin=(tx - pad_x, ty - pad_y),
-                               pmax=(tx + len(label) * config.FONT_SIZE * 0.52 + pad_x,
-                                     ty + config.FONT_SIZE + pad_y),
-                               color=(0, 0, 0, 0), fill=(0, 0, 0, 160),
-                               rounding=4,
-                               parent=self._drawlist_tag)
-            dpg.draw_text((tx, ty), label,
-                          color=(200, 200, 200, 220), size=config.FONT_SIZE,
-                          parent=self._drawlist_tag)
+            item = dpg.draw_rectangle(pmin=(tx - pad_x, ty - pad_y),
+                                      pmax=(tx + len(label) * config.FONT_SIZE * 0.52 + pad_x,
+                                            ty + config.FONT_SIZE + pad_y),
+                                      color=(0, 0, 0, 0), fill=(0, 0, 0, 160),
+                                      rounding=4,
+                                      parent=self._drawlist_tag)
+            new_items.append(item)
+            item = dpg.draw_text((tx, ty), label,
+                                 color=(200, 200, 200, 220), size=config.FONT_SIZE,
+                                 parent=self._drawlist_tag)
+            new_items.append(item)
 
         # Focus indicator.
         if self._focused:
-            dpg.draw_rectangle(pmin=(1, 1),
-                               pmax=(self._view_w - 1, self._view_h - 1),
-                               color=config.CURRENT_COLOR,
-                               thickness=2,
-                               parent=self._drawlist_tag)
+            item = dpg.draw_rectangle(pmin=(1, 1),
+                                      pmax=(self._view_w - 1, self._view_h - 1),
+                                      color=config.CURRENT_COLOR,
+                                      thickness=2,
+                                      parent=self._drawlist_tag)
+            new_items.append(item)
+
+        # --- Delete previous draw items (new ones already cover them) ---
+        for old_item in self._drawn_items:
+            try:
+                dpg.delete_item(old_item)
+            except Exception:
+                pass
+        self._drawn_items = new_items
 
     def _select_mip_from(self, mips: list[tuple[float, int | str]]) -> tuple[float, int | str]:
         """Pick the mip level closest to (but not smaller than) the current zoom.
