@@ -245,9 +245,13 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
         indices = list(grid.selected)
     else:
         indices = [grid.current] if grid.current >= 0 else []
-    indices = [i for i in indices if 0 <= i < len(triage)]
-    if not indices:
+    valid = [i for i in indices if 0 <= i < len(triage)]
+    if len(valid) < len(indices):
+        logger.warning("app._mark_triage: %d out-of-range indices dropped (grid/triage desync?)",
+                       len(indices) - len(valid))
+    if not valid:
         return
+    indices = valid
 
     errors = triage.set_state(indices, state)
     for err in errors:
