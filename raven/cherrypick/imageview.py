@@ -50,7 +50,8 @@ class ImageView:
                  device: torch.device,
                  lanczos_order: int = lanczos.DEFAULT_ORDER,
                  mip_min_size: int = config.MIP_MIN_SIZE,
-                 on_zoom_changed: Optional[Callable[[float], None]] = None):
+                 on_zoom_changed: Optional[Callable[[float], None]] = None,
+                 debug: bool = False):
         """
         *parent*: DPG parent container (tag or ID).
         *width*, *height*: initial drawlist size in pixels.
@@ -61,6 +62,7 @@ class ImageView:
         self._order = lanczos_order
         self._mip_min_size = mip_min_size
         self._on_zoom_changed = on_zoom_changed
+        self._debug = debug
 
         self._view_w = width
         self._view_h = height
@@ -268,6 +270,16 @@ class ImageView:
 
         dpg.draw_image(tex_tag, pmin=pmin, pmax=pmax,
                        parent=self._drawlist_tag)
+
+        # Debug overlay: pan/zoom coordinates.
+        if self._debug:
+            dpg.draw_text((4, 4),
+                          f"pan=({self._pan_cx:.1f}, {self._pan_cy:.1f}) "
+                          f"zoom={self._zoom:.3f} "
+                          f"img={self._img_w}x{self._img_h} "
+                          f"fit={self._zoom_is_fit}",
+                          color=(0, 255, 0, 200), size=config.FONT_SIZE,
+                          parent=self._drawlist_tag)
 
         # Focus indicator.
         if self._focused:

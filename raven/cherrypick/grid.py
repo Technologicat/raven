@@ -62,7 +62,8 @@ class ThumbnailGrid:
                  tile_size: int = config.DEFAULT_TILE_SIZE,
                  icon_font=None,
                  on_current_changed=None,
-                 on_double_click=None):
+                 on_double_click=None,
+                 debug: bool = False):
         """
         *parent*: DPG parent container.
         *width*, *height*: initial grid panel size in pixels.
@@ -70,6 +71,7 @@ class ThumbnailGrid:
         *icon_font*: DPG font ID for FontAwesome icons (optional).
         *on_current_changed*: callback ``f(idx)`` when the current image changes.
         *on_double_click*: callback ``f(idx)`` on double-click.
+        *debug*: show click position logging.
         """
         self._parent = parent
         self._width = width
@@ -78,6 +80,7 @@ class ThumbnailGrid:
         self._icon_font = icon_font
         self._on_current_changed = on_current_changed
         self._on_double_click = on_double_click
+        self._debug = debug
 
         # Data.
         self._filenames: list[str] = []  # parallel to triage manager indices
@@ -135,7 +138,7 @@ class ThumbnailGrid:
         self._triage_states = list(triage_states)
         self._n_images = len(filenames)
         self._current = 0 if self._n_images > 0 else -1
-        self._selected.clear()
+        self._selected = {0} if self._n_images > 0 else set()
         self._last_click_idx = -1
         self._clear_textures()
         self._recompute_visible()
@@ -417,13 +420,10 @@ class ThumbnailGrid:
                                fill=(55, 55, 58, 255),
                                parent=drawlist_tag)
 
-        # Selection overlay + border (visible even when thumbnail covers entire tile).
+        # Selection tint.
         if idx in self._selected:
-            dpg.draw_rectangle(pmin=(0, 0), pmax=(ts, ts),
-                               fill=config.SELECTION_TINT,
-                               parent=drawlist_tag)
             dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
-                               color=(255, 255, 255, 160), thickness=2,
+                               fill=config.SELECTION_TINT,
                                parent=drawlist_tag)
 
         # Triage border.
@@ -578,6 +578,16 @@ class ThumbnailGrid:
         """Handle single click on a tile."""
         if not self.input_enabled:
             return
+
+        if self._debug and guiutils.is_mouse_inside_widget(self._child_window_tag):
+            local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)
+            content_y = local_y + dpg.get_y_scroll(self._child_window_tag)
+            logger.info(f"ThumbnailGrid._on_click: local=({local_x:.0f},{local_y:.0f}) "
+                        f"content_y={content_y:.0f} row_h={self._row_height:.0f} "
+                        f"col_w={self._col_width:.0f} "
+                        f"row={int(content_y / self._row_height)} "
+                        f"col={int(local_x / self._col_width)}")
+
         idx = self._hit_test()
         if idx is None:
             return
@@ -597,10 +607,11 @@ class ThumbnailGrid:
         elif ctrl:
             self.toggle_select(idx)
         else:
-            had_selection = bool(self._selected)
-            self._selected.clear()
-            if had_selection:
-                self._needs_rebuild = True  # redraw all previously selected tiles
+            # Bare click: set current and replace selection with this one image.
+            old_selected = self._selected
+            self._selected = {idx}
+            if old_selected != self._selected:
+                self._needs_rebuild = True
             self.set_current(idx)
 
         self._last_click_idx = idx

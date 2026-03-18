@@ -56,6 +56,7 @@ _app_state = {
 
 _filedialog_open = None
 _help_window = None
+_debug = False
 
 # Validated at startup.
 _device = None
@@ -310,6 +311,15 @@ def _on_key(sender, app_data) -> None:
     if ctrl and shift:
         if key == dpg.mvKey_M:
             dpg.show_metrics()
+            # Toggle debug overlays.
+            global _debug
+            _debug = not _debug
+            if iv is not None:
+                iv._debug = _debug
+                iv._needs_render = True
+            if grid is not None:
+                grid._debug = _debug
+            logger.info(f"app._on_key: debug mode {'ON' if _debug else 'OFF'}")
         elif key == dpg.mvKey_R:
             dpg.show_item_registry()
         elif key == dpg.mvKey_T:
@@ -498,7 +508,12 @@ def main() -> int:
                         help=f"Initial thumbnail size (default: {config.DEFAULT_TILE_SIZE})")
     parser.add_argument("--device", type=str, default=None,
                         help="Torch device override (e.g. cuda:1, cpu)")
+    parser.add_argument("--debug", action="store_true",
+                        help="Show debug overlays (pan/zoom coordinates, click positions)")
     args = parser.parse_args()
+
+    global _debug
+    _debug = args.debug
 
     # --- GPU config ---
     if args.device is not None:
@@ -655,6 +670,7 @@ def main() -> int:
                 device=_device,
                 lanczos_order=config.THUMBNAIL_LANCZOS_ORDER,
                 mip_min_size=config.MIP_MIN_SIZE,
+                debug=_debug,
                 on_zoom_changed=_on_zoom_changed,
             )
             _app_state["image_view"] = image_view
@@ -667,6 +683,7 @@ def main() -> int:
                 icon_font=themes_and_fonts.icon_font_solid,
                 on_current_changed=_on_current_changed,
                 on_double_click=_on_double_click,
+                debug=_debug,
             )
             _app_state["grid"] = grid
 
