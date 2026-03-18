@@ -89,6 +89,12 @@ class ImageView:
         self._img_w = 0
         self._img_h = 0
         self._mips: list[tuple[float, int | str]] = []  # (scale, dpg_texture_tag)
+        self._old_mips: list[tuple[float, int | str]] = []  # kept until first new mip ready
+        self._old_img_w = 0  # dimensions matching _old_mips
+        self._old_img_h = 0
+        self._old_zoom = 1.0  # zoom/pan matching _old_mips
+        self._old_pan_cx = 0.0
+        self._old_pan_cy = 0.0
         self._mips_lock = threading.Lock()
 
         # Background mip loading.
@@ -130,9 +136,19 @@ class ImageView:
         happen in a background thread. The render loop shows the best
         available mip at each frame.
         """
-        # Cancel any in-progress mip loading and clear old textures.
+        # Cancel any in-progress mip loading.
         self._mip_task_mgr.clear(wait=True)
-        self._clear_textures()
+
+        # Keep old textures visible until the first new mip is ready.
+        # This eliminates the blank flash between images.
+        with self._mips_lock:
+            self._old_mips = list(self._mips)
+            self._old_img_w = self._img_w
+            self._old_img_h = self._img_h
+            self._old_zoom = self._zoom
+            self._old_pan_cx = self._pan_cx
+            self._old_pan_cy = self._pan_cy
+            self._mips = []
 
         self._img_h, self._img_w = rgba.shape[:2]
         self._needs_render = True
@@ -334,6 +350,16 @@ class ImageView:
                 if not inserted:
                     self._mips.append((mip_scale, tex_tag))
 
+            # Clean up old textures once we have something new to show.
+            if self._old_mips:
+                with self._mips_lock:
+                    for _s, old_tag in self._old_mips:
+                        try:
+                            dpg.delete_item(old_tag)
+                        except Exception:
+                            pass
+                    self._old_mips.clear()
+
             # Render at two points: first usable preview, and target quality.
             if not rendered_preview and mip_scale >= max(0.125, current_zoom * 0.25):
                 self._needs_render = True
@@ -367,25 +393,38 @@ class ImageView:
         """Redraw the drawlist."""
         dpg.delete_item(self._drawlist_tag, children_only=True)
 
-        if not self._mips:
+        # Use new mips if available, otherwise show old image until ready.
+        # When showing old mips, also use the old zoom/pan/dimensions so the
+        # old image isn't distorted by the new image's aspect ratio.
+        if self._mips:
+            active_mips = self._mips
+            img_w, img_h = self._img_w, self._img_h
+            zoom = self._zoom
+            pan_cx, pan_cy = self._pan_cx, self._pan_cy
+        elif self._old_mips:
+            active_mips = self._old_mips
+            img_w, img_h = self._old_img_w, self._old_img_h
+            zoom = self._old_zoom
+            pan_cx, pan_cy = self._old_pan_cx, self._old_pan_cy
+        else:
             return
 
         # Select the best mip level for current zoom.
-        mip_scale, tex_tag = self._select_mip()
+        mip_scale, tex_tag = self._select_mip_from(active_mips)
 
         # Image corners in screen (drawlist) coordinates.
         pmin = guiutils.content_to_screen(0, 0,
-                                          self._pan_cx, self._pan_cy,
-                                          self._zoom, self._view_w, self._view_h)
-        pmax = guiutils.content_to_screen(self._img_w, self._img_h,
-                                          self._pan_cx, self._pan_cy,
-                                          self._zoom, self._view_w, self._view_h)
+                                          pan_cx, pan_cy,
+                                          zoom, self._view_w, self._view_h)
+        pmax = guiutils.content_to_screen(img_w, img_h,
+                                          pan_cx, pan_cy,
+                                          zoom, self._view_w, self._view_h)
 
         # At 1:1 zoom, snap to pixel grid to avoid subpixel blur.
         # Round pmin, then derive pmax exactly so the texture maps 1:1.
-        if self._zoom == 1.0:
+        if zoom == 1.0:
             pmin = (round(pmin[0]), round(pmin[1]))
-            pmax = (pmin[0] + self._img_w, pmin[1] + self._img_h)
+            pmax = (pmin[0] + img_w, pmin[1] + img_h)
 
         dpg.draw_image(tex_tag, pmin=pmin, pmax=pmax,
                        parent=self._drawlist_tag)
@@ -410,7 +449,7 @@ class ImageView:
                                thickness=2,
                                parent=self._drawlist_tag)
 
-    def _select_mip(self) -> tuple[float, int | str]:
+    def _select_mip_from(self, mips: list[tuple[float, int | str]]) -> tuple[float, int | str]:
         """Pick the mip level closest to (but not smaller than) the current zoom.
 
         At zoom `z`, each image pixel occupies `z` screen pixels. We want
@@ -419,8 +458,8 @@ class ImageView:
         Falls back to the best available if the ideal mip hasn't loaded yet.
         """
         # Mips are sorted largest-first: [(1.0, tex), (0.5, tex), (0.25, tex), ...]
-        best = self._mips[0]
-        for scale, tex_tag in self._mips:
+        best = mips[0]
+        for scale, tex_tag in mips:
             if scale >= self._zoom:
                 best = (scale, tex_tag)
             else:
@@ -432,14 +471,15 @@ class ImageView:
     # ------------------------------------------------------------------
 
     def _clear_textures(self) -> None:
-        """Delete all mip DPG textures."""
+        """Delete all mip DPG textures (current and old)."""
         with self._mips_lock:
-            for _scale, tex_tag in self._mips:
-                try:
-                    dpg.delete_item(tex_tag)
-                except Exception:
-                    pass
-            self._mips.clear()
+            for mip_list in (self._mips, self._old_mips):
+                for _scale, tex_tag in mip_list:
+                    try:
+                        dpg.delete_item(tex_tag)
+                    except Exception:
+                        pass
+                mip_list.clear()
 
     # ------------------------------------------------------------------
     # Internal: zoom helpers
