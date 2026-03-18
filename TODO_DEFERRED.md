@@ -95,6 +95,24 @@ Could be a useful addition to pyan3 (static call graph generator already underst
 
 Discovered during raven-cherrypick development.
 
+## Refactor toolbar separator helpers into guiutils
+
+Librarian has `add_separator_for_horizontal_toolbar` (drawlist-based vertical line) and Visualizer has one for vertical toolbars. Both should be refactored into `raven.common.gui.utils`. raven-cherrypick currently uses `dpg.add_separator()` which causes visual artifacts in horizontal groups.
+
+Could refactor as classes (cleaner than the current FP closures for stateful DPG widgets).
+
+Discovered during raven-cherrypick test drive.
+
+## Faster PNG decoder
+
+PIL's PNG decode via libpng is slow (~59 ms for a 1 MP image). Unlike JPEG (where turbojpeg provides scaled decode), libpng has no equivalent fast path. Options to investigate:
+- `cv2.imread` — uses libpng but OpenCV's memory handling may be faster
+- `fpng` / `fpnge` — fast PNG codecs, but Python bindings may not exist
+- `spng` — simpler PNG library, sometimes faster than libpng
+- For thumbnails specifically, could decode at reduced bit depth or skip interlacing
+
+Discovered during raven-cherrypick test drive.
+
 ## Move SmoothValue to raven.common.gui
 
 `SmoothValue` (framerate-independent exponential decay animation) is currently defined inside `raven/common/gui/xdotwidget/viewport.py` but is a general-purpose GUI utility. Move it to `raven/common/gui/` as its own module (e.g. `smoothvalue.py`) so that any DPG widget can use it for animated transitions.

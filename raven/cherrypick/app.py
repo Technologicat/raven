@@ -163,9 +163,14 @@ def _load_current_image() -> None:
 
     entry = triage[idx]
     try:
+        old_size = iv.image_size
         rgba = imageutils.decode_image(entry.path)
+        new_size = (rgba.shape[1], rgba.shape[0])  # (W, H)
         iv.set_image(rgba)
-        iv.zoom_to_fit()
+        # Keep zoom/pan when switching between same-size images (e.g. variants
+        # of the same shot). Otherwise zoom to fit.
+        if new_size != old_size:
+            iv.zoom_to_fit()
     except Exception as exc:
         logger.warning("app._load_current_image: failed to load %s: %s",
                        entry.filename, exc)
@@ -578,7 +583,7 @@ def main() -> int:
             with dpg.tooltip(btn):
                 dpg.add_text("Zoom to fit [F]")
 
-            dpg.add_separator()
+            dpg.add_spacer(width=8)
 
             # Triage buttons.
             btn = dpg.add_button(label=fa.ICON_STAR,
@@ -605,7 +610,7 @@ def main() -> int:
             with dpg.tooltip(btn):
                 dpg.add_text("Clear mark (Neutral) [N]")
 
-            dpg.add_separator()
+            dpg.add_spacer(width=8)
 
             # Tile size selector.
             tile_size_labels = [str(s) for s in config.TILE_SIZES]
@@ -617,7 +622,7 @@ def main() -> int:
             with dpg.tooltip("cherrypick_tile_size_combo"):
                 dpg.add_text("Tile size [Ctrl+1..5]")
 
-            dpg.add_separator()
+            dpg.add_spacer(width=8)
 
             # Fullscreen / help.
             btn = dpg.add_button(label=fa.ICON_EXPAND,

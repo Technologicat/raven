@@ -341,13 +341,18 @@ class ThumbnailGrid:
     # ------------------------------------------------------------------
 
     def _compute_layout(self) -> None:
-        """Compute grid layout parameters from current width and tile size."""
+        """Compute grid layout parameters from current width and tile size.
+
+        Must match the actual DPG-rendered layout. DPG adds `item_spacing`
+        (8px horizontal, 4px vertical) between sibling widgets automatically.
+        """
         ts = self._tile_size
-        # DPG horizontal groups add item_spacing (8px) between children,
-        # which is the actual inter-tile gap regardless of _TILE_SPACING.
         dpg_item_spacing_x = 8
+        dpg_item_spacing_y = config.DPG_ITEM_SPACING_Y
         self._col_width = ts + dpg_item_spacing_x
-        self._row_height = ts + _LABEL_HEIGHT + _TILE_SPACING
+        # Row = drawlist + spacing + text (with frame padding) + spacing (between rows).
+        text_h = config.FONT_SIZE + 2 * config.DPG_FRAME_PADDING_Y
+        self._row_height = ts + dpg_item_spacing_y + text_h + dpg_item_spacing_y
         usable = self._width - config.DPG_SCROLLBAR_SIZE
         self._n_cols = max(1, int(usable / self._col_width))
 
@@ -412,10 +417,13 @@ class ThumbnailGrid:
                                fill=(55, 55, 58, 255),
                                parent=drawlist_tag)
 
-        # Selection tint (drawn under borders).
+        # Selection overlay + border (visible even when thumbnail covers entire tile).
         if idx in self._selected:
             dpg.draw_rectangle(pmin=(0, 0), pmax=(ts, ts),
                                fill=config.SELECTION_TINT,
+                               parent=drawlist_tag)
+            dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
+                               color=(255, 255, 255, 160), thickness=2,
                                parent=drawlist_tag)
 
         # Triage border.
