@@ -81,6 +81,12 @@ Also check `raven/common/image/utils.py` and any xdot widget functions for the s
 
 Discovered during raven-cherrypick imageview review.
 
+## Triage CLAUDE.md style conventions: global vs project-specific
+
+Many code style conventions currently in Raven's `CLAUDE.md` apply to all of Juha's projects (import style, naming, docstrings, log format, license DRY, sentence spacing). These should be moved to `~/.claude/CLAUDE.md` so they're picked up everywhere. Review each entry and split accordingly.
+
+Discovered during raven-cherrypick development.
+
 ## Move SmoothValue to raven.common.gui
 
 `SmoothValue` (framerate-independent exponential decay animation) is currently defined inside `raven/common/gui/xdotwidget/viewport.py` but is a general-purpose GUI utility. Move it to `raven/common/gui/` as its own module (e.g. `smoothvalue.py`) so that any DPG widget can use it for animated transitions.
