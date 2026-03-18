@@ -105,6 +105,10 @@ def _update_status() -> None:
             count_str += f" | {n_lemon}L"
         parts.append(count_str)
 
+        # Selection indicator.
+        if grid is not None and grid.selected:
+            parts.append(f"{len(grid.selected)} sel")
+
         # Focus indicator.
         if iv is not None and iv.focused:
             parts.append("IMAGE PANE FOCUSED")
@@ -226,15 +230,21 @@ def _show_open_dialog(*_args) -> None:
 # Triage commands
 # ---------------------------------------------------------------------------
 
-def _mark_triage(state: TriageState) -> None:
-    """Mark current image (or multi-selection) with the given triage state."""
+def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
+    """Mark images with the given triage state.
+
+    Without Ctrl (*use_selection=False*): operates on the current image only.
+    With Ctrl (*use_selection=True*): operates on all selected images.
+    """
     grid = _app_state["grid"]
     triage = _app_state["triage"]
     if grid is None or triage is None:
         return
 
-    # Operate on selection if any, else on current.
-    indices = list(grid.selected) if grid.selected else [grid.current]
+    if use_selection:
+        indices = list(grid.selected)
+    else:
+        indices = [grid.current] if grid.current >= 0 else []
     indices = [i for i in indices if 0 <= i < len(triage)]
     if not indices:
         return
@@ -347,6 +357,13 @@ def _on_key(sender, app_data) -> None:
     if ctrl:
         if key == dpg.mvKey_O:
             _show_open_dialog()
+        # Ctrl+X/C/V: triage all selected images.
+        elif key == dpg.mvKey_X:
+            _mark_triage(TriageState.LEMON, use_selection=True)
+        elif key == dpg.mvKey_C:
+            _mark_triage(TriageState.CHERRY, use_selection=True)
+        elif key == dpg.mvKey_V:
+            _mark_triage(TriageState.NEUTRAL, use_selection=True)
         elif key == dpg.mvKey_A:
             if grid is not None:
                 grid.select_all()
@@ -385,12 +402,12 @@ def _on_key(sender, app_data) -> None:
 
     # --- Bare keys ---
 
-    # Triage.
-    if key == dpg.mvKey_C:
-        _mark_triage(TriageState.CHERRY)
-    elif key == dpg.mvKey_L:
+    # Triage (current image only; Ctrl variants above operate on selection).
+    if key == dpg.mvKey_X:
         _mark_triage(TriageState.LEMON)
-    elif key == dpg.mvKey_N:
+    elif key == dpg.mvKey_C:
+        _mark_triage(TriageState.CHERRY)
+    elif key == dpg.mvKey_V:
         _mark_triage(TriageState.NEUTRAL)
 
     # Zoom.
@@ -620,30 +637,38 @@ def main() -> int:
 
             dpg.add_spacer(width=8)
 
-            # Triage buttons.
+            # Triage buttons. Click = current image; Ctrl+click = all selected.
+            def _triage_btn_callback(sender, app_data, user_data):
+                ctrl_held = (dpg.is_key_down(dpg.mvKey_LControl)
+                             or dpg.is_key_down(dpg.mvKey_RControl))
+                _mark_triage(user_data, use_selection=ctrl_held)
+
             btn = dpg.add_button(label=fa.ICON_STAR,
                                  tag="cherrypick_mark_cherry_btn",
-                                 callback=lambda: _mark_triage(TriageState.CHERRY),
+                                 callback=_triage_btn_callback,
+                                 user_data=TriageState.CHERRY,
                                  width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
             with dpg.tooltip(btn):
-                dpg.add_text("Mark cherry [C]")
+                dpg.add_text("Mark cherry [C, Ctrl+C for selected]")
 
             btn = dpg.add_button(label=fa.ICON_LEMON,
                                  tag="cherrypick_mark_lemon_btn",
-                                 callback=lambda: _mark_triage(TriageState.LEMON),
+                                 callback=_triage_btn_callback,
+                                 user_data=TriageState.LEMON,
                                  width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
             with dpg.tooltip(btn):
-                dpg.add_text("Mark lemon [L]")
+                dpg.add_text("Mark lemon [X, Ctrl+X for selected]")
 
             btn = dpg.add_button(label=fa.ICON_XMARK,
                                  tag="cherrypick_clear_mark_btn",
-                                 callback=lambda: _mark_triage(TriageState.NEUTRAL),
+                                 callback=_triage_btn_callback,
+                                 user_data=TriageState.NEUTRAL,
                                  width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
             with dpg.tooltip(btn):
-                dpg.add_text("Clear mark (Neutral) [N]")
+                dpg.add_text("Clear mark (Neutral) [V, Ctrl+V for selected]")
 
             dpg.add_spacer(width=8)
 
@@ -717,9 +742,9 @@ def main() -> int:
     # --- Help card ---
     hotkey_info = (
         env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open folder", notes=""),
-        env(key_indent=0, key="C", action_indent=0, action="Mark cherry", notes=""),
-        env(key_indent=0, key="L", action_indent=0, action="Mark lemon", notes=""),
-        env(key_indent=0, key="N", action_indent=0, action="Clear mark (Neutral)", notes=""),
+        env(key_indent=0, key="C / Ctrl+C", action_indent=0, action="Mark cherry", notes="Ctrl = selected"),
+        env(key_indent=0, key="X / Ctrl+X", action_indent=0, action="Mark lemon", notes="Ctrl = selected"),
+        env(key_indent=0, key="V / Ctrl+V", action_indent=0, action="Clear mark", notes="Ctrl = selected"),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Left / Right", action_indent=0, action="Prev / next image", notes="Navigate only"),
         env(key_indent=0, key="Up / Down", action_indent=0, action="Prev / next row", notes="Navigate only"),
