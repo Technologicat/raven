@@ -77,7 +77,7 @@ All new and modified code must follow `raven-style-guide.md` (in the project roo
 - Imports: prefer `import module` + `module.func()` (dotted style) over `from module import func`. Makes it clear at the call site where a function comes from. For modules with ambiguous names, use an alias: `from ..common.gui import utils as guiutils`, `from ..server import config as server_config`.
 - Naming: don't repeat the module name in function names. With dotted imports, `lanczos.resize()` reads better than `lanczos.lanczos_resize()`. The module provides the namespace.
 - Docstrings: use raw backtick names (`` `func_name` ``), not RST cross-reference markup (`:meth:`, `:func:`). The codebase is read as raw code, not via Sphinx. Single space after sentence-ending period (European convention), not double.
-- Log messages: prefix with the qualified function name, e.g. ``logger.warning("TriageManager.scan: ...")``. Python's logging doesn't include it by default.
+- Log messages: prefix with the function name (or `ClassName.method_name` for methods), e.g. ``logger.warning("TriageManager.scan: ...")``. Python's logging already shows the module name, but not the function/method name.
 - Contract-style preconditions/postconditions would be useful, but mostly not implemented yet
 
 ## Key Patterns
