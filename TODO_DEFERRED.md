@@ -47,3 +47,42 @@ Discovered during raven-cherrypick loader bench review.
 Migrate these to use the common functions where possible.
 
 Discovered during raven-cherrypick imageutil extraction.
+
+## Migrate xdot widget to shared viewport math utilities
+
+`raven/common/gui/utils.py` now has `screen_to_content`, `content_to_screen`, and `zoom_keep_point` — the same formulas that `raven/common/gui/xdotwidget/viewport.py` implements inline. The xdot viewport should be refactored to use the shared functions.
+
+Discovered during raven-cherrypick imageview implementation.
+
+## Adopt dotted import style in cherrypick and xdot modules
+
+Raven style is `from ..common.gui import utils as guiutils` + `guiutils.func()`, not
+`from ..common.gui.utils import func` + bare `func()`. The dotted style makes it clear
+at the call site where a function comes from. Modules with ambiguous names get an alias
+(e.g. `guiutils`, `server_config`, `client_config`).
+
+Files to migrate:
+- `raven/cherrypick/loader.py` — uses from-imports for imageutils and lanczos
+- `raven/cherrypick/triage.py` — from-imports IMAGE_EXTENSIONS
+- `raven/cherrypick/tests/test_loader.py` — from-imports for test utilities
+- `raven/common/gui/xdotwidget/` — check existing style, align if needed
+
+Discovered during raven-cherrypick imageview review.
+
+## Remove module-name prefix from function names in new modules
+
+With dotted imports, `lanczos.resize()` reads better than `lanczos.lanczos_resize()`.
+Rename in `raven/common/image/lanczos.py`:
+- `lanczos_resize` → `resize`
+- `lanczos_mipchain` → `mipchain`
+
+Update all call sites: `imageview.py`, `loader.py`, `image/utils.py`, test files, benchmarks.
+Also check `raven/common/image/utils.py` and any xdot widget functions for the same pattern.
+
+Discovered during raven-cherrypick imageview review.
+
+## Move SmoothValue to raven.common.gui
+
+`SmoothValue` (framerate-independent exponential decay animation) is currently defined inside `raven/common/gui/xdotwidget/viewport.py` but is a general-purpose GUI utility. Move it to `raven/common/gui/` as its own module (e.g. `smoothvalue.py`) so that any DPG widget can use it for animated transitions.
+
+Discovered during raven-cherrypick imageview implementation.

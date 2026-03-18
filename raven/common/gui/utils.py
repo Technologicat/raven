@@ -8,8 +8,10 @@ __all__ = ["get_font_path", "bootup", "load_extra_font",
            "maybe_delete_item", "has_child_items",
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
            "get_mouse_relative_pos", "is_mouse_inside_widget",
-           "recenter_window",
+           "screen_to_content", "content_to_screen", "zoom_keep_point",
+           "compute_zoom_to_fit",
            "wait_for_resize",
+           "recenter_window",
            "compute_tooltip_position_scalar",
            "get_pixels_per_plotter_data_unit"]
 
@@ -33,6 +35,10 @@ from .. import numutils
 from ..video import colorspace
 
 from . import fontsetup
+
+# ---------------------------------------------------------------------------
+# Fonts & themes
+# ---------------------------------------------------------------------------
 
 def get_font_path(font_basename: str = "OpenSans",
                   variant: Optional[str] = "Regular") -> pathlib.Path:
@@ -281,6 +287,10 @@ def load_extra_font(themes_and_fonts: env,
 
     return key, themes_and_fonts[key]
 
+# ---------------------------------------------------------------------------
+# DPG item management
+# ---------------------------------------------------------------------------
+
 def _is_dpg_item_not_found(exc):
     """Check exception chain for DPG 'item not found' error."""
     # The string check on "Item not found" is ugly but necessary
@@ -330,6 +340,10 @@ def has_child_items(widget: Union[str, int]) -> bool:
             return True
     return False
 
+# ---------------------------------------------------------------------------
+# Widget geometry
+# ---------------------------------------------------------------------------
+
 def get_widget_pos(widget: Union[str, int]) -> Tuple[int, int]:
     """Return `widget`'s (DPG tag or ID) position `(x0, y0)`, in viewport coordinates.
 
@@ -368,6 +382,10 @@ def get_widget_relative_pos(widget: Union[str, int],
     y0_local = y0 - y0_c
     return x0_local, y0_local
 
+# ---------------------------------------------------------------------------
+# Mouse
+# ---------------------------------------------------------------------------
+
 def get_mouse_relative_pos(widget: Union[str, int]) -> Tuple[int, int]:
     """Return the mouse cursor's position, measured relative to the origin of `widget` (DPG tag or ID)."""
     x0, y0 = get_widget_pos(widget)
@@ -382,6 +400,78 @@ def is_mouse_inside_widget(widget: Union[str, int]) -> bool:
     if m[0] < x0 or m[0] >= x0 + w or m[1] < y0 or m[1] >= y0 + h:
         return False
     return True
+
+# ---------------------------------------------------------------------------
+# Viewport pan/zoom math (shared by xdot widget, image viewer, etc.)
+# ---------------------------------------------------------------------------
+
+def screen_to_content(sx: float, sy: float,
+                      pan_cx: float, pan_cy: float,
+                      zoom: float,
+                      view_w: float, view_h: float) -> Tuple[float, float]:
+    """Convert screen (drawlist) coordinates to content (image/graph) coordinates.
+
+    Pan model: ``(pan_cx, pan_cy)`` is the content coordinate at the center of
+    the view.  ``zoom`` is screen pixels per content unit.
+    """
+    if zoom == 0:
+        zoom = 1.0
+    gx = (sx - view_w / 2) / zoom + pan_cx
+    gy = (sy - view_h / 2) / zoom + pan_cy
+    return gx, gy
+
+def content_to_screen(cx: float, cy: float,
+                      pan_cx: float, pan_cy: float,
+                      zoom: float,
+                      view_w: float, view_h: float) -> Tuple[float, float]:
+    """Convert content (image/graph) coordinates to screen (drawlist) coordinates.
+
+    Inverse of :func:`screen_to_content`.
+    """
+    sx = (cx - pan_cx) * zoom + view_w / 2
+    sy = (cy - pan_cy) * zoom + view_h / 2
+    return sx, sy
+
+def zoom_keep_point(old_zoom: float, new_zoom: float,
+                    sx: float, sy: float,
+                    pan_cx: float, pan_cy: float,
+                    view_w: float, view_h: float) -> Tuple[float, float]:
+    """Compute new pan after a zoom change, keeping a screen point stationary.
+
+    The point at screen position ``(sx, sy)`` maps to the same content
+    coordinate before and after the zoom change.
+
+    Returns ``(new_pan_cx, new_pan_cy)``.
+    """
+    if old_zoom == 0:
+        old_zoom = 1.0
+    gx = (sx - view_w / 2) / old_zoom + pan_cx
+    gy = (sy - view_h / 2) / old_zoom + pan_cy
+    new_pan_cx = gx - (sx - view_w / 2) / new_zoom
+    new_pan_cy = gy - (sy - view_h / 2) / new_zoom
+    return new_pan_cx, new_pan_cy
+
+def compute_zoom_to_fit(content_w: float, content_h: float,
+                        view_w: float, view_h: float,
+                        margin: int = 10) -> Tuple[float, float, float]:
+    """Compute zoom and pan to fit content in the view, centered.
+
+    Returns ``(zoom, pan_cx, pan_cy)`` where pan is the content coordinate
+    at the center of the view.  Returns ``(1.0, 0.0, 0.0)`` if the view
+    or content has zero size.
+    """
+    avail_w = view_w - 2 * margin
+    avail_h = view_h - 2 * margin
+    if avail_w <= 0 or avail_h <= 0 or content_w <= 0 or content_h <= 0:
+        return 1.0, 0.0, 0.0
+    zoom = min(avail_w / content_w, avail_h / content_h)
+    pan_cx = content_w / 2
+    pan_cy = content_h / 2
+    return zoom, pan_cx, pan_cy
+
+# ---------------------------------------------------------------------------
+# Layout helpers
+# ---------------------------------------------------------------------------
 
 def wait_for_resize(widget: Union[str, int],
                     wait_frames_max: int = 10) -> bool:
@@ -442,6 +532,10 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
     dpg.set_item_pos(thewindow,
                      (max(0, (reference_window_w - w) // 2),
                       max(0, (reference_window_h - h) // 2)))
+
+# ---------------------------------------------------------------------------
+# Tooltip positioning
+# ---------------------------------------------------------------------------
 
 def compute_tooltip_position_scalar(*,
                                     algorithm: str,
@@ -525,6 +619,10 @@ def compute_tooltip_position_scalar(*,
         pos = (1.0 - s) * pos1 + s * pos2
 
         return pos
+
+# ---------------------------------------------------------------------------
+# Plotter utilities
+# ---------------------------------------------------------------------------
 
 def get_pixels_per_plotter_data_unit(plot_widget: Union[str, int],
                                      xaxis: Union[str, int],

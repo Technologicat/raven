@@ -72,7 +72,11 @@ All new and modified code must follow `raven-style-guide.md` (in the project roo
 - `unpythonic` pure-Python features are fair game. Currently used: `env` (namespace), `Timer` (benchmarking), `@call` (scoping), `box`/`unbox`, `sym`, `dyn`. Other features welcome where they improve clarity. **Do not** use the macro layer (`unpythonic.syntax`) or features that primarily serve as macro backends (e.g. `let` bindings — these are readable only through the macro surface syntax).
 - OOP where appropriate (GUI components, stateful objects)
 - Config via Python modules (`config.py` files, not YAML/JSON)
-- Type hints encouraged but not enforced everywhere
+- Type hints encouraged but not enforced everywhere. All public interfaces should have them.
+- Imports: prefer `import module` + `module.func()` (dotted style) over `from module import func`. Makes it clear at the call site where a function comes from. For modules with ambiguous names, use an alias: `from ..common.gui import utils as guiutils`, `from ..server import config as server_config`.
+- Naming: don't repeat the module name in function names. With dotted imports, `lanczos.resize()` reads better than `lanczos.lanczos_resize()`. The module provides the namespace.
+- Docstrings: use raw backtick names (`` `func_name` ``), not RST cross-reference markup (`:meth:`, `:func:`). The codebase is read as raw code, not via Sphinx.
+- Log messages: prefix with the qualified function name, e.g. ``logger.warning("TriageManager.scan: ...")``. Python's logging doesn't include it by default.
 - Contract-style preconditions/postconditions would be useful, but mostly not implemented yet
 
 ## Key Patterns
