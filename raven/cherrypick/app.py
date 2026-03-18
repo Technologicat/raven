@@ -711,7 +711,7 @@ def main() -> int:
                                  width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
             with dpg.tooltip(btn):
-                dpg.add_text("Mark cherry [C, Ctrl+C for selected]")
+                dpg.add_text("Mark cherry [C]\n    with Ctrl: all selected")
 
             btn = dpg.add_button(label=fa.ICON_LEMON,
                                  tag="cherrypick_mark_lemon_btn",
@@ -720,7 +720,7 @@ def main() -> int:
                                  width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
             with dpg.tooltip(btn):
-                dpg.add_text("Mark lemon [X, Ctrl+X for selected]")
+                dpg.add_text("Mark lemon [X]\n    with Ctrl: all selected")
 
             btn = dpg.add_button(label=fa.ICON_XMARK,
                                  tag="cherrypick_clear_mark_btn",
@@ -729,7 +729,7 @@ def main() -> int:
                                  width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
             with dpg.tooltip(btn):
-                dpg.add_text("Clear mark (Neutral) [V, Ctrl+V for selected]")
+                dpg.add_text("Clear mark (Neutral) [V]\n    with Ctrl: all selected")
 
             dpg.add_spacer(width=8)
 
