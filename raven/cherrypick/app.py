@@ -100,9 +100,9 @@ def _update_status() -> None:
         n_lemon = triage.count(TriageState.LEMON)
         count_str = f"{n} imgs"
         if n_cherry:
-            count_str += f" | {n_cherry}\u2605"
+            count_str += f" | {n_cherry} cherries"
         if n_lemon:
-            count_str += f" | {n_lemon}L"
+            count_str += f" | {n_lemon} lemons"
         parts.append(count_str)
 
         # Selection indicator.

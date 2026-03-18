@@ -431,6 +431,13 @@ class ThumbnailGrid:
                                fill=(55, 55, 58, 255),
                                parent=drawlist_tag)
 
+        # Lemon dimming overlay (rejects fade into background).
+        state = self._triage_states[idx] if idx < len(self._triage_states) else TriageState.NEUTRAL
+        if state is TriageState.LEMON:
+            dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
+                               fill=(0, 0, 0, 128),
+                               parent=drawlist_tag)
+
         # Selection tint.
         if idx in self._selected:
             dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
@@ -438,7 +445,6 @@ class ThumbnailGrid:
                                parent=drawlist_tag)
 
         # Triage border.
-        state = self._triage_states[idx] if idx < len(self._triage_states) else TriageState.NEUTRAL
         if state is TriageState.CHERRY:
             border_color = config.CHERRY_COLOR
         elif state is TriageState.LEMON:
