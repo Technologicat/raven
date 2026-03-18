@@ -38,7 +38,7 @@ from . import config
 from .triage import TriageState, TriageManager
 from .loader import ThumbnailPipeline
 from .imageview import ImageView
-from .grid import ThumbnailGrid
+from .grid import ThumbnailGrid, FilterMode
 
 from unpythonic.env import env
 
@@ -94,15 +94,18 @@ def _update_status() -> None:
             # Zoom level.
             parts.append(f"Zoom: {iv.zoom * 100:.0f}%")
 
-        # Counts.
+        # Counts + filter indicator.
         n = len(triage)
         n_cherry = triage.count(TriageState.CHERRY)
         n_lemon = triage.count(TriageState.LEMON)
-        count_str = f"{n} imgs"
+        if grid is not None and grid.filter_mode is not FilterMode.ALL:
+            count_str = f"{grid.visible_count} / {n} images ({_FILTER_LABELS[grid.filter_mode]})"
+        else:
+            count_str = f"{n} images"
         if n_cherry:
-            count_str += f" | {n_cherry} cherries"
+            count_str += f", {n_cherry} cherries"
         if n_lemon:
-            count_str += f" | {n_lemon} lemons"
+            count_str += f", {n_lemon} lemons"
         parts.append(count_str)
 
         # Selection indicator.
@@ -414,6 +417,13 @@ def _on_key(sender, app_data) -> None:
     elif key == dpg.mvKey_V:
         _mark_triage(TriageState.NEUTRAL)
 
+    # Filter.
+    elif key == dpg.mvKey_G:
+        if shift:
+            _cycle_filter(-1)
+        else:
+            _cycle_filter(1)
+
     # Zoom.
     elif key in (dpg.mvKey_Plus, dpg.mvKey_Add):
         if iv is not None:
@@ -485,6 +495,53 @@ def _on_tile_size_combo(sender, app_data) -> None:
         return
     _change_tile_size(new_size)
 
+
+# ---------------------------------------------------------------------------
+# Filter
+# ---------------------------------------------------------------------------
+
+_FILTER_CYCLE = [FilterMode.ALL, FilterMode.CHERRY, FilterMode.LEMON, FilterMode.NEUTRAL]
+
+_FILTER_LABELS = {
+    FilterMode.ALL: "All",
+    FilterMode.CHERRY: "Cherries",
+    FilterMode.LEMON: "Lemons",
+    FilterMode.NEUTRAL: "Neutral",
+}
+
+
+def _cycle_filter(direction: int = 1) -> None:
+    """Cycle the grid filter forward (*direction=1*) or backward (*direction=-1*)."""
+    grid = _app_state["grid"]
+    if grid is None:
+        return
+    cur = grid.filter_mode
+    idx = _FILTER_CYCLE.index(cur)
+    new_idx = (idx + direction) % len(_FILTER_CYCLE)
+    _set_filter(_FILTER_CYCLE[new_idx])
+
+
+def _set_filter(mode: FilterMode) -> None:
+    """Apply a filter mode, sync the combo, and update status."""
+    grid = _app_state["grid"]
+    if grid is None:
+        return
+    grid.set_filter(mode)
+    dpg.set_value("cherrypick_filter_combo", _FILTER_LABELS[mode])
+    _update_status()
+
+
+def _on_filter_combo(sender, app_data) -> None:
+    """Callback for the filter combobox."""
+    label_to_mode = {v: k for k, v in _FILTER_LABELS.items()}
+    mode = label_to_mode.get(app_data)
+    if mode is not None:
+        _set_filter(mode)
+
+
+# ---------------------------------------------------------------------------
+# Tile size change
+# ---------------------------------------------------------------------------
 
 def _change_tile_size(new_size: int) -> None:
     """Change the grid tile size and restart the thumbnail pipeline."""
@@ -676,6 +733,18 @@ def main() -> int:
 
             dpg.add_spacer(width=8)
 
+            # Filter selector.
+            filter_labels = [_FILTER_LABELS[m] for m in _FILTER_CYCLE]
+            dpg.add_combo(items=filter_labels,
+                          default_value=_FILTER_LABELS[FilterMode.ALL],
+                          tag="cherrypick_filter_combo",
+                          callback=_on_filter_combo,
+                          width=90)
+            with dpg.tooltip("cherrypick_filter_combo"):
+                dpg.add_text("Filter view [G / Shift+G]")
+
+            dpg.add_spacer(width=8)
+
             # Tile size selector.
             tile_size_labels = [str(s) for s in config.TILE_SIZES]
             dpg.add_combo(items=tile_size_labels,
@@ -750,6 +819,9 @@ def main() -> int:
         env(key_indent=0, key="C / Ctrl+C", action_indent=0, action="Mark cherry", notes="Ctrl = selected"),
         env(key_indent=0, key="X / Ctrl+X", action_indent=0, action="Mark lemon", notes="Ctrl = selected"),
         env(key_indent=0, key="V / Ctrl+V", action_indent=0, action="Clear mark", notes="Ctrl = selected"),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="G", action_indent=0, action="Cycle filter forward", notes="All/Cherries/Lemons/Neutral"),
+        env(key_indent=0, key="Shift+G", action_indent=0, action="Cycle filter backward", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="Left / Right", action_indent=0, action="Prev / next image", notes="Navigate only"),
         env(key_indent=0, key="Up / Down", action_indent=0, action="Prev / next row", notes="Navigate only"),
