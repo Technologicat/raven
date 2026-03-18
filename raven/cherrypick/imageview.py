@@ -95,6 +95,7 @@ class ImageView:
         self._old_zoom = 1.0  # zoom/pan matching _old_mips
         self._old_pan_cx = 0.0
         self._old_pan_cy = 0.0
+        self._mip_loading = False  # True while background mip task is running
         self._mips_lock = threading.Lock()
 
         # Background mip loading.
@@ -141,16 +142,28 @@ class ImageView:
 
         # Keep old textures visible until the first new mip is ready.
         # This eliminates the blank flash between images.
+        #
+        # Only replace _old_mips when _mips is non-empty. If the previous
+        # background task was cancelled before producing any mip (rapid
+        # navigation), _mips is [] and overwriting _old_mips would lose the
+        # last successfully displayed image — causing a blank flash.
         with self._mips_lock:
-            self._old_mips = list(self._mips)
-            self._old_img_w = self._img_w
-            self._old_img_h = self._img_h
-            self._old_zoom = self._zoom
-            self._old_pan_cx = self._pan_cx
-            self._old_pan_cy = self._pan_cy
+            if self._mips:
+                for _s, old_tag in self._old_mips:
+                    try:
+                        dpg.delete_item(old_tag)
+                    except Exception:
+                        pass
+                self._old_mips = list(self._mips)
+                self._old_img_w = self._img_w
+                self._old_img_h = self._img_h
+                self._old_zoom = self._zoom
+                self._old_pan_cx = self._pan_cx
+                self._old_pan_cy = self._pan_cy
             self._mips = []
 
         self._img_h, self._img_w = rgba.shape[:2]
+        self._mip_loading = True
         self._needs_render = True
 
         # Start background mip generation.
@@ -167,6 +180,7 @@ class ImageView:
         self._clear_textures()
         self._img_w = 0
         self._img_h = 0
+        self._mip_loading = False
         self._needs_render = True
 
     def set_size(self, width: int, height: int) -> None:
@@ -201,6 +215,11 @@ class ImageView:
     @property
     def has_image(self) -> bool:
         return self._img_w > 0 and self._img_h > 0
+
+    @property
+    def mip_loading(self) -> bool:
+        """True while background mip generation is in progress."""
+        return self._mip_loading
 
     # ------------------------------------------------------------------
     # Zoom / pan commands
@@ -385,6 +404,10 @@ class ImageView:
         if e.device.type == "cuda":
             torch.cuda.empty_cache()
 
+        if not e.cancelled:
+            self._mip_loading = False
+            self._needs_render = True  # clear loading indicator
+
     # ------------------------------------------------------------------
     # Internal: rendering
     # ------------------------------------------------------------------
@@ -439,6 +462,23 @@ class ImageView:
                           f"mip={mip_scale:.3f} "
                           f"mips={len(self._mips)}",
                           color=(0, 255, 0, 200), size=config.FONT_SIZE,
+                          parent=self._drawlist_tag)
+
+        # Loading indicator — shown while background mip generation is running.
+        if self._mip_loading:
+            label = "Enhancing..."
+            tx = 8
+            ty = self._view_h - config.FONT_SIZE - 8
+            # Dark background pill for readability over any image content.
+            pad_x, pad_y = 6, 2
+            dpg.draw_rectangle(pmin=(tx - pad_x, ty - pad_y),
+                               pmax=(tx + len(label) * config.FONT_SIZE * 0.52 + pad_x,
+                                     ty + config.FONT_SIZE + pad_y),
+                               color=(0, 0, 0, 0), fill=(0, 0, 0, 160),
+                               rounding=4,
+                               parent=self._drawlist_tag)
+            dpg.draw_text((tx, ty), label,
+                          color=(200, 200, 200, 220), size=config.FONT_SIZE,
                           parent=self._drawlist_tag)
 
         # Focus indicator.
