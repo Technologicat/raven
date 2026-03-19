@@ -1,4 +1,4 @@
-# raven-cherrypick — Specification v0.3
+# raven-cherrypick — Specification v0.4
 
 ## 1. Name & Concept
 
@@ -13,15 +13,16 @@ Icons: `ICON_STAR` (cherry/keeper) and `ICON_LEMON` (reject) from FontAwesome.
 ```
 raven/cherrypick/
     __init__.py          # re-export main
-    app.py               # startup, GUI layout, render loop, hotkey dispatch (~600 lines)
-    config.py            # all constants (~80 lines)
-    imageview.py         # main image pane: drawlist, pan, zoom, display scaling (~350 lines)
-    grid.py              # thumbnail grid: layout, tile rendering, selection (~500 lines)
-    loader.py            # image I/O, thumbnail generation (GPU batch), preload cache (~400 lines)
-    triage.py            # triage state, file move operations, virtual directory merge (~250 lines)
+    app.py               # startup, GUI layout, render loop, hotkey dispatch (~1100 lines)
+    config.py            # all constants (~130 lines)
+    imageview.py         # main image pane: drawlist, pan, zoom, mip display, texture pool (~960 lines)
+    grid.py              # thumbnail grid: layout, tile rendering, selection, filter (~730 lines)
+    loader.py            # image I/O, thumbnail generation (GPU batch) (~200 lines)
+    preload.py           # preload cache: flat numpy arrays, cross-neighborhood (~350 lines)
+    triage.py            # triage state, file move operations, virtual directory merge (~200 lines)
 
-raven/common/
-    lanczos.py           # GPU Lanczos-3 resize, reusable (~200 lines)
+raven/common/image/
+    lanczos.py           # GPU Lanczos resize (configurable order 3–5), reusable
 ```
 
 No `__main__.py` — follows existing Raven convention. Entry point via `pyproject.toml`
@@ -30,16 +31,15 @@ No `__main__.py` — follows existing Raven convention. Entry point via `pyproje
 ### Testing
 
 ```
-raven/common/tests/
+raven/common/image/tests/
     test_lanczos.py      # Lanczos kernel: correctness, edge cases, multi-stage vs single-pass
 
 raven/cherrypick/tests/
     test_triage.py        # virtual directory merge, file move logic, collision handling
     test_loader.py        # thumbnail pipeline, mipchain generation, format loading (PNG/JPG/QOI)
-    test_grid.py          # grid layout math (column count, pagination, filter navigation)
 ```
 
-**Test-as-we-go**: unit tests written alongside each module, not deferred. Every algorithm (Lanczos kernel, triage state machine, virtual directory merge, grid layout calculation, filter navigation, VRAM budget logic) gets tests. The Lanczos kernel in particular needs:
+**Testing philosophy**: Test the algorithm layer; keep the GUI layer thin enough for manual integration testing. Every pure-logic algorithm (Lanczos kernel, triage state machine, virtual directory merge, VRAM budget logic) gets tests. Grid layout math is tightly coupled to DPG rendering, making unit tests fragile — manual testing of the running app covers this adequately. The Lanczos kernel in particular needs:
 - Correctness: downscale a known test pattern (e.g. checkerboard, frequency sweep), verify against PIL Lanczos as reference.
 - Identity: resize to same size ≈ identity (within floating-point tolerance).
 - Separability: horizontal-then-vertical matches a 2D reference.
@@ -50,30 +50,29 @@ raven/cherrypick/tests/
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ [Toolbar]  Open  +  -  Fit  1:1  │ Grid: 32 64 [128] 256 512      │
-│            * Mark  L Mark  N Clear │ View: All * L N │ Compare     │
-│            FS  Help                                                  │
+│ [Toolbar]  Open  +  -  Fit  1:1  ★  🍋  ☐  │ Filter ▼  128 ▼     │
+│                                               │ FS  Help            │
 ├──────────────────────────────────────┬──────────────────────────────┤
 │                                      │  ┌──┐ ┌──┐ ┌──┐ ┌──┐       │
 │                                      │  │  │ │▓▓│ │  │ │  │       │
 │         Main Image View              │  └──┘ └──┘ └──┘ └──┘       │
 │         (drawlist with pan/zoom)     │  a.jpg b.jpg c.jpg d.jpg    │
-│                                      │  ┌──┐ ┌──┐ ┌──┐ ┌──┐       │
+│                  [spinner]           │  ┌──┐ ┌──┐ ┌──┐ ┌──┐       │
 │                                      │  │  │ │  │ │  │ │  │       │
 │                                      │  └──┘ └──┘ └──┘ └──┘       │
 │                                      │  e.jpg f.jpg g.jpg h.jpg    │
 │                                      │         ...                  │
 ├──────────────────────────────────────┴──────────────────────────────┤
-│ [Status] IMG_1234.jpg | 4032x3024 | Zoom: 42% | 847 imgs | 12* 3L │
+│ IMG_1234.jpg  [42 / 128] | 4032×3024 | Zoom: 42% | 128 images     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Left ~70%**: Main image pane (drawlist inside child_window).
+- **Left ~70%**: Main image pane (drawlist inside child_window). Blue spinning indicator (DPG `loading_indicator`, Visualizer style) overlaid at bottom-left during mip generation and augmentation.
 - **Right ~30%**: Thumbnail grid (scrollable child_window).
-- **Top**: Toolbar row(s). All buttons follow the xdot_viewer pattern (30px icon buttons, FontAwesome, tooltips with `"Action [Hotkey]"` format).
-- **Bottom**: Status bar — current filename, pixel dimensions, zoom %, total image count, triage counts (star/lemon counts with icons). Also shows compare mode indicator and image-pane-focus indicator when active.
+- **Top**: Toolbar row. All buttons follow the xdot_viewer pattern (30px icon buttons, FontAwesome, tooltips with `"Action [Hotkey]"` format). Filter and tile size are comboboxes.
+- **Bottom**: Status bar — current filename with position `[pos / count]`, pixel dimensions, zoom %, total image count with triage counts. Also shows selection count and image-pane-focus indicator when active. Position tracks the visible list, so it stays meaningful under any filter.
 
-**Triage toolbar buttons**: Star, Lemon, and Neutral buttons with tooltips — makes the single-letter hotkeys discoverable. E.g. `"Mark cherry [C]"`, `"Mark lemon [L]"`, `"Clear mark (Neutral) [N]"`.
+**Triage toolbar buttons**: Star, Lemon, and Neutral buttons with tooltips — makes the single-letter hotkeys discoverable. E.g. `"Mark cherry [C]"`, `"Mark lemon [X]"`, `"Clear mark [V]"`.
 
 **Split ratio**: Configurable in `config.py` (default 70/30). Fixed in v1. Architect the layout so that widths are computed from a single ratio variable, making a future draggable splitter straightforward. Draggable splitter will need debounced grid layout recalculation (via `make_managed_task` from `raven.common.bgtask`). Note: splitter resize does NOT require thumbnail regeneration — the thumbnails are resolution-independent of the grid panel width. Only the grid layout (column count, row arrangement) needs recalculating.
 
@@ -91,9 +90,9 @@ Detection by extension (`.png`, `.jpg`, `.jpeg`, `.qoi`). The directory scanner 
 
 **Engine**: PyTorch GPU batch processing, with automatic CPU fallback via `raven.common.deviceinfo`.
 
-**Resize algorithm**: Custom Lanczos-3 kernel in `raven/common/lanczos.py` (see §4.6). Config toggle for `torch.nn.functional.interpolate(mode='area')` as alternative — may auto-switch to `area` at the smallest grid sizes (32, 64) where the extreme reduction ratio makes `area` a reasonable choice.
+**Resize algorithm**: Custom Lanczos kernel in `raven/common/image/lanczos.py` (see §4.6). Configurable kernel order (3, 4, or 5; default 4). Extremely fast on GPU and produces excellent quality at all reduction ratios.
 
-For efficiency at extreme reduction ratios (e.g. 4000→128, ~30×), use multi-stage downsampling: repeatedly halve with Lanczos until within 2× of the target, then one final Lanczos resize. This keeps the kernel compact (~6 taps per stage) while maintaining quality.
+For efficiency at extreme reduction ratios (e.g. 4000→128, ~30×), use multi-stage downsampling: repeatedly halve with Lanczos until within 2× of the target, then one final Lanczos resize. This keeps the kernel compact per stage while maintaining quality.
 
 **Pipeline**:
 1. Load batch of images on CPU (PIL/QOI → numpy RGBA uint8)
@@ -103,8 +102,8 @@ For efficiency at extreme reduction ratios (e.g. 4000→128, ~30×), use multi-s
 5. Create DPG dynamic textures
 
 **DPG texture management**:
-- Use counter-based unique tags (e.g. `f"cherrypick_thumb_{counter}"`) — DPG tag collision = crash.
-- Use descriptive tag prefixes throughout (e.g. `"cherrypick_main_tex"`, `"cherrypick_grid_child"`) for easier debugging.
+- Use counter-based unique tags (e.g. `f"grid_thumb_tex_{counter}"`) — DPG tag collision = crash.
+- Use descriptive tag prefixes throughout for easier debugging.
 - Hidden debug hotkeys ("Mr. T Lite"): Ctrl+Shift+M (metrics), R (registry), T (fonts), L (style editor).
 
 **NVIDIA workaround**: At module top, before importing DPG (see `raven/librarian/app.py:27–32` for the canonical example):
@@ -114,7 +113,7 @@ if platform.system().upper() == "LINUX":
 ```
 Required to avoid segfault when deleting textures on Linux/NVIDIA (DPG issue #554).
 
-**Batching**: Configurable batch size (default 32). Process in background thread via `TaskManager`. Grid shows placeholder tiles (neutral gray) until thumbnails are ready; tiles pop in progressively.
+**Batching**: Configurable batch size (default 32). Process in background thread via `TaskManager`. Grid shows VHS noise placeholder tiles (unique per tile, generated from `raven.common.video.postprocessor.vhs_noise_pool`) until thumbnails are ready; tiles pop in progressively.
 
 **No disk cache** — regenerate on every app launch.
 
@@ -134,7 +133,7 @@ These are OpenGL texture allocations (shared physical VRAM with CUDA). The torch
 
 **Dynamic VRAM detection**: On startup, if running on a CUDA device, query available VRAM via `torch.cuda.mem_get_info()`. Set the thumbnail VRAM budget as a configurable fraction of available memory (default: `THUMBNAIL_VRAM_FRACTION = 0.5`, capped at `THUMBNAIL_VRAM_BUDGET_MAX_MB`). On CPU, no VRAM budget applies (system RAM is the limit — much larger, no auto-downgrade).
 
-**Auto-downgrade strategy**: On folder open:
+**Auto-downgrade strategy** [not yet implemented]: On folder open:
 ```
 max_tiles = vram_budget / bytes_per_tile(current_size)
 if num_images > max_tiles:
@@ -144,15 +143,15 @@ if num_images > max_tiles:
 
 At a 2 GB effective budget, the breakpoints are: 512→2K images, 256→8K, 128→32K, 64→128K. In practice, auto-downgrade kicks in mostly at the 512 setting.
 
-**Auto-upgrade**: Remember the user's last manually chosen tile size. When opening a new folder with fewer images, auto-upgrade back to that preferred size if VRAM permits. The user's intent is preserved — auto-downgrade is a constraint, not a preference change.
+**Auto-upgrade** [not yet implemented]: Remember the user's last manually chosen tile size. When opening a new folder with fewer images, auto-upgrade back to that preferred size if VRAM permits. The user's intent is preserved — auto-downgrade is a constraint, not a preference change.
 
 ### 4.4 Main Image Display
 
-Full-resolution image loaded as a single DPG dynamic texture. Displayed on a drawlist via `dpg.draw_image()` with custom pan/zoom handlers (our own affine math, as in xdot_viewer).
+Displayed on a drawlist via `dpg.draw_image()` with custom pan/zoom handlers (our own affine math, as in xdot_viewer). Mip textures are managed via a texture pool (`set_value` on pooled textures for fast recycling without OpenGL allocation churn).
 
 **Zoom modes**:
 - Zoom to fit (whole image visible)
-- Zoom to 1:1 (actual pixels)
+- Zoom to 1:1 (raw pixel blit, no scaling — important for screenshots with text). Draw position snapped to integer coordinates to prevent GPU bilinear interpolation artifacts.
 - Zoom in/out (step factor from config)
 - Mouse wheel zoom (centered on cursor)
 
@@ -160,93 +159,96 @@ Full-resolution image loaded as a single DPG dynamic texture. Displayed on a dra
 
 **Display scaling via Lanczos mipmaps**: GPU bilinear texture sampling alone produces visible artifacts at intermediate zoom-out levels (confirmed by xdot_viewer's text rendering experience). Solution: pre-compute Lanczos mip levels at image load time.
 
-1. On image load, generate mip chain (1/2, 1/4, 1/8, … of original) using `raven.common.lanczos` on GPU.
-2. Store each mip as a separate DPG dynamic texture.
+1. On image load, generate mip chain (1/2, 1/4, 1/8, … of original) using `raven.common.image.lanczos` on GPU. Background thread, smallest-first for progressive sharpening.
+2. Store each mip as a separate DPG dynamic texture (via texture pool).
 3. At display time, pick the mip level closest to (but not smaller than) the current zoom level.
 4. GPU bilinear handles the remaining interpolation (at most 2× range — well within bilinear's comfort zone).
 
 Mip generation is a one-time cost per image load, amortized by the preload cache. No per-frame Lanczos computation during zoom or pan. No debouncing needed — mip selection is instant (a table lookup based on zoom level).
 
+**Loading indicator**: Blue DPG `loading_indicator` (style 0, spinning dots) overlaid at the bottom-left of the image pane. Shows during both full mip generation (new image) and augmentation of preloaded images. Positioned via `pos` inside a `child_window` wrapper to avoid affecting layout of the status bar.
+
 ### 4.5 Preloading
 
-Maintain a cache window of ±N images (configurable, default N=3) around the current position. Preload full-resolution images (including their mip chains) in background threads. When the user navigates to next/previous, the image and its mips are already in memory.
+Maintain a cache of nearby images in a cross-neighborhood pattern: ±N tiles horizontally and vertically in the grid (configurable, default N=2). Preload images (including capped mip chains) in background threads. When the user navigates to a cached image, the switch is instant.
 
 **GIL consideration**: Image loading (PIL decode, QOI decode) is mostly C code, so background threads release the GIL effectively. Numpy array conversion is also C-level. Torch GPU ops release the GIL during kernel execution. Threads should be fine.
 
-**Cache structure**: `OrderedDict` or similar, keyed by filename. Evict furthest-from-current entries when cache exceeds 2×N+1. Each entry holds the numpy array, DPG texture ID for the full-res image, and DPG texture IDs for mip levels.
+**Cache structure**: `PreloadCache` class in `preload.py`. Stores **flat numpy arrays** (not DPG textures) to avoid per-frame DPG registry overhead — DPG dynamic textures have O(n) per-frame cost that becomes significant at ~80+ textures. GPU texture readback (`dpg.get_value`) is also catastrophically slow on gaming-grade GPUs (observed ~540ms over Thunderbolt vs ~24ms for upload), so textures are never read back — the cache stores CPU-side arrays and uploads on demand. Each cache entry holds a list of `(scale, w, h, flat_array)` tuples for the mip levels. Eviction is furthest-from-current-first, with a configurable RAM budget (default: 25% of system RAM, clamped to [512 MB, 16 GB]).
 
-**Selection-aware preloading**: When tiles are multi-selected (e.g. for comparison), also preload those images. They get priority over positional neighbors. Cache eviction accounts for this — don't evict a selected image just because it's far from the current position.
+**Preload mip cap**: Speculative preloads are capped at `PRELOAD_MAX_SCALE` (default 0.25×) — the full-res and 0.5× levels are skipped. When the user actually navigates to a preloaded image, `augment_mips` generates the missing larger levels in the background. This keeps the cache compact while still providing instant perceived navigation.
 
-### 4.6 Lanczos-3 GPU Kernel (`raven/common/lanczos.py`)
+**Selection-aware preloading** [not yet implemented]: When tiles are multi-selected (e.g. for comparison), also preload those images. They get priority over positional neighbors. Cache eviction accounts for this — don't evict a selected image just because it's far from the current position.
 
-Custom implementation, ~150–200 lines of pure PyTorch. Same pattern as the video postprocessor filters — all standard tensor operations, no raw CUDA code. GPU acceleration comes from PyTorch's automatic dispatch.
+### 4.6 Lanczos GPU Kernel (`raven/common/image/lanczos.py`)
+
+Custom implementation, pure PyTorch. Same pattern as the video postprocessor filters — all standard tensor operations, no raw CUDA code. GPU acceleration comes from PyTorch's automatic dispatch.
+
+**Configurable kernel order**: Lanczos-*a* for *a* ∈ {3, 4, 5}. Default order 4 (good balance of stopband rejection and computation). Higher order = sharper but slightly more compute.
 
 **Key operations**: `torch.sinc()` (available since PyTorch 1.7; Raven requires ≥2.4), separable 1D horizontal + vertical passes, gather/scatter for neighbor sampling.
 
-**Kernel definition**: `L(x) = sinc(x) · sinc(x/3)` for |x| < 3, else 0.
+**Kernel definition**: `L(x) = sinc(x) · sinc(x/a)` for |x| < a, else 0.
 
-**Multi-stage downsampling** for large reduction ratios: repeatedly halve (each step uses a compact 6-tap Lanczos kernel) until within 2× of the target, then one final Lanczos pass. Equivalent quality to single-pass Lanczos, much faster.
+**Multi-stage downsampling** for large reduction ratios: repeatedly halve (each step uses a compact kernel) until within 2× of the target, then one final Lanczos pass. Equivalent quality to single-pass Lanczos, much faster.
 
-**API sketch**:
+**API**:
 ```python
-def lanczos_resize(tensor: torch.Tensor,
-                   target_h: int,
-                   target_w: int) -> torch.Tensor:
-    """Resize a (B, C, H, W) tensor using Lanczos-3 interpolation.
+def resize(tensor: torch.Tensor,
+           target_h: int,
+           target_w: int,
+           order: int = 4) -> torch.Tensor:
+    """Resize a (B, C, H, W) tensor using Lanczos interpolation."""
 
-    Uses multi-stage downsampling for ratios > 2×.
-    Input and output are float32 tensors in [0, 1] range.
-    """
-
-def lanczos_mipchain(tensor: torch.Tensor,
-                     min_size: int = 64) -> list[torch.Tensor]:
+def mipchain(tensor: torch.Tensor,
+             min_size: int = 64,
+             order: int = 4) -> list[torch.Tensor]:
     """Generate a chain of Lanczos-downsampled mip levels.
 
-    `tensor` is (B, C, H, W). Returns [original, 1/2, 1/4, ...] down to
-    `min_size` on the short edge.
+    Returns [original, 1/2, 1/4, ...] down to `min_size` on the short edge.
     """
 ```
 
-Lives in `raven/common/` for reuse by other Raven apps (e.g. improving the Anime4K final downscale step).
+Lives in `raven/common/image/` for reuse by other Raven apps (e.g. improving the Anime4K final downscale step).
 
 ## 5. Grid View
 
 ### 5.1 Layout
 
-Scrollable child_window. Tiles laid out in a wrapping grid — number of columns derived from `grid_width / tile_size`. Each tile: thumbnail image + filename (truncated to tile width, full name in tooltip).
+Scrollable child_window. Tiles laid out in a wrapping grid — number of columns derived from `grid_width / (tile_size + item_spacing)`. Each tile: per-tile drawlist (for full control over borders, image, and icon overlays) + filename label (truncated to tile width, full name in tooltip).
 
-**Implementation (v1)**: DPG table with dynamic column count, recalculated on tile size change or panel resize. Each cell is a group containing `dpg.add_image()` + `dpg.add_text()`. For borders/highlights, use per-cell DPG themes or small drawlists. If performance is a problem at 1000+ images, upgrade to virtualized rendering (only create DPG items for visible rows, recycle on scroll).
+**Implementation**: Horizontal groups of per-tile drawlists, torn down and rebuilt on filter/size changes. O(1) hit detection from mouse position via layout math. If performance is a problem at 1000+ images, upgrade to virtualized rendering (only create DPG items for visible rows, recycle on scroll).
 
 ### 5.2 Tile Visual States
 
 Each tile has two orthogonal visual properties:
 
-**Triage state** (persistent, affects border + icon):
+**Triage state** (persistent, affects border + icon + dimming):
 - Neutral — default (subtle gray border, no icon)
 - Cherry — **golden/amber** border + star icon at tile corner
-- Lemon — **muted gray** border (darker than neutral) + lemon icon at tile corner
+- Lemon — **muted dark gray** border (darker than neutral) + lemon icon + dimming overlay (rejects fade into background)
 
 Color choice is **colorblind-accessible**: the distinction is luminance-based (warm gold vs cool gray), not red/green. The star/lemon icons provide redundant shape coding.
 
 **Selection state** (transient):
-- **Current** — the image shown in the main view. Bright blue thick border. Always exactly one.
+- **Current** — the image shown in the main view. Bright blue inner border. Always exactly one.
 - **Multi-selected** — part of a selection group. Highlighted background tint. Zero or more.
 - **Neither** — default appearance.
 
-These combine: a tile can be current + cherry + multi-selected simultaneously. Rendering priority (outermost to innermost): current border > triage border > selection tint > triage icon.
+These combine: a tile can be current + cherry + multi-selected simultaneously. Rendering priority (outermost to innermost): lemon dimming > selection tint > triage border > current border > triage icon.
 
 ### 5.3 Interaction
 
-- **Single click**: Set as current image (shown in main view). Clears multi-selection.
+- **Single click**: Set as current image (shown in main view) and select it (replaces multi-selection).
 - **Ctrl+click**: Toggle tile in/out of multi-selection. Does NOT change current image.
-- **Shift+click**: Range-select from last-clicked to this tile. Does NOT change current image.
+- **Shift+click**: Range-select from last-clicked to this tile in visible order.
 - **Double-click**: Set as current + zoom to fit in main view.
-- **Right-click**: Context menu (Mark cherry / Mark lemon / Clear mark / Select all / Invert selection).
+- **Right-click**: Currently unused. A context menu may not be needed — the app is simple enough that hotkeys and toolbar buttons cover all operations.
 - **Scroll**: Standard vertical scroll of the grid.
 
 ### 5.4 Filter Views
 
-Toolbar toggle buttons (radio group): **All** | **Cherries** | **Lemons** | **Neutral**.
+Toolbar combobox: **All** | **Cherries** | **Lemons** | **Neutral**. Keyboard: `G` cycles forward, `Shift+G` cycles backward.
 
 When a filter is active, only matching tiles are shown in the grid. The current image persists even if filtered out (the main view doesn't change, but the grid may not show it).
 
@@ -258,10 +260,12 @@ When a filter is active, only matching tiles are shown in the grid. The current 
 
 Three states per image: `neutral`, `cherry`, `lemon`. Default: `neutral`.
 
-**Mark operations** (apply to current image, or to multi-selection if any):
-- Mark as cherry: `C` key (also toolbar button with star icon + tooltip `"Mark cherry [C]"`)
-- Mark as lemon: `L` key (also toolbar button with lemon icon + tooltip `"Mark lemon [L]"`)
-- Clear mark (back to neutral): `N` key (also toolbar button + tooltip `"Clear mark (Neutral) [N]"`)
+**Mark operations** (apply to current image; Ctrl variants apply to multi-selection):
+- Mark as cherry: `C` key, `Ctrl+C` for selection (also toolbar button with star icon)
+- Mark as lemon: `X` key, `Ctrl+X` for selection (also toolbar button with lemon icon)
+- Clear mark (back to neutral): `V` key, `Ctrl+V` for selection (also toolbar button)
+
+The triage keys (`X`/`C`/`V`) are on the left hand, freeing the right for the mouse. The jump-to-state keys (`B`/`N`/`M`) are the next three-column set to the right on QWERTY — same order, easy to remember.
 
 ### 6.2 File Operations
 
@@ -283,7 +287,9 @@ On app launch, any pre-existing files in `cherries/`/`lemons/` are recognized as
 
 ## 7. Animation / Compare Mode (Stretch Goal)
 
-Activated via toolbar button or `Space` hotkey when ≥2 tiles are multi-selected.
+Not yet implemented. Config values (`COMPARE_DEFAULT_FPS`, etc.) are in place.
+
+Activated via toolbar button or hotkey when ≥2 tiles are multi-selected.
 
 **Behavior**:
 1. Selected tiles are numbered 1–9 (max 9 in v1; if more selected, use first 9 by grid order).
@@ -309,12 +315,16 @@ Compare mode is an overlay on normal operation — the underlying state (triage,
 | `←` / `→` | Previous / next image (or pan when image pane focused) |
 | `↑` / `↓` | Previous / next row in grid (or pan when image pane focused) |
 | `Home` / `End` | First / last image |
-| `Page Up` / `Page Down` | Scroll grid by visible rows (last row → first, etc.) |
+| `Page Up` / `Page Down` | Scroll grid by visible rows |
+| **Jump to triage state** (All view only; wraps around) | |
+| `B` / `Shift+B` | Next / prev lemon |
+| `N` / `Shift+N` | Next / prev cherry |
+| `M` / `Shift+M` | Next / prev neutral |
 | **Zoom** | |
 | `+` / Numpad `+` | Zoom in |
 | `-` / Numpad `-` | Zoom out |
 | `F` | Zoom to fit |
-| `1` | Zoom to 1:1 (100%) — only outside compare mode |
+| `1` | Zoom to 1:1 (100%) |
 | Mouse wheel | Zoom (centered on cursor) |
 | Click+drag (main view) | Pan |
 | **Image pane focus** | |
@@ -322,18 +332,17 @@ Compare mode is an overlay on normal operation — the underlying state (triage,
 | Arrow keys | Pan (when image pane focused) |
 | `Escape` | Unfocus image pane (return to grid navigation) |
 | **Triage** | |
-| `C` | Mark current/selected as cherry |
-| `L` | Mark current/selected as lemon |
-| `N` | Clear mark (neutral) |
+| `C` / `Ctrl+C` | Mark cherry (current / all selected) |
+| `X` / `Ctrl+X` | Mark lemon (current / all selected) |
+| `V` / `Ctrl+V` | Clear mark (current / all selected) |
+| **Filter** | |
+| `G` | Cycle filter forward (All → Cherries → Lemons → Neutral) |
+| `Shift+G` | Cycle filter backward |
 | **Selection** | |
+| `Space` | Toggle select current image |
 | `Ctrl+A` | Select all (visible, per filter) |
 | `Ctrl+D` | Deselect all |
 | `Ctrl+I` | Invert selection |
-| **Compare mode** | |
-| `Space` | Enter compare mode (if multi-selected) / pause-resume (if in compare) |
-| `1`–`9` | Select numbered image and exit compare |
-| `Escape` | Exit compare mode |
-| `,` / `.` | Slower / faster |
 | **Grid tile size** | |
 | `Ctrl+1`–`Ctrl+5` | Switch tile size (32, 64, 128, 256, 512) |
 | **App** | |
@@ -341,86 +350,18 @@ Compare mode is an overlay on normal operation — the underlying state (triage,
 | `F1` | Help card |
 | `F11` | Fullscreen toggle |
 | **Debug (hidden)** | |
-| `Ctrl+Shift+M` | DPG metrics |
+| `Ctrl+Shift+M` | DPG metrics + toggle debug overlay |
 | `Ctrl+Shift+R` | DPG item registry |
 | `Ctrl+Shift+T` | DPG font manager |
 | `Ctrl+Shift+L` | DPG style editor |
 
-**Arrow key semantics**: Arrows navigate by default. `Tab` toggles image pane focus, where arrows pan instead. `Escape` returns to navigation mode. A visual indicator signals the current mode — e.g. bright border glow on the image pane, and/or status bar text `"Image pane focused — arrows pan, Esc to return"`.
+**Arrow key semantics**: Arrows navigate by default. `Tab` toggles image pane focus, where arrows pan instead. `Escape` returns to navigation mode. A bright blue border on the image pane and status bar text `"IMAGE PANE FOCUSED"` signal the current mode.
 
-**Note on `1` key**: Outside compare mode, `1` = zoom to 1:1. Inside compare mode, `1` = select image #1. Context-dependent but non-conflicting — compare mode is a clear modal state.
+**Triage key layout**: `X`/`C`/`V` (mark lemon/cherry/neutral) on the left hand, `B`/`N`/`M` (jump to lemon/cherry/neutral) are the next three-column set to the right on QWERTY. Same order, easy to remember.
 
 **DPG 2.0 key constant gotcha**: `dpg.mvKey_Prior` (Page Up) and `dpg.mvKey_Next` (Page Down) no longer work in DPG 2.0.0. The key codes are now mysterious magic numbers 517 and 518. Must check both: `key == dpg.mvKey_Prior or key == 517` etc. See `raven/visualizer/app.py:4316–4318` for the workaround pattern.
 
-## 9. Config (`config.py`)
-
-```python
-import torch
-
-# GPU configuration.
-# Uses raven.common.deviceinfo pattern: {"component": {"device_string": ..., "dtype": ...}}.
-# Validated at startup by deviceinfo.validate() — auto-falls back to CPU if CUDA unavailable,
-# auto-promotes float16 → float32 on CPU.
-gpu_config = {
-    "thumbnails": {"device_string": "cuda:0",
-                   "dtype": torch.float32},
-}
-
-# Font & Layout (derived from DPG style, as in xdot_viewer)
-FONT_SIZE = 20
-DPG_WINDOW_PADDING_Y = 8
-DPG_FRAME_PADDING_Y = 3
-DPG_ITEM_SPACING_Y = 4
-DPG_SCROLLBAR_SIZE = 14
-TOOLBAR_H = FONT_SIZE + 2 * DPG_FRAME_PADDING_Y
-STATUS_H = FONT_SIZE
-
-# Window
-DEFAULT_WIDTH = 1920
-DEFAULT_HEIGHT = 1040
-
-# Split
-IMAGE_PANE_RATIO = 0.70               # main view gets 70% of width
-
-# Grid
-DEFAULT_TILE_SIZE = 128                # initial thumbnail size
-TILE_SIZES = [32, 64, 128, 256, 512]
-THUMBNAIL_BATCH_SIZE = 32              # images per GPU batch
-THUMBNAIL_VRAM_FRACTION = 0.5          # fraction of free VRAM for thumbnails
-THUMBNAIL_VRAM_BUDGET_MAX_MB = 4096    # hard cap
-THUMBNAIL_INTERPOLATION = "lanczos"    # "lanczos" or "area"
-THUMBNAIL_AREA_THRESHOLD = 64          # auto-switch to "area" at tile sizes <= this
-
-# Colors (colorblind-accessible)
-CHERRY_COLOR = (220, 180, 50, 255)     # golden/amber
-LEMON_COLOR = (100, 100, 105, 255)     # muted gray (darker than neutral)
-NEUTRAL_BORDER_COLOR = (60, 60, 65, 255)  # subtle gray
-CURRENT_COLOR = (80, 160, 255, 255)    # bright blue
-SELECTION_TINT = (255, 255, 255, 40)   # subtle overlay
-
-# Zoom
-ZOOM_IN_FACTOR = 1.25
-ZOOM_OUT_FACTOR = 1.25
-MOUSE_WHEEL_ZOOM_FACTOR = 1.1
-PAN_AMOUNT = 30                        # pixels per arrow keypress (at 1:1 zoom)
-
-# Preload
-PRELOAD_WINDOW = 3                     # ±3 images around current
-
-# Mipmaps
-MIP_MIN_SIZE = 64                      # smallest mip level (short edge, pixels)
-
-# Compare mode
-COMPARE_DEFAULT_FPS = 3.0
-COMPARE_MIN_FPS = 0.5
-COMPARE_MAX_FPS = 15.0
-
-# Help
-HELP_WINDOW_W = 1400
-HELP_WINDOW_H = 760
-```
-
-## 10. Startup Sequence
+## 9. Startup Sequence
 
 Following the xdot_viewer / Librarian pattern:
 
@@ -433,35 +374,40 @@ Following the xdot_viewer / Librarian pattern:
 7. `dpg.create_viewport(...)`, `dpg.setup_dearpygui()`
 8. Initialize FileDialog (`dirs_only=True` for folder selection)
 9. Build GUI layout (toolbar, main view drawlist, grid child_window, status bar)
-10. Initialize ImageView (pan/zoom state)
-11. Initialize Grid (tile layout state)
-12. Initialize Triage manager
-13. Register global key handler
-14. Build help card
-15. Set primary window, resize callback, exit callback
-16. Show viewport
-17. If folder arg given, scan and load
-18. Frame callback for initial resize settling
-19. Render loop: `animator.render_frame()` + `dpg.render_dearpygui_frame()`
+10. Initialize ImageView (pan/zoom, texture pool, spinner overlay)
+11. Initialize Grid (tile layout, VHS noise placeholder pool)
+12. Register global key handler
+13. Build help card
+14. Set primary window, resize callback, exit callback, vsync
+15. Show viewport
+16. If folder arg given: scan with TriageManager, start thumbnail pipeline, initialize PreloadCache
+17. Frame callback for initial resize settling
+18. Render loop: poll thumbnail pipeline, poll deferred noise pool, update components, trigger preloading, `animator.render_frame()` + `dpg.render_dearpygui_frame()`
+19. Two-phase shutdown: cancel tasks in exit callback (without waiting), wait for threads after render loop exits, destroy DPG context.
 
-## 11. Resolved Design Decisions
+## 10. Resolved Design Decisions
 
-1. **Resize algorithm**: Custom Lanczos-3 kernel on GPU (v1). Config toggle for `area` mode; auto-switch at smallest tile sizes.
-2. **Grid**: DPG table for v1. Virtualize later if needed.
+1. **Resize algorithm**: Custom Lanczos kernel on GPU, configurable order (3–5, default 4). Extremely fast and high quality; no need for `area` interpolation fallback.
+2. **Grid**: Per-tile drawlists in horizontal groups (not DPG table). Full rebuild on filter/size change. Virtualize later if needed.
 3. **Arrow keys**: Navigate by default. `Tab` toggles image pane focus — arrows pan when focused. `Escape` returns.
-4. **Compare mode**: Max 9 images (digit keys) for v1.
+4. **Compare mode**: Max 9 images (digit keys) for v1. Not yet implemented.
 5. **Split**: Fixed ratio from config in v1. Future draggable splitter with debounced grid layout regen.
 6. **Undo**: Deferred to v2.
 7. **Icons**: `ICON_STAR` / `ICON_LEMON` from FontAwesome.
-8. **Colors**: Colorblind-accessible (golden/amber vs muted gray), with icon redundancy.
+8. **Colors**: Colorblind-accessible (golden/amber vs muted dark gray), with icon redundancy. Lemons get dimming overlay.
 9. **GPU config**: Server-style `{component: {device_string, dtype}}` dict, validated by `deviceinfo.validate()`. Supports CPU fallback.
+10. **Triage keys**: `X`/`C`/`V` (left hand, near mouse). Jump keys `B`/`N`/`M` mirror them one column right.
+11. **Preload cache**: Flat numpy arrays (not DPG textures). DPG dynamic textures have O(n) per-frame overhead — at 80+ cached textures, frame time degrades significantly. Numpy arrays have zero per-frame cost; DPG textures are created on demand via the texture pool when the image is actually displayed.
+12. **Texture pool**: Reuse DPG textures via `set_value` instead of create/delete. Avoids OpenGL allocation churn and the associated glitches on NVIDIA/Linux.
+13. **Dark mode**: Not needed. The default color scheme is already dark, and images must be shown as-is for triage accuracy.
 
-## 12. Future Enhancements (v2+)
+## 11. Future Enhancements (v2+)
 
 - Draggable split pane (with `make_managed_task` debouncing for grid layout regen)
 - Undo/redo for triage operations (`Ctrl+Z` / `Ctrl+Shift+Z`)
+- Compare mode (§7)
 - Compare mode with >9 images (paged groups?)
 - Custom graphical icons via Qwen-Image
 - Grid virtualization for 5000+ image folders
 - Metadata overlay (EXIF date, file size) on tiles
-- Improve Anime4K final downscale step using `raven.common.lanczos`
+- Improve Anime4K final downscale step using `raven.common.image.lanczos`
