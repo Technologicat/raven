@@ -204,15 +204,14 @@ class ImageView:
             new_mips.append((scale, tex_tag))
 
         with self._mips_lock:
-            if self._mips:
-                for _s, old_tag in self._old_mips:
-                    self._release_texture(old_tag)
-                self._old_mips = list(self._mips)
-                self._old_img_w = self._img_w
-                self._old_img_h = self._img_h
-                self._old_zoom = self._zoom
-                self._old_pan_cx = self._pan_cx
-                self._old_pan_cy = self._pan_cy
+            # Release all old textures. Preloaded images are ready instantly,
+            # so no need for the old-image-shown-until-new-ready bridge that
+            # set_image/bg_mip_task uses.
+            for _s, old_tag in self._old_mips:
+                self._release_texture(old_tag)
+            self._old_mips.clear()
+            for _s, old_tag in self._mips:
+                self._release_texture(old_tag)
             self._mips = new_mips
             self._mip_arrays = list(mip_arrays)
         t_swap = time.perf_counter_ns()
