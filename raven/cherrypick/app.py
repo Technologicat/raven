@@ -114,10 +114,14 @@ def _update_status() -> None:
     iv = _app_state["image_view"]
 
     if triage is not None and len(triage) > 0:
-        # Current filename.
+        # Current filename and position.
         idx = grid.current if grid is not None else -1
         if 0 <= idx < len(triage):
-            parts.append(triage[idx].filename)
+            name = triage[idx].filename
+            if grid is not None and idx in grid.visible:
+                pos = grid.visible.index(idx) + 1
+                name += f"  [{pos} / {grid.visible_count}]"
+            parts.append(name)
 
         # Image dimensions.
         if iv is not None and iv.has_image:

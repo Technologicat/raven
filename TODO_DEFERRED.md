@@ -165,9 +165,3 @@ Promising unexplored approaches:
 - **Always bridge**: treat `set_preloaded_arrays` like `set_image` — show old image via the bridge for one frame, let natural `_render()` do the switch. One frame of old image is acceptable.
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
-
-## raven-cherrypick: current image position in status bar
-
-The status bar shows overall counts (total, cherries, lemons) but no indication of *which* image is current — e.g. "42 / 128" or "42 / 128 (visible: 15 / 30)". Would help orientation when navigating large folders.
-
-Discovered during raven-cherrypick session 6 (2026-03-19).
