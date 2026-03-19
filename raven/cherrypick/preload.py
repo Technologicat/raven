@@ -92,7 +92,7 @@ class PreloadCache:
     def __init__(self, device: torch.device,
                  lanczos_order: int = lanczos.DEFAULT_ORDER,
                  mip_min_size: int = config.MIP_MIN_SIZE,
-                 ram_budget_mb: int = config.PRELOAD_VRAM_BUDGET_MB,
+                 ram_budget_mb: int = config.PRELOAD_RAM_BUDGET_FALLBACK_MB,
                  window: int = config.PRELOAD_WINDOW,
                  debug: bool = False):
         self._device = device

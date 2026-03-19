@@ -52,7 +52,7 @@ raven/cherrypick/tests/
 ┌─────────────────────────────────────────────────────────────────────┐
 │ [Toolbar]  Open  +  -  Fit  1:1  │ Grid: 32 64 [128] 256 512      │
 │            * Mark  L Mark  N Clear │ View: All * L N │ Compare     │
-│            Dark  FS  Help                                           │
+│            FS  Help                                                  │
 ├──────────────────────────────────────┬──────────────────────────────┤
 │                                      │  ┌──┐ ┌──┐ ┌──┐ ┌──┐       │
 │                                      │  │  │ │▓▓│ │  │ │  │       │
@@ -340,7 +340,6 @@ Compare mode is an overlay on normal operation — the underlying state (triage,
 | `Ctrl+O` | Open folder |
 | `F1` | Help card |
 | `F11` | Fullscreen toggle |
-| `F12` | Dark mode toggle |
 | **Debug (hidden)** | |
 | `Ctrl+Shift+M` | DPG metrics |
 | `Ctrl+Shift+R` | DPG item registry |
@@ -415,11 +414,6 @@ MIP_MIN_SIZE = 64                      # smallest mip level (short edge, pixels)
 COMPARE_DEFAULT_FPS = 3.0
 COMPARE_MIN_FPS = 0.5
 COMPARE_MAX_FPS = 15.0
-
-# Appearance
-DARK_MODE = True
-DARK_MODE_BACKGROUND = (45, 45, 48, 255)
-LIGHT_MODE_BACKGROUND = (255, 255, 255, 255)
 
 # Help
 HELP_WINDOW_W = 1400

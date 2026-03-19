@@ -79,7 +79,7 @@ All new and modified code must follow `raven-style-guide.md` (in the project roo
 - `unpythonic` pure-Python features are fair game. Currently used: `env` (namespace), `Timer` (benchmarking), `@call` (scoping), `box`/`unbox`, `sym`, `dyn`. Other features welcome where they improve clarity. **Do not** use the macro layer (`unpythonic.syntax`) or features that primarily serve as macro backends (e.g. `let` bindings — these are readable only through the macro surface syntax).
 - OOP where appropriate (GUI components, stateful objects)
 - Config via Python modules (`config.py` files, not YAML/JSON)
-- Type hints encouraged but not enforced everywhere. All public interfaces should have them.
+- Type hints on all new and modified functions (public and internal). Existing untyped code can be left as-is unless you're already editing it.
 - `__all__`: all public symbols must be listed in `__all__` (PEP 8). Whether locally defined or re-exported, doesn't matter. This allows star-importing a module in a REPL to bring in its public API only.
 - Imports: prefer `import module` + `module.func()` (dotted style) over `from module import func`. Makes it clear at the call site where a function comes from. For modules with ambiguous names, use an alias: `from ..common.gui import utils as guiutils`, `from ..server import config as server_config`.
 - Naming: don't repeat the module name in function names. With dotted imports, `lanczos.resize()` reads better than `lanczos.lanczos_resize()`. The module provides the namespace.

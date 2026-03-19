@@ -91,7 +91,10 @@ PAN_AMOUNT = 30  # pixels per arrow keypress (at 1:1 zoom)
 # ---------------------------------------------------------------------------
 
 PRELOAD_WINDOW = 2  # ±N tiles in cross neighborhood (horizontal + vertical)
-PRELOAD_VRAM_BUDGET_MB = 1500  # max VRAM for preloaded mip textures
+PRELOAD_RAM_FRACTION = 0.25  # fraction of available system RAM for preload cache
+PRELOAD_RAM_BUDGET_MIN_MB = 512  # floor (don't starve the cache on low-RAM systems)
+PRELOAD_RAM_BUDGET_MAX_MB = 16384  # ceiling (diminishing returns beyond this)
+PRELOAD_RAM_BUDGET_FALLBACK_MB = 4096  # used when RAM detection fails
 
 # ---------------------------------------------------------------------------
 # Mipmaps
@@ -106,14 +109,6 @@ MIP_MIN_SIZE = 64  # smallest mip level (short edge, pixels)
 COMPARE_DEFAULT_FPS = 3.0
 COMPARE_MIN_FPS = 0.5
 COMPARE_MAX_FPS = 15.0
-
-# ---------------------------------------------------------------------------
-# Appearance
-# ---------------------------------------------------------------------------
-
-DARK_MODE = True
-DARK_MODE_BACKGROUND = (45, 45, 48, 255)
-LIGHT_MODE_BACKGROUND = (255, 255, 255, 255)
 
 # ---------------------------------------------------------------------------
 # Navigation

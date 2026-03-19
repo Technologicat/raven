@@ -30,7 +30,6 @@ from ..common import deviceinfo
 from ..common.gui import utils as guiutils
 from ..common.gui import helpcard
 from ..common.gui import animation as gui_animation
-from ..common.image import utils as imageutils
 from ..vendor.file_dialog.fdialog import FileDialog
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 
@@ -66,6 +65,30 @@ _prev_current_idx = -1
 # Validated at startup.
 _device = None
 _dtype = None
+_preload_ram_budget_mb = config.PRELOAD_RAM_BUDGET_FALLBACK_MB
+
+
+def _detect_preload_budget() -> int:
+    """Auto-detect preload cache RAM budget.
+
+    Returns 25% of available system RAM, clamped to [min, max] from config.
+    Falls back to a fixed default if detection fails.
+    """
+    try:
+        import psutil
+        avail_mb = psutil.virtual_memory().available / (1024 * 1024)
+        budget = int(avail_mb * config.PRELOAD_RAM_FRACTION)
+        budget = max(config.PRELOAD_RAM_BUDGET_MIN_MB,
+                     min(budget, config.PRELOAD_RAM_BUDGET_MAX_MB))
+        logger.info("main: preload cache budget %d MB "
+                     "(%.0f MB available, %.0f%% fraction)",
+                     budget, avail_mb, config.PRELOAD_RAM_FRACTION * 100)
+        return budget
+    except Exception as exc:
+        logger.warning("main: RAM detection failed (%s), "
+                       "using fallback %d MB",
+                       exc, config.PRELOAD_RAM_BUDGET_FALLBACK_MB)
+        return config.PRELOAD_RAM_BUDGET_FALLBACK_MB
 
 
 # ---------------------------------------------------------------------------
@@ -218,27 +241,20 @@ def _load_current_image() -> None:
                             f"set_mips={(t_set_mips - t_donated) / 1e6:.1f}ms "
                             f"total={(t_set_mips - t_nav_start) / 1e6:.1f}ms "
                             f"cache_size={len(preload._cache)}")
+
+            # Keep zoom/pan when switching between same-size images
+            # (e.g. variants of the same shot). Otherwise zoom to fit.
+            if new_size != old_size:
+                iv.zoom_to_fit()
         else:
-            t0 = time.perf_counter_ns()
-            rgba = imageutils.decode_image(entry.path)
-            t_decode = time.perf_counter_ns() - t0
-
-            new_size = (rgba.shape[1], rgba.shape[0])  # (W, H)
-
-            t1 = time.perf_counter_ns()
-            iv.set_image(rgba)
-            t_mip = time.perf_counter_ns() - t1
+            # Cache miss — decode + mip generation on background thread.
+            # zoom_to_fit handled inside load_from_file when dimensions
+            # are known (after decode).
+            iv.load_from_file(entry.path, old_size=old_size)
 
             if _debug:
-                logger.info(f"app._load_current_image: {entry.filename} "
-                            f"decode={t_decode / 1e6:.0f}ms "
-                            f"mip={t_mip / 1e6:.0f}ms "
-                            f"total={(t_decode + t_mip) / 1e6:.0f}ms")
-
-        # Keep zoom/pan when switching between same-size images (e.g. variants
-        # of the same shot). Otherwise zoom to fit.
-        if new_size != old_size:
-            iv.zoom_to_fit()
+                logger.info("app._load_current_image: %s MISS — "
+                            "queued background decode+mip", entry.filename)
 
     except Exception as exc:
         logger.warning("app._load_current_image: failed to load %s: %s",
@@ -696,6 +712,10 @@ def main() -> int:
     _device = torch.device(config.gpu_config["thumbnails"]["device_string"])
     _dtype = config.gpu_config["thumbnails"]["dtype"]
 
+    # --- Preload RAM budget ---
+    global _preload_ram_budget_mb
+    _preload_ram_budget_mb = _detect_preload_budget()
+
     # --- DPG bootup ---
     dpg.create_context()
     themes_and_fonts = guiutils.bootup(font_size=config.FONT_SIZE)
@@ -736,6 +756,7 @@ def main() -> int:
         device=_device,
         lanczos_order=config.THUMBNAIL_LANCZOS_ORDER,
         mip_min_size=config.MIP_MIN_SIZE,
+        ram_budget_mb=_preload_ram_budget_mb,
         debug=_debug,
     )
 

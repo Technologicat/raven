@@ -20,9 +20,10 @@ __all__ = ["ImageView"]
 
 import concurrent.futures
 import logging
+import pathlib
 import threading
 import time
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 import dearpygui.dearpygui as dpg
 import numpy as np
@@ -150,25 +151,7 @@ class ImageView:
         # Cancel any in-progress mip loading.
         self._mip_task_mgr.clear(wait=True)
 
-        # Keep old textures visible until the first new mip is ready.
-        # This eliminates the blank flash between images.
-        #
-        # Only replace _old_mips when _mips is non-empty. If the previous
-        # background task was cancelled before producing any mip (rapid
-        # navigation), _mips is [] and overwriting _old_mips would lose the
-        # last successfully displayed image — causing a blank flash.
-        with self._mips_lock:
-            if self._mips:
-                for _s, old_tag in self._old_mips:
-                    self._release_texture(old_tag)
-                self._old_mips = list(self._mips)
-                self._old_img_w = self._img_w
-                self._old_img_h = self._img_h
-                self._old_zoom = self._zoom
-                self._old_pan_cx = self._pan_cx
-                self._old_pan_cy = self._pan_cy
-            self._mips = []
-            self._mip_arrays = []
+        self._bridge_old_mips()
 
         self._img_h, self._img_w = rgba.shape[:2]
         self._mip_loading = True
@@ -181,6 +164,34 @@ class ImageView:
                        mip_min_size=self._mip_min_size,
                        debug=self._debug)
         self._mip_task_mgr.submit(self._bg_mip_task, task_env)
+
+    def load_from_file(self, path: Union[pathlib.Path, str],
+                       old_size: tuple[int, int] = (0, 0)) -> None:
+        """Load an image from *path* entirely in a background thread.
+
+        Decode, mip generation, and DPG texture creation all happen off
+        the main thread. If the decoded image dimensions differ from
+        *old_size*, ``zoom_to_fit`` is called automatically.
+
+        The old image remains visible (via the texture bridge) until the
+        first new mip is ready — no blank flash.
+        """
+        self._mip_task_mgr.clear(wait=True)
+
+        self._bridge_old_mips()
+
+        # Don't clear _img_w/_img_h — the old-texture bridge render path
+        # uses _old_img_w/h, and these fields get overwritten after decode.
+        self._mip_loading = True
+        self._needs_render = True
+
+        task_env = env(path=path,
+                       old_size=old_size,
+                       device=self._device,
+                       order=self._order,
+                       mip_min_size=self._mip_min_size,
+                       debug=self._debug)
+        self._mip_task_mgr.submit(self._bg_file_mip_task, task_env)
 
     def set_preloaded_arrays(self, mip_arrays: list[tuple[float, int, int, np.ndarray]],
                              img_w: int, img_h: int) -> None:
@@ -365,8 +376,71 @@ class ImageView:
         dpg.delete_item(self._drawlist_tag)
 
     # ------------------------------------------------------------------
+    # Internal: old-texture bridge
+    # ------------------------------------------------------------------
+
+    def _bridge_old_mips(self) -> None:
+        """Preserve current mips as *old* mips for display continuity.
+
+        Called at the start of ``set_image`` and ``load_from_file``.
+        The render loop shows old mips (with their original zoom/pan/size)
+        until the first new mip is ready, eliminating blank flashes.
+
+        Only replaces ``_old_mips`` when ``_mips`` is non-empty. If the
+        previous background task was cancelled before producing any mip
+        (rapid navigation), ``_mips`` is ``[]`` and overwriting would lose
+        the last successfully displayed image.
+        """
+        with self._mips_lock:
+            if self._mips:
+                for _s, old_tag in self._old_mips:
+                    self._release_texture(old_tag)
+                self._old_mips = list(self._mips)
+                self._old_img_w = self._img_w
+                self._old_img_h = self._img_h
+                self._old_zoom = self._zoom
+                self._old_pan_cx = self._pan_cx
+                self._old_pan_cy = self._pan_cy
+            self._mips = []
+            self._mip_arrays = []
+
+    # ------------------------------------------------------------------
     # Internal: background mip loading
     # ------------------------------------------------------------------
+
+    def _bg_file_mip_task(self, e: env) -> None:
+        """Background thread: decode image from file, then generate mips.
+
+        Wraps ``_bg_mip_task`` — decodes the image, sets dimensions,
+        handles zoom-to-fit, then delegates to the standard mip pipeline.
+        """
+        t0 = time.perf_counter_ns()
+        try:
+            e.rgba = imageutils.decode_image(e.path)
+        except Exception as exc:
+            logger.warning("ImageView._bg_file_mip_task: decode failed for %s: %s",
+                           e.path, exc)
+            self._mip_loading = False
+            self._needs_render = True
+            return
+        t_decode = time.perf_counter_ns() - t0
+
+        if e.cancelled:
+            return
+
+        # Set image dimensions (needed before zoom_to_fit).
+        self._img_h, self._img_w = e.rgba.shape[:2]
+        new_size = (self._img_w, self._img_h)
+        if new_size != e.old_size:
+            self.zoom_to_fit()
+        self._needs_render = True
+
+        if e.debug:
+            logger.info("ImageView._bg_file_mip_task: decode=%dms size=%dx%d %s",
+                        t_decode / 1e6, self._img_w, self._img_h, e.path)
+
+        # Delegate to the standard mip pipeline.
+        self._bg_mip_task(e)
 
     def _bg_mip_task(self, e: env) -> None:
         """Background thread: upload, generate mip chain, create DPG textures.
