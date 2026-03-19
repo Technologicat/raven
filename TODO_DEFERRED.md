@@ -56,6 +56,11 @@ Discovered during raven-cherrypick imageview implementation.
 
 ## Adopt dotted import style in remaining modules
 
+Raven style is `from ..common.gui import utils as guiutils` + `guiutils.func()`, not
+`from ..common.gui.utils import func` + bare `func()`. The dotted style makes it clear
+at the call site where a function comes from. Modules with ambiguous names get an alias
+(e.g. `guiutils`, `server_config`, `client_config`).
+
 Cherrypick and xdot_viewer migrated (session 6). The xdotwidget internal
 sibling imports (Node, Edge, etc.) are fine as-is — tightly coupled types.
 
