@@ -89,6 +89,7 @@ ZOOM_IN_FACTOR = 1.25
 ZOOM_OUT_FACTOR = 1.25
 MOUSE_WHEEL_ZOOM_FACTOR = 1.1
 PAN_AMOUNT = 30  # pixels per arrow keypress (at 1:1 zoom)
+ZOOM_FIT_CAP = True  # cap zoom-to-fit at 100% (no upscale of small images)
 
 # ---------------------------------------------------------------------------
 # Preload

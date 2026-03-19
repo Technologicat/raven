@@ -165,9 +165,3 @@ Promising unexplored approaches:
 - **Always bridge**: treat `set_preloaded_arrays` like `set_image` — show old image via the bridge for one frame, let natural `_render()` do the switch. One frame of old image is acceptable.
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
-
-## raven-cherrypick: zoom-to-fit cap at 100%
-
-Zoom-to-fit currently upscales small images to fill the view, which looks blurry. Add a toggle to cap zoom-to-fit at 100% (1:1) — when enabled, small images are shown at actual size (centered) instead of upscaled. Needs a toolbar toggle button + hotkey.
-
-Discovered during raven-cherrypick session 6 (2026-03-20).

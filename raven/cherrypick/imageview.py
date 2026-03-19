@@ -85,6 +85,7 @@ class ImageView:
         self._pan_cx = 0.0  # image x at view center
         self._pan_cy = 0.0  # image y at view center
         self._zoom_is_fit = False  # True when last zoom was zoom_to_fit
+        self._zoom_fit_cap = config.ZOOM_FIT_CAP
 
         # Image state.
         self._img_w = 0
@@ -358,6 +359,17 @@ class ImageView:
         self._needs_render = True  # redraw focus indicator
 
     @property
+    def zoom_fit_cap(self) -> bool:
+        """Whether zoom-to-fit caps at 100% (no upscale)."""
+        return self._zoom_fit_cap
+
+    @zoom_fit_cap.setter
+    def zoom_fit_cap(self, value: bool) -> None:
+        self._zoom_fit_cap = value
+        if self._zoom_is_fit:
+            self.zoom_to_fit()  # re-apply with new cap setting
+
+    @property
     def zoom(self) -> float:
         return self._zoom
 
@@ -399,11 +411,17 @@ class ImageView:
     # ------------------------------------------------------------------
 
     def zoom_to_fit(self) -> None:
-        """Fit the entire image in the view, centered."""
+        """Fit the entire image in the view, centered.
+
+        When ``zoom_fit_cap`` is True, the zoom level is capped at 1.0
+        so small images are shown at actual size instead of upscaled.
+        """
         if not self.has_image:
             return
         z, cx, cy = guiutils.compute_zoom_to_fit(self._img_w, self._img_h,
                                                   self._view_w, self._view_h)
+        if self._zoom_fit_cap:
+            z = min(z, 1.0)
         self._zoom = z
         self._pan_cx = cx
         self._pan_cy = cy

@@ -442,6 +442,23 @@ def _toggle_fullscreen(*_args) -> None:
         _resize_gui()
 
 
+def _set_zoom_fit_cap(value: bool) -> None:
+    """Set the zoom-to-fit 100% cap and sync the checkbox."""
+    iv = _app_state["image_view"]
+    if iv is None:
+        return
+    iv.zoom_fit_cap = value
+    dpg.set_value("cherrypick_zoom_fit_cap_cb", value)
+    _update_status()
+
+
+def _toggle_zoom_fit_cap() -> None:
+    """Toggle the zoom-to-fit 100% cap."""
+    iv = _app_state["image_view"]
+    if iv is not None:
+        _set_zoom_fit_cap(not iv.zoom_fit_cap)
+
+
 # ---------------------------------------------------------------------------
 # Hotkey handler
 # ---------------------------------------------------------------------------
@@ -575,7 +592,9 @@ def _on_key(sender, app_data) -> None:
         if iv is not None:
             iv.zoom_out()
     elif key == dpg.mvKey_F:
-        if iv is not None:
+        if shift:
+            _toggle_zoom_fit_cap()
+        elif iv is not None:
             iv.zoom_to_fit()
     elif key == dpg.mvKey_1:
         if iv is not None:
@@ -893,6 +912,13 @@ def main() -> int:
             with dpg.tooltip(btn):
                 dpg.add_text("Zoom to fit [F]")
 
+            dpg.add_checkbox(label="Cap fit",
+                             tag="cherrypick_zoom_fit_cap_cb",
+                             default_value=config.ZOOM_FIT_CAP,
+                             callback=lambda s, v: _set_zoom_fit_cap(v))
+            with dpg.tooltip("cherrypick_zoom_fit_cap_cb"):
+                dpg.add_text("Cap zoom-to-fit at 100% [Shift+F]\nPrevents upscaling small images")
+
             dpg.add_spacer(width=8)
 
             # Triage buttons. Click = current image; Ctrl+click = all selected.
@@ -1046,6 +1072,7 @@ def main() -> int:
         env(key_indent=0, key="+  / Numpad +", action_indent=0, action="Zoom in", notes=""),
         env(key_indent=0, key="-  / Numpad -", action_indent=0, action="Zoom out", notes=""),
         env(key_indent=0, key="F", action_indent=0, action="Zoom to fit", notes=""),
+        env(key_indent=0, key="Shift+F", action_indent=0, action="Toggle fit cap at 100%", notes="No upscale"),
         env(key_indent=0, key="1", action_indent=0, action="Zoom to 1:1", notes=""),
         env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at cursor", notes=""),
         env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan image", notes=""),
