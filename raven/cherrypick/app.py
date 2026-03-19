@@ -246,6 +246,13 @@ def _load_current_image() -> None:
             # (e.g. variants of the same shot). Otherwise zoom to fit.
             if new_size != old_size:
                 iv.zoom_to_fit()
+
+            # If the preloaded mips are capped (missing larger levels),
+            # generate them in the background. Donated entries already
+            # have the full chain, so check before submitting.
+            has_fullres = any(s >= 1.0 for s, _w, _h, _f in cached.mips)
+            if not has_fullres:
+                iv.augment_mips(entry.path)
         else:
             # Cache miss — decode + mip generation on background thread.
             # zoom_to_fit handled inside load_from_file when dimensions

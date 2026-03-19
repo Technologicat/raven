@@ -91,6 +91,7 @@ PAN_AMOUNT = 30  # pixels per arrow keypress (at 1:1 zoom)
 # ---------------------------------------------------------------------------
 
 PRELOAD_WINDOW = 2  # ±N tiles in cross neighborhood (horizontal + vertical)
+PRELOAD_MAX_SCALE = 0.25  # cap speculative preload at this scale (skip larger mips)
 PRELOAD_RAM_FRACTION = 0.25  # fraction of available system RAM for preload cache
 PRELOAD_RAM_BUDGET_MIN_MB = 512  # floor (don't starve the cache on low-RAM systems)
 PRELOAD_RAM_BUDGET_MAX_MB = 16384  # ceiling (diminishing returns beyond this)

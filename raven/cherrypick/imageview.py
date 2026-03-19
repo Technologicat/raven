@@ -110,6 +110,12 @@ class ImageView:
             max_workers=1, thread_name_prefix="cherrypick_mip")
         self._mip_task_mgr = TaskManager("mip_loader", "sequential",
                                          self._mip_executor)
+        # Separate task group for augmenting a preloaded image with its
+        # full-res mip. Shares the executor but has independent cancellation:
+        # navigating away cancels the augment without disturbing set_image /
+        # load_from_file, and vice versa.
+        self._augment_task_mgr = TaskManager("mip_augment", "sequential",
+                                             self._mip_executor)
 
         # Interaction state.
         self.input_enabled: bool = True
@@ -148,7 +154,8 @@ class ImageView:
         happen in a background thread. The render loop shows the best
         available mip at each frame.
         """
-        # Cancel any in-progress mip loading.
+        # Cancel any in-progress mip loading (both full pipeline and augment).
+        self._augment_task_mgr.clear()
         self._mip_task_mgr.clear(wait=True)
 
         self._bridge_old_mips()
@@ -176,6 +183,7 @@ class ImageView:
         The old image remains visible (via the texture bridge) until the
         first new mip is ready — no blank flash.
         """
+        self._augment_task_mgr.clear()
         self._mip_task_mgr.clear(wait=True)
 
         self._bridge_old_mips()
@@ -193,6 +201,27 @@ class ImageView:
                        debug=self._debug)
         self._mip_task_mgr.submit(self._bg_file_mip_task, task_env)
 
+    def augment_mips(self, path: Union[pathlib.Path, str]) -> None:
+        """Generate missing (larger) mip levels and insert them into the live set.
+
+        Call after ``set_preloaded_arrays`` when the preload cache provided
+        capped mips (e.g. 0.25× max). Decodes the image, generates a full
+        mipchain, and inserts any levels not already present — typically the
+        1.0× and 0.5× levels.
+
+        The existing mips remain visible and usable throughout — no bridge,
+        no blank flash. Does NOT set ``mip_loading`` — the image is already
+        displayable. Donation (``take_mip_arrays``) works at any time,
+        yielding whatever mips are available.
+        """
+        self._augment_task_mgr.clear()
+        task_env = env(path=path,
+                       device=self._device,
+                       order=self._order,
+                       mip_min_size=self._mip_min_size,
+                       debug=self._debug)
+        self._augment_task_mgr.submit(self._bg_augment_task, task_env)
+
     def set_preloaded_arrays(self, mip_arrays: list[tuple[float, int, int, np.ndarray]],
                              img_w: int, img_h: int) -> None:
         """Display pre-computed mip arrays instantly (from preload cache).
@@ -205,6 +234,7 @@ class ImageView:
         mip generation entirely.
         """
         t0 = time.perf_counter_ns()
+        self._augment_task_mgr.clear()
         self._mip_task_mgr.clear(wait=True)
         t_clear = time.perf_counter_ns()
 
@@ -260,6 +290,7 @@ class ImageView:
 
     def clear(self) -> None:
         """Remove the current image."""
+        self._augment_task_mgr.clear()
         self._mip_task_mgr.clear(wait=True)
         self._clear_textures()
         self._mip_arrays = []
@@ -369,6 +400,7 @@ class ImageView:
 
     def destroy(self) -> None:
         """Remove DPG items and handlers. Call on app shutdown."""
+        self._augment_task_mgr.clear(wait=True)
         self._mip_task_mgr.clear(wait=True)
         self._mip_executor.shutdown(wait=True)
         self._clear_textures()
@@ -441,6 +473,88 @@ class ImageView:
 
         # Delegate to the standard mip pipeline.
         self._bg_mip_task(e)
+
+    def _bg_augment_task(self, e: env) -> None:
+        """Background thread: generate missing (larger) mip levels.
+
+        Decodes the image, generates a full mipchain, and inserts levels
+        not already present in ``_mips``. Processes from smallest new level
+        to largest (progressive sharpening). Safe to cancel at any point —
+        already-inserted mips remain valid.
+        """
+        t0 = time.perf_counter_ns()
+        try:
+            rgba = imageutils.decode_image(e.path)
+        except Exception as exc:
+            logger.warning("ImageView._bg_augment_task: decode failed for %s: %s",
+                           e.path, exc)
+            return
+        t_decode = time.perf_counter_ns() - t0
+
+        if e.cancelled:
+            return
+
+        # Upload + mipchain on GPU.
+        tensor = imageutils.np_to_tensor(rgba, e.device)
+        del rgba
+        mip_tensors = lanczos.lanczos_mipchain(tensor, min_size=e.mip_min_size,
+                                                order=e.order)
+
+        # Identify which scales are already present.
+        with self._mips_lock:
+            existing_scales = {s for s, _t in self._mips}
+
+        # Build list of missing levels (scale, tensor), largest-first.
+        scale = 1.0
+        missing = []
+        for mip_t in mip_tensors:
+            if scale not in existing_scales:
+                missing.append((scale, mip_t))
+            scale *= 0.5
+
+        del tensor, mip_tensors
+
+        if not missing:
+            return  # nothing to augment
+
+        # Create textures from smallest missing level to largest
+        # (progressive sharpening, same order as _bg_mip_task).
+        n_inserted = 0
+        for mip_scale, mip_t in reversed(missing):
+            if e.cancelled:
+                break
+            _, _, mh, mw = mip_t.shape
+            flat = imageutils.tensor_to_dpg_flat(mip_t)
+
+            if e.cancelled:
+                break
+            tex_tag = self._acquire_texture(mw, mh, flat)
+            dpg.split_frame()
+
+            if e.cancelled:
+                self._release_texture(tex_tag)
+                break
+
+            # Insert into _mips sorted (largest-first).
+            with self._mips_lock:
+                inserted = False
+                for i, (s, _t) in enumerate(self._mips):
+                    if mip_scale > s:
+                        self._mips.insert(i, (mip_scale, tex_tag))
+                        self._mip_arrays.insert(i, (mip_scale, mw, mh, flat))
+                        inserted = True
+                        break
+                if not inserted:
+                    self._mips.append((mip_scale, tex_tag))
+                    self._mip_arrays.append((mip_scale, mw, mh, flat))
+            self._needs_render = True
+            n_inserted += 1
+
+        if e.debug:
+            t_total = (time.perf_counter_ns() - t0) / 1e6
+            logger.info("ImageView._bg_augment_task: inserted %d levels, "
+                        "decode=%dms total=%dms",
+                        n_inserted, t_decode / 1e6, t_total)
 
     def _bg_mip_task(self, e: env) -> None:
         """Background thread: upload, generate mip chain, create DPG textures.

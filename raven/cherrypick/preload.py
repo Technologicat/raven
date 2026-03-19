@@ -92,12 +92,14 @@ class PreloadCache:
     def __init__(self, device: torch.device,
                  lanczos_order: int = lanczos.DEFAULT_ORDER,
                  mip_min_size: int = config.MIP_MIN_SIZE,
+                 max_scale: float = config.PRELOAD_MAX_SCALE,
                  ram_budget_mb: int = config.PRELOAD_RAM_BUDGET_FALLBACK_MB,
                  window: int = config.PRELOAD_WINDOW,
                  debug: bool = False):
         self._device = device
         self._order = lanczos_order
         self._mip_min_size = mip_min_size
+        self._max_scale = max_scale
         self._ram_budget = ram_budget_mb * 1024 * 1024  # bytes
         self._window = window
         self._debug = debug
@@ -206,6 +208,7 @@ class PreloadCache:
                                device=self._device,
                                order=self._order,
                                mip_min_size=self._mip_min_size,
+                               max_scale=self._max_scale,
                                debug=self._debug,
                                done_callback=self._on_task_done)
                 self._task_mgr.submit(_preload_one, task_env)
@@ -312,12 +315,17 @@ def _preload_one(e: env) -> None:
 
     # Convert to flat DPG-format arrays (GPU → CPU).
     # Build (scale, w, h, flat_array) list, largest-first.
+    # Skip mip levels above max_scale — full-res is generated on demand
+    # when the image is actually displayed (see ImageView.augment_fullres).
     scale = 1.0
     mips = []
     ram_bytes = 0
     for mip_t in mip_tensors:
         if e.cancelled:
             break
+        if scale > e.max_scale:
+            scale *= 0.5
+            continue
         _, _, mh, mw = mip_t.shape
         flat = imageutils.tensor_to_dpg_flat(mip_t)
         mips.append((scale, mw, mh, flat))
