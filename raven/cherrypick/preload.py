@@ -221,6 +221,20 @@ class PreloadCache:
                         f"loading={sorted(self._loading)} "
                         f"ram={self._ram_used / 1e6:.0f}MB")
 
+    def clear(self) -> None:
+        """Cancel all tasks and flush the cache.
+
+        Call when opening a new folder — stale entries keyed by index
+        from the old folder must not be served for the new one.
+        """
+        self._task_mgr.clear()
+        if self._device.type == "cuda":
+            torch.cuda.synchronize(self._device)
+        with self._lock:
+            self._cache.clear()
+            self._loading.clear()
+            self._ram_used = 0
+
     def cancel_pending(self) -> None:
         """Cancel all in-progress preload tasks (free GPU for current image).
 

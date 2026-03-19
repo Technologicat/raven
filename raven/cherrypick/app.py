@@ -203,6 +203,11 @@ def _open_folder(folder_path: str) -> None:
 
     logger.info("app._open_folder: %s", folder)
 
+    # Flush stale preload cache (indices from old folder must not be reused).
+    preload = _app_state["preload"]
+    if preload is not None:
+        preload.clear()
+
     # Triage manager.
     triage = TriageManager(folder)
     _app_state["triage"] = triage

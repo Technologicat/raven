@@ -166,8 +166,8 @@ Promising unexplored approaches:
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
 
-## raven-cherrypick: wrong image dimensions for preloaded images
+## raven-cherrypick: zoom-to-fit cap at 100%
 
-When navigating to a preloaded image, the status bar (and debug overlay) can report wrong pixel dimensions — e.g. 1344×768 for a 3373×661 PNG. The aspect ratio display is correct for the reported size, but the reported size is wrong. Likely `_img_w`/`_img_h` are set from the preloaded mip arrays (which are capped at `PRELOAD_MAX_SCALE`) instead of the original image dimensions.
+Zoom-to-fit currently upscales small images to fill the view, which looks blurry. Add a toggle to cap zoom-to-fit at 100% (1:1) — when enabled, small images are shown at actual size (centered) instead of upscaled. Needs a toolbar toggle button + hotkey.
 
 Discovered during raven-cherrypick session 6 (2026-03-20).
