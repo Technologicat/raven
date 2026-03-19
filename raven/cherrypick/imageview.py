@@ -260,7 +260,14 @@ class ImageView:
         self._img_w = img_w
         self._img_h = img_h
         self._mip_loading = False
-        self._needs_render = True
+
+        # Re-render immediately so draw items reference the new textures.
+        # Without this, the old draw items (from the previous _render call)
+        # may reference pooled textures whose data was just overwritten by
+        # _acquire_texture's set_value — causing a one-frame glitch when
+        # DPG renders the stale draw items with recycled texture data.
+        self._render()
+        self._needs_render = False
         t_done = time.perf_counter_ns()
 
         if self._debug:
@@ -714,12 +721,13 @@ class ImageView:
 
         # Debug overlay: pan/zoom coordinates.
         if self._debug:
+            mip_label = f"1/{1 / mip_scale:.0f}" if mip_scale > 0 else "?"
             item = dpg.draw_text((4, 4),
                                  f"pan=({self._pan_cx:.1f}, {self._pan_cy:.1f}) "
                                  f"zoom={self._zoom:.3f} "
                                  f"img={self._img_w}x{self._img_h} "
                                  f"fit={self._zoom_is_fit} "
-                                 f"mip={mip_scale:.3f} "
+                                 f"mip={mip_label} "
                                  f"mips={len(self._mips)}",
                                  color=(0, 255, 0, 200), size=config.FONT_SIZE,
                                  parent=self._drawlist_tag)
