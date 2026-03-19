@@ -13,6 +13,7 @@ if platform.system().upper() == "LINUX":
 
 import argparse
 import logging
+import math
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,38 @@ def _detect_preload_budget() -> int:
 # Status bar
 # ---------------------------------------------------------------------------
 
+# Common aspect ratios (wider:narrower, as floats for matching).
+_KNOWN_RATIOS = [
+    (21, 9),
+    (16, 9),
+    (16, 10),
+    (3, 2),
+    (4, 3),
+    (1, 1),
+]
+_RATIO_TOLERANCE = 0.02  # ±2%
+
+
+def _approx_aspect_ratio(w: int, h: int) -> str:
+    """Return a human-readable aspect ratio string for *w* × *h*.
+
+    Matches against common ratios within tolerance.  Always returns the
+    canonical form (wider:narrower), regardless of orientation.
+    Falls back to GCD-reduced exact ratio for unusual sizes.
+    """
+    if w <= 0 or h <= 0:
+        return ""
+    long = max(w, h)
+    short = min(w, h)
+    actual = long / short
+    for num, den in _KNOWN_RATIOS:
+        if abs(actual - num / den) <= _RATIO_TOLERANCE:
+            return f"{num}:{den}"
+    # Fallback: GCD-reduced exact ratio.
+    g = math.gcd(long, short)
+    return f"{long // g}:{short // g}"
+
+
 def _set_status(text: str) -> None:
     if _app_state["status_text"] is not None:
         dpg.set_value(_app_state["status_text"], text)
@@ -123,10 +156,11 @@ def _update_status() -> None:
                 name += f"  [{pos} / {grid.visible_count}]"
             parts.append(name)
 
-        # Image dimensions.
+        # Image dimensions and aspect ratio.
         if iv is not None and iv.has_image:
             w, h = iv.image_size
-            parts.append(f"{w}\u00d7{h}")
+            ratio = _approx_aspect_ratio(w, h)
+            parts.append(f"{w}\u00d7{h} ({ratio})" if ratio else f"{w}\u00d7{h}")
 
             # Zoom level.
             parts.append(f"Zoom: {iv.zoom * 100:.0f}%")

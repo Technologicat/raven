@@ -165,3 +165,9 @@ Promising unexplored approaches:
 - **Always bridge**: treat `set_preloaded_arrays` like `set_image` — show old image via the bridge for one frame, let natural `_render()` do the switch. One frame of old image is acceptable.
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
+
+## raven-cherrypick: wrong image dimensions for preloaded images
+
+When navigating to a preloaded image, the status bar (and debug overlay) can report wrong pixel dimensions — e.g. 1344×768 for a 3373×661 PNG. The aspect ratio display is correct for the reported size, but the reported size is wrong. Likely `_img_w`/`_img_h` are set from the preloaded mip arrays (which are capped at `PRELOAD_MAX_SCALE`) instead of the original image dimensions.
+
+Discovered during raven-cherrypick session 6 (2026-03-20).
