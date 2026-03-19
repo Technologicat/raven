@@ -133,6 +133,30 @@ class PreloadCache:
                                 f"remaining={self._vram_used / 1e6:.0f}MB")
             return entry
 
+    def donate(self, idx, mips, tex_sizes, img_w, img_h) -> None:
+        """Insert already-loaded mip textures into the cache.
+
+        Called when the user navigates away from a directly-loaded image
+        and the switch is instant (preload hit).  The outgoing image's
+        textures are donated rather than released to ImageView's pool,
+        so navigating back is also instant.
+        """
+        vram_bytes = sum(w * h * 16 for w, h in tex_sizes.values())
+        entry = _CacheEntry(idx=idx, img_w=img_w, img_h=img_h,
+                            mips=mips, tex_sizes=tex_sizes,
+                            vram_bytes=vram_bytes)
+        with self._lock:
+            # If already cached (e.g. preloader finished while we were displaying),
+            # delete the duplicate's textures.
+            if idx in self._cache:
+                self._evict(idx)
+            self._cache[idx] = entry
+            self._vram_used += vram_bytes
+        if self._debug:
+            logger.info(f"PreloadCache.donate: idx={idx} "
+                        f"vram={vram_bytes / 1e6:.0f}MB "
+                        f"total={self._vram_used / 1e6:.0f}MB")
+
     def schedule(self, current_idx, visible, n_cols, triage) -> None:
         """Recompute the preload window and start loading.
 

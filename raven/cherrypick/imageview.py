@@ -180,6 +180,21 @@ class ImageView:
                        debug=self._debug)
         self._mip_task_mgr.submit(self._bg_mip_task, task_env)
 
+    def take_mips(self) -> Optional[tuple[list, dict, int, int]]:
+        """Remove and return current mips, transferring ownership to caller.
+
+        Returns ``(mips, tex_sizes, img_w, img_h)`` or ``None`` if no image.
+        After this call, ImageView has no mips (caller owns the textures).
+        """
+        if not self.has_image or not self._mips:
+            return None
+        with self._mips_lock:
+            mips = list(self._mips)
+            tex_sizes = {tag: self._tex_sizes.pop(tag)
+                         for _s, tag in mips if tag in self._tex_sizes}
+            self._mips = []
+        return mips, tex_sizes, self._img_w, self._img_h
+
     def set_preloaded_mips(self, mips: list[tuple[float, int | str]],
                            tex_sizes: dict[int | str, tuple[int, int]],
                            img_w: int, img_h: int) -> None:

@@ -61,6 +61,7 @@ _filedialog_open = None
 _help_window = None
 _debug = False
 _preload_pending = False
+_prev_current_idx = -1
 
 # Validated at startup.
 _device = None
@@ -187,6 +188,13 @@ def _load_current_image() -> None:
         cached = preload.take(idx) if preload is not None else None
 
         if cached is not None:
+            # Donate the outgoing image's textures to the preload cache
+            # so navigating back is also instant.
+            if _prev_current_idx >= 0:
+                donated = iv.take_mips()
+                if donated is not None and preload is not None:
+                    preload.donate(_prev_current_idx, *donated)
+
             new_size = (cached.img_w, cached.img_h)
             iv.set_preloaded_mips(cached.mips, cached.tex_sizes,
                                   cached.img_w, cached.img_h)
@@ -296,7 +304,9 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
 
 def _on_current_changed(idx: int) -> None:
     """Called by the grid when the current tile changes."""
+    global _prev_current_idx
     _load_current_image()
+    _prev_current_idx = idx
 
 
 def _on_double_click(idx: int) -> None:
