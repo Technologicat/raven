@@ -56,6 +56,13 @@ IMAGE_VIEW_V_PADDING = (2 * DPG_WINDOW_PADDING_Y
 DEFAULT_TILE_SIZE = 128
 TILE_SIZES = [32, 64, 128, 256, 512]
 
+# Unique VHS noise placeholder tiles per grid tile size.
+# Scaled to ~2× visible tiles per screenful; memory stays bounded
+# because count × tile_area is roughly constant (~12 MB float32).
+PLACEHOLDER_POOL_SIZES = {32: 256, 64: 128, 128: 48, 256: 12, 512: 4}
+PLACEHOLDER_TINT = (0.92, 0.92, 1.0)  # subtle cool blue-gray
+PLACEHOLDER_BRIGHTNESS = (0.04, 0.40)  # (lo, hi) — keeps placeholders dark; wider range ≈ PAL VHS
+
 THUMBNAIL_BATCH_SIZE = 32  # images per GPU batch
 THUMBNAIL_VRAM_FRACTION = 0.5  # fraction of free VRAM to budget for thumbnails
 THUMBNAIL_VRAM_BUDGET_MAX_MB = 4096  # hard cap

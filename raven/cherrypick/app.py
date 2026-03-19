@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 import pathlib
 import time
+from typing import List
+
+import numpy as np
 
 from .. import __version__
 
@@ -39,6 +42,8 @@ from .loader import ThumbnailPipeline
 from .imageview import ImageView
 from .grid import ThumbnailGrid, FilterMode
 from .preload import PreloadCache
+from ..common.image.utils import tensor_to_dpg_flat
+from ..common.video import postprocessor
 
 from unpythonic.env import env
 
@@ -61,6 +66,7 @@ _help_window = None
 _debug = False
 _preload_pending = False
 _prev_current_idx = -1
+_noise_pool_pending_size = None  # deferred noise pool regeneration (tile size)
 
 # Validated at startup.
 _device = None
@@ -619,6 +625,19 @@ def _on_filter_combo(sender, app_data) -> None:
 # Tile size change
 # ---------------------------------------------------------------------------
 
+def _generate_noise_pool(tile_size: int) -> List[np.ndarray]:
+    """Generate VHS noise placeholder tiles for the thumbnail grid."""
+    n = config.PLACEHOLDER_POOL_SIZES[tile_size]  # KeyError → fail-fast for missing entry in config
+    tensors = postprocessor.vhs_noise_pool(
+        n,
+        tile_size, tile_size,
+        device=_device, dtype=_dtype,
+        tint=config.PLACEHOLDER_TINT,
+        brightness=config.PLACEHOLDER_BRIGHTNESS,
+    )
+    return [tensor_to_dpg_flat(t.unsqueeze(0)) for t in tensors]
+
+
 def _change_tile_size(new_size: int) -> None:
     """Change the grid tile size and restart the thumbnail pipeline."""
     grid = _app_state["grid"]
@@ -630,6 +649,9 @@ def _change_tile_size(new_size: int) -> None:
         return  # no-op
 
     grid.set_tile_size(new_size)
+    # Defer noise pool generation to the main loop (outside render callback).
+    global _noise_pool_pending_size
+    _noise_pool_pending_size = new_size
 
     # Sync the combobox.
     dpg.set_value("cherrypick_tile_size_combo", str(new_size))
@@ -916,6 +938,7 @@ def main() -> int:
                 debug=_debug,
             )
             _app_state["grid"] = grid
+            grid.set_noise_pool(_generate_noise_pool(args.tile_size))
 
         # Status bar.
         _app_state["status_text"] = dpg.add_text("Ready")
@@ -1020,6 +1043,12 @@ def main() -> int:
             if pipeline is not None and grid is not None:
                 for idx, flat_rgba in pipeline.poll():
                     grid.set_thumbnail(idx, flat_rgba)
+
+            # Deferred noise pool generation (set by _change_tile_size callback).
+            global _noise_pool_pending_size
+            if _noise_pool_pending_size is not None and grid is not None:
+                grid.set_noise_pool(_generate_noise_pool(_noise_pool_pending_size))
+                _noise_pool_pending_size = None
 
             # Update components.
             iv = _app_state["image_view"]

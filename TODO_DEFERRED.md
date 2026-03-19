@@ -103,13 +103,11 @@ Could refactor as classes (cleaner than the current FP closures for stateful DPG
 
 Discovered during raven-cherrypick test drive.
 
-## VHS noise loading placeholder
+## ThumbnailGrid thread safety
 
-When switching images, the texture briefly shows a stride-mismatch glitch. For PNGs (fast decode) this looks like a brief cyberpunk glitch; for large JPEGs it lingers and looks broken. Idea: intentionally fill the texture with VHS-style noise as a loading placeholder, wait one frame for it to stabilize, then swap in the real data. The noise reads as "loading" rather than "broken."
+`raven/cherrypick/grid.py` — not currently thread-safe. All callers happen to be on the main thread (background threads interact via queues). If background threads ever need to call grid methods directly, add locking.
 
-The video postprocessor (`raven/common/video/postprocessor.py`) already has VHS noise generation code (grain, horizontal bands). Extract a `generate_noise_frame(width, height, style="vhs")` utility into `raven/common/image/` or `raven/common/video/` for reuse.
-
-Discovered during raven-cherrypick test drive.
+Discovered during VHS noise placeholder implementation.
 
 ## Faster PNG decoder
 

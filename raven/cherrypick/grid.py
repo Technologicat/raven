@@ -12,8 +12,9 @@ __all__ = ["ThumbnailGrid", "FilterMode"]
 
 import logging
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
+import numpy as np
 import dearpygui.dearpygui as dpg
 
 from ..common.gui import utils as guiutils
@@ -54,7 +55,10 @@ class ThumbnailGrid:
     loop must call `update` every frame.
 
     Thumbnails arrive asynchronously via `set_thumbnail`.  Tiles show a
-    placeholder until their thumbnail is ready.
+    VHS noise placeholder until their thumbnail is ready.
+
+    Not currently thread-safe; all callers happen to be on the main thread.
+    Background threads interact only via queues (see `ThumbnailPipeline`).
     """
 
     def __init__(self, parent: str | int,
@@ -98,6 +102,9 @@ class ThumbnailGrid:
 
         # DPG textures for thumbnails.  idx -> texture tag.
         self._textures: dict[int, str] = {}
+
+        # VHS noise placeholder textures (shared pool).
+        self._noise_textures: list[str] = []
 
         # Layout state.
         self._n_cols: int = 1
@@ -152,8 +159,12 @@ class ThumbnailGrid:
 
         *flat_rgba*: flat float32 array (tile_size * tile_size * 4).
         Creates or updates the DPG texture, then redraws the tile if visible.
+        Stale thumbnails from a previous tile size are silently discarded.
         """
         ts = self._tile_size
+        expected = ts * ts * 4
+        if len(flat_rgba) != expected:
+            return  # stale thumbnail from previous tile size — discard
         if idx in self._textures:
             dpg.set_value(self._textures[idx], flat_rgba)
         else:
@@ -171,10 +182,32 @@ class ThumbnailGrid:
                 self._draw_tile(idx, self._tile_drawlists[vis_pos])
 
     def set_tile_size(self, size: int) -> None:
-        """Change the tile size.  Clears all textures (caller must restart pipeline)."""
+        """Change the tile size.  Clears all textures (caller must restart pipeline).
+
+        Also clears noise pool textures — caller should call
+        `set_noise_pool` with new tiles matching the new size.
+        """
         self._tile_size = size
         self._clear_textures()
+        self._clear_noise_pool()
         self._needs_rebuild = True
+
+    def set_noise_pool(self, tiles: List[np.ndarray]) -> None:
+        """Set VHS noise placeholder textures from DPG-flat float32 arrays.
+
+        Each entry must be a flat array of ``tile_size * tile_size * 4`` floats.
+        Old noise textures are deleted immediately.
+
+        Generate tiles with `raven.common.video.postprocessor.vhs_noise_pool`.
+        """
+        self._clear_noise_pool()
+        ts = self._tile_size
+        for flat in tiles:
+            tag = _next_tag("noise_tex")
+            with dpg.texture_registry():
+                dpg.add_dynamic_texture(ts, ts, default_value=flat, tag=tag)
+            self._noise_textures.append(tag)
+        logger.info("ThumbnailGrid.set_noise_pool: %d tiles loaded", len(tiles))
 
     def set_filter(self, mode: FilterMode) -> None:
         """Set the active filter (which triage states to show)."""
@@ -344,6 +377,7 @@ class ThumbnailGrid:
     def destroy(self) -> None:
         """Remove all DPG items.  Call on app shutdown."""
         self._clear_textures()
+        self._clear_noise_pool()
         dpg.delete_item(self._handler_tag)
         dpg.delete_item(self._child_window_tag)
 
@@ -354,11 +388,14 @@ class ThumbnailGrid:
     def _clear_textures(self) -> None:
         """Delete all thumbnail DPG textures."""
         for tex_tag in self._textures.values():
-            try:
-                dpg.delete_item(tex_tag)
-            except Exception:
-                pass
+            guiutils.maybe_delete_item(tex_tag)
         self._textures.clear()
+
+    def _clear_noise_pool(self) -> None:
+        """Delete all VHS noise placeholder textures."""
+        for tex_tag in self._noise_textures:
+            guiutils.maybe_delete_item(tex_tag)
+        self._noise_textures.clear()
 
     # ------------------------------------------------------------------
     # Internal: layout
@@ -431,9 +468,13 @@ class ThumbnailGrid:
         dpg.delete_item(drawlist_tag, children_only=True)
         ts = self._tile_size
 
-        # Thumbnail image (or placeholder).
+        # Thumbnail image (or VHS noise placeholder).
         if idx in self._textures:
             dpg.draw_image(self._textures[idx],
+                           pmin=(0, 0), pmax=(ts, ts),
+                           parent=drawlist_tag)
+        elif self._noise_textures:
+            dpg.draw_image(self._noise_textures[idx % len(self._noise_textures)],
                            pmin=(0, 0), pmax=(ts, ts),
                            parent=drawlist_tag)
         else:

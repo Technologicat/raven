@@ -2,10 +2,12 @@
 
 These effects work in linear intensity space, before gamma correction.
 
-This module is licensed under the 2-clause BSD license.
+This module was originally released under AGPL in SillyTavern-Extras.
+This module is relicensed by its author (Juha Jeronen) under the
+2-clause BSD license.
 """
 
-__all__ = ["Postprocessor"]
+__all__ = ["Postprocessor", "vhs_noise", "vhs_noise_pool"]
 
 from collections import defaultdict
 from functools import wraps
@@ -33,6 +35,60 @@ Atom = Union[str, bool, int, float]
 MaybeContained = Union[T, List[T], Dict[str, T]]
 
 VHS_GLITCH_BLANK = object()  # nonce value, see `analog_vhsglitches`
+
+
+# ---------------------------------------------------------------------------
+# VHS noise — public API
+# ---------------------------------------------------------------------------
+
+def vhs_noise(width: int, height: int, *,
+              device: torch.device,
+              dtype: torch.dtype = torch.float32) -> torch.Tensor:
+    """Generate monochrome VHS noise.
+
+    Returns a ``[1, height, width]`` tensor in [0, 1]. The noise has
+    horizontally correlated runs (Gaussian blur, sigma 2.0, kernel 5×1)
+    that mimic the helical-scan artifacts of analogue tape.
+
+    This is the single source of truth for the VHS noise recipe used
+    across Raven — the postprocessor's glitch/tracking filters and the
+    cherrypick placeholder tiles all derive from this.
+    """
+    noise = torch.rand(height, width, device=device, dtype=dtype).unsqueeze(0)  # [1, H, W]
+    # Horizontal-only blur: kernel (5, 1) gives smooth runs along x,
+    # sharp transitions along y — the signature VHS look.
+    noise = torchvision.transforms.GaussianBlur((5, 1), sigma=2.0)(noise)
+    return noise
+
+
+def vhs_noise_pool(n: int, width: int, height: int, *,
+                   device: torch.device,
+                   dtype: torch.dtype = torch.float32,
+                   tint: Tuple[float, float, float] = (0.92, 0.92, 1.0),
+                   brightness: Tuple[float, float] = (0.04, 0.40)) -> List[torch.Tensor]:
+    """Generate *n* unique tinted VHS noise tiles.
+
+    Each tile is a ``[4, height, width]`` RGBA tensor in [0, 1], suitable
+    for conversion to DPG texture format at the call site.
+
+    `tint`: per-channel multiplier (R, G, B) applied to the brightness.
+            Default is a subtle cool blue-gray.
+    `brightness`: (lo, hi) range that the raw [0, 1] noise is mapped to.
+                  Lower values keep the placeholders dark and subdued.
+    """
+    lo, hi = brightness
+    tr, tg, tb = tint
+    tiles: List[torch.Tensor] = []
+    for _ in range(n):
+        noise = vhs_noise(width, height, device=device, dtype=dtype).squeeze(0)  # [H, W]
+        luma = lo + (hi - lo) * noise
+        r = luma * tr
+        g = luma * tg
+        b = luma * tb
+        a = torch.ones_like(luma)
+        rgba = torch.stack([r, g, b, a], dim=0).clamp(0.0, 1.0)  # [4, H, W]
+        tiles.append(rgba)
+    return tiles
 
 # --------------------------------------------------------------------------------
 # Advanced tonemapper HDR -> LDR.
@@ -866,18 +922,14 @@ class Postprocessor:
 
     def _vhs_noise(self, image: torch.tensor, *,
                    height: int) -> torch.tensor:
-        """Generate a horizontal band of noise that looks as if it came from a blank VHS tape.
+        """Generate a horizontal band of VHS noise matching `image` width.
 
-        `height`: desired height of noise band, in pixels.
+        Custom `height`, in pixels.
 
-        Output is a tensor of shape `[1, height, w]`, where `w` is the width of `image`.
+        Thin wrapper around the module-level `vhs_noise` function, which see.
         """
         c, h, w = image.shape
-        # This looks best if we randomize the alpha channel, too.
-        noise_image = torch.rand(height, w, device=self.device, dtype=image.dtype).unsqueeze(0)  # [1, h, w]
-        # Real VHS noise has horizontal runs of the same color, and the transitions between black and white are smooth.
-        noise_image = torchvision.transforms.GaussianBlur((5, 1), sigma=2.0)(noise_image)
-        return noise_image
+        return vhs_noise(w, height, device=self.device, dtype=image.dtype)
 
     @with_metadata(strength=[0.1, 0.9],
                    unboost=[0.1, 10.0],
