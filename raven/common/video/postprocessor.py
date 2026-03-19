@@ -928,7 +928,7 @@ class Postprocessor:
 
         Thin wrapper around the module-level `vhs_noise` function, which see.
         """
-        # PAL VHS noise is monochrome, and the effect looks best when the alpha channel gets the noise, too, so we return a [1, h, w].
+        # PAL VHS noise is monochrome, so we return a [1, h, w].
         c, h, w = image.shape
         return vhs_noise(w, height, device=self.device, dtype=image.dtype)
 
