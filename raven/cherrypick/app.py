@@ -201,7 +201,7 @@ def _open_folder(folder_path: str) -> None:
         _set_status(f"Not a directory: {folder}")
         return
 
-    logger.info("app._open_folder: %s", folder)
+    logger.info("_open_folder: %s", folder)
 
     # Flush stale preload cache (indices from old folder must not be reused).
     preload = _app_state["preload"]
@@ -283,7 +283,7 @@ def _load_current_image() -> None:
             t_set_mips = time.perf_counter_ns()
 
             if _debug:
-                logger.info(f"app._load_current_image: {entry.filename} "
+                logger.info(f"_load_current_image: {entry.filename} "
                             f"PRELOADED cancel={(t_cancel - t_nav_start) / 1e6:.1f}ms "
                             f"take={(t_take - t_cancel) / 1e6:.1f}ms "
                             f"donate={(t_donated - t_cached_start) / 1e6:.1f}ms "
@@ -309,11 +309,11 @@ def _load_current_image() -> None:
             iv.load_from_file(entry.path, old_size=old_size)
 
             if _debug:
-                logger.info("app._load_current_image: %s MISS — "
+                logger.info("_load_current_image: %s MISS — "
                             "queued background decode+mip", entry.filename)
 
     except Exception as exc:
-        logger.warning("app._load_current_image: failed to load %s: %s",
+        logger.warning("_load_current_image: failed to load %s: %s",
                        entry.filename, exc)
         iv.clear()
 
@@ -370,7 +370,7 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
         indices = [grid.current] if grid.current >= 0 else []
     valid = [i for i in indices if 0 <= i < len(triage)]
     if len(valid) < len(indices):
-        logger.warning("app._mark_triage: %d out-of-range indices dropped (grid/triage desync?)",
+        logger.warning("_mark_triage: %d out-of-range indices dropped (grid/triage desync?)",
                        len(indices) - len(valid))
     if not valid:
         return
@@ -378,7 +378,7 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
 
     errors = triage.set_state(indices, state)
     for err in errors:
-        logger.warning("app._mark_triage: %s", err)
+        logger.warning("_mark_triage: %s", err)
 
     # Update grid tiles.
     for idx in indices:
@@ -490,7 +490,7 @@ def _on_key(sender, app_data) -> None:
                 iv._needs_render = True
             if grid is not None:
                 grid._debug = _debug
-            logger.info(f"app._on_key: debug mode {'ON' if _debug else 'OFF'}")
+            logger.info(f"_on_key: debug mode {'ON' if _debug else 'OFF'}")
         elif key == dpg.mvKey_R:
             dpg.show_item_registry()
         elif key == dpg.mvKey_T:
