@@ -235,6 +235,16 @@ class ThumbnailGrid:
         """Number of images visible under the current filter."""
         return len(self._visible)
 
+    @property
+    def visible(self) -> list[int]:
+        """List of image indices visible under the current filter."""
+        return list(self._visible)
+
+    @property
+    def n_cols(self) -> int:
+        """Number of columns in the current grid layout."""
+        return self._n_cols
+
     # ------------------------------------------------------------------
     # Navigation
     # ------------------------------------------------------------------

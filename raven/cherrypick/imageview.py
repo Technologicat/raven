@@ -180,6 +180,41 @@ class ImageView:
                        debug=self._debug)
         self._mip_task_mgr.submit(self._bg_mip_task, task_env)
 
+    def set_preloaded_mips(self, mips: list[tuple[float, int | str]],
+                           tex_sizes: dict[int | str, tuple[int, int]],
+                           img_w: int, img_h: int) -> None:
+        """Display pre-built mip textures instantly (from preload cache).
+
+        *mips*: list of ``(scale, dpg_texture_tag)``, largest-first.
+        *tex_sizes*: ``{tex_tag: (width, height)}`` for each texture.
+        *img_w*, *img_h*: original image dimensions.
+
+        Skips background mip generation entirely. The caller transfers
+        texture ownership — ImageView will release these to its pool
+        when done.
+        """
+        self._mip_task_mgr.clear(wait=True)
+
+        with self._mips_lock:
+            if self._mips:
+                for _s, old_tag in self._old_mips:
+                    self._release_texture(old_tag)
+                self._old_mips = list(self._mips)
+                self._old_img_w = self._img_w
+                self._old_img_h = self._img_h
+                self._old_zoom = self._zoom
+                self._old_pan_cx = self._pan_cx
+                self._old_pan_cy = self._pan_cy
+            self._mips = list(mips)
+
+        # Adopt the textures into our size tracking (so _release_texture works).
+        self._tex_sizes.update(tex_sizes)
+
+        self._img_w = img_w
+        self._img_h = img_h
+        self._mip_loading = False
+        self._needs_render = True
+
     def clear(self) -> None:
         """Remove the current image."""
         self._mip_task_mgr.clear(wait=True)
@@ -344,6 +379,8 @@ class ImageView:
             flat = imageutils.tensor_to_dpg_flat(mip_t)
             t_xfer = time.perf_counter_ns() - t0
 
+            if e.cancelled:
+                break
             t0 = time.perf_counter_ns()
             tex_tag = self._acquire_texture(mw, mh, flat)
             t_tex = time.perf_counter_ns() - t0
@@ -352,6 +389,8 @@ class ImageView:
             # tries to use it. Eliminates flicker from half-uploaded textures.
             # (split_frame is safe from background threads; it waits for the
             # main thread's render loop to complete one frame.)
+            if e.cancelled:
+                break
             dpg.split_frame()
 
             # Insert into _mips sorted (largest-first).

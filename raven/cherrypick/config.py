@@ -90,7 +90,8 @@ PAN_AMOUNT = 30  # pixels per arrow keypress (at 1:1 zoom)
 # Preload
 # ---------------------------------------------------------------------------
 
-PRELOAD_WINDOW = 3  # ±N images around current
+PRELOAD_WINDOW = 2  # ±N tiles in cross neighborhood (horizontal + vertical)
+PRELOAD_VRAM_BUDGET_MB = 1500  # max VRAM for preloaded mip textures
 
 # ---------------------------------------------------------------------------
 # Mipmaps

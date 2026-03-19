@@ -39,6 +39,7 @@ from .triage import TriageState, TriageManager
 from .loader import ThumbnailPipeline
 from .imageview import ImageView
 from .grid import ThumbnailGrid, FilterMode
+from .preload import PreloadCache
 
 from unpythonic.env import env
 
@@ -51,6 +52,7 @@ _app_state = {
     "grid": None,
     "triage": None,
     "pipeline": None,
+    "preload": None,
     "status_text": None,
     "themes_and_fonts": None,
 }
@@ -58,6 +60,7 @@ _app_state = {
 _filedialog_open = None
 _help_window = None
 _debug = False
+_preload_pending = False
 
 # Validated at startup.
 _device = None
@@ -160,9 +163,11 @@ def _open_folder(folder_path: str) -> None:
 
 def _load_current_image() -> None:
     """Load the current grid image into the image viewer."""
+    global _preload_pending
     grid = _app_state["grid"]
     triage = _app_state["triage"]
     iv = _app_state["image_view"]
+    preload = _app_state["preload"]
     if grid is None or triage is None or iv is None:
         return
     idx = grid.current
@@ -170,34 +175,52 @@ def _load_current_image() -> None:
         iv.clear()
         return
 
+    # Cancel preload tasks — free GPU for the current image.
+    if preload is not None:
+        preload.cancel_pending()
+
     entry = triage[idx]
     try:
         old_size = iv.image_size
 
-        t0 = time.perf_counter_ns()
-        rgba = imageutils.decode_image(entry.path)
-        t_decode = time.perf_counter_ns() - t0
+        # Try preload cache first.
+        cached = preload.take(idx) if preload is not None else None
 
-        new_size = (rgba.shape[1], rgba.shape[0])  # (W, H)
+        if cached is not None:
+            new_size = (cached.img_w, cached.img_h)
+            iv.set_preloaded_mips(cached.mips, cached.tex_sizes,
+                                  cached.img_w, cached.img_h)
+            if _debug:
+                logger.info(f"app._load_current_image: {entry.filename} "
+                            f"PRELOADED (instant)")
+        else:
+            t0 = time.perf_counter_ns()
+            rgba = imageutils.decode_image(entry.path)
+            t_decode = time.perf_counter_ns() - t0
 
-        t1 = time.perf_counter_ns()
-        iv.set_image(rgba)
-        t_mip = time.perf_counter_ns() - t1
+            new_size = (rgba.shape[1], rgba.shape[0])  # (W, H)
+
+            t1 = time.perf_counter_ns()
+            iv.set_image(rgba)
+            t_mip = time.perf_counter_ns() - t1
+
+            if _debug:
+                logger.info(f"app._load_current_image: {entry.filename} "
+                            f"decode={t_decode / 1e6:.0f}ms "
+                            f"mip={t_mip / 1e6:.0f}ms "
+                            f"total={(t_decode + t_mip) / 1e6:.0f}ms")
 
         # Keep zoom/pan when switching between same-size images (e.g. variants
         # of the same shot). Otherwise zoom to fit.
         if new_size != old_size:
             iv.zoom_to_fit()
 
-        if _debug:
-            logger.info(f"app._load_current_image: {entry.filename} "
-                        f"decode={t_decode / 1e6:.0f}ms "
-                        f"mip={t_mip / 1e6:.0f}ms "
-                        f"total={(t_decode + t_mip) / 1e6:.0f}ms")
     except Exception as exc:
         logger.warning("app._load_current_image: failed to load %s: %s",
                        entry.filename, exc)
         iv.clear()
+
+    _preload_pending = True
     _update_status()
 
 
@@ -528,6 +551,9 @@ def _set_filter(mode: FilterMode) -> None:
         return
     grid.set_filter(mode)
     dpg.set_value("cherrypick_filter_combo", _FILTER_LABELS[mode])
+    # Reschedule preloading — visible list changed.
+    global _preload_pending
+    _preload_pending = True
     _update_status()
 
 
@@ -569,9 +595,31 @@ def _change_tile_size(new_size: int) -> None:
 # Shutdown
 # ---------------------------------------------------------------------------
 
+def _gui_cancel_tasks() -> None:
+    """Exit callback: cancel background tasks without waiting.
+
+    Called from inside ``render_dearpygui_frame``.  Must NOT wait — that
+    would deadlock (the frame can't complete while we're waiting, and
+    ``split_frame`` waiters need the frame to complete).
+
+    The frame that triggers this callback unblocks ``split_frame`` waiters.
+    Background threads then see ``cancelled`` and exit.  The actual wait
+    and cleanup happen after the render loop exits (see end of ``main``).
+    """
+    preload = _app_state["preload"]
+    if preload is not None:
+        preload.cancel_pending()
+    iv = _app_state["image_view"]
+    if iv is not None:
+        iv._mip_task_mgr.clear(wait=False)
+
+
 def _gui_shutdown() -> None:
-    """Clean up on app exit."""
+    """Full cleanup — call after the render loop has exited."""
     gui_animation.animator.clear()
+    preload = _app_state["preload"]
+    if preload is not None:
+        preload.shutdown()
     pipeline = _app_state["pipeline"]
     if pipeline is not None:
         pipeline.shutdown()
@@ -655,6 +703,14 @@ def main() -> int:
                                  tile_size=args.tile_size,
                                  lanczos_order=config.THUMBNAIL_LANCZOS_ORDER)
     _app_state["pipeline"] = pipeline
+
+    # --- Preload cache ---
+    _app_state["preload"] = PreloadCache(
+        device=_device,
+        lanczos_order=config.THUMBNAIL_LANCZOS_ORDER,
+        mip_min_size=config.MIP_MIN_SIZE,
+        debug=_debug,
+    )
 
     # --- Build GUI ---
     with dpg.window(tag="cherrypick_main_window"):
@@ -884,7 +940,7 @@ def main() -> int:
     # --- Start app ---
     dpg.set_primary_window("cherrypick_main_window", True)
     dpg.set_viewport_resize_callback(_resize_gui)
-    dpg.set_exit_callback(_gui_shutdown)
+    dpg.set_exit_callback(_gui_cancel_tasks)
     dpg.show_viewport()
 
     # Open folder from CLI argument.
@@ -916,11 +972,26 @@ def main() -> int:
             if grid is not None:
                 grid.update()
 
+            # Trigger preloading once the current image finishes loading.
+            global _preload_pending
+            preload = _app_state["preload"]
+            triage = _app_state["triage"]
+            if (_preload_pending and preload is not None
+                    and iv is not None and not iv.mip_loading
+                    and grid is not None and triage is not None):
+                _preload_pending = False
+                preload.schedule(grid.current, grid.visible,
+                                 grid.n_cols, triage)
+
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()
     except KeyboardInterrupt:
         pass
 
+    # The exit callback cancelled tasks without waiting.  The last
+    # render_dearpygui_frame() unblocked any split_frame() waiters.
+    # Now it's safe to wait for threads and clean up.
+    _gui_shutdown()
     dpg.destroy_context()
     return 0
 
