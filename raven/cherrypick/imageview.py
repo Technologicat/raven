@@ -98,6 +98,11 @@ class ImageView:
         self._mip_loading = False  # True while background mip task is running
         self._mips_lock = threading.Lock()
 
+        # Texture pool: reuse textures across same-size images via set_value
+        # instead of creating/deleting (avoids DPG OpenGL glitches).
+        self._tex_pool: dict[tuple[int, int], list[int | str]] = {}
+        self._tex_sizes: dict[int | str, tuple[int, int]] = {}  # tag → (w, h)
+
         # Background mip loading.
         self._mip_executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="cherrypick_mip")
@@ -154,10 +159,7 @@ class ImageView:
         with self._mips_lock:
             if self._mips:
                 for _s, old_tag in self._old_mips:
-                    try:
-                        dpg.delete_item(old_tag)
-                    except Exception:
-                        pass
+                    self._release_texture(old_tag)
                 self._old_mips = list(self._mips)
                 self._old_img_w = self._img_w
                 self._old_img_h = self._img_h
@@ -343,11 +345,7 @@ class ImageView:
             t_xfer = time.perf_counter_ns() - t0
 
             t0 = time.perf_counter_ns()
-            tex_tag = _next_tag("mip")
-            with dpg.texture_registry():
-                dpg.add_dynamic_texture(mw, mh,
-                                        default_value=flat,
-                                        tag=tex_tag)
+            tex_tag = self._acquire_texture(mw, mh, flat)
             t_tex = time.perf_counter_ns() - t0
 
             # Wait for DPG to process the texture before the render loop
@@ -367,14 +365,11 @@ class ImageView:
                 if not inserted:
                     self._mips.append((mip_scale, tex_tag))
 
-            # Clean up old textures once we have something new to show.
+            # Release old textures to pool once we have something new to show.
             if self._old_mips:
                 with self._mips_lock:
                     for _s, old_tag in self._old_mips:
-                        try:
-                            dpg.delete_item(old_tag)
-                        except Exception:
-                            pass
+                        self._release_texture(old_tag)
                     self._old_mips.clear()
 
             # Trigger a render for every new mip (progressive sharpening).
@@ -523,8 +518,35 @@ class ImageView:
     # Internal: texture management
     # ------------------------------------------------------------------
 
+    def _acquire_texture(self, w: int, h: int, flat) -> str:
+        """Get a DPG texture of size ``(w, h)``, reusing from pool if possible.
+
+        If a matching texture exists in the pool, updates its data via
+        ``set_value`` (fast, no OpenGL texture creation).  Otherwise creates
+        a new ``dynamic_texture``.
+        """
+        key = (w, h)
+        pool = self._tex_pool.get(key)
+        if pool:
+            tex_tag = pool.pop()
+            dpg.set_value(tex_tag, flat)
+            return tex_tag
+        tex_tag = _next_tag("mip")
+        with dpg.texture_registry():
+            dpg.add_dynamic_texture(w, h,
+                                    default_value=flat,
+                                    tag=tex_tag)
+        self._tex_sizes[tex_tag] = key
+        return tex_tag
+
+    def _release_texture(self, tex_tag) -> None:
+        """Return a texture to the pool for reuse."""
+        size = self._tex_sizes.get(tex_tag)
+        if size is not None:
+            self._tex_pool.setdefault(size, []).append(tex_tag)
+
     def _clear_textures(self) -> None:
-        """Delete all mip DPG textures (current and old)."""
+        """Delete all mip DPG textures (current, old, and pooled)."""
         with self._mips_lock:
             for mip_list in (self._mips, self._old_mips):
                 for _scale, tex_tag in mip_list:
@@ -532,7 +554,16 @@ class ImageView:
                         dpg.delete_item(tex_tag)
                     except Exception:
                         pass
+                    self._tex_sizes.pop(tex_tag, None)
                 mip_list.clear()
+        for pool_list in self._tex_pool.values():
+            for tex_tag in pool_list:
+                try:
+                    dpg.delete_item(tex_tag)
+                except Exception:
+                    pass
+                self._tex_sizes.pop(tex_tag, None)
+        self._tex_pool.clear()
 
     # ------------------------------------------------------------------
     # Internal: zoom helpers
