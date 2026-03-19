@@ -329,7 +329,7 @@ class nonexistent_ok:
 
 def maybe_delete_item(item: Union[str, int]) -> None:
     """Delete `item` (DPG ID or tag), if it exists. If not, the error is ignored."""
-    logger.info(f"maybe_delete_item: Deleting old GUI item '{item}', if it exists.")
+    logger.debug(f"maybe_delete_item: Deleting old GUI item '{item}', if it exists.")
     with nonexistent_ok():
         dpg.delete_item(item)
 
