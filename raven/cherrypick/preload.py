@@ -184,10 +184,10 @@ class PreloadCache:
             # Evict furthest-from-current first, but only entries
             # NOT in the new target set (keeps recently visited images
             # cached even if they've scrolled out of the cross neighborhood).
+            # Sorted nearest-first so pop() yields furthest.
             evict_candidates = sorted(
                 (idx for idx in self._cache if idx not in target_indices),
                 key=lambda idx: abs(idx - current_idx),
-                reverse=True,  # furthest first
             )
 
             # Submit tasks for targets not yet cached or loading.
@@ -242,15 +242,25 @@ class PreloadCache:
         with self._lock:
             self._loading.discard(e.idx)
             if e.cancelled:
-                return  # no DPG textures to clean up
+                return  # nothing to clean up
             if not hasattr(e, "result") or e.result is None:
                 return  # task failed
             entry = e.result
-            # Check budget — might have been exceeded while we were loading.
+            # Evict distant entries to make room. A fresh neighbor is more
+            # valuable than a stale entry from a previous browsing position.
+            # Sorted nearest-to-entry first so pop() yields furthest.
+            if self._ram_used + entry.ram_bytes > self._ram_budget:
+                evict_candidates = sorted(
+                    (idx for idx in self._cache if idx != entry.idx),
+                    key=lambda idx: abs(idx - entry.idx),
+                )
+                while (self._ram_used + entry.ram_bytes > self._ram_budget
+                       and evict_candidates):
+                    self._evict(evict_candidates.pop())
             if self._ram_used + entry.ram_bytes > self._ram_budget:
                 if self._debug:
                     logger.info(f"PreloadCache._on_task_done: idx={entry.idx} "
-                                f"dropped (budget exceeded)")
+                                f"dropped (budget exceeded, nothing to evict)")
                 return
             self._cache[entry.idx] = entry
             self._ram_used += entry.ram_bytes
