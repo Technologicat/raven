@@ -130,10 +130,31 @@ class ImageView:
         # the old batch.  The drawlist is never empty, eliminating blank flashes.
         self._drawn_items: list[int | str] = []
 
-        # Create DPG drawlist.
+        # Create DPG drawlist inside a wrapper child_window (for spinner overlay).
+        # child_window has fixed height, so the spinner doesn't affect layout
+        # of siblings (e.g. the status bar) when shown/hidden.
+        self._wrapper_tag = _next_tag("wrapper")
+        dpg.add_child_window(parent=parent, tag=self._wrapper_tag,
+                             width=width, height=height,
+                             border=False, no_scrollbar=True)
         self._drawlist_tag = _next_tag("drawlist")
         dpg.add_drawlist(width=width, height=height,
-                         parent=parent, tag=self._drawlist_tag)
+                         parent=self._wrapper_tag, tag=self._drawlist_tag)
+
+        # Loading spinner — overlaid on bottom-left of the drawlist.
+        # Positioned via `pos` to float over the drawlist content.
+        self._spinner_tag = _next_tag("spinner")
+        self._spinner_radius = 2.0
+        self._spinner_h = 0  # measured after first render
+        self._spinner_needs_measure = False
+        spinner_y = max(0, height - 32)  # initial estimate; refined on first show
+        dpg.add_loading_indicator(style=0, radius=self._spinner_radius,
+                                  color=(96, 96, 255, 255),
+                                  secondary_color=(32, 32, 128, 255),
+                                  parent=self._wrapper_tag,
+                                  tag=self._spinner_tag,
+                                  pos=(8, spinner_y),
+                                  show=False)
 
         # Register mouse handlers.
         self._handler_tag = _next_tag("handlers")
@@ -163,7 +184,7 @@ class ImageView:
         self._bridge_old_mips()
 
         self._img_h, self._img_w = rgba.shape[:2]
-        self._mip_loading = True
+        self._set_mip_loading(True)
         self._needs_render = True
 
         # Start background mip generation.
@@ -193,7 +214,7 @@ class ImageView:
 
         # Don't clear _img_w/_img_h — the old-texture bridge render path
         # uses _old_img_w/h, and these fields get overwritten after decode.
-        self._mip_loading = True
+        self._set_mip_loading(True)
         self._needs_render = True
 
         task_env = env(path=path,
@@ -213,11 +234,12 @@ class ImageView:
         1.0× and 0.5× levels.
 
         The existing mips remain visible and usable throughout — no bridge,
-        no blank flash. Does NOT set ``mip_loading`` — the image is already
-        displayable. Donation (``take_mip_arrays``) works at any time,
-        yielding whatever mips are available.
+        no blank flash. Shows the loading spinner while generating.
+        Donation (``take_mip_arrays``) works at any time, yielding
+        whatever mips are available.
         """
         self._augment_task_mgr.clear()
+        self._set_mip_loading(True)
         task_env = env(path=path,
                        generation=self._mips_generation,
                        device=self._device,
@@ -264,7 +286,7 @@ class ImageView:
 
         self._img_w = img_w
         self._img_h = img_h
-        self._mip_loading = False
+        self._set_mip_loading(False)
 
         # Re-render immediately so draw items reference the new textures.
         # Without this, the old draw items (from the previous _render call)
@@ -308,14 +330,18 @@ class ImageView:
         self._mip_arrays = []
         self._img_w = 0
         self._img_h = 0
-        self._mip_loading = False
+        self._set_mip_loading(False)
         self._needs_render = True
 
     def set_size(self, width: int, height: int) -> None:
         """Resize the drawlist (call from viewport resize callback)."""
         self._view_w = width
         self._view_h = height
+        dpg.configure_item(self._wrapper_tag, width=width, height=height)
         dpg.configure_item(self._drawlist_tag, width=width, height=height)
+        if self._spinner_h > 0:
+            dpg.configure_item(self._spinner_tag,
+                               pos=(8, self._spinner_bottom_y(height)))
         if self._zoom_is_fit:
             self.zoom_to_fit()
         else:
@@ -348,6 +374,25 @@ class ImageView:
     def mip_loading(self) -> bool:
         """True while background mip generation is in progress."""
         return self._mip_loading
+
+    def _spinner_bottom_y(self, view_h: int) -> int:
+        """Y position to place the spinner near the bottom of the view."""
+        return max(0, view_h - self._spinner_h - config.DPG_WINDOW_PADDING_Y)
+
+    def _set_mip_loading(self, loading: bool) -> None:
+        """Update the loading flag and sync the spinner overlay."""
+        self._mip_loading = loading
+        with guiutils.nonexistent_ok():
+            if loading:
+                if self._spinner_h == 0:
+                    # First show: place offscreen so it's invisible while
+                    # DPG renders it (we need one frame to measure its size).
+                    dpg.configure_item(self._spinner_tag,
+                                       pos=(self._view_w, self._view_h))
+                    self._spinner_needs_measure = True
+                dpg.show_item(self._spinner_tag)
+            else:
+                dpg.hide_item(self._spinner_tag)
 
     # ------------------------------------------------------------------
     # Zoom / pan commands
@@ -401,6 +446,16 @@ class ImageView:
         Checks for newly available mip levels (from background thread)
         and redraws if needed.
         """
+        # Deferred spinner measurement: after DPG has rendered the spinner
+        # for one frame (offscreen), measure its actual size and reposition.
+        if self._spinner_needs_measure:
+            _, h = guiutils.get_widget_size(self._spinner_tag)
+            if h > 0:
+                self._spinner_h = h
+                self._spinner_needs_measure = False
+                dpg.configure_item(self._spinner_tag,
+                                   pos=(8, self._spinner_bottom_y(self._view_h)))
+
         # The background thread sets _needs_render when a new mip is ready.
         if self._needs_render:
             self._render()
@@ -417,7 +472,7 @@ class ImageView:
         self._mip_executor.shutdown(wait=True)
         self._clear_textures()
         dpg.delete_item(self._handler_tag)
-        dpg.delete_item(self._drawlist_tag)
+        dpg.delete_item(self._wrapper_tag)  # deletes drawlist + spinner
 
     # ------------------------------------------------------------------
     # Internal: old-texture bridge
@@ -464,7 +519,7 @@ class ImageView:
         except Exception as exc:
             logger.warning("ImageView._bg_file_mip_task: decode failed for %s: %s",
                            e.path, exc)
-            self._mip_loading = False
+            self._set_mip_loading(False)
             self._needs_render = True
             return
         t_decode = time.perf_counter_ns() - t0
@@ -496,77 +551,80 @@ class ImageView:
         """
         t0 = time.perf_counter_ns()
         try:
-            rgba = imageutils.decode_image(e.path)
-        except Exception as exc:
-            logger.warning("ImageView._bg_augment_task: decode failed for %s: %s",
-                           e.path, exc)
-            return
-        t_decode = time.perf_counter_ns() - t0
-
-        if e.cancelled:
-            return
-
-        # Upload + mipchain on GPU.
-        tensor = imageutils.np_to_tensor(rgba, e.device)
-        del rgba
-        mip_tensors = lanczos.lanczos_mipchain(tensor, min_size=e.mip_min_size,
-                                                order=e.order)
-
-        # Identify which scales are already present.
-        with self._mips_lock:
-            existing_scales = {s for s, _t in self._mips}
-
-        # Build list of missing levels (scale, tensor), largest-first.
-        scale = 1.0
-        missing = []
-        for mip_t in mip_tensors:
-            if scale not in existing_scales:
-                missing.append((scale, mip_t))
-            scale *= 0.5
-
-        del tensor, mip_tensors
-
-        if not missing:
-            return  # nothing to augment
-
-        # Create textures from smallest missing level to largest
-        # (progressive sharpening, same order as _bg_mip_task).
-        n_inserted = 0
-        for mip_scale, mip_t in reversed(missing):
-            if e.cancelled:
-                break
-            _, _, mh, mw = mip_t.shape
-            flat = imageutils.tensor_to_dpg_flat(mip_t)
+            try:
+                rgba = imageutils.decode_image(e.path)
+            except Exception as exc:
+                logger.warning("ImageView._bg_augment_task: decode failed for %s: %s",
+                               e.path, exc)
+                return
+            t_decode = time.perf_counter_ns() - t0
 
             if e.cancelled:
-                break
-            tex_tag = self._acquire_texture(mw, mh, flat)
-            dpg.split_frame()
+                return
 
-            if e.cancelled or e.generation != self._mips_generation:
-                self._release_texture(tex_tag)
-                break
+            # Upload + mipchain on GPU.
+            tensor = imageutils.np_to_tensor(rgba, e.device)
+            del rgba
+            mip_tensors = lanczos.lanczos_mipchain(tensor, min_size=e.mip_min_size,
+                                                    order=e.order)
 
-            # Insert into _mips sorted (largest-first).
+            # Identify which scales are already present.
             with self._mips_lock:
-                inserted = False
-                for i, (s, _t) in enumerate(self._mips):
-                    if mip_scale > s:
-                        self._mips.insert(i, (mip_scale, tex_tag))
-                        self._mip_arrays.insert(i, (mip_scale, mw, mh, flat))
-                        inserted = True
-                        break
-                if not inserted:
-                    self._mips.append((mip_scale, tex_tag))
-                    self._mip_arrays.append((mip_scale, mw, mh, flat))
-            self._needs_render = True
-            n_inserted += 1
+                existing_scales = {s for s, _t in self._mips}
 
-        if e.debug:
-            t_total = (time.perf_counter_ns() - t0) / 1e6
-            logger.info("ImageView._bg_augment_task: inserted %d levels, "
-                        "decode=%dms total=%dms",
-                        n_inserted, t_decode / 1e6, t_total)
+            # Build list of missing levels (scale, tensor), largest-first.
+            scale = 1.0
+            missing = []
+            for mip_t in mip_tensors:
+                if scale not in existing_scales:
+                    missing.append((scale, mip_t))
+                scale *= 0.5
+
+            del tensor, mip_tensors
+
+            if not missing:
+                return  # nothing to augment
+
+            # Create textures from smallest missing level to largest
+            # (progressive sharpening, same order as _bg_mip_task).
+            n_inserted = 0
+            for mip_scale, mip_t in reversed(missing):
+                if e.cancelled:
+                    break
+                _, _, mh, mw = mip_t.shape
+                flat = imageutils.tensor_to_dpg_flat(mip_t)
+
+                if e.cancelled:
+                    break
+                tex_tag = self._acquire_texture(mw, mh, flat)
+                dpg.split_frame()
+
+                if e.cancelled or e.generation != self._mips_generation:
+                    self._release_texture(tex_tag)
+                    break
+
+                # Insert into _mips sorted (largest-first).
+                with self._mips_lock:
+                    inserted = False
+                    for i, (s, _t) in enumerate(self._mips):
+                        if mip_scale > s:
+                            self._mips.insert(i, (mip_scale, tex_tag))
+                            self._mip_arrays.insert(i, (mip_scale, mw, mh, flat))
+                            inserted = True
+                            break
+                    if not inserted:
+                        self._mips.append((mip_scale, tex_tag))
+                        self._mip_arrays.append((mip_scale, mw, mh, flat))
+                self._needs_render = True
+                n_inserted += 1
+
+            if e.debug:
+                t_total = (time.perf_counter_ns() - t0) / 1e6
+                logger.info("ImageView._bg_augment_task: inserted %d levels, "
+                            "decode=%dms total=%dms",
+                            n_inserted, t_decode / 1e6, t_total)
+        finally:
+            self._set_mip_loading(False)
 
     def _bg_mip_task(self, e: env) -> None:
         """Background thread: upload, generate mip chain, create DPG textures.
@@ -669,8 +727,8 @@ class ImageView:
         # turning a 1ms mipchain into a 500ms+ stall.
 
         if not e.cancelled:
-            self._mip_loading = False
-            self._needs_render = True  # clear loading indicator
+            self._set_mip_loading(False)
+            self._needs_render = True
 
     # ------------------------------------------------------------------
     # Internal: rendering
@@ -735,25 +793,6 @@ class ImageView:
                                  f"mip={mip_label} "
                                  f"mips={len(self._mips)}",
                                  color=(0, 255, 0, 200), size=config.FONT_SIZE,
-                                 parent=self._drawlist_tag)
-            new_items.append(item)
-
-        # Loading indicator — shown while background mip generation is running.
-        if self._mip_loading:
-            label = "Enhancing..."
-            tx = 8
-            ty = self._view_h - config.FONT_SIZE - 8
-            # Dark background pill for readability over any image content.
-            pad_x, pad_y = 6, 2
-            item = dpg.draw_rectangle(pmin=(tx - pad_x, ty - pad_y),
-                                      pmax=(tx + len(label) * config.FONT_SIZE * 0.52 + pad_x,
-                                            ty + config.FONT_SIZE + pad_y),
-                                      color=(0, 0, 0, 0), fill=(0, 0, 0, 160),
-                                      rounding=4,
-                                      parent=self._drawlist_tag)
-            new_items.append(item)
-            item = dpg.draw_text((tx, ty), label,
-                                 color=(200, 200, 200, 220), size=config.FONT_SIZE,
                                  parent=self._drawlist_tag)
             new_items.append(item)
 
