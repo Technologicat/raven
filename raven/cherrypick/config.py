@@ -71,9 +71,6 @@ THUMBNAIL_INTERPOLATION = "lanczos"  # "lanczos" or "area"
 THUMBNAIL_LANCZOS_ORDER = 4  # Lanczos kernel order (3, 4, or 5); higher = better stopband, slightly more compute
 THUMBNAIL_AREA_THRESHOLD = 64  # auto-switch to "area" at tile sizes ≤ this
 
-# Tile text truncation.  Filename label is at most this many characters.
-TILE_LABEL_MAX_CHARS = 16
-
 # ---------------------------------------------------------------------------
 # Colors (colorblind-accessible)
 # ---------------------------------------------------------------------------
