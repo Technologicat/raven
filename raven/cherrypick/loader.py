@@ -4,11 +4,11 @@ Triple-buffered with two background threads:
 
   - **Decode thread** (CPU): reads and decodes images to numpy RGBA arrays.
   - **GPU thread**: transfers decoded arrays to the GPU, Lanczos-resizes to
-    tile size (with letterboxing for non-square images), transfers back.
+    tile size (with imageutils.letterboxing for non-square images), transfers back.
 
 The main thread polls for completed thumbnails and creates DPG textures.
 
-The pipeline is managed via ``raven.common.bgtask.TaskManager`` for
+The pipeline is managed via ``raven.common.bgtask.bgtask.TaskManager`` for
 cooperative cancellation when the user opens a new folder.
 """
 
@@ -24,9 +24,9 @@ import torch
 
 from unpythonic.env import env
 
-from ..common.bgtask import TaskManager
-from ..common.image.utils import decode_image, np_to_tensor, tensor_to_dpg_flat, letterbox
-from ..common.image.lanczos import DEFAULT_ORDER
+from ..common import bgtask
+from ..common.image import lanczos
+from ..common.image import utils as imageutils
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class ThumbnailPipeline:
                  device: torch.device,
                  dtype: torch.dtype,
                  tile_size: int = 128,
-                 lanczos_order: int = DEFAULT_ORDER):
+                 lanczos_order: int = lanczos.DEFAULT_ORDER):
         self._device = device
         self._dtype = dtype
         self._tile_size = tile_size
@@ -65,7 +65,7 @@ class ThumbnailPipeline:
 
         self._executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=2, thread_name_prefix="cherrypick_thumb")
-        self._task_mgr = TaskManager("thumbnails", "concurrent", self._executor)
+        self._task_mgr = bgtask.TaskManager("thumbnails", "concurrent", self._executor)
 
         # Inter-thread queues.  A small decode queue keeps the GPU fed even when
         # individual image decode times vary.  At small tile sizes the GPU is much
@@ -157,7 +157,7 @@ class ThumbnailPipeline:
             if e.cancelled:
                 break
             try:
-                arr = decode_image(path, max_size=e.max_size)
+                arr = imageutils.decode_image(path, max_size=e.max_size)
             except Exception as exc:
                 logger.warning("ThumbnailPipeline._decode_loop: "
                                "failed to decode %s: %s", path.name, exc)
@@ -194,9 +194,9 @@ class ThumbnailPipeline:
 
             idx, arr = item
             try:
-                tensor = np_to_tensor(arr, e.device)
-                thumbnail = letterbox(tensor, e.tile_size, e.order)
-                flat = tensor_to_dpg_flat(thumbnail)
+                tensor = imageutils.np_to_tensor(arr, e.device)
+                thumbnail = imageutils.letterbox(tensor, e.tile_size, e.order)
+                flat = imageutils.tensor_to_dpg_flat(thumbnail)
                 del tensor, thumbnail  # free GPU memory promptly
                 e.result_queue.put((idx, flat))
             except Exception as exc:

@@ -54,17 +54,13 @@ Discovered during raven-cherrypick imageutil extraction.
 
 Discovered during raven-cherrypick imageview implementation.
 
-## Adopt dotted import style in cherrypick and xdot modules
+## Adopt dotted import style in xdot widget
 
 Raven style is `from ..common.gui import utils as guiutils` + `guiutils.func()`, not
 `from ..common.gui.utils import func` + bare `func()`. The dotted style makes it clear
-at the call site where a function comes from. Modules with ambiguous names get an alias
-(e.g. `guiutils`, `server_config`, `client_config`).
+at the call site where a function comes from.
 
-Files to migrate:
-- `raven/cherrypick/loader.py` — uses from-imports for imageutils and lanczos
-- `raven/cherrypick/triage.py` — from-imports IMAGE_EXTENSIONS
-- `raven/cherrypick/tests/test_loader.py` — from-imports for test utilities
+Cherrypick modules migrated (session 6). Remaining:
 - `raven/common/gui/xdotwidget/` — check existing style, align if needed
 
 Discovered during raven-cherrypick imageview review.

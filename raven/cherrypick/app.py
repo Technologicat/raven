@@ -43,7 +43,7 @@ from .loader import ThumbnailPipeline
 from .imageview import ImageView
 from .grid import ThumbnailGrid, FilterMode
 from .preload import PreloadCache
-from ..common.image.utils import tensor_to_dpg_flat
+from ..common.image import utils as imageutils
 from ..common.video import postprocessor
 
 from unpythonic.env import env
@@ -718,7 +718,7 @@ def _generate_noise_pool(tile_size: int) -> List[np.ndarray]:
         tint=config.PLACEHOLDER_TINT,
         brightness=config.PLACEHOLDER_BRIGHTNESS,
     )
-    return [tensor_to_dpg_flat(t.unsqueeze(0)) for t in tensors]
+    return [imageutils.tensor_to_dpg_flat(t.unsqueeze(0)) for t in tensors]
 
 
 def _change_tile_size(new_size: int) -> None:
