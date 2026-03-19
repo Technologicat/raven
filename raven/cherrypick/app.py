@@ -496,6 +496,27 @@ def _on_key(sender, app_data) -> None:
     elif key == dpg.mvKey_V:
         _mark_triage(TriageState.NEUTRAL)
 
+    # Jump to next/prev by triage state (B/N/M mirror X/C/V, one column right).
+    # Only in "All" view — when filtered, arrow keys already navigate that state only.
+    elif key == dpg.mvKey_B:
+        if grid is not None and grid.filter_mode is FilterMode.ALL:
+            if shift:
+                grid.navigate_prev_with_state(TriageState.LEMON)
+            else:
+                grid.navigate_next_with_state(TriageState.LEMON)
+    elif key == dpg.mvKey_N:
+        if grid is not None and grid.filter_mode is FilterMode.ALL:
+            if shift:
+                grid.navigate_prev_with_state(TriageState.CHERRY)
+            else:
+                grid.navigate_next_with_state(TriageState.CHERRY)
+    elif key == dpg.mvKey_M:
+        if grid is not None and grid.filter_mode is FilterMode.ALL:
+            if shift:
+                grid.navigate_prev_with_state(TriageState.NEUTRAL)
+            else:
+                grid.navigate_next_with_state(TriageState.NEUTRAL)
+
     # Filter.
     elif key == dpg.mvKey_G:
         if shift:
@@ -956,6 +977,10 @@ def main() -> int:
         env(key_indent=1, key="Ctrl+X", action_indent=1, action="Same, but all selected", notes=""),
         env(key_indent=0, key="V", action_indent=0, action="Clear mark", notes=""),
         env(key_indent=1, key="Ctrl+V", action_indent=1, action="Same, but all selected", notes=""),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="B / Shift+B", action_indent=0, action="Next / prev lemon", notes="All view only; wraps"),
+        env(key_indent=0, key="N / Shift+N", action_indent=0, action="Next / prev cherry", notes="All view only; wraps"),
+        env(key_indent=0, key="M / Shift+M", action_indent=0, action="Next / prev neutral", notes="All view only; wraps"),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="G", action_indent=0, action="Cycle filter forward", notes="All/Cherries/Lemons/Neutral"),
         env(key_indent=0, key="Shift+G", action_indent=0, action="Cycle filter backward", notes=""),

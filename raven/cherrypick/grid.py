@@ -322,6 +322,22 @@ class ThumbnailGrid:
         self.set_current(self._visible[-1])
         return self._current
 
+    def navigate_next_with_state(self, state: TriageState) -> Optional[int]:
+        """Jump forward to the next image with triage *state*.
+
+        Searches the full image list (ignoring filter), wrapping around.
+        Returns the new index, or ``None`` if no image has that state.
+        """
+        return self._navigate_to_state(state, direction=1)
+
+    def navigate_prev_with_state(self, state: TriageState) -> Optional[int]:
+        """Jump backward to the previous image with triage *state*.
+
+        Searches the full image list (ignoring filter), wrapping around.
+        Returns the new index, or ``None`` if no image has that state.
+        """
+        return self._navigate_to_state(state, direction=-1)
+
     # ------------------------------------------------------------------
     # Selection
     # ------------------------------------------------------------------
@@ -565,6 +581,22 @@ class ThumbnailGrid:
         new_idx = self._visible[new_vis_pos]
         self.set_current(new_idx)
         return new_idx
+
+    def _navigate_to_state(self, state: TriageState, direction: int) -> Optional[int]:
+        """Jump to the next/prev image with *state* in the full list.
+
+        Wraps around. Returns the new index, or ``None`` if none found.
+        """
+        n = self._n_images
+        if n == 0:
+            return None
+        start = self._current if self._current >= 0 else 0
+        for offset in range(1, n):
+            candidate = (start + direction * offset) % n
+            if self._triage_states[candidate] is state:
+                self.set_current(candidate)
+                return candidate
+        return None
 
     def _find_nearest_visible(self, idx: int) -> int:
         """Find the visible-list position nearest to *idx* in the full list.
