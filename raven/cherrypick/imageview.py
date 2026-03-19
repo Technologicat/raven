@@ -99,6 +99,7 @@ class ImageView:
         self._old_pan_cy = 0.0
         self._mip_loading = False  # True while background mip task is running
         self._mips_lock = threading.Lock()
+        self._mips_generation = 0  # incremented on each image switch
 
         # Texture pool: reuse textures across same-size images via set_value
         # instead of creating/deleting (avoids DPG OpenGL glitches).
@@ -157,6 +158,7 @@ class ImageView:
         # Cancel any in-progress mip loading (both full pipeline and augment).
         self._augment_task_mgr.clear()
         self._mip_task_mgr.clear(wait=True)
+        self._mips_generation += 1
 
         self._bridge_old_mips()
 
@@ -185,6 +187,7 @@ class ImageView:
         """
         self._augment_task_mgr.clear()
         self._mip_task_mgr.clear(wait=True)
+        self._mips_generation += 1
 
         self._bridge_old_mips()
 
@@ -216,6 +219,7 @@ class ImageView:
         """
         self._augment_task_mgr.clear()
         task_env = env(path=path,
+                       generation=self._mips_generation,
                        device=self._device,
                        order=self._order,
                        mip_min_size=self._mip_min_size,
@@ -236,6 +240,7 @@ class ImageView:
         t0 = time.perf_counter_ns()
         self._augment_task_mgr.clear()
         self._mip_task_mgr.clear(wait=True)
+        self._mips_generation += 1
         t_clear = time.perf_counter_ns()
 
         # Create DPG textures from flat arrays via the pool.
@@ -538,7 +543,7 @@ class ImageView:
             tex_tag = self._acquire_texture(mw, mh, flat)
             dpg.split_frame()
 
-            if e.cancelled:
+            if e.cancelled or e.generation != self._mips_generation:
                 self._release_texture(tex_tag)
                 break
 

@@ -145,3 +145,25 @@ Discovered during raven-cherrypick preload performance session.
 `SmoothValue` (framerate-independent exponential decay animation) is currently defined inside `raven/common/gui/xdotwidget/viewport.py` but is a general-purpose GUI utility. Move it to `raven/common/gui/` as its own module (e.g. `smoothvalue.py`) so that any DPG widget can use it for animated transitions.
 
 Discovered during raven-cherrypick imageview implementation.
+
+## raven-cherrypick: investigate GPU/CPU load at idle
+
+The raven-cherrypick process shows noticeable GPU (graphics) and CPU load even when idle. Likely DPG's game-loop style rendering — blitting many textures (thumbnails + mips) every frame even when nothing changes. Worth investigating whether we can reduce frame rate when idle (e.g. skip `render_dearpygui_frame` when no `_needs_render` flags are set), or if the cost is inherent to DPG's texture registry overhead.
+
+Discovered during raven-cherrypick session 5 (2026-03-19).
+
+## raven-cherrypick: one-frame display glitch on preloaded image switch
+
+On preload cache hits, there's an occasional one-frame glitch — the old image is briefly visible at wrong zoom, or (on aspect ratio changes) a garbled-looking frame from the zoom mismatch. The root cause is a fundamental tension in DPG's rendering model:
+
+- `_render()` inside `set_preloaded_arrays` updates draw items immediately, but uses stale zoom (zoom_to_fit runs after). Shows new image at wrong zoom for one frame.
+- Without `_render()` inside `set_preloaded_arrays`, pooled textures recycled via `set_value` overwrite data that the current frame's draw items still reference. Shows wrong image data.
+- Deferred release (hold textures out of pool until next `_render`) and `_render()`-inside work against each other — the `_render()` call drains the deferred list immediately, negating the deferral.
+
+Approaches explored in session 5 (all insufficient): `_render()` inside `set_preloaded_arrays`, `force_new` textures (garbled data), deferred release, deferred navigation (deadlocks with `split_frame`), `flush()` after `zoom_to_fit`.
+
+Promising unexplored approaches:
+- **Double-buffered mip sets**: two complete texture sets, display one, write to the other, swap atomically. No `set_value` on active textures.
+- **Always bridge**: treat `set_preloaded_arrays` like `set_image` — show old image via the bridge for one frame, let natural `_render()` do the switch. One frame of old image is acceptable.
+
+Discovered during raven-cherrypick session 5 (2026-03-19).
