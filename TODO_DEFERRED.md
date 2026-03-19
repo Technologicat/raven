@@ -121,6 +121,17 @@ PIL's PNG decode via libpng is slow (~59 ms for a 1 MP image). Unlike JPEG (wher
 
 Discovered during raven-cherrypick test drive.
 
+## Preload cache: 16MP image optimization
+
+With 16MP images (4624×3472), each cached mipchain is ~342MB as flat arrays. The current 1500MB budget fits only ~4 images, causing most preloads to be dropped after doing the full GPU work (wasted ~530ms each, with GPU contention degrading frame times to ~90ms).
+
+Three improvements needed:
+1. **Cap preload mip resolution** — skip the full-res mip in preload (only needed at 1:1 zoom, rare during triage). At 0.5× max, per-image cost drops from 342MB to ~85MB → 17 images fit.
+2. **Check budget before submitting** — currently the budget check is in `_on_task_done` (after all the work). Reject early in `schedule()` to avoid wasted GPU work and contention.
+3. **Move decode to background thread** — `decode_image` (50-110ms) still runs on the main thread for cache misses. Add `set_image_path`/`set_image_bytes` to ImageView (sans-IO style), folding decode into the bg mip task.
+
+Discovered during raven-cherrypick preload performance session.
+
 ## Move SmoothValue to raven.common.gui
 
 `SmoothValue` (framerate-independent exponential decay animation) is currently defined inside `raven/common/gui/xdotwidget/viewport.py` but is a general-purpose GUI utility. Move it to `raven/common/gui/` as its own module (e.g. `smoothvalue.py`) so that any DPG widget can use it for animated transitions.

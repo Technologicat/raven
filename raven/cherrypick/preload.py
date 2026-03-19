@@ -1,11 +1,13 @@
 """Preload cache for raven-cherrypick.
 
-Pre-loads mip textures for images near the current tile in the grid,
+Pre-loads mip data for images near the current tile in the grid,
 so that switching images is instant (no progressive mip loading visible).
 
-The cache owns DPG textures for preloaded images. When the user navigates
-to a cached image, `take` transfers texture ownership to `ImageView`.
-Eviction deletes DPG textures to free VRAM.
+Cached entries store pre-computed flat numpy arrays (ready for DPG texture
+creation), NOT live DPG textures. This avoids per-frame overhead in DPG's
+render loop, which scales O(n) with registered dynamic textures even when
+they are not drawn. DPG textures are created only on ``take()``, by the
+caller (ImageView), using its texture pool for fast ``set_value`` reuse.
 """
 
 __all__ = ["PreloadCache"]
@@ -15,7 +17,6 @@ import logging
 import threading
 import time
 
-import dearpygui.dearpygui as dpg
 import torch
 
 from unpythonic.env import env
@@ -27,29 +28,22 @@ from . import config
 
 logger = logging.getLogger(__name__)
 
-# Counter for unique DPG tags (thread-safe).
-_tag_counter = 0
-_tag_lock = threading.Lock()
-
-
-def _next_tag(prefix: str) -> str:
-    global _tag_counter
-    with _tag_lock:
-        _tag_counter += 1
-        return f"preload_{prefix}_{_tag_counter}"
-
 
 class _CacheEntry:
-    """One preloaded image's mip textures."""
-    __slots__ = ("idx", "img_w", "img_h", "mips", "tex_sizes", "vram_bytes")
+    """One preloaded image's mip data (flat numpy arrays, no DPG textures).
 
-    def __init__(self, idx, img_w, img_h, mips, tex_sizes, vram_bytes):
+    Storing flat arrays instead of DPG textures avoids per-frame overhead
+    in ``render_dearpygui_frame()`` — DPG has O(n) cost per registered
+    dynamic texture, even if they're not drawn.
+    """
+    __slots__ = ("idx", "img_w", "img_h", "mips", "ram_bytes")
+
+    def __init__(self, idx, img_w, img_h, mips, ram_bytes):
         self.idx = idx
         self.img_w = img_w
         self.img_h = img_h
-        self.mips = mips              # list[(scale, tex_tag)], largest-first
-        self.tex_sizes = tex_sizes    # {tex_tag: (w, h)}
-        self.vram_bytes = vram_bytes  # sum of w*h*16 for all mip textures
+        self.mips = mips          # list[(scale, w, h, flat_array)], largest-first
+        self.ram_bytes = ram_bytes  # sum of flat array nbytes
 
 
 def _compute_targets(vis_pos, n_visible, n_cols, window):
@@ -82,32 +76,37 @@ def _compute_targets(vis_pos, n_visible, n_cols, window):
 
 
 class PreloadCache:
-    """Mip-texture cache for nearby images.
+    """Mip cache for nearby images, stored as flat numpy arrays.
 
-    Create once at startup.  Call `schedule` after each navigation
+    Create once at startup. Call `schedule` after each navigation
     (once the current image's mips have finished loading) to preload
-    neighbors.  Call `take` in the image-load path to check for a
+    neighbors. Call `take` in the image-load path to check for a
     cache hit before falling back to decode + mip generation.
+
+    Cached entries hold pre-computed flat arrays (ready for
+    ``dpg.set_value`` or ``dpg.add_dynamic_texture``), NOT live DPG
+    textures. This avoids per-frame overhead in DPG's render loop
+    (which scales O(n) with registered dynamic textures).
     """
 
     def __init__(self, device: torch.device,
                  lanczos_order: int = lanczos.DEFAULT_ORDER,
                  mip_min_size: int = config.MIP_MIN_SIZE,
-                 vram_budget_mb: int = config.PRELOAD_VRAM_BUDGET_MB,
+                 ram_budget_mb: int = config.PRELOAD_VRAM_BUDGET_MB,
                  window: int = config.PRELOAD_WINDOW,
                  debug: bool = False):
         self._device = device
         self._order = lanczos_order
         self._mip_min_size = mip_min_size
-        self._vram_budget = vram_budget_mb * 1024 * 1024  # bytes
+        self._ram_budget = ram_budget_mb * 1024 * 1024  # bytes
         self._window = window
         self._debug = debug
 
-        # Cache: idx → _CacheEntry.  Protected by _lock.
+        # Cache: idx → _CacheEntry. Protected by _lock.
         self._cache: dict[int, _CacheEntry] = {}
         self._loading: set[int] = set()  # indices with in-progress tasks
         self._lock = threading.Lock()
-        self._vram_used = 0  # bytes
+        self._ram_used = 0  # bytes
 
         # Background worker.
         self._executor = concurrent.futures.ThreadPoolExecutor(
@@ -121,41 +120,40 @@ class PreloadCache:
     def take(self, idx: int):
         """Remove and return a cache entry, or ``None``.
 
-        Transfers texture ownership to the caller (typically ImageView).
+        The returned entry contains flat numpy arrays, not DPG textures.
+        The caller is responsible for creating DPG textures from them.
         """
         with self._lock:
             entry = self._cache.pop(idx, None)
             if entry is not None:
-                self._vram_used -= entry.vram_bytes
+                self._ram_used -= entry.ram_bytes
                 if self._debug:
                     logger.info(f"PreloadCache.take: hit idx={idx} "
-                                f"vram={entry.vram_bytes / 1e6:.0f}MB "
-                                f"remaining={self._vram_used / 1e6:.0f}MB")
+                                f"ram={entry.ram_bytes / 1e6:.0f}MB "
+                                f"remaining={self._ram_used / 1e6:.0f}MB")
             return entry
 
-    def donate(self, idx, mips, tex_sizes, img_w, img_h) -> None:
-        """Insert already-loaded mip textures into the cache.
+    def donate(self, idx, mips, img_w, img_h) -> None:
+        """Insert pre-computed mip arrays into the cache.
 
-        Called when the user navigates away from a directly-loaded image
-        and the switch is instant (preload hit).  The outgoing image's
-        textures are donated rather than released to ImageView's pool,
-        so navigating back is also instant.
+        *mips*: list of ``(scale, w, h, flat_array)``, largest-first.
+
+        Called when the user navigates away from a fully-loaded image
+        and the switch is instant (preload hit). The outgoing image's
+        mip data is donated so navigating back is also instant.
         """
-        vram_bytes = sum(w * h * 16 for w, h in tex_sizes.values())
+        ram_bytes = sum(flat.nbytes for _s, _w, _h, flat in mips)
         entry = _CacheEntry(idx=idx, img_w=img_w, img_h=img_h,
-                            mips=mips, tex_sizes=tex_sizes,
-                            vram_bytes=vram_bytes)
+                            mips=mips, ram_bytes=ram_bytes)
         with self._lock:
-            # If already cached (e.g. preloader finished while we were displaying),
-            # delete the duplicate's textures.
             if idx in self._cache:
                 self._evict(idx)
             self._cache[idx] = entry
-            self._vram_used += vram_bytes
+            self._ram_used += ram_bytes
         if self._debug:
             logger.info(f"PreloadCache.donate: idx={idx} "
-                        f"vram={vram_bytes / 1e6:.0f}MB "
-                        f"total={self._vram_used / 1e6:.0f}MB")
+                        f"ram={ram_bytes / 1e6:.0f}MB "
+                        f"total={self._ram_used / 1e6:.0f}MB")
 
     def schedule(self, current_idx, visible, n_cols, triage) -> None:
         """Recompute the preload window and start loading.
@@ -197,10 +195,10 @@ class PreloadCache:
                 if idx in self._cache or idx in self._loading:
                     continue
                 # Evict to make room if needed.
-                while (self._vram_used >= self._vram_budget
+                while (self._ram_used >= self._ram_budget
                        and evict_candidates):
                     self._evict(evict_candidates.pop())
-                if self._vram_used >= self._vram_budget:
+                if self._ram_used >= self._ram_budget:
                     break  # budget exhausted, nothing left to evict
                 self._loading.add(idx)
                 path = triage[idx].path
@@ -218,7 +216,7 @@ class PreloadCache:
                         f"targets={sorted(target_indices)} "
                         f"cached={sorted(cached)} "
                         f"loading={sorted(self._loading)} "
-                        f"vram={self._vram_used / 1e6:.0f}MB")
+                        f"ram={self._ram_used / 1e6:.0f}MB")
 
     def cancel_pending(self) -> None:
         """Cancel all in-progress preload tasks (free GPU for current image)."""
@@ -227,12 +225,7 @@ class PreloadCache:
             self._loading.clear()
 
     def shutdown(self) -> None:
-        """Cancel all work, delete all textures, shut down executor.
-
-        Does not wait for tasks — they may be blocked on ``split_frame``
-        with no render loop running.  DPG context destruction will clean
-        up any leaked textures.
-        """
+        """Cancel all work, shut down executor."""
         self._task_mgr.clear(wait=True)
         self._executor.shutdown(wait=True)
         with self._lock:
@@ -249,44 +242,31 @@ class PreloadCache:
         with self._lock:
             self._loading.discard(e.idx)
             if e.cancelled:
-                # Clean up any textures created before cancellation.
-                if hasattr(e, "result") and e.result is not None:
-                    self._delete_entry_textures(e.result)
-                return
+                return  # no DPG textures to clean up
             if not hasattr(e, "result") or e.result is None:
                 return  # task failed
             entry = e.result
             # Check budget — might have been exceeded while we were loading.
-            if self._vram_used + entry.vram_bytes > self._vram_budget:
-                self._delete_entry_textures(entry)
+            if self._ram_used + entry.ram_bytes > self._ram_budget:
                 if self._debug:
                     logger.info(f"PreloadCache._on_task_done: idx={entry.idx} "
                                 f"dropped (budget exceeded)")
                 return
             self._cache[entry.idx] = entry
-            self._vram_used += entry.vram_bytes
+            self._ram_used += entry.ram_bytes
             if self._debug:
                 logger.info(f"PreloadCache._on_task_done: idx={entry.idx} "
-                            f"cached, vram={self._vram_used / 1e6:.0f}MB")
+                            f"cached, ram={self._ram_used / 1e6:.0f}MB")
 
     def _evict(self, idx: int) -> None:
-        """Remove an entry and delete its DPG textures.  Caller holds _lock."""
+        """Remove an entry. Caller holds _lock."""
         entry = self._cache.pop(idx, None)
         if entry is not None:
-            self._delete_entry_textures(entry)
-            self._vram_used -= entry.vram_bytes
-
-    def _delete_entry_textures(self, entry: _CacheEntry) -> None:
-        """Delete all DPG textures in a cache entry."""
-        for _scale, tex_tag in entry.mips:
-            try:
-                dpg.delete_item(tex_tag)
-            except Exception:
-                pass
+            self._ram_used -= entry.ram_bytes
 
 
 def _preload_one(e: env) -> None:
-    """Background task: decode, mip-chain, create DPG textures for one image."""
+    """Background task: decode, generate mip chain, store as flat arrays."""
     t0 = time.perf_counter_ns()
 
     try:
@@ -314,62 +294,33 @@ def _preload_one(e: env) -> None:
     if e.device.type == "cuda":
         torch.cuda.synchronize(e.device)
 
-    # Build (scale, tensor) list, largest-first.
+    # Convert to flat DPG-format arrays (GPU → CPU).
+    # Build (scale, w, h, flat_array) list, largest-first.
     scale = 1.0
-    mip_data = []
-    for mip_t in mip_tensors:
-        mip_data.append((scale, mip_t))
-        scale *= 0.5
-
-    # Create DPG textures, smallest first.
     mips = []
-    tex_sizes = {}
-    vram_bytes = 0
-
-    for mip_scale, mip_t in reversed(mip_data):
+    ram_bytes = 0
+    for mip_t in mip_tensors:
         if e.cancelled:
-            # Clean up partially created textures.
-            for _s, tag in mips:
-                try:
-                    dpg.delete_item(tag)
-                except Exception:
-                    pass
-            del tensor, mip_tensors
-            return
-
+            break
         _, _, mh, mw = mip_t.shape
         flat = imageutils.tensor_to_dpg_flat(mip_t)
-
-        if e.cancelled:
-            break
-        tex_tag = _next_tag("mip")
-        with dpg.texture_registry():
-            dpg.add_dynamic_texture(mw, mh,
-                                    default_value=flat,
-                                    tag=tex_tag)
-        if e.cancelled:
-            break
-        dpg.split_frame()
-
-        mips.append((mip_scale, tex_tag))
-        tex_sizes[tex_tag] = (mw, mh)
-        vram_bytes += mw * mh * 16  # RGBA float32
-
-    # Sort largest-first (ImageView expects this order).
-    mips.sort(key=lambda x: x[0], reverse=True)
+        mips.append((scale, mw, mh, flat))
+        ram_bytes += flat.nbytes
+        scale *= 0.5
 
     del tensor, mip_tensors
     if e.device.type == "cuda":
         torch.cuda.empty_cache()
 
-    if not e.cancelled:
-        e.result = _CacheEntry(idx=e.idx, img_w=img_w, img_h=img_h,
-                               mips=mips, tex_sizes=tex_sizes,
-                               vram_bytes=vram_bytes)
+    if e.cancelled:
+        return
+
+    e.result = _CacheEntry(idx=e.idx, img_w=img_w, img_h=img_h,
+                           mips=mips, ram_bytes=ram_bytes)
 
     t_total = (time.perf_counter_ns() - t0) / 1e6
     if e.debug:
         logger.info(f"PreloadCache._preload_one: idx={e.idx} "
                     f"{img_w}x{img_h} "
-                    f"vram={vram_bytes / 1e6:.0f}MB "
+                    f"ram={ram_bytes / 1e6:.0f}MB "
                     f"total={t_total:.0f}ms")

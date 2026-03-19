@@ -177,8 +177,10 @@ def _load_current_image() -> None:
         return
 
     # Cancel preload tasks — free GPU for the current image.
+    t_nav_start = time.perf_counter_ns()
     if preload is not None:
         preload.cancel_pending()
+    t_cancel = time.perf_counter_ns()
 
     entry = triage[idx]
     try:
@@ -186,21 +188,36 @@ def _load_current_image() -> None:
 
         # Try preload cache first.
         cached = preload.take(idx) if preload is not None else None
+        t_take = time.perf_counter_ns()
 
         if cached is not None:
-            # Donate the outgoing image's textures to the preload cache
-            # so navigating back is also instant.
-            if _prev_current_idx >= 0:
-                donated = iv.take_mips()
+            t_cached_start = time.perf_counter_ns()
+
+            # Donate the outgoing image's mip arrays to the preload cache
+            # so navigating back is also instant. Don't donate if mips
+            # are still loading — partial mip sets cause display bugs.
+            if _prev_current_idx >= 0 and not iv.mip_loading:
+                donated = iv.take_mip_arrays()
                 if donated is not None and preload is not None:
-                    preload.donate(_prev_current_idx, *donated)
+                    arrays, dw, dh = donated
+                    preload.donate(_prev_current_idx, arrays, dw, dh)
+
+            t_donated = time.perf_counter_ns()
 
             new_size = (cached.img_w, cached.img_h)
-            iv.set_preloaded_mips(cached.mips, cached.tex_sizes,
-                                  cached.img_w, cached.img_h)
+            iv.set_preloaded_arrays(cached.mips,
+                                    cached.img_w, cached.img_h)
+
+            t_set_mips = time.perf_counter_ns()
+
             if _debug:
                 logger.info(f"app._load_current_image: {entry.filename} "
-                            f"PRELOADED (instant)")
+                            f"PRELOADED cancel={(t_cancel - t_nav_start) / 1e6:.1f}ms "
+                            f"take={(t_take - t_cancel) / 1e6:.1f}ms "
+                            f"donate={(t_donated - t_cached_start) / 1e6:.1f}ms "
+                            f"set_mips={(t_set_mips - t_donated) / 1e6:.1f}ms "
+                            f"total={(t_set_mips - t_nav_start) / 1e6:.1f}ms "
+                            f"cache_size={len(preload._cache)}")
         else:
             t0 = time.perf_counter_ns()
             rgba = imageutils.decode_image(entry.path)
@@ -951,6 +968,7 @@ def main() -> int:
     dpg.set_primary_window("cherrypick_main_window", True)
     dpg.set_viewport_resize_callback(_resize_gui)
     dpg.set_exit_callback(_gui_cancel_tasks)
+    dpg.set_viewport_vsync(True)
     dpg.show_viewport()
 
     # Open folder from CLI argument.

@@ -89,6 +89,7 @@ class ImageView:
         self._img_w = 0
         self._img_h = 0
         self._mips: list[tuple[float, int | str]] = []  # (scale, dpg_texture_tag)
+        self._mip_arrays: list[tuple[float, int, int, np.ndarray]] = []  # (scale, w, h, flat)
         self._old_mips: list[tuple[float, int | str]] = []  # kept until first new mip ready
         self._old_img_w = 0  # dimensions matching _old_mips
         self._old_img_h = 0
@@ -167,6 +168,7 @@ class ImageView:
                 self._old_pan_cx = self._pan_cx
                 self._old_pan_cy = self._pan_cy
             self._mips = []
+            self._mip_arrays = []
 
         self._img_h, self._img_w = rgba.shape[:2]
         self._mip_loading = True
@@ -180,35 +182,26 @@ class ImageView:
                        debug=self._debug)
         self._mip_task_mgr.submit(self._bg_mip_task, task_env)
 
-    def take_mips(self) -> Optional[tuple[list, dict, int, int]]:
-        """Remove and return current mips, transferring ownership to caller.
+    def set_preloaded_arrays(self, mip_arrays: list[tuple[float, int, int, np.ndarray]],
+                             img_w: int, img_h: int) -> None:
+        """Display pre-computed mip arrays instantly (from preload cache).
 
-        Returns ``(mips, tex_sizes, img_w, img_h)`` or ``None`` if no image.
-        After this call, ImageView has no mips (caller owns the textures).
-        """
-        if not self.has_image or not self._mips:
-            return None
-        with self._mips_lock:
-            mips = list(self._mips)
-            tex_sizes = {tag: self._tex_sizes.pop(tag)
-                         for _s, tag in mips if tag in self._tex_sizes}
-            self._mips = []
-        return mips, tex_sizes, self._img_w, self._img_h
-
-    def set_preloaded_mips(self, mips: list[tuple[float, int | str]],
-                           tex_sizes: dict[int | str, tuple[int, int]],
-                           img_w: int, img_h: int) -> None:
-        """Display pre-built mip textures instantly (from preload cache).
-
-        *mips*: list of ``(scale, dpg_texture_tag)``, largest-first.
-        *tex_sizes*: ``{tex_tag: (width, height)}`` for each texture.
+        *mip_arrays*: list of ``(scale, w, h, flat_array)``, largest-first.
         *img_w*, *img_h*: original image dimensions.
 
-        Skips background mip generation entirely. The caller transfers
-        texture ownership — ImageView will release these to its pool
-        when done.
+        Creates DPG textures via the texture pool (``set_value`` on pooled
+        textures is fast — no ``split_frame`` needed). Skips background
+        mip generation entirely.
         """
+        t0 = time.perf_counter_ns()
         self._mip_task_mgr.clear(wait=True)
+        t_clear = time.perf_counter_ns()
+
+        # Create DPG textures from flat arrays via the pool.
+        new_mips = []
+        for scale, w, h, flat in mip_arrays:
+            tex_tag = self._acquire_texture(w, h, flat)
+            new_mips.append((scale, tex_tag))
 
         with self._mips_lock:
             if self._mips:
@@ -220,20 +213,46 @@ class ImageView:
                 self._old_zoom = self._zoom
                 self._old_pan_cx = self._pan_cx
                 self._old_pan_cy = self._pan_cy
-            self._mips = list(mips)
-
-        # Adopt the textures into our size tracking (so _release_texture works).
-        self._tex_sizes.update(tex_sizes)
+            self._mips = new_mips
+            self._mip_arrays = list(mip_arrays)
+        t_swap = time.perf_counter_ns()
 
         self._img_w = img_w
         self._img_h = img_h
         self._mip_loading = False
         self._needs_render = True
+        t_done = time.perf_counter_ns()
+
+        if self._debug:
+            logger.info(f"ImageView.set_preloaded_arrays: "
+                        f"clear={(t_clear - t0) / 1e6:.1f}ms "
+                        f"tex+swap={(t_swap - t_clear) / 1e6:.1f}ms "
+                        f"total={(t_done - t0) / 1e6:.1f}ms "
+                        f"pool_sizes={[len(v) for v in self._tex_pool.values()]} "
+                        f"tex_count={len(self._tex_sizes)}")
+
+    def take_mip_arrays(self) -> Optional[tuple[list, int, int]]:
+        """Return stored flat arrays for donation to preload cache.
+
+        Returns ``(mip_arrays, img_w, img_h)`` or ``None`` if unavailable.
+        *mip_arrays* is a list of ``(scale, w, h, flat_array)``.
+        The DPG textures are released to the pool. No GPU readback.
+        """
+        if not self.has_image or not self._mip_arrays:
+            return None
+        with self._mips_lock:
+            mip_arrays = list(self._mip_arrays)
+            for _s, tex_tag in self._mips:
+                self._release_texture(tex_tag)
+            self._mips = []
+            self._mip_arrays = []
+        return mip_arrays, self._img_w, self._img_h
 
     def clear(self) -> None:
         """Remove the current image."""
         self._mip_task_mgr.clear(wait=True)
         self._clear_textures()
+        self._mip_arrays = []
         self._img_w = 0
         self._img_h = 0
         self._mip_loading = False
@@ -385,6 +404,9 @@ class ImageView:
             scale *= 0.5
 
         # Create DPG textures from smallest to largest.
+        # Per-mip split_frame is needed: without it, the render loop may
+        # draw_image with a texture that DPG hasn't uploaded to OpenGL yet,
+        # causing visual glitches.
         for mip_scale, mip_t in reversed(mip_data):
             if e.cancelled:
                 break
@@ -400,24 +422,23 @@ class ImageView:
             tex_tag = self._acquire_texture(mw, mh, flat)
             t_tex = time.perf_counter_ns() - t0
 
-            # Wait for DPG to process the texture before the render loop
-            # tries to use it. Eliminates flicker from half-uploaded textures.
-            # (split_frame is safe from background threads; it waits for the
-            # main thread's render loop to complete one frame.)
             if e.cancelled:
                 break
             dpg.split_frame()
 
             # Insert into _mips sorted (largest-first).
+            # Also store the flat array for zero-cost donation later.
             with self._mips_lock:
                 inserted = False
                 for i, (s, _t) in enumerate(self._mips):
                     if mip_scale > s:
                         self._mips.insert(i, (mip_scale, tex_tag))
+                        self._mip_arrays.insert(i, (mip_scale, mw, mh, flat))
                         inserted = True
                         break
                 if not inserted:
                     self._mips.append((mip_scale, tex_tag))
+                    self._mip_arrays.append((mip_scale, mw, mh, flat))
 
             # Release old textures to pool once we have something new to show.
             if self._old_mips:

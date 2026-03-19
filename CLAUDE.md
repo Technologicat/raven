@@ -36,6 +36,13 @@ pytest                   # runs all tests (currently minimal coverage)
 flake8 --config=flake8rc  # lint check (note: non-standard config filename)
 ```
 
+### Workflow Rules
+
+1. **Always activate the venv** before running `python`, `pytest`, `flake8`, or any project tool: `source .venv/bin/activate && ...`. The system Python lacks project dependencies — imports will silently fall back to slower paths or fail.
+2. **Lint after every code change**: `flake8 --config=flake8rc <changed files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
+3. **DPG threading — push work to background threads aggressively.** Unlike most GUI toolkits, DPG allows all operations from background threads: creating/deleting items, setting values, creating OpenGL textures. Resist the "standard GUI toolkit" instinct to marshal everything to the main thread — doing work on background threads simplifies code and reduces GUI stutter, especially when the heavy lifting is non-Python (C/CUDA) and can release the GIL.
+4. **`dpg.split_frame()` — background threads only.** `split_frame()` waits for the main thread's render loop to complete one frame. Call it from a background thread (e.g. after creating textures, to ensure DPG processes them before the next render). Calling it from the main thread **deadlocks** — the render loop can't proceed while the main thread is blocked waiting for it.
+
 ## Architecture
 
 ### Server/Client Split
