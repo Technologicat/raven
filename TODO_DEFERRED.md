@@ -54,14 +54,12 @@ Discovered during raven-cherrypick imageutil extraction.
 
 Discovered during raven-cherrypick imageview implementation.
 
-## Adopt dotted import style in xdot widget
+## Adopt dotted import style in remaining modules
 
-Raven style is `from ..common.gui import utils as guiutils` + `guiutils.func()`, not
-`from ..common.gui.utils import func` + bare `func()`. The dotted style makes it clear
-at the call site where a function comes from.
+Cherrypick and xdot_viewer migrated (session 6). The xdotwidget internal
+sibling imports (Node, Edge, etc.) are fine as-is — tightly coupled types.
 
-Cherrypick modules migrated (session 6). Remaining:
-- `raven/common/gui/xdotwidget/` — check existing style, align if needed
+Remaining: audit other Raven apps (Librarian, Visualizer, Server) if desired.
 
 Discovered during raven-cherrypick imageview review.
 
