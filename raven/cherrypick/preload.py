@@ -219,8 +219,14 @@ class PreloadCache:
                         f"ram={self._ram_used / 1e6:.0f}MB")
 
     def cancel_pending(self) -> None:
-        """Cancel all in-progress preload tasks (free GPU for current image)."""
+        """Cancel all in-progress preload tasks (free GPU for current image).
+
+        Also flushes the CUDA pipeline — cancelled tasks may have queued
+        GPU kernels that would otherwise contend with the display path.
+        """
         self._task_mgr.clear()
+        if self._device.type == "cuda":
+            torch.cuda.synchronize(self._device)
         with self._lock:
             self._loading.clear()
 
@@ -319,8 +325,8 @@ def _preload_one(e: env) -> None:
         scale *= 0.5
 
     del tensor, mip_tensors
-    if e.device.type == "cuda":
-        torch.cuda.empty_cache()
+    # Don't call empty_cache() — keeps the allocator's block cache warm
+    # for the next image. See imageview.py comment for details.
 
     if e.cancelled:
         return

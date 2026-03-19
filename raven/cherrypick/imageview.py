@@ -379,8 +379,10 @@ class ImageView:
         # Upload to GPU.
         t0 = time.perf_counter_ns()
         tensor = imageutils.np_to_tensor(e.rgba, e.device)
-        if e.device.type == "cuda":
-            torch.cuda.synchronize(e.device)
+        # No cuda.synchronize here — the mipchain naturally waits for the
+        # upload (same stream), and per-mip .cpu() calls in tensor_to_dpg_flat
+        # provide synchronization. Device-wide sync would stall on the
+        # thumbnail pipeline's CUDA work, adding hundreds of ms.
         t_upload = time.perf_counter_ns() - t0
 
         if e.cancelled:
@@ -391,8 +393,6 @@ class ImageView:
         mip_tensors = lanczos.lanczos_mipchain(tensor,
                                                min_size=e.mip_min_size,
                                                order=e.order)
-        if e.device.type == "cuda":
-            torch.cuda.synchronize(e.device)
         t_mipgen = time.perf_counter_ns() - t0
 
         # Build (scale, tensor) list, largest-first.
@@ -463,8 +463,10 @@ class ImageView:
                         f"levels={sizes} total={t_total:.0f}ms")
 
         del tensor, mip_tensors
-        if e.device.type == "cuda":
-            torch.cuda.empty_cache()
+        # Don't call empty_cache() here — it returns the allocator's cached
+        # blocks to the driver, forcing cudaMalloc on the next load. Over
+        # Thunderbolt, cudaMalloc requires PCIe round-trips (~25ms each),
+        # turning a 1ms mipchain into a 500ms+ stall.
 
         if not e.cancelled:
             self._mip_loading = False
