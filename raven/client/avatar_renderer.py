@@ -522,7 +522,7 @@ class DPGAvatarRenderer:
             reader.start()
             try:
                 while not task_env.cancelled:
-                    frame_start_time = time.time_ns()  # for FPS measurement
+                    frame_start_time = time.monotonic_ns()  # for FPS measurement
 
                     # sync `ResultFeedReader` state from `animator_running` state
                     if not self.animator_running:
@@ -591,7 +591,7 @@ class DPGAvatarRenderer:
                     # Update FPS counter.
                     # NOTE: Since we wait on the server to send a frame, the refresh is capped to the rate that data actually arrives at, i.e. the server's TARGET_FPS.
                     #       If the machine could render faster, this just means less than 100% CPU/GPU usage.
-                    elapsed_time = time.time_ns() - frame_start_time
+                    elapsed_time = time.monotonic_ns() - frame_start_time
                     fps = 1.0 / (elapsed_time / 10**9)
                     self.fps_statistics.add_datapoint(fps)
                     maybe_set_fps_counter(describe_performance(mimetype, h, w))

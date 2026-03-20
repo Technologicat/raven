@@ -21,17 +21,6 @@ Limitations: x86-only (no ARM/Mac M-series), may lag behind Pillow releases. Nee
 
 Discovered during raven-cherrypick loader pipeline design.
 
-## Timer function audit
-
-Raven uses a mix of `time.time_ns()`, `time.monotonic()`, and `time.perf_counter()` across the codebase. Each has different guarantees:
-
-- `perf_counter_ns`: highest resolution, monotonic — correct for benchmarks
-- `monotonic_ns`: monotonic — correct for elapsed time in app code (animation, polling)
-- `time_ns`: NOT monotonic (NTP jumps) — only correct for wall-clock timestamps, not durations
-
-Audit all duration-measuring call sites and verify the correct timer type is used. The xdot widget session notes mention a `time.time_ns()` with `//` truncation bug — there may be more subtle issues.
-
-Discovered during raven-cherrypick loader bench review.
 
 ## Consolidate remaining numpy/tensor/DPG image conversions
 
@@ -125,4 +114,10 @@ Promising unexplored approaches:
 - **Always bridge**: treat `set_preloaded_arrays` like `set_image` — show old image via the bridge for one frame, let natural `_render()` do the switch. One frame of old image is acceptable.
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
+
+## Background task log format: include instance name
+
+Background task log messages should use the format: `function_name: instance {task_env.task_name}: message`. The instance name makes it clear which log messages go together when multiple instances of the same task run concurrently. Some call sites already follow this pattern (e.g. `speak_task`), others don't.
+
+Discovered during timer function audit (2026-03-21).
 

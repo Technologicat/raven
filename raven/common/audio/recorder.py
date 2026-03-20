@@ -154,7 +154,7 @@ class Recorder:
         self.on_vu_update = None  # available to be populated later by user with `connect_vu_readout`
 
         self.vu_peak_hold = vu_peak_hold  # seconds
-        self._vu_last_peak_timestamp = time.time_ns()
+        self._vu_last_peak_timestamp = time.monotonic_ns()
         self._clear_vu_readout()
 
         self._is_recording = False
@@ -205,7 +205,7 @@ class Recorder:
                     silence_level_available = False
                     silence_level_dBFS = -90.0
                     silence_measurement_timeout = 0.1  # seconds
-                    self._start_timestamp = self._vu_last_peak_timestamp = last_signal_timestamp = time.time_ns()  # timestamp after the recorder is really up and running
+                    self._start_timestamp = self._vu_last_peak_timestamp = last_signal_timestamp = time.monotonic_ns()  # timestamp after the recorder is really up and running
 
                     logger.info("Recorder.start.record_task: Entering recording loop.")
                     while self.recorder.is_recording and not task_env.cancelled:
@@ -217,7 +217,7 @@ class Recorder:
                         else:
                             self.data = array
 
-                        time_now = time.time_ns()
+                        time_now = time.monotonic_ns()
                         if not silence_level_available:  # start of recording
                             if self.silence_threshold is not None:  # explicitly specified silence level
                                 silence_level_dBFS = self.silence_threshold
@@ -288,7 +288,7 @@ class Recorder:
         """Update the VU meter data. Called automatically once per audio frame when recording."""
         peak = audio_utils.linear_to_dBFS(np.max(np.abs(array)))  # latest buffer (or whatever we were received)
         self._vu_instant = peak
-        time_now = time.time_ns()
+        time_now = time.monotonic_ns()
         if (peak > self._vu_peak) or ((time_now - self._vu_last_peak_timestamp) / 10**9 >= self.vu_peak_hold):
             self._vu_peak = peak
             self._vu_last_peak_timestamp = time_now

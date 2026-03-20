@@ -733,7 +733,7 @@ class DPGChatMessage:
                           (node_id not in system_prompt_node_ids) and
                           (node_id not in greeting_node_ids))
         def delete_subtree_callback():
-            current_time = time.time_ns()
+            current_time = time.monotonic_ns()
             if self.last_delete_click_time is not None:
                 double_okd = (current_time - self.last_delete_click_time < self.confirm_duration * 10**9)
             else:

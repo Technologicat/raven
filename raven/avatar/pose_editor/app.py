@@ -1094,7 +1094,7 @@ class PoseEditorGUI:
                 dpg.hide_item("source_no_image_loaded_text")
                 dpg.hide_item("result_no_image_loaded_text")
 
-                render_start_time = time.time_ns()
+                render_start_time = time.monotonic_ns()
 
                 # Cel-blend and apply the poser.
                 numpy_output_image = self._render(current_celstack, current_pose, output_index)  # apply the poser
@@ -1116,7 +1116,7 @@ class PoseEditorGUI:
                 return
             else:
                 # Update FPS counter, measuring the render speed only.
-                elapsed_time = time.time_ns() - render_start_time
+                elapsed_time = time.monotonic_ns() - render_start_time
                 fps = 1.0 / (elapsed_time / 10**9)
                 if self.torch_base_image is not None:
                     self.fps_statistics.add_datapoint(fps)

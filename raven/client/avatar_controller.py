@@ -206,7 +206,7 @@ class DPGAvatarController:
         self.stop_tts_button_gui_widget = stop_tts_button_gui_widget
         self.on_tts_idle = on_tts_idle
         self.tts_idle_check_interval = tts_idle_check_interval
-        self.tts_idle_check_t0 = time.time_ns()
+        self.tts_idle_check_t0 = time.monotonic_ns()
         self.subtitles_enabled = subtitles_enabled
         self.subtitle_text_gui_widget = subtitle_text_gui_widget
         self.subtitle_left_x0 = subtitle_left_x0
@@ -320,10 +320,10 @@ class DPGAvatarController:
         config._data_eyes_state_lock = threading.RLock()
         config._data_eyes_fadeout_animation = None
 
-        config._emotion_autoreset_t0 = time.time_ns()
+        config._emotion_autoreset_t0 = time.monotonic_ns()
         config._idle_detector_lock = threading.RLock()
         config._idle_detector_overrides = 0
-        config._idle_detector_t0 = time.time_ns()
+        config._idle_detector_t0 = time.monotonic_ns()
         config._avatar_speaking = False  # per-avatar-instance flag, set/reset by start/stop events in `speak_task`
 
         # Reset emotion after a few seconds of idle time (when the TTS is not speaking).
@@ -332,7 +332,7 @@ class DPGAvatarController:
                 if task_env.cancelled:
                     return
                 if config.emotion_autoreset_interval is not None:
-                    time_now = time.time_ns()
+                    time_now = time.monotonic_ns()
                     dt = (time_now - config._emotion_autoreset_t0) / 10**9
                     if not config._avatar_speaking and dt > config.emotion_autoreset_interval:
                         config._emotion_autoreset_t0 = time_now
@@ -345,7 +345,7 @@ class DPGAvatarController:
                             return
                 with config._idle_detector_lock:
                     if (config.avatar_renderer is not None) and (config.avatar_renderer.animator_running) and (config._idle_detector_overrides == 0) and (config.idle_timeout is not None):
-                        time_now = time.time_ns()
+                        time_now = time.monotonic_ns()
                         dt = (time_now - config._idle_detector_t0) / 10**9
                         if not config._avatar_speaking and dt > config.idle_timeout:
                             logger.info(f"emotion_autoreset_task: instance {task_env.task_name}: avatar idle for at least {config.idle_timeout} seconds; pausing avatar video")
@@ -373,7 +373,7 @@ class DPGAvatarController:
 
         If `avatar_renderer` is provided in `config`: resume the avatar video, if currently paused.
         """
-        config._idle_detector_t0 = time.time_ns()
+        config._idle_detector_t0 = time.monotonic_ns()
         if config.avatar_renderer is not None:
             connected = (config.avatar_renderer.avatar_instance_id is not None)
             if connected and (not config.avatar_renderer.animator_running):
@@ -446,7 +446,7 @@ class DPGAvatarController:
             return emotion
         finally:
             # Reset the timer last. If running on CPU, the emotion analysis may be slow.
-            config._emotion_autoreset_t0 = time.time_ns()
+            config._emotion_autoreset_t0 = time.monotonic_ns()
 
     def start_data_eyes(self, config: env) -> None:
         """Start the scifi "data eyes" cel effect (LLM tool access indicator).
@@ -825,7 +825,7 @@ class DPGAvatarController:
                     if self.stop_tts_button_gui_widget is not None:
                         dpg.disable_item(self.stop_tts_button_gui_widget)
                 with task_env.lock:
-                    config._emotion_autoreset_t0 = time.time_ns()  # reset the emotion autoreset timer, so that the last emotion stays for a couple more seconds once speaking ends.
+                    config._emotion_autoreset_t0 = time.monotonic_ns()  # reset the emotion autoreset timer, so that the last emotion stays for a couple more seconds once speaking ends.
                     self.ping(config)  # similarly, reset the idle countdown when speaking ends.
                     # Set the speaking state flags very last. These events are called from a different thread (the TTS client's background task),
                     # and our task threads (for `speak_task`, `emotion_autoreset_task`) monitor these flags and take action immediately.
@@ -858,7 +858,7 @@ class DPGAvatarController:
                 try:
                     output_record = self.tts_output_queue.get(block=False)
                 except queue.Empty:  # wait until we have a sentence to speak
-                    time_now = time.time_ns()
+                    time_now = time.monotonic_ns()
                     if self.tts_idle_check_interval is not None:  # trigger the TTS idle event if relevant now (if configured)
                         dt = (time_now - self.tts_idle_check_t0) / 10**9
                         if not task_env.tts_speaking and dt > self.tts_idle_check_interval:

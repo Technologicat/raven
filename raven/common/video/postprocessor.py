@@ -312,7 +312,7 @@ class Postprocessor:
 
         # FPS correction
         self.CALIBRATION_FPS = 25  # design FPS for dynamic effects (for automatic FPS correction)
-        self.stream_start_timestamp = time.time_ns()  # for updating frame counter reliably (no accumulation)
+        self.stream_start_timestamp = time.monotonic_ns()  # for updating frame counter reliably (no accumulation)
         self.frame_no = -1  # float, frame counter for *normalized* frame number *at CALIBRATION_FPS*
         self.last_frame_no = -1
 
@@ -366,7 +366,7 @@ class Postprocessor:
 
     def render_into(self, image):
         """Apply current postprocess chain, modifying `image` in-place."""
-        time_render_start = time.time_ns()
+        time_render_start = time.monotonic_ns()
 
         chain = self.chain  # read just once; other threads might reassign it while we're rendering
         if not chain:

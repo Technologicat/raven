@@ -536,7 +536,7 @@ def result_feed(instance_id: str) -> Response:
                 # Therefore, send at a target FPS that yields a nice-looking animation.
                 frame_duration_target_sec = 1 / animator.target_fps
                 if last_frame_send_complete_time is not None:
-                    time_now = time.time_ns()
+                    time_now = time.monotonic_ns()
                     this_frame_elapsed_sec = (time_now - last_frame_send_complete_time) / 10**9
                     # The 2* is a fudge factor. It doesn't matter if the frame is a bit too early, but we don't want it to be late.
                     time_until_frame_deadline = frame_duration_target_sec - this_frame_elapsed_sec - 2 * send_duration_sec
@@ -544,7 +544,7 @@ def result_feed(instance_id: str) -> Response:
                     time_until_frame_deadline = 0.0  # nothing rendered yet
 
                 if time_until_frame_deadline <= 0.0:
-                    time_now = time.time_ns()
+                    time_now = time.monotonic_ns()
                     image_format, image_data = current_frame
                     content_type_header = f"Content-Type: image/{image_format.lower()}\r\n".encode()
                     content_length_header = f"Content-Length: {len(image_data)}\r\n".encode()
@@ -560,11 +560,11 @@ def result_feed(instance_id: str) -> Response:
                            image_data +
                            b"\r\n")
                     encoder.latest_frame_sent = id(current_frame)  # atomic update, no need for lock
-                    send_duration_sec = (time.time_ns() - time_now) / 10**9  # about 0.12 ms on localhost (compress_level=1 or 6, doesn't matter)
+                    send_duration_sec = (time.monotonic_ns() - time_now) / 10**9  # about 0.12 ms on localhost (compress_level=1 or 6, doesn't matter)
                     # print(f"send {send_duration_sec:0.6g}s")  # DEBUG
 
                     # Update the FPS counter, measuring the time between network sends.
-                    time_now = time.time_ns()
+                    time_now = time.monotonic_ns()
                     if last_frame_send_complete_time is not None:
                         this_frame_elapsed_sec = (time_now - last_frame_send_complete_time) / 10**9
                         send_duration_statistics.add_datapoint(this_frame_elapsed_sec)
@@ -573,7 +573,7 @@ def result_feed(instance_id: str) -> Response:
                     time.sleep(time_until_frame_deadline)
 
                 # Log the FPS counter in 5-second intervals.
-                time_now = time.time_ns()
+                time_now = time.monotonic_ns()
                 if animator.animation_running and (last_report_time is None or time_now - last_report_time > 5e9):
                     avg_send_sec = send_duration_statistics.average()
                     msec = round(1000 * avg_send_sec, 1)
@@ -645,7 +645,7 @@ class Animator:
         self.last_talking_timestamp = None
         self.last_talking_target_value = None
 
-        t0 = time.time_ns()
+        t0 = time.monotonic_ns()
         self.breathing_epoch = t0
         self.waver_epoch = t0
         self.data_eyes_epoch = t0
@@ -936,7 +936,7 @@ class Animator:
         logger.debug(f"animate_blinking: p @ {CALIBRATION_FPS} FPS = {p_orig}, scaled p @ {debug_fps:.1f} FPS = {p_scaled:0.6g}")
 
         # Prevent blinking too fast in succession.
-        time_now = time.time_ns()
+        time_now = time.monotonic_ns()
         if self.blink_interval is not None:
             # ...except when the "confusion" emotion has been entered recently.
             seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
@@ -1004,7 +1004,7 @@ class Animator:
         # With 25 FPS (or faster) output, randomizing the mouth every frame looks too fast.
         # Determine whether enough wall time has passed to randomize a new mouth position.
         TARGET_SEC = 1 / self._settings["talking_fps"]  # rate of "actual new cels" in talking animation
-        time_now = time.time_ns()
+        time_now = time.monotonic_ns()
         update_mouth = False
         if self.last_talking_timestamp is None:
             update_mouth = True
@@ -1156,7 +1156,7 @@ class Animator:
         SWAYPARTS = self._settings["sway_morphs"]  # some characters might not sway on all axes (e.g. a robot)
 
         def macrosway() -> List[float]:  # this handles caching and everything
-            time_now = time.time_ns()
+            time_now = time.monotonic_ns()
             should_pick_new_sway_target = True
             if self.emotion == self.last_emotion:  # same emotion as previous frame?
                 if self.sway_interval is not None:  # have we created a swayed pose at least once?
@@ -1194,7 +1194,7 @@ class Animator:
         # Add dynamic noise (re-generated at 25 FPS) to the target to make the animation look less robotic, especially once we are near the target pose.
         def add_microsway() -> None:  # DANGER: MUTATING FUNCTION
             CALIBRATION_FPS = 25  # FPS at which randomizing a new microsway target looks good
-            time_now = time.time_ns()
+            time_now = time.monotonic_ns()
             should_microsway = True
             if self.last_microsway_timestamp is not None:
                 seconds_since_last_microsway = (time_now - self.last_microsway_timestamp) / 10**9
@@ -1224,7 +1224,7 @@ class Animator:
         """
         breathing_cycle_duration = self._settings["breathing_cycle_duration"]  # seconds
 
-        time_now = time.time_ns()
+        time_now = time.monotonic_ns()
         t = (time_now - self.breathing_epoch) / 10**9  # seconds since breathing-epoch
         cycle_pos = t / breathing_cycle_duration  # number of cycles since breathing-epoch
         if cycle_pos > 1.0:  # prevent loss of accuracy in long sessions
@@ -1278,7 +1278,7 @@ class Animator:
         Relevant `self._settings` keys: "animefx". See `raven.server.config` for details.
         """
         new_celstack = copy.copy(celstack)
-        time_now = time.time_ns()  # TODO: use frame start time (`time_render_start`)?
+        time_now = time.monotonic_ns()  # TODO: use frame start time (`time_render_start`)?
         seconds_since_last_emotion_change = (time_now - self.last_emotion_change_timestamp) / 10**9
         for fx_name, fx_config in self._settings["animefx"]:
             # Skip if effect disabled
@@ -1420,7 +1420,7 @@ class Animator:
                 torch.cuda.synchronize()
 
         maybe_sync_cuda()
-        time_render_start = time.time_ns()
+        time_render_start = time.monotonic_ns()
 
         self.emotion = self.pending_emotion  # update from pending emotion at start of frame (this avoids a race condition between `set_emotion` and `render_animation_frame`)
 
@@ -1548,7 +1548,7 @@ class Animator:
         # (CUDA will perform all its pending async operations at the latest when we send the final tensor to the CPU.)
         #
         # This says how fast the renderer *can* run on the current hardware; note we never render more frames than the client consumes.
-        time_now = time.time_ns()
+        time_now = time.monotonic_ns()
         if self.source_image is not None:
             render_elapsed_sec = (time_now - time_render_start) / 10**9
             self.render_duration_statistics.add_datapoint(render_elapsed_sec)
@@ -1596,7 +1596,7 @@ class Encoder:
             wait_duration_statistics = RunningAverage()
 
             while not self._terminated:
-                time_encode_start = time.time_ns()
+                time_encode_start = time.monotonic_ns()
 
                 # Retrieve a new frame from the animator if available.
                 animator = _avatar_instances[self.instance_id]["animator"]
@@ -1613,7 +1613,7 @@ class Encoder:
                         # Important: grab reference to `output_format` just once per frame; may be changed (atomic replace) by another thread while we're encoding.
                         output_format = self.output_format
 
-                        # time_now = time.time_ns()
+                        # time_now = time.monotonic_ns()
                         if output_format.upper() == "QOI":  # Quite OK Image format - like PNG, but fast
                             # Ugh, we must copy because the data isn't C-contiguous... but this is still faster than the other formats.
                             current_frame = (output_format.upper(), qoi.encode(image_rgba.copy(order="C")))  # input: uint8 array of shape (h, w, c)
@@ -1634,17 +1634,17 @@ class Encoder:
                                            format=output_format.upper(),
                                            **kwargs)
                             current_frame = (output_format, buffer.getvalue())
-                        # pack_duration_sec = (time.time_ns() - time_now) / 10**9  # DEBUG / benchmarking
+                        # pack_duration_sec = (time.monotonic_ns() - time_now) / 10**9  # DEBUG / benchmarking
 
                         # We now have a new encoded frame; but first, sync with network send.
                         # This prevents from rendering/encoding more frames than are actually sent.
                         previous_frame = self.current_frame
                         if previous_frame is not None:
-                            time_wait_start = time.time_ns()
+                            time_wait_start = time.monotonic_ns()
                             # Wait in 1ms increments until the previous encoded frame has been sent
                             while self.latest_frame_sent != id(previous_frame) and not self._terminated:
                                 time.sleep(0.001)
-                            time_now = time.time_ns()
+                            time_now = time.monotonic_ns()
                             wait_elapsed_sec = (time_now - time_wait_start) / 10**9
                         else:
                             wait_elapsed_sec = 0.0
@@ -1656,14 +1656,14 @@ class Encoder:
                         raise  # let the encoder shut down so we won't spam the log
 
                     # Update FPS counter.
-                    time_now = time.time_ns()
+                    time_now = time.monotonic_ns()
                     walltime_elapsed_sec = (time_now - time_encode_start) / 10**9
                     encode_elapsed_sec = walltime_elapsed_sec - wait_elapsed_sec
                     encode_duration_statistics.add_datapoint(encode_elapsed_sec)
                     wait_duration_statistics.add_datapoint(wait_elapsed_sec)
 
                 # Log the FPS counter in 5-second intervals.
-                time_now = time.time_ns()
+                time_now = time.monotonic_ns()
                 if animator.animation_running and (last_report_time is None or time_now - last_report_time > 5e9):
                     avg_encode_sec = encode_duration_statistics.average()
                     msec = round(1000 * avg_encode_sec, 1)
