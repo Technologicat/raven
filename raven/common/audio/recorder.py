@@ -193,12 +193,12 @@ class Recorder:
 
             def record_task(task_env: env) -> None:
                 try:
-                    logger.info("Recorder.start.record_task: Audio capture task starting.")
+                    logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Audio capture task starting.")
                     autostopped = False
                     if task_env.cancelled:  # while waiting in queue
-                        logger.info("Recorder.start.record_task: Audio capture task cancelled while in queue.")
+                        logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Audio capture task cancelled while in queue.")
                         return
-                    logger.info("Recorder.start.record_task: Starting audio recorder.")
+                    logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Starting audio recorder.")
                     self.data = None
                     self.recorder.start()
                     self.sample_rate = self.recorder.sample_rate  # read-only property; not sure if it's available when not recording, so let's be safe.
@@ -207,7 +207,7 @@ class Recorder:
                     silence_measurement_timeout = 0.1  # seconds
                     self._start_timestamp = self._vu_last_peak_timestamp = last_signal_timestamp = time.monotonic_ns()  # timestamp after the recorder is really up and running
 
-                    logger.info("Recorder.start.record_task: Entering recording loop.")
+                    logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Entering recording loop.")
                     while self.recorder.is_recording and not task_env.cancelled:
                         frame = self.recorder.read()  # -> List[int] (s16, mono)
                         array = np.array(frame, dtype=np.int16)
@@ -222,14 +222,14 @@ class Recorder:
                             if self.silence_threshold is not None:  # explicitly specified silence level
                                 silence_level_dBFS = self.silence_threshold
                                 silence_level_available = True
-                                logger.info(f"Recorder.start.record_task: Silence level set by caller to {silence_level_dBFS:0.2f}dBFS.")
+                                logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Silence level set by caller to {silence_level_dBFS:0.2f}dBFS.")
                             else:  # autodetect silence level at start of recording
                                 recording_time_elapsed = (time_now - self._start_timestamp) / 10**9
                                 if recording_time_elapsed >= silence_measurement_timeout:
                                     silence_level_raw_dBFS = audio_utils.linear_to_dBFS(np.max(np.abs(self.data)))  # all data so far!
                                     silence_level_dBFS = silence_level_raw_dBFS + 6.0  # leave some margin to be safe, in case the very beginning was unusually silent
                                     silence_level_available = True
-                                    logger.info(f"Recorder.start.record_task: Silence level measured from first {silence_measurement_timeout:0.6g}s of recorded audio as {silence_level_raw_dBFS:0.2f}dBFS.")
+                                    logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Silence level measured from first {silence_measurement_timeout:0.6g}s of recorded audio as {silence_level_raw_dBFS:0.2f}dBFS.")
 
                         else:  # silence_level_available:  # normal operation
                             # _vu_instant for the current audio frame is updated by `_update_vu_readout`, above
@@ -240,18 +240,18 @@ class Recorder:
                             if self.autostop_timeout is not None:
                                 time_elapsed_since_last_signal = (time_now - last_signal_timestamp) / 10**9
                                 if time_elapsed_since_last_signal >= self.autostop_timeout:
-                                    logger.info(f"Recorder.start.record_task: Silence detected, autostopping. (Audio input level less than {silence_level_dBFS:0.2f}dBFS for {self.autostop_timeout:0.6g}s.)")
+                                    logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Silence detected, autostopping. (Audio input level less than {silence_level_dBFS:0.2f}dBFS for {self.autostop_timeout:0.6g}s.)")
                                     autostopped = True
                                     self.stop()
                                     break
                 finally:
-                    logger.info("Recorder.start.record_task: Audio capture task exiting.")
+                    logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Audio capture task exiting.")
                     with self._recording_state_lock:
                         self._is_recording = False
                     if autostopped and on_autostop is not None:
-                        logger.info("Recorder.start.record_task: Calling custom `on_autostop`.")
+                        logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Calling custom `on_autostop`.")
                         on_autostop()  # do this last, after no longer in recording state
-                    logger.info("Recorder.start.record_task: Audio capture task exited.")
+                    logger.info(f"Recorder.start.record_task: instance {task_env.task_name}: Audio capture task exited.")
             self._task_manager.submit(record_task, env())
             logger.info("Recorder.start: Audio capture task submitted.")
 

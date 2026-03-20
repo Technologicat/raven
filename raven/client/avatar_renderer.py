@@ -501,7 +501,7 @@ class DPGAvatarRenderer:
             Receives video frames from Raven-server and renders them in the GUI.
             """
             assert task_env is not None
-            logger.info(f"DPGAvatarRenderer.start.update_live_texture: Background task for avatar instance '{avatar_instance_id}' starting.")
+            logger.info(f"DPGAvatarRenderer.start.update_live_texture: instance {task_env.task_name}: Background task for avatar instance '{avatar_instance_id}' starting.")
 
             def describe_performance(video_format: str, video_height: int, video_width: int):  # actual received video height/width of the frame being described
                 if not self.animator_running:

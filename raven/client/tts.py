@@ -325,12 +325,12 @@ def tts_speak(text: str,
     # We run this in the background
     def speak(task_env) -> None:
         if prep is None:
-            logger.info("tts_speak.speak: getting audio")
+            logger.info(f"tts_speak.speak: instance {task_env.task_name}: getting audio")
             final_prep = tts_prepare(text, voice, speed, get_metadata=False)
             if final_prep is None:
-                logger.info("tts_speak.speak: got `None` from `tts_prepare`. Cancelled.")
+                logger.info(f"tts_speak.speak: instance {task_env.task_name}: got `None` from `tts_prepare`. Cancelled.")
         else:
-            logger.info("tts_speak.speak: using precomputed audio")
+            logger.info(f"tts_speak.speak: instance {task_env.task_name}: using precomputed audio")
             final_prep = prep
         audio_bytes = final_prep["audio_bytes"]
 
@@ -339,7 +339,7 @@ def tts_speak(text: str,
             on_audio_ready(audio_bytes)
 
         # play audio
-        logger.info("tts_speak.speak: loading audio into mixer")
+        logger.info(f"tts_speak.speak: instance {task_env.task_name}: loading audio into mixer")
         audio_buffer = io.BytesIO()
         audio_buffer.write(audio_bytes)
         audio_buffer.seek(0)
@@ -348,15 +348,15 @@ def tts_speak(text: str,
         try:
             util.api_config.audio_player.load(audio_buffer)
         except RuntimeError as exc:
-            logger.error(f"tts_speak.speak: failed to load audio into mixer, reason {type(exc)}: {exc}")
+            logger.error(f"tts_speak.speak: instance {task_env.task_name}: failed to load audio into mixer, reason {type(exc)}: {exc}")
             return
 
-        logger.info("tts_speak.speak: starting playback")
+        logger.info(f"tts_speak.speak: instance {task_env.task_name}: starting playback")
         if on_start is not None:
             try:
                 on_start()
             except Exception as exc:
-                logger.error(f"tts_speak.speak: in start callback: {type(exc)}: {exc}")
+                logger.error(f"tts_speak.speak: instance {task_env.task_name}: in start callback: {type(exc)}: {exc}")
                 traceback.print_exc()
         util.api_config.audio_player.start()
 
@@ -366,14 +366,14 @@ def tts_speak(text: str,
                 # NOTE: At this point, we don't take cancellations from `task_env.cancelled`; but the client can explicitly call `tts_stop`,
                 # which stops the audio, thus exiting the loop. We are likely running on a different thread pool than the main app, anyway,
                 # unless the main thread pool was passed to `raven.client.api.initialize` (implemented in `raven.client.util.initialize_api`).
-            logger.info("tts_speak.speak: playback finished")
+            logger.info(f"tts_speak.speak: instance {task_env.task_name}: playback finished")
             try:
                 on_stop()
             except Exception as exc:
-                logger.error(f"tts_speak.speak: in stop callback: {type(exc)}: {exc}")
+                logger.error(f"tts_speak.speak: instance {task_env.task_name}: in stop callback: {type(exc)}: {exc}")
                 traceback.print_exc()
         else:
-            logger.info("tts_speak.speak: no stop callback, all done.")
+            logger.info(f"tts_speak.speak: instance {task_env.task_name}: no stop callback, all done.")
     util.api_config.task_manager.submit(speak, envcls())
 
 def tts_speak_lipsynced(instance_id: str,

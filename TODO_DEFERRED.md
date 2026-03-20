@@ -115,9 +115,3 @@ Promising unexplored approaches:
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
 
-## Background task log format: include instance name
-
-Background task log messages should use the format: `function_name: instance {task_env.task_name}: message`. The instance name makes it clear which log messages go together when multiple instances of the same task run concurrently. Some call sites already follow this pattern (e.g. `speak_task`), others don't.
-
-Discovered during timer function audit (2026-03-21).
-

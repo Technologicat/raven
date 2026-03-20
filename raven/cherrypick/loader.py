@@ -159,8 +159,8 @@ class ThumbnailPipeline:
             try:
                 arr = imageutils.decode_image(path, max_size=e.max_size)
             except Exception as exc:
-                logger.warning("ThumbnailPipeline._decode_loop: "
-                               "failed to decode %s: %s", path.name, exc)
+                logger.warning(f"ThumbnailPipeline._decode_loop: instance {e.task_name}: "
+                               f"failed to decode {path.name}: {exc}")
                 continue
 
             # Put with timeout so we can check cancellation periodically.
@@ -200,5 +200,5 @@ class ThumbnailPipeline:
                 del tensor, thumbnail  # free GPU memory promptly
                 e.result_queue.put((idx, flat))
             except Exception as exc:
-                logger.warning("ThumbnailPipeline._gpu_loop: "
-                               "failed to resize index %d: %s", idx, exc)
+                logger.warning(f"ThumbnailPipeline._gpu_loop: instance {e.task_name}: "
+                               f"failed to resize index {idx}: {exc}")

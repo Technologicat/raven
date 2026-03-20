@@ -535,8 +535,7 @@ class ImageView:
         try:
             e.rgba = imageutils.decode_image(e.path)
         except Exception as exc:
-            logger.warning("ImageView._bg_file_mip_task: decode failed for %s: %s",
-                           e.path, exc)
+            logger.warning(f"ImageView._bg_file_mip_task: instance {e.task_name}: decode failed for {e.path}: {exc}")
             self._set_mip_loading(False)
             self._needs_render = True
             return
@@ -553,8 +552,7 @@ class ImageView:
         self._needs_render = True
 
         if e.debug:
-            logger.info("ImageView._bg_file_mip_task: decode=%dms size=%dx%d %s",
-                        t_decode / 1e6, self._img_w, self._img_h, e.path)
+            logger.info(f"ImageView._bg_file_mip_task: instance {e.task_name}: decode={t_decode / 1e6:.0f}ms size={self._img_w}x{self._img_h} {e.path}")
 
         # Delegate to the standard mip pipeline.
         self._bg_mip_task(e)
@@ -572,8 +570,7 @@ class ImageView:
             try:
                 rgba = imageutils.decode_image(e.path)
             except Exception as exc:
-                logger.warning("ImageView._bg_augment_task: decode failed for %s: %s",
-                               e.path, exc)
+                logger.warning(f"ImageView._bg_augment_task: instance {e.task_name}: decode failed for {e.path}: {exc}")
                 return
             t_decode = time.perf_counter_ns() - t0
 
@@ -638,9 +635,8 @@ class ImageView:
 
             if e.debug:
                 t_total = (time.perf_counter_ns() - t0) / 1e6
-                logger.info("ImageView._bg_augment_task: inserted %d levels, "
-                            "decode=%dms total=%dms",
-                            n_inserted, t_decode / 1e6, t_total)
+                logger.info(f"ImageView._bg_augment_task: instance {e.task_name}: inserted {n_inserted} levels, "
+                            f"decode={t_decode / 1e6:.0f}ms total={t_total:.0f}ms")
         finally:
             self._set_mip_loading(False)
 
@@ -726,7 +722,7 @@ class ImageView:
             self._needs_render = True
 
             if e.debug:
-                logger.info(f"ImageView._bg_mip_task: {mw}x{mh} "
+                logger.info(f"ImageView._bg_mip_task: instance {e.task_name}: {mw}x{mh} "
                             f"scale={mip_scale:.3f} "
                             f"xfer={t_xfer / 1e6:.0f}ms "
                             f"tex={t_tex / 1e6:.0f}ms")
@@ -734,7 +730,7 @@ class ImageView:
         t_total = (time.perf_counter_ns() - t_total_start) / 1e6
         if e.debug:
             sizes = [f"{mt.shape[3]}x{mt.shape[2]}" for mt in mip_tensors]
-            logger.info(f"ImageView._bg_mip_task: done. upload={t_upload / 1e6:.0f}ms "
+            logger.info(f"ImageView._bg_mip_task: instance {e.task_name}: done. upload={t_upload / 1e6:.0f}ms "
                         f"mipgen={t_mipgen / 1e6:.0f}ms "
                         f"levels={sizes} total={t_total:.0f}ms")
 

@@ -305,7 +305,7 @@ def _preload_one(e: env) -> None:
     try:
         rgba = imageutils.decode_image(e.path)
     except Exception as exc:
-        logger.warning(f"PreloadCache._preload_one: failed to decode "
+        logger.warning(f"PreloadCache._preload_one: instance {e.task_name}: failed to decode "
                        f"{e.path}: {exc}")
         return
     if e.cancelled:
@@ -359,7 +359,7 @@ def _preload_one(e: env) -> None:
 
     t_total = (time.perf_counter_ns() - t0) / 1e6
     if e.debug:
-        logger.info(f"PreloadCache._preload_one: idx={e.idx} "
+        logger.info(f"PreloadCache._preload_one: instance {e.task_name}: idx={e.idx} "
                     f"{img_w}x{img_h} "
                     f"ram={ram_bytes / 1e6:.0f}MB "
                     f"total={t_total:.0f}ms")
