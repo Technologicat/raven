@@ -13,6 +13,7 @@ __all__ = ["get_font_path", "bootup", "load_extra_font",
            "wait_for_resize",
            "recenter_window",
            "compute_tooltip_position_scalar",
+           "add_toolbar_separator",
            "get_pixels_per_plotter_data_unit"]
 
 import logging
@@ -534,7 +535,7 @@ def recenter_window(thewindow: Union[str, int], *, reference_window: Union[str, 
                       max(0, (reference_window_h - h) // 2)))
 
 # ---------------------------------------------------------------------------
-# Tooltip positioning
+# Tooltips, toolbars
 # ---------------------------------------------------------------------------
 
 def compute_tooltip_position_scalar(*,
@@ -619,6 +620,51 @@ def compute_tooltip_position_scalar(*,
         pos = (1.0 - s) * pos1 + s * pos2
 
         return pos
+
+def add_toolbar_separator(*,
+                          horizontal: bool,
+                          toolbar_extent: int,
+                          size: int,
+                          line: bool = True,
+                          line_offset: Optional[int] = None,
+                          color: Tuple[int, int, int, int] = (140, 140, 140, 255),
+                          parent: Optional[Union[int, str]] = None) -> Union[int, str]:
+    """Add a visual separator between sections in a DPG toolbar.
+
+    Draws a thin dividing line via a drawlist, or an invisible spacer.
+
+    `horizontal`: ``True`` for a horizontal toolbar (separator is a vertical line),
+                  ``False`` for a vertical toolbar (separator is a horizontal line).
+    `toolbar_extent`: the toolbar's cross-axis size in pixels — height for a
+                      horizontal toolbar, width for a vertical toolbar.
+    `size`: separator size in pixels — width for horizontal, height for vertical.
+    `line`: if ``True``, draw a visible divider line; if ``False``, just add a spacer.
+    `line_offset`: pixel offset of the line within the separator. Defaults to center,
+                   which is `size // 2`. x offset for horizontal; y offset for vertical.
+    `color`: RGBA tuple for the line.
+    `parent`: explicit DPG parent. ``None`` uses the implicit container stack
+              (fine during initial GUI build in ``main()``).
+
+    Returns the DPG item ID of the created drawlist or spacer.
+    """
+    if line_offset is None:
+        line_offset = size // 2
+    kwargs = {} if parent is None else {"parent": parent}
+    if line:
+        if horizontal:
+            dl = dpg.add_drawlist(width=size, height=toolbar_extent, **kwargs)
+            dpg.draw_line((line_offset, 0), (line_offset, toolbar_extent),
+                          color=color, thickness=1, parent=dl)
+        else:
+            dl = dpg.add_drawlist(width=toolbar_extent, height=size, **kwargs)
+            dpg.draw_line((0, line_offset), (toolbar_extent, line_offset),
+                          color=color, thickness=1, parent=dl)
+        return dl
+    else:
+        if horizontal:
+            return dpg.add_spacer(width=size, height=toolbar_extent, **kwargs)
+        else:
+            return dpg.add_spacer(width=toolbar_extent, height=size, **kwargs)
 
 # ---------------------------------------------------------------------------
 # Plotter utilities

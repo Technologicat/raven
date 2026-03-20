@@ -82,14 +82,6 @@ Could be a useful addition to pyan3 (static call graph generator already underst
 
 Discovered during raven-cherrypick development.
 
-## Refactor toolbar separator helpers into guiutils
-
-Librarian has `add_separator_for_horizontal_toolbar` (drawlist-based vertical line) and Visualizer has one for vertical toolbars. Both should be refactored into `raven.common.gui.utils`. raven-cherrypick currently uses `dpg.add_separator()` which causes visual artifacts in horizontal groups.
-
-Could refactor as classes (cleaner than the current FP closures for stateful DPG widgets).
-
-Discovered during raven-cherrypick test drive.
-
 ## ThumbnailGrid thread safety
 
 `raven/cherrypick/grid.py` — not currently thread-safe. All callers happen to be on the main thread (background threads interact via queues). If background threads ever need to call grid methods directly, add locking.

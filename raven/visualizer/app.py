@@ -1646,24 +1646,18 @@ with timer() as tim:
 
             # Toolbar
             with dpg.group(horizontal=False, tag="toolbar_group"):
-                def add_separator_for_vertical_toolbar(*, height=None, line=True, line_offset_y=None):
+                def add_separator(*, height=None, line=True, line_offset=None):
                     if height is None:
                         height = gui_config.toolbar_separator_h
-                    if line_offset_y is None:
-                        line_offset_y = height // 2
-                    if line:
-                        with dpg.drawlist(width=gui_config.toolbar_inner_w, height=height):
-                            dpg.draw_line((0, line_offset_y),
-                                          (99, line_offset_y),
-                                          color=(140, 140, 140, 255),
-                                          thickness=1)
-                    else:
-                        dpg.add_spacer(width=gui_config.toolbar_inner_w, height=height)
+                    guiutils.add_toolbar_separator(horizontal=False,
+                                                   toolbar_extent=gui_config.toolbar_inner_w,
+                                                   size=height, line=line,
+                                                   line_offset=line_offset)
                 if gui_config.toolbutton_indent is None:
                     gui_config.toolbutton_indent = (gui_config.toolbar_inner_w - gui_config.toolbutton_w) // 2  # pixels, to center the buttons
 
                 dpg.add_text("Tools", tag="toolbar_header_text")
-                add_separator_for_vertical_toolbar(height=gui_config.toolbar_separator_h // 2, line_offset_y=0)
+                add_separator(height=gui_config.toolbar_separator_h // 2, line_offset=0)
 
                 # File controls
 
@@ -1685,7 +1679,7 @@ with timer() as tim:
                 with dpg.tooltip("open_importer_window_button", tag="open_importer_window_tooltip"):  # tag
                     dpg.add_text("Import BibTeX files [Ctrl+I]", tag="open_importer_window_tooltip_text")
 
-                add_separator_for_vertical_toolbar()
+                add_separator()
 
                 # Zoom controls
 
@@ -1714,7 +1708,7 @@ with timer() as tim:
                 # with dpg.tooltip("zoom_to_selection_button"):  # tag
                 #     dpg.add_text("Zoom to currently selected items")
 
-                add_separator_for_vertical_toolbar()
+                add_separator()
 
                 # Selection controls
 
@@ -1782,7 +1776,7 @@ with timer() as tim:
 
                 # Miscellaneous controls
 
-                add_separator_for_vertical_toolbar()
+                add_separator()
                 def toggle_fullscreen():
                     dpg.toggle_viewport_fullscreen()
                     resize_gui()  # see below
@@ -1796,7 +1790,7 @@ with timer() as tim:
                     dpg.add_text("Toggle fullscreen [F11]",
                                  tag="fullscreen_tooltip_text")
 
-                add_separator_for_vertical_toolbar()
+                add_separator()
 
                 # We'll define and bind the callback later, when we set up the help window.
                 dpg.add_button(label=fa.ICON_CIRCLE_QUESTION,
