@@ -1,7 +1,7 @@
-"""Viewport transforms and smooth animation for pan/zoom.
+"""Viewport transforms for pan/zoom.
 
-This module provides coordinate transformation between graph space and
-screen space, with smooth animation support for panning and zooming.
+Coordinate transformation between graph space and screen space,
+with smooth animation support via `SmoothValue` for panning and zooming.
 
 The interaction with Raven's GUI animation system, to actually run the
 animated parts, is handled by `widget.py`; this is an internal class.
@@ -9,132 +9,13 @@ animated parts, is handled by `widget.py`; this is an internal class.
 
 __all__ = ["SmoothValue", "Viewport"]
 
-import math
-import time
 from typing import Optional, Tuple
 
 from ... import numutils
+from ...smoothvalue import SmoothValue
 
 from .constants import Point
 from .graph import Graph
-
-
-# TODO: Unify the interpolator implementations: this one; `raven.server.modules.avatar` for pose interpolation; and `raven.common.gui.animation` for scroll position animation. Should have just one with a specifiable datatype (float or int) and an optional subpixel flag for the int case.
-class SmoothValue:
-    """An animated float value using first-order ODE solution.
-
-    The animation depends only on current and target positions, using
-    the analytical solution to Newton's law of cooling (exponential decay
-    toward target). Hence this can adapt to sudden target value changes.
-
-    This provides smooth transitions between values, without a fixed duration.
-
-    The `rate` parameter, in the half-open interval (0, 1], controls how quickly
-    the value approaches the target. Higher values mean faster animation.
-
-    For example, the default rate of 0.8 means that 80% of the remaining distance
-    toward the target value is covered in one frame at *calibration FPS*, which is 25 FPS.
-    The animator internally compensates for the render framerate automatically,
-    so that the animation speed remains the same (w.r.t. wall clock time)
-    regardless of the actual render FPS.
-    """
-
-    CALIBRATION_FPS = 25  # FPS for which `rate` was calibrated
-    EPSILON = 1e-3  # Range from which to snap to target; denormal guard
-
-    def __init__(self, value: float = 0.0, rate: float = 0.3):
-        """Initialize with a starting value.
-
-        `value`: Initial value.
-        `rate`: Animation rate, in (0, 1]. Higher = faster. Default 0.3.
-        """
-        self._current = value
-        self._target = value
-        self._rate = rate
-        self._last_time = time.time()
-
-    # TODO: Use the same style for defining properties as in the rest of the Raven codebase.
-    @property
-    def current(self) -> float:
-        """The current (animated) value."""
-        return self._current
-
-    @property
-    def target(self) -> float:
-        """The target value the animation is moving toward."""
-        return self._target
-
-    @target.setter
-    def target(self, value: float) -> None:
-        """Set a new target value."""
-        # Reset the time reference so the first animation frame has a
-        # reasonable dt, not a stale delta from the last update() call
-        # (which may have been seconds/minutes ago if nothing was animating).
-        if not self.is_animating():
-            self._last_time = time.time()
-        self._target = value
-
-    def set_immediate(self, value: float) -> None:
-        """Set both current and target value immediately (no animation)."""
-        self._current = value
-        self._target = value
-
-    def is_animating(self) -> bool:
-        """Return True if the value is still animating toward target."""
-        return abs(self._target - self._current) > 0.001
-
-    def update(self, dt: Optional[float] = None) -> bool:
-        """Advance the animation by one frame.
-
-        `dt`: Time delta in seconds. If None, computed from wall clock.
-
-        Returns True if still animating, False if reached target.
-        """
-        if not self.is_animating():
-            self._current = self._target
-            return False
-
-        # Compute time delta
-        now = time.time()
-        if dt is None:
-            dt = now - self._last_time
-        self._last_time = now
-
-        # Framerate correction for rate-based animation
-        # (from raven.common.gui.animation.SmoothScrolling)
-        alpha_orig = 1.0 - self._rate
-        if 0 < alpha_orig < 1:
-            # Estimate FPS from dt
-            if dt > 0:
-                avg_fps = 1.0 / dt
-            else:
-                avg_fps = self.CALIBRATION_FPS
-
-            # Compute number of frames to cover 50% of distance at calibration FPS
-            xrel = 0.5
-            n_orig = math.log(1.0 - xrel) / math.log(alpha_orig)
-            # Scale for actual FPS
-            n_scaled = (avg_fps / self.CALIBRATION_FPS) * n_orig
-            if n_scaled > 0:
-                alpha_scaled = (1.0 - xrel) ** (1 / n_scaled)
-            else:
-                alpha_scaled = alpha_orig
-        else:
-            alpha_scaled = alpha_orig
-
-        step_scaled = 1.0 - alpha_scaled
-
-        # Calculate new position
-        remaining = self._target - self._current
-        delta = step_scaled * remaining
-        new_value = self._current + delta
-
-        # Snap to target when close enough, to avoid denormal floats (which are software-emulated, very slow).
-        if abs(self._target - new_value) <= self.EPSILON:
-            self._current = self._target
-            return False
-        self._current = new_value
-        return True
 
 
 class Viewport:

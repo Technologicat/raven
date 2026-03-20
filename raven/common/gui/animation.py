@@ -18,6 +18,8 @@ from typing import Callable, Optional, Tuple, Union
 
 from unpythonic import sym
 
+from ..smoothvalue import SmoothInt
+
 import dearpygui.dearpygui as dpg
 
 from .. import numutils
@@ -491,11 +493,8 @@ class SmoothScrolling(Animation):
         This is pretty sophisticated, to make the movement smooth, but also keep things working as expected
         when the target position changes on the fly.
 
-        The animation depends only on the current and target positions, and has a reference rate,
-        no reference duration. Essentially, we use Newton's law of cooling (first-order ODE),
-        and apply its analytical solution.
-
-        For the math details, see the detailed comment below the source code of this class.
+        The interpolation is delegated to `SmoothInt` from `raven.common.smoothvalue`,
+        which handles FPS-corrected exponential decay with subpixel tracking.
         """
         super().__init__()
         self.instance_lock = threading.Lock()
@@ -509,7 +508,7 @@ class SmoothScrolling(Animation):
 
         self.prev_frame_new_y_scroll = None  # target position of last frame, for monitoring of stuck animation
         self.update_pending_frames = 0
-        self.fracpart = 0.0  # fractional part of position, for subpixel correction
+        self._sv = SmoothInt(value=0, rate=smooth_step)
         self.reified = False  # `True`: running; `False`: ghost mode, update other instance and exit.
 
         self.start()
@@ -550,42 +549,22 @@ class SmoothScrolling(Animation):
                 if self.prev_frame_new_y_scroll is None or current_y_scroll == self.prev_frame_new_y_scroll:
                     self.update_pending_frames = 0
 
-                    # Magic section -->
-                    # Framerate correction for rate-based animation, to reach a constant animation rate per unit of wall time, regardless of render FPS.
-                    CALIBRATION_FPS = 25  # FPS for which `step` was calibrated
-                    xrel = 0.5  # just some convenient value
-                    step = self.smooth_step
-                    alpha_orig = 1.0 - step
-                    if 0 < alpha_orig < 1:
-                        avg_render_fps = dpg.get_frame_rate()
+                    # First frame: sync SmoothInt from DPG's current scroll position.
+                    if self.prev_frame_new_y_scroll is None:
+                        self._sv.set_immediate(current_y_scroll)
+                        self._sv.target = self.target_y_scroll
 
-                        # For a constant target position and original `α`, compute the number of animation frames to cover `xrel` of distance from initial position to final position.
-                        # This is how many frames we need at `CALIBRATION_FPS`.
-                        n_orig = math.log(1.0 - xrel) / math.log(alpha_orig)
-                        # Compute the scaled `n`, to account for `avg_render_fps`. Note the direction: we need a smaller `n` (fewer animation frames) if the render runs slower than `CALIBRATION_FPS`.
-                        n_scaled = (avg_render_fps / CALIBRATION_FPS) * n_orig
-                        # Then compute the `α` that reaches `xrel` distance in `n_scaled` animation frames.
-                        alpha_scaled = (1.0 - xrel)**(1 / n_scaled)
-                    else:  # avoid some divisions by zero at the extremes
-                        alpha_scaled = alpha_orig
-                    step_scaled = 1.0 - alpha_scaled
-                    # <-- End magic section
+                    # Advance the interpolation by one frame.
+                    # Use DPG's averaged frame rate for dt (more stable than wall-clock delta).
+                    fps = dpg.get_frame_rate()
+                    dt = 1.0 / fps if fps > 0 else 1.0 / SmoothInt.CALIBRATION_FPS
+                    still_animating = self._sv.update(dt=dt)
+                    new_y_scroll = self._sv.current
 
-                    # Calculate old and new positions, with subpixel correction (IMPORTANT!).
-                    subpixel_corrected_current_y_scroll = current_y_scroll + self.fracpart  # NOTE: float
-                    remaining = self.target_y_scroll - subpixel_corrected_current_y_scroll  # remaining distance, float
-                    delta = step_scaled * remaining  # distance to cover in this frame, float
+                    logger.debug(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': old raw = {current_y_scroll}, subpixel = {self._sv.current_exact}, new int = {new_y_scroll}, target = {self.target_y_scroll}")
 
-                    subpixel_corrected_new_y_scroll = subpixel_corrected_current_y_scroll + delta
-                    fracpart = subpixel_corrected_new_y_scroll - int(subpixel_corrected_new_y_scroll)
-                    new_y_scroll = int(subpixel_corrected_new_y_scroll)  # NOTE: truncate, no rounding of any kind
-
-                    logger.debug(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': old raw = {current_y_scroll}, old subpixel = {subpixel_corrected_current_y_scroll}, delta = {delta}, new subpixel = {subpixel_corrected_new_y_scroll}, target = {self.target_y_scroll}, start-of-frame remaining distance = {remaining}")
-
-                    # Once we reach less than one pixel of distance from the final position, just snap there and end the animation.
-                    # We jump at <= 1.0, not < 1.0, to avoid some roundoff trouble.
-                    if abs(self.target_y_scroll - subpixel_corrected_current_y_scroll) <= 1.0:
-                        new_y_scroll = self.target_y_scroll
+                    if not still_animating:
+                        new_y_scroll = self._sv.target
                         action = action_finish
                         logger.debug(f"SmoothScrolling.render_frame: frame {dpg.get_frame_count()}: instance for '{self.target_child_window}': scrolling completed")
 
@@ -595,7 +574,6 @@ class SmoothScrolling(Animation):
 
                     if action is action_continue:
                         self.prev_frame_new_y_scroll = new_y_scroll
-                        self.fracpart = fracpart
 
                     dpg.set_y_scroll(self.target_child_window, new_y_scroll)
 
@@ -628,6 +606,7 @@ class SmoothScrolling(Animation):
                     other = type(self).instances[self.target_child_window]
                     with other.instance_lock:
                         other.target_y_scroll = self.target_y_scroll
+                        other._sv.target = self.target_y_scroll
                     return
 
                 type(self).instances[self.target_child_window] = self
@@ -640,151 +619,8 @@ class SmoothScrolling(Animation):
                 self.finish_callback()
             type(self).instances.pop(self.target_child_window)
 
-# The math for the scroll animation comes from the AI avatar code, see `raven.server.modules.avatar.interpolate`.
-# This depends only on the current and target positions, and has a reference *rate*, no reference duration.
-# This allows us to change the target position while the animation is running, and it'll adapt.
-#
-# Pasting this comment as-is. In a smooth scrolling animation, the equivalent of "pose" is the scroll position.
-#
-# ---8<---8<---8<---
-#
-# The `step` parameter is calibrated against animation at 25 FPS, so we must scale it appropriately, taking
-# into account the actual FPS.
-#
-# How to do this requires some explanation. Numericist hat on. Let's do a quick back-of-the-envelope calculation.
-# This pose interpolator is essentially a solver for the first-order ODE:
-#
-#   u' = f(u, t)
-#
-# Consider the most common case, where the target pose remains constant over several animation frames.
-# Furthermore, consider just one morph (they all behave similarly). Then our ODE is Newton's law of cooling:
-#
-#   u' = -β [u - u∞]
-#
-# where `u = u(t)` is the temperature, `u∞` is the constant temperature of the external environment,
-# and `β > 0` is a material-dependent cooling coefficient.
-#
-# But instead of numerical simulation at a constant timestep size, as would be typical in computational science,
-# we instead read off points off the analytical solution curve. The `step` parameter is *not* the timestep size;
-# instead, it controls the relative distance along the *u* axis that should be covered in one simulation step,
-# so it is actually related to the cooling coefficient β.
-#
-# (How exactly: write the left-hand side as `[unew - uold] / Δt + O([Δt]²)`, drop the error term, and decide
-#  whether to use `uold` (forward Euler) or `unew` (backward Euler) as `u` on the right-hand side. Then compare
-#  to our update formula. But those details don't matter here.)
-#
-# To match the notation in the rest of this code, let us denote the temperature (actually pose morph value) as `x`
-# (instead of `u`). And to keep notation shorter, let `β := step` (although it's not exactly the `β` of the
-# continuous-in-time case above).
-#
-# To scale the animation speed linearly with regard to FPS, we must invert the relation between simulation step
-# number `n` and the solution value `x`. For an initial value `x0`, a constant target value `x∞`, and constant
-# step `β ∈ (0, 1]`, the pose interpolator produces the sequence:
-#
-#   x1 = x0 + β [x∞ - x0] = [1 - β] x0 + β x∞
-#   x2 = x1 + β [x∞ - x1] = [1 - β] x1 + β x∞
-#   x3 = x2 + β [x∞ - x2] = [1 - β] x2 + β x∞
-#   ...
-#
-# Note that with exact arithmetic, if `β < 1`, the final value is only reached in the limit `n → ∞`.
-# For floating point, this is not the case. Eventually the increment becomes small enough that when
-# it is added, nothing happens. After sufficiently many steps, in practice `x` will stop just slightly
-# short of `x∞` (on the side it approached the target from).
-#
-# (For performance reasons, when approaching zero, one may need to beware of denormals, because those
-#  are usually implemented in (slow!) software on modern CPUs. So especially if the target is zero,
-#  it is useful to have some very small cutoff (inside the normal floating-point range) after which
-#  we make `x` instantly jump to the target value.)
-#
-# Inserting the definition of `x1` to the formula for `x2`, we can express `x2` in terms of `x0` and `x∞`:
-#
-#   x2 = [1 - β] ([1 - β] x0 + β x∞) + β x∞
-#      = [1 - β]² x0 + [1 - β] β x∞ + β x∞
-#      = [1 - β]² x0 + [[1 - β] + 1] β x∞
-#
-# Then inserting this to the formula for `x3`:
-#
-#   x3 = [1 - β] ([1 - β]² x0 + [[1 - β] + 1] β x∞) + β x∞
-#      = [1 - β]³ x0 + [1 - β]² β x∞ + [1 - β] β x∞ + β x∞
-#
-# To simplify notation, define:
-#
-#   α := 1 - β
-#
-# We have:
-#
-#   x1 = α  x0 + [1 - α] x∞
-#   x2 = α² x0 + [1 - α] [1 + α] x∞
-#      = α² x0 + [1 - α²] x∞
-#   x3 = α³ x0 + [1 - α] [1 + α + α²] x∞
-#      = α³ x0 + [1 - α³] x∞
-#
-# This suggests that the general pattern is (as can be proven by induction on `n`):
-#
-#   xn = α**n x0 + [1 - α**n] x∞
-#
-# This allows us to determine `x` as a function of simulation step number `n`. Now the scaling question becomes:
-# if we want to reach a given value `xn` by some given step `n_scaled` (instead of the original step `n`),
-# how must we change the step size `β` (or equivalently, the parameter `α`)?
-#
-# To simplify further, observe:
-#
-#   x1 = α x0 + [1 - α] [[x∞ - x0] + x0]
-#      = [α + [1 - α]] x0 + [1 - α] [x∞ - x0]
-#      = x0 + [1 - α] [x∞ - x0]
-#
-# Rearranging yields:
-#
-#   [x1 - x0] / [x∞ - x0] = 1 - α
-#
-# which gives us the relative distance from `x0` to `x∞` that is covered in one step. This isn't yet much
-# to write home about (it's essentially just a rearrangement of the definition of `x1`), but next, let's
-# treat `x2` the same way:
-#
-#   x2 = α² x0 + [1 - α] [1 + α] [[x∞ - x0] + x0]
-#      = [α² x0 + [1 - α²] x0] + [1 - α²] [x∞ - x0]
-#      = [α² + 1 - α²] x0 + [1 - α²] [x∞ - x0]
-#      = x0 + [1 - α²] [x∞ - x0]
-#
-# We obtain
-#
-#   [x2 - x0] / [x∞ - x0] = 1 - α²
-#
-# which is the relative distance, from the original `x0` toward the final `x∞`, that is covered in two steps
-# using the original step size `β = 1 - α`. Next up, `x3`:
-#
-#   x3 = α³ x0 + [1 - α³] [[x∞ - x0] + x0]
-#      = α³ x0 + [1 - α³] [x∞ - x0] + [1 - α³] x0
-#      = x0 + [1 - α³] [x∞ - x0]
-#
-# Rearranging,
-#
-#   [x3 - x0] / [x∞ - x0] = 1 - α³
-#
-# which is the relative distance covered in three steps. Hence, we have:
-#
-#   xrel := [xn - x0] / [x∞ - x0] = 1 - α**n
-#
-# so that
-#
-#   α**n = 1 - xrel              (**)
-#
-# and (taking the natural logarithm of both sides)
-#
-#   n log α = log [1 - xrel]
-#
-# Finally,
-#
-#   n = [log [1 - xrel]] / [log α]
-#
-# Given `α`, this gives the `n` where the interpolator has covered the fraction `xrel` of the original distance.
-# On the other hand, we can also solve (**) for `α`:
-#
-#   α = (1 - xrel)**(1 / n)
-#
-# which, given desired `n`, gives us the `α` that makes the interpolator cover the fraction `xrel` of the original distance in `n` steps.
-#
-# ---8<---8<---8<---
+# The FPS-corrected exponential decay math is now in `raven.common.smoothvalue` (which see).
+# For the full derivation, see `raven.server.modules.avatar.interpolate`.
 
 class PulsatingColor(Animation):
     def __init__(self,

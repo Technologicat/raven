@@ -1,127 +1,9 @@
 """Tests for the viewport transforms."""
 
-import pytest
+from raven.common.tests import approx
 
-from ..viewport import Viewport, SmoothValue
+from ..viewport import Viewport
 from ..graph import Graph
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _approx(a, b, tol=0.01):
-    """Check approximate float equality."""
-    return abs(a - b) < tol
-
-
-# ---------------------------------------------------------------------------
-# Tests: SmoothValue
-# ---------------------------------------------------------------------------
-
-class TestSmoothValue:
-    """Test the SmoothValue animation class.
-
-    The behavioral contract is:
-    - Monotonic approach toward target (no overshoot).
-    - Eventually reaches the target.
-    - Higher rate converges faster.
-    The tests don't assume any specific interpolation.
-    """
-
-    def test_initial_value(self):
-        """Initial current and target are both set to the given value."""
-        sv = SmoothValue(value=5.0)
-        assert sv.current == 5.0
-        assert sv.target == 5.0
-
-    def test_set_target(self):
-        """Setting target doesn't change current."""
-        sv = SmoothValue(value=0.0)
-        sv.target = 10.0
-        assert sv.target == 10.0
-        assert sv.current == 0.0
-
-    def test_set_immediate(self):
-        """set_immediate snaps both current and target."""
-        sv = SmoothValue(value=0.0)
-        sv.set_immediate(10.0)
-        assert sv.current == 10.0
-        assert sv.target == 10.0
-
-    def test_is_animating(self):
-        """is_animating is True when current differs from target."""
-        sv = SmoothValue(value=0.0)
-        assert not sv.is_animating()
-
-        sv.target = 10.0
-        assert sv.is_animating()
-
-    def test_is_not_animating_after_immediate(self):
-        """set_immediate should not leave the value animating."""
-        sv = SmoothValue(value=0.0)
-        sv.set_immediate(10.0)
-        assert not sv.is_animating()
-
-    def test_update_moves_toward_target(self):
-        """A single update moves current toward target."""
-        sv = SmoothValue(value=0.0, rate=0.5)
-        sv.target = 10.0
-
-        initial = sv.current
-        sv.update(dt=0.1)
-
-        assert sv.current > initial
-        assert sv.current < sv.target
-
-    def test_update_monotonic(self):
-        """Successive updates move monotonically toward target (no overshoot)."""
-        sv = SmoothValue(value=0.0, rate=0.9)
-        sv.target = 10.0
-
-        prev = sv.current
-        for _ in range(50):
-            sv.update(dt=0.05)
-            assert sv.current >= prev  # monotonically increasing toward target
-            assert sv.current <= sv.target  # no overshoot
-            prev = sv.current
-
-    def test_update_monotonic_decreasing(self):
-        """Monotonic approach also works when target is below current."""
-        sv = SmoothValue(value=10.0, rate=0.9)
-        sv.target = 0.0
-
-        prev = sv.current
-        for _ in range(50):
-            sv.update(dt=0.05)
-            assert sv.current <= prev  # monotonically decreasing
-            assert sv.current >= sv.target  # no overshoot
-            prev = sv.current
-
-    def test_update_reaches_target(self):
-        """Repeated updates eventually reach the target."""
-        sv = SmoothValue(value=0.0, rate=0.9)
-        sv.target = 10.0
-
-        for _ in range(100):
-            sv.update(dt=0.05)
-
-        assert _approx(sv.current, sv.target)
-
-    def test_higher_rate_converges_faster(self):
-        """Higher rate reaches the target in fewer steps."""
-        def steps_to_converge(rate, tol=0.01):
-            sv = SmoothValue(value=0.0, rate=rate)
-            sv.target = 10.0
-            for i in range(1000):
-                sv.update(dt=0.05)
-                if _approx(sv.current, sv.target, tol=tol):
-                    return i
-            return 1000  # didn't converge
-
-        slow = steps_to_converge(rate=0.3)
-        fast = steps_to_converge(rate=0.9)
-        assert fast < slow
 
 
 # ---------------------------------------------------------------------------
@@ -161,8 +43,8 @@ class TestViewport:
         sx, sy = vp.graph_to_screen(gx, gy)
         gx2, gy2 = vp.screen_to_graph(sx, sy)
 
-        assert _approx(gx, gx2, tol=0.001)
-        assert _approx(gy, gy2, tol=0.001)
+        assert approx(gx, gx2, tol=0.001)
+        assert approx(gy, gy2, tol=0.001)
 
     def test_zoom_scales_coordinates(self):
         """Doubling zoom doubles screen distance from center."""
@@ -179,7 +61,7 @@ class TestViewport:
         center = 50
         dist1 = abs(sx1 - center)
         dist2 = abs(sx2 - center)
-        assert _approx(dist2, 2 * dist1, tol=0.001)
+        assert approx(dist2, 2 * dist1, tol=0.001)
 
     # --- Zoom to fit ---
 
@@ -190,8 +72,8 @@ class TestViewport:
 
         vp.zoom_to_fit(graph, margin=0, animate=False)
 
-        assert _approx(vp.pan_x.current, 100)  # graph_width / 2
-        assert _approx(vp.pan_y.current, 50)   # graph_height / 2
+        assert approx(vp.pan_x.current, 100)  # graph_width / 2
+        assert approx(vp.pan_y.current, 50)   # graph_height / 2
 
     def test_zoom_to_fit_zoom_level(self):
         """zoom_to_fit sets zoom to fit the graph in the viewport.
@@ -204,7 +86,7 @@ class TestViewport:
 
         vp.zoom_to_fit(graph, margin=0, animate=False)
 
-        assert _approx(vp.zoom.current, 2.0)
+        assert approx(vp.zoom.current, 2.0)
 
     def test_zoom_to_fit_with_margin(self):
         """zoom_to_fit accounts for margin.
@@ -307,7 +189,7 @@ class TestViewport:
         delta_z1 = pan_delta_x(zoom=1.0)
         delta_z2 = pan_delta_x(zoom=2.0)
 
-        assert _approx(delta_z2, delta_z1 / 2, tol=0.001)
+        assert approx(delta_z2, delta_z1 / 2, tol=0.001)
 
     # --- Zoom ---
 
@@ -356,8 +238,8 @@ class TestViewport:
         """zoom_to_bbox centers the pan on the bbox midpoint."""
         vp = Viewport(width=400, height=300)
         vp.zoom_to_bbox(20, 30, 80, 90, margin=0, animate=False)
-        assert _approx(vp.pan_x.current, 50)   # (20 + 80) / 2
-        assert _approx(vp.pan_y.current, 60)    # (30 + 90) / 2
+        assert approx(vp.pan_x.current, 50)   # (20 + 80) / 2
+        assert approx(vp.pan_y.current, 60)    # (30 + 90) / 2
 
     def test_zoom_to_bbox_correct_zoom(self):
         """zoom_to_bbox computes the correct zoom level.
@@ -367,7 +249,7 @@ class TestViewport:
         """
         vp = Viewport(width=400, height=300)
         vp.zoom_to_bbox(20, 30, 80, 90, margin=0, animate=False)
-        assert _approx(vp.zoom.current, 5.0)
+        assert approx(vp.zoom.current, 5.0)
 
     def test_zoom_to_bbox_degenerate_zero_area(self):
         """zoom_to_bbox with zero-area bbox doesn't crash and keeps current zoom."""
@@ -375,10 +257,10 @@ class TestViewport:
         vp.zoom.set_immediate(2.0)
         vp.zoom_to_bbox(50, 50, 50, 50, margin=0, animate=False)
         # Degenerate → zoom should not change
-        assert _approx(vp.zoom.current, 2.0)
+        assert approx(vp.zoom.current, 2.0)
         # But pan should center on the point
-        assert _approx(vp.pan_x.current, 50)
-        assert _approx(vp.pan_y.current, 50)
+        assert approx(vp.pan_x.current, 50)
+        assert approx(vp.pan_y.current, 50)
 
     # --- pan_to_point ---
 
@@ -386,8 +268,8 @@ class TestViewport:
         """pan_to_point with animate=False sets current immediately."""
         vp = Viewport(width=100, height=100)
         vp.pan_to_point(75.0, 25.0, animate=False)
-        assert _approx(vp.pan_x.current, 75.0)
-        assert _approx(vp.pan_y.current, 25.0)
+        assert approx(vp.pan_x.current, 75.0)
+        assert approx(vp.pan_y.current, 25.0)
 
     def test_pan_to_point_animated(self):
         """pan_to_point with animate=True sets target only (current unchanged)."""
@@ -396,8 +278,8 @@ class TestViewport:
         vp.pan_y.set_immediate(0)
         vp.pan_to_point(75.0, 25.0, animate=True)
         # Target set
-        assert _approx(vp.pan_x.target, 75.0)
-        assert _approx(vp.pan_y.target, 25.0)
+        assert approx(vp.pan_x.target, 75.0)
+        assert approx(vp.pan_y.target, 25.0)
         # Current unchanged
-        assert _approx(vp.pan_x.current, 0)
-        assert _approx(vp.pan_y.current, 0)
+        assert approx(vp.pan_x.current, 0)
+        assert approx(vp.pan_y.current, 0)

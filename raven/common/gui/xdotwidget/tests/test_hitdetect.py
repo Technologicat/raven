@@ -2,18 +2,11 @@
 
 import pytest
 
+from raven.common.tests import approx
+
 from ..hitdetect import _point_in_polygon, _point_to_segment_dist_sq, get_edge
 from ..graph import (Graph, Node, Edge, Pen,
                      TextShape, BezierShape)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _approx(a, b, tol=0.01):
-    """Check approximate float equality."""
-    return abs(a - b) < tol
 
 
 def _make_node(name, x=0, y=0):
@@ -65,7 +58,7 @@ class TestPointToSegmentDistSq:
         Distance = 3, squared = 9.
         """
         d = _point_to_segment_dist_sq(2, 3, 0, 0, 4, 0)
-        assert _approx(d, 9.0)
+        assert approx(d, 9.0)
 
     def test_beyond_segment_start(self):
         """Point nearest to the start endpoint.
@@ -74,7 +67,7 @@ class TestPointToSegmentDistSq:
         Nearest point is (2,0), distance = 2, squared = 4.
         """
         d = _point_to_segment_dist_sq(0, 0, 2, 0, 4, 0)
-        assert _approx(d, 4.0)
+        assert approx(d, 4.0)
 
     def test_beyond_segment_end(self):
         """Point nearest to the end endpoint.
@@ -83,7 +76,7 @@ class TestPointToSegmentDistSq:
         Nearest point is (2,0), distance = 2, squared = 4.
         """
         d = _point_to_segment_dist_sq(4, 0, 0, 0, 2, 0)
-        assert _approx(d, 4.0)
+        assert approx(d, 4.0)
 
     def test_zero_length_segment(self):
         """Degenerate segment (point). Distance is just point-to-point.
@@ -92,12 +85,12 @@ class TestPointToSegmentDistSq:
         Distance = sqrt(9+16) = 5, squared = 25.
         """
         d = _point_to_segment_dist_sq(4, 5, 1, 1, 1, 1)
-        assert _approx(d, 25.0)
+        assert approx(d, 25.0)
 
     def test_point_on_segment(self):
         """Point exactly on the segment → distance 0."""
         d = _point_to_segment_dist_sq(2, 0, 0, 0, 4, 0)
-        assert _approx(d, 0.0)
+        assert approx(d, 0.0)
 
 
 # ---------------------------------------------------------------------------

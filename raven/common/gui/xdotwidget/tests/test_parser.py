@@ -2,8 +2,10 @@
 
 import pytest
 
-from ..parser import parse_xdot, XDotParser, ParseError
-from ..graph import (Graph, Node, Edge,
+from raven.common.tests import approx
+
+from ..parser import parse_xdot, ParseError
+from ..graph import (Graph, Node,
                      TextShape, EllipseShape, BezierShape, PolygonShape)
 
 
@@ -82,11 +84,6 @@ digraph G {
 def _shapes_of_type(element, shape_class):
     """Return all shapes of a given type from an element."""
     return [s for s in element.shapes if isinstance(s, shape_class)]
-
-
-def _approx(a, b, tol=0.01):
-    """Check approximate float equality."""
-    return abs(a - b) < tol
 
 
 # ---------------------------------------------------------------------------
@@ -308,10 +305,10 @@ class TestColorParsing:
         color = ellipses[0].pen.color
 
         assert len(color) == 4
-        assert _approx(color[0], 0x1a / 255.0)  # R
-        assert _approx(color[1], 0x4b / 255.0)  # G
-        assert _approx(color[2], 0x7c / 255.0)  # B
-        assert _approx(color[3], 1.0)            # A (default, no alpha in input)
+        assert approx(color[0], 0x1a / 255.0)  # R
+        assert approx(color[1], 0x4b / 255.0)  # G
+        assert approx(color[2], 0x7c / 255.0)  # B
+        assert approx(color[3], 1.0)            # A (default, no alpha in input)
 
     def test_hex_color_rgba(self):
         """Hex #RRGGBBAA is parsed with correct alpha."""
@@ -320,10 +317,10 @@ class TestColorParsing:
         ellipses = _shapes_of_type(node, EllipseShape)
         color = ellipses[0].pen.color
 
-        assert _approx(color[0], 0x1a / 255.0)
-        assert _approx(color[1], 0x4b / 255.0)
-        assert _approx(color[2], 0x7c / 255.0)
-        assert _approx(color[3], 0x80 / 255.0)  # ~0.502
+        assert approx(color[0], 0x1a / 255.0)
+        assert approx(color[1], 0x4b / 255.0)
+        assert approx(color[2], 0x7c / 255.0)
+        assert approx(color[3], 0x80 / 255.0)  # ~0.502
 
     def test_hsv_color(self):
         """HSV color is converted to correct RGB.
@@ -337,10 +334,10 @@ class TestColorParsing:
         color = ellipses[0].pen.color
 
         # Should match #1a4b7c after HSV->RGB conversion.
-        assert _approx(color[0], 0x1a / 255.0)  # R
-        assert _approx(color[1], 0x4b / 255.0)  # G
-        assert _approx(color[2], 0x7c / 255.0)  # B
-        assert _approx(color[3], 1.0)            # A (HSV has no alpha; defaults to 1.0)
+        assert approx(color[0], 0x1a / 255.0)  # R
+        assert approx(color[1], 0x4b / 255.0)  # G
+        assert approx(color[2], 0x7c / 255.0)  # B
+        assert approx(color[3], 1.0)            # A (HSV has no alpha; defaults to 1.0)
 
     def test_named_color(self):
         """Named X11 color 'red' is parsed correctly."""

@@ -52,6 +52,7 @@ from flask import Response
 
 from ...common.hfutil import maybe_install_models
 from ...common.running_average import RunningAverage
+from ...common import smoothvalue
 
 from ...common.video import compositor
 from ...common.video.postprocessor import Postprocessor
@@ -1332,6 +1333,12 @@ class Animator:
     def interpolate(self, current: List[float], target: List[float]) -> List[float]:
         """Interpolate a list of floats from `current` toward `target`.
 
+        Uses the same FPS-corrected exponential decay algorithm as `raven.common.smoothvalue`
+        (which see), but implemented separately: the avatar operates on a list of ~50 morph
+        channels whose targets change every frame (emotion + sway + overrides + lipsync), and
+        the FPS estimate comes from render-duration statistics capped to ``target_fps``. These
+        requirements don't fit `SmoothValue`'s lifecycle (set target, let it animate).
+
         Relevant `self._settings` keys:
 
         `"pose_interpolator_step"`: [0, 1]; how far toward `target` to interpolate in one frame,
@@ -1347,168 +1354,18 @@ class Animator:
 
         This is a feature, not a bug!
         """
-        # The `step` parameter is calibrated against animation at 25 FPS, so we must scale it appropriately, taking
-        # into account the actual FPS.
-        #
-        # How to do this requires some explanation. Numericist hat on. Let's do a quick back-of-the-envelope calculation.
-        # This interpolator is essentially a solver for the first-order ODE:
-        #
-        #   u' = f(u, t)
-        #
-        # Consider the most common case, where the target remains constant over several animation frames.
-        # Furthermore, consider just one element of the vector (they all behave similarly and independently).
-        # Then our ODE is Newton's law of cooling:
-        #
-        #   u' = -β [u - u∞]
-        #
-        # where `u = u(t)` is the temperature, `u∞` is the constant temperature of the external environment,
-        # and `β > 0` is a material-dependent cooling coefficient.
-        #
-        # But instead of numerical simulation at a constant timestep size, as would be typical in computational science,
-        # we instead read off points off the analytical solution curve. The `step` parameter is *not* the timestep size;
-        # instead, it controls the relative distance along the *u* axis that should be covered in one simulation step,
-        # so it is actually related to the cooling coefficient β.
-        #
-        # (How exactly: write the left-hand side as `[unew - uold] / Δt + O([Δt]²)`, drop the error term, and decide
-        #  whether to use `uold` (forward Euler) or `unew` (backward Euler) as `u` on the right-hand side. Then compare
-        #  to our update formula. But those details don't matter here.)
-        #
-        # To match the notation in the rest of this code, let us denote the temperature (actually current value) as `x`
-        # (instead of `u`). And to keep notation shorter, let `β := step` (although it's not exactly the `β` of the
-        # continuous-in-time case above).
-        #
-        # To scale the animation speed linearly with regard to FPS, we must invert the relation between simulation step
-        # number `n` and the solution value `x`. For an initial value `x0`, a constant target value `x∞`, and constant
-        # step `β ∈ (0, 1]`, the current interpolator produces the sequence:
-        #
-        #   x1 = x0 + β [x∞ - x0] = [1 - β] x0 + β x∞
-        #   x2 = x1 + β [x∞ - x1] = [1 - β] x1 + β x∞
-        #   x3 = x2 + β [x∞ - x2] = [1 - β] x2 + β x∞
-        #   ...
-        #
-        # Note that with exact arithmetic, if `β < 1`, the final value is only reached in the limit `n → ∞`.
-        # For floating point, this is not the case. Eventually the increment becomes small enough that when
-        # it is added, nothing happens. After sufficiently many steps, in practice `x` will stop just slightly
-        # short of `x∞` (on the side it approached the target from).
-        #
-        # (For performance reasons, when approaching zero, one may need to beware of denormals, because those
-        #  are usually implemented in (slow!) software on modern CPUs. So especially if the target is zero,
-        #  it is useful to have some very small cutoff (inside the normal floating-point range) after which
-        #  we make `x` instantly jump to the target value.)
-        #
-        # Inserting the definition of `x1` to the formula for `x2`, we can express `x2` in terms of `x0` and `x∞`:
-        #
-        #   x2 = [1 - β] ([1 - β] x0 + β x∞) + β x∞
-        #      = [1 - β]² x0 + [1 - β] β x∞ + β x∞
-        #      = [1 - β]² x0 + [[1 - β] + 1] β x∞
-        #
-        # Then inserting this to the formula for `x3`:
-        #
-        #   x3 = [1 - β] ([1 - β]² x0 + [[1 - β] + 1] β x∞) + β x∞
-        #      = [1 - β]³ x0 + [1 - β]² β x∞ + [1 - β] β x∞ + β x∞
-        #
-        # To simplify notation, define:
-        #
-        #   α := 1 - β
-        #
-        # We have:
-        #
-        #   x1 = α  x0 + [1 - α] x∞
-        #   x2 = α² x0 + [1 - α] [1 + α] x∞
-        #      = α² x0 + [1 - α²] x∞
-        #   x3 = α³ x0 + [1 - α] [1 + α + α²] x∞
-        #      = α³ x0 + [1 - α³] x∞
-        #
-        # This suggests that the general pattern is (as can be proven by induction on `n`):
-        #
-        #   xn = α**n x0 + [1 - α**n] x∞
-        #
-        # This allows us to determine `x` as a function of simulation step number `n`. Now the scaling question becomes:
-        # if we want to reach a given value `xn` by some given step `n_scaled` (instead of the original step `n`),
-        # how must we change the step size `β` (or equivalently, the parameter `α`)?
-        #
-        # To simplify further, observe:
-        #
-        #   x1 = α x0 + [1 - α] [[x∞ - x0] + x0]
-        #      = [α + [1 - α]] x0 + [1 - α] [x∞ - x0]
-        #      = x0 + [1 - α] [x∞ - x0]
-        #
-        # Rearranging yields:
-        #
-        #   [x1 - x0] / [x∞ - x0] = 1 - α
-        #
-        # which gives us the relative distance from `x0` to `x∞` that is covered in one step. This isn't yet much
-        # to write home about (it's essentially just a rearrangement of the definition of `x1`), but next, let's
-        # treat `x2` the same way:
-        #
-        #   x2 = α² x0 + [1 - α] [1 + α] [[x∞ - x0] + x0]
-        #      = [α² x0 + [1 - α²] x0] + [1 - α²] [x∞ - x0]
-        #      = [α² + 1 - α²] x0 + [1 - α²] [x∞ - x0]
-        #      = x0 + [1 - α²] [x∞ - x0]
-        #
-        # We obtain
-        #
-        #   [x2 - x0] / [x∞ - x0] = 1 - α²
-        #
-        # which is the relative distance, from the original `x0` toward the final `x∞`, that is covered in two steps
-        # using the original step size `β = 1 - α`. Next up, `x3`:
-        #
-        #   x3 = α³ x0 + [1 - α³] [[x∞ - x0] + x0]
-        #      = α³ x0 + [1 - α³] [x∞ - x0] + [1 - α³] x0
-        #      = x0 + [1 - α³] [x∞ - x0]
-        #
-        # Rearranging,
-        #
-        #   [x3 - x0] / [x∞ - x0] = 1 - α³
-        #
-        # which is the relative distance covered in three steps. Hence, we have:
-        #
-        #   xrel := [xn - x0] / [x∞ - x0] = 1 - α**n
-        #
-        # so that
-        #
-        #   α**n = 1 - xrel              (**)
-        #
-        # and (taking the natural logarithm of both sides)
-        #
-        #   n log α = log [1 - xrel]
-        #
-        # Finally,
-        #
-        #   n = [log [1 - xrel]] / [log α]
-        #
-        # Given `α`, this gives the `n` where the interpolator has covered the fraction `xrel` of the original distance.
-        # On the other hand, we can also solve (**) for `α`:
-        #
-        #   α = (1 - xrel)**(1 / n)
-        #
-        # which, given desired `n`, gives us the `α` that makes the interpolator cover the fraction `xrel` of the original distance in `n` steps.
-        #
-        CALIBRATION_FPS = 25  # FPS for which the default value `step` was calibrated
-        xrel = 0.5  # just some convenient value
-        step = self._settings["pose_interpolator_step"]
-        alpha_orig = 1.0 - step
-        if 0 < alpha_orig < 1:
-            avg_render_sec = self.render_duration_statistics.average()
-            if avg_render_sec > 0:
-                avg_render_fps = 1 / avg_render_sec
-                # Even if render completes faster, the avatar output is rate-limited to `self.target_fps` at most.
-                avg_render_fps = min(avg_render_fps, self.target_fps)
-            else:  # No statistics available yet; let's assume we're running at `target_fps`.
-                avg_render_fps = self.target_fps
+        # Compute effective FPS for the step correction.
+        # Capped to target_fps because the avatar output is rate-limited.
+        rate = self._settings["pose_interpolator_step"]
+        avg_render_sec = self.render_duration_statistics.average()
+        if avg_render_sec > 0:
+            avg_render_fps = min(1.0 / avg_render_sec, self.target_fps)
+        else:  # No statistics available yet; assume target_fps.
+            avg_render_fps = self.target_fps
+        dt = 1.0 / avg_render_fps
+        step = smoothvalue.fps_corrected_step(rate, dt)
 
-            # For a constant target and original `α`, compute the number of animation frames to cover `xrel` of distance from current value to target.
-            n_orig = math.log(1.0 - xrel) / math.log(alpha_orig)
-            # Compute the scaled `n`. Note the direction: we need a smaller `n` (fewer animation frames) if the render runs slower than the calibration FPS.
-            n_scaled = (avg_render_fps / CALIBRATION_FPS) * n_orig
-            # Then compute the `α` that reaches `xrel` distance in `n_scaled` animation frames.
-            alpha_scaled = (1.0 - xrel)**(1 / n_scaled)
-        else:  # avoid some divisions by zero at the extremes
-            alpha_scaled = alpha_orig
-        step_scaled = 1.0 - alpha_scaled
-
-        debug_fps = round(avg_render_fps, 1)
-        logger.debug(f"interpolate: step @ {CALIBRATION_FPS} FPS = {step}, scaled step @ {debug_fps:.1f} FPS = {step_scaled:0.6g}")
+        logger.debug(f"interpolate: rate @ {smoothvalue.CALIBRATION_FPS} FPS = {rate}, step @ {avg_render_fps:.1f} FPS = {step:0.6g}")
 
         # NOTE: When interpolation is applied to a pose, this overwrites blinking, talking, and breathing, but that doesn't matter,
         # because we apply this interpolator first. The other animation drivers may then partially overwrite our result.
@@ -1516,7 +1373,7 @@ class Animator:
         new = list(current)  # copy
         for idx in range(len(current)):
             delta = target[idx] - current[idx]
-            new[idx] = current[idx] + step_scaled * delta
+            new[idx] = current[idx] + step * delta
 
             # Prevent denormal floats (which are really slow); important when running on CPU and approaching zero.
             # Our ϵ is really big compared to denormals; but there's no point in continuing to compute ever smaller

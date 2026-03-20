@@ -2,17 +2,10 @@
 
 import pytest
 
+from raven.common.tests import approx
+
 from ..graph import (Graph, Node, Edge, TextShape, Pen,
                      tessellate_bezier)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _approx(a, b, tol=0.01):
-    """Check approximate float equality."""
-    return abs(a - b) < tol
 
 
 def _make_node(name, x=0, y=0):
@@ -46,10 +39,10 @@ class TestTessellateBezier:
         """First and last tessellation points match the bezier endpoints."""
         points = [(0, 0), (1, 2), (2, 2), (3, 0)]
         result = tessellate_bezier(points, n=10)
-        assert _approx(result[0][0], 0)
-        assert _approx(result[0][1], 0)
-        assert _approx(result[-1][0], 3)
-        assert _approx(result[-1][1], 0)
+        assert approx(result[0][0], 0)
+        assert approx(result[0][1], 0)
+        assert approx(result[-1][0], 3)
+        assert approx(result[-1][1], 0)
 
     def test_two_segments(self):
         """Two cubic segments: [P0, C1, C2, P1, C3, C4, P2].
@@ -63,8 +56,8 @@ class TestTessellateBezier:
         result = tessellate_bezier(points, n=10)
         assert len(result) == 21
         # Endpoints
-        assert _approx(result[0][0], 0)
-        assert _approx(result[-1][0], 6)
+        assert approx(result[0][0], 0)
+        assert approx(result[-1][0], 6)
 
     def test_degenerate_empty(self):
         """Empty point list returns empty."""
@@ -89,7 +82,7 @@ class TestTessellateBezier:
         points = [(0, 0), (1, 0), (2, 0), (3, 0)]
         result = tessellate_bezier(points, n=10)
         for x, y in result:
-            assert _approx(y, 0, tol=1e-10), f"y={y} should be 0 for collinear controls"
+            assert approx(y, 0, tol=1e-10), f"y={y} should be 0 for collinear controls"
 
 
 # ---------------------------------------------------------------------------

@@ -117,11 +117,6 @@ raven-cherrypick is effectively an image viewer with QOI support, which is rare.
 
 Discovered during raven-cherrypick preload performance session.
 
-## Move SmoothValue to raven.common.gui
-
-`SmoothValue` (framerate-independent exponential decay animation) is currently defined inside `raven/common/gui/xdotwidget/viewport.py` but is a general-purpose GUI utility. Move it to `raven/common/gui/` as its own module (e.g. `smoothvalue.py`) so that any DPG widget can use it for animated transitions.
-
-Discovered during raven-cherrypick imageview implementation.
 
 ## raven-cherrypick: investigate GPU/CPU load at idle
 
