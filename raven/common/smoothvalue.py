@@ -218,7 +218,7 @@ class SmoothValue:
         self._current = value
         self._target = value
         self._rate = rate
-        self._last_time = time.time()
+        self._last_time = time.monotonic()
 
     @property
     def current(self) -> float:
@@ -237,7 +237,7 @@ class SmoothValue:
         # reasonable dt, not a stale delta from the last update() call
         # (which may have been seconds/minutes ago if nothing was animating).
         if not self.is_animating():
-            self._last_time = time.time()
+            self._last_time = time.monotonic()
         self._target = value
 
     def set_immediate(self, value: float) -> None:
@@ -260,7 +260,7 @@ class SmoothValue:
             self._current = self._target
             return False
 
-        now = time.time()
+        now = time.monotonic()
         if dt is None:
             dt = now - self._last_time
         self._last_time = now
@@ -298,7 +298,7 @@ class SmoothInt:
         self._current_float = float(value)
         self._target = value
         self._rate = rate
-        self._last_time = time.time()
+        self._last_time = time.monotonic()
 
     @property
     def current(self) -> int:
@@ -319,7 +319,7 @@ class SmoothInt:
     def target(self, value: int) -> None:
         """Set a new target value."""
         if not self.is_animating():
-            self._last_time = time.time()
+            self._last_time = time.monotonic()
         self._target = value
 
     def set_immediate(self, value: int) -> None:
@@ -342,7 +342,7 @@ class SmoothInt:
             self._current_float = float(self._target)
             return False
 
-        now = time.time()
+        now = time.monotonic()
         if dt is None:
             dt = now - self._last_time
         self._last_time = now

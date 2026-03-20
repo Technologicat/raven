@@ -779,10 +779,10 @@ def main() -> int:
     dpg.set_frame_callback(10, _initial_resize)
 
     # --- Render loop ---
-    last_check = time.time()
+    last_check = time.monotonic()
     def _poll_reload():
         nonlocal last_check
-        now = time.time()
+        now = time.monotonic()
         if now - last_check > config.FILE_RELOAD_POLL_INTERVAL:
             _check_file_reload()
             last_check = now

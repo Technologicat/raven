@@ -48,7 +48,7 @@ class Animator:
     def add(self, animation: "Animation") -> "Animation":
         """Register a new `Animation` instance, so that our `render_frame` will call its `render_frame` method.
 
-        Its start time `animation.t0` is set automatically to the current time as returned by `time.time_ns()`.
+        Its start time `animation.t0` is set automatically to the current time as returned by `time.monotonic_ns()`.
 
         For convenience, returns `animation`.
         """
@@ -98,7 +98,7 @@ class Animator:
                 dpg.render_dearpygui_frame()
         """
         with self.animation_list_lock:
-            time_now = time.time_ns()
+            time_now = time.monotonic_ns()
             running_animations = []
             for animation in self.animations:
                 action = animation.render_frame(t=time_now)
@@ -139,14 +139,14 @@ class Animation:
         """Semantically: (re-)start the animation from the beginning.
 
         Technically, in this base class: Set the animation start time `self.t0` to the current time,
-        as given by `time.time_ns()`.
+        as given by `time.monotonic_ns()`.
         """
-        self.t0 = time.time_ns()
+        self.t0 = time.monotonic_ns()
 
     def render_frame(self, t: int) -> sym:
         """Override this in a derived class to render one frame of your animation.
 
-        `t`: time at start of current frame as returned by `time.time_ns()`.
+        `t`: time at start of current frame as returned by `time.monotonic_ns()`.
 
         The animation start time is available in `self.t0`.
 

@@ -60,7 +60,7 @@ class RateLimiter:
         Further calls to `wait` the time from when the previous call to `wait` finished.
         """
         with self.lock:
-            t = time.time_ns()
+            t = time.monotonic_ns()
             delay_ns = self.delay * 10**9
             wait_duration_ns = delay_ns - (t - self.timestamp)
             if wait_duration_ns > 0:
@@ -68,12 +68,12 @@ class RateLimiter:
                     with tqdm(desc="Waiting for API rate limit", leave=False) as pbar:
                         pbar.total = math.ceil((wait_duration_ns / 10**9) * 10)  # segments of 0.1 seconds (last one may be shorter)
                         pbar.n = 0
-                        while (time.time_ns() - t) < wait_duration_ns:
+                        while (time.monotonic_ns() - t) < wait_duration_ns:
                             time.sleep(min(0.1, wait_duration_ns / 10**9))
                             pbar.update()
                 else:
                     time.sleep(wait_duration_ns / 10**9)
-            self.timestamp = time.time_ns()
+            self.timestamp = time.monotonic_ns()
 
 def clean_arxiv_id(arxiv_id: str) -> str:
     """Remove version suffix (e.g., 'v1') from arXiv ID."""

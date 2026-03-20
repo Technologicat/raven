@@ -98,7 +98,7 @@ def animate_cel_cycle(cycle_duration: float,
 
     `cycle_duration` (seconds) is the duration of one cycle through `cels`. The special value 0.0 disables the animation.
 
-    `epoch` anchors the cycle start time (as given by `time.time_ns()`). This is parameterized to keep this function stateless.
+    `epoch` anchors the cycle start time (as given by `time.monotonic_ns()`). This is parameterized to keep this function stateless.
 
     `strength` is the cel opacity, range [0, 1].
 
@@ -112,7 +112,7 @@ def animate_cel_cycle(cycle_duration: float,
     if cycle_duration == 0.0 or not cels:  # convenience feature: zero cycle duration or no cels = effect disabled
         return epoch, new_celstack
 
-    time_now = time.time_ns()
+    time_now = time.monotonic_ns()
     t = (time_now - epoch) / 10**9
     cycle_pos = t / cycle_duration
     if cycle_pos > 1.0:
@@ -148,7 +148,7 @@ def animate_cel_sequence(t0: float,
                          celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
     """Generic play-once cel animation driver (e.g. an exclamation mark when the character realizes something).
 
-    `t0` is the effect start time (as given by `time.time_ns()`). This is parameterized to keep this function stateless.
+    `t0` is the effect start time (as given by `time.monotonic_ns()`). This is parameterized to keep this function stateless.
 
     `duration` (seconds) is divided evenly to the cels. The special value 0.0 disables the animation.
 
@@ -162,7 +162,7 @@ def animate_cel_sequence(t0: float,
     if duration == 0.0 or not cels:  # convenience feature: zero duration or no cels = effect disabled
         return new_celstack
 
-    time_now = time.time_ns()
+    time_now = time.monotonic_ns()
     t = (time_now - t0) / 10**9
     animation_pos = t / duration
     if animation_pos >= 1.0:  # effect ended?
@@ -181,7 +181,7 @@ def animate_cel_fadeout(t0: float,
                         celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
     """Generic fadeout cel animation driver (e.g. a huge sweatdrop that turns translucent and vanishes).
 
-    `t0` is the effect start time (as given by `time.time_ns()`). This is parameterized to keep this function stateless.
+    `t0` is the effect start time (as given by `time.monotonic_ns()`). This is parameterized to keep this function stateless.
 
     `duration` (seconds) is the fadeout duration. The special value 0.0 disables the animation.
 
@@ -192,7 +192,7 @@ def animate_cel_fadeout(t0: float,
     if duration == 0.0 or not cels:  # convenience feature: zero duration or no cels = effect disabled
         return new_celstack
 
-    time_now = time.time_ns()
+    time_now = time.monotonic_ns()
     t = (time_now - t0) / 10**9
     animation_pos = t / duration
     if animation_pos >= 1.0:  # effect ended?

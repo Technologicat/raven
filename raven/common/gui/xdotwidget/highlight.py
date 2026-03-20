@@ -67,7 +67,7 @@ class HighlightState:
             # Previous hover starts fading
             if self._hover is not None:
                 # Start fade from full intensity
-                self._fading[self._hover] = (time.time_ns(), 1.0)
+                self._fading[self._hover] = (time.monotonic_ns(), 1.0)
 
             self._hover = element
 
@@ -184,7 +184,7 @@ class HighlightState:
             # Check fading
             if element in self._fading:
                 start_time, initial_intensity = self._fading[element]
-                elapsed = (time.time_ns() - start_time) / 10**9
+                elapsed = (time.monotonic_ns() - start_time) / 10**9
                 progress = elapsed / self.fade_duration
 
                 if progress >= 1.0:
@@ -200,7 +200,7 @@ class HighlightState:
 
         Returns True if any animations are still running.
         """
-        now = time.time_ns()
+        now = time.monotonic_ns()
         finished = []
 
         with self._fading_lock:
