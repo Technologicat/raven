@@ -13,6 +13,7 @@ from typing import Optional, Tuple
 
 from ... import numutils
 from ...smoothvalue import SmoothValue
+from .. import utils as guiutils
 
 from .constants import Point
 from .graph import Graph
@@ -66,19 +67,17 @@ class Viewport:
 
     def graph_to_screen(self, gx: float, gy: float) -> Point:
         """Convert graph coordinates to screen coordinates."""
-        z = self.zoom.current
-        sx = (gx - self.pan_x.current) * z + self.width / 2
-        sy = (gy - self.pan_y.current) * z + self.height / 2
-        return sx, sy
+        return guiutils.content_to_screen(gx, gy,
+                                          self.pan_x.current, self.pan_y.current,
+                                          self.zoom.current,
+                                          self.width, self.height)
 
     def screen_to_graph(self, sx: float, sy: float) -> Point:
         """Convert screen coordinates to graph coordinates."""
-        z = self.zoom.current
-        if z == 0:
-            z = 1.0
-        gx = (sx - self.width / 2) / z + self.pan_x.current
-        gy = (sy - self.height / 2) / z + self.pan_y.current
-        return gx, gy
+        return guiutils.screen_to_content(sx, sy,
+                                          self.pan_x.current, self.pan_y.current,
+                                          self.zoom.current,
+                                          self.width, self.height)
 
     def zoom_to_fit(self, graph: Graph, margin: int = 12, animate: bool = True) -> None:
         """Adjust pan and zoom to fit the entire graph in the viewport.
@@ -157,26 +156,12 @@ class Viewport:
         new_zoom = numutils.clamp(new_zoom, self.min_zoom, self.max_zoom)
 
         if center_sx is not None and center_sy is not None:
-            # Adjust pan so the point at (center_sx, center_sy) stays in place on the screen.
-            #
-            # We have, from `screen_to_graph`:
-            #   gx = (sx - w / 2) / zoom + pan_x
-            #   gy = (sy - h / 2) / zoom + pan_y
-            #
-            # so for the x component,
-            #   sx = (gx - pan_x) * zoom + w / 2
-            #
-            # and after zoom,
-            #   sx = (gx - new_pan_x) * new_zoom + w / 2
-            #
-            # Solving for new_pan_x:
-            #   new_pan_x = gx - (sx - self.width / 2) / new_zoom
-            #
-            # y component similarly.
-            #
-            gx, gy = self.screen_to_graph(center_sx, center_sy)
-            new_pan_x = gx - (center_sx - self.width / 2) / new_zoom
-            new_pan_y = gy - (center_sy - self.height / 2) / new_zoom
+            # Adjust pan so the point at (center_sx, center_sy) stays in place.
+            new_pan_x, new_pan_y = guiutils.zoom_keep_point(
+                old_zoom, new_zoom,
+                center_sx, center_sy,
+                self.pan_x.current, self.pan_y.current,
+                self.width, self.height)
 
             self.pan_x.target = new_pan_x
             self.pan_y.target = new_pan_y

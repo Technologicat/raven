@@ -444,6 +444,19 @@ def zoom_keep_point(old_zoom: float, new_zoom: float,
 
     Returns ``(new_pan_cx, new_pan_cy)``.
     """
+    # From `screen_to_content`:
+    #   gx = (sx - w / 2) / zoom + pan_x
+    #
+    # So in screen coords:
+    #   sx = (gx - pan_x) * zoom + w / 2
+    #
+    # After zoom change, we want the same gx to map to the same sx:
+    #   sx = (gx - new_pan_x) * new_zoom + w / 2
+    #
+    # Solving for new_pan_x:
+    #   new_pan_x = gx - (sx - w / 2) / new_zoom
+    #
+    # y component similarly.
     if old_zoom == 0:
         old_zoom = 1.0
     gx = (sx - view_w / 2) / old_zoom + pan_cx

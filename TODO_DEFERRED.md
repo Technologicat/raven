@@ -48,12 +48,6 @@ Migrate these to use the common functions where possible.
 
 Discovered during raven-cherrypick imageutil extraction.
 
-## Migrate xdot widget to shared viewport math utilities
-
-`raven/common/gui/utils.py` now has `screen_to_content`, `content_to_screen`, and `zoom_keep_point` — the same formulas that `raven/common/gui/xdotwidget/viewport.py` implements inline. The xdot viewport should be refactored to use the shared functions.
-
-Discovered during raven-cherrypick imageview implementation.
-
 ## Adopt dotted import style in remaining modules
 
 Raven style is `from ..common.gui import utils as guiutils` + `guiutils.func()`, not
