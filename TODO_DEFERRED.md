@@ -126,8 +126,3 @@ Promising unexplored approaches:
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
 
-## raven-cherrypick: VHS noise thumbnails missing sRGB conversion
-
-The VHS noise placeholder tiles are generated in linear colorspace but displayed without a linear-to-sRGB conversion. Technically incorrect — the noise should go through the same colorspace pipeline as real thumbnails. Purely cosmetic (noise is noise), but for 100% correctness it should match.
-
-Discovered during image conversion consolidation review (2026-03-20).

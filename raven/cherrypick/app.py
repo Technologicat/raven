@@ -36,6 +36,7 @@ from ..common.gui import helpcard
 from ..common.gui import animation as gui_animation
 from ..vendor.file_dialog.fdialog import FileDialog
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
+from ..vendor.tha3.util import torch_linear_to_srgb
 
 from . import config
 from .triage import TriageState, TriageManager
@@ -718,6 +719,9 @@ def _generate_noise_pool(tile_size: int) -> List[np.ndarray]:
         tint=config.PLACEHOLDER_TINT,
         brightness=config.PLACEHOLDER_BRIGHTNESS,
     )
+    # Convert linear → sRGB for display (RGB channels only, not alpha).
+    for t in tensors:
+        t[:3] = torch_linear_to_srgb(t[:3])
     return [imageutils.tensor_to_dpg_flat(t.unsqueeze(0)) for t in tensors]
 
 
