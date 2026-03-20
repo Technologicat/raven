@@ -33,18 +33,16 @@ Audit all duration-measuring call sites and verify the correct timer type is use
 
 Discovered during raven-cherrypick loader bench review.
 
-## Consolidate numpy/tensor/DPG image conversions
+## Consolidate remaining numpy/tensor/DPG image conversions
 
-`raven/common/imageutil.py` now provides canonical conversion functions (`np_to_tensor`, `tensor_to_np`, `tensor_to_dpg_flat`). Several existing modules have their own inline versions of these conversions, with slight variations (some `.detach()`, some don't; some clamp, some don't):
+`raven/common/image/utils.py` provides canonical `np_to_tensor`, `tensor_to_np`, `tensor_to_dpg_flat`. The `imagefx.py` conversions have been migrated. Remaining sites have intentional differences that make direct replacement impractical:
 
-- `raven/server/modules/avatarutil.py` — lines 269, 290, 309
-- `raven/server/modules/imagefx.py` — lines 144, 150, 152, 191, 217, 219
-- `raven/server/modules/avatar.py` — line 1681, 1686
-- `raven/avatar/pose_editor/app.py` — line 1052, 1054
-- `raven/client/avatar_renderer.py` — lines 229, 301, 468, 566, 576
-- `raven/vendor/tha3/util.py` — line 92 (vendored, lower priority)
+- `raven/server/modules/avatarutil.py` — involves sRGB ↔ linear colorspace conversion (domain-specific preprocessing, not just axis reordering)
+- `raven/avatar/pose_editor/app.py` — pure numpy `.ravel()` for DPG, too simple to benefit from abstraction
+- `raven/client/avatar_renderer.py` — pure numpy `/ 255` + `.ravel()` for DPG (3 sites), same
+- `raven/vendor/tha3/util.py` — vendored, with custom scale/offset normalization (THA3-specific)
 
-Migrate these to use the common functions where possible.
+The remaining gain would be single-source-of-truth, not code reduction. Revisit if the avatar pipeline is ever refactored.
 
 Discovered during raven-cherrypick imageutil extraction.
 
@@ -127,3 +125,9 @@ Promising unexplored approaches:
 - **Always bridge**: treat `set_preloaded_arrays` like `set_image` — show old image via the bridge for one frame, let natural `_render()` do the switch. One frame of old image is acceptable.
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
+
+## raven-cherrypick: VHS noise thumbnails missing sRGB conversion
+
+The VHS noise placeholder tiles are generated in linear colorspace but displayed without a linear-to-sRGB conversion. Technically incorrect — the noise should go through the same colorspace pipeline as real thumbnails. Purely cosmetic (noise is noise), but for 100% correctness it should match.
+
+Discovered during image conversion consolidation review (2026-03-20).

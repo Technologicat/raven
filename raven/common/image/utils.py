@@ -126,25 +126,31 @@ def decode_image(path: Union[pathlib.Path, str],
 # ---------------------------------------------------------------------------
 
 def np_to_tensor(arr: np.ndarray,
-                 device: Union[torch.device, str]) -> torch.Tensor:
-    """Convert an ``(H, W, C)`` uint8 numpy image to a ``(1, C, H, W)`` float32 tensor.
+                 device: Union[torch.device, str],
+                 dtype: torch.dtype = torch.float32,
+                 batch: bool = True) -> torch.Tensor:
+    """Convert an ``(H, W, C)`` uint8 numpy image to a float tensor.
 
-    Combines dtype conversion and device transfer in one ``.to()`` call
-    to minimize intermediate copies.
+    Returns ``(1, C, H, W)`` when *batch* is True (default), ``(C, H, W)``
+    when False.  Combines dtype conversion and device transfer in one
+    ``.to()`` call to minimize intermediate copies.
     """
-    return (torch.from_numpy(arr)
-            .permute(2, 0, 1)
-            .unsqueeze(0)
-            .to(dtype=torch.float32, device=device)
-            / 255.0)
+    t = torch.from_numpy(arr).permute(2, 0, 1)
+    if batch:
+        t = t.unsqueeze(0)
+    return t.to(dtype=dtype, device=device) / 255.0
 
 
 def tensor_to_np(tensor: torch.Tensor) -> np.ndarray:
-    """Convert a ``(1, C, H, W)`` float32 tensor to an ``(H, W, C)`` uint8 numpy image.
+    """Convert a float tensor to an ``(H, W, C)`` uint8 numpy image.
 
+    Accepts both ``(1, C, H, W)`` (batched) and ``(C, H, W)`` (unbatched)
+    input — auto-detected from ``tensor.ndim``.
     Clamps to [0, 1] before conversion (handles Lanczos ringing).
     """
-    return (tensor[0]
+    if tensor.ndim == 4:
+        tensor = tensor[0]
+    return (tensor
             .clamp(0.0, 1.0)
             .permute(1, 2, 0)
             .cpu()
@@ -155,12 +161,16 @@ def tensor_to_np(tensor: torch.Tensor) -> np.ndarray:
 
 
 def tensor_to_dpg_flat(tensor: torch.Tensor) -> np.ndarray:
-    """Convert a ``(1, C, H, W)`` float32 tensor to a flat float32 array for DPG.
+    """Convert a float tensor to a flat float32 array for DPG.
 
+    Accepts both ``(1, C, H, W)`` (batched) and ``(C, H, W)`` (unbatched)
+    input — auto-detected from ``tensor.ndim``.
     DPG dynamic textures expect a flat array of ``width × height × channels``
     floats in [0, 1].  Clamps to handle Lanczos ringing.
     """
-    return (tensor[0]
+    if tensor.ndim == 4:
+        tensor = tensor[0]
+    return (tensor
             .clamp(0.0, 1.0)
             .permute(1, 2, 0)
             .cpu()

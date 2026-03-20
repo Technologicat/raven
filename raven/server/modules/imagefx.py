@@ -26,6 +26,7 @@ import numpy as np
 
 import torch
 
+from ...common.image import utils as imageutils
 from ...common.video.postprocessor import Postprocessor
 from ...common.video.upscaler import Upscaler
 
@@ -137,19 +138,15 @@ def process(input_stream,
         image_rgba = decode_image(input_stream)
 
         logger.info("process: processing image")
-        image_rgba = np.array(image_rgba, dtype=np.float32) / 255  # uint8 -> float [0, 1]
         with torch.no_grad():
-            h, w, c = image_rgba.shape
-            image_rgba = torch.tensor(image_rgba).to(postprocessor.device).to(postprocessor.dtype)
-            image_rgba = torch.transpose(image_rgba.reshape(h * w, c), 0, 1).reshape(c, h, w)
+            image_rgba = imageutils.np_to_tensor(image_rgba, device=postprocessor.device,
+                                                 dtype=postprocessor.dtype, batch=False)
 
             with postprocessor_lock:  # because we replace the chain
                 postprocessor.chain = postprocessor_chain
                 postprocessor.render_into(image_rgba)
 
-            image_rgba = torch.transpose(image_rgba.reshape(c, h * w), 0, 1).reshape(h, w, c)
-            image_rgba = (255.0 * image_rgba).byte()  # float [0, 1] -> uint8
-            image_rgba = image_rgba.detach().cpu().numpy()
+            image_rgba = imageutils.tensor_to_np(image_rgba)
 
         encoded_image_bytes = encode_image(image_rgba, output_format)
 
@@ -184,11 +181,9 @@ def upscale(input_stream,
     try:
         image_rgba = decode_image(input_stream)
 
-        image_rgba = np.array(image_rgba, dtype=np.float32) / 255  # uint8 -> float [0, 1]
         with torch.no_grad():
-            h, w, c = image_rgba.shape
-            image_rgba = torch.tensor(image_rgba).to(postprocessor.device).to(postprocessor.dtype)
-            image_rgba = torch.transpose(image_rgba.reshape(h * w, c), 0, 1).reshape(c, h, w)
+            image_rgba = imageutils.np_to_tensor(image_rgba, device=postprocessor.device,
+                                                 dtype=postprocessor.dtype, batch=False)
 
             with upscaler_lock:
                 # Instantiate upscaler at first run, and re-instantiate when settings change
@@ -213,10 +208,7 @@ def upscale(input_stream,
                 logger.info("upscale: upscaling")
                 image_rgba = upscaler.upscale(image_rgba)
 
-            c, h, w = image_rgba.shape  # after upscale (in Torch layout)
-            image_rgba = torch.transpose(image_rgba.reshape(c, h * w), 0, 1).reshape(h, w, c)
-            image_rgba = (255.0 * image_rgba).byte()  # float [0, 1] -> uint8
-            image_rgba = image_rgba.detach().cpu().numpy()
+            image_rgba = imageutils.tensor_to_np(image_rgba)
 
         encoded_image_bytes = encode_image(image_rgba, output_format)
 
