@@ -1333,11 +1333,7 @@ class Animator:
     def interpolate(self, current: List[float], target: List[float]) -> List[float]:
         """Interpolate a list of floats from `current` toward `target`.
 
-        Uses the same FPS-corrected exponential decay algorithm as `raven.common.smoothvalue`
-        (which see), but implemented separately: the avatar operates on a list of ~50 morph
-        channels whose targets change every frame (emotion + sway + overrides + lipsync), and
-        the FPS estimate comes from render-duration statistics capped to ``target_fps``. These
-        requirements don't fit `SmoothValue`'s lifecycle (set target, let it animate).
+        Uses the same FPS-corrected exponential decay algorithm as `raven.common.smoothvalue`, which see.
 
         Relevant `self._settings` keys:
 
