@@ -353,7 +353,7 @@ class DPGAvatarController:
                                 if config.avatar_renderer is not None:
                                     config.avatar_renderer.pause(action="pause")
                             except Exception as exc:
-                                logger.error(f"emotion_autoreset_task: during `avatar_renderer.pause`: {type(exc)}: {exc}")
+                                logger.error(f"emotion_autoreset_task: instance {task_env.task_name}: during `avatar_renderer.pause`: {type(exc)}: {exc}")
                                 traceback.print_exc()
                             config._idle_detector_t0 = time_now  # reset the timeout last, so that the old timestamp is available during `on_idle`.
                 time.sleep(0.1)
@@ -752,7 +752,7 @@ class DPGAvatarController:
                 try:
                     process_item(input_record)
                 except Exception as exc:
-                    logger.error(f"preprocess_task: during `process_item`: {type(exc)}: {exc}")
+                    logger.error(f"preprocess_task: instance {task_env.task_name}: during `process_item`: {type(exc)}: {exc}")
                     traceback.print_exc()
         finally:
             logger.info(f"preprocess_task: instance {task_env.task_name}: TTS input preprocessor exiting")
@@ -871,7 +871,7 @@ class DPGAvatarController:
                 try:
                     process_item(output_record)
                 except Exception as exc:
-                    logger.error(f"speak_task: during `process_item`: {type(exc)}: {exc}")
+                    logger.error(f"speak_task: instance {task_env.task_name}: during `process_item`: {type(exc)}: {exc}")
                     traceback.print_exc()
         finally:
             logger.info(f"speak_task: instance {task_env.task_name}: TTS playback controller exiting")
