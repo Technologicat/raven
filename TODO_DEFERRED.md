@@ -76,12 +76,6 @@ Could be a useful addition to pyan3 (static call graph generator already underst
 
 Discovered during raven-cherrypick development.
 
-## ThumbnailGrid thread safety
-
-`raven/cherrypick/grid.py` — not currently thread-safe. All callers happen to be on the main thread (background threads interact via queues). If background threads ever need to call grid methods directly, add locking.
-
-Discovered during VHS noise placeholder implementation.
-
 ## Faster PNG decoder
 
 PIL's PNG decode via libpng is slow (~59 ms for a 1 MP image). Unlike JPEG (where turbojpeg provides scaled decode), libpng has no equivalent fast path. Options to investigate:

@@ -11,6 +11,7 @@ manually for O(1) hit detection from mouse position.
 __all__ = ["ThumbnailGrid", "FilterMode"]
 
 import logging
+import threading
 from enum import Enum
 from typing import List, Optional
 
@@ -26,12 +27,14 @@ logger = logging.getLogger(__name__)
 
 # Counter for unique DPG tags.
 _tag_counter = 0
+_tag_lock = threading.Lock()
 
 
 def _next_tag(prefix: str) -> str:
     global _tag_counter
-    _tag_counter += 1
-    return f"grid_{prefix}_{_tag_counter}"
+    with _tag_lock:
+        _tag_counter += 1
+        return f"grid_{prefix}_{_tag_counter}"
 
 
 class FilterMode(Enum):
@@ -57,8 +60,8 @@ class ThumbnailGrid:
     Thumbnails arrive asynchronously via `set_thumbnail`.  Tiles show a
     VHS noise placeholder until their thumbnail is ready.
 
-    Not currently thread-safe; all callers happen to be on the main thread.
-    Background threads interact only via queues (see `ThumbnailPipeline`).
+    Thread-safe: all public methods and mouse handlers are guarded by an
+    `RLock` (reentrant, because public methods call each other internally).
     """
 
     def __init__(self, parent: str | int,
@@ -79,6 +82,8 @@ class ThumbnailGrid:
         *on_double_click*: callback ``f(idx)`` on double-click.
         *debug*: show click position logging.
         """
+        self._lock = threading.RLock()
+
         self._parent = parent
         self._width = width
         self._height = height
@@ -144,15 +149,16 @@ class ThumbnailGrid:
         *filenames* and *triage_states* must be parallel lists (same length,
         same ordering as the TriageManager).
         """
-        self._filenames = list(filenames)
-        self._triage_states = list(triage_states)
-        self._n_images = len(filenames)
-        self._current = 0 if self._n_images > 0 else -1
-        self._selected = set()  # no auto-select; user selects explicitly
-        self._last_click_idx = -1
-        self._clear_textures()
-        self._recompute_visible()
-        self._needs_rebuild = True
+        with self._lock:
+            self._filenames = list(filenames)
+            self._triage_states = list(triage_states)
+            self._n_images = len(filenames)
+            self._current = 0 if self._n_images > 0 else -1
+            self._selected = set()  # no auto-select; user selects explicitly
+            self._last_click_idx = -1
+            self._clear_textures()
+            self._recompute_visible()
+            self._needs_rebuild = True
 
     def set_thumbnail(self, idx: int, flat_rgba) -> None:
         """Update the thumbnail for image *idx*.
@@ -161,25 +167,26 @@ class ThumbnailGrid:
         Creates or updates the DPG texture, then redraws the tile if visible.
         Stale thumbnails from a previous tile size are silently discarded.
         """
-        ts = self._tile_size
-        expected = ts * ts * 4
-        if len(flat_rgba) != expected:
-            return  # stale thumbnail from previous tile size — discard
-        if idx in self._textures:
-            dpg.set_value(self._textures[idx], flat_rgba)
-        else:
-            tex_tag = _next_tag("thumb_tex")
-            with dpg.texture_registry():
-                dpg.add_dynamic_texture(ts, ts,
-                                        default_value=flat_rgba,
-                                        tag=tex_tag)
-            self._textures[idx] = tex_tag
+        with self._lock:
+            ts = self._tile_size
+            expected = ts * ts * 4
+            if len(flat_rgba) != expected:
+                return  # stale thumbnail from previous tile size — discard
+            if idx in self._textures:
+                dpg.set_value(self._textures[idx], flat_rgba)
+            else:
+                tex_tag = _next_tag("thumb_tex")
+                with dpg.texture_registry():
+                    dpg.add_dynamic_texture(ts, ts,
+                                            default_value=flat_rgba,
+                                            tag=tex_tag)
+                self._textures[idx] = tex_tag
 
-        # Redraw tile if it's currently visible in the grid.
-        if idx in self._visible:
-            vis_pos = self._visible.index(idx)
-            if vis_pos in self._tile_drawlists:
-                self._draw_tile(idx, self._tile_drawlists[vis_pos])
+            # Redraw tile if it's currently visible in the grid.
+            if idx in self._visible:
+                vis_pos = self._visible.index(idx)
+                if vis_pos in self._tile_drawlists:
+                    self._draw_tile(idx, self._tile_drawlists[vis_pos])
 
     def set_tile_size(self, size: int) -> None:
         """Change the tile size.  Clears all textures (caller must restart pipeline).
@@ -187,10 +194,11 @@ class ThumbnailGrid:
         Also clears noise pool textures — caller should call
         `set_noise_pool` with new tiles matching the new size.
         """
-        self._tile_size = size
-        self._clear_textures()
-        self._clear_noise_pool()
-        self._needs_rebuild = True
+        with self._lock:
+            self._tile_size = size
+            self._clear_textures()
+            self._clear_noise_pool()
+            self._needs_rebuild = True
 
     def set_noise_pool(self, tiles: List[np.ndarray]) -> None:
         """Set VHS noise placeholder textures from DPG-flat float32 arrays.
@@ -200,83 +208,94 @@ class ThumbnailGrid:
 
         Generate tiles with `raven.common.video.postprocessor.vhs_noise_pool`.
         """
-        self._clear_noise_pool()
-        ts = self._tile_size
-        for flat in tiles:
-            tag = _next_tag("noise_tex")
-            with dpg.texture_registry():
-                dpg.add_dynamic_texture(ts, ts, default_value=flat, tag=tag)
-            self._noise_textures.append(tag)
-        logger.info("ThumbnailGrid.set_noise_pool: %d tiles loaded", len(tiles))
+        with self._lock:
+            self._clear_noise_pool()
+            ts = self._tile_size
+            for flat in tiles:
+                tag = _next_tag("noise_tex")
+                with dpg.texture_registry():
+                    dpg.add_dynamic_texture(ts, ts, default_value=flat, tag=tag)
+                self._noise_textures.append(tag)
+            logger.info("ThumbnailGrid.set_noise_pool: %d tiles loaded", len(tiles))
 
     def set_filter(self, mode: FilterMode) -> None:
         """Set the active filter (which triage states to show)."""
-        if mode == self._filter:
-            return
-        self._filter = mode
-        self._recompute_visible()
-        self._needs_rebuild = True
+        with self._lock:
+            if mode == self._filter:
+                return
+            self._filter = mode
+            self._recompute_visible()
+            self._needs_rebuild = True
 
     def set_size(self, width: int, height: int) -> None:
         """Resize the grid panel (call from viewport resize callback)."""
-        self._width = width
-        self._height = height
-        dpg.configure_item(self._child_window_tag, width=width, height=height)
-        self._needs_rebuild = True
+        with self._lock:
+            self._width = width
+            self._height = height
+            dpg.configure_item(self._child_window_tag, width=width, height=height)
+            self._needs_rebuild = True
 
     def set_current(self, idx: int) -> None:
         """Set the current image (shown in main view)."""
-        if idx == self._current:
-            return
-        old = self._current
-        self._current = idx
-        # Redraw old and new tiles.
-        self._redraw_tile_by_idx(old)
-        self._redraw_tile_by_idx(idx)
-        self._scroll_to_current()
-        if self._on_current_changed is not None:
-            self._on_current_changed(idx)
+        with self._lock:
+            if idx == self._current:
+                return
+            old = self._current
+            self._current = idx
+            # Redraw old and new tiles.
+            self._redraw_tile_by_idx(old)
+            self._redraw_tile_by_idx(idx)
+            self._scroll_to_current()
+            if self._on_current_changed is not None:
+                self._on_current_changed(idx)
 
     def update_triage_state(self, idx: int, state: TriageState) -> None:
         """Notify the grid that a triage state changed (after file move)."""
-        if idx < 0 or idx >= self._n_images:
-            return
-        self._triage_states[idx] = state
-        old_visible = list(self._visible)
-        self._recompute_visible()
-        if self._visible != old_visible:
-            self._needs_rebuild = True
-        else:
-            self._redraw_tile_by_idx(idx)
+        with self._lock:
+            if idx < 0 or idx >= self._n_images:
+                return
+            self._triage_states[idx] = state
+            old_visible = list(self._visible)
+            self._recompute_visible()
+            if self._visible != old_visible:
+                self._needs_rebuild = True
+            else:
+                self._redraw_tile_by_idx(idx)
 
     @property
     def current(self) -> int:
         """Index of the current image, or -1."""
-        return self._current
+        with self._lock:
+            return self._current
 
     @property
     def selected(self) -> set[int]:
         """Set of multi-selected indices (not including current)."""
-        return set(self._selected)
+        with self._lock:
+            return set(self._selected)
 
     @property
     def filter_mode(self) -> FilterMode:
-        return self._filter
+        with self._lock:
+            return self._filter
 
     @property
     def visible_count(self) -> int:
         """Number of images visible under the current filter."""
-        return len(self._visible)
+        with self._lock:
+            return len(self._visible)
 
     @property
     def visible(self) -> list[int]:
         """List of image indices visible under the current filter."""
-        return list(self._visible)
+        with self._lock:
+            return list(self._visible)
 
     @property
     def n_cols(self) -> int:
         """Number of columns in the current grid layout."""
-        return self._n_cols
+        with self._lock:
+            return self._n_cols
 
     # ------------------------------------------------------------------
     # Navigation
@@ -284,43 +303,51 @@ class ThumbnailGrid:
 
     def navigate_next(self) -> Optional[int]:
         """Move to the next visible image.  Returns new index, or None."""
-        return self._navigate_by(1)
+        with self._lock:
+            return self._navigate_by(1)
 
     def navigate_prev(self) -> Optional[int]:
         """Move to the previous visible image.  Returns new index, or None."""
-        return self._navigate_by(-1)
+        with self._lock:
+            return self._navigate_by(-1)
 
     def navigate_row_down(self) -> Optional[int]:
         """Move down by one row."""
-        return self._navigate_by(self._n_cols)
+        with self._lock:
+            return self._navigate_by(self._n_cols)
 
     def navigate_row_up(self) -> Optional[int]:
         """Move up by one row."""
-        return self._navigate_by(-self._n_cols)
+        with self._lock:
+            return self._navigate_by(-self._n_cols)
 
     def navigate_page_down(self) -> Optional[int]:
         """Move down by a page (visible rows)."""
-        visible_rows = max(1, int(self._height / self._row_height)) - 1
-        return self._navigate_by(visible_rows * self._n_cols)
+        with self._lock:
+            visible_rows = max(1, int(self._height / self._row_height)) - 1
+            return self._navigate_by(visible_rows * self._n_cols)
 
     def navigate_page_up(self) -> Optional[int]:
         """Move up by a page (visible rows)."""
-        visible_rows = max(1, int(self._height / self._row_height)) - 1
-        return self._navigate_by(-visible_rows * self._n_cols)
+        with self._lock:
+            visible_rows = max(1, int(self._height / self._row_height)) - 1
+            return self._navigate_by(-visible_rows * self._n_cols)
 
     def navigate_first(self) -> Optional[int]:
         """Jump to the first visible image."""
-        if not self._visible:
-            return None
-        self.set_current(self._visible[0])
-        return self._current
+        with self._lock:
+            if not self._visible:
+                return None
+            self.set_current(self._visible[0])
+            return self._current
 
     def navigate_last(self) -> Optional[int]:
         """Jump to the last visible image."""
-        if not self._visible:
-            return None
-        self.set_current(self._visible[-1])
-        return self._current
+        with self._lock:
+            if not self._visible:
+                return None
+            self.set_current(self._visible[-1])
+            return self._current
 
     def navigate_next_with_state(self, state: TriageState) -> Optional[int]:
         """Jump forward to the next image with triage *state*.
@@ -328,7 +355,8 @@ class ThumbnailGrid:
         Searches the full image list (ignoring filter), wrapping around.
         Returns the new index, or ``None`` if no image has that state.
         """
-        return self._navigate_to_state(state, direction=1)
+        with self._lock:
+            return self._navigate_to_state(state, direction=1)
 
     def navigate_prev_with_state(self, state: TriageState) -> Optional[int]:
         """Jump backward to the previous image with triage *state*.
@@ -336,7 +364,8 @@ class ThumbnailGrid:
         Searches the full image list (ignoring filter), wrapping around.
         Returns the new index, or ``None`` if no image has that state.
         """
-        return self._navigate_to_state(state, direction=-1)
+        with self._lock:
+            return self._navigate_to_state(state, direction=-1)
 
     # ------------------------------------------------------------------
     # Selection
@@ -348,33 +377,37 @@ class ThumbnailGrid:
 
     def select_all(self) -> None:
         """Select all visible images."""
-        self._selected = set(self._visible)
-        self._needs_rebuild = True  # many tiles changed
-        self._notify_selection_changed()
+        with self._lock:
+            self._selected = set(self._visible)
+            self._needs_rebuild = True  # many tiles changed
+            self._notify_selection_changed()
 
     def deselect_all(self) -> None:
         """Clear multi-selection."""
-        if not self._selected:
-            return
-        self._selected.clear()
-        self._needs_rebuild = True
-        self._notify_selection_changed()
+        with self._lock:
+            if not self._selected:
+                return
+            self._selected.clear()
+            self._needs_rebuild = True
+            self._notify_selection_changed()
 
     def invert_selection(self) -> None:
         """Invert selection among visible images."""
-        visible_set = set(self._visible)
-        self._selected = visible_set - self._selected
-        self._needs_rebuild = True
-        self._notify_selection_changed()
+        with self._lock:
+            visible_set = set(self._visible)
+            self._selected = visible_set - self._selected
+            self._needs_rebuild = True
+            self._notify_selection_changed()
 
     def toggle_select(self, idx: int) -> None:
         """Toggle *idx* in/out of the multi-selection (Ctrl+click)."""
-        if idx in self._selected:
-            self._selected.discard(idx)
-        else:
-            self._selected.add(idx)
-        self._redraw_tile_by_idx(idx)
-        self._notify_selection_changed()
+        with self._lock:
+            if idx in self._selected:
+                self._selected.discard(idx)
+            else:
+                self._selected.add(idx)
+            self._redraw_tile_by_idx(idx)
+            self._notify_selection_changed()
 
     # ------------------------------------------------------------------
     # Frame update
@@ -382,9 +415,10 @@ class ThumbnailGrid:
 
     def update(self) -> None:
         """Call from the render loop every frame."""
-        if self._needs_rebuild:
-            self._rebuild()
-            self._needs_rebuild = False
+        with self._lock:
+            if self._needs_rebuild:
+                self._rebuild()
+                self._needs_rebuild = False
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -392,10 +426,11 @@ class ThumbnailGrid:
 
     def destroy(self) -> None:
         """Remove all DPG items.  Call on app shutdown."""
-        self._clear_textures()
-        self._clear_noise_pool()
-        dpg.delete_item(self._handler_tag)
-        dpg.delete_item(self._child_window_tag)
+        with self._lock:
+            self._clear_textures()
+            self._clear_noise_pool()
+            dpg.delete_item(self._handler_tag)
+            dpg.delete_item(self._child_window_tag)
 
     # ------------------------------------------------------------------
     # Internal: texture management
@@ -676,56 +711,58 @@ class ThumbnailGrid:
 
     def _on_click(self, sender, app_data) -> None:
         """Handle single click on a tile."""
-        if not self.input_enabled:
-            return
+        with self._lock:
+            if not self.input_enabled:
+                return
 
-        if self._debug and guiutils.is_mouse_inside_widget(self._child_window_tag):
-            local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)
-            content_y = local_y + dpg.get_y_scroll(self._child_window_tag)
-            logger.info(f"ThumbnailGrid._on_click: local=({local_x:.0f},{local_y:.0f}) "
-                        f"content_y={content_y:.0f} row_h={self._row_height:.0f} "
-                        f"col_w={self._col_width:.0f} "
-                        f"row={int(content_y / self._row_height)} "
-                        f"col={int(local_x / self._col_width)}")
+            if self._debug and guiutils.is_mouse_inside_widget(self._child_window_tag):
+                local_x, local_y = guiutils.get_mouse_relative_pos(self._child_window_tag)
+                content_y = local_y + dpg.get_y_scroll(self._child_window_tag)
+                logger.info(f"ThumbnailGrid._on_click: local=({local_x:.0f},{local_y:.0f}) "
+                            f"content_y={content_y:.0f} row_h={self._row_height:.0f} "
+                            f"col_w={self._col_width:.0f} "
+                            f"row={int(content_y / self._row_height)} "
+                            f"col={int(local_x / self._col_width)}")
 
-        idx = self._hit_test()
-        if idx is None:
-            return
+            idx = self._hit_test()
+            if idx is None:
+                return
 
-        ctrl = (dpg.is_key_down(dpg.mvKey_LControl)
-                or dpg.is_key_down(dpg.mvKey_RControl))
-        shift = (dpg.is_key_down(dpg.mvKey_LShift)
-                 or dpg.is_key_down(dpg.mvKey_RShift))
+            ctrl = (dpg.is_key_down(dpg.mvKey_LControl)
+                    or dpg.is_key_down(dpg.mvKey_RControl))
+            shift = (dpg.is_key_down(dpg.mvKey_LShift)
+                     or dpg.is_key_down(dpg.mvKey_RShift))
 
-        if shift and self._last_click_idx >= 0 and self._last_click_idx in self._visible:
-            # Range select from last click to this click (in visible order).
-            a = self._visible.index(self._last_click_idx)
-            b = self._visible.index(idx) if idx in self._visible else a
-            lo, hi = min(a, b), max(a, b)
-            self._selected = set(self._visible[lo:hi + 1])
-            self._needs_rebuild = True  # many tiles changed
-            self._notify_selection_changed()
-        elif ctrl:
-            self.toggle_select(idx)  # already notifies
-        else:
-            # Bare click: set current and replace selection with this one image.
-            old_selected = self._selected
-            self._selected = {idx}
-            if old_selected != self._selected:
-                self._needs_rebuild = True
+            if shift and self._last_click_idx >= 0 and self._last_click_idx in self._visible:
+                # Range select from last click to this click (in visible order).
+                a = self._visible.index(self._last_click_idx)
+                b = self._visible.index(idx) if idx in self._visible else a
+                lo, hi = min(a, b), max(a, b)
+                self._selected = set(self._visible[lo:hi + 1])
+                self._needs_rebuild = True  # many tiles changed
                 self._notify_selection_changed()
-            self.set_current(idx)
+            elif ctrl:
+                self.toggle_select(idx)  # already notifies
+            else:
+                # Bare click: set current and replace selection with this one image.
+                old_selected = self._selected
+                self._selected = {idx}
+                if old_selected != self._selected:
+                    self._needs_rebuild = True
+                    self._notify_selection_changed()
+                self.set_current(idx)
 
-        self._last_click_idx = idx
+            self._last_click_idx = idx
 
     def _on_double_click_handler(self, sender, app_data) -> None:
         """Handle double-click on a tile."""
-        if not self.input_enabled:
-            return
-        idx = self._hit_test()
-        if idx is None:
-            return
-        self._selected.clear()
-        self.set_current(idx)
-        if self._on_double_click is not None:
-            self._on_double_click(idx)
+        with self._lock:
+            if not self.input_enabled:
+                return
+            idx = self._hit_test()
+            if idx is None:
+                return
+            self._selected.clear()
+            self.set_current(idx)
+            if self._on_double_click is not None:
+                self._on_double_click(idx)
