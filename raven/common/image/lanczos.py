@@ -16,7 +16,7 @@ and ringing on sharp edges:
 All operations use standard PyTorch tensor ops.
 """
 
-__all__ = ["lanczos_resize", "lanczos_mipchain"]
+__all__ = ["resize", "mipchain"]
 
 import math
 
@@ -172,10 +172,10 @@ def _resize_1d(tensor: torch.Tensor, out_size: int, dim: int,
 # Public API
 # ---------------------------------------------------------------------------
 
-def lanczos_resize(tensor: torch.Tensor,
-                   target_h: int,
-                   target_w: int,
-                   order: int = DEFAULT_ORDER) -> torch.Tensor:
+def resize(tensor: torch.Tensor,
+           target_h: int,
+           target_w: int,
+           order: int = DEFAULT_ORDER) -> torch.Tensor:
     """Resize a ``(B, C, H, W)`` tensor using Lanczos interpolation.
 
     *order* controls the kernel size (default 3).  Higher values give sharper
@@ -211,9 +211,9 @@ def lanczos_resize(tensor: torch.Tensor,
     return tensor
 
 
-def lanczos_mipchain(tensor: torch.Tensor,
-                     min_size: int = 64,
-                     order: int = DEFAULT_ORDER) -> list[torch.Tensor]:
+def mipchain(tensor: torch.Tensor,
+             min_size: int = 64,
+             order: int = DEFAULT_ORDER) -> list[torch.Tensor]:
     """Generate a chain of Lanczos-downsampled mip levels.
 
     ``tensor`` is ``(B, C, H, W)``.  Returns ``[original, ½, ¼, …]``,

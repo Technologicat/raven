@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from raven.common.image.lanczos import lanczos_resize, lanczos_mipchain
+from raven.common.image import lanczos
 
 
 # ---------------------------------------------------------------------------
@@ -66,14 +66,14 @@ if torch.backends.mps.is_available():
 # ---------------------------------------------------------------------------
 
 class TestLanczosResize:
-    """Correctness tests for lanczos_resize."""
+    """Correctness tests for `lanczos.resize`."""
 
     @pytest.mark.parametrize("device", _devices)
     def test_identity_resize(self, device):
         """Resizing to the same size should be (approximately) the identity."""
         img = _make_checkerboard(64, 96)
         t = _np_to_tensor(img, device)
-        result = lanczos_resize(t, 64, 96)
+        result = lanczos.resize(t, 64, 96)
         assert result.shape == (1, 3, 64, 96)
         # Should be very close to input (within FP rounding).
         diff = (result - t).abs().max().item()
@@ -86,7 +86,7 @@ class TestLanczosResize:
         target_h, target_w = 100, 150
 
         t = _np_to_tensor(img, device)
-        ours = _tensor_to_np(lanczos_resize(t, target_h, target_w))
+        ours = _tensor_to_np(lanczos.resize(t, target_h, target_w))
         ref = _pil_lanczos_resize(img, target_h, target_w)
 
         # Allow some tolerance — boundary handling and exact kernel differ slightly.
@@ -104,7 +104,7 @@ class TestLanczosResize:
         target_h, target_w = 64, 96
 
         t = _np_to_tensor(img, device)
-        ours = _tensor_to_np(lanczos_resize(t, target_h, target_w))
+        ours = _tensor_to_np(lanczos.resize(t, target_h, target_w))
         ref = _pil_lanczos_resize(img, target_h, target_w)
 
         mae = np.abs(ours.astype(float) - ref.astype(float)).mean()
@@ -119,7 +119,7 @@ class TestLanczosResize:
         target_h, target_w = 128, 192
 
         t = _np_to_tensor(img, device)
-        ours = _tensor_to_np(lanczos_resize(t, target_h, target_w))
+        ours = _tensor_to_np(lanczos.resize(t, target_h, target_w))
         ref = _pil_lanczos_resize(img, target_h, target_w)
 
         mae = np.abs(ours.astype(float) - ref.astype(float)).mean()
@@ -132,7 +132,7 @@ class TestLanczosResize:
         t = _np_to_tensor(img, device)
 
         for th, tw in [(50, 75), (33, 47), (200, 300), (1, 1), (100, 50)]:
-            result = lanczos_resize(t, th, tw)
+            result = lanczos.resize(t, th, tw)
             assert result.shape == (1, 3, th, tw), f"Expected shape (1,3,{th},{tw}), got {result.shape}"
 
     @pytest.mark.parametrize("device", _devices)
@@ -140,7 +140,7 @@ class TestLanczosResize:
         """Odd input and target dimensions should work without error."""
         img = _make_checkerboard(101, 77)
         t = _np_to_tensor(img, device)
-        result = lanczos_resize(t, 51, 39)
+        result = lanczos.resize(t, 51, 39)
         assert result.shape == (1, 3, 51, 39)
 
     @pytest.mark.parametrize("device", _devices)
@@ -148,7 +148,7 @@ class TestLanczosResize:
         """Downscaling to 1×1 should produce the (weighted) mean."""
         img = _make_gradient(64, 64)
         t = _np_to_tensor(img, device)
-        result = lanczos_resize(t, 1, 1)
+        result = lanczos.resize(t, 1, 1)
         assert result.shape == (1, 3, 1, 1)
         # Just check it's a valid value — exact mean depends on kernel.
         val = result[0, 0, 0, 0].item()
@@ -159,7 +159,7 @@ class TestLanczosResize:
         """Batch of images should be resized independently."""
         imgs = np.stack([_make_checkerboard(64, 64), _make_gradient(64, 64)], axis=0)
         t = torch.from_numpy(imgs).permute(0, 3, 1, 2).float().to(device) / 255.0
-        result = lanczos_resize(t, 32, 32)
+        result = lanczos.resize(t, 32, 32)
         assert result.shape == (2, 3, 32, 32)
 
     @pytest.mark.parametrize("device", _devices)
@@ -170,7 +170,7 @@ class TestLanczosResize:
         rgba = np.concatenate([img, alpha], axis=-1)
 
         t = _np_to_tensor(rgba, device)
-        result = lanczos_resize(t, 32, 48)
+        result = lanczos.resize(t, 32, 48)
         assert result.shape == (1, 4, 32, 48)
 
     @pytest.mark.parametrize("device", _devices)
@@ -182,7 +182,7 @@ class TestLanczosResize:
         """
         img = _make_checkerboard(128, 128, block=4)
         t = _np_to_tensor(img, device)
-        result = lanczos_resize(t, 64, 64)
+        result = lanczos.resize(t, 64, 64)
         assert result.min().item() > -0.35, f"Output min {result.min().item()}"
         assert result.max().item() < 1.35, f"Output max {result.max().item()}"
 
@@ -199,22 +199,22 @@ class TestDeviceConsistency:
         t_cpu = _np_to_tensor(img, "cpu")
         t_gpu = _np_to_tensor(img, gpu)
 
-        out_cpu = lanczos_resize(t_cpu, 100, 150)
-        out_gpu = lanczos_resize(t_gpu, 100, 150)
+        out_cpu = lanczos.resize(t_cpu, 100, 150)
+        out_gpu = lanczos.resize(t_gpu, 100, 150)
 
         diff = (out_cpu - out_gpu.cpu()).abs().max().item()
         assert diff < 1e-4, f"CPU/{gpu} mismatch: max diff {diff}"
 
 
 class TestMipchain:
-    """Tests for lanczos_mipchain."""
+    """Tests for `lanczos.mipchain`."""
 
     @pytest.mark.parametrize("device", _devices)
     def test_mipchain_sizes(self, device):
         """Each mip level should be half the previous, down to min_size."""
         img = _make_checkerboard(512, 256)
         t = _np_to_tensor(img, device)
-        chain = lanczos_mipchain(t, min_size=64)
+        chain = lanczos.mipchain(t, min_size=64)
 
         assert chain[0] is t  # first level is the original
         for i in range(1, len(chain)):
@@ -228,7 +228,7 @@ class TestMipchain:
         """Chain should stop when the short edge would drop below min_size."""
         img = _make_checkerboard(512, 256)
         t = _np_to_tensor(img, device)
-        chain = lanczos_mipchain(t, min_size=64)
+        chain = lanczos.mipchain(t, min_size=64)
 
         last = chain[-1]
         short_edge = min(last.shape[2], last.shape[3])
@@ -242,7 +242,7 @@ class TestMipchain:
         """Input already at or below min_size should return just the original."""
         img = _make_checkerboard(32, 32)
         t = _np_to_tensor(img, device)
-        chain = lanczos_mipchain(t, min_size=64)
+        chain = lanczos.mipchain(t, min_size=64)
         assert len(chain) == 1
         assert chain[0] is t
 
@@ -254,7 +254,7 @@ class TestMipchain:
         rgba = np.concatenate([img, alpha], axis=-1)
         t = _np_to_tensor(rgba, device)
 
-        chain = lanczos_mipchain(t, min_size=32)
+        chain = lanczos.mipchain(t, min_size=32)
         for level in chain:
             assert level.shape[0] == 1  # batch
             assert level.shape[1] == 4  # RGBA

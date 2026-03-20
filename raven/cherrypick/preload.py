@@ -322,8 +322,9 @@ def _preload_one(e: env) -> None:
         return
 
     # Generate mip chain.
-    mip_tensors = lanczos.lanczos_mipchain(tensor, min_size=e.mip_min_size,
-                                            order=e.order)
+    mip_tensors = lanczos.mipchain(tensor,
+                                   min_size=e.mip_min_size,
+                                   order=e.order)
     if e.device.type == "cuda":
         torch.cuda.synchronize(e.device)
 

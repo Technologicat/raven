@@ -17,7 +17,7 @@ from typing import Optional, Union
 import numpy as np
 import torch
 
-from .lanczos import lanczos_resize, DEFAULT_ORDER
+from . import lanczos
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ def tensor_to_dpg_flat(tensor: torch.Tensor) -> np.ndarray:
 
 def letterbox(tensor: torch.Tensor,
               tile_size: int,
-              order: int = DEFAULT_ORDER,
+              order: int = lanczos.DEFAULT_ORDER,
               bg_value: float = 0.3) -> torch.Tensor:
     """Resize *tensor* to fit within ``tile_size × tile_size``, letterbox the rest.
 
@@ -189,7 +189,7 @@ def letterbox(tensor: torch.Tensor,
     new_h = max(1, round(H * scale))
     new_w = max(1, round(W * scale))
 
-    resized = lanczos_resize(tensor, new_h, new_w, order=order)
+    resized = lanczos.resize(tensor, new_h, new_w, order=order)
 
     result = torch.full((1, C, tile_size, tile_size), bg_value,
                         device=tensor.device, dtype=tensor.dtype)

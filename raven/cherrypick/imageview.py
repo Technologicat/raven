@@ -583,8 +583,8 @@ class ImageView:
             # Upload + mipchain on GPU.
             tensor = imageutils.np_to_tensor(rgba, e.device)
             del rgba
-            mip_tensors = lanczos.lanczos_mipchain(tensor, min_size=e.mip_min_size,
-                                                    order=e.order)
+            mip_tensors = lanczos.mipchain(tensor, min_size=e.mip_min_size,
+                                           order=e.order)
 
             # Identify which scales are already present.
             with self._mips_lock:
@@ -666,9 +666,9 @@ class ImageView:
 
         # Generate mip chain on GPU.
         t0 = time.perf_counter_ns()
-        mip_tensors = lanczos.lanczos_mipchain(tensor,
-                                               min_size=e.mip_min_size,
-                                               order=e.order)
+        mip_tensors = lanczos.mipchain(tensor,
+                                       min_size=e.mip_min_size,
+                                       order=e.order)
         t_mipgen = time.perf_counter_ns() - t0
 
         # Build (scale, tensor) list, largest-first.

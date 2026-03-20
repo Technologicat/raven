@@ -18,7 +18,7 @@ Stages measured:
 2. **PIL decode**: ``Image.open()`` + ``.convert("RGBA")`` → numpy array.
 3. **QOI decode**: ``qoi.decode()`` (for .qoi files).
 4. **CPU→GPU transfer**: numpy → torch tensor on device.
-5. **GPU resize (Lanczos)**: ``lanczos_resize`` on device.
+5. **GPU resize (Lanczos)**: ``lanczos.resize`` on device.
 6. **GPU→CPU transfer**: result tensor back to CPU numpy.
 7. **End-to-end sequential**: decode + transfer + resize + transfer back, one at a time.
 8. **End-to-end batched**: same but in batches of N.
@@ -34,7 +34,7 @@ import torch
 from PIL import Image
 
 from raven.common.image.utils import IMAGE_EXTENSIONS
-from raven.common.image.lanczos import lanczos_resize
+from raven.common.image import lanczos
 
 
 def _ns_to_s(ns: int) -> float:
@@ -119,7 +119,7 @@ def bench_gpu_resize(arrays: list[np.ndarray], device: str,
     """Stage 4: GPU Lanczos resize (transfer + resize + free, one at a time)."""
     # Warm up.
     t = _np_to_tensor(arrays[0], device)
-    lanczos_resize(t, tile_size, tile_size, order=order)
+    lanczos.resize(t, tile_size, tile_size, order=order)
     del t
     if device.startswith("cuda"):
         torch.cuda.synchronize(device)
@@ -128,7 +128,7 @@ def bench_gpu_resize(arrays: list[np.ndarray], device: str,
     t0 = time.perf_counter_ns()
     for a in arrays:
         t = _np_to_tensor(a, device)
-        r = lanczos_resize(t, tile_size, tile_size, order=order)
+        r = lanczos.resize(t, tile_size, tile_size, order=order)
         total_pixels += a.shape[0] * a.shape[1]
         del t, r
     if device.startswith("cuda"):
@@ -147,7 +147,7 @@ def bench_transfer_to_cpu(arrays: list[np.ndarray], device: str,
     # Generate thumbnails to transfer back.
     # Warm up.
     t = _np_to_tensor(arrays[0], device)
-    r = lanczos_resize(t, tile_size, tile_size, order=order)
+    r = lanczos.resize(t, tile_size, tile_size, order=order)
     _ = r.cpu().numpy()
     del t, r
     torch.cuda.synchronize(device)
@@ -156,7 +156,7 @@ def bench_transfer_to_cpu(arrays: list[np.ndarray], device: str,
     t0 = time.perf_counter_ns()
     for a in arrays:
         t = _np_to_tensor(a, device)
-        r = lanczos_resize(t, tile_size, tile_size, order=order)
+        r = lanczos.resize(t, tile_size, tile_size, order=order)
         out = r.cpu().numpy()
         total_bytes += out.nbytes
         del t, r
@@ -176,7 +176,7 @@ def bench_e2e_sequential(files: list[pathlib.Path], device: str,
     # Warm up.
     arr = _decode_image(files[0])
     t = _np_to_tensor(arr, device)
-    r = lanczos_resize(t, tile_size, tile_size, order=order)
+    r = lanczos.resize(t, tile_size, tile_size, order=order)
     _ = r.cpu().numpy()
     if device.startswith("cuda"):
         torch.cuda.synchronize(device)
@@ -185,7 +185,7 @@ def bench_e2e_sequential(files: list[pathlib.Path], device: str,
     for f in files:
         arr = _decode_image(f)
         t = _np_to_tensor(arr, device)
-        r = lanczos_resize(t, tile_size, tile_size, order=order)
+        r = lanczos.resize(t, tile_size, tile_size, order=order)
         _ = r.cpu().numpy()
     if device.startswith("cuda"):
         torch.cuda.synchronize(device)
@@ -201,7 +201,7 @@ def bench_e2e_batched(files: list[pathlib.Path], device: str,
     # Warm up.
     arr = _decode_image(files[0])
     t = _np_to_tensor(arr, device)
-    lanczos_resize(t, tile_size, tile_size, order=order)
+    lanczos.resize(t, tile_size, tile_size, order=order)
     if device.startswith("cuda"):
         torch.cuda.synchronize(device)
 
@@ -213,7 +213,7 @@ def bench_e2e_batched(files: list[pathlib.Path], device: str,
         # Resize individually (images may differ in size, can't stack).
         for arr in arrays:
             t = _np_to_tensor(arr, device)
-            r = lanczos_resize(t, tile_size, tile_size, order=order)
+            r = lanczos.resize(t, tile_size, tile_size, order=order)
             _ = r.cpu().numpy()
     if device.startswith("cuda"):
         torch.cuda.synchronize(device)

@@ -38,7 +38,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-from raven.common.image.lanczos import lanczos_resize
+from raven.common.image import lanczos
 
 
 def to_tensor(img, device="cuda"):
@@ -134,7 +134,7 @@ def run_benchmark(device):
 
     # Warm up.
     dummy = torch.randn(1, 3, 512, 512, device=device)
-    lanczos_resize(dummy, 128, 128, order=3)
+    lanczos.resize(dummy, 128, 128, order=3)
     if device.startswith("cuda"):
         torch.cuda.synchronize(device)
 
@@ -155,7 +155,7 @@ def run_benchmark(device):
         tensor = torch.randn(1, 3, in_h, in_w, device=device)
         for order in orders:
             # Warm up this specific config.
-            lanczos_resize(tensor, out_h, out_w, order=order)
+            lanczos.resize(tensor, out_h, out_w, order=order)
             if device.startswith("cuda"):
                 torch.cuda.synchronize(device)
 
@@ -164,7 +164,7 @@ def run_benchmark(device):
                 torch.cuda.synchronize(device)
             t0 = time.perf_counter()
             for _ in range(n_iter):
-                lanczos_resize(tensor, out_h, out_w, order=order)
+                lanczos.resize(tensor, out_h, out_w, order=order)
             if device.startswith("cuda"):
                 torch.cuda.synchronize(device)
             elapsed = (time.perf_counter() - t0) / n_iter * 1000  # ms
@@ -231,7 +231,7 @@ def main():
         t = to_tensor(img, device)
         for order in orders:
             for s in sizes:
-                result = lanczos_resize(t, s, s, order=order)
+                result = lanczos.resize(t, s, s, order=order)
                 downscaled = from_tensor(result)
                 suffix = f"_L{order}_{s}" if len(orders) > 1 else f"_lanczos_{s}"
                 Image.fromarray(downscaled).save(outdir / f"{name}{suffix}.png")
