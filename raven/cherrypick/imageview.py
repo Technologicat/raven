@@ -535,7 +535,7 @@ class ImageView:
         try:
             e.rgba = imageutils.decode_image(e.path)
         except Exception as exc:
-            logger.warning(f"ImageView._bg_file_mip_task: instance {e.task_name}: decode failed for {e.path}: {exc}")
+            logger.warning(f"ImageView._bg_file_mip_task: instance {e.task_name}: decode failed for {e.path}: {type(exc)}: {exc}")
             self._set_mip_loading(False)
             self._needs_render = True
             return
@@ -570,7 +570,7 @@ class ImageView:
             try:
                 rgba = imageutils.decode_image(e.path)
             except Exception as exc:
-                logger.warning(f"ImageView._bg_augment_task: instance {e.task_name}: decode failed for {e.path}: {exc}")
+                logger.warning(f"ImageView._bg_augment_task: instance {e.task_name}: decode failed for {e.path}: {type(exc)}: {exc}")
                 return
             t_decode = time.perf_counter_ns() - t0
 

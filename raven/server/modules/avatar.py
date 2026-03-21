@@ -756,7 +756,7 @@ class Animator:
             with open(animator_settings_path / "animator.json", "r") as json_file:
                 server_settings = json.load(json_file)
         except Exception as exc:
-            logger.warning(f"load_animator_settings: skipping server settings, reason: {exc}")
+            logger.warning(f"load_animator_settings: skipping server settings, reason: {type(exc)}: {exc}")
             server_settings = {}
 
         # Let's define some helpers:

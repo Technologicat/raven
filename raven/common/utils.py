@@ -226,7 +226,7 @@ def format_bibtex_authors(authors):
     try:
         authors_list = [format_bibtex_author(author) for author in authors]
     except ValueError as exc:
-        logger.warning(f"format_bibtex_authors: failed, reason: {str(exc)}")
+        logger.warning(f"format_bibtex_authors: failed, reason: {type(exc)}: {exc}")
         return ""
     if len(authors_list) >= 3:
         authors_str = f"{authors_list[0]} et al."

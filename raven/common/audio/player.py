@@ -139,7 +139,7 @@ class Player(Singleton):
         try:
             pygame.mixer.music.load(stream)
         except pygame.error as exc:
-            raise RuntimeError("Player.load: failed to load audio stream into player, reason {type(exc)}: {exc}") from exc
+            raise RuntimeError(f"Player.load: failed to load audio stream into player, reason {type(exc)}: {exc}") from exc
         logger.info("Player.load: Successfully loaded.")
 
     def start(self) -> None:
