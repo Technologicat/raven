@@ -111,9 +111,9 @@ class TriageManager:
                     if _is_image(f):
                         if f.name in entries:
                             # Same filename in base AND subdir — keep the triaged one.
-                            logger.warning("TriageManager.scan: duplicate filename %r in both %s/ and %s/; "
-                                           "using the triaged copy.",
-                                           f.name, self.base_dir.name, subdir)
+                            logger.warning(f"TriageManager.scan: instance '{self.base_dir.name}': "
+                                           f"duplicate filename {f.name!r} in both {self.base_dir.name}/ and {subdir}/; "
+                                           f"using the triaged copy.")
                         entries[f.name] = state
 
         # Build sorted list.
@@ -199,5 +199,5 @@ class TriageManager:
             return msg
 
         entry.state = new_state
-        logger.info("TriageManager.set_state: %s → %s", entry.filename, new_state.value)
+        logger.info(f"TriageManager.set_state: instance '{self.base_dir.name}': {entry.filename} → {new_state.value}")
         return None

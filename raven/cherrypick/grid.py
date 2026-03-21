@@ -216,7 +216,7 @@ class ThumbnailGrid:
                 with dpg.texture_registry():
                     dpg.add_dynamic_texture(ts, ts, default_value=flat, tag=tag)
                 self._noise_textures.append(tag)
-            logger.info("ThumbnailGrid.set_noise_pool: %d tiles loaded", len(tiles))
+            logger.info(f"ThumbnailGrid.set_noise_pool: instance 0x{id(self):x}: {len(tiles)} tiles loaded")
 
     def set_filter(self, mode: FilterMode) -> None:
         """Set the active filter (which triage states to show)."""
