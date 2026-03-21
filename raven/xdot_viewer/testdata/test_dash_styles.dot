@@ -1,0 +1,16 @@
+digraph dash_test {
+    rankdir=LR;
+    node [shape=ellipse, style=filled, fillcolor="#4488cc"];
+
+    A -> B [label="solid (default)"];
+    A -> C [label="dashed", style=dashed];
+    A -> D [label="dotted", style=dotted];
+    B -> C [label="solid"];
+    C -> D [label="dashed", style=dashed];
+    B -> D [label="dotted", style=dotted];
+
+    // Some longer edges to see the pattern over distance
+    E -> F [label="long dashed", style=dashed];
+    E -> G [label="long dotted", style=dotted];
+    F -> G [label="long solid"];
+}
