@@ -115,9 +115,4 @@ Promising unexplored approaches:
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
 
-## raven-xdot-viewer: GUI error messagebox for failed graph loads
-
-`_run_graphviz` and `_load_file` in `raven/xdot_viewer/app.py` currently only `logger.error(...)` when a graph can't be opened (file not found, unsupported format, GraphViz produced no output). Should additionally show a modal error dialog via `raven.common.gui.messagebox`. See the existing TODO comments in the code (3 sites).
-
-Discovered during dashed-edge visual testing session.
 

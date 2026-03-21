@@ -10,6 +10,8 @@ Usage:
 """
 
 import logging
+from typing import List, Optional, Tuple, Union
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,6 @@ with timer() as tim:
     import time
     import pathlib
     import webbrowser
-    from typing import Optional, Union
 
     import dearpygui.dearpygui as dpg
 
@@ -40,6 +41,7 @@ with timer() as tim:
     from ..common.gui import utils as guiutils
     from ..common.gui import helpcard
     from ..common.gui import animation as gui_animation
+    from ..common.gui import messagebox
     from ..vendor import DearPyGui_Markdown as dpg_markdown
     from ..vendor.file_dialog.fdialog import FileDialog
 
@@ -78,6 +80,44 @@ def _show_open_dialog(*_args) -> None:
         _filedialog_open.show_file_dialog()
 
 
+_render_loop_running = False
+_deferred_errors: List[Tuple[str, str]] = []
+
+
+def _show_error(title: str, message: str) -> None:
+    """Log an error and show a modal error dialog.
+
+    During startup (before the render loop), queues the error — the
+    messagebox uses ``split_frame``, which deadlocks outside the render
+    loop. Queued errors are shown once the render loop starts.
+    """
+    logger.error(message)
+    if _render_loop_running:
+        messagebox.modal_dialog(window_title=title,
+                                message=message,
+                                buttons=["Close"],
+                                ok_button="Close",
+                                cancel_button="Close",
+                                centering_reference_window="main_window")
+    else:
+        _deferred_errors.append((title, message))
+
+
+def _flush_deferred_errors(*_args) -> None:
+    """Show any errors that were queued during startup."""
+    if _deferred_errors:
+        # Show the first one; if there are multiple, they'll stack
+        # as the user closes each dialog.
+        title, message = _deferred_errors.pop(0)
+        messagebox.modal_dialog(window_title=title,
+                                message=message,
+                                buttons=["Close"],
+                                ok_button="Close",
+                                cancel_button="Close",
+                                callback=lambda _: _flush_deferred_errors(),
+                                centering_reference_window="main_window")
+
+
 def _run_graphviz(dot_source: str, engine: str = "dot") -> Optional[str]:
     """Run a GraphViz layout engine on DOT source, return xdot code.
 
@@ -96,10 +136,12 @@ def _run_graphviz(dot_source: str, engine: str = "dot") -> Optional[str]:
             logger.warning(f"_run_graphviz: `{engine}` warnings: {result.stderr.strip()}")
         if result.stdout:
             return result.stdout
-        logger.error(f"_run_graphviz: `{engine}` produced no output (exit code {result.returncode}).")
+        _show_error("GraphViz Error",
+                    f"`{engine}` produced no output (exit code {result.returncode}).")
         return None
     except FileNotFoundError:
-        logger.error(f"_run_graphviz: `{engine}` command not found. Please install GraphViz.")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
+        _show_error("GraphViz Not Found",
+                    f"`{engine}` command not found. Please install GraphViz.")
         return None
 
 
@@ -112,7 +154,7 @@ def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
     filepath = common_utils.absolutize_filename(filepath)
 
     if not os.path.exists(filepath):
-        logger.error(f"_load_file: File not found: '{filepath}'")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
+        _show_error("File Not Found", f"File not found: '{filepath}'")
         return None
 
     ext = os.path.splitext(filepath)[1].lower()
@@ -137,7 +179,8 @@ def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
         return _run_graphviz(_app_state["dot_source"], engine)
 
     else:
-        logger.error(f"_load_file: Unsupported file type: '{ext}'. Supported: `.xdot`, `.dot`, `.gv`.")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
+        _show_error("Unsupported Format",
+                    f"Unsupported file type: '{ext}'. Supported: .xdot, .dot, .gv")
         return None
 
 
@@ -785,6 +828,9 @@ def main() -> int:
     dpg.set_frame_callback(10, _initial_resize)
 
     # --- Render loop ---
+    global _render_loop_running
+    _render_loop_running = True
+    dpg.set_frame_callback(12, _flush_deferred_errors)
     last_check = time.monotonic()
     def _poll_reload():
         nonlocal last_check
