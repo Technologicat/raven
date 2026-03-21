@@ -79,21 +79,27 @@ def _show_open_dialog(*_args) -> None:
 
 
 def _run_graphviz(dot_source: str, engine: str = "dot") -> Optional[str]:
-    """Run a GraphViz layout engine on DOT source, return xdot code."""
+    """Run a GraphViz layout engine on DOT source, return xdot code.
+
+    GraphViz may exit non-zero while still producing valid output (e.g.
+    ``trouble in init_rank`` warnings on complex graphs). We accept the
+    output as long as stdout is non-empty.
+    """
     try:
         result = subprocess.run(
             [engine, "-Txdot"],
             input=dot_source,
             capture_output=True,
             text=True,
-            check=True
         )
-        return result.stdout
+        if result.stderr:
+            logger.warning(f"_run_graphviz: `{engine}` warnings: {result.stderr.strip()}")
+        if result.stdout:
+            return result.stdout
+        logger.error(f"_run_graphviz: `{engine}` produced no output (exit code {result.returncode}).")
+        return None
     except FileNotFoundError:
         logger.error(f"_run_graphviz: `{engine}` command not found. Please install GraphViz.")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
-        return None
-    except subprocess.CalledProcessError as e:
-        logger.error(f"_run_graphviz: Error running `{engine}`: {e.stderr}")  # TODO: additionally use `raven.common.gui.messagebox` to spawn a modal GUI error box that background-threads automatically
         return None
 
 
@@ -499,7 +505,7 @@ def _on_key(sender, app_data) -> None:
             _zoom_in()
         elif key in (dpg.mvKey_Minus, dpg.mvKey_Subtract):
             _zoom_out()
-        elif key in (dpg.mvKey_0, dpg.mvKey_NumPad0):
+        elif key == dpg.mvKey_F:
             _zoom_to_fit()
         elif key == dpg.mvKey_Up:
             widget.pan_by(dx=0, dy=+config.PAN_AMOUNT)
@@ -595,7 +601,7 @@ def main() -> int:
             dpg.add_button(label=fa.ICON_SQUARE, tag="zoom_to_fit_button", callback=_zoom_to_fit, width=30)
             dpg.bind_item_font("zoom_to_fit_button", themes_and_fonts.icon_font_regular)  # tag
             with dpg.tooltip("zoom_to_fit_button"):  # tag
-                dpg.add_text("Zoom to fit [0]")
+                dpg.add_text("Zoom to fit [F]")
 
             dpg.add_button(label=fa.ICON_MAGNIFYING_GLASS_PLUS, tag="zoom_in_button", callback=_zoom_in, width=30)
             dpg.bind_item_font("zoom_in_button", themes_and_fonts.icon_font_solid)  # tag
@@ -699,7 +705,7 @@ def main() -> int:
         # Column 2: navigation & app
         env(key_indent=0, key="+  / Numpad +", action_indent=0, action="Zoom in", notes=""),
         env(key_indent=0, key="-  / Numpad -", action_indent=0, action="Zoom out", notes=""),
-        env(key_indent=0, key="0  / Numpad 0", action_indent=0, action="Zoom to fit", notes=""),
+        env(key_indent=0, key="F", action_indent=0, action="Zoom to fit", notes=""),
         env(key_indent=0, key="Arrow keys", action_indent=0, action="Pan view", notes=""),
         env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at cursor", notes=""),
         env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan view", notes=""),

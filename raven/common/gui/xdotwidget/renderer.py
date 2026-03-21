@@ -7,6 +7,7 @@ DearPyGUI's drawlist primitives.
 __all__ = ["render_graph", "color_to_dpg", "set_dark_mode", "get_dark_mode"]
 
 import colorsys
+import math
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import dearpygui.dearpygui as dpg
@@ -105,6 +106,70 @@ def _transform_points(points: List[Point],
                       viewport: Viewport) -> List[Point]:
     """Transform a list of points from graph to screen coordinates."""
     return [viewport.graph_to_screen(p[0], p[1]) for p in points]
+
+
+def _dashify_polyline(points: List[Point],
+                      dash: Tuple[float, ...]) -> List[List[Point]]:
+    """Split a polyline into dashed segments.
+
+    Walks along `points`, toggling between "on" (visible) and "off" (gap)
+    phases according to the dash pattern. The pattern repeats cyclically —
+    e.g. ``(6,)`` means 6 on, 6 off; ``(2, 4)`` means 2 on, 4 off.
+
+    Returns a list of sub-polylines (the "on" segments).
+    """
+    if len(points) < 2:
+        return [list(points)] if points else []
+
+    # Expand a single-value dash pattern to on/off pair
+    cycle = dash if len(dash) >= 2 else (dash[0], dash[0])
+    segments: List[List[Point]] = []
+    current: List[Point] = []   # points in the current "on" segment
+    phase_idx = 0               # index into `cycle`
+    phase_remaining = cycle[0]  # distance remaining in current on/off phase
+
+    # phase_idx even → drawing ("on"), odd → gap ("off")
+    current.append(points[0])
+
+    for k in range(1, len(points)):
+        ax, ay = points[k - 1]
+        bx, by = points[k]
+        dx, dy = bx - ax, by - ay
+        seg_len = math.hypot(dx, dy)
+        if seg_len == 0:
+            continue
+        ux, uy = dx / seg_len, dy / seg_len  # unit direction
+
+        consumed = 0.0
+        while consumed < seg_len:
+            step = min(phase_remaining, seg_len - consumed)
+            consumed += step
+            phase_remaining -= step
+
+            # Interpolated point at `consumed` along this segment
+            px = ax + ux * consumed
+            py = ay + uy * consumed
+
+            if phase_idx % 2 == 0:
+                # "on" phase — accumulate points
+                current.append((px, py))
+
+            if phase_remaining <= 1e-9:
+                # Phase exhausted — finalize "on" segment or start new one
+                if phase_idx % 2 == 0 and len(current) >= 2:
+                    segments.append(current)
+                    current = []
+                elif phase_idx % 2 == 1:
+                    # Transition off → on: start a new segment at this point
+                    current = [(px, py)]
+                phase_idx = (phase_idx + 1) % len(cycle)
+                phase_remaining = cycle[phase_idx]
+
+    # Flush the last "on" segment
+    if phase_idx % 2 == 0 and len(current) >= 2:
+        segments.append(current)
+
+    return segments
 
 
 def _render_text_shape(drawlist: Union[int, str],
@@ -230,8 +295,15 @@ def _render_line_shape(drawlist: Union[int, str],
     stroke_color = color_to_dpg(pen.color)
     thickness = max(1, pen.linewidth * zoom)
 
-    dpg.draw_polyline(points, color=stroke_color, thickness=thickness,
-                      parent=drawlist)
+    if pen.dash:
+        # Dash pattern is in graph-coordinate points; scale by zoom
+        scaled_dash = tuple(d * zoom for d in pen.dash)
+        for seg in _dashify_polyline(points, scaled_dash):
+            dpg.draw_polyline(seg, color=stroke_color, thickness=thickness,
+                              parent=drawlist)
+    else:
+        dpg.draw_polyline(points, color=stroke_color, thickness=thickness,
+                          parent=drawlist)
 
 
 def _render_bezier_shape(drawlist: Union[int, str],
@@ -255,25 +327,34 @@ def _render_bezier_shape(drawlist: Union[int, str],
         dpg.draw_polygon(tess_screen, color=(0, 0, 0, 0), fill=fill_color,
                          parent=drawlist)
     else:
-        points = _transform_points(shape.points, viewport)
         zoom = viewport.zoom.current
         stroke_color = color_to_dpg(pen.color)
         thickness = max(1, pen.linewidth * zoom)
 
-        # Draw each cubic bezier segment
-        # Points format: [p0, c1, c2, p1, c1, c2, p1, ...]
-        p0 = points[0]
-        for i in range(1, len(points), 3):
-            if i + 2 >= len(points):
-                break
-            c1 = points[i]
-            c2 = points[i + 1]
-            p1 = points[i + 2]
-
-            dpg.draw_bezier_cubic(p0, c1, c2, p1,
-                                  color=stroke_color, thickness=thickness,
+        if pen.dash:
+            # Tessellate to polyline in graph coords, transform, then dashify.
+            tess_graph = tessellate_bezier(shape.points)
+            tess_screen = _transform_points(tess_graph, viewport)
+            scaled_dash = tuple(d * zoom for d in pen.dash)
+            for seg in _dashify_polyline(tess_screen, scaled_dash):
+                dpg.draw_polyline(seg, color=stroke_color, thickness=thickness,
                                   parent=drawlist)
-            p0 = p1
+        else:
+            # Solid — use DPG's native bezier for smooth curves.
+            points = _transform_points(shape.points, viewport)
+            # Points format: [p0, c1, c2, p1, c1, c2, p1, ...]
+            p0 = points[0]
+            for i in range(1, len(points), 3):
+                if i + 2 >= len(points):
+                    break
+                c1 = points[i]
+                c2 = points[i + 1]
+                p1 = points[i + 2]
+
+                dpg.draw_bezier_cubic(p0, c1, c2, p1,
+                                      color=stroke_color, thickness=thickness,
+                                      parent=drawlist)
+                p0 = p1
 
 
 def _render_shape(drawlist: Union[int, str],

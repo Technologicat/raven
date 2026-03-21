@@ -390,8 +390,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ## XDot Viewer (`raven-xdot-viewer`)
 
-- **[Medium]** Dashed edge rendering: DOT `style="dashed"` edges currently render as solid. Noticed when viewing pyan3 call graphs, where dashed = defines, solid = uses.
-
+*(No outstanding items.)*
 
 ---
 
