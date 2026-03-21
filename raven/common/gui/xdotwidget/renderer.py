@@ -59,6 +59,11 @@ def _invert_lightness(color: Color) -> Color:
     return (r2, g2, b2, a)
 
 
+def _perceived_luminance(r: float, g: float, b: float) -> float:
+    """Perceived luminance (ITU-R BT.709). Input channels in [0,1]."""
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
 def color_to_dpg(color: Color) -> DPGColor:  # TODO: move to a utility module, maybe `raven.common.video.colorspace`? OTOH, not video, but GUI, and we don't have a colorspace module in that namespace.
     """Convert RGBA color from [0,1] to DPG format [0,255].
 
@@ -177,7 +182,8 @@ def _render_text_shape(drawlist: Union[int, str],
                        viewport: Viewport,
                        pen: Pen,
                        text_compaction_cb: Optional[Callable] = None,
-                       graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None) -> None:
+                       graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
+                       element_fillcolor: Optional[Color] = None) -> None:
     """Render a text shape."""
     # Transform position
     sx, sy = viewport.graph_to_screen(shape.x, shape.y)
@@ -213,7 +219,21 @@ def _render_text_shape(drawlist: Union[int, str],
     # Approximate adjustment based on font size
     y = sy - font_size_px * 0.8
 
-    color = color_to_dpg(pen.color)
+    # In dark mode, text on colored fills needs contrast-aware color selection.
+    # The standard lightness inversion can produce near-white text on medium-
+    # lightness fills (e.g., green, yellow), which is unreadable.
+    # `element_fillcolor` comes from the element's filled shape (parsed from
+    # `_draw_`), not from this text shape's pen (parsed from `_ldraw_`).
+    if _dark_mode and element_fillcolor is not None:
+        inv_fill = _invert_lightness(element_fillcolor)
+        lum = _perceived_luminance(inv_fill[0], inv_fill[1], inv_fill[2])
+        if lum > 0.5:
+            v = int(_DARK_MODE_L_MIN * 255)
+        else:
+            v = int(_DARK_MODE_L_MAX * 255)
+        color = (v, v, v, int(pen.color[3] * 255))
+    else:
+        color = color_to_dpg(pen.color)
 
     # DPG's draw_text size parameter is in pixels
     item = dpg.draw_text((x, y), text, size=font_size_px, color=color, parent=drawlist)
@@ -321,7 +341,7 @@ def _render_bezier_shape(drawlist: Union[int, str],
 
     if shape.filled:
         # DPG has no filled bezier support, so tessellate into a polygon.
-        tess_graph = tessellate_bezier(shape.points)
+        tess_graph = tessellate_bezier(shape.points, n=32)
         tess_screen = _transform_points(tess_graph, viewport)
         fill_color = color_to_dpg(pen.fillcolor)
         dpg.draw_polygon(tess_screen, color=(0, 0, 0, 0), fill=fill_color,
@@ -332,8 +352,10 @@ def _render_bezier_shape(drawlist: Union[int, str],
         thickness = max(1, pen.linewidth * zoom)
 
         if pen.dash:
-            # Tessellate to polyline in graph coords, transform, then dashify.
-            tess_graph = tessellate_bezier(shape.points)
+            # Tessellate to polyline for dash pattern rendering.
+            # Use n=32 for visual smoothness (the default n=10 is fine
+            # for hit detection but looks angular at high zoom).
+            tess_graph = tessellate_bezier(shape.points, n=32)
             tess_screen = _transform_points(tess_graph, viewport)
             scaled_dash = tuple(d * zoom for d in pen.dash)
             for seg in _dashify_polyline(tess_screen, scaled_dash):
@@ -342,7 +364,6 @@ def _render_bezier_shape(drawlist: Union[int, str],
         else:
             # Solid — use DPG's native bezier for smooth curves.
             points = _transform_points(shape.points, viewport)
-            # Points format: [p0, c1, c2, p1, c1, c2, p1, ...]
             p0 = points[0]
             for i in range(1, len(points), 3):
                 if i + 2 >= len(points):
@@ -350,11 +371,25 @@ def _render_bezier_shape(drawlist: Union[int, str],
                 c1 = points[i]
                 c2 = points[i + 1]
                 p1 = points[i + 2]
-
                 dpg.draw_bezier_cubic(p0, c1, c2, p1,
                                       color=stroke_color, thickness=thickness,
                                       parent=drawlist)
                 p0 = p1
+
+
+def _get_element_fillcolor(element: Optional[Element]) -> Optional[Color]:
+    """Extract the fill color from an element's filled shapes, if any.
+
+    Returns the fillcolor of the first filled EllipseShape or PolygonShape
+    found in the element's shape list, or ``None`` if the element has no
+    filled shapes (e.g. edges, background shapes).
+    """
+    if element is None:
+        return None
+    for shape in element.shapes:
+        if isinstance(shape, (EllipseShape, PolygonShape)) and shape.filled:
+            return shape.pen.fillcolor if shape.pen is not None else None
+    return None
 
 
 def _render_shape(drawlist: Union[int, str],
@@ -363,12 +398,15 @@ def _render_shape(drawlist: Union[int, str],
                   element: Optional[Element],
                   highlight_intensities: Dict[Element, float],
                   text_compaction_cb: Optional[Callable],
-                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None) -> None:
+                  graph_text_fonts: Optional[Sequence[Tuple[float, Union[int, str]]]] = None,
+                  element_fillcolor: Optional[Color] = None) -> None:
     """Render a single shape."""
     pen = _get_effective_pen(shape, element, highlight_intensities)
 
     if isinstance(shape, TextShape):
-        _render_text_shape(drawlist, shape, viewport, pen, text_compaction_cb, graph_text_fonts)
+        _render_text_shape(drawlist, shape, viewport, pen,
+                           text_compaction_cb, graph_text_fonts,
+                           element_fillcolor=element_fillcolor)
     elif isinstance(shape, EllipseShape):
         _render_ellipse_shape(drawlist, shape, viewport, pen)
     elif isinstance(shape, PolygonShape):
@@ -380,7 +418,9 @@ def _render_shape(drawlist: Union[int, str],
     elif isinstance(shape, CompoundShape):
         for child in shape.shapes:
             _render_shape(drawlist, child, viewport, element,
-                          highlight_intensities, text_compaction_cb, graph_text_fonts)
+                          highlight_intensities, text_compaction_cb,
+                          graph_text_fonts,
+                          element_fillcolor=element_fillcolor)
 
 
 def _is_element_visible(element: Element, viewport: Viewport) -> bool:
@@ -441,6 +481,8 @@ def render_graph(drawlist: Union[int, str],
     for node in graph.nodes:
         if not _is_element_visible(node, viewport):
             continue
+        fillcolor = _get_element_fillcolor(node)
         for shape in node.shapes:
             _render_shape(drawlist, shape, viewport, node,
-                          highlight_intensities, text_compaction_cb, graph_text_fonts)
+                          highlight_intensities, text_compaction_cb,
+                          graph_text_fonts, element_fillcolor=fillcolor)

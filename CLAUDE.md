@@ -161,3 +161,4 @@ Recommended model: Qwen3-VL-30B-A3B (24GB+ VRAM) or Qwen3-VL-4B (8GB VRAM).
 - Annotation tooltip help section rebuilt every time (could be static with show/hide)
 - `_update_info_panel` race condition: current item highlight sometimes doesn't update immediately after selection change
 - Search match scrolling race condition: hammering the button can error out (`app.py:2978`)
+- XDot viewer: GraphViz `--concentrate` produces near-miss edge endpoints (0.02–0.09 graph units off) at edge split/merge points, visible as small gaps at high zoom. This is a GraphViz precision issue in the xdot data, not a rendering bug.

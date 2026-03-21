@@ -113,9 +113,12 @@ class Pen:
         dash: Dash pattern tuple (empty for solid line).
     """
 
+    DEFAULT_COLOR: Color = (0.0, 0.0, 0.0, 1.0)
+    DEFAULT_FILLCOLOR: Color = (0.0, 0.0, 0.0, 1.0)
+
     def __init__(self):
-        self.color: Color = (0.0, 0.0, 0.0, 1.0)
-        self.fillcolor: Color = (0.0, 0.0, 0.0, 1.0)
+        self.color: Color = Pen.DEFAULT_COLOR
+        self.fillcolor: Color = Pen.DEFAULT_FILLCOLOR
         self.linewidth: float = 1.0
         self.fontsize: float = 14.0
         self.dash: Tuple[float, ...] = ()
