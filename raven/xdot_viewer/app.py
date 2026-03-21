@@ -10,7 +10,7 @@ Usage:
 """
 
 import logging
-from typing import List, Optional, Tuple, Union
+from typing import Optional, Union
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -80,42 +80,15 @@ def _show_open_dialog(*_args) -> None:
         _filedialog_open.show_file_dialog()
 
 
-_render_loop_running = False
-_deferred_errors: List[Tuple[str, str]] = []
-
-
 def _show_error(title: str, message: str) -> None:
-    """Log an error and show a modal error dialog.
-
-    During startup (before the render loop), queues the error — the
-    messagebox uses ``split_frame``, which deadlocks outside the render
-    loop. Queued errors are shown once the render loop starts.
-    """
+    """Log an error and show a modal error dialog."""
     logger.error(message)
-    if _render_loop_running:
-        messagebox.modal_dialog(window_title=title,
-                                message=message,
-                                buttons=["Close"],
-                                ok_button="Close",
-                                cancel_button="Close",
-                                centering_reference_window="main_window")
-    else:
-        _deferred_errors.append((title, message))
-
-
-def _flush_deferred_errors(*_args) -> None:
-    """Show any errors that were queued during startup."""
-    if _deferred_errors:
-        # Show the first one; if there are multiple, they'll stack
-        # as the user closes each dialog.
-        title, message = _deferred_errors.pop(0)
-        messagebox.modal_dialog(window_title=title,
-                                message=message,
-                                buttons=["Close"],
-                                ok_button="Close",
-                                cancel_button="Close",
-                                callback=lambda _: _flush_deferred_errors(),
-                                centering_reference_window="main_window")
+    messagebox.modal_dialog(window_title=title,
+                            message=message,
+                            buttons=["Close"],
+                            ok_button="Close",
+                            cancel_button="Close",
+                            centering_reference_window="main_window")
 
 
 def _run_graphviz(dot_source: str, engine: str = "dot") -> Optional[str]:
@@ -811,26 +784,20 @@ def main() -> int:
     dpg.set_exit_callback(_gui_shutdown)
     dpg.show_viewport()
 
-    # Load initial file if provided
-    if args.file:
-        _open_file(args.file)
-
-    # The widget was created with the *requested* viewport size, but the window
-    # manager may have constrained the window (e.g. on a 1080p screen with a
-    # taskbar). Sync the widget to the realized window size once DPG has
-    # settled its layout (needs several frames). Re-fit the graph too, since
-    # _open_file's zoom_to_fit used the old (pre-correction) dimensions.
-    def _initial_resize(*_args):
+    # Defer initial file load to a frame callback so the render loop is
+    # running — this lets _show_error display modal dialogs if loading fails.
+    # Also sync the widget to the realized viewport size (the window manager
+    # may have constrained it), and re-fit the graph.
+    def _initial_startup(*_args):
         _resize_gui()
+        if args.file:
+            _open_file(args.file)
         widget = _app_state["widget"]
         if widget is not None and _app_state["current_file"] is not None:
             widget.zoom_to_fit(animate=False)
-    dpg.set_frame_callback(10, _initial_resize)
+    dpg.set_frame_callback(10, _initial_startup)
 
     # --- Render loop ---
-    global _render_loop_running
-    _render_loop_running = True
-    dpg.set_frame_callback(12, _flush_deferred_errors)
     last_check = time.monotonic()
     def _poll_reload():
         nonlocal last_check
