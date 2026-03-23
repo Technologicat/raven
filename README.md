@@ -45,6 +45,8 @@ The vision is to help you absorb information from large volumes of text.
 
 Recent changes are explained in the [CHANGELOG](CHANGELOG.md).
 
+For my stance on AI contributions, see the [collaboration guidelines](https://github.com/Technologicat/substrate-independent/blob/main/collaboration.md).
+
 ## Raven-visualizer: Visualize research literature
 
 <a href="raven/visualizer/README.md"><img src="img/screenshot-main.png" alt="Screenshot of Raven-visualizer's main window" height="200"/></a>
