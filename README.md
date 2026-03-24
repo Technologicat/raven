@@ -12,6 +12,7 @@
     - [Raven-librarian: Multiversal LLM frontend](#raven-librarian-multiversal-llm-frontend)
     - [Raven-avatar: AI-animated anime avatar](#raven-avatar-ai-animated-anime-avatar)
     - [Raven-xdot-viewer: Small standalone GraphViz graph viewer](#raven-xdot-viewer-small-standalone-graphviz-graph-viewer)
+    - [Raven-cherrypick: Triage images quickly](#raven-cherrypick-triage-images-quickly)
     - [Raven-server: Web API server](#raven-server-web-api-server)
 - [Install & run](#install--run)
     - [From source](#from-source)
@@ -117,6 +118,8 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 
 *Added in v0.2.5.*
 
+<img src="img/xdot-viewer.png" alt="Screenshot of Raven-xdot-viewer" height=200/>
+
 - **Documentation**: WIP
 - **Goal**: View your `.dot` (`.gv`) and `.xdot` files in a GUI app with a focus on usability
   - **Status**: :white_check_mark: Fully operational prototype, usage: `raven-xdot-viewer myfile.xdot`
@@ -124,6 +127,30 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - Animated GUI, easy for pair work.
   - Click on the end of an edge to follow it.
   - Incremental fragment search for node/edge labels, like in *Visualizer*.
+  - Supports fills, line styles, etc.
+  - Optional dark mode to reduce eye strain.
+    - Node hue preserved, lightness flipped.
+    - In dark mode, text color adapts based on perceived luminance (ITU-R BT.709) of the background.
+
+## Raven-cherrypick: Triage images quickly
+
+*Added in v0.2.6.*
+
+<img src="img/cherrypick.png" alt="Screenshot of Raven-cherrypick" height=200/>
+
+- **Documentation**: WIP
+- **Goal**: Triage a folder of images into cherries (keepers), lemons (rejects), and neutral.
+  - **Status**: :white_check_mark: Fully operational prototype, usage: `raven-cherrypick some/path/to/images/`
+- **Features**:
+  - GPU-accelerated, mipmapped Lanczos scaling for high quality.
+  - No on-disk thumbnail cache, no metadata files.
+    - Thumbnails are generated on the fly, into a RAM cache. (Noise shown in thumbnail until it has loaded.)
+    - Image state is encoded by directory path: `base/cherries`, `base/lemons`, where `base` is the directory you are viewing.
+  - The same virtual view combines the cherry/lemon/neutral directories.
+  - Easy two-hand operation: arrows navigate; X=lemon, C=cherry, V=clear mark (drop back to base level).
+  - Zoom/pan preserved when switching between images with the same dimensions.
+    - Makes it easy to compare a detail in variations of the same shot, by flicking back and forth.
+    - Especially useful for mobile photos taken of someone's conference slides from 20m away, without optical zoom.
 
 
 ## Raven-server: Web API server
