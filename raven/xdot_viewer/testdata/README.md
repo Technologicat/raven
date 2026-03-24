@@ -1,4 +1,4 @@
-# XDot Widget Test Data
+# XDot Viewer Test Data
 
 ## contrast_test
 
@@ -9,11 +9,11 @@ Generated from the xdot widget and viewer source with Pyan3, laid out with fdp.
 # Generate DOT (from project root)
 pyan3 raven/xdot_viewer/*.py raven/common/gui/xdotwidget/*.py \
     --dot --colored --no-defines --concentrate --depth 1 \
-    --file raven/common/gui/xdotwidget/testdata/contrast_test.dot
+    --file raven/xdot_viewer/testdata/contrast_test.dot
 
 # Layout with fdp
-fdp -Txdot raven/common/gui/xdotwidget/testdata/contrast_test.dot \
-    -o raven/common/gui/xdotwidget/testdata/contrast_test.xdot
+fdp -Txdot raven/xdot_viewer/testdata/contrast_test.dot \
+    -o raven/xdot_viewer/testdata/contrast_test.xdot
 ```
 
 Open in `raven-xdot-viewer` and toggle dark mode to verify text readability
