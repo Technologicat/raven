@@ -127,7 +127,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - Animated GUI, easy for pair work.
   - Click on the end of an edge to follow it.
   - Incremental fragment search for node/edge labels, like in *Visualizer*.
-  - Supports fills, line styles, etc.
+  - Supports fills, line styles, beziers, etc.
   - Optional dark mode to reduce eye strain.
     - Node hue preserved, lightness flipped.
     - In dark mode, text color adapts based on perceived luminance (ITU-R BT.709) of the background.
