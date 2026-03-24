@@ -126,6 +126,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 - **Features**:
   - Animated GUI, easy for pair work.
   - Click on the end of an edge to follow it.
+    - Click *on an edge* to jump between zoom-to-edge and its endpoint nodes.
   - Incremental fragment search for node/edge labels, like in *Visualizer*.
   - Supports fills, line styles, beziers, etc.
   - Optional dark mode to reduce eye strain.
