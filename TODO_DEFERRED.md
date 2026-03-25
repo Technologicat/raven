@@ -99,6 +99,12 @@ Holding down the down arrow key while thumbnails are still being generated cause
 
 Discovered during smoke-testing on new machine (2026-03-25).
 
+## pygame pkg_resources deprecation warning
+
+pygame 2.6.1 emits a deprecation warning: `pkg_resources is deprecated as an API` (from `pygame/pkgdata.py`). Functional but noisy. Check if a newer pygame version fixes this, or if pygame has moved to `importlib.resources`.
+
+Discovered during smoke-testing on new machine (2026-03-25).
+
 ## raven-cherrypick: investigate GPU/CPU load at idle
 
 The raven-cherrypick process shows noticeable GPU (graphics) and CPU load even when idle. Likely DPG's game-loop style rendering — blitting many textures (thumbnails + mips) every frame even when nothing changes. Worth investigating whether we can reduce frame rate when idle (e.g. skip `render_dearpygui_frame` when no `_needs_render` flags are set), or if the cost is inherent to DPG's texture registry overhead.
