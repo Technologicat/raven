@@ -86,6 +86,11 @@ classifiers = [
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "flake8",
+    "autopep8",
+    "importmagic",
+    "epc",
+    "jedi>=0.19.2",
 ]
 
 [project.optional-dependencies]
