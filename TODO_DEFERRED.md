@@ -93,6 +93,12 @@ raven-cherrypick is effectively an image viewer with QOI support, which is rare.
 Discovered during raven-cherrypick preload performance session.
 
 
+## raven-cherrypick: app hang when holding down arrow key during thumbnail generation
+
+Holding down the down arrow key while thumbnails are still being generated causes the app to hang. Previously nearly unreproducible; now reliably reproducible with this method. Likely a deadlock or resource contention between the thumbnail generation pipeline and rapid navigation input. Raven's `img/` folder is good test data for reproducing this.
+
+Discovered during smoke-testing on new machine (2026-03-25).
+
 ## raven-cherrypick: investigate GPU/CPU load at idle
 
 The raven-cherrypick process shows noticeable GPU (graphics) and CPU load even when idle. Likely DPG's game-loop style rendering — blitting many textures (thumbnails + mips) every frame even when nothing changes. Worth investigating whether we can reduce frame rate when idle (e.g. skip `render_dearpygui_frame` when no `_needs_render` flags are set), or if the cost is inherent to DPG's texture registry overhead.

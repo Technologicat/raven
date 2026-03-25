@@ -14,7 +14,7 @@ Local research assistant constellation. Privacy-first, 100% local.
 
 ## Build and Development
 
-Uses PDM with `pdm-backend`. Python 3.11–3.12 (3.13/3.14 blocked by unpythonic/mcpyrate compatibility; see `pyproject.toml`). Optional CUDA extras via `pdm install -G cuda`.
+Uses PDM with `pdm-backend`. Python 3.11–3.14 (see `pyproject.toml`). Optional CUDA extras via `pdm install -G cuda`.
 
 ```bash
 pdm install              # creates .venv/ and installs deps

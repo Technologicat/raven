@@ -417,6 +417,8 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Low]** Post PR of vendored FileDialog fixes upstream. Raven's extensions have genuine added value worth sharing. Upstream is likely inactive but the PR is worth filing.
 
+- **[Low]** Fork kokoro/misaki and bump their Python upper bound (`<3.13` → `<3.15`), then test on 3.13+. The `<3.13` cap may be precautionary rather than reflecting real incompatibility. kokoro appears effectively abandoned upstream, and it's the only TTS engine that provides timestamped phoneme data (required for avatar lipsync). Currently Raven's `requires-python` is narrowed to `<3.13` to accommodate this.
+
 - **[Low]** wosfile: consider vendoring our fixed version. Check upstream activity first — may be worth a PR instead.
 
 - **[Low]** Raven technical report (arXiv): document Raven as a citable reference. "Here's a tasteful way to put existing ideas together, plus a GUI app." Needs a CS category endorser.
