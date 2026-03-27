@@ -13,6 +13,7 @@
     - [Raven-avatar: AI-animated anime avatar](#raven-avatar-ai-animated-anime-avatar)
     - [Raven-xdot-viewer: Small standalone GraphViz graph viewer](#raven-xdot-viewer-small-standalone-graphviz-graph-viewer)
     - [Raven-cherrypick: Triage images quickly](#raven-cherrypick-triage-images-quickly)
+    - [Raven-conference-timer: Countdown timer for talks](#raven-conference-timer-countdown-timer-for-talks)
     - [Raven-server: Web API server](#raven-server-web-api-server)
 - [Install & run](#install--run)
     - [From source](#from-source)
@@ -152,6 +153,21 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - Zoom/pan preserved when switching between images with the same dimensions.
     - Makes it easy to compare a detail in variations of the same shot, by flicking back and forth.
     - Especially useful for mobile photos taken of someone's conference slides from 20m away, without optical zoom.
+
+
+## Raven-conference-timer: Countdown timer for talks
+
+*Added in v0.2.6.*
+
+<img src="img/conference-timer.png" alt="Screenshot of Raven-conference-timer" height=200/>
+
+- **Documentation**: WIP
+- **Goal**: A simple, large-font countdown timer for conference presentations.
+  - **Status**: :white_check_mark: Fully operational, usage: `raven-conference-timer 15:00`
+- **Features**:
+  - Auto-sizes the window to fit the countdown text.
+  - Color changes at configurable thresholds: white → yellow → red → pulsating expired.
+  - Thresholds configurable via `--yellow` and `--red` (default 5:00 and 2:00).
 
 
 ## Raven-server: Web API server
@@ -319,6 +335,7 @@ raven-visualizer                  →    python -m raven.visualizer.app
 raven-importer                    →    python -m raven.visualizer.importer
 raven-librarian                   →    python -m raven.librarian.app
 raven-xdot-viewer                 →    python -m raven.xdot_viewer.app
+raven-conference-timer            →    python -m raven.conference_timer.app
 raven-arxiv2id                    →    python -m raven.tools.arxiv2id
 raven-arxiv-download              →    python -m raven.tools.arxiv_download
 raven-burstbib                    →    python -m raven.tools.burstbib
