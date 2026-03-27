@@ -10,10 +10,12 @@ COUNTDOWN_FONT_SIZE = 120
 DEFAULT_WIDTH = 500
 DEFAULT_HEIGHT = 300
 
-# Warning threshold (seconds remaining). Counter turns yellow.
-WARNING_THRESHOLD = 120
+# Default thresholds (seconds remaining) for color changes.
+YELLOW_THRESHOLD = 300  # 5:00 — counter turns yellow
+RED_THRESHOLD = 120     # 2:00 — counter turns red
 
 # Colors (RGBA 0–255).
 COLOR_NORMAL = (255, 255, 255, 255)
-COLOR_WARNING = (255, 255, 0, 255)
+COLOR_YELLOW = (255, 255, 0, 255)
+COLOR_RED = (255, 64, 64, 255)
 COLOR_EXPIRED = (255, 0, 0, 255)

@@ -57,8 +57,16 @@ def main() -> int:
     parser.add_argument('-v', '--version', action='version',
                         version=('%(prog)s ' + __version__))
     parser.add_argument(
-        "duration",
-        help="Duration as mm:ss or bare minutes (e.g. 15:00 or 15)"
+        "duration", metavar="mm:ss",
+        help="Countdown duration (e.g. 15:00 or bare minutes like 15)"
+    )
+    parser.add_argument(
+        "--yellow", metavar="mm:ss", default=None,
+        help=f"Yellow threshold (default: {config.YELLOW_THRESHOLD // 60}:{config.YELLOW_THRESHOLD % 60:02d})"
+    )
+    parser.add_argument(
+        "--red", metavar="mm:ss", default=None,
+        help=f"Red threshold (default: {config.RED_THRESHOLD // 60}:{config.RED_THRESHOLD % 60:02d})"
     )
     parser.add_argument(
         "--width", type=int, default=config.DEFAULT_WIDTH,
@@ -72,6 +80,8 @@ def main() -> int:
 
     try:
         total_seconds = _parse_duration(args.duration)
+        yellow_threshold = _parse_duration(args.yellow) if args.yellow else config.YELLOW_THRESHOLD
+        red_threshold = _parse_duration(args.red) if args.red else config.RED_THRESHOLD
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -98,9 +108,13 @@ def main() -> int:
         with dpg.theme_component(dpg.mvText):
             dpg.add_theme_color(dpg.mvThemeCol_Text, config.COLOR_NORMAL)
 
-    with dpg.theme() as theme_warning:
+    with dpg.theme() as theme_yellow:
         with dpg.theme_component(dpg.mvText):
-            dpg.add_theme_color(dpg.mvThemeCol_Text, config.COLOR_WARNING)
+            dpg.add_theme_color(dpg.mvThemeCol_Text, config.COLOR_YELLOW)
+
+    with dpg.theme() as theme_red:
+        with dpg.theme_component(dpg.mvText):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, config.COLOR_RED)
 
     with dpg.theme() as theme_expired:
         with dpg.theme_component(dpg.mvText):
@@ -118,7 +132,7 @@ def main() -> int:
 
     # --- Timer state ---
     start_time = time.monotonic()
-    expired = False
+    color_state = "normal"
 
     # --- Render loop ---
     try:
@@ -131,13 +145,16 @@ def main() -> int:
             seconds = remaining_int % 60
             dpg.set_value(countdown_text, f"{minutes:02d}:{seconds:02d}")
 
-            # Update color.
-            if remaining <= 0:
-                if not expired:
-                    dpg.bind_item_theme(countdown_text, theme_expired)
-                    expired = True
-            elif remaining <= config.WARNING_THRESHOLD:
-                dpg.bind_item_theme(countdown_text, theme_warning)
+            # Update color (only on state change).
+            if remaining <= 0 and color_state != "expired":
+                dpg.bind_item_theme(countdown_text, theme_expired)
+                color_state = "expired"
+            elif remaining > 0 and remaining <= red_threshold and color_state != "red":
+                dpg.bind_item_theme(countdown_text, theme_red)
+                color_state = "red"
+            elif remaining > red_threshold and remaining <= yellow_threshold and color_state != "yellow":
+                dpg.bind_item_theme(countdown_text, theme_yellow)
+                color_state = "yellow"
 
             dpg.render_dearpygui_frame()
     except KeyboardInterrupt:
