@@ -25,6 +25,7 @@ with timer() as tim:
 
     import dearpygui.dearpygui as dpg
 
+    from ..common.gui import animation as gui_animation
     from ..common.gui import utils as guiutils
 
     from . import config
@@ -118,7 +119,10 @@ def main() -> int:
 
     with dpg.theme() as theme_expired:
         with dpg.theme_component(dpg.mvText):
-            dpg.add_theme_color(dpg.mvThemeCol_Text, config.COLOR_EXPIRED)
+            expired_color_widget = dpg.add_theme_color(dpg.mvThemeCol_Text, config.COLOR_EXPIRED)
+        expired_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
+                                                    theme_color_widget=expired_color_widget)
+        gui_animation.animator.add(expired_glow)
 
     # --- Build GUI ---
     with dpg.window(tag="main_window"):
@@ -156,10 +160,12 @@ def main() -> int:
                 dpg.bind_item_theme(countdown_text, theme_yellow)
                 color_state = "yellow"
 
+            gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()
     except KeyboardInterrupt:
         pass
 
+    gui_animation.animator.clear()
     dpg.destroy_context()
     return 0
 
