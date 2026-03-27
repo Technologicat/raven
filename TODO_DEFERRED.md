@@ -127,4 +127,8 @@ Promising unexplored approaches:
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
 
+## raven-server: CUDA sanity check at startup
 
+raven-server boots without complaint even when NVRTC is broken (missing `libnvrtc-builtins.so`). The error only surfaces later when something triggers JIT compilation. Server startup should probe CUDA early (e.g. a trivial JIT-compiled kernel or `torch.cuda.is_available()` + an NVRTC smoke test) and log a clear warning/error if the environment is misconfigured.
+
+Discovered during demo prep (2026-03-26).
