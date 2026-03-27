@@ -9,8 +9,8 @@ digraph dash_test {
     C -> D [label="dashed", style=dashed];
     B -> D [label="dotted", style=dotted];
 
-    // Some longer edges to see the pattern over distance
-    E -> F [label="long dashed", style=dashed];
-    E -> G [label="long dotted", style=dotted];
-    F -> G [label="long solid"];
+    // Second group — same styles, different topology
+    E -> F [label="dashed 2", style=dashed];
+    E -> G [label="dotted 2", style=dotted];
+    F -> G [label="solid 2"];
 }
