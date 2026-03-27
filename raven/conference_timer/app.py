@@ -19,6 +19,7 @@ logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
     import argparse
+    import math
     import sys
     import time
 
@@ -123,11 +124,8 @@ def main() -> int:
     try:
         while dpg.is_dearpygui_running():
             elapsed = time.monotonic() - start_time
-            remaining = max(0, total_seconds - elapsed)
-            remaining_int = int(remaining)
-            # Round up: show 0:01 until fully elapsed, then 0:00.
-            if remaining > 0 and remaining_int == 0:
-                remaining_int = 1
+            remaining = max(0.0, total_seconds - elapsed)
+            remaining_int = math.ceil(remaining)
 
             minutes = remaining_int // 60
             seconds = remaining_int % 60
