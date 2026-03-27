@@ -6,9 +6,13 @@ FONT_SIZE = 20
 # Large countdown font size (pixels).
 COUNTDOWN_FONT_SIZE = 120
 
-# Default viewport dimensions.
-DEFAULT_WIDTH = 500
-DEFAULT_HEIGHT = 300
+# DPG style values (pixels). Used for auto-fit margin calculation.
+DPG_WINDOW_PADDING = 8   # mvStyleVar_WindowPadding (default)
+DPG_SCROLLBAR_SIZE = 14  # mvStyleVar_ScrollbarSize (default)
+
+# Initial viewport dimensions (before auto-fit to text size).
+INITIAL_WIDTH = 500
+INITIAL_HEIGHT = 300
 
 # Default thresholds (seconds remaining) for color changes.
 YELLOW_THRESHOLD = 300  # 5:00 — counter turns yellow

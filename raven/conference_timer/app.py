@@ -69,14 +69,6 @@ def main() -> int:
         "--red", metavar="mm:ss", default=None,
         help=f"Red threshold (default: {config.RED_THRESHOLD // 60}:{config.RED_THRESHOLD % 60:02d})"
     )
-    parser.add_argument(
-        "--width", type=int, default=config.DEFAULT_WIDTH,
-        help=f"Window width (default: {config.DEFAULT_WIDTH})"
-    )
-    parser.add_argument(
-        "--height", type=int, default=config.DEFAULT_HEIGHT,
-        help=f"Window height (default: {config.DEFAULT_HEIGHT})"
-    )
     args = parser.parse_args()
 
     try:
@@ -96,10 +88,11 @@ def main() -> int:
     _key, countdown_font = guiutils.load_extra_font(
         themes_and_fonts, config.COUNTDOWN_FONT_SIZE, "OpenSans", "Bold")
 
+    # Start with a generous initial size; the frame callback will auto-fit.
     dpg.create_viewport(
         title=f"Raven Conference Timer {__version__}",
-        width=args.width,
-        height=args.height
+        width=config.INITIAL_WIDTH,
+        height=config.INITIAL_HEIGHT
     )
 
     dpg.setup_dearpygui()
@@ -125,8 +118,12 @@ def main() -> int:
         gui_animation.animator.add(expired_glow)
 
     # --- Build GUI ---
+    # Set the initial text so the frame callback can measure its rendered size.
+    initial_minutes = total_seconds // 60
+    initial_seconds = total_seconds % 60
     with dpg.window(tag="main_window"):
-        countdown_text = dpg.add_text("", tag="countdown_text")
+        countdown_text = dpg.add_text(f"{initial_minutes:02d}:{initial_seconds:02d}",
+                                      tag="countdown_text")
         dpg.bind_item_font(countdown_text, countdown_font)
         dpg.bind_item_theme(countdown_text, theme_normal)
 
@@ -134,13 +131,32 @@ def main() -> int:
     dpg.set_primary_window("main_window", True)
     dpg.show_viewport()
 
-    # --- Timer state ---
-    start_time = time.monotonic()
+    # Auto-fit viewport to rendered text size (+ 5% margin).
+    # Deferred to a frame callback so DPG has laid out the text.
+    start_time = None  # set by _startup; timer doesn't run until then
     color_state = "normal"
+
+    def _startup(*_args):
+        nonlocal start_time
+        tw, th = guiutils.get_widget_size(countdown_text)
+        pad = 2 * config.DPG_WINDOW_PADDING
+        target_w = tw + pad + config.DPG_SCROLLBAR_SIZE
+        target_h = th + pad + config.DPG_SCROLLBAR_SIZE
+        dpg.set_viewport_min_width(target_w)
+        dpg.set_viewport_min_height(target_h)
+        dpg.set_viewport_width(target_w)
+        dpg.set_viewport_height(target_h)
+        start_time = time.monotonic()
+    dpg.set_frame_callback(10, _startup)
 
     # --- Render loop ---
     try:
         while dpg.is_dearpygui_running():
+            if start_time is None:
+                # Waiting for _startup to fire.
+                dpg.render_dearpygui_frame()
+                continue
+
             elapsed = time.monotonic() - start_time
             remaining = max(0.0, total_seconds - elapsed)
             remaining_int = math.ceil(remaining)
