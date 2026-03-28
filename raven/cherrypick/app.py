@@ -1149,12 +1149,15 @@ def main() -> int:
                 grid.set_noise_pool(_generate_noise_pool(_noise_pool_pending_size))
                 _noise_pool_pending_size = None
 
-            # Update components.
+            # Update components.  Grid first: its deferred callbacks
+            # (on_current_changed, on_double_click) trigger image loading
+            # which may set iv._needs_render.  Then iv.update() processes
+            # the render in the same frame — no one-frame lag.
+            if grid is not None:
+                grid.update()
             iv = _app_state["image_view"]
             if iv is not None:
                 iv.update()
-            if grid is not None:
-                grid.update()
 
             # Trigger preloading once the current image finishes loading.
             global _preload_pending

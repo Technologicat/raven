@@ -178,8 +178,11 @@ class ImageView:
         available mip at each frame.
         """
         # Cancel any in-progress mip loading (both full pipeline and augment).
+        # No wait — the old task uses split_frame(), so waiting from the
+        # main thread would deadlock. The generation counter prevents stale
+        # mip insertion from the cancelled task.
         self._augment_task_mgr.clear()
-        self._mip_task_mgr.clear(wait=True)
+        self._mip_task_mgr.clear()
         self._mips_generation += 1
 
         self._bridge_old_mips()
@@ -193,6 +196,7 @@ class ImageView:
                        device=self._device,
                        order=self._order,
                        mip_min_size=self._mip_min_size,
+                       generation=self._mips_generation,
                        debug=self._debug)
         self._mip_task_mgr.submit(self._bg_mip_task, task_env)
 
@@ -208,7 +212,7 @@ class ImageView:
         first new mip is ready — no blank flash.
         """
         self._augment_task_mgr.clear()
-        self._mip_task_mgr.clear(wait=True)
+        self._mip_task_mgr.clear()
         self._mips_generation += 1
 
         self._bridge_old_mips()
@@ -223,6 +227,7 @@ class ImageView:
                        device=self._device,
                        order=self._order,
                        mip_min_size=self._mip_min_size,
+                       generation=self._mips_generation,
                        debug=self._debug)
         self._mip_task_mgr.submit(self._bg_file_mip_task, task_env)
 
@@ -251,60 +256,32 @@ class ImageView:
 
     def set_preloaded_arrays(self, mip_arrays: list[tuple[float, int, int, np.ndarray]],
                              img_w: int, img_h: int) -> None:
-        """Display pre-computed mip arrays instantly (from preload cache).
+        """Display pre-computed mip arrays from the preload cache.
 
         *mip_arrays*: list of ``(scale, w, h, flat_array)``, largest-first.
         *img_w*, *img_h*: original image dimensions.
 
-        Creates DPG textures via the texture pool (``set_value`` on pooled
-        textures is fast — no ``split_frame`` needed). Skips background
-        mip generation entirely.
+        Texture creation is delegated to a background thread with a single
+        ``split_frame`` to guarantee DPG has uploaded textures to OpenGL
+        before they're rendered. The ``_old_mips`` bridge keeps the
+        previous image visible for one frame during the upload — no blank
+        flash, no stale-data flash.
         """
-        t0 = time.perf_counter_ns()
         self._augment_task_mgr.clear()
-        self._mip_task_mgr.clear(wait=True)
+        self._mip_task_mgr.clear()
         self._mips_generation += 1
-        t_clear = time.perf_counter_ns()
 
-        # Create DPG textures from flat arrays via the pool.
-        new_mips = []
-        for scale, w, h, flat in mip_arrays:
-            tex_tag = self._acquire_texture(w, h, flat)
-            new_mips.append((scale, tex_tag))
-
-        with self._mips_lock:
-            # Release all old textures. Preloaded images are ready instantly,
-            # so no need for the old-image-shown-until-new-ready bridge that
-            # set_image/bg_mip_task uses.
-            for _s, old_tag in self._old_mips:
-                self._release_texture(old_tag)
-            self._old_mips.clear()
-            for _s, old_tag in self._mips:
-                self._release_texture(old_tag)
-            self._mips = new_mips
-            self._mip_arrays = list(mip_arrays)
-        t_swap = time.perf_counter_ns()
+        self._bridge_old_mips()
 
         self._img_w = img_w
         self._img_h = img_h
-        self._set_mip_loading(False)
+        self._set_mip_loading(True)
+        self._needs_render = True
 
-        # Re-render immediately so draw items reference the new textures.
-        # Without this, the old draw items (from the previous _render call)
-        # may reference pooled textures whose data was just overwritten by
-        # _acquire_texture's set_value — causing a one-frame glitch when
-        # DPG renders the stale draw items with recycled texture data.
-        self._render()
-        self._needs_render = False
-        t_done = time.perf_counter_ns()
-
-        if self._debug:
-            logger.info(f"ImageView.set_preloaded_arrays: "
-                        f"clear={(t_clear - t0) / 1e6:.1f}ms "
-                        f"tex+swap={(t_swap - t_clear) / 1e6:.1f}ms "
-                        f"total={(t_done - t0) / 1e6:.1f}ms "
-                        f"pool_sizes={[len(v) for v in self._tex_pool.values()]} "
-                        f"tex_count={len(self._tex_sizes)}")
+        task_env = env(mip_arrays=mip_arrays,
+                       generation=self._mips_generation,
+                       debug=self._debug)
+        self._mip_task_mgr.submit(self._bg_preloaded_task, task_env)
 
     def take_mip_arrays(self) -> Optional[tuple[list, int, int]]:
         """Return stored flat arrays for donation to preload cache.
@@ -326,7 +303,8 @@ class ImageView:
     def clear(self) -> None:
         """Remove the current image."""
         self._augment_task_mgr.clear()
-        self._mip_task_mgr.clear(wait=True)
+        self._mip_task_mgr.clear()
+        self._mips_generation += 1
         self._clear_textures()
         self._mip_arrays = []
         self._img_w = 0
@@ -557,6 +535,53 @@ class ImageView:
         # Delegate to the standard mip pipeline.
         self._bg_mip_task(e)
 
+    def _bg_preloaded_task(self, e: env) -> None:
+        """Background thread: create DPG textures from preloaded flat arrays.
+
+        Single ``split_frame`` ensures all textures are uploaded to OpenGL
+        before the render loop references them.  Uses the texture pool
+        (safe here — ``split_frame`` guarantees the upload).
+        """
+        t0 = time.perf_counter_ns()
+
+        new_mips = []
+        new_arrays = []
+        for scale, w, h, flat in e.mip_arrays:
+            if e.cancelled:
+                break
+            tex_tag = self._acquire_texture(w, h, flat)
+            new_mips.append((scale, tex_tag))
+            new_arrays.append((scale, w, h, flat))
+
+        if e.cancelled:
+            for _s, tag in new_mips:
+                self._release_texture(tag)
+            return
+
+        # One split_frame for the entire batch — DPG uploads all
+        # pending textures during render_dearpygui_frame().
+        dpg.split_frame()
+
+        with self._mips_lock:
+            if e.cancelled or self._mips_generation != e.generation:
+                for _s, tag in new_mips:
+                    self._release_texture(tag)
+                return
+            # Release bridge textures — new mips are ready.
+            for _s, old_tag in self._old_mips:
+                self._release_texture(old_tag)
+            self._old_mips.clear()
+            self._mips = new_mips
+            self._mip_arrays = new_arrays
+
+        self._set_mip_loading(False)
+        self._needs_render = True
+
+        if e.debug:
+            t_total = (time.perf_counter_ns() - t0) / 1e6
+            logger.info(f"ImageView._bg_preloaded_task: instance {e.task_name}: "
+                        f"{len(new_mips)} mips, total={t_total:.0f}ms")
+
     def _bg_augment_task(self, e: env) -> None:
         """Background thread: generate missing (larger) mip levels.
 
@@ -614,12 +639,11 @@ class ImageView:
                 tex_tag = self._acquire_texture(mw, mh, flat)
                 dpg.split_frame()
 
-                if e.cancelled or e.generation != self._mips_generation:
-                    self._release_texture(tex_tag)
-                    break
-
-                # Insert into _mips sorted (largest-first).
+                # Check-and-insert must be atomic (same reason as _bg_mip_task).
                 with self._mips_lock:
+                    if e.cancelled or e.generation != self._mips_generation:
+                        self._release_texture(tex_tag)
+                        break
                     inserted = False
                     for i, (s, _t) in enumerate(self._mips):
                         if mip_scale > s:
@@ -675,9 +699,11 @@ class ImageView:
             scale *= 0.5
 
         # Create DPG textures from smallest to largest.
-        # Per-mip split_frame is needed: without it, the render loop may
-        # draw_image with a texture that DPG hasn't uploaded to OpenGL yet,
-        # causing visual glitches.
+        # Create DPG textures from smallest to largest.
+        # Per-mip split_frame ensures DPG has uploaded the texture to OpenGL
+        # before the render loop references it (prevents blank flash).
+        # Safe because callers use clear() (no wait) — they never block on
+        # this task, so split_frame can't deadlock.
         for mip_scale, mip_t in reversed(mip_data):
             if e.cancelled:
                 break
@@ -699,7 +725,17 @@ class ImageView:
 
             # Insert into _mips sorted (largest-first).
             # Also store the flat array for zero-cost donation later.
+            #
+            # The generation/cancelled check MUST be inside _mips_lock.
+            # A new image load can call clear() (no wait) + _bridge_old_mips()
+            # between split_frame() returning and this lock acquisition.
+            # Without the atomic check-and-insert, stale textures from the
+            # wrong image leak into _mips — causing corruption and blank
+            # flashes on the next navigation.
             with self._mips_lock:
+                if e.cancelled or self._mips_generation != e.generation:
+                    self._release_texture(tex_tag)
+                    break
                 inserted = False
                 for i, (s, _t) in enumerate(self._mips):
                     if mip_scale > s:
@@ -710,10 +746,8 @@ class ImageView:
                 if not inserted:
                     self._mips.append((mip_scale, tex_tag))
                     self._mip_arrays.append((mip_scale, mw, mh, flat))
-
-            # Release old textures to pool once we have something new to show.
-            if self._old_mips:
-                with self._mips_lock:
+                # Release old textures to pool once we have something new.
+                if self._old_mips:
                     for _s, old_tag in self._old_mips:
                         self._release_texture(old_tag)
                     self._old_mips.clear()
@@ -854,6 +888,11 @@ class ImageView:
         If a matching texture exists in the pool, updates its data via
         ``set_value`` (fast, no OpenGL texture creation).  Otherwise creates
         a new ``dynamic_texture``.
+
+        Callers that display the texture immediately must call
+        ``split_frame`` after acquiring to ensure DPG has uploaded
+        the data to OpenGL (both ``set_value`` and ``add_dynamic_texture``
+        are deferred until ``render_dearpygui_frame``).
         """
         key = (w, h)
         pool = self._tex_pool.get(key)

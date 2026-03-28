@@ -127,6 +127,13 @@ class ThumbnailGrid:
 
         self._needs_rebuild = False
 
+        # Deferred callbacks — fired from update() outside the lock.
+        # Prevents grid._lock from being held across expensive work like
+        # _load_current_image() → clear(wait=True), which would block the
+        # main loop and deadlock with split_frame() waiters.
+        self._pending_current_changed: Optional[int] = None
+        self._pending_double_click: Optional[int] = None
+
         # Mouse handlers.
         self._handler_tag = _next_tag("handlers")
         with dpg.handler_registry(tag=self._handler_tag):
@@ -236,7 +243,12 @@ class ThumbnailGrid:
             self._needs_rebuild = True
 
     def set_current(self, idx: int) -> None:
-        """Set the current image (shown in main view)."""
+        """Set the current image (shown in main view).
+
+        The ``on_current_changed`` callback is deferred to ``update()``
+        (outside the lock) to avoid holding ``_lock`` across expensive
+        image-load work.
+        """
         with self._lock:
             if idx == self._current:
                 return
@@ -246,8 +258,8 @@ class ThumbnailGrid:
             self._redraw_tile_by_idx(old)
             self._redraw_tile_by_idx(idx)
             self._scroll_to_current()
-            if self._on_current_changed is not None:
-                self._on_current_changed(idx)
+            # Deferred — fires from update() outside the lock.
+            self._pending_current_changed = idx
 
     def update_triage_state(self, idx: int, state: TriageState) -> None:
         """Notify the grid that a triage state changed (after file move)."""
@@ -414,11 +426,30 @@ class ThumbnailGrid:
     # ------------------------------------------------------------------
 
     def update(self) -> None:
-        """Call from the render loop every frame."""
+        """Call from the render loop every frame.
+
+        Fires deferred ``on_current_changed`` / ``on_double_click``
+        callbacks outside ``_lock``.  This is critical: the callbacks
+        trigger image loading which may call ``TaskManager.clear(wait=True)``
+        — holding ``_lock`` across that wait would deadlock the main loop.
+        """
+        pending_current = None
+        pending_dblclick = None
         with self._lock:
             if self._needs_rebuild:
                 self._rebuild()
                 self._needs_rebuild = False
+            if self._pending_current_changed is not None:
+                pending_current = self._pending_current_changed
+                self._pending_current_changed = None
+            if self._pending_double_click is not None:
+                pending_dblclick = self._pending_double_click
+                self._pending_double_click = None
+        # Callbacks fire outside the lock.
+        if pending_current is not None and self._on_current_changed is not None:
+            self._on_current_changed(pending_current)
+        if pending_dblclick is not None and self._on_double_click is not None:
+            self._on_double_click(pending_dblclick)
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -764,5 +795,5 @@ class ThumbnailGrid:
                 return
             self._selected.clear()
             self.set_current(idx)
-            if self._on_double_click is not None:
-                self._on_double_click(idx)
+            # Deferred — fires from update() outside the lock.
+            self._pending_double_click = idx
