@@ -285,6 +285,7 @@ def _load_current_image() -> None:
 
             if _debug:
                 logger.info(f"_load_current_image: {entry.filename} "
+                            f"{cached.img_w}x{cached.img_h} "
                             f"PRELOADED cancel={(t_cancel - t_nav_start) / 1e6:.1f}ms "
                             f"take={(t_take - t_cancel) / 1e6:.1f}ms "
                             f"donate={(t_donated - t_cached_start) / 1e6:.1f}ms "
@@ -310,8 +311,9 @@ def _load_current_image() -> None:
             iv.load_from_file(entry.path, old_size=old_size)
 
             if _debug:
-                logger.info("_load_current_image: %s MISS — "
-                            "queued background decode+mip", entry.filename)
+                logger.info(f"_load_current_image: {entry.filename} MISS "
+                            f"— queued background decode+mip "
+                            f"(dimensions in _bg_file_mip_task log)")
 
     except Exception as exc:
         logger.warning("_load_current_image: failed to load %s: %s",

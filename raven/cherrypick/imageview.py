@@ -558,8 +558,11 @@ class ImageView:
                 self._release_texture(tag)
             return
 
-        # One split_frame for the entire batch — DPG uploads all
-        # pending textures during render_dearpygui_frame().
+        # Two split_frames: the first triggers the texture upload during
+        # render_dearpygui_frame(); the second ensures the upload is fully
+        # processed before we reference the textures.  DPG doesn't guarantee
+        # upload-before-render ordering within a single frame.
+        dpg.split_frame()
         dpg.split_frame()
 
         with self._mips_lock:
@@ -638,6 +641,7 @@ class ImageView:
                     break
                 tex_tag = self._acquire_texture(mw, mh, flat)
                 dpg.split_frame()
+                dpg.split_frame()  # second frame: ensures texture upload is complete
 
                 # Check-and-insert must be atomic (same reason as _bg_mip_task).
                 with self._mips_lock:
@@ -722,6 +726,7 @@ class ImageView:
             if e.cancelled:
                 break
             dpg.split_frame()
+            dpg.split_frame()  # second frame: ensures texture upload is complete
 
             # Insert into _mips sorted (largest-first).
             # Also store the flat array for zero-cost donation later.
@@ -793,18 +798,24 @@ class ImageView:
         # Use new mips if available, otherwise show old image until ready.
         # When showing old mips, also use the old zoom/pan/dimensions so the
         # old image isn't distorted by the new image's aspect ratio.
-        if self._mips:
-            active_mips = self._mips
-            img_w, img_h = self._img_w, self._img_h
-            zoom = self._zoom
-            pan_cx, pan_cy = self._pan_cx, self._pan_cy
-        elif self._old_mips:
-            active_mips = self._old_mips
-            img_w, img_h = self._old_img_w, self._old_img_h
-            zoom = self._old_zoom
-            pan_cx, pan_cy = self._old_pan_cx, self._old_pan_cy
-        else:
-            return
+        #
+        # Snapshot under lock: background tasks (augment, mip) mutate _mips
+        # via list.insert(). Without a snapshot, _select_mip_from() can race
+        # with the insert — seeing a partially-shifted list and selecting
+        # the wrong mip level (one-frame flash of a heavily upscaled tiny mip).
+        with self._mips_lock:
+            if self._mips:
+                active_mips = list(self._mips)
+                img_w, img_h = self._img_w, self._img_h
+                zoom = self._zoom
+                pan_cx, pan_cy = self._pan_cx, self._pan_cy
+            elif self._old_mips:
+                active_mips = list(self._old_mips)
+                img_w, img_h = self._old_img_w, self._old_img_h
+                zoom = self._old_zoom
+                pan_cx, pan_cy = self._old_pan_cx, self._old_pan_cy
+            else:
+                return
 
         # Select the best mip level for current zoom.
         mip_scale, tex_tag = self._select_mip_from(active_mips)
