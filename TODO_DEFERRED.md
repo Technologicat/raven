@@ -93,11 +93,6 @@ raven-cherrypick is effectively an image viewer with QOI support, which is rare.
 Discovered during raven-cherrypick preload performance session.
 
 
-## raven-cherrypick: app hang when holding down arrow key during thumbnail generation
-
-Holding down the down arrow key while thumbnails are still being generated causes the app to hang. Previously nearly unreproducible; now reliably reproducible with this method. Likely a deadlock or resource contention between the thumbnail generation pipeline and rapid navigation input. Raven's `img/` folder is good test data for reproducing this.
-
-Discovered during smoke-testing on new machine (2026-03-25).
 
 ## pygame pkg_resources deprecation warning
 
@@ -111,21 +106,39 @@ The raven-cherrypick process shows noticeable GPU (graphics) and CPU load even w
 
 Discovered during raven-cherrypick session 5 (2026-03-19).
 
-## raven-cherrypick: one-frame display glitch on preloaded image switch
 
-On preload cache hits, there's an occasional one-frame glitch — the old image is briefly visible at wrong zoom, or (on aspect ratio changes) a garbled-looking frame from the zoom mismatch. The root cause is a fundamental tension in DPG's rendering model:
+## raven-cherrypick: low FPS with large images
 
-- `_render()` inside `set_preloaded_arrays` updates draw items immediately, but uses stale zoom (zoom_to_fit runs after). Shows new image at wrong zoom for one frame.
-- Without `_render()` inside `set_preloaded_arrays`, pooled textures recycled via `set_value` overwrite data that the current frame's draw items still reference. Shows wrong image data.
-- Deferred release (hold textures out of pool until next `_render`) and `_render()`-inside work against each other — the `_render()` call drains the deferred list immediately, negating the deferral.
+With large images (e.g. 4247×891, 5203×1313), steady-state FPS drops to 10–15 (66ms/frame) compared to ~30 FPS for 1MP images. DPG metrics show the bottleneck is in presentation/rendering, not input routing. Likely causes:
 
-Approaches explored in session 5 (all insufficient): `_render()` inside `set_preloaded_arrays`, `force_new` textures (garbled data), deferred release, deferred navigation (deadlocks with `split_frame`), `flush()` after `zoom_to_fit`.
+- Large `draw_image` textures are expensive to blit every frame.
+- Texture pool growth — `_release_texture` accumulates pooled dynamic textures; DPG scans all registered textures O(n) per frame even when not drawn.
+- The double `split_frame()` workaround (needed because DPG doesn't guarantee texture upload before rendering within a single frame) adds ~16ms latency per mip during loading, but shouldn't affect steady-state FPS.
 
-Promising unexplored approaches:
-- **Double-buffered mip sets**: two complete texture sets, display one, write to the other, swap atomically. No `set_value` on active textures.
-- **Always bridge**: treat `set_preloaded_arrays` like `set_image` — show old image via the bridge for one frame, let natural `_render()` do the switch. One frame of old image is acceptable.
+Related: the existing "investigate GPU/CPU load at idle" item. Both may benefit from frame-skip when nothing changes, and/or pool trimming to reduce registered texture count.
 
-Discovered during raven-cherrypick session 5 (2026-03-19).
+Discovered during raven-cherrypick deadlock/flash fix session (2026-03-28).
+
+## CLAUDE.md: rephrase DPG pitfall #5 to avoid Claude thinking loops
+
+DPG pitfall #5 (callback thread deadlock pattern) was temporarily removed from CLAUDE.md because it causes Claude Opus and Sonnet to hang when analyzing cherrypick concurrency code. The model reads the complex three-way deadlock description, then enters an unproductive reasoning loop — consistently stalls at ~250–300 output tokens across multiple retries and effort levels.
+
+The information is correct and important (confirmed by C++ source analysis — see `dpg-threading-notes.md`). Needs rephrasing in a way that conveys the same constraints without the chain-of-reasoning structure that triggers the loop. The original text is recoverable from git history.
+
+Discovered during raven-cherrypick debugging session (2026-03-28).
+
+## Audit and slim down project CLAUDE.md
+
+Raven's CLAUDE.md is growing long, which increases token cost per conversation and may contribute to reasoning issues (see pitfall #5 incident above). Audit for:
+
+- Material that could move to **project-specific skills** (e.g. "how to set up a new Raven DPG app" — the DPG app structure, startup sequence, and key patterns sections are reference material, not per-conversation instructions).
+- Material already covered by **sub-project CLAUDE.md files** (Visualizer and Librarian have their own — check for redundancy).
+- Material that belongs in the **global `~/.claude/CLAUDE.md`** (see existing deferred item "Triage CLAUDE.md style conventions").
+- Sections that are **too detailed for instructions** and would be better as standalone reference docs (like `dpg-threading-notes.md`).
+
+Goal: CLAUDE.md should be concise instructions and constraints, not an encyclopedia. Reference material goes in separate files that can be read on demand.
+
+Discovered during raven-cherrypick debugging session (2026-03-28).
 
 ## raven-server: CUDA sanity check at startup
 
