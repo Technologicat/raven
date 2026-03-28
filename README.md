@@ -115,7 +115,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - Realtime video postprocessor with visual effects such as [bloom](https://en.wikipedia.org/wiki/Bloom_(shader_effect)), [chromatic aberration](https://en.wikipedia.org/wiki/Chromatic_aberration), or [scanlines](https://en.wikipedia.org/wiki/Scan_line).
   - Web API to receive avatar video stream and to control the avatar.
 
-## Raven-xdot-viewer: Small standalone GraphViz graph viewer
+## Raven-xdot-viewer: Interactive GraphViz graph viewer
 
 *Added in v0.2.5.*
 
