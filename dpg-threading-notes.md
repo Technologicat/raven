@@ -104,6 +104,14 @@ use `split_frame` at all (deadlock — see above). Such code must delegate
 texture creation to a background thread via `split_frame`, using the old-mips
 bridge for display continuity during the one-frame upload delay.
 
+**Possible exception: `raw_texture`**. The avatar renderer uses `set_value` on
+a `raw_texture` with a single `split_frame` and has never exhibited upload
+ordering glitches despite heavy use. Hypothesis: raw textures are zero-copy —
+DPG reads directly from the user-provided buffer during rendering, so there's
+no deferred upload step to race against. If confirmed, switching from
+`dynamic_texture` to `raw_texture` could eliminate the need for double
+`split_frame` in cherrypick's mip pipeline. Needs investigation.
+
 ## Source references
 
 - `mvRunCallbacks()`: `src/mvCallbackRegistry.cpp`
