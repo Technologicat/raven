@@ -164,12 +164,6 @@ Check existing toolbar buttons in raven-cherrypick and raven-xdot-viewer for whe
 
 Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
-## raven-cherrypick: help card first column overflow
-
-The help card's first column currently cuts off — the last five entries don't fit. The last visible entry is "Toggle in selection". Fix after compare mode is complete, since adding compare mode hotkeys will change the layout anyway — better to fix the overflow once with all entries present.
-
-Discovered during raven-cherrypick compare mode planning (2026-03-30).
-
 ## raven-server: CUDA sanity check at startup
 
 raven-server boots without complaint even when NVRTC is broken (missing `libnvrtc-builtins.so`). The error only surfaces later when something triggers JIT compilation. Server startup should probe CUDA early (e.g. a trivial JIT-compiled kernel or `torch.cuda.is_available()` + an NVRTC smoke test) and log a clear warning/error if the environment is misconfigured.
