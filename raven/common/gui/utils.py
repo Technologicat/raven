@@ -215,6 +215,12 @@ def bootup(font_size: int,
             dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
+        # Same for combos (used by cherrypick toolbar).
+        with dpg.theme_component(dpg.mvCombo, enabled_state=False):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, disabled_button_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
 
     with dpg.theme(tag="disablable_red_button_theme") as disablable_red_button_theme:  # useful for dangerous delete buttons and such
         with dpg.theme_component(dpg.mvButton, enabled_state=False):

@@ -6,6 +6,12 @@
 
 Discovered during raven-cherrypick compare mode review (2026-03-30).
 
+## Rename disablable_button_theme → disablable_widget_theme
+
+The theme now covers both `mvButton` and `mvCombo` disabled states (extended during cherrypick compare mode work). The name "button" is misleading. Rename across all Raven apps: the DPG tag `"disablable_button_theme"`, the `themes_and_fonts` attribute, and all `bind_item_theme` / `ButtonFlash.original_theme` references. Similarly for the red and blue variants.
+
+Discovered during raven-cherrypick compare mode toolbar work (2026-03-31).
+
 ## Audit unnamed lambdas
 
 Unnamed lambdas produce unhelpful `<lambda>` in stack traces. Audit all Raven apps for unnamed lambdas and name them using either `unpythonic.namelambda` or by hoisting to a `def`. Start with raven-cherrypick and raven-xdot-viewer.
