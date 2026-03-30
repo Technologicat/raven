@@ -153,6 +153,10 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - Zoom/pan preserved when switching between images with the same dimensions.
     - Makes it easy to compare a detail in variations of the same shot, by flicking back and forth.
     - Especially useful for mobile photos taken of someone's conference slides from 20m away, without optical zoom.
+  - **Compare mode**: select 2–9 images and press Enter to cycle through them automatically.
+    - Adjustable speed (0.5–15 FPS), pause/resume, zoom while cycling.
+    - Numbered badges on grid tiles, large overlay number on the main view.
+    - Press a digit key (1–9) to pick a winner and exit.
 
 
 ## Raven-conference-timer: Countdown timer for talks
