@@ -570,13 +570,47 @@ def _on_key(sender, app_data) -> None:
     ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
     shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
 
-    # --- Always available: F1 help, F11 fullscreen ---
+    # --- Always available ---
     if key == dpg.mvKey_F1:
         if _help_window is not None:
             _help_window.show()
         return
     if key == dpg.mvKey_F11:
         _toggle_fullscreen()
+        return
+    # Zoom keys.
+    if key in (dpg.mvKey_Plus, dpg.mvKey_Add):
+        if iv is not None:
+            iv.zoom_in()
+        return
+    if key in (dpg.mvKey_Minus, dpg.mvKey_Subtract):
+        if iv is not None:
+            iv.zoom_out()
+        return
+    if key == dpg.mvKey_F:
+        if shift:
+            _toggle_zoom_fit_cap()
+        elif iv is not None:
+            iv.zoom_to_fit()
+        return
+    # Debug keys (Ctrl+Shift).
+    if ctrl and shift:
+        if key == dpg.mvKey_M:
+            dpg.show_metrics()
+            global _debug
+            _debug = not _debug
+            if iv is not None:
+                iv._debug = _debug
+                iv._needs_render = True
+            if grid is not None:
+                grid._debug = _debug
+            logger.info(f"_on_key: debug mode {'ON' if _debug else 'OFF'}")
+        elif key == dpg.mvKey_R:
+            dpg.show_item_registry()
+        elif key == dpg.mvKey_T:
+            dpg.show_font_manager()
+        elif key == dpg.mvKey_L:
+            dpg.show_style_editor()
         return
 
     # --- Compare mode active: intercept most keys ---
@@ -596,38 +630,7 @@ def _on_key(sender, app_data) -> None:
         elif dpg.mvKey_1 <= key <= dpg.mvKey_9 and not ctrl:
             compare.select_frame(key - dpg.mvKey_1 + 1)
             _on_compare_exit()
-        # Zoom keys — tentatively available during compare mode.
-        elif key in (dpg.mvKey_Plus, dpg.mvKey_Add):
-            if iv is not None:
-                iv.zoom_in()
-        elif key in (dpg.mvKey_Minus, dpg.mvKey_Subtract):
-            if iv is not None:
-                iv.zoom_out()
-        elif key == dpg.mvKey_F and not shift:
-            if iv is not None:
-                iv.zoom_to_fit()
         # All other keys suppressed.
-        return
-
-    # --- Ctrl+Shift: debug ---
-    if ctrl and shift:
-        if key == dpg.mvKey_M:
-            dpg.show_metrics()
-            # Toggle debug overlays.
-            global _debug
-            _debug = not _debug
-            if iv is not None:
-                iv._debug = _debug
-                iv._needs_render = True
-            if grid is not None:
-                grid._debug = _debug
-            logger.info(f"_on_key: debug mode {'ON' if _debug else 'OFF'}")
-        elif key == dpg.mvKey_R:
-            dpg.show_item_registry()
-        elif key == dpg.mvKey_T:
-            dpg.show_font_manager()
-        elif key == dpg.mvKey_L:
-            dpg.show_style_editor()
         return
 
     # --- Ctrl: app commands ---
@@ -715,18 +718,7 @@ def _on_key(sender, app_data) -> None:
         else:
             _cycle_filter(1)
 
-    # Zoom.
-    elif key in (dpg.mvKey_Plus, dpg.mvKey_Add):
-        if iv is not None:
-            iv.zoom_in()
-    elif key in (dpg.mvKey_Minus, dpg.mvKey_Subtract):
-        if iv is not None:
-            iv.zoom_out()
-    elif key == dpg.mvKey_F:
-        if shift:
-            _toggle_zoom_fit_cap()
-        elif iv is not None:
-            iv.zoom_to_fit()
+    # Zoom (1:1 only — +/-/F/Shift+F handled in always-available section).
     elif key == dpg.mvKey_1:
         if iv is not None:
             iv.zoom_to_actual()
