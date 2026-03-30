@@ -293,6 +293,10 @@ class CompareMode:
             logger.warning("CompareMode._show_frame: cache miss for idx=%d",
                            img_idx)
 
+        # Re-apply zoom-to-fit when switching between different-sized images.
+        if iv._zoom_is_fit:
+            iv.zoom_to_fit()
+
         # Update overlay number.
         frame_num = self.frame_idx + 1
         iv.set_overlay_number(frame_num)
