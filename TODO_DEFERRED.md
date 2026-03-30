@@ -140,6 +140,18 @@ Goal: CLAUDE.md should be concise instructions and constraints, not an encyclope
 
 Discovered during raven-cherrypick debugging session (2026-03-28).
 
+## Audit typing: abstract parameter types, concrete return types
+
+Raven convention: parameters should use abstract types from `collections.abc` (`Mapping`, `Sequence`, `Iterable`) for widest-possible-accepted semantics. Return types should use concrete lowercase builtins (`tuple[int, int]`, `list[int]`, `dict[str, int]`) — PEP 585, Python 3.9+. The capitalized `typing` forms (`Dict`, `List`, `Tuple`) are deprecated aliases for the builtins and offer no extra width — avoid them. Audit existing type hints across the codebase for consistency.
+
+Discovered during raven-cherrypick compare mode planning (2026-03-30).
+
+## Audit toolbar buttons for ButtonFlash acknowledgment
+
+Check existing toolbar buttons in raven-cherrypick and raven-xdot-viewer for whether their actions should flash green on activation (Raven's convention for acknowledging a click or hotkey press). Other Raven apps (Librarian, Visualizer) already use `ButtonFlash` consistently — cherrypick and xdot-viewer may be missing it.
+
+Discovered during raven-cherrypick compare mode planning (2026-03-30).
+
 ## raven-cherrypick: help card first column overflow
 
 The help card's first column currently cuts off — the last five entries don't fit. The last visible entry is "Toggle in selection". Fix after compare mode is complete, since adding compare mode hotkeys will change the layout anyway — better to fix the overflow once with all entries present.
