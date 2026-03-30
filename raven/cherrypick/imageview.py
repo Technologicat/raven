@@ -897,20 +897,28 @@ class ImageView:
         # Compare mode number overlay (top-right, near the grid).
         if self._overlay_number is not None:
             overlay_text = str(self._overlay_number)
-            overlay_size = 72
+            font_size = 72
+            # Box sized for a single digit. Offsets are empirical —
+            # DPG draw_text positioning doesn't match simple glyph metrics.
+            pad_x, pad_y = 14, 6
+            box_w = int(font_size * 0.55) + 2 * pad_x
+            box_h = int(font_size * 0.75) + 2 * pad_y
             margin = 16
-            ox = self._view_w - overlay_size - margin
+            ox = self._view_w - box_w - margin
             oy = margin
             # Semi-transparent background for readability.
             item = dpg.draw_rectangle(
-                pmin=(ox - 8, oy - 4),
-                pmax=(ox + overlay_size + 4, oy + overlay_size + 4),
+                pmin=(ox, oy),
+                pmax=(ox + box_w, oy + box_h),
                 fill=(0, 0, 0, 120), rounding=8,
                 parent=self._drawlist_tag)
             new_items.append(item)
+            # Digit position: nudged right and up within the box.
+            tx = ox + pad_x + 4
+            ty = oy + pad_y - int(font_size * 0.2) + 2
             item = dpg.draw_text(
-                (ox, oy), overlay_text,
-                color=(255, 255, 255, 220), size=overlay_size,
+                (tx, ty), overlay_text,
+                color=(255, 255, 255, 220), size=font_size,
                 parent=self._drawlist_tag)
             if self._overlay_font is not None:
                 dpg.bind_item_font(item, self._overlay_font)

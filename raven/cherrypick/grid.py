@@ -671,16 +671,25 @@ class ThumbnailGrid:
         if idx in self._compare_badges:
             badge_num = self._compare_badges[idx]
             badge_text = str(badge_num)
-            badge_size = max(14, ts // 6)
-            # 50% gray translucent background with white number, top-left.
-            bx = 4
+            font_size = max(14, ts // 6)
+            # Box sized for a single digit. Offsets are empirical —
+            # DPG draw_text positioning doesn't match simple glyph metrics.
+            pad_x = max(2, font_size // 5)
+            pad_y = max(1, font_size // 8)
+            box_w = max(1, int(font_size * 0.55)) + 2 * pad_x
+            box_h = max(1, int(font_size * 0.75)) + 2 * pad_y
+            # Semi-transparent background for readability.
+            bx = 2
             by = 2
-            dpg.draw_rectangle(pmin=(bx - 2, by),
-                               pmax=(bx + badge_size, by + badge_size + 2),
+            dpg.draw_rectangle(pmin=(bx, by),
+                               pmax=(bx + box_w, by + box_h),
                                fill=(128, 128, 128, 160),
                                parent=drawlist_tag)
-            dpg.draw_text((bx, by), badge_text,
-                          color=(255, 255, 255, 255), size=badge_size,
+            # Digit position: nudged right and up within the box.
+            tx = bx + pad_x + max(1, font_size // 10) - 1
+            ty = by + pad_y - max(1, int(font_size * 0.2))
+            dpg.draw_text((tx, ty), badge_text,
+                          color=(255, 255, 255, 255), size=font_size,
                           parent=drawlist_tag)
 
     # ------------------------------------------------------------------
