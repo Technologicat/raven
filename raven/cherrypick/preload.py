@@ -269,8 +269,16 @@ class PreloadCache:
             self._pinned = set(indices)
 
             for idx in indices:
-                if idx in self._cache or idx in self._loading:
+                if idx in self._loading:
                     continue
+                # Evict entries with capped mips — compare mode needs
+                # the full chain for quality display at any zoom.
+                if idx in self._cache:
+                    entry = self._cache[idx]
+                    has_fullres = any(s >= 1.0 for s, _w, _h, _f in entry.mips)
+                    if has_fullres:
+                        continue
+                    self._evict(idx)
                 self._loading.add(idx)
                 path = triage[idx].path
                 task_env = env(idx=idx, path=path,
