@@ -901,19 +901,21 @@ def _gui_cancel_tasks() -> None:
     Background threads then see ``cancelled`` and exit.  The actual wait
     and cleanup happen after the render loop exits (see end of ``main``).
     """
+    # Exit compare mode: skip DPG redraws (item tree may be torn down).
+    compare = _app_state["compare"]
+    if compare is not None and compare.active:
+        compare.exit(restore=False, redraw=False)
     preload = _app_state["preload"]
     if preload is not None:
         preload.cancel_pending()
     iv = _app_state["image_view"]
     if iv is not None:
         iv._mip_task_mgr.clear(wait=False)
+        iv._augment_task_mgr.clear(wait=False)
 
 
 def _gui_shutdown() -> None:
     """Full cleanup — call after the render loop has exited."""
-    compare = _app_state["compare"]
-    if compare is not None and compare.active:
-        compare.exit(restore=False)
     gui_animation.animator.clear()
     preload = _app_state["preload"]
     if preload is not None:

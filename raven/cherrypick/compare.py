@@ -107,11 +107,13 @@ class CompareMode:
                     len(ordered), ordered)
         return True
 
-    def exit(self, restore: bool = True) -> None:
+    def exit(self, restore: bool = True, redraw: bool = True) -> None:
         """Exit compare mode.
 
         *restore*: if ``True``, navigate back to the image that was
         current before entering compare mode.
+        *redraw*: if ``False``, skip DPG draw operations (for shutdown,
+        when the DPG item tree may already be torn down).
 
         Always unpins preload entries (finally-style cleanup).
         """
@@ -132,8 +134,15 @@ class CompareMode:
         if iv is not None:
             iv.clear_overlay()
         if grid is not None:
-            grid.clear_compare_badges()
-            grid.clear_compare_active()
+            if redraw:
+                grid.clear_compare_badges()
+                grid.clear_compare_active()
+            else:
+                # Shutdown path: clear state without redrawing
+                # (DPG items may already be torn down).
+                grid._compare_badges.clear()
+                grid._compare_active_idx = -1
+                grid._compare_active_alpha = 0.0
 
         # Always unpin — finally-style.
         if preload is not None:
