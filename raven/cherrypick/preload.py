@@ -16,6 +16,7 @@ import concurrent.futures
 import logging
 import threading
 import time
+from collections.abc import Sequence
 
 import torch
 
@@ -78,7 +79,7 @@ def _compute_targets(vis_pos, n_visible, n_cols, window):
 class PreloadCache:
     """Mip cache for nearby images, stored as flat numpy arrays.
 
-    Create once at startup. Call `schedule` after each navigation
+    Create once at startup. Call `schedule_neighbors` after each navigation
     (once the current image's mips have finished loading) to preload
     neighbors. Call `take` in the image-load path to check for a
     cache hit before falling back to decode + mip generation.
@@ -107,6 +108,7 @@ class PreloadCache:
         # Cache: idx → _CacheEntry. Protected by _lock.
         self._cache: dict[int, _CacheEntry] = {}
         self._loading: set[int] = set()  # indices with in-progress tasks
+        self._pinned: set[int] = set()  # compare mode: protect from eviction
         self._lock = threading.Lock()
         self._ram_used = 0  # bytes
 
@@ -157,15 +159,16 @@ class PreloadCache:
                         f"ram={ram_bytes / 1e6:.0f}MB "
                         f"total={self._ram_used / 1e6:.0f}MB")
 
-    def schedule(self, current_idx, visible, n_cols, triage) -> None:
-        """Recompute the preload window and start loading.
+    def schedule_neighbors(self, current_idx, visible, n_cols, triage) -> None:
+        """Recompute the preload window and start loading neighbors.
 
         *current_idx*: current image index (in the full list).
         *visible*: ``grid.visible`` — list of indices visible under the filter.
         *n_cols*: ``grid.n_cols`` — column count for 2D neighborhood.
         *triage*: ``TriageManager`` — for file paths.
 
-        Evicts entries outside the new window, submits tasks for new targets.
+        Evicts entries outside the new window (except pinned), submits
+        tasks for new targets.
         """
         if current_idx not in visible:
             return  # current is filtered out; don't preload
@@ -186,19 +189,15 @@ class PreloadCache:
             # Evict furthest-from-current first, but only entries
             # NOT in the new target set (keeps recently visited images
             # cached even if they've scrolled out of the cross neighborhood).
-            # Sorted nearest-first so pop() yields furthest.
-            evict_candidates = sorted(
-                (idx for idx in self._cache if idx not in target_indices),
-                key=lambda idx: abs(idx - current_idx),
-            )
+            evict_candidates = self._evict_candidates(
+                current_idx, exclude=target_indices)
 
             # Submit tasks for targets not yet cached or loading.
             for idx in (visible[p] for p in target_positions):
                 if idx in self._cache or idx in self._loading:
                     continue
                 # Evict to make room if needed.
-                while (self._ram_used >= self._ram_budget
-                       and evict_candidates):
+                while self._ram_used >= self._ram_budget and evict_candidates:
                     self._evict(evict_candidates.pop())
                 if self._ram_used >= self._ram_budget:
                     break  # budget exhausted, nothing left to evict
@@ -215,7 +214,7 @@ class PreloadCache:
 
         if self._debug:
             cached = set(self._cache.keys())
-            logger.info(f"PreloadCache.schedule: current={current_idx} "
+            logger.info(f"PreloadCache.schedule_neighbors: current={current_idx} "
                         f"targets={sorted(target_indices)} "
                         f"cached={sorted(cached)} "
                         f"loading={sorted(self._loading)} "
@@ -247,6 +246,67 @@ class PreloadCache:
         with self._lock:
             self._loading.clear()
 
+    # ------------------------------------------------------------------
+    # Compare mode support
+    # ------------------------------------------------------------------
+
+    def schedule_compare(self, indices: Sequence[int], triage) -> None:
+        """Pre-cache a specific set of image indices for compare mode.
+
+        Cancels pending neighbor-preload tasks to free GPU bandwidth,
+        pins the requested indices against eviction, and submits tasks
+        for any indices not already cached.
+
+        Uses full mip chain (no ``max_scale`` cap) — compare mode
+        preserves whatever zoom level was active when it started.
+        """
+        self._task_mgr.clear()
+        if self._device.type == "cuda":
+            torch.cuda.synchronize(self._device)
+
+        with self._lock:
+            self._loading.clear()
+            self._pinned = set(indices)
+
+            for idx in indices:
+                if idx in self._cache or idx in self._loading:
+                    continue
+                self._loading.add(idx)
+                path = triage[idx].path
+                task_env = env(idx=idx, path=path,
+                               device=self._device,
+                               order=self._order,
+                               mip_min_size=self._mip_min_size,
+                               max_scale=1.0,  # full mip chain for compare
+                               debug=self._debug,
+                               done_callback=self._on_task_done)
+                self._task_mgr.submit(_preload_one, task_env)
+
+        if self._debug:
+            cached = set(self._cache.keys())
+            logger.info(f"PreloadCache.schedule_compare: "
+                        f"indices={sorted(indices)} "
+                        f"cached={sorted(cached & set(indices))} "
+                        f"loading={sorted(self._loading & set(indices))}")
+
+    def unpin_all(self) -> None:
+        """Clear all pinned entries. Call when compare mode exits."""
+        with self._lock:
+            self._pinned.clear()
+
+    def is_cached(self, idx: int) -> bool:
+        """Check if an index is in the cache."""
+        with self._lock:
+            return idx in self._cache
+
+    def compare_progress(self, indices: Sequence[int]) -> tuple[int, int]:
+        """Return ``(n_cached, n_total)`` for compare mode warm-up display."""
+        with self._lock:
+            n_cached = sum(1 for idx in indices if idx in self._cache)
+        return (n_cached, len(indices))
+
+    # ------------------------------------------------------------------
+
     def shutdown(self) -> None:
         """Cancel all work, shut down executor."""
         self._task_mgr.clear(wait=True)
@@ -260,6 +320,31 @@ class PreloadCache:
     # Internal
     # ------------------------------------------------------------------
 
+    def _evict_candidates(self, center_idx: int,
+                          exclude: set[int] | None = None) -> list[int]:
+        """Build eviction candidate list, sorted nearest-first.
+
+        Caller holds ``_lock``. Returns indices sorted by distance from
+        *center_idx* (nearest first), so ``pop()`` yields the furthest.
+        Pinned entries and *exclude* set are omitted.
+        """
+        skip = self._pinned
+        if exclude:
+            skip = skip | exclude
+        return sorted(
+            (idx for idx in self._cache
+             if idx not in skip and idx != center_idx),
+            key=lambda idx: abs(idx - center_idx),
+        )
+
+    def _evict_until_fits(self, needed: int, candidates: list[int]) -> None:
+        """Evict from *candidates* (furthest first) until budget allows *needed* bytes.
+
+        Caller holds ``_lock``.
+        """
+        while self._ram_used + needed > self._ram_budget and candidates:
+            self._evict(candidates.pop())
+
     def _on_task_done(self, e: env) -> None:
         """Callback when a preload task completes (runs in background thread)."""
         with self._lock:
@@ -271,15 +356,9 @@ class PreloadCache:
             entry = e.result
             # Evict distant entries to make room. A fresh neighbor is more
             # valuable than a stale entry from a previous browsing position.
-            # Sorted nearest-to-entry first so pop() yields furthest.
             if self._ram_used + entry.ram_bytes > self._ram_budget:
-                evict_candidates = sorted(
-                    (idx for idx in self._cache if idx != entry.idx),
-                    key=lambda idx: abs(idx - entry.idx),
-                )
-                while (self._ram_used + entry.ram_bytes > self._ram_budget
-                       and evict_candidates):
-                    self._evict(evict_candidates.pop())
+                evict_candidates = self._evict_candidates(entry.idx)
+                self._evict_until_fits(entry.ram_bytes, evict_candidates)
             if self._ram_used + entry.ram_bytes > self._ram_budget:
                 if self._debug:
                     logger.info(f"PreloadCache._on_task_done: idx={entry.idx} "

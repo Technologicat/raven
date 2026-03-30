@@ -13,6 +13,7 @@ __all__ = ["ThumbnailGrid", "FilterMode"]
 import logging
 import threading
 from enum import Enum
+from collections.abc import Mapping
 from typing import List, Optional
 
 import numpy as np
@@ -126,6 +127,11 @@ class ThumbnailGrid:
         self._tile_labels: dict[int, str] = {}
 
         self._needs_rebuild = False
+
+        # Compare mode overlay state.
+        self._compare_badges: dict[int, int] = {}  # image_idx → badge number (1–9)
+        self._compare_active_idx: int = -1  # currently cycling tile (-1 = none)
+        self._compare_active_alpha: float = 0.0  # fade-out [0, 1]
 
         # Deferred callbacks — fired from update() outside the lock.
         # Prevents grid._lock from being held across expensive work like
@@ -273,6 +279,51 @@ class ThumbnailGrid:
                 self._needs_rebuild = True
             else:
                 self._redraw_tile_by_idx(idx)
+
+    # ------------------------------------------------------------------
+    # Compare mode overlays
+    # ------------------------------------------------------------------
+
+    def set_compare_badges(self, mapping: Mapping[int, int]) -> None:
+        """Show number badges (1–9) on tiles.
+
+        *mapping*: ``{image_idx: badge_number}``.
+        """
+        with self._lock:
+            self._compare_badges = dict(mapping)
+            for idx in self._compare_badges:
+                self._redraw_tile_by_idx(idx)
+
+    def clear_compare_badges(self) -> None:
+        """Remove all compare badges."""
+        with self._lock:
+            old = self._compare_badges
+            self._compare_badges = {}
+            for idx in old:
+                self._redraw_tile_by_idx(idx)
+
+    def set_compare_active(self, idx: int, alpha: float) -> None:
+        """Highlight the active compare tile.
+
+        *idx*: image index of the currently cycling tile.
+        *alpha*: fade-out intensity [0, 1] from ``CompareMode.fade_alpha()``.
+        """
+        with self._lock:
+            prev = self._compare_active_idx
+            self._compare_active_idx = idx
+            self._compare_active_alpha = alpha
+            if prev >= 0 and prev != idx:
+                self._redraw_tile_by_idx(prev)
+            self._redraw_tile_by_idx(idx)
+
+    def clear_compare_active(self) -> None:
+        """Remove the active-compare highlight."""
+        with self._lock:
+            prev = self._compare_active_idx
+            self._compare_active_idx = -1
+            self._compare_active_alpha = 0.0
+            if prev >= 0:
+                self._redraw_tile_by_idx(prev)
 
     @property
     def current(self) -> int:
@@ -607,6 +658,30 @@ class ThumbnailGrid:
                                           parent=drawlist_tag)
             if icon_item is not None:
                 dpg.bind_item_font(icon_item, self._icon_font)
+
+        # Compare mode: active tile highlight.
+        if idx == self._compare_active_idx and self._compare_active_alpha > 0:
+            r, g, b, a_max = config.COMPARE_FADE_COLOR
+            a = int(a_max * self._compare_active_alpha)
+            dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
+                               fill=(r, g, b, a),
+                               parent=drawlist_tag)
+
+        # Compare mode: number badge.
+        if idx in self._compare_badges:
+            badge_num = self._compare_badges[idx]
+            badge_text = str(badge_num)
+            badge_size = max(14, ts // 6)
+            # 50% gray translucent background with white number, top-left.
+            bx = 4
+            by = 2
+            dpg.draw_rectangle(pmin=(bx - 2, by),
+                               pmax=(bx + badge_size, by + badge_size + 2),
+                               fill=(128, 128, 128, 160),
+                               parent=drawlist_tag)
+            dpg.draw_text((bx, by), badge_text,
+                          color=(255, 255, 255, 255), size=badge_size,
+                          parent=drawlist_tag)
 
     # ------------------------------------------------------------------
     # Internal: filter and visibility

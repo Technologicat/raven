@@ -5,6 +5,7 @@ __all__ = ["Animator", "animator",  # controller and its global instance (need o
            "Dimmer",  # overlays
            "ButtonFlash", "SmoothScrolling", "PulsatingColor",  # animations
            "ScrollEndFlasher",  # animated overlay
+           "pulsation_envelope",  # utility: the cosine-squared curve used by pulsating animations
            "action_continue", "action_finish", "action_cancel"]  # return values for `render_frame`
 
 import logging
@@ -622,6 +623,23 @@ class SmoothScrolling(Animation):
 # The FPS-corrected exponential decay math is now in `raven.common.smoothvalue` (which see).
 # For the full derivation, see `raven.server.modules.avatar.interpolate`.
 
+# --------------------------------------------------------------------------------
+# Pulsation envelope
+
+def pulsation_envelope(t: float) -> float:
+    """Cosine-squared envelope: 1 at *t*=0, 0 at *t*=0.5, 1 at *t*=1.
+
+    Used by `PulsatingColor` and available for manual alpha calculations
+    (e.g. compare mode tile fade). *t* is the normalized cycle position
+    [0, 1], where 0 and 1 are cycle boundaries.
+
+    The curve provides smooth acceleration and deceleration (slow at
+    the extremes, fast in the middle).
+    """
+    return math.cos(t * math.pi) ** 2
+
+# --------------------------------------------------------------------------------
+
 class PulsatingColor(Animation):
     def __init__(self,
                  cycle_duration: float,
@@ -679,9 +697,7 @@ class PulsatingColor(Animation):
             self.reset()
         cycle_pos = cycle_pos - float(int(cycle_pos))  # fractional part; raw position in animation cycle
 
-        # Convert animation cycle position to animation control channel value.
-        # Same approach as in the AI avatar code, see `raven.server.modules.avatar.animate_breathing`.
-        animation_pos = math.cos(cycle_pos * math.pi)**2  # 1 ... 0 ... 1, smoothly, with slow start and end, fast middle
+        animation_pos = pulsation_envelope(cycle_pos)
         alpha = self._compute_alpha(animation_pos)
         dpg.set_value(self.theme_color_widget, (*self.rgb, alpha))
 

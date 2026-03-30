@@ -1,5 +1,17 @@
 # Deferred TODOs
 
+## MPS (Apple Silicon) device synchronization
+
+`torch.cuda.synchronize()` calls throughout the codebase (preload cache, imageview mip loading) only handle CUDA/ROCm. Apple MPS (`torch.device("mps")`) needs `torch.mps.synchronize()` instead. Audit all `torch.cuda.synchronize` call sites and add MPS equivalents. Consider a `deviceinfo.synchronize(device)` helper.
+
+Discovered during raven-cherrypick compare mode review (2026-03-30).
+
+## Audit unnamed lambdas
+
+Unnamed lambdas produce unhelpful `<lambda>` in stack traces. Audit all Raven apps for unnamed lambdas and name them using either `unpythonic.namelambda` or by hoisting to a `def`. Start with raven-cherrypick and raven-xdot-viewer.
+
+Discovered during raven-cherrypick compare mode review (2026-03-30).
+
 ## AMD GPU (ROCm) support audit
 
 ROCm presents as `"cuda"` in PyTorch, so our Lanczos kernel and `deviceinfo` validation should already work on AMD GPUs. However, the rest of the codebase needs auditing:

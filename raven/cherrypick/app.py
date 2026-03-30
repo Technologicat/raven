@@ -44,9 +44,11 @@ from .loader import ThumbnailPipeline
 from .imageview import ImageView
 from .grid import ThumbnailGrid, FilterMode
 from .preload import PreloadCache
+from .compare import CompareMode
 from ..common.image import utils as imageutils
 from ..common.video import postprocessor
 
+from unpythonic import namelambda
 from unpythonic.env import env
 
 # ---------------------------------------------------------------------------
@@ -59,6 +61,7 @@ _app_state = {
     "triage": None,
     "pipeline": None,
     "preload": None,
+    "compare": None,
     "status_text": None,
     "themes_and_fonts": None,
 }
@@ -391,6 +394,85 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Compare mode
+# ---------------------------------------------------------------------------
+
+def _enter_compare_mode(*_args) -> None:
+    """Activate compare mode from toolbar button or hotkey."""
+    compare = _app_state["compare"]
+    grid = _app_state["grid"]
+    if compare is None or grid is None:
+        return
+    if compare.active:
+        # Button is in stop mode — exit.
+        compare.exit(restore=True)
+        _on_compare_exit()
+        return
+    if not dpg.is_item_enabled("cherrypick_compare_btn"):
+        return
+    selected = grid.selected
+    if len(selected) < 2:
+        return
+    if compare.enter(list(selected)):
+        # Disable grid clicks during compare mode.
+        grid.input_enabled = False
+        _on_compare_enter()
+
+
+def _on_compare_enter() -> None:
+    """Update toolbar button when compare mode starts."""
+    taf = _app_state["themes_and_fonts"]
+    dpg.set_item_label("cherrypick_compare_btn", fa.ICON_STOP)
+    dpg.bind_item_font("cherrypick_compare_btn", taf.icon_font_solid)
+    # Update tooltip text.
+    dpg.set_value("cherrypick_compare_tooltip_text",
+                  "Exit compare mode [Esc]")
+    # Flash the button green.
+    gui_animation.animator.add(gui_animation.ButtonFlash(
+        message=None,
+        target_button="cherrypick_compare_btn",
+        target_tooltip=None,
+        target_text=None,
+        original_theme="disablable_button_theme",
+        duration=1.0))
+
+
+def _on_compare_exit() -> None:
+    """Restore toolbar button and grid input when compare mode exits."""
+    taf = _app_state["themes_and_fonts"]
+    dpg.set_item_label("cherrypick_compare_btn", fa.ICON_PLAY)
+    dpg.bind_item_font("cherrypick_compare_btn", taf.icon_font_solid)
+    dpg.set_value("cherrypick_compare_tooltip_text",
+                  "Compare selected [Enter]")
+    _update_compare_button_state()
+    # Re-enable grid input.
+    grid = _app_state["grid"]
+    if grid is not None:
+        grid.input_enabled = True
+
+
+def _update_compare_button_state() -> None:
+    """Enable/disable the compare button based on selection count."""
+    compare = _app_state["compare"]
+    grid = _app_state["grid"]
+    if compare is not None and compare.active:
+        dpg.enable_item("cherrypick_compare_btn")
+        return
+    if grid is not None and len(grid.selected) >= 2:
+        dpg.enable_item("cherrypick_compare_btn")
+    else:
+        dpg.disable_item("cherrypick_compare_btn")
+
+
+def _compare_load_image(idx: int) -> None:
+    """Load an image by index — used by CompareMode for frame display."""
+    grid = _app_state["grid"]
+    if grid is not None:
+        grid.set_current(idx)
+    _load_current_image()
+
+
+# ---------------------------------------------------------------------------
 # Navigation callbacks (for grid -> image view)
 # ---------------------------------------------------------------------------
 
@@ -415,6 +497,12 @@ def _on_double_click(idx: int) -> None:
 
 def _on_zoom_changed(zoom: float) -> None:
     """Called by the image view when zoom changes."""
+    _update_status()
+
+
+def _on_selection_changed() -> None:
+    """Called by the grid when multi-selection changes."""
+    _update_compare_button_state()
     _update_status()
 
 
@@ -471,6 +559,7 @@ def _on_key(sender, app_data) -> None:
     key = app_data
     iv = _app_state["image_view"]
     grid = _app_state["grid"]
+    compare = _app_state["compare"]
 
     # Suppress input when modal dialogs are open.
     if iv is not None and not iv.input_enabled:
@@ -480,6 +569,45 @@ def _on_key(sender, app_data) -> None:
 
     ctrl = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
     shift = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
+
+    # --- Always available: F1 help, F11 fullscreen ---
+    if key == dpg.mvKey_F1:
+        if _help_window is not None:
+            _help_window.show()
+        return
+    if key == dpg.mvKey_F11:
+        _toggle_fullscreen()
+        return
+
+    # --- Compare mode active: intercept most keys ---
+    if compare is not None and compare.active:
+        if key == dpg.mvKey_Escape:
+            compare.exit(restore=True)
+            _on_compare_exit()
+        elif key == dpg.mvKey_Spacebar:
+            compare.toggle_pause()
+        elif key == dpg.mvKey_Comma:
+            compare.adjust_fps(-config.COMPARE_FPS_STEP)
+        elif key == dpg.mvKey_Period:
+            compare.adjust_fps(config.COMPARE_FPS_STEP)
+        elif key == dpg.mvKey_M and not ctrl and not shift:
+            compare.reset_fps()
+        # Digit keys 1–9: select frame and exit.
+        elif dpg.mvKey_1 <= key <= dpg.mvKey_9 and not ctrl:
+            compare.select_frame(key - dpg.mvKey_1 + 1)
+            _on_compare_exit()
+        # Zoom keys — tentatively available during compare mode.
+        elif key in (dpg.mvKey_Plus, dpg.mvKey_Add):
+            if iv is not None:
+                iv.zoom_in()
+        elif key in (dpg.mvKey_Minus, dpg.mvKey_Subtract):
+            if iv is not None:
+                iv.zoom_out()
+        elif key == dpg.mvKey_F and not shift:
+            if iv is not None:
+                iv.zoom_to_fit()
+        # All other keys suppressed.
+        return
 
     # --- Ctrl+Shift: debug ---
     if ctrl and shift:
@@ -640,12 +768,9 @@ def _on_key(sender, app_data) -> None:
         if grid is not None:
             grid.navigate_page_down()
 
-    # App.
-    elif key == dpg.mvKey_F1:
-        if _help_window is not None:
-            _help_window.show()
-    elif key == dpg.mvKey_F11:
-        _toggle_fullscreen()
+    # Compare mode.
+    elif key == dpg.mvKey_Return:
+        _enter_compare_mode()
 
 
 # ---------------------------------------------------------------------------
@@ -777,6 +902,9 @@ def _gui_cancel_tasks() -> None:
 
 def _gui_shutdown() -> None:
     """Full cleanup — call after the render loop has exited."""
+    compare = _app_state["compare"]
+    if compare is not None and compare.active:
+        compare.exit(restore=False)
     gui_animation.animator.clear()
     preload = _app_state["preload"]
     if preload is not None:
@@ -962,6 +1090,19 @@ def main() -> int:
 
             dpg.add_spacer(width=8)
 
+            # Compare mode button.
+            btn = dpg.add_button(label=fa.ICON_PLAY,
+                                 tag="cherrypick_compare_btn",
+                                 callback=_enter_compare_mode,
+                                 width=30, enabled=False)
+            dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
+            dpg.bind_item_theme(btn, "disablable_button_theme")
+            with dpg.tooltip(btn):
+                dpg.add_text("Compare selected [Enter]",
+                             tag="cherrypick_compare_tooltip_text")
+
+            dpg.add_spacer(width=8)
+
             # Filter selector.
             filter_labels = [_FILTER_LABELS[m] for m in _FILTER_CYCLE]
             dpg.add_combo(items=filter_labels,
@@ -1029,7 +1170,7 @@ def main() -> int:
                 tile_size=args.tile_size,
                 icon_font=themes_and_fonts.icon_font_solid,
                 on_current_changed=_on_current_changed,
-                on_selection_changed=_update_status,
+                on_selection_changed=_on_selection_changed,
                 on_double_click=_on_double_click,
                 debug=_debug,
             )
@@ -1039,19 +1180,36 @@ def main() -> int:
         # Status bar.
         _app_state["status_text"] = dpg.add_text("Ready")
 
+    # --- Overlay font for compare mode (large size for crisp drawlist text) ---
+    _overlay_font_key, overlay_font = guiutils.load_extra_font(
+        themes_and_fonts, 72, "OpenSans", "Bold")
+    image_view.set_overlay_font(overlay_font)
+
+    # --- Compare mode ---
+    _app_state["compare"] = CompareMode(
+        get_image_view=namelambda("get_image_view")(lambda: _app_state["image_view"]),
+        get_grid=namelambda("get_grid")(lambda: _app_state["grid"]),
+        get_preload=namelambda("get_preload")(lambda: _app_state["preload"]),
+        get_triage=namelambda("get_triage")(lambda: _app_state["triage"]),
+        load_image_fn=_compare_load_image,
+        set_status_fn=_set_status,
+        update_status_fn=_update_status,
+    )
+
     # --- Hotkey handler ---
     with dpg.handler_registry():
         dpg.add_key_press_handler(callback=_on_key)
 
     # --- Help card ---
     hotkey_info = (
+        # --- Column 1: Triage, Jump, Filter (14 rows) ---
         env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open folder", notes=""),
         env(key_indent=0, key="C", action_indent=0, action="Mark cherry", notes=""),
-        env(key_indent=1, key="Ctrl+C", action_indent=1, action="Same, but all selected", notes=""),
+        env(key_indent=1, key="Ctrl+C", action_indent=1, action="...all selected", notes=""),
         env(key_indent=0, key="X", action_indent=0, action="Mark lemon", notes=""),
-        env(key_indent=1, key="Ctrl+X", action_indent=1, action="Same, but all selected", notes=""),
+        env(key_indent=1, key="Ctrl+X", action_indent=1, action="...all selected", notes=""),
         env(key_indent=0, key="V", action_indent=0, action="Clear mark", notes=""),
-        env(key_indent=1, key="Ctrl+V", action_indent=1, action="Same, but all selected", notes=""),
+        env(key_indent=1, key="Ctrl+V", action_indent=1, action="...all selected", notes=""),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="B / Shift+B", action_indent=0, action="Next / prev lemon", notes="All view only; wraps"),
         env(key_indent=0, key="N / Shift+N", action_indent=0, action="Next / prev cherry", notes="All view only; wraps"),
@@ -1060,6 +1218,13 @@ def main() -> int:
         env(key_indent=0, key="G", action_indent=0, action="Cycle filter forward", notes="All/Cherries/Lemons/Neutral"),
         env(key_indent=0, key="Shift+G", action_indent=0, action="Cycle filter backward", notes=""),
         helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="Ctrl+1..5", action_indent=0, action="Tile size preset", notes=""),
+        env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
+        env(key_indent=0, key="F11", action_indent=0, action="Fullscreen", notes=""),
+
+        helpcard.hotkey_new_column,
+
+        # --- Column 2: Navigation, Selection (17 rows) ---
         env(key_indent=0, key="Left / Right", action_indent=0, action="Prev / next image", notes="Navigate only"),
         env(key_indent=0, key="Up / Down", action_indent=0, action="Prev / next row", notes="Navigate only"),
         env(key_indent=0, key="Home / End", action_indent=0, action="First / last image", notes=""),
@@ -1072,24 +1237,28 @@ def main() -> int:
         env(key_indent=0, key="Ctrl+A", action_indent=0, action="Select all", notes=""),
         env(key_indent=0, key="Ctrl+D", action_indent=0, action="Deselect all", notes=""),
         env(key_indent=0, key="Ctrl+I", action_indent=0, action="Invert selection", notes=""),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="Tab", action_indent=0, action="Toggle image pane focus", notes=""),
+        env(key_indent=1, key="Arrows", action_indent=0, action="Pan (when focused)", notes=""),
+        env(key_indent=1, key="Esc", action_indent=0, action="Unfocus", notes=""),
 
         helpcard.hotkey_new_column,
 
+        # --- Column 3: Zoom, Compare, App (17 rows) ---
         env(key_indent=0, key="+  / Numpad +", action_indent=0, action="Zoom in", notes=""),
         env(key_indent=0, key="-  / Numpad -", action_indent=0, action="Zoom out", notes=""),
         env(key_indent=0, key="F", action_indent=0, action="Zoom to fit", notes=""),
-        env(key_indent=0, key="Shift+F", action_indent=0, action="Toggle fit cap at 100%", notes="No upscale"),
+        env(key_indent=0, key="Shift+F", action_indent=0, action="Toggle fit cap", notes="No upscale"),
         env(key_indent=0, key="1", action_indent=0, action="Zoom to 1:1", notes=""),
         env(key_indent=0, key="Mouse wheel", action_indent=0, action="Zoom at cursor", notes=""),
         env(key_indent=0, key="Mouse drag", action_indent=0, action="Pan image", notes=""),
         helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="Tab", action_indent=0, action="Toggle image pane focus", notes=""),
-        env(key_indent=1, key="Left / Right / Up / Down", action_indent=0, action="Pan (when focused)", notes=""),
-        env(key_indent=1, key="Esc", action_indent=0, action="Unfocus", notes=""),
-        helpcard.hotkey_blank_entry,
-        env(key_indent=0, key="Ctrl+1..5", action_indent=0, action="Tile size preset", notes=""),
-        env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
-        env(key_indent=0, key="F11", action_indent=0, action="Fullscreen", notes=""),
+        env(key_indent=0, key="Enter", action_indent=0, action="Compare selected", notes="Need 2+ selected"),
+        env(key_indent=1, key="1\u20139", action_indent=0, action="Select frame, exit", notes=""),
+        env(key_indent=1, key="Esc", action_indent=0, action="Exit, restore image", notes=""),
+        env(key_indent=1, key=",  / .", action_indent=0, action="Slower / faster", notes=""),
+        env(key_indent=1, key="M", action_indent=0, action="Reset FPS to default", notes=""),
+        env(key_indent=1, key="Space", action_indent=0, action="Pause / resume", notes=""),
     )
 
     def _help_on_show():
@@ -1161,16 +1330,23 @@ def main() -> int:
             if iv is not None:
                 iv.update()
 
+            # Compare mode tick (before animations, after component updates).
+            compare = _app_state["compare"]
+            if compare is not None:
+                compare.tick()
+
             # Trigger preloading once the current image finishes loading.
+            # Suppressed during compare mode (preload is managing compare set).
             global _preload_pending
             preload = _app_state["preload"]
             triage = _app_state["triage"]
-            if (_preload_pending and preload is not None
-                    and iv is not None and not iv.mip_loading
-                    and grid is not None and triage is not None):
-                _preload_pending = False
-                preload.schedule(grid.current, grid.visible,
-                                 grid.n_cols, triage)
+            if (compare is None or not compare.active):
+                if (_preload_pending and preload is not None
+                        and iv is not None and not iv.mip_loading
+                        and grid is not None and triage is not None):
+                    _preload_pending = False
+                    preload.schedule_neighbors(grid.current, grid.visible,
+                                               grid.n_cols, triage)
 
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()

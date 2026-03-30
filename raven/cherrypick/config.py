@@ -115,6 +115,10 @@ MIP_MIN_SIZE = 64  # smallest mip level (short edge, pixels)
 COMPARE_DEFAULT_FPS = 3.0
 COMPARE_MIN_FPS = 0.5
 COMPARE_MAX_FPS = 15.0
+COMPARE_FPS_STEP = 0.5  # comma/period increment
+COMPARE_MAX_IMAGES = 9
+COMPARE_FADE_COLOR = (80, 160, 255, 180)  # bright blue tint for active tile
+COMPARE_PAUSED_PULSE_DURATION = 2.0  # seconds, full 1→0→1 cycle when paused
 
 # ---------------------------------------------------------------------------
 # Navigation

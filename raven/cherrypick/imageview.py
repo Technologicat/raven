@@ -131,6 +131,10 @@ class ImageView:
         # the old batch.  The drawlist is never empty, eliminating blank flashes.
         self._drawn_items: list[int | str] = []
 
+        # Compare mode: overlay number (None = hidden, 1–9 = visible).
+        self._overlay_number: Optional[int] = None
+        self._overlay_font = None  # set via set_overlay_font()
+
         # Create DPG drawlist inside a wrapper child_window (for spinner overlay).
         # child_window has fixed height, so the spinner doesn't affect layout
         # of siblings (e.g. the status bar) when shown/hidden.
@@ -456,6 +460,32 @@ class ImageView:
         if self._needs_render:
             self._render()
             self._needs_render = False
+
+    # ------------------------------------------------------------------
+    # Compare mode overlay
+    # ------------------------------------------------------------------
+
+    def set_overlay_font(self, font_id) -> None:
+        """Set the font for the compare mode number overlay.
+
+        Call once at startup with a large-size font loaded via
+        ``raven.common.gui.utils.load_extra_font()``. Drawlist text is
+        rendered from the font texture atlas, so a large atlas size is
+        needed for crisp rendering.
+        """
+        self._overlay_font = font_id
+
+    def set_overlay_number(self, n: Optional[int]) -> None:
+        """Show or hide the compare mode number overlay.
+
+        *n*: ``None`` to hide, or ``1``–``9`` to show.
+        """
+        self._overlay_number = n
+        self._needs_render = True
+
+    def clear_overlay(self) -> None:
+        """Hide the compare mode number overlay."""
+        self.set_overlay_number(None)
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -862,6 +892,28 @@ class ImageView:
                                       color=config.CURRENT_COLOR,
                                       thickness=2,
                                       parent=self._drawlist_tag)
+            new_items.append(item)
+
+        # Compare mode number overlay (top-right, near the grid).
+        if self._overlay_number is not None:
+            overlay_text = str(self._overlay_number)
+            overlay_size = 72
+            margin = 16
+            ox = self._view_w - overlay_size - margin
+            oy = margin
+            # Semi-transparent background for readability.
+            item = dpg.draw_rectangle(
+                pmin=(ox - 8, oy - 4),
+                pmax=(ox + overlay_size + 4, oy + overlay_size + 4),
+                fill=(0, 0, 0, 120), rounding=8,
+                parent=self._drawlist_tag)
+            new_items.append(item)
+            item = dpg.draw_text(
+                (ox, oy), overlay_text,
+                color=(255, 255, 255, 220), size=overlay_size,
+                parent=self._drawlist_tag)
+            if self._overlay_font is not None:
+                dpg.bind_item_font(item, self._overlay_font)
             new_items.append(item)
 
         # --- Delete previous draw items (new ones already cover them) ---
