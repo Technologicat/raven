@@ -285,27 +285,32 @@ On app launch, any pre-existing files in `cherries/`/`lemons/` are recognized as
 
 **Filename collision handling**: If marking would overwrite an existing file in the target directory, refuse and show an error in the status bar. (Shouldn't happen in normal use, but be defensive.)
 
-## 7. Animation / Compare Mode (Stretch Goal)
+## 7. Compare Mode
 
-Not yet implemented. Config values (`COMPARE_DEFAULT_FPS`, etc.) are in place.
+Implemented. Module: `compare.py` (`CompareMode` class).
 
-Activated via toolbar button or hotkey when ≥2 tiles are multi-selected.
+Activated via toolbar button (`ICON_PLAY`) or `Enter` when ≥2 tiles are multi-selected. Pre-caches all compare images before cycling starts (status bar shows warm-up progress). Toolbar button switches to `ICON_STOP` during compare mode; inapplicable toolbar items (triage, filter, tile size, open) are disabled.
 
 **Behavior**:
-1. Selected tiles are numbered 1–9 (max 9 in v1; if more selected, use first 9 by grid order).
+1. Selected tiles are numbered 1–9 (max 9; if more selected, first 9 by grid-visible order).
 2. The main view cycles through them at configurable speed (default: 3 FPS).
-3. A large, prominent number overlay appears on the main view (top-left corner, semi-transparent).
-4. Corresponding number badges appear on the grid tiles.
-5. The grid tile for the currently displayed image pulses or highlights during its frame.
-6. Status bar shows "Compare mode" indicator with current speed.
+3. A large, prominent number overlay appears on the main view (top-right corner, semi-transparent, bold font loaded at 72px for crisp drawlist rendering).
+4. Corresponding number badges appear on the grid tiles (top-left corner, gray translucent background).
+5. The grid tile for the currently displayed image highlights with a cosine-squared fade (`pulsation_envelope` from `raven.common.gui.animation`). When paused, the highlight pulses continuously at 2s cycle.
+6. Status bar shows compare indicator: `"Compare [2/5] | 3.0 FPS"` or `"Compare [2/5] | PAUSED"`.
+7. Zoom-to-fit is re-applied per frame when comparing images of different sizes.
+8. Grid input (click, selection) is disabled during compare mode.
 
 **Controls during compare mode**:
-- `1`–`9`: Stop animation, select that image as current, exit compare mode.
-- `Escape`: Stop animation, return to previous current image, exit compare mode.
-- `,` / `.`: Slower / faster.
+- `1`–`9`: Select that image as current, exit compare mode.
+- `Escape`: Return to previous current image, exit compare mode.
+- `,` / `.`: Slower / faster (±0.5 FPS step, clamped to [0.5, 15.0]).
+- `M`: Reset FPS to default.
 - `Space`: Pause/resume cycling.
+- Zoom keys (`+`, `-`, `F`, `Shift+F`, mouse wheel): always available.
+- `F1`, `F11`: always available.
 
-Compare mode is an overlay on normal operation — the underlying state (triage, etc.) is unchanged.
+Compare mode is an overlay on normal operation — the underlying state (triage, selection, etc.) is unchanged. Selection is preserved on exit.
 
 ## 8. Hotkeys
 
@@ -390,7 +395,7 @@ Following the xdot_viewer / Librarian pattern:
 1. **Resize algorithm**: Custom Lanczos kernel on GPU, configurable order (3–5, default 4). Extremely fast and high quality; no need for `area` interpolation fallback.
 2. **Grid**: Per-tile drawlists in horizontal groups (not DPG table). Full rebuild on filter/size change. Virtualize later if needed.
 3. **Arrow keys**: Navigate by default. `Tab` toggles image pane focus — arrows pan when focused. `Escape` returns.
-4. **Compare mode**: Max 9 images (digit keys) for v1. Not yet implemented.
+4. **Compare mode**: Max 9 images (digit keys) for v1. Implemented (§7).
 5. **Split**: Fixed ratio from config in v1. Future draggable splitter with debounced grid layout regen.
 6. **Undo**: Deferred to v2.
 7. **Icons**: `ICON_STAR` / `ICON_LEMON` from FontAwesome.
@@ -405,7 +410,6 @@ Following the xdot_viewer / Librarian pattern:
 
 - Draggable split pane (with `make_managed_task` debouncing for grid layout regen)
 - Undo/redo for triage operations (`Ctrl+Z` / `Ctrl+Shift+Z`)
-- Compare mode (§7)
 - Compare mode with >9 images (paged groups?)
 - Custom graphical icons via Qwen-Image
 - Grid virtualization for 5000+ image folders

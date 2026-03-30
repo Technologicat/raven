@@ -592,8 +592,15 @@ class ImageView:
         # render_dearpygui_frame(); the second ensures the upload is fully
         # processed before we reference the textures.  DPG doesn't guarantee
         # upload-before-render ordering within a single frame.
-        dpg.split_frame()
-        dpg.split_frame()
+        # During shutdown, the render loop may have already exited — in that
+        # case split_frame raises, and we bail (textures won't be needed).
+        try:
+            dpg.split_frame()
+            dpg.split_frame()
+        except (SystemError, Exception):
+            for _s, tag in new_mips:
+                self._release_texture(tag)
+            return
 
         with self._mips_lock:
             if e.cancelled or self._mips_generation != e.generation:
