@@ -1,0 +1,22 @@
+digraph G {
+    graph [rankdir=TB, ranksep=0.5, layout=dot, clusterrank="local"];
+    subgraph "cluster_G" {
+
+        graph [style="filled,rounded", fillcolor="#80808018", label=""];
+        subgraph "cluster_pkg_a" {
+
+            graph [style="filled,rounded", fillcolor="#80808018", label="pkg_a"];
+            "pkg_a__alpha" [label="alpha", style="filled", fillcolor="#feccccb2", fontcolor="#000000", group="0"];
+        }
+        subgraph "cluster_pkg_b" {
+
+            graph [style="filled,rounded", fillcolor="#80808018", label="pkg_b"];
+            "pkg_b__beta" [label="beta", style="filled", fillcolor="#ccfeccb2", fontcolor="#000000", group="1"];
+            "pkg_b__gamma" [label="gamma", style="filled", fillcolor="#ccfeccb2", fontcolor="#000000", group="1"];
+        }
+    }
+        "pkg_a__alpha" -> "pkg_b__beta" [style="solid",  color="#000000"];
+        "pkg_a__alpha" -> "pkg_b__gamma" [style="solid",  color="#000000"];
+        "pkg_b__beta" -> "pkg_b__gamma" [style="solid",  color="#000000"];
+        "pkg_b__gamma" -> "pkg_a__alpha" [style="solid",  color="#000000"];
+    }
