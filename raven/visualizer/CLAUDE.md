@@ -16,7 +16,7 @@ The code is a deliberate script-style interleaving of function definitions, modu
 
 Lines tagged `# tag` indicate DPG widget tag references (searchable). All widget tags are string literals.
 
-See `REFACTORING_NOTES.md` in this directory for the approximate section map of `app.py` (line-number index, pre-refactoring snapshot — update as modules get extracted).
+See `briefs/visualizer-refactoring.md` (project root) for the approximate section map of `app.py` (line-number index, pre-refactoring snapshot — update as modules get extracted).
 
 ## Key Patterns
 
@@ -32,7 +32,7 @@ See `REFACTORING_NOTES.md` in this directory for the approximate section map of 
 
 **Widget search via predicates**: `user_data` on DPG widgets stores `(kind, data)` tuples. Predicate functions like `is_entry_title_container_group(item)` check the kind. `widgetfinder.binary_search_widget()` uses these for O(log n) lookups in the info panel widget list.
 
-The tooltip (`_update_annotation`, ~300 lines) and info panel (`_update_info_panel`, ~720 lines) share a rendering vocabulary but implement it independently — see `REFACTORING_NOTES.md` for a detailed comparison. The tooltip also renders a help/legend section at its bottom.
+The tooltip (`_update_annotation`, ~300 lines) and info panel (`_update_info_panel`, ~720 lines) share a rendering vocabulary but implement it independently — see `briefs/visualizer-refactoring.md` for a detailed comparison. The tooltip also renders a help/legend section at its bottom.
 
 ## importer.py Structure
 
@@ -42,8 +42,8 @@ Uses `unpythonic.dyn` for injecting status update callbacks. Progress tracked vi
 
 ## Importer Rework
 
-Planned changes to the import pipeline (Nomic-embed migration, PCA preprocessing, outlier assignment, Procrustes alignment). See `IMPORTER_REWORK.md` in this directory for details.
+Planned changes to the import pipeline (Nomic-embed migration, PCA preprocessing, outlier assignment, Procrustes alignment). See `briefs/visualizer-importer-rework.md` (project root) for details.
 
 ## Refactoring
 
-**Goal**: Split `app.py` into a layered module structure analogous to Librarian. See `REFACTORING_NOTES.md` in this directory for the detailed plan (proposed modules, state management, constraints).
+**Goal**: Split `app.py` into a layered module structure analogous to Librarian. See `briefs/visualizer-refactoring.md` (project root) for the detailed plan (proposed modules, state management, constraints).
