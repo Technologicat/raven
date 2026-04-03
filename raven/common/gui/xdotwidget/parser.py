@@ -27,6 +27,33 @@ from .graph import (
 # --------------------------------------------------------------------------------
 # Utilities
 
+_DOT_ESCAPE_RE = re.compile(r"\\(.)")
+_DOT_ESCAPE_MAP = {
+    "n": "\n",
+    "t": "\t",
+    "\\": "\\",  # can't use raw string: r"\" is a syntax error
+    # Note: \" is already unescaped by the tokenizer, so we don't need it here.
+    # Dot label-specific escapes (\l, \r for alignment) are not meaningful
+    # in tooltip strings; unknown escapes pass through unchanged.
+}
+
+
+def _unescape_dot_string(s: str) -> str:
+    """Unescape a DOT quoted-string value.
+
+    The tokenizer strips quotes and handles line continuations and ``\\\"``,
+    but leaves other backslash escapes (``\\n``, ``\\t``, ``\\\\``) as-is.
+    This function resolves the remaining standard escapes.
+
+    Uses regex so that ``\\\\n`` is correctly parsed as literal backslash + ``n``
+    (the first ``\\\\`` consumes the escape, leaving ``n`` as plain text).
+    """
+    def _replace(m: re.Match) -> str:
+        c = m.group(1)
+        return _DOT_ESCAPE_MAP.get(c, "\\" + c)
+    return _DOT_ESCAPE_RE.sub(_replace, s)
+
+
 class ParseError(Exception):
     """Error during DOT parsing."""
 
@@ -684,7 +711,10 @@ class XDotParser(DotParser):
                 shapes.extend(parser.parse())
 
         url = attrs.get("URL", None)
-        node = Node(x, y, w, h, shapes, url, internal_name=id_)
+        tooltip = attrs.get("tooltip", None)
+        if tooltip is not None:
+            tooltip = _unescape_dot_string(tooltip).strip()
+        node = Node(x, y, w, h, shapes, url, internal_name=id_, tooltip=tooltip)
         self.node_by_name[id_] = node
         if shapes:
             self.nodes.append(node)

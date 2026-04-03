@@ -170,6 +170,25 @@ Check existing toolbar buttons in raven-cherrypick and raven-xdot-viewer for whe
 
 Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
+## raven-xdot-viewer: tooltip window has phantom bottom padding
+
+DPG's `autosize` on a `no_title_bar` window with multiline `add_text` content adds roughly one line height of extra blank space at the bottom. Confirmed the text content has no trailing newline — the padding is an ImGui/DPG rendering artifact. Attempted fixes that didn't work: `WindowMinSize(1,1)`, `FramePadding(0,0)`, `ItemSpacing(8,0)`, and manual sizing from `get_widget_size` on the text item (text item's reported size already includes the phantom space).
+
+Possible approaches to try:
+- Wrap the text item in a `dpg.group()` — groups may get different size handling from autosize
+- Drawlist-based tooltip instead of a window (full control over layout)
+- ImGui style variable we haven't found yet
+- Negative `WindowPadding` y (probably not supported)
+- Filing a DPG issue
+
+Discovered during tooltip feature development (2026-04-03).
+
+## raven-xdot-viewer: FPS drops on dense graphs
+
+With ~84 nodes and defines-edges enabled (pyan3 output of 3 files, `--uses --defines`), FPS drops to 5–10 when moving the mouse, and also when the cursor is outside the viewport. Reproduces reliably; uses-only graph of the same nodes has fine FPS. The `_refresh_hover` early-return path sets `_needs_render = True` unconditionally when mouse is outside the widget, triggering a full re-render every frame. For dense graphs (many edges), this is expensive. Investigate guarding re-renders to only when the hover highlight actually changes.
+
+Discovered during tooltip feature development (2026-04-03).
+
 ## raven-server: CUDA sanity check at startup
 
 raven-server boots without complaint even when NVRTC is broken (missing `libnvrtc-builtins.so`). The error only surfaces later when something triggers JIT compilation. Server startup should probe CUDA early (e.g. a trivial JIT-compiled kernel or `torch.cuda.is_available()` + an NVRTC smoke test) and log a clear warning/error if the environment is misconfigured.

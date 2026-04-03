@@ -8,8 +8,12 @@ The widget registers itself with Raven's GUI animator for smooth animations.
 
 __all__ = ["XDotWidget"]
 
+import logging
 import threading
+import time
 from typing import Callable, List, Optional, Sequence, Set, Tuple, Union
+
+logger = logging.getLogger(__name__)
 
 import dearpygui.dearpygui as dpg
 
@@ -117,6 +121,26 @@ class XDotWidget(gui_animation.Animation):
 
         # Follow-edge indicator: screen coords of the endpoint to highlight, or None
         self._follow_indicator_pos: Optional[Point] = None
+
+        # Tooltip window for node annotations (e.g. pyan3 --annotated output).
+        # Created here (before the render loop) so it gets correct z-order
+        # (DPG renders windows in creation order; primary window is background).
+        self._tooltip_window = dpg.add_window(
+            tag="xdot_tooltip_window",
+            show=False, modal=False, no_title_bar=True,
+            autosize=True, no_move=True, no_resize=True,
+            no_scrollbar=True, no_collapse=True,
+            no_focus_on_appearing=True)
+        # Tight padding so the tooltip doesn't have excess whitespace.
+        with dpg.theme() as tooltip_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 6, 4)
+                dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 8, 0)
+                dpg.add_theme_style(dpg.mvStyleVar_WindowMinSize, 1, 1)
+        dpg.bind_item_theme(self._tooltip_window, tooltip_theme)
+        self._tooltip_node: Optional[Node] = None  # which node the tooltip is currently showing for
+        self._tooltip_hover_start: int = 0  # monotonic_ns when hover on current node began
+        self._tooltip_visible: bool = False  # whether the tooltip window is currently shown
 
         # Edge click cycle: repeated clicks on same edge body cycle
         # through midpoint → src → dst → midpoint → ...
@@ -559,6 +583,86 @@ class XDotWidget(gui_animation.Animation):
             return f"Edge: {label}"
         return None
 
+    @staticmethod
+    def _get_node_tooltip_text(node: Node) -> Optional[str]:
+        """Return tooltip text for a node, or None.
+
+        Uses the explicit ``tooltip`` attribute from the dot file
+        (e.g. pyan3 always populates this for non-top-level nodes).
+        """
+        return node.tooltip or None
+
+    _TOOLTIP_OFFSET = 20  # pixels away from cursor, to prevent hover-over-tooltip
+    _TOOLTIP_SHOW_DELAY_NS = 300_000_000  # 300ms before tooltip appears
+
+    def _update_tooltip(self, node: Node) -> None:
+        """Update tooltip state for `node`. Called each frame while hovering.
+
+        Handles the show delay: the tooltip appears only after the cursor
+        has dwelled on the same annotated node for `_TOOLTIP_SHOW_DELAY` seconds.
+        Once visible, the tooltip follows the cursor.
+        """
+        text = self._get_node_tooltip_text(node)
+        if text is None:
+            self._hide_tooltip()
+            return
+
+        now = time.monotonic_ns()
+
+        if self._tooltip_node is not node:
+            # Hovering a new node — reset the delay timer, hide if currently showing.
+            self._tooltip_node = node
+            self._tooltip_hover_start = now
+            if self._tooltip_visible:
+                self._tooltip_visible = False
+                dpg.configure_item(self._tooltip_window, show=False)
+            return
+
+        if not self._tooltip_visible:
+            # Still waiting for the dwell delay.
+            if now - self._tooltip_hover_start < self._TOOLTIP_SHOW_DELAY_NS:
+                return
+            # Delay elapsed — build and show the tooltip.
+            dpg.delete_item(self._tooltip_window, children_only=True)
+            dpg.add_text(text, parent=self._tooltip_window)
+            self._tooltip_visible = True
+            self._position_tooltip()
+            dpg.configure_item(self._tooltip_window, show=True)
+            logger.debug("_update_tooltip: showing for '%s'", node.internal_name)
+        else:
+            # Already visible — just reposition to follow the cursor.
+            self._position_tooltip()
+
+    def _hide_tooltip(self) -> None:
+        """Hide the tooltip window and reset state."""
+        if self._tooltip_node is not None:
+            self._tooltip_node = None
+        if self._tooltip_visible:
+            self._tooltip_visible = False
+            dpg.configure_item(self._tooltip_window, show=False)
+
+    def _position_tooltip(self) -> None:
+        """Position the tooltip window near the mouse cursor."""
+        mouse_pos = dpg.get_mouse_pos(local=False)
+        tooltip_size = guiutils.get_widget_size(self._tooltip_window)
+        vp_w = dpg.get_viewport_client_width()
+        vp_h = dpg.get_viewport_client_height()
+        offset = self._TOOLTIP_OFFSET
+
+        xpos = guiutils.compute_tooltip_position_scalar(
+            algorithm="snap",
+            cursor_pos=mouse_pos[0],
+            tooltip_size=tooltip_size[0],
+            viewport_size=vp_w,
+            offset=offset)
+        ypos = guiutils.compute_tooltip_position_scalar(
+            algorithm="snap",
+            cursor_pos=mouse_pos[1],
+            tooltip_size=tooltip_size[1],
+            viewport_size=vp_h,
+            offset=offset)
+        dpg.set_item_pos(self._tooltip_window, [xpos, ypos])
+
     # -------------------------------------------------------------------------
     # Mouse handling
 
@@ -603,6 +707,7 @@ class XDotWidget(gui_animation.Animation):
         if not self._input_enabled or not self._is_mouse_inside():
             # Mouse left widget or input suppressed — clear hover.
             self._highlight.set_hover(None)
+            self._hide_tooltip()
             if self._highlight.has_link_highlights():
                 self._highlight.clear_link_highlights()
             if self._last_hover_desc is not None:
@@ -620,6 +725,12 @@ class XDotWidget(gui_animation.Animation):
 
         # Update hover
         self._highlight.set_hover(element)
+
+        # Update annotation tooltip (follows cursor while hovering on annotated nodes)
+        if isinstance(element, Node):
+            self._update_tooltip(element)
+        else:
+            self._hide_tooltip()
 
         # Update follow-edge indicator: show ring near the endpoint
         # that would be the follow origin (i.e. the end you're near).
@@ -842,6 +953,9 @@ class XDotWidget(gui_animation.Animation):
         """Clean up resources."""
         with guiutils.nonexistent_ok():
             dpg.delete_item(self._handler_registry)
+
+        with guiutils.nonexistent_ok():
+            dpg.delete_item(self._tooltip_window)
 
         with guiutils.nonexistent_ok():
             dpg.delete_item(self.group)

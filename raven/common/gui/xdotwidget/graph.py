@@ -342,11 +342,13 @@ class Node(Element):
         shapes: Drawing shapes.
         url: Optional URL associated with this node.
         internal_name: Node ID from the graph.
+        tooltip: Optional tooltip text (from dot `tooltip` attribute).
     """
 
     def __init__(self, x: float, y: float, w: float, h: float,
                  shapes: List[Shape], url: Optional[str] = None,
-                 internal_name: Optional[str] = None):
+                 internal_name: Optional[str] = None,
+                 tooltip: Optional[str] = None):
         super().__init__(shapes)
         self.x = x
         self.y = y
@@ -356,6 +358,7 @@ class Node(Element):
         self.y2 = y + 0.5 * h
         self.url = url
         self.internal_name = internal_name
+        self.tooltip = tooltip
 
     def is_inside(self, x: float, y: float) -> bool:
         """Return whether point (x, y) is inside this node's bounding box."""
