@@ -130,13 +130,12 @@ class XDotWidget(gui_animation.Animation):
             show=False, modal=False, no_title_bar=True,
             autosize=True, no_move=True, no_resize=True,
             no_scrollbar=True, no_collapse=True,
-            no_focus_on_appearing=True)
+            no_focus_on_appearing=True,
+            min_size=[1, 1])
         # Tight padding so the tooltip doesn't have excess whitespace.
         with dpg.theme() as tooltip_theme:
             with dpg.theme_component(dpg.mvAll):
-                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 6, 4)
-                dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 8, 0)
-                dpg.add_theme_style(dpg.mvStyleVar_WindowMinSize, 1, 1)
+                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 6, 0, category=dpg.mvThemeCat_Core)
         dpg.bind_item_theme(self._tooltip_window, tooltip_theme)
         self._tooltip_group = dpg.add_group(tag="xdot_tooltip_group",
                                             parent=self._tooltip_window)
@@ -627,6 +626,7 @@ class XDotWidget(gui_animation.Animation):
             # Delay elapsed — build and show the tooltip.
             dpg.delete_item(self._tooltip_group, children_only=True)
             dpg.add_text(text, parent=self._tooltip_group)
+            dpg.add_spacer(height=2, parent=self._tooltip_group)  # bottom padding (top comes from font ascender)
             self._tooltip_visible = True
             self._position_tooltip()
             dpg.configure_item(self._tooltip_window, show=True)
