@@ -101,33 +101,8 @@ All new and modified code must follow `raven-style-guide.md` (in the project roo
 
 ## Key Patterns
 
-### DearPyGui App Structure (Librarian as Reference)
-- **Layout**: App-specific. Both Librarian and Visualizer use two-column layouts, but this isn't a general requirement. All in a single `main_window`.
-- **Resize**: `resize_gui()` callback recalculates sizes. Debounced via background task for expensive updates.
-- **Themes**: Named themes for button variants, pulsating indicators. Created at module level.
-- **Fonts**: Default + icon fonts (FontAwesome), loaded at startup.
-- **Animations**: `PulsatingColor` (cyclic) and `ButtonFlash` (one-shot) via `raven.common.gui.animation` global `animator` singleton.
-- **Hotkeys**: Registered via `dpg.add_key_*_handler` in a handler registry.
-- **Help card**: Each GUI app should have a help card (built with `raven.common.gui.helpcard`). Currently present in Librarian, Visualizer, and raven-xdot-viewer; some apps are still missing theirs.
-- **Background work**: All async ops (LLM, avatar, RAG) run in background threads via `raven.common.bgtask`. `TaskManager` represents a set of related tasks sharing a `ThreadPoolExecutor`; the whole set can be cancelled via `.clear()`. Several task managers can share one executor. Debouncing via `ManagedTask` (OOP) or `make_managed_task` (functional) — use whichever is clearer.
-- **Thread safety**: All components must be thread-safe. When every component has proper locking, thread-safety bugs are eliminated and there's no need to orchestrate main-thread-only operations. The price is lock contention; the advantage is erring on the side of safety and correctness. Any approach is valid as long as the end result is thread-safe: `threading.Lock` or `RLock` (choose based on whether re-entry is needed), lock-free atomic access (with a comment stating it's intentional), or other mechanisms. Prefer lock-free where possible — it's simpler and faster.
-- **DPG threading** (unintuitive — unlike most GUI toolkits): DPG allows most operations from background threads, including creating/deleting items, setting values, and creating textures. `dpg.split_frame()` is safe **only** from background threads — it waits for the main thread's render loop to complete one frame. Calling it from the main thread **deadlocks** (the render loop can't proceed). Use `split_frame()` after creating textures in a background thread to ensure DPG has processed them before the render loop tries to use them (eliminates flicker from half-uploaded textures).
-- **DPG parent management**: Never depend on the state of the DPG container stack. Don't use `dpg.last_container()` or rely on implicit parenting. Always pass `parent=` explicitly (using tags or saved IDs). This is a thread safety concern: component `__init__` methods create handler registries and other items that pollute the container stack, and some parts of Raven create GUI controls from background threads. Explicit parents are the only safe approach. **Exception**: when initially building the app's main GUI in `main()`, using the `with` context managers (`with dpg.window(...):`, `with dpg.group(...):`) is fine — the main loop hasn't started yet, so no background tasks are running, and the stack is predictable.
-- **DPG group size attributes**: `width`/`height` on `dpg.add_group()` are unreliable as of DPG 2.0 — the data may not actually constrain layout, and reading the values back may not reflect reality. Don't depend on them. For grid/tile layouts, let groups auto-size to their content and use DPG's `item_spacing` (default 8px horizontal, 4px vertical) for inter-element gaps.
-- **DPG error handling**: DPG raises either `SystemError` (older versions) or `Exception` (newer) for "item not found" errors, with no proper exception subclass. The `nonexistent_ok()` context manager in `raven.common.gui.utils` suppresses these via string matching on the exception chain (EAFP pattern, avoids TOCTTOU). Has `.errored` attribute to check whether the block errored out.
-- **DPG texture buffer sizes**: When a pipeline produces textures asynchronously and the expected size changes (e.g. tile size switch), stale pipeline output can arrive with wrong dimensions. `dpg.add_dynamic_texture(w, h, data)` with undersized data causes a buffer overread → heap corruption → segfault or "double free" later. Guard with a size check before creating/updating textures. This bug is insidious because the crash often manifests far from the overflow (during an unrelated texture delete or render call).
-- **DPG texture operations — defensive patterns**: Delete textures from DPG callbacks (inside `render_dearpygui_frame`) where the OpenGL context is active. Avoid synchronous CUDA work during callbacks; defer it to outside `render_dearpygui_frame` via a pending flag, or to a background thread. Use `dynamic_texture` for anything that may be deleted at runtime; `static_texture` is for truly permanent assets.
-
-### Startup Sequence (Librarian as Reference)
-1. DPG init (context, fonts, themes, viewport)
-2. Connect to raven-server (`raven.client.api`)
-3. Connect to LLM backend, if needed by this app (`llmclient.setup()`)
-4. Load persistent state (app-specific `appstate` implementation)
-5. Load domain-specific backends (e.g. RAG: `hybridir.setup()`)
-6. Build GUI layout
-7. Create controller(s)
-8. Initial view render
-9. Start DPG event loop
+### DearPyGui App Structure
+See `dpg-notes.md` "Raven DPG app structure" section for layout patterns, startup sequence, background work, thread safety, DPG item management, and texture handling.
 
 ### Avatar Lipsync
 TTS (Kokoro) provides timestamped phonemes → mapped to mouth morphs → THA3 animator. Audio playback occurs on the client side.
