@@ -138,6 +138,8 @@ class XDotWidget(gui_animation.Animation):
                 dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 8, 0)
                 dpg.add_theme_style(dpg.mvStyleVar_WindowMinSize, 1, 1)
         dpg.bind_item_theme(self._tooltip_window, tooltip_theme)
+        self._tooltip_group = dpg.add_group(tag="xdot_tooltip_group",
+                                            parent=self._tooltip_window)
         self._tooltip_node: Optional[Node] = None  # which node the tooltip is currently showing for
         self._tooltip_hover_start: int = 0  # monotonic_ns when hover on current node began
         self._tooltip_visible: bool = False  # whether the tooltip window is currently shown
@@ -623,8 +625,8 @@ class XDotWidget(gui_animation.Animation):
             if now - self._tooltip_hover_start < self._TOOLTIP_SHOW_DELAY_NS:
                 return
             # Delay elapsed — build and show the tooltip.
-            dpg.delete_item(self._tooltip_window, children_only=True)
-            dpg.add_text(text, parent=self._tooltip_window)
+            dpg.delete_item(self._tooltip_group, children_only=True)
+            dpg.add_text(text, parent=self._tooltip_group)
             self._tooltip_visible = True
             self._position_tooltip()
             dpg.configure_item(self._tooltip_window, show=True)
