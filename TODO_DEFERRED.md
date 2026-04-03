@@ -170,6 +170,20 @@ Check existing toolbar buttons in raven-cherrypick and raven-xdot-viewer for whe
 
 Discovered during raven-cherrypick compare mode planning (2026-03-30).
 
+## Extract `raven.common` into an upstream library ("corvid")
+
+Raven's `common/` package has grown into a general-purpose DPG toolkit: GUI widgets (file dialog, markdown, helpcard, xdot widget, animation framework, VU meter), video/audio processing, networking utils, bgtask infrastructure. This creates a gravitational well — new apps land in Raven because the batteries are there, even when they have nothing to do with NLP/ML.
+
+Extracting `raven.common` (and the vendored DPG extensions) into a standalone library would:
+- Let pyan-gui and other non-Raven DPG apps use the toolkit without vendoring
+- Move the general DPG notes (`dpg-notes.md`) upstream with the code they document
+- Reduce Raven to domain apps (Visualizer, Librarian, Server, Avatar) + ML-specific code
+- Clarify the dependency direction: corvid → DPG, Raven → corvid + ML
+
+Short-term: vendor the xdot widget into pyan for pyan-gui. Long-term: extract properly.
+
+Discovered during tooltip feature session (2026-04-03).
+
 ## raven-xdot-viewer: FPS drops on dense graphs
 
 With ~84 nodes and defines-edges enabled (pyan3 output of 3 files, `--uses --defines`), FPS drops to 5–10 when moving the mouse, and also when the cursor is outside the viewport. Reproduces reliably; uses-only graph of the same nodes has fine FPS. The `_refresh_hover` early-return path sets `_needs_render = True` unconditionally when mouse is outside the widget, triggering a full re-render every frame. For dense graphs (many edges), this is expensive. Investigate guarding re-renders to only when the hover highlight actually changes.
