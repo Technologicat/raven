@@ -437,3 +437,89 @@ class TestGraphSearch:
         graph = parse_xdot(SIMPLE_XDOT)
         results = graph.filter_items_by_text("xyznonexistent")
         assert len(results) == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: DOT string escaping
+# ---------------------------------------------------------------------------
+
+class TestDotStringEscaping:
+    """Test that DOT string escape sequences are unescaped by the tokenizer."""
+
+    def _parse_tooltip(self, tooltip_value: str) -> str:
+        """Helper: parse a graph with one node carrying a tooltip, return the tooltip."""
+        xdot = f'''digraph G {{
+            graph [bb="0,0,100,100"];
+            a [pos="50,50", width="0.5", height="0.5",
+               _draw_="c 7 -#000000 e 50 50 18 18 ",
+               tooltip="{tooltip_value}"];
+        }}'''
+        graph = parse_xdot(xdot)
+        assert len(graph.nodes) == 1
+        return graph.nodes[0].tooltip
+
+    def test_newline_escape(self):
+        r"""``\n`` in a dot string becomes a real newline."""
+        assert self._parse_tooltip(r"line1\nline2") == "line1\nline2"
+
+    def test_tab_escape(self):
+        r"""``\t`` in a dot string becomes a real tab."""
+        assert self._parse_tooltip(r"col1\tcol2") == "col1\tcol2"
+
+    def test_backslash_escape(self):
+        r"""``\\`` in a dot string becomes a single backslash."""
+        assert self._parse_tooltip(r"path\\name") == "path\\name"
+
+    def test_escaped_backslash_before_n(self):
+        r"""``\\n`` is a literal backslash followed by 'n', not a newline."""
+        assert self._parse_tooltip(r"path\\nname") == "path\\nname"
+
+    def test_escaped_quote(self):
+        r"""``\"`` in a dot string becomes a literal quote."""
+        assert self._parse_tooltip(r'say \"hello\"') == 'say "hello"'
+
+    def test_multiline_tooltip(self):
+        """Pyan3-style multiline tooltip with newlines and dot escapes."""
+        raw = r"pyan.node.Flavor\n/path/to/node.py:18\nclass in pyan.node"
+        expected = "pyan.node.Flavor\n/path/to/node.py:18\nclass in pyan.node"
+        assert self._parse_tooltip(raw) == expected
+
+    def test_unknown_escape_passthrough(self):
+        r"""Unknown escapes (like ``\l``) pass through unchanged."""
+        assert self._parse_tooltip(r"left\laligned") == r"left\laligned"
+
+
+# ---------------------------------------------------------------------------
+# Tests: Tooltip attribute
+# ---------------------------------------------------------------------------
+
+class TestTooltipParsing:
+    """Test parsing of the dot ``tooltip`` attribute on nodes."""
+
+    def test_tooltip_present(self):
+        """Node with tooltip attribute has it set."""
+        xdot = '''digraph G {
+            graph [bb="0,0,100,100"];
+            a [pos="50,50", width="0.5", height="0.5",
+               _draw_="c 7 -#000000 e 50 50 18 18 ",
+               tooltip="hello world"];
+        }'''
+        graph = parse_xdot(xdot)
+        assert graph.nodes[0].tooltip == "hello world"
+
+    def test_tooltip_absent(self):
+        """Node without tooltip attribute has None."""
+        graph = parse_xdot(SIMPLE_XDOT)
+        for node in graph.nodes:
+            assert node.tooltip is None
+
+    def test_tooltip_stripped(self):
+        """Leading/trailing whitespace is stripped from tooltip."""
+        xdot = '''digraph G {
+            graph [bb="0,0,100,100"];
+            a [pos="50,50", width="0.5", height="0.5",
+               _draw_="c 7 -#000000 e 50 50 18 18 ",
+               tooltip="  spaced  "];
+        }'''
+        graph = parse_xdot(xdot)
+        assert graph.nodes[0].tooltip == "spaced"
