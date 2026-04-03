@@ -944,8 +944,8 @@ def main() -> int:
     )
     parser.add_argument("-v", "--version", action="version",
                         version=f"%(prog)s {__version__}")
-    parser.add_argument("folder", nargs="?",
-                        help="Folder of images to open")
+    parser.add_argument("folder", nargs="?", default=os.getcwd(),
+                        help="Folder of images to open (default: current directory)")
     parser.add_argument("--width", type=int, default=config.DEFAULT_WIDTH,
                         help=f"Window width (default: {config.DEFAULT_WIDTH})")
     parser.add_argument("--height", type=int, default=config.DEFAULT_HEIGHT,
