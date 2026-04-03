@@ -43,7 +43,7 @@ flake8 --config=flake8rc  # lint check (note: non-standard config filename)
 
 ### DPG Pitfalls
 
-See `dpg-threading-notes.md` (project root) for the full DPG threading model — thread architecture, callback dispatch, `split_frame` mechanics, texture upload ordering. The notes below are the key pitfalls distilled from that reference.
+See `dpg-notes.md` (project root) for the full DPG reference — threading model, callback dispatch, `split_frame` mechanics, texture upload ordering, window sizing gotchas. The notes below are the key pitfalls distilled from that reference.
 
 1. **DPG threading — push work to background threads aggressively.** Unlike most GUI toolkits, DPG allows all operations from background threads: creating/deleting items, setting values, creating OpenGL textures. Resist the "standard GUI toolkit" instinct to marshal everything to the main thread — doing work on background threads simplifies code and reduces GUI stutter, especially when the heavy lifting is non-Python (C/CUDA) and can release the GIL.
 2. **`dpg.split_frame()` — not in the render loop thread.** `split_frame()` waits for the render loop to complete one frame. Safe to call from background threads, DPG event callbacks, and frame callbacks (DPG dispatches these on a separate thread). **Deadlocks** if called from code that runs synchronously in the render loop — i.e. anything in the `while dpg.is_dearpygui_running(): dpg.render_dearpygui_frame()` loop body (e.g. animation frame updaters), or before the render loop starts (startup code). Common use: call from a background thread after creating textures, to ensure DPG processes them before the next render.

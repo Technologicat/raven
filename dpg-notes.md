@@ -1,7 +1,13 @@
-# DearPyGui Threading Model
+# DearPyGui Notes
 
-Reference notes on DPG's internal threading, derived from the C++ source
-(`hoffstadt/DearPyGui`, confirmed against DPG 2.0).
+Reference notes on DPG gotchas, internal mechanisms, and workarounds.
+Derived from experience with Raven apps and confirmed against DPG 2.0 / ImGui source.
+
+---
+
+# Threading
+
+Derived from the C++ source (`hoffstadt/DearPyGui`).
 
 ## Thread architecture
 
@@ -128,3 +134,55 @@ no deferred upload step to race against. If confirmed, switching from
 - 2026-03-28: Discovered texture upload ordering issue during flash/corruption
   debugging. DPG doesn't guarantee upload-before-render within a single
   render_dearpygui_frame(). Double split_frame() is the reliable workaround.
+
+---
+
+# Window sizing
+
+## `min_size` vs `mvStyleVar_WindowMinSize`
+
+`dpg.add_window()` has an explicit `min_size` parameter (default ~`[100, 100]`).
+The theme style `mvStyleVar_WindowMinSize` does **not** override it — the
+window parameter takes precedence. This means an autosize window won't shrink
+below its `min_size` even when the content is smaller.
+
+**Symptom**: autosize window appears to have phantom blank space below the
+content. Looks like padding or an extra text line, but is actually the window
+being clamped to its minimum height.
+
+**Fix**: set `min_size=[1, 1]` explicitly on the window:
+
+```python
+dpg.add_window(autosize=True, no_title_bar=True, min_size=[1, 1], ...)
+```
+
+## Asymmetric vertical padding for tooltip-style windows
+
+`WindowPadding` applies symmetrically to top and bottom. However, text items
+have built-in ascender space above the first line (from the font metrics),
+adding natural top padding. Setting `WindowPadding` y=0 gives a good top
+appearance, but the bottom then has zero padding.
+
+**Workaround**: use `WindowPadding` y=0 and add a trailing `dpg.add_spacer(height=N)`
+to the content group for bottom padding. Typically N=2 balances well against
+the font's natural ascender space.
+
+## Window z-order
+
+DPG renders windows in creation order. The primary window (set via
+`set_primary_window`) is always at the back. Windows created later render on
+top. There is no runtime z-order control — `focus_item` brings a window to
+front but also steals keyboard focus.
+
+**Implication for tooltips**: create the tooltip window during app
+initialization (before the render loop), not lazily during hover. Windows
+created mid-render-loop may end up behind earlier windows.
+
+## Investigation history
+
+- 2026-04-03: Discovered `min_size` default causing phantom padding in
+  xdot-viewer tooltip. The theme style `WindowMinSize(1, 1)` had no effect;
+  only the window parameter `min_size=[1, 1]` fixed it.
+- 2026-04-03: Tooltip z-order issue — lazy window creation during render loop
+  placed the tooltip behind the primary window. Fixed by creating the window
+  during `__init__` (before the render loop starts).
