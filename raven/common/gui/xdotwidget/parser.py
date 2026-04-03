@@ -31,27 +31,17 @@ _DOT_ESCAPE_RE = re.compile(r"\\(.)")
 _DOT_ESCAPE_MAP = {
     "n": "\n",
     "t": "\t",
+    '"': '"',
     "\\": "\\",  # can't use raw string: r"\" is a syntax error
-    # Note: \" is already unescaped by the tokenizer, so we don't need it here.
     # Dot label-specific escapes (\l, \r for alignment) are not meaningful
-    # in tooltip strings; unknown escapes pass through unchanged.
+    # in most attribute strings; unknown escapes pass through unchanged.
 }
 
 
-def _unescape_dot_string(s: str) -> str:
-    """Unescape a DOT quoted-string value.
-
-    The tokenizer strips quotes and handles line continuations and ``\\\"``,
-    but leaves other backslash escapes (``\\n``, ``\\t``, ``\\\\``) as-is.
-    This function resolves the remaining standard escapes.
-
-    Uses regex so that ``\\\\n`` is correctly parsed as literal backslash + ``n``
-    (the first ``\\\\`` consumes the escape, leaving ``n`` as plain text).
-    """
-    def _replace(m: re.Match) -> str:
-        c = m.group(1)
-        return _DOT_ESCAPE_MAP.get(c, "\\" + c)
-    return _DOT_ESCAPE_RE.sub(_replace, s)
+def _dot_escape_replace(m: re.Match) -> str:
+    """Replacement function for `_DOT_ESCAPE_RE`."""
+    c = m.group(1)
+    return _DOT_ESCAPE_MAP.get(c, "\\" + c)
 
 
 class ParseError(Exception):
@@ -308,17 +298,18 @@ class DotLexer(Lexer):
     scanner = DotScanner()
 
     def _filter(self, type_: int, text: str) -> Tuple[int, str]:
-        """Filter STR_ID and HTML_ID tokens, e.g. by stripping the quotes."""
+        """Filter STR_ID and HTML_ID tokens: strip quotes, unescape DOT string escapes."""
         if type_ == STR_ID:
             text = text[1:-1]  # Strip quotes
 
-            # Line continuations
+            # Line continuations (backslash-newline in the .dot source file)
             text = text.replace("\\\r\n", "")
             text = text.replace("\\\r", "")
             text = text.replace("\\\n", "")
 
-            # Escaped quotes
-            text = text.replace('\\"', '"')
+            # DOT string escapes. Use regex so that e.g. \\n is correctly
+            # parsed as literal backslash + 'n' (the \\ consumes the escape).
+            text = _DOT_ESCAPE_RE.sub(_dot_escape_replace, text)
 
             type_ = ID
 
@@ -713,7 +704,7 @@ class XDotParser(DotParser):
         url = attrs.get("URL", None)
         tooltip = attrs.get("tooltip", None)
         if tooltip is not None:
-            tooltip = _unescape_dot_string(tooltip).strip()
+            tooltip = tooltip.strip()
         node = Node(x, y, w, h, shapes, url, internal_name=id_, tooltip=tooltip)
         self.node_by_name[id_] = node
         if shapes:
