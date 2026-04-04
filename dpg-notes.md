@@ -233,11 +233,18 @@ There is no way to load fewer than ~224 glyphs per font in DPG.
 When the atlas overflows:
 - Some glyphs silently fail to rasterize.
 - `get_item_rect_size` returns the size of whatever *did* render (clipped/wrapped).
-- DPG briefly falls back to the bound default font during atlas rebuilds.
-  This is orthogonal to overflow — it happens on any valid font switch too.
-  At normal sizes the rebuild is fast enough to be invisible; at large sizes
-  (~1000px) it takes a couple of frames, producing a visible flash.
 - `bind_item_font` appears to succeed but the text renders with wrong/missing glyphs.
+
+## Atlas rebuild flash
+
+When a new font is added to the registry, DPG rebuilds the atlas texture. During
+the rebuild, text briefly renders with the bound default font. This is orthogonal
+to overflow — it happens on any valid font switch. At normal sizes the rebuild is
+fast enough to be invisible; at large sizes (~1000px) it takes a couple of frames,
+producing a visible flash.
+
+**Workaround**: hide the text (e.g. position offscreen) before switching fonts,
+reveal it after the new font has rendered.
 
 ## `guiutils.bootup` and atlas space
 
