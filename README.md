@@ -172,6 +172,9 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - Auto-sizes the window to fit the countdown text.
   - Color changes at configurable thresholds: white → yellow → red → pulsating expired.
   - Thresholds configurable via `--yellow` and `--red` (default 5:00 and 2:00).
+  - `--size N` sets the countdown font size in pixels (max 1000; DPG atlas limit).
+  - `Space` to pause/resume — the counter pulsates while paused.
+  - `Esc` to exit.
 
 
 ## Raven-server: Web API server

@@ -3,6 +3,7 @@
 Usage:
     raven-conference-timer 15:00
     raven-conference-timer 5
+    raven-conference-timer 15:00 --size 600
     python -m raven.conference_timer 15:00
 """
 
@@ -59,15 +60,20 @@ def main() -> int:
                         version=('%(prog)s ' + __version__))
     parser.add_argument(
         "duration", metavar="mm:ss",
-        help="Countdown duration (e.g. 15:00 or bare minutes like 15)"
+        help="Countdown duration (e.g. 15:00, or bare minutes like 15)"
     )
     parser.add_argument(
         "--yellow", metavar="mm:ss", default=None,
-        help=f"Yellow threshold (default: {config.YELLOW_THRESHOLD // 60}:{config.YELLOW_THRESHOLD % 60:02d})"
+        help=f"Yellow threshold time (default: {config.YELLOW_THRESHOLD // 60}:{config.YELLOW_THRESHOLD % 60:02d})"
     )
     parser.add_argument(
         "--red", metavar="mm:ss", default=None,
-        help=f"Red threshold (default: {config.RED_THRESHOLD // 60}:{config.RED_THRESHOLD % 60:02d})"
+        help=f"Red threshold time (default: {config.RED_THRESHOLD // 60}:{config.RED_THRESHOLD % 60:02d})"
+    )
+    parser.add_argument(
+        "--size", metavar="PIXELS", default=None, type=int,
+        help=(f"Font size in pixels (default: {config.COUNTDOWN_FONT_SIZE},"
+              f" max: {config.MAX_COUNTDOWN_FONT_SIZE})")
     )
     args = parser.parse_args()
 
@@ -79,20 +85,55 @@ def main() -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
+    if args.size is not None:
+        if args.size <= 0:
+            print(f"Error: --size must be positive, got {args.size}", file=sys.stderr)
+            return 1
+        font_size = min(args.size, config.MAX_COUNTDOWN_FONT_SIZE)
+    else:
+        font_size = config.COUNTDOWN_FONT_SIZE
+
     # --- DPG bootup ---
+    #
+    # We skip `guiutils.bootup` — the timer doesn't need FontAwesome, Markdown,
+    # or the disabled-button themes.  More importantly, `bootup` binds a 20px
+    # default font with extended Unicode ranges (~11k codepoints), which wastes
+    # atlas space at large countdown sizes and causes a visible flash when
+    # switching fonts (DPG briefly falls back to the bound default during atlas
+    # rebuild).  Instead, we load only what the timer needs.
     dpg.create_context()
 
-    themes_and_fonts = guiutils.bootup(font_size=config.FONT_SIZE)
+    reference_size = config.COUNTDOWN_FONT_SIZE
+    countdown_font_path = guiutils.get_font_path("OpenSans", variant="Bold")
+    loaded_fonts = {}  # size → DPG font ID
 
-    # Load the large countdown font.
-    _key, countdown_font = guiutils.load_extra_font(
-        themes_and_fonts, config.COUNTDOWN_FONT_SIZE, "OpenSans", "Bold")
+    with dpg.font_registry() as font_registry:
+        # Start with the reference font (120px) — small enough to fit and
+        # measure accurately in any viewport.  The startup callback loads
+        # the target font after estimating the required viewport size.
+        with dpg.font(countdown_font_path, reference_size) as ref_font:
+            pass  # default Latin-1 is sufficient for "00:00"
+        dpg.bind_font(ref_font)
+        loaded_fonts[reference_size] = ref_font
 
-    # Start with a generous initial size; the frame callback will auto-fit.
+    countdown_font = ref_font
+
+    def _load_countdown_font(size: int) -> int:
+        """Load OpenSans Bold at `size`.  Cached; skips extended Unicode ranges."""
+        if size not in loaded_fonts:
+            logger.info(f"_load_countdown_font: loading at size {size}")
+            with dpg.font(countdown_font_path, size, parent=font_registry) as font:
+                pass
+            loaded_fonts[size] = font
+        return loaded_fonts[size]
+
+    # Start with a small viewport — the startup callback resizes it after
+    # measuring the text.  The text widget is positioned offscreen during
+    # setup so the user doesn't see intermediate states.
     dpg.create_viewport(
         title=f"Raven Conference Timer {__version__}",
         width=config.INITIAL_WIDTH,
-        height=config.INITIAL_HEIGHT
+        height=config.INITIAL_HEIGHT,
     )
 
     dpg.setup_dearpygui()
@@ -110,20 +151,48 @@ def main() -> int:
         with dpg.theme_component(dpg.mvText):
             dpg.add_theme_color(dpg.mvThemeCol_Text, config.COLOR_RED)
 
+    # Pulsating theme for the expired state.
     with dpg.theme() as theme_expired:
         with dpg.theme_component(dpg.mvText):
             expired_color_widget = dpg.add_theme_color(dpg.mvThemeCol_Text, config.COLOR_EXPIRED)
-        expired_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
+        expired_glow = gui_animation.PulsatingColor(cycle_duration=config.PULSATION_CYCLE,
                                                     theme_color_widget=expired_color_widget)
         gui_animation.animator.add(expired_glow)
 
+    # Pulsating theme for the paused state.
+    #
+    # This reuses the current countdown color — we replace the glow animation's
+    # `.rgb` (which controls the RGB components) when the paused state is entered.
+    with dpg.theme() as theme_paused:
+        with dpg.theme_component(dpg.mvText):
+            paused_color_widget = dpg.add_theme_color(dpg.mvThemeCol_Text, config.COLOR_NORMAL)  # dummy color
+        pause_glow = gui_animation.PulsatingColor(cycle_duration=config.PULSATION_CYCLE,
+                                                  theme_color_widget=paused_color_widget)
+        gui_animation.animator.add(pause_glow)
+
+    # Lookup tables for color state → theme / RGB.
+    # The RGB is used by the pause mechanism, overriding the alpha channel.
+    solid_themes = {
+        "normal": theme_normal,
+        "yellow": theme_yellow,
+        "red": theme_red,
+        "expired": theme_expired,
+    }
+    color_rgbs = {
+        "normal": list(config.COLOR_NORMAL[:3]),
+        "yellow": list(config.COLOR_YELLOW[:3]),
+        "red": list(config.COLOR_RED[:3]),
+        "expired": list(config.COLOR_EXPIRED[:3]),
+    }
+
     # --- Build GUI ---
-    # Set the initial text so the frame callback can measure its rendered size.
+    # Position the text offscreen during setup so the user doesn't see
+    # intermediate states.  The startup callback moves it to (0, 0).
     initial_minutes = total_seconds // 60
     initial_seconds = total_seconds % 60
-    with dpg.window(tag="main_window"):
+    with dpg.window(tag="main_window", no_scrollbar=True):
         countdown_text = dpg.add_text(f"{initial_minutes:02d}:{initial_seconds:02d}",
-                                      tag="countdown_text")
+                                      tag="countdown_text", pos=[10000, 10000])
         dpg.bind_item_font(countdown_text, countdown_font)
         dpg.bind_item_theme(countdown_text, theme_normal)
 
@@ -131,29 +200,132 @@ def main() -> int:
     dpg.set_primary_window("main_window", True)
     dpg.show_viewport()
 
-    # Auto-fit viewport to rendered text size (+ 5% margin).
-    # Deferred to a frame callback so DPG has laid out the text.
+    # --- State ---
     start_time = None  # set by _startup; timer doesn't run until then
     color_state = "normal"
+    paused = False
+    frozen_remaining = None  # remaining seconds snapshot when paused
 
-    def _startup(*_args):
-        nonlocal start_time
-        tw, th = guiutils.get_widget_size(countdown_text)
-        pad = 2 * config.DPG_WINDOW_PADDING
-        target_w = tw + pad + config.DPG_SCROLLBAR_SIZE
-        target_h = th + pad + config.DPG_SCROLLBAR_SIZE
-        dpg.set_viewport_min_width(target_w)
-        dpg.set_viewport_min_height(target_h)
-        dpg.set_viewport_width(target_w)
-        dpg.set_viewport_height(target_h)
-        start_time = time.monotonic()
-    dpg.set_frame_callback(10, _startup)
+    # --- Keyboard ---
+    def _on_key(_sender, key, *_args):
+        nonlocal paused, frozen_remaining, start_time
+        if key == dpg.mvKey_Escape:
+            dpg.stop_dearpygui()
+        elif key == dpg.mvKey_Spacebar and start_time is not None:
+            paused = not paused
+            if paused:
+                # Freeze the display and start pulsating.
+                elapsed = time.monotonic() - start_time
+                frozen_remaining = max(0.0, total_seconds - elapsed)
+                pause_glow.rgb = color_rgbs[color_state]
+                pause_glow.reset()
+                # Expired already pulsates; only swap theme for non-expired states.
+                if color_state != "expired":
+                    dpg.bind_item_theme(countdown_text, theme_paused)
+            else:
+                # Resume: shift start_time so remaining stays continuous.
+                start_time = time.monotonic() - (total_seconds - frozen_remaining)
+                frozen_remaining = None
+                dpg.bind_item_theme(countdown_text, solid_themes[color_state])
+
+    with dpg.handler_registry():
+        dpg.add_key_press_handler(callback=_on_key)
+
+    # --- Startup callbacks (deferred to frame 10 so DPG has laid out text) ---
+    #
+    # Frame 10: measure reference text (120px, fits in any viewport), load
+    #           the target font.  Don't resize the viewport yet — keep it
+    #           small so the user doesn't see a huge empty window.
+    #
+    # Frame 12: compute the final viewport size from the reference measurement
+    #           (font metrics scale ~linearly), resize the viewport.
+    #
+    # Frame 14: the viewport has settled — read its actual client dimensions,
+    #           center the text, reveal it, and start the timer.
+
+    if font_size == reference_size:
+        # Compensate for trailing glyph advance width in the text rect — the
+        # visible ink is narrower than `get_item_rect_size` reports, making the
+        # text look left-aligned.  We widen the viewport by `nudge` and let the
+        # centering formula shift the text right naturally.
+        nudge = int(math.sqrt(font_size))
+
+        # Default size — font is already loaded.  Measure, fit, center.
+        def _fit_viewport(*_args):
+            """Frame 10: measure text, resize viewport."""
+            tw, th = guiutils.get_widget_size(countdown_text)
+            pad = 2 * config.DPG_WINDOW_PADDING
+            target_w = int(tw + pad)
+            target_h = int(th + pad)
+            dpg.set_viewport_width(target_w)
+            dpg.set_viewport_height(target_h)
+            dpg.set_viewport_min_width(target_w)
+            dpg.set_viewport_min_height(target_h)
+
+        def _center_and_start(*_args):
+            """Frame 12: center text in actual viewport, reveal, start."""
+            nonlocal start_time
+            tw, th = guiutils.get_widget_size(countdown_text)
+            vw = dpg.get_viewport_client_width()
+            vh = dpg.get_viewport_client_height()
+            pad = 2 * config.DPG_WINDOW_PADDING
+            text_x = max(0, int((vw - pad - tw) / 2) + nudge // 2)
+            text_y = max(0, int((vh - pad - th) / 2))
+            dpg.set_item_pos(countdown_text, [text_x, text_y])
+            start_time = time.monotonic()
+
+        dpg.set_frame_callback(10, _fit_viewport)
+        dpg.set_frame_callback(12, _center_and_start)
+
+    else:
+        # Custom --size: load target font, estimate viewport from reference
+        # measurement, then center text in the actual viewport.
+        nudge = int(math.sqrt(font_size))
+        ref_dims = [0, 0]  # tw_ref, th_ref
+
+        def _load_font(*_args):
+            """Frame 10: measure reference text, load target font."""
+            nonlocal countdown_font
+            ref_dims[0], ref_dims[1] = guiutils.get_widget_size(countdown_text)
+            countdown_font = _load_countdown_font(font_size)
+            dpg.bind_item_font(countdown_text, countdown_font)
+
+        def _resize_viewport(*_args):
+            """Frame 12: resize viewport from reference estimate."""
+            tw_ref, th_ref = ref_dims
+            if tw_ref <= 0 or th_ref <= 0:
+                return
+            pad = 2 * config.DPG_WINDOW_PADDING
+            ratio = font_size / reference_size
+            target_w = int(tw_ref * ratio + pad)
+            target_h = int(th_ref * ratio + pad)
+            dpg.set_viewport_width(target_w)
+            dpg.set_viewport_height(target_h)
+
+        def _center_and_start(*_args):
+            """Frame 14: center text in actual viewport, reveal, start."""
+            nonlocal start_time
+            tw_ref, th_ref = ref_dims
+            ratio = font_size / reference_size
+            text_w = tw_ref * ratio
+            vw = dpg.get_viewport_client_width()
+            vh = dpg.get_viewport_client_height()
+            pad = 2 * config.DPG_WINDOW_PADDING
+            text_x = max(0, int((vw - pad - text_w) / 2) + nudge // 2)
+            text_y = max(0, int((vh - pad - th_ref * ratio) / 2))
+            dpg.set_item_pos(countdown_text, [text_x, text_y])
+            start_time = time.monotonic()
+
+        dpg.set_frame_callback(10, _load_font)
+        dpg.set_frame_callback(12, _resize_viewport)
+        dpg.set_frame_callback(14, _center_and_start)
 
     # --- Render loop ---
     try:
         while dpg.is_dearpygui_running():
-            if start_time is None:
-                # Waiting for _startup to fire.
+            if start_time is None or paused:
+                # Waiting for startup, or paused — just keep animations ticking.
+                gui_animation.animator.render_frame()
                 dpg.render_dearpygui_frame()
                 continue
 

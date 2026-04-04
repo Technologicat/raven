@@ -1,10 +1,12 @@
 """Configuration constants for the Raven Conference Timer."""
 
-# Font size (pixels) — must match raven's global app standard.
-FONT_SIZE = 20
-
-# Large countdown font size (pixels).
+# Default countdown font size (pixels).
 COUNTDOWN_FONT_SIZE = 120
+
+# Maximum countdown font size (pixels).  DPG rasterizes each Latin-1 glyph
+# into a font atlas texture; above ~1200px the atlas silently overflows.
+MAX_COUNTDOWN_FONT_SIZE = 1000
+
 
 # DPG style values (pixels). Used for auto-fit margin calculation.
 DPG_WINDOW_PADDING = 8   # mvStyleVar_WindowPadding (default)
@@ -17,6 +19,9 @@ INITIAL_HEIGHT = 300
 # Default thresholds (seconds remaining) for color changes.
 YELLOW_THRESHOLD = 300  # 5:00 — counter turns yellow
 RED_THRESHOLD = 120     # 2:00 — counter turns red
+
+# Pulsation cycle duration (seconds). Used for expired and paused states.
+PULSATION_CYCLE = 2.0
 
 # Colors (RGBA 0–255).
 COLOR_NORMAL = (255, 255, 255, 255)
