@@ -107,16 +107,19 @@ def main() -> int:
     countdown_font_path = guiutils.get_font_path("OpenSans", variant="Bold")
     loaded_fonts = {}  # size → DPG font ID
 
-    with dpg.font_registry() as font_registry:
-        # Start with the reference font (120px) — small enough to fit and
-        # measure accurately in any viewport.  The startup callback loads
-        # the target font after estimating the required viewport size.
-        with dpg.font(countdown_font_path, reference_size) as ref_font:
-            pass  # default Latin-1 is sufficient for "00:00"
-        dpg.bind_font(ref_font)
-        loaded_fonts[reference_size] = ref_font
+    # For fonts ≤ reference_size, we load the target font directly — it's
+    # small enough to measure accurately in the initial 500×300 viewport.
+    # For fonts > reference_size, we start with the reference font and switch
+    # to the target in a frame callback after estimating the viewport size.
+    initial_font_size = min(font_size, reference_size)
 
-    countdown_font = ref_font
+    with dpg.font_registry() as font_registry:
+        with dpg.font(countdown_font_path, initial_font_size) as initial_font:
+            pass  # default Latin-1 is sufficient for "00:00"
+        dpg.bind_font(initial_font)
+        loaded_fonts[initial_font_size] = initial_font
+
+    countdown_font = initial_font
 
     def _load_countdown_font(size: int) -> int:
         """Load OpenSans Bold at `size`.  Cached; skips extended Unicode ranges."""
@@ -243,7 +246,7 @@ def main() -> int:
     # Frame 14: the viewport has settled — read its actual client dimensions,
     #           center the text, reveal it, and start the timer.
 
-    if font_size == reference_size:
+    if font_size <= reference_size:
         # Compensate for trailing glyph advance width in the text rect — the
         # visible ink is narrower than `get_item_rect_size` reports, making the
         # text look left-aligned.  We widen the viewport by `nudge` and let the
