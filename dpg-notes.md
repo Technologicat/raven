@@ -189,6 +189,103 @@ created mid-render-loop may end up behind earlier windows.
 
 ---
 
+# Font atlas limits
+
+DPG (via ImGui/stb_truetype) rasterizes every glyph in a font's character range
+into a single texture atlas. The atlas has a finite size, and exceeding it causes
+**silent glyph loss** — no error, no warning, just missing characters and wrong
+`get_item_rect_size` measurements.
+
+## `setup_font_ranges` and extended Unicode
+
+`raven.common.gui.fontsetup.setup_font_ranges()` adds `dpg.add_font_range(0x100, 0x2FFF)`
+— approximately 11,500 codepoints. This is fine at normal font sizes (20px), but at
+large sizes (600px+) the atlas overflows. Each glyph at 600px is roughly 350×600 pixels;
+11,500 of them need ~2.5 billion pixels of atlas space.
+
+**Workaround**: for apps that only need digits/ASCII at large sizes, skip
+`setup_font_ranges()` — load fonts directly with `dpg.font()`, which includes
+the default Latin-1 range (~224 codepoints).
+
+## Maximum font size
+
+Even with only the default Latin-1 range (~224 codepoints), the atlas overflows
+at font sizes above ~1200px. Empirically tested limits (2026-04-04, RTX 4090 /
+RTX 3070 Ti):
+
+| Font size | Latin-1 (224 chars) | Status |
+|-----------|---------------------|--------|
+| 600px     | ~20M pixels         | Works  |
+| 1000px    | ~56M pixels         | Works  |
+| 1200px    | ~80M pixels         | Works  |
+| 1400px    | ~134M pixels        | Fails (missing glyphs) |
+
+The conference timer caps at 1000px (`config.MAX_COUNTDOWN_FONT_SIZE`).
+
+## `add_font_chars` does not reduce the range
+
+`dpg.add_font_chars([...])` **adds** characters on top of the default Latin-1
+range — it cannot remove characters. The default range is always loaded.
+There is no way to load fewer than ~224 glyphs per font in DPG.
+
+## Failure mode
+
+When the atlas overflows:
+- Some glyphs silently fail to rasterize.
+- `get_item_rect_size` returns the size of whatever *did* render (clipped/wrapped).
+- DPG may fall back to the bound default font during atlas rebuilds, causing a
+  visible flash.
+- `bind_item_font` appears to succeed but the text renders with wrong/missing glyphs.
+
+## `guiutils.bootup` and atlas space
+
+`guiutils.bootup()` loads multiple fonts (Regular, Bold, Italic, BoldItalic,
+FontAwesome) with extended Unicode ranges at the standard 20px size. This is
+correct for scientific apps but wastes atlas space when large countdown-style
+fonts are also needed. The conference timer skips `bootup` entirely and loads
+only what it needs.
+
+## `bind_item_font` is queued, not immediate
+
+`bind_item_font` from a frame callback takes effect **after the callback returns**
+— it's queued as an internal DPG task. Calling `split_frame()` within the same
+callback does **not** force the font change; the next render still uses the old font.
+
+**Workaround**: use two separate frame callbacks (e.g. frames 10 and 12) — the
+first loads and binds the font, the second measures the text with the new font
+applied.
+
+## `get_item_rect_size` and text overflow
+
+When text overflows the primary window's content width, DPG wraps it. The
+`get_item_rect_size` for the text widget then returns the **wrapped** dimensions
+(width of the longest line, total height of all lines), not the full unwrapped
+text extent.
+
+**Workaround**: ensure the viewport is wide enough that the text doesn't wrap
+before calling `get_item_rect_size`. For large fonts where this isn't practical,
+measure a reference text at a smaller font size and use linear scaling (font
+metrics scale ~linearly with size, within ~1%).
+
+## `no_scrollbar=True`
+
+Without `no_scrollbar=True`, DPG reserves ~14px (`mvStyleVar_ScrollbarSize`)
+on the right side of the window for a potential scrollbar, even when no scrollbar
+is shown. This causes asymmetric margins. Adding `no_scrollbar=True` to the
+window eliminates the reservation.
+
+## Investigation history
+
+- 2026-04-04: Discovered during conference timer `--size` implementation.
+  Silent atlas overflow at 1711px caused text to render at default font size
+  with no error. Extended Unicode ranges (11k codepoints) overflow at ~600px.
+  `add_font_chars` confirmed to add, not replace.
+- 2026-04-05: Confirmed `bind_item_font` queuing behavior — `split_frame()`
+  in a frame callback cannot force font changes within the same callback.
+  Two-callback pattern (frames 10/12) is the reliable workaround.
+
+---
+
 # Raven DPG app structure
 
 Reference patterns for building DearPyGui apps in Raven (Librarian as primary reference).
