@@ -165,16 +165,20 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 
 <img src="img/conference-timer.png" alt="Screenshot of Raven-conference-timer" height=200/>
 
-- **Documentation**: WIP
-- **Goal**: A simple, large-font countdown timer for conference presentations.
+- **Documentation**: This is a very simple tool; this section is the full user manual.
+- **Goal**: A simple, large-font countdown timer for conference presentations and similar.
   - **Status**: :white_check_mark: Fully operational, usage: `raven-conference-timer 15:00`
 - **Features**:
   - Auto-sizes the window to fit the countdown text.
-  - Color changes at configurable thresholds: white → yellow → red → pulsating expired.
-  - Thresholds configurable via `--yellow` and `--red` (default 5:00 and 2:00).
-  - `--size N` sets the countdown font size in pixels (max 1000; DPG atlas limit).
-  - `Space` to pause/resume — the counter pulsates while paused.
-  - `Esc` to exit.
+    - `--size N` sets the countdown font size in pixels (default 500; max 1000, DPG atlas limit).
+  - Color changes at configurable thresholds: white → yellow → red → pulsating expired at a deeper red.
+    - Thresholds configurable via `--yellow` and `--red` (default 5:00 and 2:00).
+  - Both the main countdown time and the thresholds can use `mm:ss` (15:00) or bare minutes (15).
+  - Hotkeys:
+    - `Space` to pause/resume — the counter pulsates while paused.
+    - `F11` to toggle fullscreen mode. No text resize - this just removes distractions by dedicating the screen to the timer and its blank background.
+    - `F1` for help card.
+    - `Esc` to exit.
 
 
 ## Raven-server: Web API server
