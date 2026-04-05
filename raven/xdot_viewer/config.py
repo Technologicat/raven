@@ -56,3 +56,7 @@ GRAPHVIZ_ENGINES = ["[as-is]", "dot", "neato", "fdp", "sfdp", "circo", "twopi"]
 # Help card dimensions (pixels). Chosen to fit the content.
 HELP_WINDOW_W = 1400
 HELP_WINDOW_H = 760
+
+# Idle throttle — reduce frame rate when nothing needs updating.
+IDLE_SLEEP_S = 0.08   # ~12 fps when idle
+INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input

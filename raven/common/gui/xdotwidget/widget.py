@@ -456,6 +456,10 @@ class XDotWidget(gui_animation.Animation):
     # -------------------------------------------------------------------------
     # Animation and rendering
 
+    def is_animating(self) -> bool:
+        """Return True if any viewport or highlight animation is in progress."""
+        return self._viewport.is_animating() or self._highlight.is_animating()
+
     def render_frame(self, t: int) -> sym:
         """Adapter; hook for Raven's GUI animation system.
 

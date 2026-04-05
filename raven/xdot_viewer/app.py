@@ -64,6 +64,7 @@ _app_state = {
 
 _filedialog_open = None  # initialized after DPG setup
 _help_window = None  # initialized after DPG setup
+_last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 
 def _open_file_dialog_callback(selected_files):
@@ -465,8 +466,21 @@ def _check_file_reload() -> None:
         pass
 
 
+def _is_busy() -> bool:
+    """True when the render loop should run at full frame rate."""
+    if (time.monotonic_ns() - _last_input_ns) < config.INPUT_ACTIVE_S * 1e9:
+        return True
+    widget = _app_state["widget"]
+    if widget is not None and widget.is_animating():
+        return True
+    return False
+
+
 def _on_key(sender, app_data) -> None:
     """Handle keyboard shortcuts."""
+    global _last_input_ns
+    _last_input_ns = time.monotonic_ns()
+
     key = app_data
 
     widget = _app_state["widget"]
@@ -698,9 +712,16 @@ def main() -> int:
         # Status bar
         _app_state["status_text"] = dpg.add_text("Ready")
 
-    # Keyboard handler (global — applies to entire viewport)
+    # Input handlers (global — applies to entire viewport)
+    def _on_any_input(*_args):
+        global _last_input_ns
+        _last_input_ns = time.monotonic_ns()
+
     with dpg.handler_registry():
         dpg.add_key_press_handler(callback=_on_key)
+        dpg.add_mouse_move_handler(callback=_on_any_input)
+        dpg.add_mouse_click_handler(callback=_on_any_input)
+        dpg.add_mouse_wheel_handler(callback=_on_any_input)
 
     # --- Help card ---
     hotkey_info = (
@@ -810,6 +831,10 @@ def main() -> int:
             _poll_reload()
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()
+
+            # Idle throttle: sleep when nothing needs updating.
+            if not _is_busy():
+                time.sleep(config.IDLE_SLEEP_S)
     except KeyboardInterrupt:
         pass
 

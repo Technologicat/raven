@@ -195,6 +195,11 @@ class HighlightState:
 
             return 0.0
 
+    def is_animating(self) -> bool:
+        """Return True if any fade animations are in progress."""
+        with self._fading_lock:
+            return len(self._fading) > 0
+
     def update(self) -> bool:
         """Advance fade animations.
 
@@ -238,8 +243,3 @@ class HighlightState:
                         result.add(node)
 
             return result
-
-    def is_animating(self) -> bool:
-        """Return True if any fade animations are running."""
-        with self._fading_lock:
-            return len(self._fading) > 0

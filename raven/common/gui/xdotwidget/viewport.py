@@ -197,7 +197,7 @@ class Viewport:
         return animating
 
     def is_animating(self) -> bool:
-        """Return True if any value is still animating."""
+        """Return True if any pan/zoom animation is in progress."""
         return (self.pan_x.is_animating() or
                 self.pan_y.is_animating() or
                 self.zoom.is_animating())
