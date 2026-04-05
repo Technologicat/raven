@@ -211,15 +211,19 @@ def _update_status() -> None:
         n_lemon = triage.count(TriageState.LEMON)
         n_neutral = n - n_cherry - n_lemon
         if grid is not None and grid.filter_mode is not FilterMode.ALL:
-            count_str = f"{grid.visible_count} / {n} images ({_FILTER_LABELS[grid.filter_mode]})"
+            plural_s = "s" if n != 1 else ""
+            count_str = f"{grid.visible_count} / {n} image{plural_s} ({_FILTER_LABELS[grid.filter_mode]})"
         else:
-            count_str = f"{n} images"
+            plural_s = "s" if n != 1 else ""
+            count_str = f"{n} image{plural_s}"
         if n_cherry:
-            count_str += f", {n_cherry} cherries"
+            plural_s = "ies" if n_cherry != 1 else "y"
+            count_str += f", {n_cherry} cherr{plural_s}"
         if n_lemon:
-            count_str += f", {n_lemon} lemons"
+            plural_s = "s" if n_lemon != 1 else ""
+            count_str += f", {n_lemon} lemon{plural_s}"
         if n_neutral:
-            count_str += f", {n_neutral} untriaged"
+            count_str += f", {n_neutral} neutral"
         parts.append(count_str)
 
         # Selection indicator.
