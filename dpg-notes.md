@@ -367,3 +367,82 @@ Reference patterns for building DearPyGui apps in Raven (Librarian as primary re
 7. Create controller(s)
 8. Initial view render
 9. Start DPG event loop
+
+## Idle framerate throttling
+
+DPG's render loop runs at full GPU frame rate (typically 60 fps with vsync, or uncapped without). For apps with a mostly static GUI — where the user spends most time looking at results rather than interacting — this wastes CPU and GPU cycles, heats the machine, and drains laptop batteries.
+
+The pattern: detect whether anything actually needs updating, and `time.sleep()` in the render loop when idle. This drops the effective frame rate to ~12 fps when nothing is happening, then instantly returns to full speed on user input or animation.
+
+### Components
+
+**1. Configuration** (`config.py`):
+
+```python
+IDLE_SLEEP_S = 0.08    # ~12 fps when idle (1 / 0.08 ≈ 12.5)
+INPUT_ACTIVE_S = 0.5   # stay at full fps for this long after last user input
+```
+
+**2. Input timestamp tracking** — a module-level `_last_input_ns` updated by all input handlers:
+
+```python
+_last_input_ns: int = 0
+
+def _on_any_input(*_args):
+    global _last_input_ns
+    _last_input_ns = time.monotonic_ns()
+
+with dpg.handler_registry():
+    dpg.add_mouse_move_handler(callback=_on_any_input)
+    dpg.add_mouse_click_handler(callback=_on_any_input)
+    dpg.add_mouse_wheel_handler(callback=_on_any_input)
+    # Key handler also updates _last_input_ns (at the top of the handler body).
+```
+
+**3. Activity detector** — `_is_busy()` returns `True` when any of these hold:
+
+- Recent user input (within `INPUT_ACTIVE_S`)
+- GUI animations running (`gui_animation.animator.active_count > 0`)
+- Background pipeline producing results (app-specific: thumbnail loading, mip loading, etc.)
+- Visual effects in progress (resize flash, scroll countdown, etc.)
+
+Minimal version (xdot-viewer):
+
+```python
+def _is_busy() -> bool:
+    if (time.monotonic_ns() - _last_input_ns) < config.INPUT_ACTIVE_S * 1e9:
+        return True
+    if gui_animation.animator.active_count > 0:
+        return True
+    widget = _app_state["widget"]
+    if widget is not None and widget.is_animating():
+        return True
+    return False
+```
+
+**4. Render loop** — the sleep goes *after* `render_dearpygui_frame()`:
+
+```python
+while dpg.is_dearpygui_running():
+    # ... poll pipelines, update components ...
+    gui_animation.animator.render_frame()
+    dpg.render_dearpygui_frame()
+
+    if not _is_busy():
+        time.sleep(config.IDLE_SLEEP_S)
+```
+
+### Design notes
+
+- **Sleep after render, not before.** This way the last input event still gets a full-speed frame immediately, and the sleep only affects the *next* frame if still idle.
+- **`INPUT_ACTIVE_S = 0.5`** provides a grace period after the last input. This keeps tooltips, combo dropdowns, and hover highlights responsive — DPG needs a few frames after mouse-move to settle these. Too short and the UI feels sluggish; too long and the power savings are lost.
+- **`IDLE_SLEEP_S = 0.08`** (~12 fps) is a sweet spot: fast enough that the GUI doesn't feel frozen (cursor changes, repaints still happen reasonably quickly), slow enough to cut idle CPU/GPU usage dramatically.
+- **`time.sleep` precision**: on Linux, actual sleep granularity is ~1–4 ms (timer slack), so 80 ms sleeps are accurate enough. On Windows, default timer resolution is ~15.6 ms, which is still fine at this scale.
+- **Animations self-wake**: since `_is_busy()` checks `animator.active_count`, starting an animation (e.g. a fade or smooth scroll) automatically returns to full frame rate for the animation's duration.
+- **No explicit target FPS**: the pattern doesn't set a target frame rate. Full-speed mode runs at whatever vsync or the GPU provides; idle mode is governed by the sleep duration. This is simpler and more robust than trying to maintain a precise low FPS.
+
+### When to use
+
+Good candidates: apps with static content display (image viewers, graph viewers, document readers). Poor candidates: apps with continuous animation (real-time video, particle systems) — they're always busy anyway.
+
+Currently used in: `raven-cherrypick`, `raven-xdot-viewer`.

@@ -168,7 +168,7 @@ Raven's CLAUDE.md is growing long, which increases token cost per conversation a
 
 Goal: CLAUDE.md should be concise instructions and constraints, not an encyclopedia. Reference material goes in separate files that can be read on demand.
 
-Discovered during raven-cherrypick debugging session (2026-03-28).
+Discovered during raven-cherrypick debugging session (2026-03-28). Reinforced 2026-04-06: instruction volume caused Claude to lint a .md file despite existing memory saying not to.
 
 ## Audit typing: abstract parameter types, concrete return types
 
