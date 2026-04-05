@@ -127,11 +127,19 @@ class ThumbnailGrid:
         self._tile_labels: dict[int, str] = {}
 
         self._needs_rebuild = False
+        # Deferred scroll after rebuild: counts down frames to retry.
+        # DPG needs at least one render frame after item creation before
+        # get_y_scroll_max reflects the new content height; sometimes two.
+        self._scroll_countdown: int = 0
 
         # Compare mode overlay state.
         self._compare_badges: dict[int, int] = {}  # image_idx → badge number (1–9)
         self._compare_active_idx: int = -1  # currently cycling tile (-1 = none)
         self._compare_active_alpha: float = 0.0  # fade-out [0, 1]
+
+        # Beacon overlay (resize orientation flash).
+        self._beacon_idx: int = -1  # image index to flash (-1 = none)
+        self._beacon_alpha: float = 0.0  # fade-out [0, 1]
 
         # Deferred callbacks — fired from update() outside the lock.
         # Prevents grid._lock from being held across expensive work like
@@ -325,6 +333,31 @@ class ThumbnailGrid:
             if prev >= 0:
                 self._redraw_tile_by_idx(prev)
 
+    # --- Beacon (resize orientation flash) ---
+
+    def set_beacon(self, idx: int, alpha: float) -> None:
+        """Highlight a tile with a fade-out beacon overlay.
+
+        *idx*: image index to flash.
+        *alpha*: intensity [0, 1], driven from the app render loop.
+        """
+        with self._lock:
+            prev = self._beacon_idx
+            self._beacon_idx = idx
+            self._beacon_alpha = alpha
+            if prev >= 0 and prev != idx:
+                self._redraw_tile_by_idx(prev)
+            self._redraw_tile_by_idx(idx)
+
+    def clear_beacon(self) -> None:
+        """Remove the beacon highlight."""
+        with self._lock:
+            prev = self._beacon_idx
+            self._beacon_idx = -1
+            self._beacon_alpha = 0.0
+            if prev >= 0:
+                self._redraw_tile_by_idx(prev)
+
     @property
     def current(self) -> int:
         """Index of the current image, or -1."""
@@ -490,6 +523,11 @@ class ThumbnailGrid:
             if self._needs_rebuild:
                 self._rebuild()
                 self._needs_rebuild = False
+            elif self._scroll_countdown > 0:
+                # Deferred scroll: retry for a few frames after rebuild,
+                # giving DPG time to settle get_y_scroll_max.
+                self._scroll_to_current()
+                self._scroll_countdown -= 1
             if self._pending_current_changed is not None:
                 pending_current = self._pending_current_changed
                 self._pending_current_changed = None
@@ -594,7 +632,10 @@ class ThumbnailGrid:
             # Draw tile contents.
             self._draw_tile(idx, dl_tag)
 
-        self._scroll_to_current()
+        # Defer scroll — DPG needs a render frame (sometimes two) after
+        # item creation before get_y_scroll_max reflects the new content.
+        # Retry for a few frames to be safe.
+        self._scroll_countdown = 3
 
     def _draw_tile(self, idx: int, drawlist_tag: str) -> None:
         """Draw a single tile's contents on its drawlist."""
@@ -659,10 +700,30 @@ class ThumbnailGrid:
             if icon_item is not None:
                 dpg.bind_item_font(icon_item, self._icon_font)
 
+        # Position number (lower-left corner).
+        if idx in self._visible:
+            vis_pos = self._visible.index(idx)
+            num_text = str(vis_pos + 1)
+            num_size = max(10, min(14, ts // 8))
+            # Positioned inside the border (2px) with a small margin.
+            nx = 4
+            ny = ts - num_size - 4
+            dpg.draw_text((nx, ny), num_text,
+                          color=(255, 255, 255, 120), size=num_size,
+                          parent=drawlist_tag)
+
         # Compare mode: active tile highlight.
         if idx == self._compare_active_idx and self._compare_active_alpha > 0:
             r, g, b, a_max = config.COMPARE_FADE_COLOR
             a = int(a_max * self._compare_active_alpha)
+            dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
+                               fill=(r, g, b, a),
+                               parent=drawlist_tag)
+
+        # Beacon overlay (resize orientation flash).
+        if idx == self._beacon_idx and self._beacon_alpha > 0:
+            r, g, b, a_max = config.BEACON_COLOR
+            a = int(a_max * self._beacon_alpha)
             dpg.draw_rectangle(pmin=(0, 0), pmax=(ts - 1, ts - 1),
                                fill=(r, g, b, a),
                                parent=drawlist_tag)

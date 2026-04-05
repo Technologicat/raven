@@ -72,6 +72,7 @@ _debug = False
 _preload_pending = False
 _prev_current_idx = -1
 _noise_pool_pending_size = None  # deferred noise pool regeneration (tile size)
+_beacon_start_ns: int = 0  # monotonic_ns timestamp of last resize (0 = inactive)
 
 # Validated at startup.
 _device = None
@@ -151,14 +152,13 @@ def _update_status() -> None:
     iv = _app_state["image_view"]
 
     if triage is not None and len(triage) > 0:
-        # Current filename and position.
         idx = grid.current if grid is not None else -1
+
+        # Position indicator (most glanceable info first).
         if 0 <= idx < len(triage):
-            name = triage[idx].filename
             if grid is not None and idx in grid.visible:
                 pos = grid.visible.index(idx) + 1
-                name += f"  [{pos} / {grid.visible_count}]"
-            parts.append(name)
+                parts.append(f"[{pos} / {grid.visible_count}]")
 
         # Image dimensions and aspect ratio.
         if iv is not None and iv.has_image:
@@ -166,13 +166,19 @@ def _update_status() -> None:
             ratio = _approx_aspect_ratio(w, h)
             parts.append(f"{w}\u00d7{h} ({ratio})" if ratio else f"{w}\u00d7{h}")
 
-            # Zoom level.
+        # Zoom level.
+        if iv is not None and iv.has_image:
             parts.append(f"Zoom: {iv.zoom * 100:.0f}%")
+
+        # Filename.
+        if 0 <= idx < len(triage):
+            parts.append(triage[idx].filename)
 
         # Counts + filter indicator.
         n = len(triage)
         n_cherry = triage.count(TriageState.CHERRY)
         n_lemon = triage.count(TriageState.LEMON)
+        n_neutral = n - n_cherry - n_lemon
         if grid is not None and grid.filter_mode is not FilterMode.ALL:
             count_str = f"{grid.visible_count} / {n} images ({_FILTER_LABELS[grid.filter_mode]})"
         else:
@@ -181,6 +187,8 @@ def _update_status() -> None:
             count_str += f", {n_cherry} cherries"
         if n_lemon:
             count_str += f", {n_lemon} lemons"
+        if n_neutral:
+            count_str += f", {n_neutral} untriaged"
         parts.append(count_str)
 
         # Selection indicator.
@@ -232,6 +240,7 @@ def _open_folder(folder_path: str) -> None:
 
     # Load the first image in the main view.
     _load_current_image()
+    _sync_triage_mark()
 
     # Update window title.
     dpg.set_viewport_title(f"raven-cherrypick {__version__} \u2014 {folder.name}")
@@ -390,7 +399,36 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
     for idx in indices:
         grid.update_triage_state(idx, triage[idx].state)
 
+    # Sync triage mark overlay if current image was affected.
+    _sync_triage_mark()
     _update_status()
+
+
+def _sync_triage_mark() -> None:
+    """Push the current image's triage state to the imageview overlay."""
+    iv = _app_state["image_view"]
+    triage = _app_state["triage"]
+    grid = _app_state["grid"]
+    if iv is None or triage is None or grid is None:
+        return
+    idx = grid.current
+    if 0 <= idx < len(triage):
+        iv.set_triage_state(triage[idx].state)
+    else:
+        iv.set_triage_state(TriageState.NEUTRAL)
+
+
+def _toggle_triage_mark() -> None:
+    """Toggle the triage mark overlay on the main image view."""
+    iv = _app_state["image_view"]
+    if iv is None:
+        return
+    iv.show_triage_mark = not iv.show_triage_mark
+    # Sync toolbar button icon.
+    taf = _app_state["themes_and_fonts"]
+    icon = fa.ICON_EYE if iv.show_triage_mark else fa.ICON_EYE_SLASH
+    dpg.set_item_label("cherrypick_triage_mark_btn", icon)
+    dpg.bind_item_font("cherrypick_triage_mark_btn", taf.icon_font_solid)
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +535,7 @@ def _on_current_changed(idx: int) -> None:
     """Called by the grid when the current tile changes."""
     global _prev_current_idx
     _load_current_image()
+    _sync_triage_mark()
     _prev_current_idx = idx
 
 
@@ -542,6 +581,13 @@ def _resize_gui(*_args) -> None:
         iv.set_size(iv_w, iv_h)
     if grid is not None and grid_w > 0 and grid_h > 0:
         grid.set_size(grid_w, grid_h)
+
+    # Start (or restart) the beacon flash on the current tile.
+    # Restarting on every resize event means the flash happens after
+    # resizing settles, not during the drag.
+    global _beacon_start_ns
+    if grid is not None and grid.current >= 0:
+        _beacon_start_ns = time.monotonic_ns()
 
 
 def _toggle_fullscreen(*_args) -> None:
@@ -706,6 +752,8 @@ def _on_key(sender, app_data) -> None:
         _mark_triage(TriageState.CHERRY)
     elif key == dpg.mvKey_V:
         _mark_triage(TriageState.NEUTRAL)
+    elif key == dpg.mvKey_T:
+        _toggle_triage_mark()
 
     # Jump to next/prev by triage state (B/N/M mirror X/C/V, one column right).
     # Only in "All" view — when filtered, arrow keys already navigate that state only.
@@ -1111,6 +1159,15 @@ def main() -> int:
             with dpg.tooltip(btn):
                 dpg.add_text("Clear mark (Neutral) [V]\n    with Ctrl: all selected")
 
+            btn = dpg.add_button(
+                label=fa.ICON_EYE if config.TRIAGE_MARK_DEFAULT_VISIBLE else fa.ICON_EYE_SLASH,
+                tag="cherrypick_triage_mark_btn",
+                callback=lambda: _toggle_triage_mark(),
+                width=30)
+            dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
+            with dpg.tooltip(btn):
+                dpg.add_text("Toggle triage mark on image [T]")
+
             dpg.add_spacer(width=8)
 
             # Compare mode button.
@@ -1210,6 +1267,16 @@ def main() -> int:
         themes_and_fonts, 72, "OpenSans", "Bold")
     image_view.set_overlay_font(overlay_font)
 
+    # --- Triage mark icon font (2× default for readability) ---
+    _triage_mark_font_key = f"fa6_solid_{config.TRIAGE_MARK_FONT_SIZE}"
+    if _triage_mark_font_key not in themes_and_fonts:
+        with dpg.font(guiutils.get_font_path(fa.FONT_ICON_FILE_NAME_FAS, variant=None),
+                      config.TRIAGE_MARK_FONT_SIZE,
+                      parent=themes_and_fonts.font_registry) as _triage_mark_font:
+            dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
+        themes_and_fonts[_triage_mark_font_key] = _triage_mark_font
+    image_view.set_triage_mark_font(themes_and_fonts[_triage_mark_font_key])
+
     # --- Compare mode ---
     _app_state["compare"] = CompareMode(
         get_image_view=namelambda("get_image_view")(lambda: _app_state["image_view"]),
@@ -1235,6 +1302,7 @@ def main() -> int:
         env(key_indent=1, key="Ctrl+X", action_indent=1, action="...all selected", notes=""),
         env(key_indent=0, key="V", action_indent=0, action="Clear mark", notes=""),
         env(key_indent=1, key="Ctrl+V", action_indent=1, action="...all selected", notes=""),
+        env(key_indent=0, key="T", action_indent=0, action="Toggle triage mark", notes="On main image"),
         helpcard.hotkey_blank_entry,
         env(key_indent=0, key="B / Shift+B", action_indent=0, action="Next / prev lemon", notes="All view only; wraps"),
         env(key_indent=0, key="N / Shift+N", action_indent=0, action="Next / prev cherry", notes="All view only; wraps"),
@@ -1362,7 +1430,7 @@ def main() -> int:
 
             # Trigger preloading once the current image finishes loading.
             # Suppressed during compare mode (preload is managing compare set).
-            global _preload_pending
+            global _preload_pending, _beacon_start_ns
             preload = _app_state["preload"]
             triage = _app_state["triage"]
             if (compare is None or not compare.active):
@@ -1372,6 +1440,18 @@ def main() -> int:
                     _preload_pending = False
                     preload.schedule_neighbors(grid.current, grid.visible,
                                                grid.n_cols, triage)
+
+            # Beacon fade (resize orientation flash).
+            if _beacon_start_ns > 0 and grid is not None:
+                elapsed = (time.monotonic_ns() - _beacon_start_ns) / 1e9
+                if elapsed < config.BEACON_DURATION:
+                    # Cosine-squared fade: 1 → 0 over the duration.
+                    t = elapsed / config.BEACON_DURATION
+                    alpha = gui_animation.pulsation_envelope(t * 0.5)  # half-cycle: 1→0
+                    grid.set_beacon(grid.current, alpha)
+                else:
+                    grid.clear_beacon()
+                    _beacon_start_ns = 0
 
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()

@@ -35,7 +35,9 @@ from ..common.bgtask import TaskManager
 from ..common.gui import utils as guiutils
 from ..common.image import lanczos
 from ..common.image import utils as imageutils
+from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from . import config
+from .triage import TriageState
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +136,11 @@ class ImageView:
         # Compare mode: overlay number (None = hidden, 1–9 = visible).
         self._overlay_number: Optional[int] = None
         self._overlay_font = None  # set via set_overlay_font()
+
+        # Triage mark overlay (top-right icon showing cherry/lemon state).
+        self._triage_state: TriageState = TriageState.NEUTRAL
+        self._show_triage_mark: bool = config.TRIAGE_MARK_DEFAULT_VISIBLE
+        self._triage_mark_font = None  # set via set_triage_mark_font()
 
         # Create DPG drawlist inside a wrapper child_window (for spinner overlay).
         # child_window has fixed height, so the spinner doesn't affect layout
@@ -486,6 +493,33 @@ class ImageView:
     def clear_overlay(self) -> None:
         """Hide the compare mode number overlay."""
         self.set_overlay_number(None)
+
+    # --- Triage mark overlay ---
+
+    def set_triage_mark_font(self, font_id) -> None:
+        """Set the icon font for the triage mark overlay.
+
+        Call once at startup with a FontAwesome solid font loaded at
+        ``config.TRIAGE_MARK_FONT_SIZE``.
+        """
+        self._triage_mark_font = font_id
+
+    def set_triage_state(self, state: TriageState) -> None:
+        """Update the triage state shown by the mark overlay."""
+        if state != self._triage_state:
+            self._triage_state = state
+            self._needs_render = True
+
+    @property
+    def show_triage_mark(self) -> bool:
+        """Whether the triage mark overlay is visible."""
+        return self._show_triage_mark
+
+    @show_triage_mark.setter
+    def show_triage_mark(self, value: bool) -> None:
+        if value != self._show_triage_mark:
+            self._show_triage_mark = value
+            self._needs_render = True
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -899,6 +933,27 @@ class ImageView:
                                       color=config.CURRENT_COLOR,
                                       thickness=2,
                                       parent=self._drawlist_tag)
+            new_items.append(item)
+
+        # Triage mark overlay (top-right icon: cherry star or lemon).
+        if (self._show_triage_mark
+                and self._triage_mark_font is not None
+                and self._triage_state is not TriageState.NEUTRAL):
+            if self._triage_state is TriageState.CHERRY:
+                mark_icon = fa.ICON_STAR
+                r, g, b, _a = config.CHERRY_COLOR
+            else:
+                mark_icon = fa.ICON_LEMON
+                r, g, b = 180, 180, 180
+            mark_size = config.TRIAGE_MARK_FONT_SIZE
+            margin = 12
+            ix = self._view_w - mark_size - margin
+            iy = margin
+            item = dpg.draw_text(
+                (ix, iy), mark_icon,
+                color=(r, g, b, 160), size=mark_size,
+                parent=self._drawlist_tag)
+            dpg.bind_item_font(item, self._triage_mark_font)
             new_items.append(item)
 
         # Compare mode number overlay (top-right, near the grid).

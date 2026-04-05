@@ -133,3 +133,17 @@ PAGE_JUMP_ROWS = 0
 
 HELP_WINDOW_W = 1400
 HELP_WINDOW_H = 760
+
+# ---------------------------------------------------------------------------
+# Triage mark overlay (main image view)
+# ---------------------------------------------------------------------------
+
+TRIAGE_MARK_FONT_SIZE = 2 * FONT_SIZE  # 40px — large enough to read at a glance
+TRIAGE_MARK_DEFAULT_VISIBLE = True  # show by default
+
+# ---------------------------------------------------------------------------
+# Resize beacon (grid)
+# ---------------------------------------------------------------------------
+
+BEACON_DURATION = 0.6  # seconds, fade-out after resize settles
+BEACON_COLOR = (80, 160, 255, 160)  # same blue family as CURRENT_COLOR
