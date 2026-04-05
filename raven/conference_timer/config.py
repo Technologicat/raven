@@ -3,8 +3,9 @@
 # GUI font size for non-countdown elements (help card, etc.).
 GUI_FONT_SIZE = 20
 
-# Default countdown font size (pixels).
-COUNTDOWN_FONT_SIZE = 120
+# Default countdown font size (pixels).  500px is large enough for the help
+# card to fit inside the viewport, and readable from across a room.
+COUNTDOWN_FONT_SIZE = 500
 
 # Maximum countdown font size (pixels).  DPG rasterizes each Latin-1 glyph
 # into a font atlas texture; above ~1200px the atlas silently overflows.
