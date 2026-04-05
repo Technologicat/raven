@@ -122,7 +122,7 @@ class XDotWidget(gui_animation.Animation):
         # Follow-edge indicator: screen coords of the endpoint to highlight, or None
         self._follow_indicator_pos: Optional[Point] = None
 
-        # Tooltip window for node annotations (e.g. pyan3 --annotated output).
+        # Tooltip window for node annotations (e.g. pyan3 tooltips).
         # Created here (before the render loop) so it gets correct z-order
         # (DPG renders windows in creation order; primary window is background).
         self._tooltip_window = dpg.add_window(
