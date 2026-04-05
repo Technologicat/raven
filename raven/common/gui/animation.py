@@ -43,8 +43,8 @@ class Animator:
 
         Use the global `animator` instance from this module; don't create your own.
         """
-        self.animations = []
-        self.animation_list_lock = threading.RLock()
+        self._animations = []
+        self._lock = threading.RLock()
 
     def add(self, animation: "Animation") -> "Animation":
         """Register a new `Animation` instance, so that our `render_frame` will call its `render_frame` method.
@@ -53,9 +53,9 @@ class Animator:
 
         For convenience, returns `animation`.
         """
-        with self.animation_list_lock:
+        with self._lock:
             animation.reset()  # set the animation start time
-            self.animations.append(animation)
+            self._animations.append(animation)
         return animation
 
     def cancel(self, animation: "Animation", finalize: bool = True) -> "Animation":
@@ -74,11 +74,11 @@ class Animator:
 
         For convenience, returns `animation`.
         """
-        with self.animation_list_lock:
+        with self._lock:
             if finalize:
                 animation.finish()
             try:
-                self.animations.remove(animation)  # uses default comparison by `id()` since `Animation` has no `__eq__` operator
+                self._animations.remove(animation)  # uses default comparison by `id()` since `Animation` has no `__eq__` operator
             except ValueError:  # not in list
                 logger.debug(f"Animator.cancel: specified {animation} is not in the animation registry (maybe already finished?), skipping removal.")
         return animation
@@ -98,10 +98,10 @@ class Animator:
                 animator.render_frame()
                 dpg.render_dearpygui_frame()
         """
-        with self.animation_list_lock:
+        with self._lock:
             time_now = time.monotonic_ns()
             running_animations = []
-            for animation in self.animations:
+            for animation in self._animations:
                 action = animation.render_frame(t=time_now)
                 if action is action_continue:
                     running_animations.append(animation)
@@ -111,18 +111,24 @@ class Animator:
                     pass  # when cancelled, do nothing, just remove the animation
                 else:
                     raise ValueError(f"Animator.render_frame: animation {animation} returned unknown action {action}, expected one of the `raven.common.gui.animation.action_X` constants (where X is 'continue', 'finish', or 'cancel').")
-            self.animations.clear()
-            self.animations.extend(running_animations)
+            self._animations.clear()
+            self._animations.extend(running_animations)
+
+    @property
+    def active_count(self) -> int:
+        """Number of currently registered (running) animations."""
+        with self._lock:
+            return len(self._animations)
 
     def clear(self) -> None:
         """Terminate all registered animations and clear the list of registered animations.
 
         To terminate a specific animation (by object instance), see `cancel`.
         """
-        with self.animation_list_lock:
-            for animation in self.animations:
+        with self._lock:
+            for animation in self._animations:
                 animation.finish()
-            self.animations.clear()
+            self._animations.clear()
 animator = Animator()
 
 class Animation:

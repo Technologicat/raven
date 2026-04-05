@@ -147,3 +147,10 @@ TRIAGE_MARK_DEFAULT_VISIBLE = True  # show by default
 
 BEACON_DURATION = 0.6  # seconds, fade-out after resize settles
 BEACON_COLOR = (80, 160, 255, 160)  # same blue family as CURRENT_COLOR
+
+# ---------------------------------------------------------------------------
+# Idle throttle
+# ---------------------------------------------------------------------------
+
+IDLE_SLEEP_S = 0.08  # ~12 fps when idle
+INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input

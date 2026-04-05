@@ -73,6 +73,7 @@ _preload_pending = False
 _prev_current_idx = -1
 _noise_pool_pending_size = None  # deferred noise pool regeneration (tile size)
 _beacon_start_ns: int = 0  # monotonic_ns timestamp of last resize (0 = inactive)
+_last_input_ns: int = 0  # monotonic_ns timestamp of last user input
 
 # Validated at startup.
 _device = None
@@ -101,6 +102,36 @@ def _detect_preload_budget() -> int:
                        "using fallback %d MB",
                        exc, config.PRELOAD_RAM_BUDGET_FALLBACK_MB)
         return config.PRELOAD_RAM_BUDGET_FALLBACK_MB
+
+
+# ---------------------------------------------------------------------------
+# Idle throttle
+# ---------------------------------------------------------------------------
+
+def _is_busy() -> bool:
+    """True when the render loop should run at full frame rate."""
+    # Recent user input — covers tooltips, combos, and general responsiveness.
+    if (time.monotonic_ns() - _last_input_ns) < config.INPUT_ACTIVE_S * 1e9:
+        return True
+    compare = _app_state["compare"]
+    if compare is not None and compare.active:
+        return True
+    if _beacon_start_ns > 0:
+        return True
+    pipeline = _app_state["pipeline"]
+    if pipeline is not None and pipeline.in_progress:
+        return True
+    iv = _app_state["image_view"]
+    if iv is not None and iv.mip_loading:
+        return True
+    grid = _app_state["grid"]
+    if grid is not None and (grid._needs_rebuild or grid._scroll_countdown > 0):
+        return True
+    if _noise_pool_pending_size is not None:
+        return True
+    if gui_animation.animator.active_count > 0:
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -619,6 +650,9 @@ def _toggle_zoom_fit_cap() -> None:
 
 def _on_key(sender, app_data) -> None:
     """Global keyboard shortcut handler."""
+    global _last_input_ns
+    _last_input_ns = time.monotonic_ns()
+
     key = app_data
     iv = _app_state["image_view"]
     grid = _app_state["grid"]
@@ -1288,9 +1322,16 @@ def main() -> int:
         update_status_fn=_update_status,
     )
 
-    # --- Hotkey handler ---
+    # --- Input handlers ---
+    def _on_any_input(*_args):
+        global _last_input_ns
+        _last_input_ns = time.monotonic_ns()
+
     with dpg.handler_registry():
         dpg.add_key_press_handler(callback=_on_key)
+        dpg.add_mouse_move_handler(callback=_on_any_input)
+        dpg.add_mouse_click_handler(callback=_on_any_input)
+        dpg.add_mouse_wheel_handler(callback=_on_any_input)
 
     # --- Help card ---
     hotkey_info = (
@@ -1455,6 +1496,11 @@ def main() -> int:
 
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()
+
+            # Idle throttle: sleep when nothing needs updating.
+            # Cuts GPU/CPU usage when the user is just looking at an image.
+            if not _is_busy():
+                time.sleep(config.IDLE_SLEEP_S)
     except KeyboardInterrupt:
         pass
 
