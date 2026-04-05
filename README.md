@@ -126,6 +126,9 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - **Status**: :white_check_mark: Fully operational prototype, usage: `raven-xdot-viewer myfile.xdot`
 - **Features**:
   - Animated GUI, easy for pair work.
+  - Layout engine switching.
+    - If GraphViz is installed, the graph layout can be re-rendered with `dot`, `neato`, `fdp`, `sfdp`, `circo`, or `twopi`.
+    - `.xdot` files can also be rendered as-is, using the existing layout information from the file.
   - Click on the end of an edge to follow it.
     - Click *on an edge* to jump between zoom-to-edge and its endpoint nodes.
   - Incremental fragment search for node/edge labels, like in *Visualizer*.
