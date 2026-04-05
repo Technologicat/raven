@@ -79,7 +79,7 @@ class XDotWidget(gui_animation.Animation):
                                      Receives (text, available_width_px).
                                      Must return compacted text.
         `mouse_wheel_zoom_factor`: Zoom factor per mouse wheel notch.
-        `on_open_url`: Callback when a node with a URL is double-clicked.
+        `on_open_url`: Callback when a node with a URL is right-clicked.
                         Receives the URL string.
         `dark_mode`: If True, invert graph lightness for dark backgrounds.
         `dark_bg_color`: Background color in dark mode (DPG format, [0,255]).
