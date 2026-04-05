@@ -48,7 +48,12 @@ with timer() as tim:
     from ...vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa  # https://github.com/juliettef/IconFontCppHeaders
     from ...vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
+    from unpythonic.env import env
+
+    from ...vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
+
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
+    from ...common.gui import helpcard
     from ...common.gui import messagebox
     from ...common.gui import utils as guiutils
     from ...common import utils as common_utils
@@ -398,10 +403,11 @@ video_recorder = AvatarVideoRecorder()
 def is_any_modal_window_visible():
     """Return whether *some* modal window is open.
 
-    Currently these are file dialogs.
+    Currently these are file dialogs and the help card.
     """
     return (is_open_input_image_dialog_visible() or is_open_json_dialog_visible() or
-            is_animator_settings_dialog_visible() or is_save_animator_settings_dialog_visible())
+            is_animator_settings_dialog_visible() or is_save_animator_settings_dialog_visible() or
+            (_help_window is not None and _help_window.is_visible()))
 
 class PostprocessorSettingsEditorGUI:
     """Main app window for the postprocessor settings editor for `raven.avatar`."""
@@ -452,7 +458,9 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_text("REC", tag="recording_text")
 
                 with dpg.child_window(width=self.button_width + 16, autosize_y=True):
-                    dpg.add_button(label="Fullscreen/windowed [F11]", width=self.button_width, callback=toggle_fullscreen, tag="fullscreen_button")
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="Fullscreen [F11]", width=self.button_width - 80, callback=toggle_fullscreen, tag="fullscreen_button")
+                        dpg.add_button(label="Help [F1]", width=72, callback=lambda: _help_window.show() if _help_window is not None else None, tag="help_button")
                     dpg.add_spacer(height=8)
 
                     with dpg.group(horizontal=True):
@@ -1310,7 +1318,10 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
     #
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
     else:
-        if key == dpg.mvKey_F11:
+        if key == dpg.mvKey_F1:
+            if _help_window is not None:
+                _help_window.show()
+        elif key == dpg.mvKey_F11:
             toggle_fullscreen()
         else:
             # {widget_tag_or_id: list_of_choices}
@@ -1341,6 +1352,49 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
                 browse(focused_item, combobox_choice_map[focused_item])
 with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="avatar_settings_editor_hotkeys_handler", callback=avatar_settings_editor_hotkeys_callback)
+
+# --------------------------------------------------------------------------------
+# Help card (F1)
+
+hotkey_info = (
+    # Column 1: file operations
+    env(key_indent=0, key="Ctrl+O", action_indent=0, action="Load character image", notes=""),
+    env(key_indent=0, key="Ctrl+R", action_indent=0, action="Refresh character image", notes=""),
+    env(key_indent=0, key="Ctrl+B", action_indent=0, action="Load backdrop image", notes=""),
+    helpcard.hotkey_blank_entry,
+    env(key_indent=0, key="Ctrl+Shift+E", action_indent=0, action="Load emotion templates", notes=""),
+    env(key_indent=0, key="Ctrl+Shift+A", action_indent=0, action="Load animator settings", notes=""),
+    env(key_indent=0, key="Ctrl+Shift+S", action_indent=0, action="Save animator settings", notes=""),
+
+    helpcard.hotkey_new_column,
+
+    # Column 2: controls & app
+    env(key_indent=0, key="Ctrl+T", action_indent=0, action="Toggle talking animation", notes="Non-lipsynced"),
+    env(key_indent=0, key="Ctrl+P", action_indent=0, action="Toggle animator paused", notes=""),
+    env(key_indent=0, key="Ctrl+S", action_indent=0, action="Speak / stop speaking", notes=""),
+    env(key_indent=0, key="Ctrl+E", action_indent=0, action="Focus emotion chooser", notes=""),
+    env(key_indent=0, key="Ctrl+V", action_indent=0, action="Focus voice chooser", notes=""),
+    env(key_indent=1, key="Up / Down", action_indent=0, action="Previous / next choice", notes="While focused"),
+    env(key_indent=1, key="Home / End", action_indent=0, action="First / last choice", notes="While focused"),
+    helpcard.hotkey_blank_entry,
+    env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
+    env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
+)
+
+def _render_help_extras(self: helpcard.HelpWindow, gui_parent) -> None:
+    """Render app-specific extra information into the help card."""
+    dpg_markdown.add_text(f"{self.c_hed}**Lipsynced speech**{self.c_end}", parent=gui_parent)
+    g = dpg.add_group(parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_txt}Speaking through the TTS (**Ctrl+S**) automatically activates lipsynced talking animation.\n"
+                          f"The avatar's mouth movements are driven by phoneme timestamps from the TTS engine.{self.c_end}",
+                          parent=g)
+
+_help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
+                                   width=1100,
+                                   height=560,
+                                   reference_window="avatar_settings_editor_main_window",
+                                   themes_and_fonts=themes_and_fonts,
+                                   on_render_extras=_render_help_extras)
 
 # --------------------------------------------------------------------------------
 # Start the app
