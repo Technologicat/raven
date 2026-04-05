@@ -336,7 +336,8 @@ Reference patterns for building DearPyGui apps in Raven (Librarian as primary re
 - **Fonts**: Default + icon fonts (FontAwesome), loaded at startup.
 - **Animations**: `PulsatingColor` (cyclic) and `ButtonFlash` (one-shot) via `raven.common.gui.animation` global `animator` singleton.
 - **Hotkeys**: Registered via `dpg.add_key_*_handler` in a handler registry.
-- **Help card**: Each GUI app should have a help card (built with `raven.common.gui.helpcard`). Currently present in Librarian, Visualizer, and raven-xdot-viewer; some apps are still missing theirs.
+- **Help card (F1)**: Every GUI app should have a help card (built with `raven.common.gui.helpcard`). Apps that skip `bootup` can pass a `gui_font` parameter to `HelpWindow` for the correct text size. Currently present in Librarian, Visualizer, Cherrypick, XDot Viewer, Conference Timer, and Avatar Settings Editor. The Avatar Pose Editor is still missing its help card.
+- **Fullscreen (F11)**: Toggle via `dpg.toggle_viewport_fullscreen()` + `resize_gui()`. Standard pattern: `_toggle_fullscreen` calls both, `resize_gui` waits for size to settle via `wait_for_resize`, then calls `_resize_gui` to relayout.
 
 ## Background work and thread safety
 
