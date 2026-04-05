@@ -204,7 +204,7 @@ Discovered during tooltip feature development (2026-04-03).
 
 ## Add F1 help card to Avatar pose editor
 
-The pose editor is the last GUI app missing an F1 help card. It already has F11 fullscreen support. Follow the same pattern as the settings editor (add helpcard import, hotkey_info tuple, HelpWindow instance, F1 in keyboard handler, help button in toolbar). Check what hotkeys exist in the pose editor to populate the help card content.
+The pose editor is the last GUI app missing an F1 help card. Follow the same pattern as the settings editor (add helpcard import, hotkey_info tuple, HelpWindow instance, F1 in keyboard handler, help button in toolbar). Check what hotkeys exist in the pose editor to populate the help card content. F11 fullscreen is not needed for this app.
 
 Discovered during F1/F11 consistency pass (2026-04-06).
 
