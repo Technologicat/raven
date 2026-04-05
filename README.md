@@ -130,6 +130,8 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
     - Click *on an edge* to jump between zoom-to-edge and its endpoint nodes.
   - Incremental fragment search for node/edge labels, like in *Visualizer*.
   - Supports fills, line styles, beziers, etc.
+  - Supports the `tooltip` attribute, rendered as a tooltip (multiline plain text).
+  - Supports the `URL` attribute on nodes. Right-clicking a node that has an URL (shown in the status bar) opens the URL in the default web browser.
   - Optional dark mode to reduce eye strain.
     - Node hue preserved, lightness flipped.
     - In dark mode, text color adapts based on perceived luminance (ITU-R BT.709) of the background.
