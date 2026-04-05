@@ -26,7 +26,10 @@ with timer() as tim:
 
     import dearpygui.dearpygui as dpg
 
+    from unpythonic.env import env
+
     from ..common.gui import animation as gui_animation
+    from ..common.gui import helpcard
     from ..common.gui import utils as guiutils
 
     from . import config
@@ -95,12 +98,12 @@ def main() -> int:
 
     # --- DPG bootup ---
     #
-    # We skip `guiutils.bootup` — the timer doesn't need FontAwesome, Markdown,
-    # or the disabled-button themes.  More importantly, `bootup` binds a 20px
-    # default font with extended Unicode ranges (~11k codepoints), which wastes
-    # atlas space at large countdown sizes and causes a visible flash when
-    # switching fonts (DPG briefly falls back to the bound default during atlas
-    # rebuild).  Instead, we load only what the timer needs.
+    # We skip `guiutils.bootup` — its default font (20px with ~11k extended
+    # Unicode codepoints) causes a visible flash when switching fonts at large
+    # countdown sizes (DPG briefly falls back to the bound default during atlas
+    # rebuild).  Instead, we load only the countdown font (Latin-1), and call
+    # `setup_markdown` directly for the help card (markdown fonts are lazy-loaded,
+    # so no atlas rebuild until F1 is actually pressed).
     dpg.create_context()
 
     reference_size = config.COUNTDOWN_FONT_SIZE
@@ -120,6 +123,15 @@ def main() -> int:
         loaded_fonts[initial_font_size] = initial_font
 
     countdown_font = initial_font
+
+    # Set up Markdown renderer and a small GUI font for the help card.
+    # Markdown fonts are loaded lazily (no atlas rebuild until F1 is pressed).
+    # The GUI font is needed because the DPG default is the large countdown font.
+    guiutils.setup_markdown(font_registry, font_size=config.GUI_FONT_SIZE)
+    guiutils.setup_themes()  # rounded corners for the help card
+    gui_font_path = guiutils.get_font_path("OpenSans", variant="Regular")
+    with dpg.font(gui_font_path, config.GUI_FONT_SIZE, parent=font_registry) as gui_font:
+        pass  # Latin-1 is sufficient for help card text
 
     def _load_countdown_font(size: int) -> int:
         """Load OpenSans Bold at `size`.  Cached; skips extended Unicode ranges."""
@@ -208,12 +220,49 @@ def main() -> int:
     color_state = "normal"
     paused = False
     frozen_remaining = None  # remaining seconds snapshot when paused
+    _help_window = None  # set up after frame callbacks (below)
+
+    # Compensate for trailing glyph advance width in the text rect — the
+    # visible ink is narrower than `get_item_rect_size` reports, making the
+    # text look left-aligned.  We widen the viewport by `nudge` and let the
+    # centering formula shift the text right naturally.
+    nudge = int(math.sqrt(font_size))
+
+    # --- Recentering & fullscreen ---
+
+    def _recenter_text() -> None:
+        """Re-center the countdown text in the current viewport."""
+        tw, th = guiutils.get_widget_size(countdown_text)
+        vw = dpg.get_viewport_client_width()
+        vh = dpg.get_viewport_client_height()
+        pad = 2 * config.DPG_WINDOW_PADDING
+        text_x = max(0, int((vw - pad - tw) / 2) + nudge // 2)
+        text_y = max(0, int((vh - pad - th) / 2))
+        dpg.set_item_pos(countdown_text, [text_x, text_y])
+
+    def _toggle_fullscreen(*_args) -> None:
+        """Toggle fullscreen and re-center the text."""
+        dpg.toggle_viewport_fullscreen()
+        if guiutils.wait_for_resize("main_window"):
+            _recenter_text()
+            # Re-center help card too, if open.
+            if _help_window is not None:
+                _help_window.reposition()
 
     # --- Keyboard ---
+
     def _on_key(_sender, key, *_args):
         nonlocal paused, frozen_remaining, start_time
+        # Help card handles its own Escape key; suppress other keys while visible.
+        if _help_window is not None and _help_window.is_visible():
+            return
         if key == dpg.mvKey_Escape:
             dpg.stop_dearpygui()
+        elif key == dpg.mvKey_F1:
+            if _help_window is not None:
+                _help_window.show()
+        elif key == dpg.mvKey_F11:
+            _toggle_fullscreen()
         elif key == dpg.mvKey_Spacebar and start_time is not None:
             paused = not paused
             if paused:
@@ -247,12 +296,6 @@ def main() -> int:
     #           center the text, reveal it, and start the timer.
 
     if font_size <= reference_size:
-        # Compensate for trailing glyph advance width in the text rect — the
-        # visible ink is narrower than `get_item_rect_size` reports, making the
-        # text look left-aligned.  We widen the viewport by `nudge` and let the
-        # centering formula shift the text right naturally.
-        nudge = int(math.sqrt(font_size))
-
         # Default size — font is already loaded.  Measure, fit, center.
         def _fit_viewport(*_args):
             """Frame 10: measure text, resize viewport."""
@@ -275,6 +318,7 @@ def main() -> int:
             text_x = max(0, int((vw - pad - tw) / 2) + nudge // 2)
             text_y = max(0, int((vh - pad - th) / 2))
             dpg.set_item_pos(countdown_text, [text_x, text_y])
+            dpg.set_viewport_resizable(False)
             start_time = time.monotonic()
 
         dpg.set_frame_callback(10, _fit_viewport)
@@ -283,7 +327,6 @@ def main() -> int:
     else:
         # Custom --size: load target font, estimate viewport from reference
         # measurement, then center text in the actual viewport.
-        nudge = int(math.sqrt(font_size))
         ref_dims = [0, 0]  # tw_ref, th_ref
 
         def _load_font(*_args):
@@ -317,11 +360,32 @@ def main() -> int:
             text_x = max(0, int((vw - pad - text_w) / 2) + nudge // 2)
             text_y = max(0, int((vh - pad - th_ref * ratio) / 2))
             dpg.set_item_pos(countdown_text, [text_x, text_y])
+            dpg.set_viewport_resizable(False)
             start_time = time.monotonic()
 
         dpg.set_frame_callback(10, _load_font)
         dpg.set_frame_callback(12, _resize_viewport)
         dpg.set_frame_callback(14, _center_and_start)
+
+    # --- Help card (F1) ---
+    #
+    # HelpWindow defers its GUI rendering to first show (frame ≥ 10),
+    # so it's safe to create the instance here.
+    hotkey_info = (
+        env(key_indent=0, key="Space", action_indent=0, action="Pause / resume", notes=""),
+        env(key_indent=0, key="Esc", action_indent=0, action="Quit", notes=""),
+        helpcard.hotkey_blank_entry,
+        env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
+        env(key_indent=0, key="F11", action_indent=0, action="Toggle fullscreen", notes=""),
+    )
+    _help_window = helpcard.HelpWindow(  # noqa: F841 — read by `_on_key` closure
+        hotkey_info=hotkey_info,
+        width=config.HELP_WINDOW_W,
+        height=config.HELP_WINDOW_H,
+        reference_window="main_window",
+        themes_and_fonts=env(font_size=config.GUI_FONT_SIZE),
+        gui_font=gui_font,
+    )
 
     # --- Render loop ---
     try:

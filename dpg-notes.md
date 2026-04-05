@@ -251,8 +251,37 @@ reveal it after the new font has rendered.
 `guiutils.bootup()` loads multiple fonts (Regular, Bold, Italic, BoldItalic,
 FontAwesome) with extended Unicode ranges at the standard 20px size. This is
 correct for scientific apps but wastes atlas space when large countdown-style
-fonts are also needed. The conference timer skips `bootup` entirely and loads
-only what it needs.
+fonts are also needed.
+
+`bootup` is composed of four lower-level functions that can be called individually:
+- `setup_default_font(font_size, font_basename)` — font registry + default font
+- `setup_icon_fonts(font_registry, font_size)` — FontAwesome into existing registry
+- `setup_markdown(font_registry, font_size, font_basename)` — `dpg_markdown` configuration
+- `setup_themes()` — global rounded theme, disabled-control themes
+
+Apps with non-standard font needs (e.g. the conference timer, which skips the
+default font to keep the atlas lean) can call just the functions they need.
+
+## `dpg_markdown` during app init
+
+**Do not** call `dpg_markdown.add_text` more than once before the first frame
+renders — this segfaults DPG (at least 1.11), likely a race condition in font
+loading.
+
+The render also appears asynchronous: if you populate other content into the same
+container while `dpg_markdown` is loading its fonts, the rendering engine can lose
+its place — some content is omitted, and the rest injected mid-Markdown-render.
+This may also interact with DPG's global container stack.
+
+**Workaround**: trigger Markdown font loading once at startup with a single dummy
+element (`dpg_markdown.add_text("hello, *hello*, **hello**, ***hello***")`) that
+exercises all four font families. Place it in a throwaway group. Do not add any
+other Markdown elements until after the first frame. See `raven.visualizer.app`
+(the `markdown_font_loader_trigger_dummy` group) for an example.
+
+If your app creates Markdown content only on demand (e.g. a help card opened by
+F1), this isn't an issue — by the time the user presses F1, the render loop has
+been running for many frames.
 
 ## `bind_item_font` is queued, not immediate
 

@@ -80,7 +80,7 @@ Client apps call Server via `raven/client/api.py`. Server can run on a different
 - `IconsFontAwesome6.py` - Icon font (note: outdated version)
 
 ## Code Style
-All new and modified code must follow `raven-style-guide.md` (in the project root).
+All new and modified code must follow `raven-style-guide.md` (in the project root). **Read the full guide before implementing a new app.** The summary below covers the most commonly needed conventions.
 
 - Impure functional, Lispy (closures, `unpythonic` patterns)
 - `unpythonic` pure-Python features are fair game. Currently used: `env` (namespace), `Timer` (benchmarking), `@call` (scoping), `box`/`unbox`, `sym`, `dyn`. Other features welcome where they improve clarity. **Do not** use the macro layer (`unpythonic.syntax`) or features that primarily serve as macro backends (e.g. `let` bindings — these are readable only through the macro surface syntax).
@@ -97,6 +97,8 @@ All new and modified code must follow `raven-style-guide.md` (in the project roo
   - Exceptions: use ``{type(exc)}: {exc}`` in log messages, not bare ``{exc}``. The type name is cheap insurance against uninformative `str()` output.
 - Timers: use the right clock for the job. ``time.perf_counter()``/``perf_counter_ns()`` for benchmarks (highest resolution, monotonic). ``time.monotonic()``/``monotonic_ns()`` for elapsed time in app code (animation, polling, timeouts — immune to NTP adjustments). ``time.time()``/``time_ns()`` only for wall-clock timestamps that need epoch identity (chat message timestamps, persistent records).
 - License DRY: the project-level `LICENSE.md` is the single source of truth (2-clause BSD). Don't repeat the license in individual module docstrings unless a module has a *different* license from the project default (e.g. AGPL for Server and Avatar pose editor).
+- Blank lines in code are paragraph breaks — insert when the topic changes, not mechanically (e.g. not "always before `return`").
+- Properties: define as `def get_x(...) ... def set_x(...) ... x = property(fget=..., fset=..., doc=...)` instead of the `@property`/`@x.setter` decorator syntax.
 - Contract-style preconditions/postconditions would be useful, but mostly not implemented yet
 
 ## Key Patterns

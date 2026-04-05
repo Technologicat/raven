@@ -170,7 +170,7 @@ is sometimes used for minor sub-sections within a major section.
 
 - **Line width**: ~110 characters. Can locally go a few characters over for a more pleasing layout.
 - **No line breaks in URLs**, even if over 110 characters. URLs must be copy-pasteable.
-- **Blank lines**: Play the role of paragraph breaks in prose. Insert when the topic changes.
+- **Blank lines**: Play the role of paragraph breaks in prose. Insert when the topic changes, not mechanically (e.g. not "always before `return`").
 - **One blank line** after most function and class definitions.
 - **Two blank lines** when the topic changes across a major boundary (before a horizontal separator, between classes).
 - **f-strings** for all string formatting (not `%` or `.format()`).
@@ -352,6 +352,14 @@ class TaskManager:
 
 - `__repr__` / `__str__` implemented for debugging where useful.
 - ABCs and metaclasses used only when needed, with detailed comments explaining why.
+- **Properties**: Use explicit `property(fget=..., fset=..., doc=...)` instead of the `@property`/`@x.setter` decorator syntax. Define `get_x` and `set_x` as regular methods first, then bind them:
+  ```python
+  def get_x(self) -> int:
+      return self._x
+  def set_x(self, value: int) -> None:
+      self._x = value
+  x = property(fget=get_x, fset=set_x, doc="The x coordinate.")
+  ```
 
 ## Configuration
 

@@ -65,6 +65,7 @@ class HelpWindow:
                  heading_color: Tuple[int] = (255, 255, 255, 255),
                  text_color: Tuple[int] = (180, 180, 180, 255),
                  dimmed_color: Tuple[int] = (140, 140, 140, 255),
+                 gui_font: Optional[int] = None,
                  on_render_extras: Optional[Callable] = None,
                  on_show: Optional[Callable] = None,
                  on_hide: Optional[Callable] = None):
@@ -102,6 +103,12 @@ class HelpWindow:
                             To manually recenter (e.g. in a DPG viewport resize handler), you can call the `reposition` method.
 
         `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
+                            Apps that skip `bootup` can pass a minimal ``env(font_size=N)`` instead.
+
+        `gui_font`: Optional DPG font ID to bind to the help window. If ``None`` (the default),
+                    the help card inherits the DPG default font, which is correct for apps that
+                    call `bootup`. Apps that use a non-standard default font (e.g. a large countdown
+                    font) should pass a GUI-sized font here.
 
         `highlight_color`: RGB or RGBA tuple, range [0, 255]. Text color for a highlighted segment. Meant for use by `on_render_extras`.
         `heading_color`: RGB or RGBA tuple, range [0, 255]. Text color for help headings.
@@ -157,6 +164,7 @@ class HelpWindow:
         self.c_dim = f'<font color="{self.dimmed_color}">'
         self.c_end = '</font>'
 
+        self.gui_font = gui_font
         self.on_render_extras = on_render_extras
         self.on_show = on_show
         self.on_hide = on_hide
@@ -202,6 +210,9 @@ class HelpWindow:
                                      no_scroll_with_mouse=True,
                                      width=self.width,
                                      height=self.height)
+
+        if self.gui_font is not None:
+            dpg.bind_item_font(help_window, self.gui_font)
 
         help_group = dpg.add_group(tag=f"help_group_{self.gui_uuid}",
                                    parent=help_window)

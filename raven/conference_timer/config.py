@@ -1,5 +1,8 @@
 """Configuration constants for the Raven Conference Timer."""
 
+# GUI font size for non-countdown elements (help card, etc.).
+GUI_FONT_SIZE = 20
+
 # Default countdown font size (pixels).
 COUNTDOWN_FONT_SIZE = 120
 
@@ -28,3 +31,7 @@ COLOR_NORMAL = (255, 255, 255, 255)
 COLOR_YELLOW = (255, 255, 0, 255)
 COLOR_RED = (255, 64, 64, 255)
 COLOR_EXPIRED = (255, 0, 0, 255)
+
+# Help window dimensions (pixels).
+HELP_WINDOW_W = 500
+HELP_WINDOW_H = 260

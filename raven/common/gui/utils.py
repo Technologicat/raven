@@ -3,7 +3,9 @@
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["get_font_path", "bootup", "load_extra_font",
+__all__ = ["get_font_path",
+           "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",
+           "bootup", "load_extra_font",
            "nonexistent_ok",
            "maybe_delete_item", "has_child_items",
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
@@ -66,116 +68,69 @@ def get_font_path(font_basename: str = "OpenSans",
     logger.info(f"get_font_path: basename '{font_basename}', variant '{variant}' -> '{filename}'")
     return pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", filename)).expanduser().resolve()
 
-def bootup(font_size: int,
-           font_basename: str = "OpenSans") -> env:
-    """Perform GUI initialization common to the Raven constellation of apps.
+def setup_default_font(font_size: int,
+                       font_basename: str = "OpenSans") -> int:
+    """Set up the default GUI font with extended Unicode ranges.
 
-    Must be called *after* `dpg.create_context()`, but *before* `dpg.create_viewport(...)`.
+    Creates a DPG font registry, loads the default text font, and binds it
+    as the DPG default.
 
-    `font_size`: in pixels, as in DPG functions that handle fonts.
+    Must be called after `dpg.create_context()`.
 
-                 This is used for initializing the default GUI font, the icon fonts (for toolbars etc.),
-                 and the font for the Markdown renderer.
-
-    `font_basename`: Fonts are looked up as:
-
-            raven/fonts/<basename>-Regular.ttf
-            raven/fonts/<basename>-Bold.ttf
-            raven/fonts/<basename>-Italic.ttf
-            raven/fonts/<basename>-BoldItalic.ttf
-
-        Look in `raven/fonts/` for valid values. If you need to install more fonts, place them there.
-
-        By default, Raven has the following fonts installed:
-
-            `font_basename="OpenSans"`: https://fonts.google.com/specimen/Open+Sans
-            `font_basename="InterTight"`: https://fonts.google.com/specimen/Inter+Tight
-
-        For scientific text, OpenSans is otherwise better (e.g. has a subscript "x" glyph for chemical formulas),
-        but it confuses subscripts and superscripts. InterTight is missing that subscript "x" glyph. No better options
-        have been found so far.
-
-    Returns an `unpythonic.env` with the following attributes:
-        - `icon_font_regular (DPG font ID)
-        - `icon_font_solid` (DPG font ID)
-        - `global_theme` (DPG theme ID), in case you need to refer to the customized default theme explicitly.
-        - `my_no_spacing_theme` (DPG theme ID), also registered under the DPG tag "my_no_spacing_theme".
-        - `disablable_button_theme` (DPG theme ID), also registered under the DPG tag "disablable_button_theme".
-
-
-    **Details**
-
-    This function does the following font setup:
-
-      - Sets up DPG with a default font that's easy to read and looks good (e.g. Open Sans).
-
-      - Sets up DPG's font ranges so that e.g. Greek letters work (important for scientific text).
-
-      - Loads the FontAwesome icon fonts (regular and solid) at the specified font size, for toolbar buttons and similar.
-
-      - Hooks up the on-demand font loader for `DearPyGui_Markdown`.
-
-        NOTE: It may still be a good idea to create a dummy GUI element that forces `DearPyGui_Markdown`
-              to load its fonts at app startup time. Place it somewhere offscreen, and render it once.
-
-              During app startup, do **NOT** add more than one Markdown GUI element (see below).
-              Once startup is complete, then Markdown GUI elements can be added freely.
-
-              See `raven.visualizer.app` for an example.
-
-    and the following DPG theme setup:
-
-      - Sets up DPG's global theme to use rounded widgets, making apps look more friendly.
-
-      - Registers "my_no_spacing_theme", for tight text layout.
-
-      - Registers "disablable_button_theme" (matching the colors of DPG's built-in default theme)
-        so that a disabled button using this theme also looks disabled.
-
-
-    **About the Markdown renderer**
-
-    We use the `DearPyGui_Markdown` package:
-        https://github.com/IvanNazaruk/DearPyGui-Markdown
-
-    USAGE::
-        dpg_markdown.add_text(some_markdown_string)
-
-    For font color/size, use these HTML syntaxes::
-        <font color="(255, 0, 0)">Test</font>
-        <font color="#ff0000">Test</font>
-        <font size="50">Test</font>
-        <font size=50>Test</font>
-
-    Color and size can be used in the same font tag.
-
-    The first use (during an app session) of a particular font size/family loads the font into the renderer.
-
-    During app startup (first frame?), don't call `dpg_markdown.add_text` more than once, or it'll crash the app
-    (some kind of race condition in font loading?). After the app has started, it's fine to call it as often as needed.
+    Returns the DPG font registry ID. Pass it to `setup_icon_fonts`,
+    `setup_markdown`, or both, depending on what the app needs.
     """
-    # Initialize fonts. Must be done after `dpg.create_context`, or the app will just segfault at startup.
     # https://dearpygui.readthedocs.io/en/latest/documentation/fonts.html
-    with dpg.font_registry() as the_font_registry:
-        # Change the default font to something that looks clean and has good on-screen readability.
-        # https://fonts.google.com/specimen/Open+Sans
+    with dpg.font_registry() as font_registry:
         with dpg.font(get_font_path(font_basename, variant="Regular"),
                       font_size) as default_font:
             fontsetup.setup_font_ranges()
         dpg.bind_font(default_font)
+    return font_registry
 
-        # FontAwesome 6 for symbols (toolbar button icons etc.).
-        # We bind this font to individual GUI widgets as needed.
-        with dpg.font(get_font_path(fa.FONT_ICON_FILE_NAME_FAR, variant=None),
-                      font_size) as icon_font_regular:
-            dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
-        with dpg.font(get_font_path(fa.FONT_ICON_FILE_NAME_FAS, variant=None),
-                      font_size) as icon_font_solid:
-            dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
+def setup_icon_fonts(font_registry: int,
+                     font_size: int) -> env:
+    """Load FontAwesome icon fonts (regular and solid) into an existing font registry.
 
-    # Configure fonts for the Markdown renderer.
-    #     https://github.com/IvanNazaruk/DearPyGui-Markdown
-    dpg_markdown.set_font_registry(the_font_registry)
+    `font_registry`: DPG font registry ID (from `setup_default_font` or your own).
+    `font_size`: icon size in pixels (usually matches the GUI font size).
+
+    Returns an `unpythonic.env` with:
+        - `icon_font_regular` (DPG font ID)
+        - `icon_font_solid` (DPG font ID)
+    """
+    with dpg.font(get_font_path(fa.FONT_ICON_FILE_NAME_FAR, variant=None),
+                  font_size, parent=font_registry) as icon_font_regular:
+        dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
+    with dpg.font(get_font_path(fa.FONT_ICON_FILE_NAME_FAS, variant=None),
+                  font_size, parent=font_registry) as icon_font_solid:
+        dpg.add_font_range(fa.ICON_MIN, fa.ICON_MAX_16)
+    return env(icon_font_regular=icon_font_regular,
+               icon_font_solid=icon_font_solid)
+
+def setup_markdown(font_registry: int,
+                   font_size: int,
+                   font_basename: str = "OpenSans") -> None:
+    """Configure the `DearPyGui_Markdown` renderer.
+
+    Call after creating a DPG font registry. Fonts are loaded lazily — the first
+    use of `dpg_markdown.add_text` at a given size triggers the actual font load.
+
+    `font_registry`: DPG font registry ID to register markdown fonts in.
+    `font_size`: base font size in pixels.
+    `font_basename`: font family name (looked up via `get_font_path`).
+
+    NOTE: It may still be a good idea to create a dummy GUI element that forces
+    `DearPyGui_Markdown` to load its fonts at app startup time. Place it somewhere
+    offscreen, and render it once.
+
+    During app startup, do **NOT** add more than one Markdown GUI element.
+    Once startup is complete, Markdown GUI elements can be added freely.
+
+    See `raven.visualizer.app` for an example.
+    """
+    # https://github.com/IvanNazaruk/DearPyGui-Markdown
+    dpg_markdown.set_font_registry(font_registry)
     dpg_markdown.set_add_font_function(fontsetup.markdown_add_font_callback)
     dpg_markdown.set_font(font_size=font_size,
                           default=get_font_path(font_basename, variant="Regular"),
@@ -183,7 +138,20 @@ def bootup(font_size: int,
                           italic=get_font_path(font_basename, variant="Italic"),
                           italic_bold=get_font_path(font_basename, variant="BoldItalic"))
 
-    # Modify global theme
+def setup_themes() -> env:
+    """Set up DPG themes: rounded global theme, tight-layout theme, and disabled control themes.
+
+    Binds the global theme (rounded widgets) as the DPG default. Also registers named
+    themes: ``"my_no_spacing_theme"``, ``"disablable_button_theme"``,
+    ``"disablable_red_button_theme"``, ``"disablable_blue_button_theme"``.
+
+    Returns an `unpythonic.env` with:
+        - `global_theme`
+        - `my_no_spacing_theme`
+        - `disablable_button_theme`
+        - `disablable_red_button_theme`
+        - `disablable_blue_button_theme`
+    """
     with dpg.theme() as global_theme:
         with dpg.theme_component(dpg.mvAll):
             # dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (53, 168, 84))  # same color as Linux Mint default selection color in the green theme
@@ -192,7 +160,7 @@ def bootup(font_size: int,
             dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8, category=dpg.mvThemeCat_Core)
     dpg.bind_theme(global_theme)  # set this theme as the default
 
-    # Add a theme for tight text layout
+    # Tight text layout
     with dpg.theme(tag="my_no_spacing_theme") as my_no_spacing_theme:
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 0, category=dpg.mvThemeCat_Core)
@@ -240,17 +208,90 @@ def bootup(font_size: int,
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, colorspace.hex_to_rgb("#9ea2eeff"))
 
-    out = env(font_size=font_size,  # for introspection
-              font_basename=font_basename,  # for introspection
-              font_registry=the_font_registry,  # for the app to be able to add more fonts while running (`load_extra_font`)
-              icon_font_regular=icon_font_regular,
-              icon_font_solid=icon_font_solid,
-              global_theme=global_theme,
-              my_no_spacing_theme=my_no_spacing_theme,
-              disablable_button_theme=disablable_button_theme,
-              disablable_red_button_theme=disablable_red_button_theme,
-              disablable_blue_button_theme=disablable_blue_button_theme)
-    return out
+    return env(global_theme=global_theme,
+               my_no_spacing_theme=my_no_spacing_theme,
+               disablable_button_theme=disablable_button_theme,
+               disablable_red_button_theme=disablable_red_button_theme,
+               disablable_blue_button_theme=disablable_blue_button_theme)
+
+def bootup(font_size: int,
+           font_basename: str = "OpenSans") -> env:
+    """Perform GUI initialization common to the Raven constellation of apps.
+
+    Must be called *after* `dpg.create_context()`, but *before* `dpg.create_viewport(...)`.
+
+    This is the high-level orchestrator that calls `setup_default_font`,
+    `setup_icon_fonts`, `setup_markdown`, and `setup_themes`. Apps with non-standard
+    font needs (e.g. the conference timer, which skips the default font to keep
+    the atlas lean) can call those lower-level functions directly instead.
+
+    `font_size`: in pixels, as in DPG functions that handle fonts.
+
+                 This is used for initializing the default GUI font, the icon fonts (for toolbars etc.),
+                 and the font for the Markdown renderer.
+
+    `font_basename`: Fonts are looked up as:
+
+            raven/fonts/<basename>-Regular.ttf
+            raven/fonts/<basename>-Bold.ttf
+            raven/fonts/<basename>-Italic.ttf
+            raven/fonts/<basename>-BoldItalic.ttf
+
+        Look in `raven/fonts/` for valid values. If you need to install more fonts, place them there.
+
+        By default, Raven has the following fonts installed:
+
+            `font_basename="OpenSans"`: https://fonts.google.com/specimen/Open+Sans
+            `font_basename="InterTight"`: https://fonts.google.com/specimen/Inter+Tight
+
+        For scientific text, OpenSans is otherwise better (e.g. has a subscript "x" glyph for chemical formulas),
+        but it confuses subscripts and superscripts. InterTight is missing that subscript "x" glyph. No better options
+        have been found so far.
+
+    Returns an `unpythonic.env` with the following attributes:
+        - `icon_font_regular` (DPG font ID)
+        - `icon_font_solid` (DPG font ID)
+        - `global_theme` (DPG theme ID), in case you need to refer to the customized default theme explicitly.
+        - `my_no_spacing_theme` (DPG theme ID), also registered under the DPG tag "my_no_spacing_theme".
+        - `disablable_button_theme` (DPG theme ID), also registered under the DPG tag "disablable_button_theme".
+
+
+    **About the Markdown renderer**
+
+    We use the `DearPyGui_Markdown` package:
+        https://github.com/IvanNazaruk/DearPyGui-Markdown
+
+    USAGE::
+        dpg_markdown.add_text(some_markdown_string)
+
+    For font color/size, use these HTML syntaxes::
+        <font color="(255, 0, 0)">Test</font>
+        <font color="#ff0000">Test</font>
+        <font size="50">Test</font>
+        <font size=50>Test</font>
+
+    Color and size can be used in the same font tag.
+
+    The first use (during an app session) of a particular font size/family loads the font into the renderer.
+
+    During app startup (first frame?), don't call `dpg_markdown.add_text` more than once, or it'll crash the app
+    (some kind of race condition in font loading?). After the app has started, it's fine to call it as often as needed.
+    """
+    font_registry = setup_default_font(font_size, font_basename)
+    icons = setup_icon_fonts(font_registry, font_size)
+    setup_markdown(font_registry, font_size, font_basename)
+    themes = setup_themes()
+
+    return env(font_size=font_size,  # for introspection
+               font_basename=font_basename,  # for introspection
+               font_registry=font_registry,  # for the app to be able to add more fonts while running (`load_extra_font`)
+               icon_font_regular=icons.icon_font_regular,
+               icon_font_solid=icons.icon_font_solid,
+               global_theme=themes.global_theme,
+               my_no_spacing_theme=themes.my_no_spacing_theme,
+               disablable_button_theme=themes.disablable_button_theme,
+               disablable_red_button_theme=themes.disablable_red_button_theme,
+               disablable_blue_button_theme=themes.disablable_blue_button_theme)
 
 def load_extra_font(themes_and_fonts: env,
                     font_size: int,
