@@ -124,6 +124,18 @@ Idle throttle (2026-04-05) reduced CPU load from ~80% to ~20% of one core by sle
 
 Originally discovered during raven-cherrypick session 5 (2026-03-19).
 
+## Idle throttle for Librarian
+
+Librarian has an avatar idle auto-off, and a no-avatar mode is under consideration. When the avatar is off and no LLM generation is in progress, the GUI is mostly static — same pattern as cherrypick/xdot-viewer. Busy sources: avatar rendering, LLM streaming, RAG indexing, pulsating color animations (audit which are always-on vs. conditional), recent user input. The existing cherrypick/xdot-viewer pattern (`_is_busy()` + sleep) should port directly.
+
+Discovered during idle throttle discussion (2026-04-05).
+
+## Idle throttle for Avatar pose editor
+
+Low priority — the pose editor is very rarely used. But if the pattern is cheap to add (same `_is_busy()` + sleep), could be worth it. The GUI is fully static when no slider is being dragged. Busy sources: avatar preview rendering (always-on while visible?), recent user input.
+
+Discovered during idle throttle discussion (2026-04-05).
+
 
 ## raven-cherrypick: low FPS with large images
 
