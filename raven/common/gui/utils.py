@@ -3,9 +3,9 @@
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["get_font_path",
-           "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",
-           "bootup", "load_extra_font",
+__all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually want these two for app bootup
+           "get_font_path",  # mostly internal, but available for exotic use cases
+           "setup_default_font", "setup_icon_fonts", "setup_markdown", "setup_themes",  # granular low-level app bootup API
            "nonexistent_ok",
            "maybe_delete_item", "has_child_items",
            "get_widget_pos", "get_widget_size", "get_widget_relative_pos",
@@ -42,6 +42,127 @@ from . import fontsetup
 # ---------------------------------------------------------------------------
 # Fonts & themes
 # ---------------------------------------------------------------------------
+
+def bootup(font_size: int,
+           font_basename: str = "OpenSans") -> env:
+    """Perform GUI initialization common to the Raven constellation of apps.
+
+    Must be called *after* `dpg.create_context()`, but *before* `dpg.create_viewport(...)`.
+
+    This is the high-level orchestrator that calls `setup_default_font`,
+    `setup_icon_fonts`, `setup_markdown`, and `setup_themes`. Apps with non-standard
+    font needs (e.g. the conference timer, which skips the default font to keep
+    the atlas lean) can call those lower-level functions directly instead.
+
+    `font_size`: in pixels, as in DPG functions that handle fonts.
+
+                 This is used for initializing the default GUI font, the icon fonts (for toolbars etc.),
+                 and the font for the Markdown renderer.
+
+    `font_basename`: Fonts are looked up as:
+
+            raven/fonts/<basename>-Regular.ttf
+            raven/fonts/<basename>-Bold.ttf
+            raven/fonts/<basename>-Italic.ttf
+            raven/fonts/<basename>-BoldItalic.ttf
+
+        Look in `raven/fonts/` for valid values. If you need to install more fonts, place them there.
+
+        By default, Raven has the following fonts installed:
+
+            `font_basename="OpenSans"`: https://fonts.google.com/specimen/Open+Sans
+            `font_basename="InterTight"`: https://fonts.google.com/specimen/Inter+Tight
+
+        For scientific text, OpenSans is otherwise better (e.g. has a subscript "x" glyph for chemical formulas),
+        but it confuses subscripts and superscripts. InterTight is missing that subscript "x" glyph. No better options
+        have been found so far.
+
+    Returns an `unpythonic.env` with the following attributes:
+        - `icon_font_regular` (DPG font ID)
+        - `icon_font_solid` (DPG font ID)
+        - `global_theme` (DPG theme ID), in case you need to refer to the customized default theme explicitly.
+        - `my_no_spacing_theme` (DPG theme ID), also registered under the DPG tag "my_no_spacing_theme".
+        - `disablable_button_theme` (DPG theme ID), also registered under the DPG tag "disablable_button_theme".
+
+
+    **About the Markdown renderer**
+
+    We use the `DearPyGui_Markdown` package:
+        https://github.com/IvanNazaruk/DearPyGui-Markdown
+
+    USAGE::
+        dpg_markdown.add_text(some_markdown_string)
+
+    For font color/size, use these HTML syntaxes::
+        <font color="(255, 0, 0)">Test</font>
+        <font color="#ff0000">Test</font>
+        <font size="50">Test</font>
+        <font size=50>Test</font>
+
+    Color and size can be used in the same font tag.
+
+    The first use (during an app session) of a particular font size/family loads the font into the renderer.
+
+    During app startup (first frame?), don't call `dpg_markdown.add_text` more than once, or it'll crash the app
+    (some kind of race condition in font loading?). After the app has started, it's fine to call it as often as needed.
+    """
+    font_registry = setup_default_font(font_size, font_basename)
+    icons = setup_icon_fonts(font_registry, font_size)
+    setup_markdown(font_registry, font_size, font_basename)
+    themes = setup_themes()
+
+    return env(font_size=font_size,  # for introspection
+               font_basename=font_basename,  # for introspection
+               font_registry=font_registry,  # for the app to be able to add more fonts while running (`load_extra_font`)
+               icon_font_regular=icons.icon_font_regular,
+               icon_font_solid=icons.icon_font_solid,
+               global_theme=themes.global_theme,
+               my_no_spacing_theme=themes.my_no_spacing_theme,
+               disablable_button_theme=themes.disablable_button_theme,
+               disablable_red_button_theme=themes.disablable_red_button_theme,
+               disablable_blue_button_theme=themes.disablable_blue_button_theme)
+
+def load_extra_font(themes_and_fonts: env,
+                    font_size: int,
+                    font_basename: str,
+                    variant: Optional[str]) -> Union[str, int]:
+    """Load another (non-default) font.
+
+    `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
+                        The font will be cached here.
+    `font_size`: in pixels, as in DPG functions that handle fonts.
+    `font_basename`: passed to `get_font_path`, which see.
+    `variant`: passed to `get_font_path`, which see.
+
+    Returns the tuple `(key, id)`, where:
+
+      - `key` is the name of the font.
+              You can get the corresponding DPG font ID as `themes_and_fonts[key]`.
+
+              Key depends on all of `font_basename`, `variant` (if applicable),
+              and `font_size`.
+
+      - `id` is DPG ID of the loaded font. For convenience,
+             so you don't have to fish it out of `themes_and_fonts`.
+
+    If the font is already loaded (same variant, at the same size),
+    the cached font is returned.
+    """
+    if variant is None:
+        variant_str = ""
+    else:
+        variant_str = f"_{variant}"  # e.g. "OpenSans-Regular"
+    key = f"{font_basename}{variant_str}_{font_size}"
+
+    if key not in themes_and_fonts:
+        logger.info(f"load_extra_font: Loading and caching font {key}.")
+        with dpg.font(get_font_path(font_basename, variant=variant),
+                      font_size,
+                      parent=themes_and_fonts.font_registry) as new_font:
+            fontsetup.setup_font_ranges()
+        themes_and_fonts[key] = new_font
+
+    return key, themes_and_fonts[key]
 
 def get_font_path(font_basename: str = "OpenSans",
                   variant: Optional[str] = "Regular") -> pathlib.Path:
@@ -213,127 +334,6 @@ def setup_themes() -> env:
                disablable_button_theme=disablable_button_theme,
                disablable_red_button_theme=disablable_red_button_theme,
                disablable_blue_button_theme=disablable_blue_button_theme)
-
-def bootup(font_size: int,
-           font_basename: str = "OpenSans") -> env:
-    """Perform GUI initialization common to the Raven constellation of apps.
-
-    Must be called *after* `dpg.create_context()`, but *before* `dpg.create_viewport(...)`.
-
-    This is the high-level orchestrator that calls `setup_default_font`,
-    `setup_icon_fonts`, `setup_markdown`, and `setup_themes`. Apps with non-standard
-    font needs (e.g. the conference timer, which skips the default font to keep
-    the atlas lean) can call those lower-level functions directly instead.
-
-    `font_size`: in pixels, as in DPG functions that handle fonts.
-
-                 This is used for initializing the default GUI font, the icon fonts (for toolbars etc.),
-                 and the font for the Markdown renderer.
-
-    `font_basename`: Fonts are looked up as:
-
-            raven/fonts/<basename>-Regular.ttf
-            raven/fonts/<basename>-Bold.ttf
-            raven/fonts/<basename>-Italic.ttf
-            raven/fonts/<basename>-BoldItalic.ttf
-
-        Look in `raven/fonts/` for valid values. If you need to install more fonts, place them there.
-
-        By default, Raven has the following fonts installed:
-
-            `font_basename="OpenSans"`: https://fonts.google.com/specimen/Open+Sans
-            `font_basename="InterTight"`: https://fonts.google.com/specimen/Inter+Tight
-
-        For scientific text, OpenSans is otherwise better (e.g. has a subscript "x" glyph for chemical formulas),
-        but it confuses subscripts and superscripts. InterTight is missing that subscript "x" glyph. No better options
-        have been found so far.
-
-    Returns an `unpythonic.env` with the following attributes:
-        - `icon_font_regular` (DPG font ID)
-        - `icon_font_solid` (DPG font ID)
-        - `global_theme` (DPG theme ID), in case you need to refer to the customized default theme explicitly.
-        - `my_no_spacing_theme` (DPG theme ID), also registered under the DPG tag "my_no_spacing_theme".
-        - `disablable_button_theme` (DPG theme ID), also registered under the DPG tag "disablable_button_theme".
-
-
-    **About the Markdown renderer**
-
-    We use the `DearPyGui_Markdown` package:
-        https://github.com/IvanNazaruk/DearPyGui-Markdown
-
-    USAGE::
-        dpg_markdown.add_text(some_markdown_string)
-
-    For font color/size, use these HTML syntaxes::
-        <font color="(255, 0, 0)">Test</font>
-        <font color="#ff0000">Test</font>
-        <font size="50">Test</font>
-        <font size=50>Test</font>
-
-    Color and size can be used in the same font tag.
-
-    The first use (during an app session) of a particular font size/family loads the font into the renderer.
-
-    During app startup (first frame?), don't call `dpg_markdown.add_text` more than once, or it'll crash the app
-    (some kind of race condition in font loading?). After the app has started, it's fine to call it as often as needed.
-    """
-    font_registry = setup_default_font(font_size, font_basename)
-    icons = setup_icon_fonts(font_registry, font_size)
-    setup_markdown(font_registry, font_size, font_basename)
-    themes = setup_themes()
-
-    return env(font_size=font_size,  # for introspection
-               font_basename=font_basename,  # for introspection
-               font_registry=font_registry,  # for the app to be able to add more fonts while running (`load_extra_font`)
-               icon_font_regular=icons.icon_font_regular,
-               icon_font_solid=icons.icon_font_solid,
-               global_theme=themes.global_theme,
-               my_no_spacing_theme=themes.my_no_spacing_theme,
-               disablable_button_theme=themes.disablable_button_theme,
-               disablable_red_button_theme=themes.disablable_red_button_theme,
-               disablable_blue_button_theme=themes.disablable_blue_button_theme)
-
-def load_extra_font(themes_and_fonts: env,
-                    font_size: int,
-                    font_basename: str,
-                    variant: Optional[str]) -> Union[str, int]:
-    """Load another (non-default) font.
-
-    `themes_and_fonts`: Obtain by calling `raven.common.gui.utils.bootup` at app start time.
-                        The font will be cached here.
-    `font_size`: in pixels, as in DPG functions that handle fonts.
-    `font_basename`: passed to `get_font_path`, which see.
-    `variant`: passed to `get_font_path`, which see.
-
-    Returns the tuple `(key, id)`, where:
-
-      - `key` is the name of the font.
-              You can get the corresponding DPG font ID as `themes_and_fonts[key]`.
-
-              Key depends on all of `font_basename`, `variant` (if applicable),
-              and `font_size`.
-
-      - `id` is DPG ID of the loaded font. For convenience,
-             so you don't have to fish it out of `themes_and_fonts`.
-
-    If the font is already loaded (same variant, at the same size),
-    the cached font is returned.
-    """
-    if variant is None:
-        variant_str = ""
-    else:
-        variant_str = f"_{variant}"  # e.g. "OpenSans-Regular"
-    key = f"{font_basename}{variant_str}_{font_size}"
-
-    if key not in themes_and_fonts:
-        logger.info(f"load_extra_font: Loading and caching font {key}.")
-        with dpg.font(get_font_path(font_basename, variant=variant),
-                      font_size,
-                      parent=themes_and_fonts.font_registry) as new_font:
-            fontsetup.setup_font_ranges()
-        themes_and_fonts[key] = new_font
-
-    return key, themes_and_fonts[key]
 
 # ---------------------------------------------------------------------------
 # DPG item management
