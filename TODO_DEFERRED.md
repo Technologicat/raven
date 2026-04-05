@@ -118,11 +118,11 @@ pygame 2.6.1 emits a deprecation warning: `pkg_resources is deprecated as an API
 
 Discovered during smoke-testing on new machine (2026-03-25).
 
-## raven-cherrypick: investigate GPU/CPU load at idle
+## raven-cherrypick: further reduce idle CPU/GPU load
 
-The raven-cherrypick process shows noticeable GPU (graphics) and CPU load even when idle. Likely DPG's game-loop style rendering — blitting many textures (thumbnails + mips) every frame even when nothing changes. Worth investigating whether we can reduce frame rate when idle (e.g. skip `render_dearpygui_frame` when no `_needs_render` flags are set), or if the cost is inherent to DPG's texture registry overhead.
+Idle throttle (2026-04-05) reduced CPU load from ~80% to ~20% of one core by sleeping ~80ms between frames when nothing needs updating. The remaining ~20% is the floor cost of `render_dearpygui_frame()` at ~12fps — ImGui resubmits the entire UI each call. Further reduction options: adaptive sleep ramp (80ms → 500ms over ~5s idle, snap back on input), or skipping `render_dearpygui_frame()` entirely (risky — event processing is tied to the render call).
 
-Discovered during raven-cherrypick session 5 (2026-03-19).
+Originally discovered during raven-cherrypick session 5 (2026-03-19).
 
 
 ## raven-cherrypick: low FPS with large images
