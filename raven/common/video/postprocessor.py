@@ -674,10 +674,12 @@ class Postprocessor:
     # Defaults chosen so that they look good for a handful of characters rendered in SD Forge, with the Wai 14.0 Illustrious-SDXL checkpoint.
     @with_metadata(threshold=[0.0, 1.0],
                    exposure=[0.1, 5.0],
+                   sigma=[0.1, 7.0],
                    _priority=0.0)
     def bloom(self, image: torch.tensor, *,
               threshold: float = 0.560,
-              exposure: float = 0.842) -> None:
+              exposure: float = 0.842,
+              sigma: float = 7.0) -> None:
         """[static] Bloom effect (fake HDR). Makes the image look brighter. Popular in early 2000s anime.
 
         Can also be used as just a camera exposure adjustment by setting `threshold=1.0` to disable the glow.
@@ -689,6 +691,10 @@ class Postprocessor:
                      Technically, this is true relative luminance, not luma, since we work in linear RGB space.
         `exposure`: Overall brightness of the output. Like in photography, higher exposure means brighter image,
                     saturating toward white.
+        `sigma`: Standard deviation for the bloom blur. Larger values produce a wider glow.
+                 The kernel size is 21, so sigma up to 7.0 is meaningful.
+                 7.0 gives a wide, dreamy early-2000s anime bloom; ~1.6 gives a tighter,
+                 more modern glow.
         """
         # There are online tutorials for how to create this effect, see e.g.:
         #   https://learnopengl.com/Advanced-Lighting/Bloom
@@ -710,8 +716,8 @@ class Postprocessor:
             # Although everything else in Torch takes (height, width), kernel size is given as (size_x, size_y);
             # see `gaussian_blur_image` in https://pytorch.org/vision/main/_modules/torchvision/transforms/v2/functional/_misc.html
             # for a hint (the part where it computes the padding).
-            brights = torchvision.transforms.GaussianBlur((21, 1), sigma=7.0)(brights)  # blur along x
-            brights = torchvision.transforms.GaussianBlur((1, 21), sigma=7.0)(brights)  # blur along y
+            brights = torchvision.transforms.GaussianBlur((21, 1), sigma=sigma)(brights)  # blur along x
+            brights = torchvision.transforms.GaussianBlur((1, 21), sigma=sigma)(brights)  # blur along y
 
             # Additively blend the images. Note we are working in linear intensity space, and we will now go over 1.0 intensity.
             image.add_(brights)
