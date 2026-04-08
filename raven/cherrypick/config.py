@@ -63,6 +63,15 @@ PLACEHOLDER_POOL_SIZES = {32: 256, 64: 128, 128: 48, 256: 12, 512: 4}
 PLACEHOLDER_TINT = (0.92, 0.92, 1.0)  # subtle cool blue-gray
 PLACEHOLDER_BRIGHTNESS = (0.04, 0.40)  # (lo, hi) — keeps placeholders dark; wider range ≈ PAL VHS
 
+# VHS noise standard for placeholder tiles.
+# "PAL" (Phase Alternating Line) — stable color, luma noise only.
+#     Standard in most of Europe.
+# "NTSC" (National Television System Committee) — adds chroma noise.
+#     Standard in North America and Japan. Sometimes referred to by
+#     field engineers as "Never The Same Color" due to the absence of
+#     phase-alternation error correction in the chrominance channel.
+PLACEHOLDER_VHS_MODE = "PAL"
+
 THUMBNAIL_BATCH_SIZE = 32  # images per GPU batch
 THUMBNAIL_VRAM_FRACTION = 0.5  # fraction of free VRAM to budget for thumbnails
 THUMBNAIL_VRAM_BUDGET_MAX_MB = 4096  # hard cap

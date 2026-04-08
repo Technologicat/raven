@@ -43,29 +43,59 @@ VHS_GLITCH_BLANK = object()  # nonce value, see `analog_vhsglitches`
 
 def vhs_noise(width: int, height: int, *,
               device: torch.device,
-              dtype: torch.dtype = torch.float32) -> torch.Tensor:
-    """Generate monochrome VHS noise.
+              dtype: torch.dtype = torch.float32,
+              mode: str = "PAL") -> torch.Tensor:
+    """Generate VHS noise.
 
-    Returns a ``[1, height, width]`` tensor in [0, 1]. The noise has
-    horizontally correlated runs (Gaussian blur, sigma 2.0, kernel 5×1)
-    that mimic the helical-scan artifacts of analogue tape.
+    `mode`:
+        ``"PAL"``:  Monochrome luma noise. Returns ``[1, H, W]`` in [0, 1].
+                    PAL's phase-alternation cancels chroma errors, so tape
+                    noise is overwhelmingly in luminance.
+
+        ``"NTSC"``: Three independent noise planes (Y, U, V). Returns
+                    ``[3, H, W]``, where the `Y` channel is in [0, 1],
+                    and the `U` and `V` channels are in [-0.5, 0.5].
+                    NTSC has no phase-alternation error correction,
+                    so tape speed variation and magnetic noise cause
+                    chroma speckling and hue wander — the
+                    "Never The Same Color" phenomenon.
+
+    Both modes use horizontal-only Gaussian blur to mimic helical-scan
+    artifacts. NTSC U/V planes get a wider kernel (lower chroma bandwidth
+    on VHS — ~500 kHz vs. ~3 MHz for luma).
 
     This is the single source of truth for the VHS noise recipe used
     across Raven — the postprocessor's glitch/tracking filters and the
     cherrypick placeholder tiles all derive from this.
     """
-    noise = torch.rand(height, width, device=device, dtype=dtype).unsqueeze(0)  # [1, H, W]
-    # Horizontal-only blur: kernel (5, 1) gives smooth runs along x,
-    # sharp transitions along y — the signature VHS look.
-    noise = torchvision.transforms.GaussianBlur((5, 1), sigma=2.0)(noise)
-    return noise
+    # Y channel (luma): fine-grained horizontal runs.
+    noise_y = torch.rand(height, width, device=device, dtype=dtype).unsqueeze(0)  # [1, H, W]
+    noise_y = torchvision.transforms.GaussianBlur((5, 1), sigma=2.0)(noise_y)
+
+    if mode == "PAL":
+        return noise_y
+    if mode != "NTSC":
+        raise ValueError(f"vhs_noise: unknown mode {mode!r}; expected 'PAL' or 'NTSC'")
+
+    # NTSC: independent U/V planes with coarser horizontal blur
+    # (lower chroma bandwidth → wider, smoother runs).
+    noise_u = torch.rand(height, width, device=device, dtype=dtype).unsqueeze(0)
+    noise_u = torchvision.transforms.GaussianBlur((11, 1), sigma=4.0)(noise_u)
+    noise_u -= 0.5
+
+    noise_v = torch.rand(height, width, device=device, dtype=dtype).unsqueeze(0)
+    noise_v = torchvision.transforms.GaussianBlur((11, 1), sigma=4.0)(noise_v)
+    noise_v -= 0.5
+
+    return torch.cat([noise_y, noise_u, noise_v], dim=0)  # [3, H, W]
 
 
 def vhs_noise_pool(n: int, width: int, height: int, *,
                    device: torch.device,
                    dtype: torch.dtype = torch.float32,
                    tint: Tuple[float, float, float] = (0.92, 0.92, 1.0),
-                   brightness: Tuple[float, float] = (0.04, 0.40)) -> List[torch.Tensor]:
+                   brightness: Tuple[float, float] = (0.04, 0.40),
+                   mode: str = "PAL") -> List[torch.Tensor]:
     """Generate *n* unique tinted VHS noise tiles.
 
     Each tile is a ``[4, height, width]`` RGBA tensor in [0, 1], suitable
@@ -75,17 +105,37 @@ def vhs_noise_pool(n: int, width: int, height: int, *,
             Default is a subtle cool blue-gray.
     `brightness`: (lo, hi) range that the raw [0, 1] noise is mapped to.
                   Lower values keep the placeholders dark and subdued.
+    `mode`: ``"PAL"`` (monochrome luma × tint) or ``"NTSC"`` (per-tile
+            color variation via independent chroma noise). See `vhs_noise`.
     """
     lo, hi = brightness
     tr, tg, tb = tint
     tiles: List[torch.Tensor] = []
     for _ in range(n):
-        noise = vhs_noise(width, height, device=device, dtype=dtype).squeeze(0)  # [H, W]
-        luma = lo + (hi - lo) * noise
-        r = luma * tr
-        g = luma * tg
-        b = luma * tb
-        a = torch.ones_like(luma)
+        noise = vhs_noise(width, height, device=device, dtype=dtype, mode=mode)
+
+        if mode == "PAL":
+            luma = lo + (hi - lo) * noise.squeeze(0)  # [H, W]
+            r = luma * tr
+            g = luma * tg
+            b = luma * tb
+        else:
+            # NTSC: Y plane → brightness-mapped luma, U/V → small chroma offsets.
+            # Each tile gets its own random color cast — some warm, some cool.
+            noise_y = noise[0]  # [H, W]
+            noise_u = noise[1]  # [H, W], pre-scaled by 0.5
+            noise_v = noise[2]
+
+            y = lo + (hi - lo) * noise_y                    # [H, W]
+            u = 0.5 * noise_u                               # centered, -0.25 ... +0.25
+            v = 0.5 * noise_v
+            yuv = torch.stack([y, u, v], dim=0)              # [3, H, W]
+            rgb = yuv_to_rgb(yuv, clamp=True)                # [3, H, W]
+            r = rgb[0] * tr
+            g = rgb[1] * tg
+            b = rgb[2] * tb
+
+        a = torch.ones(height, width, device=device, dtype=dtype)
         rgba = torch.stack([r, g, b, a], dim=0).clamp(0.0, 1.0)  # [4, H, W]
         tiles.append(rgba)
     return tiles
@@ -319,6 +369,7 @@ class Postprocessor:
         # Caches for individual dynamic effects
         self.zoom_data = defaultdict(lambda: None)
         self.noise_last_image = defaultdict(lambda: None)
+        self.noise_last_strength = defaultdict(lambda: -1.0)
         self.vhs_glitch_interval = defaultdict(lambda: 0.0)
         self.vhs_glitch_last_frame_no = defaultdict(lambda: 0.0)
         self.vhs_glitch_last_image = defaultdict(lambda: None)
@@ -706,7 +757,7 @@ class Postprocessor:
 
     @with_metadata(strength=[0.1, 1.0],
                    sigma=[0.1, 3.0],
-                   channel=["Y", "A"],
+                   channel=["Y", "A", "VHS_PAL", "VHS_NTSC"],
                    name=["!ignore"],  # hint for GUI to ignore this parameter
                    _priority=4.0)
     def noise(self, image: torch.tensor, *,
@@ -714,32 +765,40 @@ class Postprocessor:
               sigma: float = 1.0,
               channel: str = "Y",
               name: str = "noise0") -> None:
-        """[dynamic] Add noise to the luminance or to the alpha channel.
+        """[dynamic] Add noise.
 
         NOTE: At small values of `sigma`, this filter causes the video to use a lot of bandwidth
         during network transfer, because noise is impossible to compress.
 
-        `strength`: Fraction of noise in the output's Y or A channel.
+        `strength`: How much noise to apply. 0 is no noise, 1 replaces the input image with noise.
 
-                    How much noise to apply. 0 is no noise, 1 replaces the input image with noise.
-
-                    The formula is:
+                    For the `"Y"` and `"A"` channels, the formula is:
 
                         out = in * ((1 - magnitude) + magnitude * noise_texture)
 
                     The filter is multiplicative, so it never brightens the image, and
-                    never makes visible pixels that are fully translucent (alpha = 0.0) in the input.
+                    never makes visible those pixels that are already fully translucent
+                    (alpha = 0.0) in the input.
 
                     A larger `strength` makes the image darker/more translucent overall, because
                     then a larger portion of the luminance/alpha axis is reserved for the noise.
 
-        `sigma`: If nonzero, apply a Gaussian blur to the noise, thus reducing its spatial frequency
-                 (i.e. making larger and smoother "noise blobs").
+                    In VHS_NTSC mode, the U/V planes get special treatment with additive noise.
 
-        `channel`: One of:
-                     "Y": modulate the luminance (converts to YUV and back; slower)
-                     "A": modulate the alpha channel (fast; perhaps less effect on image file size
-                          in compressed RGBA formats; makes the noise translucent)
+        `sigma`: If nonzero, apply a Gaussian blur to the noise, thus reducing its spatial frequency
+                 (i.e. making larger and smoother "noise blobs"). Used by ``"Y"`` and ``"A"``
+                 modes only — the VHS modes use their own fixed anisotropic kernels.
+
+        `channel`: Operation mode. One of:
+                     ``"Y"``:        Modulate luminance (isotropic blur, converts to YUV and back).
+                     ``"A"``:        Modulate alpha (isotropic blur, fast).
+                     ``"VHS_PAL"``:  Anisotropic luma noise — horizontal runs, sharp vertical
+                                     transitions. Multiplicative on Y only; chroma untouched
+                                     (PAL's phase alternation cancels chroma errors).
+                     ``"VHS_NTSC"``: Anisotropic luma noise plus *additive* chroma noise on
+                                     Cb/Cr — the "Never The Same Color" phenomenon.
+                                     Luma is multiplicative; chroma is additive (random
+                                     hue/saturation shift, not darkening).
 
         `name`: Optional name for this filter instance in the chain. Used as cache key to store the noise texture.
                 If you have more than one `noise` filter in the chain, they should have different names so that
@@ -750,32 +809,54 @@ class Postprocessor:
                  affects the texture.)
 
         Suggested settings:
-            Scifi hologram:   strength=0.1, sigma=0.0
-            Analog VHS tape:  strength=0.2, sigma=2.0
+            Scifi hologram:     strength=0.1, sigma=0.0
+            Analog television:  strength=0.2, sigma=2.0
         """
         # Re-randomize the noise texture whenever the normalized frame number changes, or the video stream size changes.
         c, h, w = image.shape
         size_changed = (h != self._prev_h or w != self._prev_w)
-        if self.noise_last_image[name] is None or size_changed or int(self.frame_no) > int(self.last_frame_no):
+        strength_changed = (strength != self.noise_last_strength[name])
+        if self.noise_last_image[name] is None or size_changed or strength_changed or int(self.frame_no) > int(self.last_frame_no):
             c, h, w = image.shape
-            noise_image = torch.rand(h, w, device=self.device, dtype=image.dtype)
-            if sigma > 0.0:
-                noise_image = noise_image.unsqueeze(0)  # [h, w] -> [c, h, w] (where c=1)
-                noise_image = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(noise_image)
-                noise_image = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(noise_image)
-                noise_image = noise_image.squeeze(0)  # -> [h, w]
+            if channel.startswith("VHS_"):
+                vhs_mode = channel.removeprefix("VHS_")  # "PAL" or "NTSC"
+                noise_image = vhs_noise(w, h, device=self.device, dtype=image.dtype, mode=vhs_mode)
+                # PAL: [1, H, W]; NTSC: [3, H, W] — stored as-is, distinguished at application time.
+            else:
+                noise_image = torch.rand(h, w, device=self.device, dtype=image.dtype)
+                if sigma > 0.0:
+                    noise_image = noise_image.unsqueeze(0)  # [h, w] -> [c, h, w] (where c=1)
+                    noise_image = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(noise_image)
+                    noise_image = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(noise_image)
+                    noise_image = noise_image.squeeze(0)  # -> [h, w]
+            noise_image.mul_(strength)  # bake in current strength to save a few full-image multiplications during rendering
             self.noise_last_image[name] = noise_image
+            self.noise_last_strength[name] = strength
         else:
             noise_image = self.noise_last_image[name]
         base_multiplier = 1.0 - strength
 
         if channel == "A":  # alpha
-            image[3, :, :].mul_(base_multiplier + strength * noise_image)
+            image[3, :, :].mul_(base_multiplier + noise_image)
+            return
+
+        image_yuv = rgb_to_yuv(image[:3, :, :])
+        if channel == "VHS_PAL":
+            image_yuv[0, :, :].mul_(base_multiplier + noise_image.squeeze(0))
+        elif channel == "VHS_NTSC":
+            image_yuv = rgb_to_yuv(image[:3, :, :])
+            # Luma: multiplicative (same as PAL/Y modes).
+            image_yuv[0, :, :].mul_(base_multiplier + noise_image[0])
+            # Chroma: additive — random hue/saturation shift.
+            image_yuv[1, :, :].add_(noise_image[1])
+            image_yuv[1].clamp_(-0.5, 0.5)
+            image_yuv[2, :, :].add_(noise_image[2])
+            image_yuv[2].clamp_(-0.5, 0.5)
         else:  # "Y", luminance
             image_yuv = rgb_to_yuv(image[:3, :, :])
-            image_yuv[0, :, :].mul_(base_multiplier + strength * noise_image)
-            image_rgb = yuv_to_rgb(image_yuv)
-            image[:3, :, :] = image_rgb
+            image_yuv[0, :, :].mul_(base_multiplier + noise_image)
+        image_rgb = yuv_to_rgb(image_yuv)
+        image[:3, :, :] = image_rgb
 
     # --------------------------------------------------------------------------------
     # Lo-fi analog video

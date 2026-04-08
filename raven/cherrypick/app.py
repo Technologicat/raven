@@ -940,6 +940,7 @@ def _generate_noise_pool(tile_size: int) -> List[np.ndarray]:
         device=_device, dtype=_dtype,
         tint=config.PLACEHOLDER_TINT,
         brightness=config.PLACEHOLDER_BRIGHTNESS,
+        mode=config.PLACEHOLDER_VHS_MODE,
     )
     # Convert linear → sRGB for display (RGB channels only, not alpha).
     for t in tensors:
@@ -1054,6 +1055,13 @@ def main() -> int:
     global _device, _dtype
     _device = torch.device(config.gpu_config["thumbnails"]["device_string"])
     _dtype = config.gpu_config["thumbnails"]["dtype"]
+
+    # --- Validate VHS noise mode ---
+    _valid_vhs_modes = ("PAL", "NTSC")
+    if config.PLACEHOLDER_VHS_MODE not in _valid_vhs_modes:
+        logger.error("main: PLACEHOLDER_VHS_MODE=%r not in %s; falling back to 'PAL'",
+                     config.PLACEHOLDER_VHS_MODE, _valid_vhs_modes)
+        config.PLACEHOLDER_VHS_MODE = "PAL"
 
     # --- Preload RAM budget ---
     global _preload_ram_budget_mb
