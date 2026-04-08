@@ -405,11 +405,11 @@ class Postprocessor:
         self.vhs_glitch_last_frame_no = defaultdict(lambda: 0.0)
         self.vhs_glitch_last_image = defaultdict(lambda: None)
         self.vhs_glitch_last_mask = defaultdict(lambda: None)
+        self.vhs_headswitching_noise = defaultdict(lambda: None)
+        self.vhs_tracking_noise = defaultdict(lambda: None)
         self.digital_glitches_interval = defaultdict(lambda: 0.0)
         self.digital_glitches_last_frame_no = defaultdict(lambda: 0.0)
         self.digital_glitches_grid = defaultdict(lambda: None)
-        self.vhs_headswitching_noise = defaultdict(lambda: None)
-        self.vhs_tracking_noise = defaultdict(lambda: None)
 
     @classmethod
     @memoize
