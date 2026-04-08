@@ -1053,18 +1053,6 @@ class Postprocessor:
         warped = warped.squeeze(0)  # [1, c, h, w] -> [c, h, w]
         image[:, :, :] = warped
 
-    def _vhs_noise(self, image: torch.tensor, *,
-                   height: int) -> torch.tensor:
-        """Generate a horizontal band of VHS noise matching `image` width.
-
-        Custom `height`, in pixels.
-
-        Thin wrapper around the module-level `vhs_noise` function, which see.
-        """
-        # PAL VHS noise is monochrome, so we return a [1, h, w].
-        c, h, w = image.shape
-        return vhs_noise(w, height, device=self.device, dtype=image.dtype)
-
     @with_metadata(strength=[0.1, 0.9],
                    unboost=[0.1, 10.0],
                    max_glitches=[1, 10],
@@ -1117,7 +1105,7 @@ class Postprocessor:
                 for line in glitch_start_lines:
                     glitch_height = torch.rand(1, device="cpu")
                     glitch_height = int(min_glitch_height + (max_glitch_height - min_glitch_height) * glitch_height[0])
-                    vhs_glitch_image[0, line:(line + glitch_height), :] = self._vhs_noise(image, height=glitch_height)  # [1, h, w]
+                    vhs_glitch_image[0, line:(line + glitch_height), :] = vhs_noise(w, glitch_height, device=self.device, dtype=image.dtype)  # [1, h, w]
                     vhs_glitch_mask[0, line:(line + glitch_height), :] = 1.0  # mark the glitching lines for blending
             self.vhs_glitch_last_image[name] = vhs_glitch_image
             self.vhs_glitch_last_mask[name] = vhs_glitch_mask
@@ -1132,6 +1120,88 @@ class Postprocessor:
             # Apply glitch to RGB only, so fully transparent parts stay transparent (important to make the effect less distracting).
             strength_field = strength * vhs_glitch_mask  # "field" as in physics, NOT as in CRT TV
             image[:3, :, :] = (1.0 - strength_field) * image[:3, :, :] + strength_field * vhs_glitch_image
+
+    @with_metadata(speed=[1.0, 32.0],
+                   height=[0.01, 0.05],
+                   max_displacement=[0.01, 0.1],
+                   noise_blend=[0.0, 1.0],
+                   _priority=8.5)
+    def analog_vhs_headswitching(self, image: torch.Tensor, *,
+                                 speed: float = 8.0,
+                                 height: float = 0.03,
+                                 max_displacement: float = 0.03,
+                                 noise_blend: float = 0.25) -> None:
+        """[dynamic] VHS head switching noise at the bottom edge.
+
+        Simulates the horizontal displacement and static visible at the
+        bottom of a VHS frame during the rotary head switch. CRT televisions
+        hid this behind overscan; it becomes visible on full-raster digital
+        captures. The most immediately recognizable VHS artifact.
+
+        Each scanline in the affected region is shifted by a different
+        horizontal amount, increasing toward the bottom — producing the
+        characteristic squiggly shear. VHS noise is blended in with an
+        increasing envelope so the bottom rows dissolve into static.
+
+        `height`: Height of the affected region as a fraction of image
+                  height. At typical render sizes (512–1024), 0.015 ≈
+                  8–15 pixels.
+        `max_displacement`: Maximum horizontal shift amplitude. Units:
+                            image width = 2.0 (same as `analog_rippling_hsync`).
+                            Much larger than rippling hsync (~0.001) — this is
+                            a clearly visible horizontal shear, not subtle edge
+                            ripple.
+        `noise_blend`: Maximum noise blend fraction at the very bottom of the
+                       affected region. Ramps from 0 at the top of the band to
+                       `noise_blend` at the bottom. 0.0 = pure displaced image
+                       everywhere, 1.0 = pure noise at the bottom edge.
+        `speed`: Animation speed. Same convention as other analog filters
+                 (cycle position updates by `speed / image_height` per frame).
+
+        NOTE: "frame" refers to the normalized frame number, at 25 FPS.
+        """
+        c, h, w = image.shape
+        n_rows = max(1, int(height * h))
+
+        # Animation — continuous cycle position, no wrapping needed (feeds into sin).
+        cycle_pos = (self.frame_no / h) * speed
+
+        # Displacement profile: three sine waves at incommensurate frequencies,
+        # modulated by an increasing envelope. The spatial variable is
+        # normalized row position [0, 1] within the affected band, so the
+        # wobble character is resolution-independent. The time terms at
+        # different rates make adjacent frames correlated but not identical.
+        row_indices = torch.arange(n_rows, dtype=self.dtype, device=self.device)
+        envelope = row_indices / max(1, n_rows - 1)  # [0..1] ramp
+        normalized_rows = envelope  # same thing — reuse for clarity
+
+        wobble = (torch.sin((3.0 * normalized_rows + 2.0 * cycle_pos) * math.pi)
+                  + 0.7 * torch.sin((7.0 * normalized_rows + 5.0 * cycle_pos) * math.pi)
+                  + 0.4 * torch.sin((13.0 * normalized_rows + 11.0 * cycle_pos) * math.pi))
+        displacement = envelope * max_displacement * wobble  # [n_rows]
+
+        # Apply displacement to the bottom rows of meshx only.
+        meshx = self._meshx.clone()
+        meshy = self._meshy
+        meshx[-n_rows:, :] += displacement.unsqueeze(1)  # broadcast across x
+
+        grid = torch.stack((meshx, meshy), 2)
+        grid = grid.unsqueeze(0)
+        image_batch = image.unsqueeze(0)
+        warped = torch.nn.functional.grid_sample(image_batch, grid, mode="bilinear", padding_mode="border", align_corners=False)
+        warped = warped.squeeze(0)
+        image[:, :, :] = warped
+
+        # Blend VHS noise into the affected region, ramping from 0 at the
+        # top of the band to `noise_blend` at the bottom — same envelope
+        # shape as the displacement.
+        if noise_blend > 0.0:
+            # Head switching reads between tracks, not valid chroma data, so the noise is luma-only
+            # on both PAL and NTSC systems. We get this by calling `vhs_noise` in its PAL mode.
+            noise = vhs_noise(w, n_rows, device=self.device, dtype=image.dtype)  # [1, n_rows, w]
+            blend = (envelope * noise_blend).unsqueeze(1)  # [n_rows, 1] → broadcasts to [n_rows, w]
+            blend = blend.unsqueeze(0)  # [1, n_rows, w] → broadcasts to [3, n_rows, w]
+            image[:3, -n_rows:, :] = (1.0 - blend) * image[:3, -n_rows:, :] + blend * noise
 
     @with_metadata(base_offset=[0.0, 1.0],
                    max_dynamic_offset=[0.0, 1.0],
@@ -1180,7 +1250,7 @@ class Postprocessor:
         base_offset_pixels = int((base_offset / 2.0) * h)
         noise_pixels = yoffs_pixels + base_offset_pixels
         if noise_pixels > 0:
-            image[:, -noise_pixels:, :] = self._vhs_noise(image, height=noise_pixels)
+            image[:, -noise_pixels:, :] = vhs_noise(w, noise_pixels, device=self.device, dtype=image.dtype)
             # # Fade out toward left/right, since the character does not take up the full width.
             # # Works, but fails at reaching the iconic VHS look.
             # xx = torch.linspace(0, math.pi, w, dtype=image.dtype, device=self.device)
