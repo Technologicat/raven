@@ -408,6 +408,8 @@ class Postprocessor:
         self.digital_glitches_interval = defaultdict(lambda: 0.0)
         self.digital_glitches_last_frame_no = defaultdict(lambda: 0.0)
         self.digital_glitches_grid = defaultdict(lambda: None)
+        self.vhs_headswitching_noise = defaultdict(lambda: None)
+        self.vhs_tracking_noise = defaultdict(lambda: None)
 
     @classmethod
     @memoize
@@ -863,7 +865,8 @@ class Postprocessor:
         c, h, w = image.shape
         size_changed = (h != self._prev_h or w != self._prev_w)
         strength_changed = (strength != self.noise_last_strength[name])
-        if self.noise_last_image[name] is None or size_changed or strength_changed or int(self.frame_no) > int(self.last_frame_no):
+        cached = self.noise_last_image[name]
+        if cached is None or size_changed or strength_changed or int(self.frame_no) > int(self.last_frame_no):
             c, h, w = image.shape
             gen_h, gen_w = ((h + 1) // 2, (w + 1) // 2) if double_size else (h, w)
             if channel.startswith("VHS_"):
@@ -885,7 +888,7 @@ class Postprocessor:
             self.noise_last_image[name] = noise_image
             self.noise_last_strength[name] = strength
         else:
-            noise_image = self.noise_last_image[name]
+            noise_image = cached
         base_multiplier = 1.0 - strength
 
         if channel == "A":  # alpha
@@ -1125,12 +1128,14 @@ class Postprocessor:
                    height=[0.01, 0.05],
                    max_displacement=[0.01, 0.1],
                    noise_blend=[0.0, 1.0],
+                   name=["!ignore"],
                    _priority=8.5)
     def analog_vhs_headswitching(self, image: torch.Tensor, *,
                                  speed: float = 8.0,
                                  height: float = 0.03,
                                  max_displacement: float = 0.03,
-                                 noise_blend: float = 0.25) -> None:
+                                 noise_blend: float = 0.25,
+                                 name: str = "analog_vhs_headswitching0") -> None:
         """[dynamic] VHS head switching noise at the bottom edge.
 
         Simulates the horizontal displacement and static visible at the
@@ -1157,6 +1162,10 @@ class Postprocessor:
                        everywhere, 1.0 = pure noise at the bottom edge.
         `speed`: Animation speed. Same convention as other analog filters
                  (cycle position updates by `speed / image_height` per frame).
+
+        `name`: Optional name for this filter instance in the chain. Used as cache key.
+                If you have more than one `analog_vhs_headswitching` in the chain, they should have
+                different names so that each one gets its own cache.
 
         NOTE: "frame" refers to the normalized frame number, at 25 FPS.
         """
@@ -1198,7 +1207,13 @@ class Postprocessor:
         if noise_blend > 0.0:
             # Head switching reads between tracks, not valid chroma data, so the noise is luma-only
             # on both PAL and NTSC systems. We get this by calling `vhs_noise` in its PAL mode.
-            noise = vhs_noise(w, n_rows, device=self.device, dtype=image.dtype)  # [1, n_rows, w]
+            size_changed = (h != self._prev_h or w != self._prev_w)
+            cached = self.vhs_headswitching_noise[name]
+            if cached is None or size_changed or int(self.frame_no) > int(self.last_frame_no):
+                noise = vhs_noise(w, n_rows, device=self.device, dtype=image.dtype)  # [1, n_rows, w]
+                self.vhs_headswitching_noise[name] = noise
+            else:
+                noise = cached
             blend = (envelope * noise_blend).unsqueeze(1)  # [n_rows, 1] → broadcasts to [n_rows, w]
             blend = blend.unsqueeze(0)  # [1, n_rows, w] → broadcasts to [3, n_rows, w]
             image[:3, -n_rows:, :] = (1.0 - blend) * image[:3, -n_rows:, :] + blend * noise
@@ -1206,11 +1221,13 @@ class Postprocessor:
     @with_metadata(base_offset=[0.0, 1.0],
                    max_dynamic_offset=[0.0, 1.0],
                    speed=[1.0, 16.0],
+                   name=["!ignore"],
                    _priority=9.0)
     def analog_vhstracking(self, image: torch.tensor, *,
                            base_offset: float = 0.03,
                            max_dynamic_offset: float = 0.01,
-                           speed: float = 8.0) -> None:
+                           speed: float = 8.0,
+                           name: str = "analog_vhstracking0") -> None:
         """[dynamic] 1980s VHS tape with bad tracking.
 
         Image floats up and down, and a band of black and white noise appears at the bottom.
@@ -1222,6 +1239,10 @@ class Postprocessor:
         `speed`: At speed 1.0, the floating motion completes a full cycle every
                  `image_height` frames. So effectively the cycle position updates by
                  `speed * (1 / image_height)` at each frame.
+
+        `name`: Optional name for this filter instance in the chain. Used as cache key.
+                If you have more than one `analog_vhstracking` in the chain, they should have
+                different names so that each one gets its own cache.
 
         NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
         """
@@ -1250,7 +1271,23 @@ class Postprocessor:
         base_offset_pixels = int((base_offset / 2.0) * h)
         noise_pixels = yoffs_pixels + base_offset_pixels
         if noise_pixels > 0:
-            image[:, -noise_pixels:, :] = vhs_noise(w, noise_pixels, device=self.device, dtype=image.dtype)
+            size_changed = (h != self._prev_h or w != self._prev_w)
+            cached = self.vhs_tracking_noise[name]
+            if cached is None or size_changed or int(self.frame_no) > int(self.last_frame_no):
+                # Generate at current noise_pixels height. Cached for sub-frame reuse.
+                noise = vhs_noise(w, noise_pixels, device=self.device, dtype=image.dtype)
+                self.vhs_tracking_noise[name] = noise
+            else:
+                noise = cached
+                # noise_pixels may jitter ±1 within the same integer frame due to float frame_no.
+                # Slice if the cached tensor is taller, regenerate if shorter.
+                cached_h = noise.shape[1]
+                if cached_h < noise_pixels:
+                    noise = vhs_noise(w, noise_pixels, device=self.device, dtype=image.dtype)
+                    self.vhs_tracking_noise[name] = noise
+                elif cached_h > noise_pixels:
+                    noise = noise[:, :noise_pixels, :]
+            image[:, -noise_pixels:, :] = noise
             # # Fade out toward left/right, since the character does not take up the full width.
             # # Works, but fails at reaching the iconic VHS look.
             # xx = torch.linspace(0, math.pi, w, dtype=image.dtype, device=self.device)
