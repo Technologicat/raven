@@ -144,6 +144,7 @@ def isotropic_noise(width: int, height: int, *,
     blur to mimic helical-scan artifacts.
 
     `sigma`:       Standard deviation for Gaussian blur (0 = no blur).
+                   Works up to 3.0.
     `double_size`: Generate at half resolution and upscale 2×.
                    `width` and `height` specify the final output size.
     """
@@ -691,10 +692,10 @@ class Postprocessor:
                      Technically, this is true relative luminance, not luma, since we work in linear RGB space.
         `exposure`: Overall brightness of the output. Like in photography, higher exposure means brighter image,
                     saturating toward white.
-        `sigma`: Standard deviation for the bloom blur. Larger values produce a wider glow.
-                 The kernel size is 21, so sigma up to 7.0 is meaningful.
-                 7.0 gives a wide, dreamy early-2000s anime bloom; ~1.6 gives a tighter,
-                 more modern glow.
+        `sigma`: Standard deviation for the bloom blur. Larger values produce a wider glow. Works up to 7.0.
+                 Recommended values:
+                     7.0 - wide, dreamy early-2000s anime bloom.
+                     1.6 - tighter, more modern glow.
         """
         # There are online tutorials for how to create this effect, see e.g.:
         #   https://learnopengl.com/Advanced-Lighting/Bloom
@@ -753,7 +754,7 @@ class Postprocessor:
         and the transverse effect (focal distance varying w.r.t. wavelength) by a gaussian blur.
 
         `scale`: Axial CA geometric distortion parameter.
-        `sigma`: Transverse CA blur parameter.
+        `sigma`: Transverse CA blur parameter. Works up to 3.0.
 
         Note that in a real lens:
           - Axial CA is typical at long focal lengths (e.g. tele/zoom lens)
@@ -867,8 +868,10 @@ class Postprocessor:
                     In VHS_NTSC mode, the U/V planes get special treatment with additive noise.
 
         `sigma`: If nonzero, apply a Gaussian blur to the noise, thus reducing its spatial frequency
-                 (i.e. making larger and smoother "noise blobs"). Used by ``"Y"`` and ``"A"``
-                 modes only — the VHS modes use their own fixed anisotropic kernels.
+                 (i.e. making larger and smoother "noise blobs"). Works up to 3.0.
+
+                 Used by ``"Y"`` and ``"A"`` modes only — the VHS modes use their own fixed
+                 anisotropic kernels.
 
         `channel`: Operation mode. One of:
                      ``"Y"``:        Modulate luminance (isotropic blur, converts to YUV and back).
@@ -959,7 +962,7 @@ class Postprocessor:
                       sigma: float = 1.5) -> None:
         """[static] Low-resolution analog video signal, simulated by blurring.
 
-        `sigma`: standard deviation of the Gaussian blur kernel, in pixels.
+        `sigma`: standard deviation of the Gaussian blur kernel, in pixels. Works up to 3.0.
         """
         image[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(image)  # blur along x
         image[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(image)  # blur along y
