@@ -96,9 +96,9 @@ def vhs_noise(width: int, height: int, *,
         # (lower chroma bandwidth → wider, smoother runs).
         #
         # 4:2:0 chroma subsampling: generate U/V at half luma resolution and
-        # nearest-neighbour upscale. Human vision has low chroma spatial acuity,
-        # and the coarser chroma blocks dramatically improve delta-based
-        # compression (QOI) — random per-pixel chroma is the main entropy source.
+        # upscale. Human vision has low chroma spatial acuity, and the coarser
+        # chroma blocks dramatically improve delta-based compression (QOI) —
+        # random per-pixel chroma is the main entropy source.
         chroma_h = (gen_h + 1) // 2
         chroma_w = (gen_w + 1) // 2
 
@@ -112,11 +112,11 @@ def vhs_noise(width: int, height: int, *,
 
         # Upscale chroma to luma resolution.
         chroma = torch.cat([noise_u, noise_v], dim=0)  # [2, chroma_h, chroma_w]
-        if ntsc_chroma == "bilinear":
+        if ntsc_chroma == "bilinear":  # analog aesthetic
             chroma = torch.nn.functional.interpolate(
                 chroma.unsqueeze(0), size=(gen_h, gen_w), mode="bilinear", align_corners=False,
             ).squeeze(0)
-        else:
+        else:  # ntsc_chroma == "nearest":  # retro digital aesthetic
             chroma = (chroma.repeat_interleave(2, dim=-1)
                             .repeat_interleave(2, dim=-2)[:, :gen_h, :gen_w])
         noise_u = chroma[0:1]  # [1, H, W]
