@@ -45,7 +45,8 @@ def vhs_noise(width: int, height: int, *,
               device: torch.device,
               dtype: torch.dtype = torch.float32,
               mode: str = "PAL",
-              ntsc_chroma: str = "nearest") -> torch.Tensor:
+              ntsc_chroma: str = "nearest",
+              double_size: bool = False) -> torch.Tensor:
     """Generate VHS noise.
 
     `mode`:
@@ -68,6 +69,10 @@ def vhs_noise(width: int, height: int, *,
         ``"bilinear"``: Bilinear interpolation — smooth chroma transitions.
                         Slower, larger encoded frames. More analog look.
 
+    `double_size`: Generate noise at half resolution and upscale 2×.
+                   Produces chunkier grain. `width` and `height` specify
+                   the final output size either way.
+
     Both modes use horizontal-only Gaussian blur to mimic helical-scan
     artifacts. NTSC U/V planes get a wider kernel (lower chroma bandwidth
     on VHS — ~500 kHz vs. ~3 MHz for luma) and are 4:2:0 subsampled
@@ -79,46 +84,79 @@ def vhs_noise(width: int, height: int, *,
     across Raven — the postprocessor's glitch/tracking filters and the
     cherrypick placeholder tiles all derive from this.
     """
+    gen_w, gen_h = ((width + 1) // 2, (height + 1) // 2) if double_size else (width, height)
     # Y channel (luma): fine-grained horizontal runs.
-    noise_y = torch.rand(height, width, device=device, dtype=dtype).unsqueeze(0)  # [1, H, W]
+    noise_y = torch.rand(gen_h, gen_w, device=device, dtype=dtype).unsqueeze(0)  # [1, H, W]
     noise_y = torchvision.transforms.GaussianBlur((5, 1), sigma=2.0)(noise_y)
 
     if mode == "PAL":
-        return noise_y
-    if mode != "NTSC":
+        result = noise_y
+    elif mode == "NTSC":
+        # NTSC: independent U/V planes with coarser horizontal blur
+        # (lower chroma bandwidth → wider, smoother runs).
+        #
+        # 4:2:0 chroma subsampling: generate U/V at half luma resolution and
+        # nearest-neighbour upscale. Human vision has low chroma spatial acuity,
+        # and the coarser chroma blocks dramatically improve delta-based
+        # compression (QOI) — random per-pixel chroma is the main entropy source.
+        chroma_h = (gen_h + 1) // 2
+        chroma_w = (gen_w + 1) // 2
+
+        noise_u = torch.rand(chroma_h, chroma_w, device=device, dtype=dtype).unsqueeze(0)
+        noise_u = torchvision.transforms.GaussianBlur((11, 1), sigma=4.0)(noise_u)
+        noise_u -= 0.5
+
+        noise_v = torch.rand(chroma_h, chroma_w, device=device, dtype=dtype).unsqueeze(0)
+        noise_v = torchvision.transforms.GaussianBlur((11, 1), sigma=4.0)(noise_v)
+        noise_v -= 0.5
+
+        # Upscale chroma to luma resolution.
+        chroma = torch.cat([noise_u, noise_v], dim=0)  # [2, chroma_h, chroma_w]
+        if ntsc_chroma == "bilinear":
+            chroma = torch.nn.functional.interpolate(
+                chroma.unsqueeze(0), size=(gen_h, gen_w), mode="bilinear", align_corners=False,
+            ).squeeze(0)
+        else:
+            chroma = (chroma.repeat_interleave(2, dim=-1)
+                            .repeat_interleave(2, dim=-2)[:, :gen_h, :gen_w])
+        noise_u = chroma[0:1]  # [1, H, W]
+        noise_v = chroma[1:2]  # [1, H, W]
+
+        result = torch.cat([noise_y, noise_u, noise_v], dim=0)  # [3, H, W]
+    else:
         raise ValueError(f"vhs_noise: unknown mode {mode!r}; expected 'PAL' or 'NTSC'")
 
-    # NTSC: independent U/V planes with coarser horizontal blur
-    # (lower chroma bandwidth → wider, smoother runs).
-    #
-    # 4:2:0 chroma subsampling: generate U/V at half luma resolution and
-    # nearest-neighbour upscale. Human vision has low chroma spatial acuity,
-    # and the coarser chroma blocks dramatically improve delta-based
-    # compression (QOI) — random per-pixel chroma is the main entropy source.
-    chroma_h = (height + 1) // 2
-    chroma_w = (width + 1) // 2
+    if double_size:
+        result = result.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[..., :height, :width]
+    return result
 
-    noise_u = torch.rand(chroma_h, chroma_w, device=device, dtype=dtype).unsqueeze(0)
-    noise_u = torchvision.transforms.GaussianBlur((11, 1), sigma=4.0)(noise_u)
-    noise_u -= 0.5
 
-    noise_v = torch.rand(chroma_h, chroma_w, device=device, dtype=dtype).unsqueeze(0)
-    noise_v = torchvision.transforms.GaussianBlur((11, 1), sigma=4.0)(noise_v)
-    noise_v -= 0.5
+def isotropic_noise(width: int, height: int, *,
+                    device: torch.device,
+                    dtype: torch.dtype = torch.float32,
+                    sigma: float = 1.0,
+                    double_size: bool = False) -> torch.Tensor:
+    """Generate isotropic Gaussian-blurred uniform noise.
 
-    # Upscale chroma to luma resolution.
-    chroma = torch.cat([noise_u, noise_v], dim=0)  # [2, chroma_h, chroma_w]
-    if ntsc_chroma == "bilinear":
-        chroma = torch.nn.functional.interpolate(
-            chroma.unsqueeze(0), size=(height, width), mode="bilinear", align_corners=False,
-        ).squeeze(0)
-    else:
-        chroma = (chroma.repeat_interleave(2, dim=-1)
-                        .repeat_interleave(2, dim=-2)[:, :height, :width])
-    noise_u = chroma[0:1]  # [1, H, W]
-    noise_v = chroma[1:2]  # [1, H, W]
+    Returns a ``[height, width]`` tensor in [0, 1]. When ``sigma > 0``,
+    the raw uniform noise is blurred with the same kernel size in both
+    dimensions — contrast with `vhs_noise`, which uses horizontal-only
+    blur to mimic helical-scan artifacts.
 
-    return torch.cat([noise_y, noise_u, noise_v], dim=0)  # [3, H, W]
+    `sigma`:       Standard deviation for Gaussian blur (0 = no blur).
+    `double_size`: Generate at half resolution and upscale 2×.
+                   `width` and `height` specify the final output size.
+    """
+    gen_w, gen_h = ((width + 1) // 2, (height + 1) // 2) if double_size else (width, height)
+    noise = torch.rand(gen_h, gen_w, device=device, dtype=dtype)
+    if sigma > 0.0:
+        noise = noise.unsqueeze(0)  # [h, w] -> [1, h, w]
+        noise = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(noise)
+        noise = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(noise)
+        noise = noise.squeeze(0)  # -> [h, w]
+    if double_size:
+        noise = noise.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[:height, :width]
+    return noise
 
 
 def vhs_noise_pool(n: int, width: int, height: int, *,
@@ -868,23 +906,16 @@ class Postprocessor:
         cached = self.noise_last_image[name]
         if cached is None or size_changed or strength_changed or int(self.frame_no) > int(self.last_frame_no):
             c, h, w = image.shape
-            gen_h, gen_w = ((h + 1) // 2, (w + 1) // 2) if double_size else (h, w)
             if channel.startswith("VHS_"):
                 vhs_mode = channel.removeprefix("VHS_")  # "PAL" or "NTSC"
-                noise_image = vhs_noise(gen_w, gen_h, device=self.device, dtype=image.dtype,
-                                        mode=vhs_mode, ntsc_chroma=ntsc_chroma)
+                noise_image = vhs_noise(w, h, device=self.device, dtype=image.dtype,
+                                        mode=vhs_mode, ntsc_chroma=ntsc_chroma, double_size=double_size)
                 # PAL: [1, H, W]; NTSC: [3, H, W] — stored as-is, distinguished at application time.
                 # NTSC chroma is already 4:2:0 subsampled inside vhs_noise.
             else:
-                noise_image = torch.rand(gen_h, gen_w, device=self.device, dtype=image.dtype)
-                if sigma > 0.0:
-                    noise_image = noise_image.unsqueeze(0)  # [h, w] -> [c, h, w] (where c=1)
-                    noise_image = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(noise_image)
-                    noise_image = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(noise_image)
-                    noise_image = noise_image.squeeze(0)  # -> [h, w]
+                noise_image = isotropic_noise(w, h, device=self.device, dtype=image.dtype,
+                                              sigma=sigma, double_size=double_size)
             noise_image.mul_(strength)  # bake in current strength to save a few full-image multiplications during rendering
-            if double_size:
-                noise_image = noise_image.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[..., :h, :w]
             self.noise_last_image[name] = noise_image
             self.noise_last_strength[name] = strength
         else:
@@ -1214,10 +1245,7 @@ class Postprocessor:
             size_changed = (h != self._prev_h or w != self._prev_w)
             cached = self.vhs_headswitching_noise[name]
             if cached is None or size_changed or int(self.frame_no) > int(self.last_frame_no):
-                gen_h, gen_w = ((n_rows + 1) // 2, (w + 1) // 2) if double_size else (n_rows, w)
-                noise = vhs_noise(gen_w, gen_h, device=self.device, dtype=image.dtype)  # [1, gen_h, gen_w]
-                if double_size:
-                    noise = noise.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[..., :n_rows, :w]
+                noise = vhs_noise(w, n_rows, device=self.device, dtype=image.dtype, double_size=double_size)
                 self.vhs_headswitching_noise[name] = noise
             else:
                 noise = cached
@@ -1282,18 +1310,11 @@ class Postprocessor:
         base_offset_pixels = int((base_offset / 2.0) * h)
         noise_pixels = yoffs_pixels + base_offset_pixels
         if noise_pixels > 0:
-            def regen_noise_pattern():
-                gen_h, gen_w = ((noise_pixels + 1) // 2, (w + 1) // 2) if double_size else (noise_pixels, w)
-                noise = vhs_noise(gen_w, gen_h, device=self.device, dtype=image.dtype)
-                if double_size:
-                    noise = noise.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[..., :noise_pixels, :w]
-                return noise
-
             size_changed = (h != self._prev_h or w != self._prev_w)
             cached = self.vhs_tracking_noise[name]
             if cached is None or size_changed or int(self.frame_no) > int(self.last_frame_no):
                 # Generate at current noise_pixels height. Cached for sub-frame reuse.
-                noise = regen_noise_pattern()
+                noise = vhs_noise(w, noise_pixels, device=self.device, dtype=image.dtype, double_size=double_size)
                 self.vhs_tracking_noise[name] = noise
             else:
                 noise = cached
@@ -1301,7 +1322,7 @@ class Postprocessor:
                 # Slice if the cached tensor is taller, regenerate if shorter.
                 cached_h = noise.shape[1]
                 if cached_h < noise_pixels:
-                    noise = regen_noise_pattern()
+                    noise = vhs_noise(w, noise_pixels, device=self.device, dtype=image.dtype, double_size=double_size)
                     self.vhs_tracking_noise[name] = noise
                 elif cached_h > noise_pixels:
                     noise = noise[:, :noise_pixels, :]
