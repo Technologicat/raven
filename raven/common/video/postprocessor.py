@@ -44,7 +44,8 @@ VHS_GLITCH_BLANK = object()  # nonce value, see `analog_vhsglitches`
 def vhs_noise(width: int, height: int, *,
               device: torch.device,
               dtype: torch.dtype = torch.float32,
-              mode: str = "PAL") -> torch.Tensor:
+              mode: str = "PAL",
+              ntsc_chroma: str = "nearest") -> torch.Tensor:
     """Generate VHS noise.
 
     `mode`:
@@ -60,9 +61,19 @@ def vhs_noise(width: int, height: int, *,
                     chroma speckling and hue wander — the
                     "Never The Same Color" phenomenon.
 
+    `ntsc_chroma` (NTSC only): how the 4:2:0 chroma planes are
+    upscaled to luma resolution.
+        ``"nearest"``:  Nearest-neighbour — blocky 2×2 chroma texels.
+                        Fast, compresses well. Retro digital look.
+        ``"bilinear"``: Bilinear interpolation — smooth chroma transitions.
+                        Slower, larger encoded frames. More analog look.
+
     Both modes use horizontal-only Gaussian blur to mimic helical-scan
     artifacts. NTSC U/V planes get a wider kernel (lower chroma bandwidth
-    on VHS — ~500 kHz vs. ~3 MHz for luma).
+    on VHS — ~500 kHz vs. ~3 MHz for luma) and are 4:2:0 subsampled
+    (generated at half luma resolution). This matches human vision's low
+    chroma spatial acuity and dramatically improves compressibility of
+    the rendered image.
 
     This is the single source of truth for the VHS noise recipe used
     across Raven — the postprocessor's glitch/tracking filters and the
@@ -79,13 +90,33 @@ def vhs_noise(width: int, height: int, *,
 
     # NTSC: independent U/V planes with coarser horizontal blur
     # (lower chroma bandwidth → wider, smoother runs).
-    noise_u = torch.rand(height, width, device=device, dtype=dtype).unsqueeze(0)
+    #
+    # 4:2:0 chroma subsampling: generate U/V at half luma resolution and
+    # nearest-neighbour upscale. Human vision has low chroma spatial acuity,
+    # and the coarser chroma blocks dramatically improve delta-based
+    # compression (QOI) — random per-pixel chroma is the main entropy source.
+    chroma_h = (height + 1) // 2
+    chroma_w = (width + 1) // 2
+
+    noise_u = torch.rand(chroma_h, chroma_w, device=device, dtype=dtype).unsqueeze(0)
     noise_u = torchvision.transforms.GaussianBlur((11, 1), sigma=4.0)(noise_u)
     noise_u -= 0.5
 
-    noise_v = torch.rand(height, width, device=device, dtype=dtype).unsqueeze(0)
+    noise_v = torch.rand(chroma_h, chroma_w, device=device, dtype=dtype).unsqueeze(0)
     noise_v = torchvision.transforms.GaussianBlur((11, 1), sigma=4.0)(noise_v)
     noise_v -= 0.5
+
+    # Upscale chroma to luma resolution.
+    chroma = torch.cat([noise_u, noise_v], dim=0)  # [2, chroma_h, chroma_w]
+    if ntsc_chroma == "bilinear":
+        chroma = torch.nn.functional.interpolate(
+            chroma.unsqueeze(0), size=(height, width), mode="bilinear", align_corners=False,
+        ).squeeze(0)
+    else:
+        chroma = (chroma.repeat_interleave(2, dim=-1)
+                        .repeat_interleave(2, dim=-2)[:, :height, :width])
+    noise_u = chroma[0:1]  # [1, H, W]
+    noise_v = chroma[1:2]  # [1, H, W]
 
     return torch.cat([noise_y, noise_u, noise_v], dim=0)  # [3, H, W]
 
@@ -759,13 +790,15 @@ class Postprocessor:
                    sigma=[0.1, 3.0],
                    channel=["Y", "A", "VHS_PAL", "VHS_NTSC"],
                    double_size=[False, True],
+                   ntsc_chroma=["nearest", "bilinear"],
                    name=["!ignore"],  # hint for GUI to ignore this parameter
                    _priority=4.0)
     def noise(self, image: torch.tensor, *,
               strength: float = 0.3,
               sigma: float = 1.0,
               channel: str = "Y",
-              double_size: bool = False,
+              double_size: bool = True,
+              ntsc_chroma: str = "nearest",
               name: str = "noise0") -> None:
         """[dynamic] Add noise.
 
@@ -808,6 +841,12 @@ class Postprocessor:
                        duplication. Particularly useful for ``"VHS_NTSC"``, where chroma noise
                        otherwise destroys delta-based compression.
 
+        `ntsc_chroma` (``"VHS_NTSC"`` only): how the 4:2:0 chroma noise is upscaled.
+                       ``"nearest"``:  Blocky 2×2 chroma texels. Fast, compresses well.
+                                       Retro digital aesthetic.
+                       ``"bilinear"``: Smooth chroma transitions. Slower, larger frames.
+                                       Analog aesthetic — more faithful to real tape noise.
+
         `name`: Optional name for this filter instance in the chain. Used as cache key to store the noise texture.
                 If you have more than one `noise` filter in the chain, they should have different names so that
                 each one gets its own noise texture.
@@ -829,8 +868,10 @@ class Postprocessor:
             gen_h, gen_w = ((h + 1) // 2, (w + 1) // 2) if double_size else (h, w)
             if channel.startswith("VHS_"):
                 vhs_mode = channel.removeprefix("VHS_")  # "PAL" or "NTSC"
-                noise_image = vhs_noise(gen_w, gen_h, device=self.device, dtype=image.dtype, mode=vhs_mode)
+                noise_image = vhs_noise(gen_w, gen_h, device=self.device, dtype=image.dtype,
+                                        mode=vhs_mode, ntsc_chroma=ntsc_chroma)
                 # PAL: [1, H, W]; NTSC: [3, H, W] — stored as-is, distinguished at application time.
+                # NTSC chroma is already 4:2:0 subsampled inside vhs_noise.
             else:
                 noise_image = torch.rand(gen_h, gen_w, device=self.device, dtype=image.dtype)
                 if sigma > 0.0:

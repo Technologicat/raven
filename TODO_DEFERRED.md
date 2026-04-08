@@ -208,6 +208,12 @@ The pose editor is the last GUI app missing an F1 help card. Follow the same pat
 
 Discovered during F1/F11 consistency pass (2026-04-06).
 
+## Avatar settings editor: dynamic parameter help from docstrings
+
+The postprocessor filter parameters (noise `channel`, `ntsc_chroma`, `double_size`, etc.) have detailed docstrings, but the settings editor GUI shows only bare parameter names and value dropdowns — no descriptions. Add a dynamically generated info button (ⓘ or similar) next to each parameter that extracts the relevant section from the filter's docstring, converts RST markup to Markdown, and displays it via `dpg_markdown`. This would make the growing number of filter options self-documenting in the GUI.
+
+Discovered during NTSC VHS noise development (2026-04-08).
+
 ## raven-server: CUDA sanity check at startup
 
 raven-server boots without complaint even when NVRTC is broken (missing `libnvrtc-builtins.so`). The error only surfaces later when something triggers JIT compilation. Server startup should probe CUDA early (e.g. a trivial JIT-compiled kernel or `torch.cuda.is_available()` + an NVRTC smoke test) and log a clear warning/error if the environment is misconfigured.
