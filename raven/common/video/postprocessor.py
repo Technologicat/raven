@@ -758,12 +758,14 @@ class Postprocessor:
     @with_metadata(strength=[0.1, 1.0],
                    sigma=[0.1, 3.0],
                    channel=["Y", "A", "VHS_PAL", "VHS_NTSC"],
+                   double_size=[False, True],
                    name=["!ignore"],  # hint for GUI to ignore this parameter
                    _priority=4.0)
     def noise(self, image: torch.tensor, *,
               strength: float = 0.3,
               sigma: float = 1.0,
               channel: str = "Y",
+              double_size: bool = False,
               name: str = "noise0") -> None:
         """[dynamic] Add noise.
 
@@ -800,6 +802,12 @@ class Postprocessor:
                                      Luma is multiplicative; chroma is additive (random
                                      hue/saturation shift, not darkening).
 
+        `double_size`: If ``True``, each noise texel covers a 2×2 pixel block (generated at
+                       half resolution, nearest-neighbour upscaled). This dramatically improves
+                       compressibility — QOI and similar codecs exploit the horizontal run
+                       duplication. Particularly useful for ``"VHS_NTSC"``, where chroma noise
+                       otherwise destroys delta-based compression.
+
         `name`: Optional name for this filter instance in the chain. Used as cache key to store the noise texture.
                 If you have more than one `noise` filter in the chain, they should have different names so that
                 each one gets its own noise texture.
@@ -818,18 +826,21 @@ class Postprocessor:
         strength_changed = (strength != self.noise_last_strength[name])
         if self.noise_last_image[name] is None or size_changed or strength_changed or int(self.frame_no) > int(self.last_frame_no):
             c, h, w = image.shape
+            gen_h, gen_w = ((h + 1) // 2, (w + 1) // 2) if double_size else (h, w)
             if channel.startswith("VHS_"):
                 vhs_mode = channel.removeprefix("VHS_")  # "PAL" or "NTSC"
-                noise_image = vhs_noise(w, h, device=self.device, dtype=image.dtype, mode=vhs_mode)
+                noise_image = vhs_noise(gen_w, gen_h, device=self.device, dtype=image.dtype, mode=vhs_mode)
                 # PAL: [1, H, W]; NTSC: [3, H, W] — stored as-is, distinguished at application time.
             else:
-                noise_image = torch.rand(h, w, device=self.device, dtype=image.dtype)
+                noise_image = torch.rand(gen_h, gen_w, device=self.device, dtype=image.dtype)
                 if sigma > 0.0:
                     noise_image = noise_image.unsqueeze(0)  # [h, w] -> [c, h, w] (where c=1)
                     noise_image = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(noise_image)
                     noise_image = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(noise_image)
                     noise_image = noise_image.squeeze(0)  # -> [h, w]
             noise_image.mul_(strength)  # bake in current strength to save a few full-image multiplications during rendering
+            if double_size:
+                noise_image = noise_image.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[..., :h, :w]
             self.noise_last_image[name] = noise_image
             self.noise_last_strength[name] = strength
         else:
