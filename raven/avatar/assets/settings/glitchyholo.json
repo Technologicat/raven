@@ -145,14 +145,8 @@
             }
         ],
         [
-            "desaturate",
+            "monochrome_display",
             {
-                "bandpass_q": 0.0,
-                "bandpass_reference_rgb": [
-                    1.0,
-                    0.0,
-                    0.0
-                ],
                 "strength": 1.0,
                 "tint_rgb": [
                     0.4584236892999387,

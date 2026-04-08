@@ -831,6 +831,133 @@ class Postprocessor:
         image[3, :, :].mul_(alpha)
 
     # --------------------------------------------------------------------------------
+    # Retouching / color grading
+
+    def _rgb_to_hue(self, rgb: List[float]) -> float:
+        """Convert an RGB color to an HSL hue, for use as `bandpass_hue` in `_desaturate_impl`.
+
+        This uses a cartesian-to-polar approximation of the HSL representation,
+        which is fine for hue detection, but should not be taken as an authoritative
+        H component of an accurate RGB->HSL conversion.
+        """
+        R, G, B = rgb
+        alpha = 0.5 * (2.0 * R - G - B)
+        beta = 3.0**0.5 / 2.0 * (G - B)
+        hue = math.atan2(beta, alpha) / (2.0 * math.pi)  # note atan2(0, 0) := 0
+        hue = hue + 0.5  # convert from `[-0.5, 0.5)` to `[0, 1)`
+        return hue
+
+    def _desaturate_impl(self, image: torch.tensor, *,
+                         strength: float = 1.0,
+                         tint_rgb: List[float] = [1.0, 1.0, 1.0],
+                         bandpass_reference_rgb: List[float] = [1.0, 0.0, 0.0],
+                         bandpass_q: float = 0.0) -> None:
+        """Shared implementation for `desaturate` and `monochrome_display`."""
+        R = image[0, :, :]
+        G = image[1, :, :]
+        B = image[2, :, :]
+        if bandpass_q > 0.0:  # hue bandpass enabled?
+            # Calculate hue of each pixel, using a cartesian-to-polar approximation of the HSL representation.
+            # An approximation is fine here, because we only use this for a hue detector.
+            # This is faster and requires less branching than the exact hexagonal representation.
+            desat_alpha = 0.5 * (2.0 * R - G - B)
+            desat_beta = 3.0**0.5 / 2.0 * (G - B)
+            desat_hue = torch.atan2(desat_beta, desat_alpha) / (2.0 * math.pi)  # note atan2(0, 0) := 0
+            desat_hue += 0.5  # convert from `[-0.5, 0.5)` to `[0, 1)`
+            # -> [h, w]
+
+            # Determine whether to keep this pixel or desaturate (and by how much).
+            #
+            # Calculate distance of each pixel from reference hue, accounting for wrap-around.
+            bandpass_hue = self._rgb_to_hue(bandpass_reference_rgb)
+            desat_temp1 = torch.abs(desat_hue - bandpass_hue)
+            desat_temp2 = torch.abs((desat_hue + 1.0) - bandpass_hue)
+            desat_temp3 = torch.abs(desat_hue - (bandpass_hue + 1.0))
+            desat_hue_distance = 2.0 * torch.minimum(torch.minimum(desat_temp1, desat_temp2),
+                                                     desat_temp3)  # [0, 0.5] -> [0, 1]
+            # -> [h, w]
+
+            # How to interpret the following factor:
+            #    0: far away from reference hue, pixel should be desaturated
+            #    1: at reference hue, pixel should be kept as-is
+            #
+            # - Pixels with their hue at least `bandpass_q` away from `bandpass_hue` are fully desaturated.
+            # - As distance falls below `bandpass_q`, a blend starts very gradually.
+            # - As the hue difference approaches zero, the pixel is fully passed through.
+            # - The 1.0 - ... together with the square makes a sharp spike at the reference hue.
+            desat_diff2 = (1.0 - torch.clamp(desat_hue_distance / bandpass_q, min=0.0, max=1.0))**2
+
+            # Gray pixels should always be desaturated, so that they get the tint applied.
+            # In HSL computations, gray pixels have an arbitrary hue, usually red, so we must filter them out separately.
+            # We can do this in YUV space.
+            YUV = rgb_to_yuv(image[:3, :, :])
+            Y = YUV[0, :, :]  # -> [h, w]
+            U = YUV[1, :, :]  # -> [h, w]
+            V = YUV[2, :, :]  # -> [h, w]
+            notgray_threshold = 0.05
+            urel = torch.clamp(torch.abs(U) / notgray_threshold, min=0.0, max=1.0)
+            vrel = torch.clamp(torch.abs(V) / notgray_threshold, min=0.0, max=1.0)
+            notgray = (urel**2 + vrel**2)**0.5  # [h, w]; 0: completely gray; 1: has at least some color
+            desat_diff2 *= notgray
+
+            strength_field = strength * (1.0 - desat_diff2)  # [h, w]; "field" as in physics, NOT as in CRT TV
+        else:
+            Y = luminance(image[:3, :, :])  # save some compute since in this case we don't need U and V
+            strength_field = strength  # just a scalar!
+
+        # Desaturate, then apply tint
+        Y = Y.unsqueeze(0)  # -> [1, h, w]
+        tint_color = torch.tensor(tint_rgb, device=self.device, dtype=image.dtype).unsqueeze(1).unsqueeze(2)  # [c, 1, 1]
+        tinted_desat_image = Y * tint_color  # -> [c, h, w]
+
+        # Final blend
+        image[:3, :, :] = (1.0 - strength_field) * image[:3, :, :] + strength_field * tinted_desat_image
+
+    # This filter is adapted from an old GLSL code I made for Panda3D 1.8 back in 2014.
+    @with_metadata(strength=[0.0, 1.0],
+                   tint_rgb=["!RGB"],  # hint the GUI that this parameter needs an RGB color picker
+                   bandpass_reference_rgb=["!RGB"],
+                   bandpass_q=[0.0, 1.0],
+                   _priority=3.5)
+    def desaturate(self, image: torch.tensor, *,
+                   strength: float = 1.0,
+                   tint_rgb: List[float] = [1.0, 1.0, 1.0],
+                   bandpass_reference_rgb: List[float] = [1.0, 0.0, 0.0],
+                   bandpass_q: float = 0.0) -> None:
+        """[static] Desaturate the image, with optional hue bandpass and tint.
+
+        This is an image retouching / color grading effect. It runs early in the
+        chain (before noise and analog degradation), so the bandpass sees clean
+        color data. For monochrome display simulation, see `monochrome_display`.
+
+        Does not touch the alpha channel.
+
+        `strength`: Overall blending strength of the filter (0 is off, 1 is fully applied).
+
+        `tint_rgb`: Color to multiplicatively tint the image with. Applied after desaturation.
+
+                    Some example tint values:
+                        Sepia effect:           [0.8039, 0.6588, 0.5098]
+                        No tint (off; default): [1.0, 1.0, 1.0]
+
+        `bandpass_reference_rgb`: Reference color for hue to let through the bandpass.
+                                  Use this to let e.g. red things bypass the desaturation.
+                                  The hue is extracted automatically from the given color.
+
+        `bandpass_q`: Hue bandpass band half-width, in (0, 1]. Hues farther away from `bandpass_hue`
+                      than `bandpass_q` will be fully desaturated. The opposite colors on the color
+                      circle are defined as having the largest possible hue difference, 1.0.
+
+                      The shape of the filter is a quadratic spike centered on the reference hue,
+                      and smoothly decaying to zero at `bandpass_q` away from the center.
+
+                      The special value 0 (default) switches the hue bandpass code off,
+                      saving some compute.
+        """
+        self._desaturate_impl(image, strength=strength, tint_rgb=tint_rgb,
+                              bandpass_reference_rgb=bandpass_reference_rgb, bandpass_q=bandpass_q)
+
+    # --------------------------------------------------------------------------------
     # General use
 
     @with_metadata(strength=[0.1, 1.0],
@@ -1410,31 +1537,19 @@ class Postprocessor:
     # --------------------------------------------------------------------------------
     # CRT TV output
 
-    def _rgb_to_hue(self, rgb: List[float]) -> float:
-        """Convert an RGB color to an HSL hue, for use as `bandpass_hue` in `desaturate`.
-
-        This uses a cartesian-to-polar approximation of the HSL representation,
-        which is fine for hue detection, but should not be taken as an authoritative
-        H component of an accurate RGB->HSL conversion.
-        """
-        R, G, B = rgb
-        alpha = 0.5 * (2.0 * R - G - B)
-        beta = 3.0**0.5 / 2.0 * (G - B)
-        hue = math.atan2(beta, alpha) / (2.0 * math.pi)  # note atan2(0, 0) := 0
-        hue = hue + 0.5  # convert from `[-0.5, 0.5)` to `[0, 1)`
-        return hue
-
-    # This filter is adapted from an old GLSL code I made for Panda3D 1.8 back in 2014.
     @with_metadata(strength=[0.0, 1.0],
-                   tint_rgb=["!RGB"],  # hint the GUI that this parameter needs an RGB color picker
-                   bandpass_reference_rgb=["!RGB"],
-                   bandpass_q=[0.0, 1.0],
+                   tint_rgb=["!RGB"],
                    _priority=11.0)
-    def desaturate(self, image: torch.tensor, *,
-                   strength: float = 1.0,
-                   tint_rgb: List[float] = [1.0, 1.0, 1.0],
-                   bandpass_reference_rgb: List[float] = [1.0, 0.0, 0.0], bandpass_q: float = 0.0) -> None:
-        """[static] Desaturation with bells and whistles.
+    def monochrome_display(self, image: torch.tensor, *,
+                           strength: float = 1.0,
+                           tint_rgb: List[float] = [1.0, 1.0, 1.0]) -> None:
+        """[static] Monochrome display simulation.
+
+        Desaturates the image as seen through a monochrome display. Runs late
+        in the chain (after noise and analog degradation), so transport artifacts
+        like NTSC chroma noise are correctly collapsed into luminance — as a
+        real monochrome display would do. For color grading / bandpass
+        desaturation, see `desaturate`.
 
         Does not touch the alpha channel.
 
@@ -1443,84 +1558,11 @@ class Postprocessor:
         `tint_rgb`: Color to multiplicatively tint the image with. Applied after desaturation.
 
                     Some example tint values:
-                        Green monochrome computer monitor: [0.5, 1.0, 0.5]
-                        Amber monochrome computer monitor: [1.0, 0.5, 0.2]
-                        Sepia effect:                      [0.8039, 0.6588, 0.5098]
-                        No tint (off; default):            [1.0, 1.0, 1.0]
-
-        `bandpass_reference_rgb`: Reference color for hue to let through the bandpass.
-                                  Use this to let e.g. red things bypass the desaturation.
-                                  The hue is extracted automatically from the given color.
-
-        `bandpass_q`: Hue bandpass band half-width, in (0, 1]. Hues farther away from `bandpass_hue`
-                      than `bandpass_q` will be fully desaturated. The opposite colors on the color
-                      circle are defined as having the largest possible hue difference, 1.0.
-
-                      The shape of the filter is a quadratic spike centered on the reference hue,
-                      and smoothly decaying to zero at `bandpass_q` away from the center.
-
-                      The special value 0 (default) switches the hue bandpass code off,
-                      saving some compute.
+                        Green monochrome CRT:              [0.5, 1.0, 0.5]
+                        Amber monochrome CRT:              [1.0, 0.5, 0.2]
+                        No tint (white phosphor; default): [1.0, 1.0, 1.0]
         """
-        R = image[0, :, :]
-        G = image[1, :, :]
-        B = image[2, :, :]
-        if bandpass_q > 0.0:  # hue bandpass enabled?
-            # Calculate hue of each pixel, using a cartesian-to-polar approximation of the HSL representation.
-            # An approximation is fine here, because we only use this for a hue detector.
-            # This is faster and requires less branching than the exact hexagonal representation.
-            desat_alpha = 0.5 * (2.0 * R - G - B)
-            desat_beta = 3.0**0.5 / 2.0 * (G - B)
-            desat_hue = torch.atan2(desat_beta, desat_alpha) / (2.0 * math.pi)  # note atan2(0, 0) := 0
-            desat_hue += 0.5  # convert from `[-0.5, 0.5)` to `[0, 1)`
-            # -> [h, w]
-
-            # Determine whether to keep this pixel or desaturate (and by how much).
-            #
-            # Calculate distance of each pixel from reference hue, accounting for wrap-around.
-            bandpass_hue = self._rgb_to_hue(bandpass_reference_rgb)
-            desat_temp1 = torch.abs(desat_hue - bandpass_hue)
-            desat_temp2 = torch.abs((desat_hue + 1.0) - bandpass_hue)
-            desat_temp3 = torch.abs(desat_hue - (bandpass_hue + 1.0))
-            desat_hue_distance = 2.0 * torch.minimum(torch.minimum(desat_temp1, desat_temp2),
-                                                     desat_temp3)  # [0, 0.5] -> [0, 1]
-            # -> [h, w]
-
-            # How to interpret the following factor:
-            #    0: far away from reference hue, pixel should be desaturated
-            #    1: at reference hue, pixel should be kept as-is
-            #
-            # - Pixels with their hue at least `bandpass_q` away from `bandpass_hue` are fully desaturated.
-            # - As distance falls below `bandpass_q`, a blend starts very gradually.
-            # - As the hue difference approaches zero, the pixel is fully passed through.
-            # - The 1.0 - ... together with the square makes a sharp spike at the reference hue.
-            desat_diff2 = (1.0 - torch.clamp(desat_hue_distance / bandpass_q, min=0.0, max=1.0))**2
-
-            # Gray pixels should always be desaturated, so that they get the tint applied.
-            # In HSL computations, gray pixels have an arbitrary hue, usually red, so we must filter them out separately.
-            # We can do this in YUV space.
-            YUV = rgb_to_yuv(image[:3, :, :])
-            Y = YUV[0, :, :]  # -> [h, w]
-            U = YUV[1, :, :]  # -> [h, w]
-            V = YUV[2, :, :]  # -> [h, w]
-            notgray_threshold = 0.05
-            urel = torch.clamp(torch.abs(U) / notgray_threshold, min=0.0, max=1.0)
-            vrel = torch.clamp(torch.abs(V) / notgray_threshold, min=0.0, max=1.0)
-            notgray = (urel**2 + vrel**2)**0.5  # [h, w]; 0: completely gray; 1: has at least some color
-            desat_diff2 *= notgray
-
-            strength_field = strength * (1.0 - desat_diff2)  # [h, w]; "field" as in physics, NOT as in CRT TV
-        else:
-            Y = luminance(image[:3, :, :])  # save some compute since in this case we don't need U and V
-            strength_field = strength  # just a scalar!
-
-        # Desaturate, then apply tint
-        Y = Y.unsqueeze(0)  # -> [1, h, w]
-        tint_color = torch.tensor(tint_rgb, device=self.device, dtype=image.dtype).unsqueeze(1).unsqueeze(2)  # [c, 1, 1]
-        tinted_desat_image = Y * tint_color  # -> [c, h, w]
-
-        # Final blend
-        image[:3, :, :] = (1.0 - strength_field) * image[:3, :, :] + strength_field * tinted_desat_image
+        self._desaturate_impl(image, strength=strength, tint_rgb=tint_rgb)
 
     @with_metadata(strength=[0.1, 0.9],
                    density=[1.0, 4.0],
