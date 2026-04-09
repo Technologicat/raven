@@ -543,7 +543,7 @@ class PostprocessorSettingsEditorGUI:
                                       callback=self.on_upscaler_settings_change,
                                       tag="upscale_preset_choice")
                         dpg.add_tooltip("upscale_preset_choice", tag="upscale_preset_tooltip")  # tag
-                        dpg.add_text("Choose Anime4K preset\n    A = optimized to remove blur, resampling artifacts, smearing\n    B = optimized to remove ringing/aliasing\n    C = optimized for images with no degradation", parent="upscale_preset_tooltip")  # tag
+                        dpg.add_text("Choose Anime4K preset\n    A = optimized to remove blur, resampling artifacts, smearing\n    B = optimized to remove ringing/aliasing\n    C = optimized for images with no degradation\nAnime4K is used when quality is 'low' or 'high'.", parent="upscale_preset_tooltip")  # tag
                         dpg.add_text("Preset")
                     with dpg.group(horizontal=True):
                         self.upscale_qualities = ["low", "high", "bilinear", "bicubic"]
@@ -553,7 +553,7 @@ class PostprocessorSettingsEditorGUI:
                                       callback=self.on_upscaler_settings_change,
                                       tag="upscale_quality_choice")
                         dpg.add_tooltip("upscale_quality_choice", tag="upscale_quality_tooltip")  # tag
-                        dpg.add_text("Choose upscale quality/speed tradeoff", parent="upscale_quality_tooltip")  # tag
+                        dpg.add_text("Choose upscale quality/speed tradeoff.\n    low = Anime4K with chosen preset, low quality mode [recommended]\n    high = Anime4K with chosen preset, high quality mode\n    bilinear = simple bilinear scaling\n    bicubic = bicubic scaling [recommended, low-cost option]", parent="upscale_quality_tooltip")  # tag
                         dpg.add_text("Quality")
                     dpg.add_text("[Presets as in Anime4K.]", color=(140, 140, 140))
 
