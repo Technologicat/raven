@@ -624,7 +624,8 @@ class Postprocessor:
         # Recompute mesh when the filter settings change, or the video stream size changes.
         do_setup = True
         c, h, w = image.shape
-        size_changed = (h != self._prev_h or w != self._prev_w)
+        cached_grid = self.zoom_data[name]["grid"] if name in self.zoom_data else None
+        size_changed = cached_grid is None or cached_grid.shape[-3] != h or cached_grid.shape[-2] != w
         if not size_changed and name in self.zoom_data:
             if (factor == self.zoom_data[name]["factor"] and
                     center_x == self.zoom_data[name]["center_x"] and
@@ -959,9 +960,9 @@ class Postprocessor:
         """Shared implementation for `noise` and `analog_vhs_noise`."""
         # Re-randomize the noise texture whenever the normalized frame number changes, or the video stream size changes.
         c, h, w = image.shape
-        size_changed = (h != self._prev_h or w != self._prev_w)
-        strength_changed = (strength != self.noise_last_strength[name])
         cached = self.noise_last_image[name]
+        size_changed = cached is not None and (cached.shape[-2] != h or cached.shape[-1] != w)
+        strength_changed = (strength != self.noise_last_strength[name])
         if cached is None or size_changed or strength_changed or int(self.frame_no) > int(self.last_frame_no):
             c, h, w = image.shape
             if channel.startswith("VHS_"):
@@ -1289,8 +1290,9 @@ class Postprocessor:
         """
         # Re-randomize the glitch noise image whenever enough frames have elapsed after last randomization, or the video stream size changes.
         c, h, w = image.shape
-        size_changed = (h != self._prev_h or w != self._prev_w)
-        if self.vhs_glitch_last_image[name] is None or size_changed or (int(self.frame_no) - int(self.vhs_glitch_last_frame_no[name])) >= self.vhs_glitch_interval[name]:
+        cached = self.vhs_glitch_last_image[name]
+        size_changed = cached is not None and cached is not VHS_GLITCH_BLANK and (cached.shape[-2] != h or cached.shape[-1] != w)
+        if cached is None or size_changed or (int(self.frame_no) - int(self.vhs_glitch_last_frame_no[name])) >= self.vhs_glitch_interval[name]:
             n_glitches = torch.rand(1, device="cpu")**unboost  # unboost: increase probability of having none or few glitching lines
             n_glitches = int(max_glitches * n_glitches[0])
             if not n_glitches:
@@ -1408,8 +1410,8 @@ class Postprocessor:
         if noise_blend > 0.0:
             # Head switching reads between tracks, not valid chroma data, so the noise is luma-only
             # on both PAL and NTSC systems. We get this by calling `vhs_noise` in its PAL mode.
-            size_changed = (h != self._prev_h or w != self._prev_w)
             cached = self.vhs_headswitching_noise[name]
+            size_changed = cached is not None and cached.shape[-1] != w
             if cached is None or size_changed or int(self.frame_no) > int(self.last_frame_no):
                 noise = vhs_noise(w, n_rows, device=self.device, dtype=image.dtype, double_size=double_size)
                 self.vhs_headswitching_noise[name] = noise
@@ -1476,8 +1478,8 @@ class Postprocessor:
         base_offset_pixels = int((base_offset / 2.0) * h)
         noise_pixels = yoffs_pixels + base_offset_pixels
         if noise_pixels > 0:
-            size_changed = (h != self._prev_h or w != self._prev_w)
             cached = self.vhs_tracking_noise[name]
+            size_changed = cached is not None and cached.shape[-1] != w
             if cached is None or size_changed or int(self.frame_no) > int(self.last_frame_no):
                 # Generate at current noise_pixels height. Cached for sub-frame reuse.
                 noise = vhs_noise(w, noise_pixels, device=self.device, dtype=image.dtype, double_size=double_size)
@@ -1536,8 +1538,9 @@ class Postprocessor:
         """
         # Re-randomize the glitch pattern whenever enough frames have elapsed after last randomization, or the video stream size changes.
         c, h, w = image.shape
-        size_changed = (h != self._prev_h or w != self._prev_w)
-        if self.digital_glitches_grid[name] is None or size_changed or (int(self.frame_no) - int(self.digital_glitches_last_frame_no[name])) >= self.digital_glitches_interval[name]:
+        cached_grid = self.digital_glitches_grid[name]
+        size_changed = cached_grid is not None and (cached_grid.shape[-3] != h or cached_grid.shape[-2] != w)
+        if cached_grid is None or size_changed or (int(self.frame_no) - int(self.digital_glitches_last_frame_no[name])) >= self.digital_glitches_interval[name]:
             n_glitches = torch.rand(1, device="cpu")**unboost  # unboost: increase probability of having none or few glitching lines
             n_glitches = int(max_glitches * n_glitches[0])
             meshy = self._meshy
