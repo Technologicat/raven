@@ -88,7 +88,7 @@ class Editor07(Module):
                 pose: Tensor,
                 *args) -> List[Tensor]:
         n, c = pose.shape
-        pose = pose.view(n, c, 1, 1).repeat(1, 1, self.args.image_size, self.args.image_size)
+        pose = pose.view(n, c, 1, 1).expand(-1, -1, self.args.image_size, self.args.image_size)
         feature = torch.cat([input_original_image, input_warped_image, input_grid_change, pose], dim=1)
 
         feature = self.body.forward(feature)[-1]

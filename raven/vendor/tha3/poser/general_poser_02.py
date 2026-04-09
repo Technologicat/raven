@@ -44,9 +44,11 @@ class GeneralPoser02(Poser):
             self.modules = {}
             for key in self.module_loaders:
                 module = self.module_loaders[key]()
-                self.modules[key] = module
                 module.to(self.device)
                 module.train(False)
+                if self.device.type == "cuda":
+                    module = torch.compile(module, mode="reduce-overhead")
+                self.modules[key] = module
         return self.modules
 
     def get_pose_parameter_groups(self) -> List[PoseParameterGroup]:

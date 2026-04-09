@@ -76,7 +76,7 @@ class TwoAlgoFaceBodyRotator05(Module):
 
     def forward(self, image: Tensor, pose: Tensor, *args) -> List[Tensor]:
         n, c = pose.shape
-        pose = pose.view(n, c, 1, 1).repeat(1, 1, self.args.image_size, self.args.image_size)
+        pose = pose.view(n, c, 1, 1).expand(-1, -1, self.args.image_size, self.args.image_size)
         feature = torch.cat([image, pose], dim=1)
 
         feature = self.encoder_decoder.forward(feature)[-1]

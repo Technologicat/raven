@@ -29,25 +29,30 @@ class GridChangeApplier:
         self.last_n = None
         self.last_device = None
         self.last_identity = None
+        self._base_grid_cache = {}  # (n, c, h, w, dtype, device, align_corners) -> base_grid
 
     def apply(self, grid_change: Tensor, image: Tensor, align_corners: bool = False) -> Tensor:
         n, c, h, w = image.shape
         device = grid_change.device
         grid_change = torch.transpose(grid_change.view(n, 2, h * w), 1, 2).view(n, h, w, 2)
 
-        if n == self.last_n and device == self.last_device:
-            identity = self.last_identity
-        else:
-            identity = torch.tensor(
-                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-                dtype=grid_change.dtype,
-                device=device,
-                requires_grad=False) \
-                .unsqueeze(0).repeat(n, 1, 1)
-            self.last_identity = identity
-            self.last_n = n
-            self.last_device = device
-        base_grid = affine_grid(identity, [n, c, h, w], align_corners=align_corners)
+        cache_key = (n, c, h, w, grid_change.dtype, device, align_corners)
+        base_grid = self._base_grid_cache.get(cache_key, None)
+        if base_grid is None:
+            if n == self.last_n and device == self.last_device:
+                identity = self.last_identity
+            else:
+                identity = torch.tensor(
+                    [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                    dtype=grid_change.dtype,
+                    device=device,
+                    requires_grad=False) \
+                    .unsqueeze(0).repeat(n, 1, 1)
+                self.last_identity = identity
+                self.last_n = n
+                self.last_device = device
+            base_grid = affine_grid(identity, [n, c, h, w], align_corners=align_corners)
+            self._base_grid_cache[cache_key] = base_grid
 
         grid = base_grid + grid_change
         resampled_image = grid_sample(image, grid, mode='bilinear', padding_mode='border', align_corners=align_corners)

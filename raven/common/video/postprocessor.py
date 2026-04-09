@@ -509,7 +509,7 @@ class Postprocessor:
             #
             # We don't strictly keep state here - we just cache. :P
 
-            with torch.no_grad():
+            with torch.inference_mode():
                 self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
                 self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
                 self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
@@ -570,7 +570,7 @@ class Postprocessor:
         # While I can almost imagine the eventual bug report, I think it's safe to ignore this.
 
         # Apply the current filter chain.
-        with torch.no_grad():
+        with torch.inference_mode():
             for filter_name, settings in chain:
                 apply_filter = getattr(self, filter_name)
                 apply_filter(image, **settings)

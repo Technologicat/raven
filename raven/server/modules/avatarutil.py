@@ -302,7 +302,7 @@ def torch_image_to_numpy(image: torch.tensor) -> np.array:
     Output is a NumPy array on CPU, of shape [h, w, c], dtype float32, range [0, 1], SRGB (display-ready).
     You can `.ravel()` this for sending into a DPG texture.
     """
-    with torch.no_grad():
+    with torch.inference_mode():
         image = torch.clone(image.detach())
         image[:3, :, :] = torch_linear_to_srgb(image[:3, :, :])
         c, h, w = image.shape

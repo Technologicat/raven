@@ -1026,7 +1026,7 @@ class PoseEditorGUI:
         assert self.torch_base_image is not None
 
         posetensor = torch.tensor(pose, device=self.device, dtype=self.dtype)
-        with torch.no_grad():
+        with torch.inference_mode():
             # Cel blending: apply cels to base image.
             torch_source_image = compositor.render_celstack(self.torch_base_image, celstack, self.torch_cels)
 

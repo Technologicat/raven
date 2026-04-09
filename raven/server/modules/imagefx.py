@@ -138,7 +138,7 @@ def process(input_stream,
         image_rgba = decode_image(input_stream)
 
         logger.info("process: processing image")
-        with torch.no_grad():
+        with torch.inference_mode():
             image_rgba = imageutils.np_to_tensor(image_rgba, device=postprocessor.device,
                                                  dtype=postprocessor.dtype, batch=False)
 
@@ -181,7 +181,7 @@ def upscale(input_stream,
     try:
         image_rgba = decode_image(input_stream)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             image_rgba = imageutils.np_to_tensor(image_rgba, device=postprocessor.device,
                                                  dtype=postprocessor.dtype, batch=False)
 

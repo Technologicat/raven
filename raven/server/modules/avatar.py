@@ -1401,7 +1401,7 @@ class Animator:
             self._warmup_pending = False
             logger.info("render_animation_frame: warming up render pipeline")
             with timer() as tim:
-                with torch.no_grad():
+                with torch.inference_mode():
                     warmup_image = self.source_image * 2.0 - 1.0  # [0, 1] -> [-1, 1], same transform as render pipeline
                     warmup_pose = torch.zeros(self.poser.get_num_parameters(), device=self.device, dtype=self.poser.get_dtype())
                     warmup_output = self.poser.pose(warmup_image, warmup_pose)[0]
@@ -1471,7 +1471,7 @@ class Animator:
             _, strength = target_celstack[waver1_idx]
             self.current_celstack = self.animate_eye_waver(strength, self.current_celstack)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             # Detailed performance measurement protocol: sync CUDA (i.e. finish pending async CUDA operations), start timer, do desired CUDA operation(s), sync CUDA again, stop timer.
             with timer() as tim_celblend:
                 blended_source_image = compositor.render_celstack(self.source_image, self.current_celstack, self.torch_cels)
