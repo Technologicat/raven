@@ -1,15 +1,73 @@
 # Changelog
 
-**0.2.6** (March 2026, in progress):
+**0.2.6** (9 April 2026):
+
+**Added**:
+
+- New GUI app: *Raven-cherrypick*.
+  - An image triage tool for quickly sorting a folder of images into cherries (keepers), lemons (rejects), and neutral.
+  - Start with `raven-cherrypick some/path/to/images/`. If no path given, defaults to CWD.
+  - GPU-accelerated Lanczos scaling with mipmapped progressive loading and preload cache for instant image switching.
+  - No on-disk thumbnail cache, no metadata files. Image state is encoded by directory path (`base/cherries`, `base/lemons`).
+  - Easy two-hand operation: arrows navigate; X=lemon, C=cherry, V=clear mark. Ctrl+click in grid view for multi-select.
+  - Filter view: show only cherries, lemons or neutral, or show all (G / Shift+G to cycle).
+  - Jump to next cherry/lemon/neutral with B/N/M.
+  - Zoom/pan preserved when switching between images with the same dimensions — useful for comparing variations of the same shot.
+  - Compare mode: select 2–9 images and press Enter to cycle through them automatically. Adjustable speed, pause/resume, zoom while cycling. Press a digit key to pick a winner and exit.
+  - Status bar: current position, image dimensions and approximate aspect ratio, selection count.
+  - F11 fullscreen mode and F1 help card available.
+
+- New CLI tool: *Raven-conference-timer*.
+  - A large-font countdown timer for conference presentations.
+  - Start with `raven-conference-timer 15:00` (or bare minutes: `raven-conference-timer 15`).
+  - Auto-sizes the window to fit the countdown text. `--size N` sets font size in pixels (default 500).
+  - Color changes at configurable thresholds: white → yellow → red → pulsating glow when expired.
+    - `--yellow` and `--red` set the thresholds (default 5:00 and 2:00).
+  - Hotkeys: Space to pause/resume, F11 for fullscreen, F1 for help card, Esc to exit.
+
+- *Raven-xdot-viewer*:
+  - GUI: combobox to choose which GraphViz layout engine to use, re-rendering the current graph with the chosen engine.
+  - Tooltip support for node annotations (from GraphViz `tooltip` attribute; e.g. Pyan3 2.4.0+ generates these).
+  - Dashed and dotted edge rendering.
+  - Error dialog for failed graph loads.
+  - Idle framerate throttle (reduced GPU usage when not animating).
+
+- *Raven-avatar*:
+  - F1 help card for the avatar settings editor.
+
+- *Video processing* (`raven.common.video`):
+  - New filter: VHS head switching noise (horizontal distortion bands at frame bottom). The most iconic VHS artifact.
+  - New noise mode: VHS, with PAL and NTSC modes. NTSC comes with 4:2:0 chroma subsampling for a more authentic analog look.
+  - Bloom filter: added `sigma` parameter for controlling glow width. Recommended values: 7.0 for dreamy early 2000s anime glow, 1.6 for modern tighter glow.
+
+- *Common libraries*:
+  - New module: `raven.common.image` (image utilities and GPU-accelerated loader pipeline).
+  - Extracted `SmoothValue`/`SmoothInt` into `raven.common.smoothvalue` (shared across xdot viewer, cherrypick, and future apps).
+  - `PyTurboJPEG` dependency added for fast JPEG decoding. Requires the `turbojpeg` system-level library (on Debian-based Linux: `sudo apt install libturbojpeg`).
 
 **Changed**:
 
-- Raven-xdot-viewer:
-  - GUI: Add a combobox to choose which GraphViz layout engine to use, re-rendering the current graph with the chosen engine.
+- *Video processing* (`raven.common.video`):
+  - There are now two noise stages: `noise` (sensor/film grain, early in the chain) and `analog_vhs_noise` (VHS tape noise, later). This better models the physical signal path.
+    - If you have custom chains that use `noise`, check whether you need both stages.
+  - Split `desaturate` into `desaturate` (retouching stage) and `monochrome_display` (display output stage), allowing separate control over the artistic and output desaturation.
+  - Renamed the `translucency` filter to `translucent_display` for consistency with the new `monochrome_display`, and moved it late in the chain because it models a scifi display device.
+    - If you have custom avatar postprocessor chains (in `raven.server.config` or custom JSON presets), rename the filter in your chain. The bundled presets have been updated.
+
+- *Dependencies*:
+  - Bump `mcpyrate` to 4.0.0.
+  - Bump `unpythonic` to 2.0.0.
+  - Widen Python support to `<3.15`.
+    - But narrow `requires-python` to `<3.13` for `kokoro`/`misaki` compatibility.
 
 **Fixed**:
 
 - Compatibility: detect "Item not found" across different Python/DPG versions, needed in GUI code.
+
+- *Raven-xdot-viewer*:
+  - Fix dark-mode text contrast on colored node fills (text now adapts based on perceived luminance).
+  - Fix graph area too small on 1080p displays.
+  - Fix `--size` flag for fonts smaller than the default 120px.
 
 
 ---
