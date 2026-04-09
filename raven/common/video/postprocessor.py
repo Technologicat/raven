@@ -960,81 +960,14 @@ class Postprocessor:
     # --------------------------------------------------------------------------------
     # General use
 
-    @with_metadata(strength=[0.1, 1.0],
-                   sigma=[0.1, 3.0],
-                   channel=["Y", "A", "VHS_PAL", "VHS_NTSC"],
-                   double_size=[False, True],
-                   ntsc_chroma=["nearest", "bilinear"],
-                   name=["!ignore"],  # hint for GUI to ignore this parameter
-                   _priority=4.0)
-    def noise(self, image: torch.tensor, *,
-              strength: float = 0.3,
-              sigma: float = 1.0,
-              channel: str = "Y",
-              double_size: bool = True,
-              ntsc_chroma: str = "nearest",
-              name: str = "noise0") -> None:
-        """[dynamic] Add noise.
-
-        NOTE: At small values of `sigma`, this filter causes the video to use a lot of bandwidth
-        during network transfer, because noise is impossible to compress.
-
-        `strength`: How much noise to apply. 0 is no noise, 1 replaces the input image with noise.
-
-                    For the `"Y"` and `"A"` channels, the formula is:
-
-                        out = in * ((1 - magnitude) + magnitude * noise_texture)
-
-                    The filter is multiplicative, so it never brightens the image, and
-                    never makes visible those pixels that are already fully translucent
-                    (alpha = 0.0) in the input.
-
-                    A larger `strength` makes the image darker/more translucent overall, because
-                    then a larger portion of the luminance/alpha axis is reserved for the noise.
-
-                    In VHS_NTSC mode, the U/V planes get special treatment with additive noise.
-
-        `sigma`: If nonzero, apply a Gaussian blur to the noise, thus reducing its spatial frequency
-                 (i.e. making larger and smoother "noise blobs"). Works up to 3.0.
-
-                 Used by ``"Y"`` and ``"A"`` modes only — the VHS modes use their own fixed
-                 anisotropic kernels.
-
-        `channel`: Operation mode. One of:
-                     ``"Y"``:        Modulate luminance (isotropic blur, converts to YUV and back).
-                     ``"A"``:        Modulate alpha (isotropic blur, fast).
-                     ``"VHS_PAL"``:  Anisotropic luma noise — horizontal runs, sharp vertical
-                                     transitions. Multiplicative on Y only; chroma untouched
-                                     (PAL's phase alternation cancels chroma errors).
-                     ``"VHS_NTSC"``: Anisotropic luma noise plus *additive* chroma noise on
-                                     Cb/Cr — the "Never The Same Color" phenomenon.
-                                     Luma is multiplicative; chroma is additive (random
-                                     hue/saturation shift, not darkening).
-
-        `double_size`: If ``True``, each noise texel covers a 2×2 pixel block (generated at
-                       half resolution, nearest-neighbour upscaled). This dramatically improves
-                       compressibility — QOI and similar codecs exploit the horizontal run
-                       duplication. Particularly useful for ``"VHS_NTSC"``, where chroma noise
-                       otherwise destroys delta-based compression.
-
-        `ntsc_chroma` (``"VHS_NTSC"`` only): how the 4:2:0 chroma noise is upscaled.
-                       ``"nearest"``:  Blocky 2×2 chroma texels. Fast, compresses well.
-                                       Retro digital aesthetic.
-                       ``"bilinear"``: Smooth chroma transitions. Slower, larger frames.
-                                       Analog aesthetic — more faithful to real tape noise.
-
-        `name`: Optional name for this filter instance in the chain. Used as cache key to store the noise texture.
-                If you have more than one `noise` filter in the chain, they should have different names so that
-                each one gets its own noise texture.
-
-                (Of course, to save some compute, you can give them the same name; then they'll use the same
-                 noise texture. But be aware that then the sigma values should be the same, because sigma
-                 affects the texture.)
-
-        Suggested settings:
-            Scifi hologram:     strength=0.1, sigma=0.0
-            Analog television:  strength=0.2, sigma=2.0
-        """
+    def _noise_impl(self, image: torch.tensor, *,
+                    strength: float = 0.3,
+                    sigma: float = 1.0,
+                    channel: str = "Y",
+                    double_size: bool = True,
+                    ntsc_chroma: str = "nearest",
+                    name: str = "noise0") -> None:
+        """Shared implementation for `noise` and `analog_vhs_noise`."""
         # Re-randomize the noise texture whenever the normalized frame number changes, or the video stream size changes.
         c, h, w = image.shape
         size_changed = (h != self._prev_h or w != self._prev_w)
@@ -1079,6 +1012,61 @@ class Postprocessor:
             image_yuv[0, :, :].mul_(base_multiplier + noise_image)
         image_rgb = yuv_to_rgb(image_yuv)
         image[:3, :, :] = image_rgb
+
+    @with_metadata(strength=[0.1, 1.0],
+                   sigma=[0.1, 3.0],
+                   channel=["Y", "A"],
+                   double_size=[False, True],
+                   name=["!ignore"],
+                   _priority=1.5)
+    def noise(self, image: torch.tensor, *,
+              strength: float = 0.3,
+              sigma: float = 1.0,
+              channel: str = "Y",
+              double_size: bool = True,
+              name: str = "noise0") -> None:
+        """[dynamic] Sensor / film grain noise.
+
+        Isotropic noise applied at the camera/capture stage. Runs early in the
+        chain, before analog transport degradation. For VHS tape noise, see
+        `analog_vhs_noise`.
+
+        NOTE: At small values of `sigma`, this filter causes the video to use a lot of bandwidth
+        during network transfer, because noise is impossible to compress.
+
+        `strength`: How much noise to apply. 0 is no noise, 1 replaces the input image with noise.
+
+                    The formula is:
+
+                        out = in * ((1 - strength) + strength * noise_texture)
+
+                    The filter is multiplicative, so it never brightens the image, and
+                    never makes visible those pixels that are already fully translucent
+                    (alpha = 0.0) in the input.
+
+                    A larger `strength` makes the image darker/more translucent overall, because
+                    then a larger portion of the luminance/alpha axis is reserved for the noise.
+
+        `sigma`: Gaussian blur sigma for the noise, reducing its spatial frequency
+                 (i.e. making larger and smoother "noise blobs"). Works up to 3.0.
+                 0 = no blur (raw uniform noise).
+
+        `channel`: Operation mode:
+                     ``"Y"``: Modulate luminance (converts to YUV and back).
+                     ``"A"``: Modulate alpha (fast).
+
+        `double_size`: If ``True``, each noise texel covers a 2×2 pixel block (generated at
+                       half resolution, nearest-neighbour upscaled). Improves compressibility.
+
+        `name`: Cache key for this filter instance. Use different names for multiple
+                instances in the chain.
+
+        Suggested settings:
+            Scifi hologram:     strength=0.1, sigma=0.0
+            Analog television:  strength=0.2, sigma=2.0
+        """
+        self._noise_impl(image, strength=strength, sigma=sigma, channel=channel,
+                         double_size=double_size, name=name)
 
     # --------------------------------------------------------------------------------
     # Lo-fi analog video
@@ -1222,6 +1210,59 @@ class Postprocessor:
         warped = torch.nn.functional.grid_sample(image_batch, grid, mode="bilinear", padding_mode="border", align_corners=False)
         warped = warped.squeeze(0)  # [1, c, h, w] -> [c, h, w]
         image[:, :, :] = warped
+
+    # VHS tape effects, in physical order:
+    #   1. Tape medium noise — intrinsic magnetic noise, baked into the recorded signal.
+    #   2. Glitches — localized tape surface damage / oxide dropout.
+    #   3. Head switching — mechanical artifact from the rotary drum switching heads during playback.
+    #   4. Tracking — playback speed/alignment error, tape doesn't track the helical scan correctly.
+
+    @with_metadata(strength=[0.1, 1.0],
+                   mode=["PAL", "NTSC"],
+                   double_size=[False, True],
+                   ntsc_chroma=["nearest", "bilinear"],
+                   name=["!ignore"],
+                   _priority=7.5)
+    def analog_vhs_noise(self, image: torch.tensor, *,
+                         strength: float = 0.3,
+                         mode: str = "PAL",
+                         double_size: bool = True,
+                         ntsc_chroma: str = "nearest",
+                         name: str = "analog_vhs_noise0") -> None:
+        """[dynamic] VHS tape noise.
+
+        Anisotropic noise characteristic of the VHS magnetic medium. Runs in the
+        analog transport stage, after hsync artifacts but before glitches and
+        head switching. For sensor / film grain noise, see `noise`.
+
+        `strength`: How much noise to apply. 0 is no noise, 1 replaces the input with noise.
+
+                    Luma is multiplicative (darkens). In NTSC mode, chroma is additive
+                    (random hue/saturation shift).
+
+        `mode`: VHS color system:
+                  ``"PAL"``:  Luma noise only — horizontal runs, sharp vertical
+                              transitions. Chroma untouched (PAL's phase alternation
+                              cancels chroma errors).
+                  ``"NTSC"``: Luma noise plus *additive* chroma noise on Cb/Cr — the
+                              "Never The Same Color" phenomenon.
+
+        `double_size`: If ``True``, each noise texel covers a 2×2 pixel block (generated at
+                       half resolution, nearest-neighbour upscaled). Dramatically improves
+                       compressibility. Particularly useful for ``"NTSC"``, where chroma noise
+                       otherwise destroys delta-based compression.
+
+        `ntsc_chroma` (``"NTSC"`` only): how the 4:2:0 chroma noise is upscaled.
+                       ``"nearest"``:  Blocky 2×2 chroma texels. Fast, compresses well.
+                                       Retro digital aesthetic.
+                       ``"bilinear"``: Smooth chroma transitions. Slower, larger frames.
+                                       More analog look — faithful to real tape noise.
+
+        `name`: Cache key for this filter instance. Use different names for multiple
+                instances in the chain.
+        """
+        self._noise_impl(image, strength=strength, channel=f"VHS_{mode}",
+                         double_size=double_size, ntsc_chroma=ntsc_chroma, name=name)
 
     @with_metadata(strength=[0.1, 0.9],
                    unboost=[0.1, 10.0],
