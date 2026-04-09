@@ -64,8 +64,9 @@ def isotropic_noise(width: int, height: int, *,
     noise = torch.rand(gen_h, gen_w, device=device, dtype=dtype)
     if sigma > 0.0:
         noise = noise.unsqueeze(0)  # [h, w] -> [1, h, w]
-        noise = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(noise)
-        noise = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(noise)
+        ks = _blur_kernel_size(sigma)
+        noise = torchvision.transforms.GaussianBlur((ks, 1), sigma=sigma)(noise)
+        noise = torchvision.transforms.GaussianBlur((1, ks), sigma=sigma)(noise)
         noise = noise.squeeze(0)  # -> [h, w]
     if double_size:
         noise = noise.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[:height, :width]
@@ -342,21 +343,17 @@ class HistogramEqualizer:
 
 # --------------------------------------------------------------------------------
 
-# Gaussian blur kernel size for most filters that use Gaussian blur.
-#
-# The largest sensible value for `sigma` is such that
-#
-#     kernel_size = 2 * (2 * sigma) + 1,
-#
-# so that the kernel reaches its "2 sigma" (95% mass) point where the
-# finitely sized kernel cuts the tail. If you want to be really hi-fi,
-# you could go for the "3 sigma" (99.7% mass) point, but in practice
-# this isn't necessary.
-#
-# Hence, the largest sensible value is `sigma = 3.0` (which is already
-# really blurry).
-#
-_kernel_size = 13
+def _blur_kernel_size(sigma: float) -> int:
+    """Gaussian blur kernel size for a given sigma.
+
+    Uses the 2-sigma rule: the kernel reaches the point where the Gaussian
+    has decayed to ~1.8% of its peak. This captures ~95% of the mass.
+    Sufficient for a visual effects postprocessor; 3-sigma (99.7%) is overkill.
+
+    Result is always odd (required by torchvision GaussianBlur).
+    Minimum kernel size is 3 (torchvision requirement).
+    """
+    return min(21, max(3, 2 * math.ceil(2 * sigma) + 1))
 
 # Convenient for GUI auto-population so that we can specify sensible ranges for parameters once, at the implementation site (not separately at each GUI use site).
 def with_metadata(**metadata):
@@ -720,8 +717,9 @@ class Postprocessor:
             # Although everything else in Torch takes (height, width), kernel size is given as (size_x, size_y);
             # see `gaussian_blur_image` in https://pytorch.org/vision/main/_modules/torchvision/transforms/v2/functional/_misc.html
             # for a hint (the part where it computes the padding).
-            brights = torchvision.transforms.GaussianBlur((21, 1), sigma=sigma)(brights)  # blur along x
-            brights = torchvision.transforms.GaussianBlur((1, 21), sigma=sigma)(brights)  # blur along y
+            ks = _blur_kernel_size(sigma)
+            brights = torchvision.transforms.GaussianBlur((ks, 1), sigma=sigma)(brights)  # blur along x
+            brights = torchvision.transforms.GaussianBlur((1, ks), sigma=sigma)(brights)  # blur along y
 
             # Additively blend the images. Note we are working in linear intensity space, and we will now go over 1.0 intensity.
             image.add_(brights)
@@ -772,14 +770,20 @@ class Postprocessor:
             https://en.wikipedia.org/wiki/Chromatic_aberration
         """
         # Axial CA: Shrink R (deflected less), pass G through (lens reference wavelength), enlarge B (deflected more).
-        grid_R = torch.stack((self._meshx * (1.0 + scale), self._meshy * (1.0 + scale)), 2).unsqueeze(0)
-        grid_B = torch.stack((self._meshx * (1.0 - scale), self._meshy * (1.0 - scale)), 2).unsqueeze(0)
+        # Cache grids — they depend only on `scale` + meshgrid (meshgrid invalidates on resolution change).
+        if not hasattr(self, '_ca_cache') or self._ca_cache[0] != scale or self._ca_cache[1] != id(self._meshx):
+            grid_R = torch.stack((self._meshx * (1.0 + scale), self._meshy * (1.0 + scale)), 2).unsqueeze(0)
+            grid_B = torch.stack((self._meshx * (1.0 - scale), self._meshy * (1.0 - scale)), 2).unsqueeze(0)
+            self._ca_cache = (scale, id(self._meshx), grid_R, grid_B)
+        else:
+            grid_R, grid_B = self._ca_cache[2], self._ca_cache[3]
 
         # Batch R+A and B+A to halve grid_sample and GaussianBlur calls.
         # R and A-via-grid_R use the same warp grid; same for B and A-via-grid_B.
         # GaussianBlur processes all channels, so blurring a 2-channel tensor does both at once.
-        blur_x = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)
-        blur_y = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)
+        ks = _blur_kernel_size(sigma)
+        blur_x = torchvision.transforms.GaussianBlur((ks, 1), sigma=sigma)
+        blur_y = torchvision.transforms.GaussianBlur((1, ks), sigma=sigma)
 
         # Warp R and A together with grid_R (advanced indexing → copy, safe before writes)
         warped_RA = torch.nn.functional.grid_sample(image[[0, 3], :, :].unsqueeze(0),
@@ -791,11 +795,11 @@ class Postprocessor:
                                                     grid_B, mode="bilinear", padding_mode="border", align_corners=False)
         warped_BA = blur_y(blur_x(warped_BA))  # transverse CA
 
-        # Alpha channel: average the R-warped, G-original, and B-warped alpha values
         image[0, :, :] = warped_RA[0, 0, :, :]
         # image[1, :, :] passed through as-is (G is the lens reference wavelength)
         image[2, :, :] = warped_BA[0, 0, :, :]
-        image[3, :, :] = (warped_RA[0, 1, :, :] + image[3, :, :] + warped_BA[0, 1, :, :]) / 3.0
+        # Alpha: average the R-warped, G-original, and B-warped alpha values (in-place, no temporary)
+        image[3, :, :].add_(warped_RA[0, 1, :, :]).add_(warped_BA[0, 1, :, :]).mul_(1.0 / 3.0)
 
     @with_metadata(strength=[0.1, 0.5],
                    _priority=2.0)
@@ -1061,8 +1065,9 @@ class Postprocessor:
 
         `sigma`: standard deviation of the Gaussian blur kernel, in pixels. Works up to 3.0.
         """
-        image[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(image)  # blur along x
-        image[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(image)  # blur along y
+        ks = _blur_kernel_size(sigma)
+        image[:, :, :] = torchvision.transforms.GaussianBlur((ks, 1), sigma=sigma)(image)  # blur along x
+        image[:, :, :] = torchvision.transforms.GaussianBlur((1, ks), sigma=sigma)(image)  # blur along y
 
     @with_metadata(speed=[1.0, 16.0],
                    amplitude1=[0.001, 0.01],
