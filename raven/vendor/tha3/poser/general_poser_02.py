@@ -46,7 +46,7 @@ class GeneralPoser02(Poser):
                 module = self.module_loaders[key]()
                 module.to(self.device)
                 module.train(False)
-                if self.device.type == "cuda":
+                if torch.device(self.device).type == "cuda":
                     module = torch.compile(module, mode="reduce-overhead")
                 self.modules[key] = module
         return self.modules
