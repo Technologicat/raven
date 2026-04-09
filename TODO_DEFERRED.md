@@ -1,5 +1,17 @@
 # Deferred TODOs
 
+## Postprocessor: remaining incremental optimizations
+
+From the 2026-04-09 performance audit session. Each is small but they compound:
+
+1. **Auto-size GaussianBlur kernels based on sigma.** Replace the hardcoded `_kernel_size = 13` (and bloom's 21) with `2 * ceil(2 * sigma) + 1`. Saves ~46% blur cost at the default CA sigma=1.0 (kernel 5 vs 13). Bloom at sigma=1.6 goes from kernel 21 to 9. All filters use stable (non-animated) sigma, so cuDNN autotuner stays warm. One helper function replaces the constants.
+
+2. **Cache chromatic aberration grids.** `grid_R` and `grid_B` depend only on `scale` + meshgrid. Cache keyed by `scale`, invalidate on resolution change (same pattern as zoom filter). Saves 2 `torch.stack` + 2 `unsqueeze` per frame.
+
+3. **In-place CA alpha averaging.** Replace `image[3] = (a + b + c) / 3` with `image[3].add_(a).add_(b).mul_(1/3)` — avoids a temporary tensor (~4 MB at 1024×1024 FP16).
+
+4. **Bilinear/bicubic upscale bypass.** Add a `quality` option that skips Anime4K entirely and uses `F.interpolate`. Trades quality for ~18× speedup on the upscale stage. Useful escape hatch for constrained GPUs.
+
 ## torch.compile for the postprocessor
 
 `torch.compile()` on THA3 was investigated (2026-04-09) and yields only ~6% speedup (20.3ms → 19.0ms on 3070 Ti) at the cost of 37s compilation startup. Not worth it for THA3 — the model is already lean with separable convolutions + FP16. Also hangs in the server (works in standalone; cause unresolved — possibly Triton subprocess interaction with waitress/threads).
