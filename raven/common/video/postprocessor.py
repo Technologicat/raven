@@ -818,19 +818,6 @@ class Postprocessor:
         image[:3, :, :] *= brightness
 
     # --------------------------------------------------------------------------------
-    # Scifi hologram
-
-    @with_metadata(alpha=[0.1, 0.9],
-                   _priority=3.0)
-    def translucency(self, image: torch.tensor, *,
-                     alpha: float = 0.9) -> None:
-        """[static] A simple translucency filter for a hologram look.
-
-        Multiplicatively adjusts the alpha channel.
-        """
-        image[3, :, :].mul_(alpha)
-
-    # --------------------------------------------------------------------------------
     # Retouching / color grading
 
     def _rgb_to_hue(self, rgb: List[float]) -> float:
@@ -1576,7 +1563,17 @@ class Postprocessor:
         image[:, :, :] = warped
 
     # --------------------------------------------------------------------------------
-    # CRT TV output
+    # Display output
+
+    @with_metadata(alpha=[0.1, 0.9],
+                   _priority=10.5)
+    def translucent_display(self, image: torch.tensor, *,
+                            alpha: float = 0.9) -> None:
+        """[static] Translucent display (e.g. scifi hologram).
+
+        Multiplicatively adjusts the alpha channel.
+        """
+        image[3, :, :].mul_(alpha)
 
     @with_metadata(strength=[0.0, 1.0],
                    tint_rgb=["!RGB"],

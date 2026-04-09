@@ -117,7 +117,7 @@
             }
         ],
         [
-            "translucency",
+            "translucent_display",
             {
                 "alpha": 0.8999999761581421
             }

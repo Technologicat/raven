@@ -91,6 +91,6 @@
  "postprocessor_chain": [["bloom", {}],
                          ["chromatic_aberration", {}],
                          ["vignetting", {}],
-                         ["translucency", {}],
+                         ["translucent_display", {}],
                          ["banding", {}],
                          ["scanlines", {}]]}

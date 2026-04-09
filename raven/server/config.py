@@ -197,8 +197,8 @@ postprocessor_defaults = [
     ("chromatic_aberration", {}),
     ("vignetting", {}),
 
-    # scifi hologram output
-    ("translucency", {}),
+    # display output
+    ("translucent_display", {}),
     # ("noise", {"strength": 0.1, "sigma": 0.0, "channel": "A"}),
 
     # # lo-fi analog video
