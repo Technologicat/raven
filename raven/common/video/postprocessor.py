@@ -772,38 +772,30 @@ class Postprocessor:
             https://en.wikipedia.org/wiki/Chromatic_aberration
         """
         # Axial CA: Shrink R (deflected less), pass G through (lens reference wavelength), enlarge B (deflected more).
-        grid_R = torch.stack((self._meshx * (1.0 + scale), self._meshy * (1.0 + scale)), 2)
-        grid_R = grid_R.unsqueeze(0)
-        grid_B = torch.stack((self._meshx * (1.0 - scale), self._meshy * (1.0 - scale)), 2)
-        grid_B = grid_B.unsqueeze(0)
+        grid_R = torch.stack((self._meshx * (1.0 + scale), self._meshy * (1.0 + scale)), 2).unsqueeze(0)
+        grid_B = torch.stack((self._meshx * (1.0 - scale), self._meshy * (1.0 - scale)), 2).unsqueeze(0)
 
-        image_batch_R = image[0, :, :].unsqueeze(0).unsqueeze(0)  # [h, w] -> [c, h, w] -> [n, c, h, w]
-        warped_R = torch.nn.functional.grid_sample(image_batch_R, grid_R, mode="bilinear", padding_mode="border", align_corners=False)
-        warped_R = warped_R.squeeze(0)  # [1, c, h, w] -> [c, h, w]
-        image_batch_B = image[2, :, :].unsqueeze(0).unsqueeze(0)
-        warped_B = torch.nn.functional.grid_sample(image_batch_B, grid_B, mode="bilinear", padding_mode="border", align_corners=False)
-        warped_B = warped_B.squeeze(0)  # [1, c, h, w] -> [c, h, w]
+        # Batch R+A and B+A to halve grid_sample and GaussianBlur calls.
+        # R and A-via-grid_R use the same warp grid; same for B and A-via-grid_B.
+        # GaussianBlur processes all channels, so blurring a 2-channel tensor does both at once.
+        blur_x = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)
+        blur_y = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)
 
-        # Transverse CA (blur to simulate wrong focal distance for R and B)
-        warped_R[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(warped_R)  # blur along x
-        warped_R[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(warped_R)  # blur along y
-        warped_B[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(warped_B)  # blur along x
-        warped_B[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(warped_B)  # blur along y
+        # Warp R and A together with grid_R (advanced indexing → copy, safe before writes)
+        warped_RA = torch.nn.functional.grid_sample(image[[0, 3], :, :].unsqueeze(0),
+                                                    grid_R, mode="bilinear", padding_mode="border", align_corners=False)
+        warped_RA = blur_y(blur_x(warped_RA))  # transverse CA
 
-        # Alpha channel: treat similarly to each of R,G,B and average the three resulting alpha channels
-        image_batch_A = image[3, :, :].unsqueeze(0).unsqueeze(0)
-        warped_A1 = torch.nn.functional.grid_sample(image_batch_A, grid_R, mode="bilinear", padding_mode="border", align_corners=False)
-        warped_A1[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(warped_A1)
-        warped_A1[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(warped_A1)
-        warped_A2 = torch.nn.functional.grid_sample(image_batch_A, grid_B, mode="bilinear", padding_mode="border", align_corners=False)
-        warped_A2[:, :, :] = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(warped_A2)
-        warped_A2[:, :, :] = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(warped_A2)
-        averaged_alpha = (warped_A1 + image[3, :, :] + warped_A2) / 3.0
+        # Warp B and A together with grid_B
+        warped_BA = torch.nn.functional.grid_sample(image[[2, 3], :, :].unsqueeze(0),
+                                                    grid_B, mode="bilinear", padding_mode="border", align_corners=False)
+        warped_BA = blur_y(blur_x(warped_BA))  # transverse CA
 
-        image[0, :, :] = warped_R
-        # image[1, :, :] passed through as-is
-        image[2, :, :] = warped_B
-        image[3, :, :] = averaged_alpha
+        # Alpha channel: average the R-warped, G-original, and B-warped alpha values
+        image[0, :, :] = warped_RA[0, 0, :, :]
+        # image[1, :, :] passed through as-is (G is the lens reference wavelength)
+        image[2, :, :] = warped_BA[0, 0, :, :]
+        image[3, :, :] = (warped_RA[0, 1, :, :] + image[3, :, :] + warped_BA[0, 1, :, :]) / 3.0
 
     @with_metadata(strength=[0.1, 0.5],
                    _priority=2.0)
