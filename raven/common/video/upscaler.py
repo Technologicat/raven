@@ -88,11 +88,22 @@ class Upscaler:
         target_size = (self.upscaled_height, self.upscaled_width)
 
         if self.pipeline is None:
-            # Bypass mode: bilinear or bicubic interpolation, no Anime4K
-            return torch.nn.functional.interpolate(image_tensor.unsqueeze(0),
-                                                   target_size,
-                                                   mode=self.quality,
-                                                   align_corners=False)[0]
+            # Bypass mode: bilinear or bicubic interpolation, no Anime4K.
+            # Alpha always uses bilinear — bicubic's negative lobes cause
+            # ringing at silhouette edges (Gibbs phenomenon).
+            if c == 3 or self.quality == "bilinear":
+                return torch.nn.functional.interpolate(image_tensor.unsqueeze(0),
+                                                       target_size,
+                                                       mode=self.quality,
+                                                       align_corners=False)[0]
+            upscaled_rgb = torch.nn.functional.interpolate(image_tensor[:3, :, :].unsqueeze(0),
+                                                           target_size,
+                                                           mode="bicubic",
+                                                           align_corners=False)[0]
+            upscaled_alpha = torch.nn.functional.interpolate(image_tensor[3:4, :, :].unsqueeze(0),
+                                                             target_size,
+                                                             mode="bilinear")[0]
+            return torch.cat([upscaled_rgb, upscaled_alpha], dim=0)
 
         # Anime4K pipeline: operates on RGB only
         rgb_image_tensor = image_tensor[:3, :, :] if c == 4 else image_tensor
