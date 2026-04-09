@@ -5,7 +5,14 @@
 **Changed**:
 
 - *Raven-avatar*:
-  - Performance: ~4–5% faster avatar rendering via `torch.inference_mode`, cached `affine_grid` base grids in the THA3 engine, and zero-copy pose tensor expansion. Pure inference paths across the render pipeline (avatar, postprocessor, pose editor) now use `inference_mode` instead of `no_grad`.
+  - Performance: ~4–5% faster avatar rendering via `torch.inference_mode`, cached `affine_grid` base grids in the THA3 engine, and zero-copy pose tensor expansion. Pure inference paths across the render pipeline (avatar, postprocessor, upscaler, pose editor) now use `inference_mode` instead of `no_grad`.
+  - Performance: Chromatic aberration filter 2.2× faster (batched grid_sample and GaussianBlur calls). Default postprocessor chain 38–67% faster depending on resolution.
+  - Performance: Anime4K upscaler — eliminated unnecessary tensor clone, in-place output clamp.
+
+**Fixed**:
+
+- *Video processing* (`raven.common.video`):
+  - Fix filter cache invalidation on resolution change. Noise, zoom, and glitch caches now check their own tensor dimensions instead of relying on global state, preventing stale data when the image resolution changes mid-session.
 
 
 ---
