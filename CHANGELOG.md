@@ -4,21 +4,24 @@
 
 **Changed**:
 
-- *Raven-avatar*:
-  - Performance: ~4–5% faster avatar rendering via `torch.inference_mode`, cached `affine_grid` base grids in the THA3 engine, and zero-copy pose tensor expansion. Pure inference paths across the render pipeline (avatar, postprocessor, upscaler, pose editor) now use `inference_mode` instead of `no_grad`.
-  - Performance: Chromatic aberration filter 2.2× faster (batched grid_sample and GaussianBlur calls), cached grids, in-place alpha averaging. Default postprocessor chain 38–67% faster depending on resolution.
-  - Performance: Auto-sized GaussianBlur kernels based on sigma (previously hardcoded at maximum). Saves blur cost at typical settings (e.g. CA at sigma=1.0: kernel 5 instead of 13).
-  - Performance: Anime4K upscaler — eliminated unnecessary tensor clone, in-place output clamp.
-  - New upscaler quality options: `bilinear` and `bicubic` bypass Anime4K entirely for constrained GPUs. Trades image quality for ~18× faster upscaling. Quality difference is unnoticeable with the postprocessor enabled.
+- *Raven-avatar* performance improvements:
+  - ~4–5% faster avatar rendering via `torch.inference_mode`, cached `affine_grid` base grids in the THA3 engine, and zero-copy pose tensor expansion. Pure inference paths across the render pipeline (avatar, postprocessor, upscaler, pose editor) now use `inference_mode` instead of `no_grad`.
+  - Chromatic aberration filter optimized, now 2.2× faster (batched grid_sample and GaussianBlur calls), cached grids, in-place alpha averaging.
+    - Default postprocessor chain now 38–67% faster depending on resolution.
+  - Auto-sized GaussianBlur kernels based on sigma (previously hardcoded at maximum). Saves blur cost at typical settings (e.g. CA at sigma=1.0: kernel 5 instead of 13).
+  - Anime4K upscaler — eliminated unnecessary tensor clone, in-place output clamp.
+  - New upscaler quality options: `bilinear` and `bicubic` bypass Anime4K entirely for compute-constrained GPUs.
+    - This trades off image quality for ~18× faster upscaling - which may upgrade an avatar from 20 FPS to 25 FPS.
+    - Quality difference is unnoticeable with the postprocessor enabled (with the default chain).
+    - Main difference between Anime4K and `bicubic` is in details with thin lines, such as the rims of a character's glasses.
 
 **Fixed**:
 
 - *Video processing* (`raven.common.video`):
-  - Fix filter cache invalidation on resolution change. Noise, zoom, and glitch caches now check their own tensor dimensions instead of relying on global state, preventing stale data when the image resolution changes mid-session.
-  - Fix bicubic upscale ringing on alpha channel (Gibbs phenomenon at character silhouette edges). Alpha now always uses bilinear interpolation.
+  - Fix filter cache invalidation on resolution change. Filters using texture caches now check their own tensor dimensions instead of relying on the video frame dimensions, preventing stale data when the image resolution changes mid-session.
 
 - *Raven-avatar*:
-  - Fix settings editor crash when loading filters with `!ignore` parameters (e.g. chromatic aberration's instance name). The canonize and generate paths now skip these, matching the GUI build path.
+  - Fix settings editor crash when loading filters with `!ignore` parameters (e.g. anything with a `name`). The canonize and generate paths now skip these, matching the GUI build path.
 
 
 ---
