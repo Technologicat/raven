@@ -1,8 +1,10 @@
 # Deferred TODOs
 
-## torch.compile for THA3 and postprocessor
+## torch.compile for the postprocessor
 
-`torch.compile()` on the 5 THA3 neural network modules hangs during first inference — both `mode="reduce-overhead"` (CUDA graphs) and default mode. Likely related to `grid_sample`/`affine_grid` or `InstanceNorm2d` interaction with Inductor tracing. The postprocessor (`raven.common.video.postprocessor`) would also benefit from compilation (20–60 kernel launches per frame). Investigate what triggers the hang, possibly by compiling one module at a time and narrowing to the problematic operation. See `briefs/tha3-performance-audit.md` for the full analysis. Code location: `raven/vendor/tha3/poser/general_poser_02.py:get_modules()`.
+`torch.compile()` on THA3 was investigated (2026-04-09) and yields only ~6% speedup (20.3ms → 19.0ms on 3070 Ti) at the cost of 37s compilation startup. Not worth it for THA3 — the model is already lean with separable convolutions + FP16. Also hangs in the server (works in standalone; cause unresolved — possibly Triton subprocess interaction with waitress/threads).
+
+The postprocessor (`raven.common.video.postprocessor`) might benefit more from compilation (20–60 kernel launches per frame, more fusible elementwise ops). Worth investigating separately. See `briefs/tha3-performance-audit.md`.
 
 Discovered during THA3 performance optimization work (2026-04-09).
 

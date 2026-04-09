@@ -44,14 +44,9 @@ class GeneralPoser02(Poser):
             self.modules = {}
             for key in self.module_loaders:
                 module = self.module_loaders[key]()
+                self.modules[key] = module
                 module.to(self.device)
                 module.train(False)
-                # TODO: investigate torch.compile() — currently hangs during
-                # first inference (even default mode). Likely grid_sample/affine_grid
-                # or InstanceNorm2d interaction with Inductor tracing.
-                # if torch.device(self.device).type == "cuda":
-                #     module = torch.compile(module)
-                self.modules[key] = module
         return self.modules
 
     def get_pose_parameter_groups(self) -> List[PoseParameterGroup]:
