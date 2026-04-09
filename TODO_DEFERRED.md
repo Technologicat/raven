@@ -1,5 +1,11 @@
 # Deferred TODOs
 
+## torch.compile for THA3 and postprocessor
+
+`torch.compile()` on the 5 THA3 neural network modules hangs during first inference — both `mode="reduce-overhead"` (CUDA graphs) and default mode. Likely related to `grid_sample`/`affine_grid` or `InstanceNorm2d` interaction with Inductor tracing. The postprocessor (`raven.common.video.postprocessor`) would also benefit from compilation (20–60 kernel launches per frame). Investigate what triggers the hang, possibly by compiling one module at a time and narrowing to the problematic operation. See `briefs/tha3-performance-audit.md` for the full analysis. Code location: `raven/vendor/tha3/poser/general_poser_02.py:get_modules()`.
+
+Discovered during THA3 performance optimization work (2026-04-09).
+
 ## MPS (Apple Silicon) device synchronization
 
 `torch.cuda.synchronize()` calls throughout the codebase (preload cache, imageview mip loading) only handle CUDA/ROCm. Apple MPS (`torch.device("mps")`) needs `torch.mps.synchronize()` instead. Audit all `torch.cuda.synchronize` call sites and add MPS equivalents. Consider a `deviceinfo.synchronize(device)` helper.
