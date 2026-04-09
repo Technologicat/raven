@@ -165,7 +165,7 @@ class anime4k(nn.Module):
             out = self.ps(out) + F.interpolate(x, scale_factor=self.scale, mode=self.upscale_mode)
         else:
             out += x
-        return torch.clamp(out, max=1.0, min=0.0)
+        return out.clamp_(min=0.0, max=1.0)
 
     def import_param(self, filename):
         for param in self.parameters():
@@ -276,7 +276,7 @@ class Anime4KPipeline(nn.Module):
                 continue
             if model.__class__.__name__ == "ClampHighlight":
                 clamp_hightlight = model
-                orig_img = x.clone()
+                orig_img = x  # No clone needed: no model mutates its input (x = model(x) rebinds the name)
                 continue
             x = model(x)
         if clamp_hightlight is not None:

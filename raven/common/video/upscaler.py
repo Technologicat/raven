@@ -82,8 +82,9 @@ class Upscaler:
             rgb_image_tensor = image_tensor
         else:
             raise ValueError(f"Upscaler.upscale: Expected [c, h, w] image tensor with 3 (RGB) or 4 (RGBA) channels, got {c} instead (shape {image_tensor.shape}).")
-        data = rgb_image_tensor.unsqueeze(0).to(self.device).to(self.dtype)
-        upscaled_rgb_tensor = self.pipeline(data)[0]
+        data = rgb_image_tensor.unsqueeze(0).to(device=self.device, dtype=self.dtype)
+        with torch.inference_mode():
+            upscaled_rgb_tensor = self.pipeline(data)[0]
 
         if c == 3:
             result = upscaled_rgb_tensor
