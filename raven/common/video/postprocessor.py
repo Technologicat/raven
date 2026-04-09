@@ -1324,9 +1324,9 @@ class Postprocessor:
                    _priority=8.5)
     def analog_vhs_headswitching(self, image: torch.Tensor, *,
                                  speed: float = 8.0,
-                                 height: float = 0.03,
+                                 height: float = 0.035,
                                  max_displacement: float = 0.03,
-                                 noise_blend: float = 0.25,
+                                 noise_blend: float = 0.075,
                                  double_size: bool = True,
                                  name: str = "analog_vhs_headswitching0") -> None:
         """[dynamic] VHS head switching noise at the bottom edge.
