@@ -2,7 +2,10 @@
 
 **0.2.7** (in progress):
 
-*No user-visible changes yet.*
+**Changed**:
+
+- *Raven-avatar*:
+  - Performance: ~4–5% faster avatar rendering via `torch.inference_mode`, cached `affine_grid` base grids in the THA3 engine, and zero-copy pose tensor expansion. Pure inference paths across the render pipeline (avatar, postprocessor, pose editor) now use `inference_mode` instead of `no_grad`.
 
 
 ---
