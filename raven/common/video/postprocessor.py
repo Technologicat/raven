@@ -437,6 +437,7 @@ class Postprocessor:
 
         # Caches for individual dynamic effects
         self.zoom_data = defaultdict(lambda: None)
+        self.ca_grid_cache = None  # {"scale": float, "grid_R": Tensor, "grid_B": Tensor}
         self.noise_last_image = defaultdict(lambda: None)
         self.noise_last_strength = defaultdict(lambda: -1.0)
         self.vhs_glitch_interval = defaultdict(lambda: 0.0)
@@ -771,12 +772,15 @@ class Postprocessor:
         """
         # Axial CA: Shrink R (deflected less), pass G through (lens reference wavelength), enlarge B (deflected more).
         # Cache grids — they depend only on `scale` + meshgrid (meshgrid invalidates on resolution change).
-        if not hasattr(self, '_ca_cache') or self._ca_cache[0] != scale or self._ca_cache[1] != id(self._meshx):
+        c, h, w = image.shape
+        cached = self.ca_grid_cache
+        size_changed = cached is not None and (cached["grid_R"].shape[-3] != h or cached["grid_R"].shape[-2] != w)
+        if cached is None or size_changed or scale != cached["scale"]:
             grid_R = torch.stack((self._meshx * (1.0 + scale), self._meshy * (1.0 + scale)), 2).unsqueeze(0)
             grid_B = torch.stack((self._meshx * (1.0 - scale), self._meshy * (1.0 - scale)), 2).unsqueeze(0)
-            self._ca_cache = (scale, id(self._meshx), grid_R, grid_B)
+            self.ca_grid_cache = {"scale": scale, "grid_R": grid_R, "grid_B": grid_B}
         else:
-            grid_R, grid_B = self._ca_cache[2], self._ca_cache[3]
+            grid_R, grid_B = cached["grid_R"], cached["grid_B"]
 
         # Batch R+A and B+A to halve grid_sample and GaussianBlur calls.
         # R and A-via-grid_R use the same warp grid; same for B and A-via-grid_B.
