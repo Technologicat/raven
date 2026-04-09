@@ -7,7 +7,9 @@ This module is relicensed by its author (Juha Jeronen) under the
 2-clause BSD license.
 """
 
-__all__ = ["Postprocessor", "vhs_noise", "vhs_noise_pool"]
+__all__ = ["Postprocessor",
+           "isotropic_noise",
+           "vhs_noise", "vhs_noise_pool"]
 
 from collections import defaultdict
 from functools import wraps
@@ -38,8 +40,37 @@ VHS_GLITCH_BLANK = object()  # nonce value, see `analog_vhsglitches`
 
 
 # ---------------------------------------------------------------------------
-# VHS noise — public API
+# Video noise generator — public API
 # ---------------------------------------------------------------------------
+
+def isotropic_noise(width: int, height: int, *,
+                    device: torch.device,
+                    dtype: torch.dtype = torch.float32,
+                    sigma: float = 1.0,
+                    double_size: bool = False) -> torch.Tensor:
+    """Generate isotropic Gaussian-blurred uniform noise.
+
+    Returns a ``[height, width]`` tensor in [0, 1]. When ``sigma > 0``,
+    the raw uniform noise is blurred with the same kernel size in both
+    dimensions — contrast with `vhs_noise`, which uses horizontal-only
+    blur to mimic helical-scan artifacts.
+
+    `sigma`:       Standard deviation for Gaussian blur (0 = no blur).
+                   Works up to 3.0.
+    `double_size`: Generate at half resolution and upscale 2×.
+                   `width` and `height` specify the final output size.
+    """
+    gen_w, gen_h = ((width + 1) // 2, (height + 1) // 2) if double_size else (width, height)
+    noise = torch.rand(gen_h, gen_w, device=device, dtype=dtype)
+    if sigma > 0.0:
+        noise = noise.unsqueeze(0)  # [h, w] -> [1, h, w]
+        noise = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(noise)
+        noise = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(noise)
+        noise = noise.squeeze(0)  # -> [h, w]
+    if double_size:
+        noise = noise.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[:height, :width]
+    return noise
+
 
 def vhs_noise(width: int, height: int, *,
               device: torch.device,
@@ -129,35 +160,6 @@ def vhs_noise(width: int, height: int, *,
     if double_size:
         result = result.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[..., :height, :width]
     return result
-
-
-def isotropic_noise(width: int, height: int, *,
-                    device: torch.device,
-                    dtype: torch.dtype = torch.float32,
-                    sigma: float = 1.0,
-                    double_size: bool = False) -> torch.Tensor:
-    """Generate isotropic Gaussian-blurred uniform noise.
-
-    Returns a ``[height, width]`` tensor in [0, 1]. When ``sigma > 0``,
-    the raw uniform noise is blurred with the same kernel size in both
-    dimensions — contrast with `vhs_noise`, which uses horizontal-only
-    blur to mimic helical-scan artifacts.
-
-    `sigma`:       Standard deviation for Gaussian blur (0 = no blur).
-                   Works up to 3.0.
-    `double_size`: Generate at half resolution and upscale 2×.
-                   `width` and `height` specify the final output size.
-    """
-    gen_w, gen_h = ((width + 1) // 2, (height + 1) // 2) if double_size else (width, height)
-    noise = torch.rand(gen_h, gen_w, device=device, dtype=dtype)
-    if sigma > 0.0:
-        noise = noise.unsqueeze(0)  # [h, w] -> [1, h, w]
-        noise = torchvision.transforms.GaussianBlur((_kernel_size, 1), sigma=sigma)(noise)
-        noise = torchvision.transforms.GaussianBlur((1, _kernel_size), sigma=sigma)(noise)
-        noise = noise.squeeze(0)  # -> [h, w]
-    if double_size:
-        noise = noise.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)[:height, :width]
-    return noise
 
 
 def vhs_noise_pool(n: int, width: int, height: int, *,
