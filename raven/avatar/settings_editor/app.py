@@ -546,7 +546,7 @@ class PostprocessorSettingsEditorGUI:
                         dpg.add_text("Choose Anime4K preset\n    A = optimized to remove blur, resampling artifacts, smearing\n    B = optimized to remove ringing/aliasing\n    C = optimized for images with no degradation", parent="upscale_preset_tooltip")  # tag
                         dpg.add_text("Preset")
                     with dpg.group(horizontal=True):
-                        self.upscale_qualities = ["low", "high"]
+                        self.upscale_qualities = ["low", "high", "bilinear", "bicubic"]
                         dpg.add_combo(items=self.upscale_qualities,
                                       default_value=self.upscale_quality,
                                       width=self.button_width - 64,
@@ -853,8 +853,12 @@ class PostprocessorSettingsEditorGUI:
                 logger.warning(f"canonize_postprocessor_parameters_for_gui: Unknown filter '{filter_name}', ignoring.")
                 continue
             defaults = self.all_postprocessor_filters[filter_name]["defaults"]  # all parameters, with their default values
+            ranges = self.all_postprocessor_filters[filter_name]["ranges"]
             validated_settings = {}
             for param_name in defaults:
+                param_range = ranges[param_name]
+                if len(param_range) == 1 and param_range[0] == "!ignore":
+                    continue  # no GUI widget for this parameter (e.g. instance name)
                 validated_settings[param_name] = filter_settings.get(param_name, defaults[param_name])
             validated_postprocessor_chain.append((filter_name, validated_settings))
         return validated_postprocessor_chain
@@ -883,8 +887,12 @@ class PostprocessorSettingsEditorGUI:
             if dpg.get_value(f"{filter_name}_checkbox") is False:
                 continue
             defaults = self.all_postprocessor_filters[filter_name]["defaults"]  # all parameters, with their default values
+            ranges = self.all_postprocessor_filters[filter_name]["ranges"]
             settings = {}
             for param_name in defaults:
+                param_range = ranges[param_name]
+                if len(param_range) == 1 and param_range[0] == "!ignore":
+                    continue  # no GUI widget for this parameter (e.g. instance name)
                 widget = self.filter_param_to_gui_widget(filter_name, param_name, defaults[param_name])
                 if widget is None:
                     logger.warning(f"generate_postprocessor_chain_from_gui: Unknown parameter type {type(defaults[param_name])}, ignoring this parameter.")
