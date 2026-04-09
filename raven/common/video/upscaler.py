@@ -24,13 +24,15 @@ class Upscaler:
                   These roughly correspond to the presets of Anime4K:
                       https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
         `quality`: One of:
-                   "low": fast, with acceptable quality
-                   "high": slow, with good quality
+                   "low": fast, with acceptable quality (Anime4K small models)
+                   "high": slow, with good quality (Anime4K larger models)
+                   "bilinear": very fast, basic bilinear interpolation (no Anime4K)
+                   "bicubic": very fast, bicubic interpolation (no Anime4K, slightly sharper than bilinear)
         """
         if preset not in ("A", "B", "C"):
             raise ValueError(f"Unknown preset '{preset}'; valid: 'A', 'B', 'C'.")
-        if quality not in ("low", "high"):
-            raise ValueError(f"Unknown quality '{quality}'; valid: 'low', 'high'.")
+        if quality not in ("low", "high", "bilinear", "bicubic"):
+            raise ValueError(f"Unknown quality '{quality}'; valid: 'low', 'high', 'bilinear', 'bicubic'.")
 
         self.device = device
         self.dtype = dtype
@@ -38,6 +40,10 @@ class Upscaler:
         self.upscaled_height = upscaled_height
         self.preset = preset
         self.quality = quality
+
+        if quality in ("bilinear", "bicubic"):
+            self.pipeline = None  # bypass Anime4K; use torch.nn.functional.interpolate
+            return
 
         # For the models, see `anime4k` for explanation, and `anime4k.model_dict` for available choices.
         if preset == "A":  # Restore -> Upscale -> Upscale
@@ -76,24 +82,29 @@ class Upscaler:
         `image_tensor`: [c, h, w], where c = 3 (RGB) or c = 4 (RGBA).
         """
         c, h, w = image_tensor.shape
-        if c == 4:
-            rgb_image_tensor = image_tensor[:3, :, :]
-        elif c == 3:
-            rgb_image_tensor = image_tensor
-        else:
+        if c not in (3, 4):
             raise ValueError(f"Upscaler.upscale: Expected [c, h, w] image tensor with 3 (RGB) or 4 (RGBA) channels, got {c} instead (shape {image_tensor.shape}).")
+
+        target_size = (self.upscaled_height, self.upscaled_width)
+
+        if self.pipeline is None:
+            # Bypass mode: bilinear or bicubic interpolation, no Anime4K
+            return torch.nn.functional.interpolate(image_tensor.unsqueeze(0),
+                                                   target_size,
+                                                   mode=self.quality,
+                                                   align_corners=False)[0]
+
+        # Anime4K pipeline: operates on RGB only
+        rgb_image_tensor = image_tensor[:3, :, :] if c == 4 else image_tensor
         data = rgb_image_tensor.unsqueeze(0).to(device=self.device, dtype=self.dtype)
         with torch.inference_mode():
             upscaled_rgb_tensor = self.pipeline(data)[0]
 
         if c == 3:
-            result = upscaled_rgb_tensor
-        else:  # c == 4:  # anime4k supports RGB only; upscale the alpha channel manually.
-            upscaled_alpha = torch.nn.functional.interpolate(image_tensor[3, :, :].unsqueeze(0).unsqueeze(0),  # [w, h] -> [batch, c, w, h]
-                                                             (self.upscaled_height, self.upscaled_width),
-                                                             mode="bilinear")
-            upscaled_rgba_tensor = torch.cat([upscaled_rgb_tensor, upscaled_alpha[0]], dim=0)  # RGB [3, w, h], alpha [1, w, h]
+            return upscaled_rgb_tensor
 
-            result = upscaled_rgba_tensor
-
-        return result
+        # Anime4K supports RGB only; upscale the alpha channel with bilinear interpolation.
+        upscaled_alpha = torch.nn.functional.interpolate(image_tensor[3:4, :, :].unsqueeze(0),
+                                                         target_size,
+                                                         mode="bilinear")[0]
+        return torch.cat([upscaled_rgb_tensor, upscaled_alpha], dim=0)
