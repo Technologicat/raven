@@ -147,7 +147,7 @@ class DPGAvatarRenderer:
         self.backdrop_drawlist_gui_widget = dpg.add_drawlist(tag="avatar_backdrop_drawlist", width=1024, height=1024, pos=(0, 0))  # for backdrop image (bottommost GUI item in z-order)
 
         # For displaying current video FPS arriving from the server
-        self.fps_text_gui_widget = dpg.add_text("FPS counter will appear here",
+        self.fps_text_gui_widget = dpg.add_text("Loading...",
                                                 color=(0, 255, 0),
                                                 pos=(8, 0),
                                                 show=False,
