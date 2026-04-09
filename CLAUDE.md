@@ -16,13 +16,15 @@ Local research assistant constellation. Privacy-first, 100% local.
 
 Uses PDM with `pdm-backend`. Python 3.11–3.14 (see `pyproject.toml`). Optional CUDA extras via `pdm install -G cuda`.
 
+Version is defined in `raven/__init__.py` (`__version__`), read by PDM via `[tool.pdm.version]` in `pyproject.toml`. Tag format: `vX.Y.Z`.
+
 ```bash
 pdm install              # creates .venv/ and installs deps
 pdm use --venv in-project
 source .venv/bin/activate
 ```
 
-Entry points defined in `pyproject.toml` under `[project.scripts]` — main apps are `raven-visualizer`, `raven-librarian`, `raven-server`, `raven-importer`, `raven-minichat`, `raven-xdot-viewer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`.
+Entry points defined in `pyproject.toml` under `[project.scripts]` — main apps are `raven-visualizer`, `raven-librarian`, `raven-server`, `raven-importer`, `raven-minichat`, `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`.
 
 ### Running Tests
 
