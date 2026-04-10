@@ -1,7 +1,7 @@
 # `raven.papers` — consolidating paper/bibliography tools
 
 **Date:** 2026-04-10
-**Status:** Plan approved, not yet implemented
+**Status:** Implemented
 **Trigger:** Integrating the standalone `arxiv-api-search` CLI tool into Raven
 
 ## Motivation
