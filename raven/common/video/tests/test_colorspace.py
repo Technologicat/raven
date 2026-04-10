@@ -185,3 +185,51 @@ class TestClamping:
         rgb = yuv_to_rgb(yuv, clamp=False)
         # At least one channel should be negative or > 1 for this extreme chroma
         assert rgb.min() < 0.0 or rgb.max() > 1.0
+
+
+# ---------------------------------------------------------------------------
+# Tests: BT.709 coefficient verification
+# ---------------------------------------------------------------------------
+
+class TestBT709Coefficients:
+    """Verify the conversion uses BT.709 (HDTV) color primaries."""
+
+    def test_pure_red_luminance(self):
+        """Pure red should have Y = 0.2126 (BT.709 red coefficient)."""
+        rgb = torch.zeros(3, 1, 1)
+        rgb[0] = 1.0
+        assert torch.allclose(luminance(rgb), torch.tensor(0.2126), atol=1e-4)
+
+    def test_pure_green_luminance(self):
+        """Pure green should have Y = 0.7152 (BT.709 green coefficient)."""
+        rgb = torch.zeros(3, 1, 1)
+        rgb[1] = 1.0
+        assert torch.allclose(luminance(rgb), torch.tensor(0.7152), atol=1e-4)
+
+    def test_pure_blue_luminance(self):
+        """Pure blue should have Y = 0.0722 (BT.709 blue coefficient)."""
+        rgb = torch.zeros(3, 1, 1)
+        rgb[2] = 1.0
+        assert torch.allclose(luminance(rgb), torch.tensor(0.0722), atol=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# Tests: additional coverage
+# ---------------------------------------------------------------------------
+
+class TestYuvToRgbDtype:
+    def test_yuv_to_rgb_preserves_dtype(self):
+        for dt in (torch.float32, torch.float64):
+            yuv = torch.rand(3, 4, 4, dtype=dt)
+            rgb = yuv_to_rgb(yuv)
+            assert rgb.dtype == dt
+
+
+class TestLuminanceRange:
+    def test_luminance_in_unit_interval(self):
+        """For valid RGB in [0, 1], luminance should be in [0, 1]."""
+        torch.manual_seed(42)
+        rgb = torch.rand(3, 64, 64)
+        y = luminance(rgb)
+        assert y.min() >= -1e-6
+        assert y.max() <= 1.0 + 1e-6
