@@ -450,6 +450,26 @@ class Postprocessor:
         self.digital_glitches_last_frame_no = defaultdict(lambda: 0.0)
         self.digital_glitches_grid = defaultdict(lambda: None)
 
+    def _setup_meshgrid(self, h: int, w: int) -> None:
+        """Compute base meshgrid for the geometric position of each pixel.
+
+        Needed by filters that vary by position (e.g. `vignetting`) or deform
+        the image (e.g. `analog_rippling_hsync`). Called automatically by
+        `render_into` when the image size changes; can also be called directly
+        to prepare a `Postprocessor` for invoking individual filters outside
+        the render loop (e.g. in tests).
+
+        We cache the meshgrid, because this postprocessor is typically applied
+        to a video stream. As long as the image dimensions stay constant, we can
+        re-use the same meshgrid.
+        """
+        logger.info(f"_setup_meshgrid: Computing pixel position tensors for image size {w}x{h}")
+        with torch.inference_mode():
+            self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
+            self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
+            self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
+        logger.info("_setup_meshgrid: Pixel position tensors cached")
+
     @classmethod
     @memoize
     def get_filters(cls):
@@ -497,21 +517,7 @@ class Postprocessor:
 
         c, h, w = image.shape
         if h != self._prev_h or w != self._prev_w:
-            logger.info(f"render_into: Computing pixel position tensors for image size {w}x{h}")
-            # Compute base meshgrid for the geometric position of each pixel.
-            # This is needed by filters that either vary by geometric position (e.g. `vignetting`),
-            # or deform the image (e.g. `analog_rippling_hsync`).
-            #
-            # This postprocessor is typically applied to a video stream. As long as
-            # the image dimensions stay constant, we can re-use the previous meshgrid.
-            #
-            # We don't strictly keep state here - we just cache. :P
-
-            with torch.inference_mode():
-                self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
-                self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
-                self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
-            logger.info("render_into: Pixel position tensors cached")
+            self._setup_meshgrid(h, w)
 
         # Update the frame counter.
         #
@@ -573,7 +579,7 @@ class Postprocessor:
                 apply_filter = getattr(self, filter_name)
                 apply_filter(image, **settings)
 
-        # Remember last seen video stream size (for caches that store grids/images)
+        # Remember last seen video stream size (for meshgrid cache invalidation)
         self._prev_h = h
         self._prev_w = w
 

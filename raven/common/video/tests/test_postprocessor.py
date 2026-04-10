@@ -121,12 +121,18 @@ class TestIsotropicNoise:
 # Tests: Postprocessor noise cache mechanics
 # ---------------------------------------------------------------------------
 
-def _make_postprocessor():
-    """Create a Postprocessor with an empty chain for cache testing."""
+def _make_postprocessor(h=64, w=128):
+    """Create a Postprocessor with an empty chain for testing.
+
+    Sets up meshgrids and frame state as if `render_into` had been called once,
+    so individual filters can be invoked directly.
+    """
     pp = Postprocessor("cpu", torch.float32, chain=[])
-    # Simulate render_into having seen at least one frame, so _prev_h/_prev_w are set.
-    pp._prev_h = 64
-    pp._prev_w = 128
+    pp._setup_meshgrid(h, w)
+    pp._prev_h = h  # simulate end-of-frame update from `render_into`
+    pp._prev_w = w
+    pp.frame_no = 0.0
+    pp.last_frame_no = -1.0
     return pp
 
 
@@ -567,3 +573,513 @@ class TestChromaSubsampleErrors:
             assert False, "Expected ValueError"
         except ValueError:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Tests: bloom filter
+# ---------------------------------------------------------------------------
+
+class TestBloomShape:
+    def test_preserves_shape(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original_shape = image.shape
+        pp.bloom(image)
+        assert image.shape == original_shape
+
+    def test_output_range(self):
+        """Output must be clamped to [0, 1]."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        pp.bloom(image)
+        assert image.min() >= 0.0
+        assert image.max() <= 1.0
+
+
+class TestBloomEffect:
+    def test_modifies_image(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.bloom(image)
+        assert not torch.equal(image, original)
+
+    def test_threshold_one_is_exposure_only(self):
+        """threshold=1.0 disables bloom glow; only tonemapping/exposure remains."""
+        pp = _make_postprocessor()
+        image1 = _make_image()
+        image2 = image1.clone()
+        # With threshold=1.0, no pixels glow — bloom branch is skipped.
+        pp.bloom(image1, threshold=1.0, exposure=1.0)
+        # The filter should still modify the image (tonemapping).
+        assert not torch.equal(image1, image2)
+
+    def test_higher_exposure_brighter(self):
+        """Higher exposure should produce a brighter image overall."""
+        pp = _make_postprocessor()
+        image_lo = _make_image()
+        image_hi = image_lo.clone()
+        pp.bloom(image_lo, threshold=1.0, exposure=0.5)
+        pp.bloom(image_hi, threshold=1.0, exposure=2.0)
+        assert image_hi[:3].mean() > image_lo[:3].mean()
+
+    def test_alpha_max_combined(self):
+        """Alpha should be max-combined with the bloom, not just passed through."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        # Make alpha partially transparent
+        image[3, :, :] = 0.5
+        # Make some pixels very bright so bloom kicks in
+        image[:3, :10, :10] = 1.0
+        alpha_before = image[3].clone()
+        pp.bloom(image, threshold=0.3, exposure=1.0)
+        # Alpha in the bright region should be >= what it was (max-combine)
+        assert (image[3] >= alpha_before - 1e-6).all()
+
+
+# ---------------------------------------------------------------------------
+# Tests: chromatic_aberration filter
+# ---------------------------------------------------------------------------
+
+class TestChromaticAberrationShape:
+    def test_preserves_shape(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original_shape = image.shape
+        pp.chromatic_aberration(image)
+        assert image.shape == original_shape
+
+
+class TestChromaticAberrationEffect:
+    def test_modifies_image(self):
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        original = image.clone()
+        pp.chromatic_aberration(image, scale=0.01, sigma=1.0)
+        assert not torch.equal(image, original)
+
+    def test_green_channel_passthrough(self):
+        """G channel is the lens reference wavelength — passed through unwarped.
+
+        Note: G is still affected by transverse CA (blur), so we test with sigma=0
+        to isolate the axial (geometric) component. With sigma=0, blur kernel size
+        is 3 (the torchvision minimum), which causes slight blurring at edges. So
+        we check the interior only.
+        """
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        green_before = image[1].clone()
+        pp.chromatic_aberration(image, scale=0.01, sigma=0.1)
+        # Interior pixels should be very close (edge pixels blur from border padding)
+        margin = 5
+        interior = slice(margin, -margin), slice(margin, -margin)
+        assert torch.allclose(image[1][interior], green_before[interior], atol=1e-2)
+
+    def test_r_and_b_diverge(self):
+        """R and B channels should be warped in opposite directions."""
+        pp = _make_postprocessor()
+        image = torch.ones(4, 64, 128, dtype=torch.float32)
+        # Paint a centered bright patch — after CA, R and B copies will shift apart
+        image[:3, :, :] = 0.2
+        image[:3, 20:44, 40:88] = 1.0
+        image[3, :, :] = 1.0
+        original = image.clone()
+        pp.chromatic_aberration(image, scale=0.02, sigma=0.1)
+        r_diff = (image[0] - original[0]).abs().sum()
+        b_diff = (image[2] - original[2]).abs().sum()
+        # Both R and B should have changed
+        assert r_diff > 0.1
+        assert b_diff > 0.1
+
+
+# ---------------------------------------------------------------------------
+# Tests: vignetting filter
+# ---------------------------------------------------------------------------
+
+class TestVignettingShape:
+    def test_preserves_shape(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original_shape = image.shape
+        pp.vignetting(image)
+        assert image.shape == original_shape
+
+
+class TestVignettingAlpha:
+    def test_alpha_untouched(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        alpha_before = image[3].clone()
+        pp.vignetting(image)
+        assert torch.equal(image[3], alpha_before)
+
+
+class TestVignettingEffect:
+    def test_modifies_image(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.vignetting(image, strength=0.3)
+        assert not torch.equal(image, original)
+
+    def test_center_brightest(self):
+        """Center pixel should be the brightest after vignetting a uniform image."""
+        pp = _make_postprocessor()
+        image = torch.ones(4, 64, 128, dtype=torch.float32)
+        pp.vignetting(image, strength=0.3)
+        center_val = image[0, 32, 64]
+        corner_val = image[0, 0, 0]
+        assert center_val > corner_val
+
+    def test_corners_darkest(self):
+        """Corners should be darker than edge midpoints."""
+        pp = _make_postprocessor()
+        image = torch.ones(4, 64, 128, dtype=torch.float32)
+        pp.vignetting(image, strength=0.3)
+        corner_val = image[0, 0, 0]
+        edge_mid_val = image[0, 32, 0]  # midpoint of left edge
+        assert edge_mid_val > corner_val
+
+    def test_only_darkens(self):
+        """Vignetting is multiplicative — it can only darken, never brighten."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.vignetting(image, strength=0.3)
+        assert (image[:3] <= original[:3] + 1e-6).all()
+
+    def test_radially_symmetric(self):
+        """Opposite corners should have the same brightness on a uniform image."""
+        pp = _make_postprocessor(h=64, w=64)  # square for clean symmetry
+        image = torch.ones(4, 64, 64, dtype=torch.float32)
+        pp.vignetting(image, strength=0.3)
+        assert torch.allclose(image[0, 0, 0], image[0, 0, -1], atol=1e-5)
+        assert torch.allclose(image[0, 0, 0], image[0, -1, 0], atol=1e-5)
+        assert torch.allclose(image[0, 0, 0], image[0, -1, -1], atol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# Tests: desaturate filter
+# ---------------------------------------------------------------------------
+
+class TestDesaturateAlpha:
+    def test_alpha_untouched(self):
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        alpha_before = image[3].clone()
+        pp.desaturate(image, strength=1.0)
+        assert torch.equal(image[3], alpha_before)
+
+
+class TestDesaturateEffect:
+    def test_strength_zero_is_noop(self):
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        original = image.clone()
+        pp.desaturate(image, strength=0.0)
+        assert torch.allclose(image, original, atol=1e-6)
+
+    def test_strength_one_produces_grayscale(self):
+        """Full desaturation with white tint should produce a grayscale image."""
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        pp.desaturate(image, strength=1.0, tint_rgb=[1.0, 1.0, 1.0])
+        # All RGB channels should be equal (grayscale)
+        assert torch.allclose(image[0], image[1], atol=1e-5)
+        assert torch.allclose(image[0], image[2], atol=1e-5)
+
+    def test_partial_strength_blends(self):
+        """Partial strength should produce something between original and grayscale."""
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        original = image.clone()
+        pp.desaturate(image, strength=0.5, tint_rgb=[1.0, 1.0, 1.0])
+        # Not the same as original (some desaturation happened)
+        assert not torch.equal(image, original)
+        # Not fully grayscale either
+        assert not torch.allclose(image[0], image[1], atol=1e-3)
+
+    def test_tint_colors_output(self):
+        """A non-white tint should shift the color of the desaturated image."""
+        pp = _make_postprocessor()
+        image1 = _make_colorful_image()
+        image2 = image1.clone()
+        pp.desaturate(image1, strength=1.0, tint_rgb=[1.0, 1.0, 1.0])
+        pp.desaturate(image2, strength=1.0, tint_rgb=[0.5, 1.0, 0.5])
+        # Green-tinted result should differ from white-tinted
+        assert not torch.equal(image1, image2)
+        # Green channel should be brightest in the green-tinted version
+        assert image2[1].mean() > image2[0].mean()
+        assert image2[1].mean() > image2[2].mean()
+
+    def test_hue_bandpass_preserves_reference_hue(self):
+        """With hue bandpass, pixels near the reference hue should stay colorful."""
+        pp = _make_postprocessor()
+        # Pure red image
+        image = torch.zeros(4, 64, 128, dtype=torch.float32)
+        image[0, :, :] = 0.8  # strong red
+        image[1, :, :] = 0.1
+        image[2, :, :] = 0.1
+        image[3, :, :] = 1.0
+        # Bandpass centered on red — red pixels should survive
+        pp.desaturate(image, strength=1.0, tint_rgb=[1.0, 1.0, 1.0],
+                      bandpass_reference_rgb=[1.0, 0.0, 0.0], bandpass_q=0.5)
+        # Red pixels should still have more red than green/blue
+        assert image[0].mean() > image[1].mean()
+
+
+# ---------------------------------------------------------------------------
+# Tests: monochrome_display filter
+# ---------------------------------------------------------------------------
+
+class TestMonochromeDisplayAlpha:
+    def test_alpha_untouched(self):
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        alpha_before = image[3].clone()
+        pp.monochrome_display(image, strength=1.0)
+        assert torch.equal(image[3], alpha_before)
+
+
+class TestMonochromeDisplayEffect:
+    def test_strength_zero_is_noop(self):
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        original = image.clone()
+        pp.monochrome_display(image, strength=0.0)
+        assert torch.allclose(image, original, atol=1e-6)
+
+    def test_white_tint_produces_grayscale(self):
+        """White tint should produce equal R=G=B (pure grayscale)."""
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        pp.monochrome_display(image, strength=1.0, tint_rgb=[1.0, 1.0, 1.0])
+        assert torch.allclose(image[0], image[1], atol=1e-5)
+        assert torch.allclose(image[0], image[2], atol=1e-5)
+
+    def test_green_tint(self):
+        """Green phosphor tint: G should be brightest, R and B attenuated."""
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        pp.monochrome_display(image, strength=1.0, tint_rgb=[0.5, 1.0, 0.5])
+        assert image[1].mean() > image[0].mean()
+        assert image[1].mean() > image[2].mean()
+
+    def test_amber_tint(self):
+        """Amber phosphor tint: R > G > B."""
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        pp.monochrome_display(image, strength=1.0, tint_rgb=[1.0, 0.5, 0.2])
+        assert image[0].mean() > image[1].mean()
+        assert image[1].mean() > image[2].mean()
+
+    def test_tint_is_not_just_passthrough(self):
+        """Tinted output should differ from untinted grayscale."""
+        pp = _make_postprocessor()
+        image1 = _make_colorful_image()
+        image2 = image1.clone()
+        pp.monochrome_display(image1, strength=1.0, tint_rgb=[1.0, 1.0, 1.0])
+        pp.monochrome_display(image2, strength=1.0, tint_rgb=[0.5, 1.0, 0.5])
+        assert not torch.equal(image1, image2)
+
+
+# ---------------------------------------------------------------------------
+# Tests: translucent_display filter
+# ---------------------------------------------------------------------------
+
+class TestTranslucentDisplay:
+    def test_preserves_shape(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original_shape = image.shape
+        pp.translucent_display(image)
+        assert image.shape == original_shape
+
+    def test_rgb_untouched(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        rgb_before = image[:3].clone()
+        pp.translucent_display(image, alpha=0.5)
+        assert torch.equal(image[:3], rgb_before)
+
+    def test_alpha_scaled(self):
+        """Alpha should be multiplicatively scaled."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        image[3, :, :] = 1.0
+        pp.translucent_display(image, alpha=0.7)
+        assert torch.allclose(image[3], torch.full_like(image[3], 0.7), atol=1e-6)
+
+    def test_alpha_scales_nonuniform(self):
+        """Non-uniform alpha should scale proportionally."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        alpha_before = image[3].clone()
+        pp.translucent_display(image, alpha=0.5)
+        expected = alpha_before * 0.5
+        assert torch.allclose(image[3], expected, atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Tests: analog_lowres filter
+# ---------------------------------------------------------------------------
+
+class TestAnalogLowresShape:
+    def test_preserves_shape(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original_shape = image.shape
+        pp.analog_lowres(image)
+        assert image.shape == original_shape
+
+
+class TestAnalogLowresEffect:
+    def test_modifies_image(self):
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        original = image.clone()
+        pp.analog_lowres(image, sigma=2.0)
+        assert not torch.equal(image, original)
+
+    def test_blurs_alpha_too(self):
+        """analog_lowres blurs all channels, including alpha."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        # Sharp alpha edge
+        image[3, :, :] = 0.0
+        image[3, :, 64:] = 1.0
+        alpha_before = image[3].clone()
+        pp.analog_lowres(image, sigma=2.0)
+        # Alpha should have changed (edge blurred)
+        assert not torch.equal(image[3], alpha_before)
+
+    def test_reduces_high_frequency(self):
+        """Blurring should reduce pixel-to-pixel variation."""
+        pp = _make_postprocessor()
+        # Checkerboard pattern — maximum high-frequency content
+        image = torch.zeros(4, 64, 128, dtype=torch.float32)
+        image[:3, 0::2, 0::2] = 1.0
+        image[:3, 1::2, 1::2] = 1.0
+        image[3, :, :] = 1.0
+        # Measure variation before
+        diff_before = (image[0, :, 1:] - image[0, :, :-1]).abs().mean()
+        pp.analog_lowres(image, sigma=2.0)
+        diff_after = (image[0, :, 1:] - image[0, :, :-1]).abs().mean()
+        assert diff_after < diff_before
+
+
+# ---------------------------------------------------------------------------
+# Tests: scanlines filter
+# ---------------------------------------------------------------------------
+
+class TestScanlinesShape:
+    def test_preserves_shape(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original_shape = image.shape
+        pp.scanlines(image)
+        assert image.shape == original_shape
+
+
+class TestScanlinesEffect:
+    def test_modifies_image(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.scanlines(image, strength=0.3)
+        assert not torch.equal(image, original)
+
+    def test_alpha_mode_preserves_rgb(self):
+        """In alpha mode, RGB channels should be untouched."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        rgb_before = image[:3].clone()
+        pp.scanlines(image, channel="A", strength=0.3)
+        assert torch.equal(image[:3], rgb_before)
+
+    def test_alpha_mode_modifies_alpha(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        alpha_before = image[3].clone()
+        pp.scanlines(image, channel="A", strength=0.3)
+        assert not torch.equal(image[3], alpha_before)
+
+    def test_luma_mode_preserves_alpha(self):
+        """In Y mode, alpha should be untouched."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        alpha_before = image[3].clone()
+        pp.scanlines(image, channel="Y", strength=0.3)
+        assert torch.equal(image[3], alpha_before)
+
+    def test_alternating_lines_dimmed(self):
+        """Every other line should be dimmer than its neighbor."""
+        pp = _make_postprocessor()
+        image = torch.ones(4, 64, 128, dtype=torch.float32)
+        pp.scanlines(image, channel="A", strength=0.3, dynamic=False,
+                     field=0, double_size=False)
+        # Even lines (field=0) should be dimmed
+        even_alpha = image[3, 0::2, :].mean()
+        odd_alpha = image[3, 1::2, :].mean()
+        assert even_alpha < odd_alpha
+
+    def test_double_size_dims_pairs(self):
+        """With double_size, two adjacent lines should be dimmed together."""
+        pp = _make_postprocessor()
+        image = torch.ones(4, 64, 128, dtype=torch.float32)
+        pp.scanlines(image, channel="A", strength=0.3, dynamic=False,
+                     field=0, double_size=True)
+        # Lines 0,1 should be dimmed equally (both in the first double-line)
+        assert torch.allclose(image[3, 0, :], image[3, 1, :], atol=1e-6)
+        # Lines 2,3 should be bright (next double-line, undimmed)
+        assert image[3, 2, :].mean() > image[3, 0, :].mean()
+
+    def test_only_darkens(self):
+        """Scanlines should only darken, never brighten."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.scanlines(image, channel="A", strength=0.3)
+        assert (image[3] <= original[3] + 1e-6).all()
+
+
+# ---------------------------------------------------------------------------
+# Tests: zoom filter (low quality)
+# ---------------------------------------------------------------------------
+
+class TestZoomShape:
+    def test_preserves_shape(self):
+        pp = _make_postprocessor()
+        image = _make_image()
+        original_shape = image.shape
+        pp.zoom(image, factor=2.0, quality="low")
+        assert image.shape == original_shape
+
+
+class TestZoomEffect:
+    def test_factor_one_is_noop(self):
+        """factor=1.0 should be an identity operation."""
+        pp = _make_postprocessor()
+        image = _make_image()
+        original = image.clone()
+        pp.zoom(image, factor=1.0)
+        assert torch.equal(image, original)
+
+    def test_modifies_image(self):
+        pp = _make_postprocessor()
+        image = _make_colorful_image()
+        original = image.clone()
+        pp.zoom(image, factor=2.0, quality="low")
+        assert not torch.equal(image, original)
+
+    def test_zoom_in_magnifies_center(self):
+        """Zooming in should spread the center region across the whole image."""
+        pp = _make_postprocessor()
+        # Bright center dot on dark background
+        image = torch.zeros(4, 64, 128, dtype=torch.float32)
+        image[:3, 30:34, 62:66] = 1.0
+        image[3, :, :] = 1.0
+        pp.zoom(image, factor=2.0, center_x=0.0, center_y=0.0, quality="low")
+        # The bright region should now be larger
+        bright_count = (image[0] > 0.5).sum().item()
+        assert bright_count > 4 * 4  # original was 4×4 pixels
