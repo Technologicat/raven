@@ -2,6 +2,16 @@
 
 **0.2.7** (in progress):
 
+**Added**:
+
+- New submodule: `raven.papers` — consolidates all paper and bibliography tools.
+  - Integrates the standalone `arxiv-api-search` tool as `raven-arxiv-search` — search arXiv with boolean expressions (AND/OR/ANDNOT, quoted phrases, parenthesized grouping), export results as BibTeX.
+  - Relocated from `raven.tools`: `raven-arxiv2id`, `raven-arxiv-download`, `raven-burstbib`, `raven-csv2bib`, `raven-pdf2bib`, `raven-wos2bib`. CLI command names unchanged.
+  - Shared `RateLimiter` (thread-safe, tqdm progress bar) — extracted from the arXiv downloader, now also used by the search tool.
+  - Shared `bibtex_escape`/`bibtex_unescape` — single source of truth, replacing duplicate definitions in `csv2bib` and `wos2bib`.
+  - Consolidated arXiv ID handling: `identifiers.strip_version()` replaces three separate implementations.
+  - New dependency: `feedparser>=6.0`.
+
 **Changed**:
 
 - *Raven-avatar* performance improvements:
@@ -20,6 +30,12 @@
     - Reduces chrominance (color) resolution while keeping luminance (brightness) at full resolution. Real video systems use this to improve compression, because human vision isn't as sensitive to color as it is to brightness.
 
 **Fixed**:
+
+- *BibTeX tools* (`raven.papers`):
+  - Fix `bibtex_escape`: unmatched `{` in source text (e.g. WoS abstracts) produced unbalanced braces that broke bibtexparser parsing. The old approach doubled braces (`{` → `{{`); now uses proper LaTeX escapes (`\{`, `\}`).
+  - Add missing `#` and `$` escaping — both are BibTeX/LaTeX specials that could cause parse or render errors in downstream tools.
+  - `pdf2bib` now applies `bibtex_escape` to all field values (literal, LLM-extracted, and function-generated). Previously, LLM output was written unescaped.
+  - `requests` and `tqdm` added as explicit dependencies (were used directly but only present as transitive deps).
 
 - *Video processing* (`raven.common.video`):
   - Fix filter cache invalidation on resolution change. Filters using texture caches now check their own tensor dimensions instead of relying on the video frame dimensions, preventing stale data when the image resolution changes mid-session.
