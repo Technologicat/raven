@@ -129,8 +129,6 @@ def _make_postprocessor(h=64, w=128):
     """
     pp = Postprocessor("cpu", torch.float32, chain=[])
     pp._setup_meshgrid(h, w)
-    pp._prev_h = h  # simulate end-of-frame update from `render_into`
-    pp._prev_w = w
     pp.frame_no = 0.0
     pp.last_frame_no = -1.0
     return pp

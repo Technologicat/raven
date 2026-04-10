@@ -426,8 +426,8 @@ class Postprocessor:
         self._xx = None
         self._meshy = None
         self._meshx = None
-        self._prev_h = None
-        self._prev_w = None
+        self._meshgrid_prev_h = None
+        self._meshgrid_prev_w = None
 
         # FPS correction
         self.CALIBRATION_FPS = 25  # design FPS for dynamic effects (for automatic FPS correction)
@@ -468,6 +468,8 @@ class Postprocessor:
             self._yy = torch.linspace(-1.0, 1.0, h, dtype=self.dtype, device=self.device)
             self._xx = torch.linspace(-1.0, 1.0, w, dtype=self.dtype, device=self.device)
             self._meshy, self._meshx = torch.meshgrid((self._yy, self._xx), indexing="ij")
+        self._meshgrid_prev_h = h
+        self._meshgrid_prev_w = w
         logger.info("_setup_meshgrid: Pixel position tensors cached")
 
     @classmethod
@@ -516,7 +518,7 @@ class Postprocessor:
             return
 
         c, h, w = image.shape
-        if h != self._prev_h or w != self._prev_w:
+        if h != self._meshgrid_prev_h or w != self._meshgrid_prev_w:
             self._setup_meshgrid(h, w)
 
         # Update the frame counter.
@@ -578,10 +580,6 @@ class Postprocessor:
             for filter_name, settings in chain:
                 apply_filter = getattr(self, filter_name)
                 apply_filter(image, **settings)
-
-        # Remember last seen video stream size (for meshgrid cache invalidation)
-        self._prev_h = h
-        self._prev_w = w
 
     # --------------------------------------------------------------------------------
     # Physical input signal
