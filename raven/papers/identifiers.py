@@ -14,9 +14,9 @@ __all__ = [
     "extract_id",
     "split_version",
     "strip_version",
-    "extract_ids_from_filenames",
     "list_subfolders",
     "list_pdf_files",
+    "extract_ids_from_filenames",
     "main",
 ]
 
