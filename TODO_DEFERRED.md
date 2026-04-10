@@ -6,6 +6,12 @@
 
 Moved from `TODO.md` (2026-04-10).
 
+## pdf2bib: apply bibtex_escape to LLM-extracted field values
+
+`pdf2bib.py` writes LLM-extracted text (titles, authors, abstracts) directly into BibTeX fields without escaping BibTeX-special characters (`%`, `{`, `}`, `&`, etc.). There's a TODO on line 15 noting this. Now that `bibtex_escape()` lives in `raven.papers.utils`, pipe each field value through it before writing. The LLM won't reliably escape these itself.
+
+Discovered during `raven.papers` extraction (2026-04-10).
+
 ## torch.compile for the postprocessor
 
 `torch.compile()` on THA3 was investigated (2026-04-09) and yields only ~6% speedup (20.3ms → 19.0ms on 3070 Ti) at the cost of 37s compilation startup. Not worth it for THA3 — the model is already lean with separable convolutions + FP16. Also hangs in the server (works in standalone; cause unresolved — possibly Triton subprocess interaction with waitress/threads).

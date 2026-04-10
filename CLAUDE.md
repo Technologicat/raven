@@ -10,7 +10,8 @@ Local research assistant constellation. Privacy-first, 100% local.
 - **Client** (`raven/client/`): Python bindings for Server API.
 - **Avatar** (`raven/avatar/`): AI-animated anime character (THA3 engine, lipsync, cel animations). Some avatar-related code (video postprocessor, colorspace) lives in Common for licensing reasons.
 - **Common** (`raven/common/`): Shared utilities (video processing, audio, GUI widgets, networking). BSD-licensed; Server and Avatar pose editor are AGPL.
-- **Tools** (`raven/tools/`): CLI utilities (format converters, system checks).
+- **Papers** (`raven/papers/`): Academic paper tools — arXiv search/download, bibliography converters (WoS, CSV, PDF, BibTeX burst).
+- **Tools** (`raven/tools/`): Miscellaneous CLI utilities (CUDA check, audio device listing, image format conversion, dehyphenation).
 
 ## Build and Development
 

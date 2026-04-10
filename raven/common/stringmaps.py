@@ -81,5 +81,5 @@ regular_to_superscript = {**regular_to_superscript_numbers,
                           **regular_to_superscript_letters}
 superscript_to_regular = {v: k for k, v in regular_to_superscript.items()}
 
-# Here "." is important for `raven-arxiv2id` to correctly handle files downloaded by `raven-arxiv-download`.
+# Here "." is important for `raven.papers.identifiers` to correctly handle files downloaded by `raven.papers.download`.
 filename_safe_nonalphanum = " -_',."

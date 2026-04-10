@@ -7,7 +7,7 @@ Usage::
 
   python csv2bib.py input1.csv ... inputn.csv >output.bib
 
-Example input (each indent here represents a single tab character, "\t"):
+Example input (each indent here represents a single tab character, "\\t"):
 
 Author                       Year    Title             Abstract
 A. Author and B. Coauthor    2026    Our Study         Blah blah blah...
@@ -42,15 +42,8 @@ import bibtexparser
 from bibtexparser.model import Entry, Field
 
 from ..common import readcsv
+from .utils import bibtex_escape
 
-def bibtex_escape(s: str):
-    s = s.replace("\\", "\\\\")
-    s = s.replace("{", "{{")
-    s = s.replace("}", "}}")
-    s = s.replace("[", "{[}")
-    s = s.replace("&", r"\&")
-    s = s.replace("%", r"\%")
-    return s
 
 def main():
     parser = argparse.ArgumentParser(description="""Convert CSV (comma-separated values) files to BibTeX. The first line must be a header with field names; fields with those names will be populated in the output.""",
@@ -82,6 +75,7 @@ def main():
                       fields=fields)
         library.add(entry)
     print(bibtexparser.writer.write(library))
+
 
 if __name__ == "__main__":
     main()

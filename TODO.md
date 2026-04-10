@@ -21,7 +21,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** Flash the search field when focused by hotkey. Currently affects Visualizer main window, fdialog component, and XDot Viewer. Generalize `ButtonFlash` for GUI elements other than buttons.
 
-- **[Medium]** `vis_data` → `entries` rename across the whole constellation, including importers and BibTeX tooling in `raven.tools`.
+- **[Medium]** `vis_data` → `entries` rename across the whole constellation, including importers and BibTeX tooling in `raven.papers`.
 
 - **[Medium]** Visualizer↔Librarian integration: allow querying Librarian for documents (set as RAG sources) that are currently selected in Visualizer. Apps communicate over the local network. Core workflow: "show me the cluster structure around this topic" → "now let me drill into those papers conversationally."
   - IPC design: ZeroMQ pub/sub over localhost (or localhost websockets, since raven-server already has a web API layer). IPC is optional — if both apps are running, use it; if not, graceful degradation. Neither app should depend on the other being present.
@@ -392,7 +392,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 ---
 
-## Tooling (e.g. pdf2bib, csv2bib)
+## Papers tooling (e.g. pdf2bib, csv2bib)
 
 - **[Medium]** `raven-docdb-import` (or similar — check naming convention against existing CLI tools): CLI tool for batch document ingestion into the Librarian document DB. Just run `hybridir.setup` on the same datastore that Librarian uses and wait for the scanner to finish.
 

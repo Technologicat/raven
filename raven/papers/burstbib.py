@@ -16,6 +16,7 @@ from typing import Union
 from ..common import stringmaps
 from ..common import utils as common_utils
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="""Burst a BibTeX file into individual entries, for Raven-librarian's document database.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -110,6 +111,7 @@ def main() -> None:
                     record.write(headerline)
                 else:  # part of current record
                     record.write(line)
+
 
 if __name__ == "__main__":
     main()

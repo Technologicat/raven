@@ -58,6 +58,7 @@ dependencies = [
     "accelerate>=1.11.0",  # faster loading of `whisper-large-v3-turbo`, according to model card
     "pvrecorder>=1.2.7",
     "PyTurboJPEG<2",
+    "feedparser>=6.0",  # papers: arXiv search
     "requests>=2.31",  # client, librarian, papers (arXiv tools)
     "tqdm>=4.0",  # server.stt, papers (arXiv download)
 ]
@@ -116,14 +117,15 @@ Repository = "https://github.com/Technologicat/raven"
 [project.scripts]
 raven-check-cuda = "raven.tools.check_cuda:main"
 raven-check-audio-devices = "raven.tools.check_audio_devices:main"
-raven-arxiv2id = "raven.tools.arxiv2id:main"
-raven-arxiv-download = "raven.tools.arxiv_download:main"
-raven-burstbib = "raven.tools.burstbib:main"
+raven-arxiv2id = "raven.papers.identifiers:main"
+raven-arxiv-download = "raven.papers.download:main"
+raven-arxiv-search = "raven.papers.search:main"
+raven-burstbib = "raven.papers.burstbib:main"
 raven-dehyphenate = "raven.tools.dehyphenate:main"
-raven-csv2bib = "raven.tools.csv2bib:main"
-raven-pdf2bib = "raven.tools.pdf2bib:main"
+raven-csv2bib = "raven.papers.csv2bib:main"
+raven-pdf2bib = "raven.papers.pdf2bib:main"
 raven-qoi2png = "raven.tools.qoi2png:main"
-raven-wos2bib = "raven.tools.wos2bib:main"
+raven-wos2bib = "raven.papers.wos2bib:main"
 raven-minichat = "raven.librarian.minichat:main"
 raven-librarian = "raven.librarian.app:main"
 raven-server = "raven.server.app:main"

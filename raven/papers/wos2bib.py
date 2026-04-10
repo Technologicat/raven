@@ -22,17 +22,11 @@ import bibtexparser
 from bibtexparser.model import Entry, Field
 import wosfile
 
+from .utils import bibtex_escape
+
 ptmap = {"J": "article",
          "B": "book"}  # TODO: "S" (series), "P" (patent)
 
-def bibtex_escape(s: str):
-    s = s.replace("\\", "\\\\")
-    s = s.replace("{", "{{")
-    s = s.replace("}", "}}")
-    s = s.replace("[", "{[}")
-    s = s.replace("&", r"\&")
-    s = s.replace("%", r"\%")
-    return s
 
 def main():
     parser = argparse.ArgumentParser(description="""Convert Web of Science plain text export (.wos/.txt) to BibTeX.""",
@@ -141,13 +135,6 @@ def main():
 
             # author_keywords = rec.get("DE")  # often there seem to be no keywords
 
-            # # DEBUG
-            # issue_str = f"({issue})" if issue is not None else ""
-            # pages_comma = ", " if pages != "" else ""
-            # doi_str = f" {doi}." if doi is not None else ""
-            # have_abstract = "[ABS]" if abstract is not None else ""
-            # print(f"'{accession_number}': {authors_str}. {year_published}. {title}. {publication_name} {volume}{issue_str}{pages_comma}{pages}.{doi_str} {have_abstract}")
-
             # Build the corresponding BibTeX entry
             fields = [Field(key="Author", value=f"{{{authors_str}}}"),
                       Field(key="Year", value=f"{{{year_published}}}"),
@@ -181,6 +168,7 @@ def main():
     logger.info(f"    Done in {tim.dt:0.6g}s.")
     if n_skipped > 0:
         logger.info(f"    {n_skipped} entries skipped (see full log above).")
+
 
 if __name__ == "__main__":
     main()
