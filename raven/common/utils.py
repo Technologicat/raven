@@ -294,9 +294,13 @@ def unicodize_basic_markup(s):
     """
     s = normalize_unicode(s)
 
-    # Remove some common LaTeX encodings
+    # Remove LaTeX escapes (including those produced by `raven.papers.utils.bibtex_escape`)
     s = s.replace(r"\%", "%")
     s = s.replace(r"\$", "$")
+    s = s.replace(r"\#", "#")
+    s = s.replace(r"\&", "&")
+    s = s.replace(r"\{", "{")
+    s = s.replace(r"\}", "}")
 
     # Replace some HTML entities
     s = s.replace(r"&le;", "≤")

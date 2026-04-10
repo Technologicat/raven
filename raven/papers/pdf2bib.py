@@ -13,7 +13,6 @@ This allows easily continuing later, if there are lots of input files. A file is
 successfully processed, AFTER printing its bibtex entry.
 """
 
-# TODO: Apply BibTeX escapes (especially "%", "{", "}") - the LLM doesn't seem to do that even if we instruct it to do so. So we don't currently even try.
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +48,8 @@ from ..common import utils as common_utils
 from ..librarian import config as librarian_config
 from ..librarian import llmclient
 from ..visualizer import config as visualizer_config
+
+from .utils import bibtex_escape
 
 # --------------------------------------------------------------------------------
 # Bootup
@@ -848,7 +849,7 @@ def process_one(llm_settings: env,
         sys.stderr.flush()
         for field_key, (data_kind, data, progress_symbol) in prompts.items():
             if data_kind == "literal":
-                bibtex_entry.write(f"    {field_key} = {{{data}}},\n")
+                bibtex_entry.write(f"    {field_key} = {{{bibtex_escape(data)}}},\n")
                 field_status = status_success
             elif data_kind == "prompt":
                 # To keep things simple, we use a single-turn conversation for querying the LLM.
@@ -856,7 +857,7 @@ def process_one(llm_settings: env,
                 raw_output_text, scrubbed_output_text = llmclient.perform_throwaway_task(llm_settings,
                                                                                          instruction=f"{data}\n-----\n\n{text}",
                                                                                          on_progress=llmclient.make_console_progress_handler("p"))  # "p" for "prompt mode"
-                bibtex_entry.write(f"    {field_key} = {{{scrubbed_output_text}}},\n")
+                bibtex_entry.write(f"    {field_key} = {{{bibtex_escape(scrubbed_output_text)}}},\n")
                 field_status = status_success
             elif data_kind == "function":
                 field_status, field_error_info, function_output = data(unique_id, text)
@@ -864,7 +865,7 @@ def process_one(llm_settings: env,
                     entry_status = status_failed
                     error_infos.append(field_error_info)
                 if function_output is not None:  # A function can indicate "no data" by returning `None`. Inject the field only if data was returned. Inject also when we suspect an error.
-                    bibtex_entry.write(f"    {field_key} = {{{function_output}}},\n")
+                    bibtex_entry.write(f"    {field_key} = {{{bibtex_escape(function_output)}}},\n")
             else:
                 raise ValueError(f"Unknown data kind '{data_kind}'; please check your settings.")
     print(f"done in {tim.dt:0.2f}s", file=sys.stderr)
