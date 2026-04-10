@@ -396,8 +396,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Medium]** `raven-docdb-import` (or similar — check naming convention against existing CLI tools): CLI tool for batch document ingestion into the Librarian document DB. Just run `hybridir.setup` on the same datastore that Librarian uses and wait for the scanner to finish.
 
-- **[Medium]** pdf2bib: conference name is hardcoded. Make it configurable (parameter or config file).
-
 - **[Medium]** pdf2bib: prompt the author extraction step to return a canonical string (e.g. "No authors provided") when no authors are found. Same for title extraction (e.g. "No title provided"; also handle the case where the LLM thinks the title is literally "Abstract").
 
 - **[Medium]** pdf2bib: some LLMs behave erratically when the system date is later than their training cutoff (e.g. refusing tasks, claiming to be in a simulation). Investigate mitigation strategies; may be model-version-specific. Track across model upgrades.
@@ -442,7 +440,7 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **"Importer: allow specifying a dataset to load dimension reduction from" (original)**: the simplest approach to adding new data on top of an existing dataset. Superseded by Procrustes alignment, which is strictly better for the common case (related data). The Procrustes item above documents its assumptions and the fallback for unrelated datasets.
 
-- **PDF conference abstracts robustness item**: added as a reminder to check whether pdf2bib handles this case. Now working correctly. (Conference name still hardcoded — see active TODO item.)
+- **PDF conference abstracts robustness item**: added as a reminder to check whether pdf2bib handles this case. Now working correctly. Conference info is now configurable via CLI options.
 
 - **System prompt tuning for LLM speculation on/off**: was relevant during early Qwen3 work. Superseded by improved model behavior. Dropped.
 

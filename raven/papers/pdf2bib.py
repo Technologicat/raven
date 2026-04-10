@@ -63,21 +63,14 @@ dehyphenator = mayberemote.Dehyphenator(allow_local=True,
                                         device_string=visualizer_config.devices["sanitize"]["device_string"])
 
 # --------------------------------------------------------------------------------
-# Settings
-
-# This conference information is automatically filled into all generated BibTeX entries.
-# TODO: Add command-line options for conference info, to make this script into a properly reusable tool.
-conference_slug = "ECCOMAS2024"  # Short name of conference; BibTeX entry keys are generated as <slug>-<PDF_filename>
-conference_year = "2024"
-conference_booktitle = "The 9th European Congress on Computational Methods in Applied Sciences and Engineering (ECCOMAS Congress 2024)"
-conference_note = "3--7 June 2024, Lisbon, Portugal"
-conference_url = "https://eccomas2024.org/"
-
-# --------------------------------------------------------------------------------
 # Utilities
 
 def setup_prompts(llm_settings: env,
-                  n_retries: int) -> Dict:
+                  n_retries: int,
+                  conference_year: str,
+                  conference_booktitle: str | None = None,
+                  conference_note: str | None = None,
+                  conference_url: str | None = None) -> Dict:
     """Set up the LLM task handlers.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
@@ -806,12 +799,15 @@ def setup_prompts(llm_settings: env,
         "author": ("function", extract_authors, None),
         "year": ("literal", conference_year, None),
         "title": ("function", extract_title, None),
-        "booktitle": ("literal", conference_booktitle, None),
-        "note": ("literal", conference_note, None),
-        "url": ("literal", conference_url, None),
-        "keywords": ("function", extract_keywords, None),
-        "abstract": ("function", extract_abstract, None),
     }
+    if conference_booktitle is not None:
+        prompts["booktitle"] = ("literal", conference_booktitle, None)
+    if conference_note is not None:
+        prompts["note"] = ("literal", conference_note, None)
+    if conference_url is not None:
+        prompts["url"] = ("literal", conference_url, None)
+    prompts["keywords"] = ("function", extract_keywords, None)
+    prompts["abstract"] = ("function", extract_abstract, None)
     return prompts
 
 
@@ -824,12 +820,14 @@ def listpdf(path: str) -> List[str]:
 
 def process_one(llm_settings: env,
                 prompts: Dict,
+                conference_slug: str,
                 unique_id: str,
                 text: str) -> str:
-    """Convert one confrence abstract from free-form text to BibTeX.
+    """Convert one conference abstract from free-form text to BibTeX.
 
     `llm_settings`: Obtain this by calling `raven.librarian.llmclient.setup` at app start time.
     `prompts`: Obtain by calling `setup_prompts` at app start time.
+    `conference_slug`: Short conference identifier for BibTeX entry keys.
     `unique_id`: input file identifier, for error messages
     `text`: The text to process (extracted from a conference abstract PDF).
 
@@ -883,7 +881,11 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
         raise RuntimeError("Failed to connect to LLM backend, cannot proceed.")
     llm_settings = llmclient.setup(backend_url=opts.backend_url)
     prompts = setup_prompts(llm_settings,
-                            n_retries=opts.retries)
+                            n_retries=opts.retries,
+                            conference_year=opts.conference_year,
+                            conference_booktitle=opts.conference_booktitle,
+                            conference_note=opts.conference_note,
+                            conference_url=opts.conference_url)
     logger.info(f"Connected to LLM backend at {opts.backend_url}")
     plural_s = "s" if opts.retries != 1 else ""
     logger.info(f"    prompts set up to use up to {opts.retries} attempt{plural_s}")
@@ -934,6 +936,7 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
 
                         status, error_info, bibtex_entry = process_one(llm_settings,
                                                                        prompts,
+                                                                       opts.conference_slug,
                                                                        unique_id,
                                                                        text_from_pdf)
                         # bibtex_entries.append(bibtex_entry)
@@ -981,6 +984,14 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help="where to access the LLM API")
+
+    conf = parser.add_argument_group("conference info", "Metadata for the conference; injected into all generated BibTeX entries.")
+    conf.add_argument("--slug", dest="conference_slug", required=True, type=str, metavar="SLUG", help="Short conference identifier for BibTeX entry keys (e.g. ECCOMAS2024).")
+    conf.add_argument("--year", dest="conference_year", required=True, type=str, metavar="YEAR", help="Conference year (e.g. 2024).")
+    conf.add_argument("--booktitle", dest="conference_booktitle", default=None, type=str, metavar="TITLE", help="Full conference title for the BibTeX booktitle field (optional).")
+    conf.add_argument("--note", dest="conference_note", default=None, type=str, metavar="NOTE", help="Conference note, e.g. dates and location (optional).")
+    conf.add_argument("--url", dest="conference_url", default=None, type=str, metavar="URL", help="Conference URL (optional).")
+
     parser.add_argument("-s", "--success", dest="success_filename", type=str, metavar="success.bib", help="Output BibTeX file for successful entries (default stdout). Will be appended to.")
     parser.add_argument("-f", "--failed", dest="failed_filename", type=str, metavar="failed.bib", help="Output BibTeX file for failed entries (default: send these too to the success output). Will be appended to. As detected by heuristics, requiring manual verification/fixes.")
     parser.add_argument("-r", "--retries", dest="retries", default=3, type=int, metavar="x", help="Up to this many attempts (default: 3) will be made at the various processing steps for author extraction, when the processing fails. The number set here includes the initial attempt, so '-r 3' means 'try, and then retry up to twice if needed'. Attempts are counted separately for each processing step; each step gets this many retries if needed. This often helps get the LLM unstuck, especially if it starts overthinking and fails to produce a final response within the maximum token limit for a reply.")
