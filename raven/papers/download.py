@@ -10,15 +10,19 @@ Thanks to Qwen3-30B-A3B-Thinking-2507 and the documentation:
 
 from __future__ import annotations
 
-__all__ = ["get_paper_metadata", "download_papers", "main"]
+__all__ = ["get_paper_metadata", "download_papers", "extract_ids_from_bib", "main"]
 
 import argparse
 import os
 import pathlib
+import sys
+
 import requests
 import traceback
 from typing import Dict, List
 import xml.etree.ElementTree as ET
+
+import bibtexparser
 
 from mcpyrate import colorizer
 
@@ -26,6 +30,7 @@ from .. import __version__
 from ..common import stringmaps
 from . import identifiers
 from .ratelimit import RateLimiter
+from .utils import deduplicate_arxiv_ids
 
 GLOBE = "\U0001f310"  # 🌐 — for progress messages indicating internet access
 
@@ -196,6 +201,31 @@ def download_papers(arxiv_ids: List[str],
             traceback.print_exc()
 
 
+def extract_ids_from_bib(bib_path: str) -> list[str]:
+    """Extract arXiv IDs from the ``eprint`` fields of a BibTeX file.
+
+    Returns a list of arXiv ID strings. Entries without an ``eprint``
+    field (or with ``archiveprefix`` other than ``arXiv``) are skipped.
+    """
+    library = bibtexparser.parse_file(bib_path)
+    if library.failed_blocks:
+        print(f"Warning: {len(library.failed_blocks)} entries failed to parse in {bib_path}",
+              file=sys.stderr)
+
+    raw_ids: list[str] = []
+    for entry in library.entries:
+        fields = entry.fields_dict
+        eprint = fields.get("eprint")
+        if eprint is None:
+            continue
+        # Only accept arXiv eprints (skip e.g. SSRN or other archives)
+        prefix = fields.get("archiveprefix")
+        if prefix is not None and prefix.value.lower() != "arxiv":
+            continue
+        raw_ids.append(eprint.value)
+    return deduplicate_arxiv_ids(raw_ids)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Download arXiv papers by their IDs, and name the files "
@@ -204,11 +234,16 @@ def main() -> None:
         "version is downloaded.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(dest="arxiv_ids", nargs="+", default=None,
+    parser.add_argument(dest="arxiv_ids", nargs="*", default=None,
                         type=str, metavar="id",
                         help="arXiv IDs of papers to download (ID format e.g. "
                         "2511.22570, 2411.17075v5, cond-mat/0207270, "
                         "math/0501001v2)")
+    parser.add_argument("-b", "--from-bib", dest="bib_file",
+                        type=str, metavar="file.bib", default=None,
+                        help="Read arXiv IDs from the eprint fields of a "
+                        "BibTeX file (e.g. output of raven-arxiv-search). "
+                        "Can be combined with positional IDs.")
     parser.add_argument("-o", "--output-dir", dest="output_dir", default=".",
                         type=str, metavar="output_dir",
                         help="Output directory where to write the PDF file(s). "
@@ -218,7 +253,15 @@ def main() -> None:
                         version=('%(prog)s ' + __version__))
     opts = parser.parse_args()
 
-    download_papers(arxiv_ids=opts.arxiv_ids,
+    arxiv_ids = list(opts.arxiv_ids or [])
+    if opts.bib_file is not None:
+        bib_ids = extract_ids_from_bib(opts.bib_file)
+        print(f"Read {len(bib_ids)} arXiv IDs from {opts.bib_file}", file=sys.stderr)
+        arxiv_ids.extend(bib_ids)
+    if not arxiv_ids:
+        parser.error("no arXiv IDs specified (provide IDs on the command line and/or via --from-bib)")
+
+    download_papers(arxiv_ids=arxiv_ids,
                     output_dir=opts.output_dir)
 
 
