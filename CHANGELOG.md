@@ -50,6 +50,7 @@
   - Fix filter cache invalidation on resolution change. Filters using texture caches now check their own tensor dimensions instead of relying on the video frame dimensions, preventing stale data when the image resolution changes mid-session.
 
 - *Raven-avatar*:
+  - Settings editor: avatar panel now resizes with the window (especially noticeable when going fullscreen). Previously the rightmost column expanded uselessly; now the postprocessor column stays at its default width and extra space goes to the avatar panel.
   - Fix settings editor crash when loading filters with `!ignore` parameters (e.g. anything with a `name`). The canonize and generate paths now skip these, matching the GUI build path.
 
 

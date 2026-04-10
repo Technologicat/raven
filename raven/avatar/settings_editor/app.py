@@ -425,6 +425,14 @@ class PostprocessorSettingsEditorGUI:
 
         self.button_width = 300
 
+        # Three-column layout: avatar | controls | postprocessor.
+        # Avatar panel gets any extra width when the viewport is resized.
+        self.control_width = self.button_width + 16
+        # Horizontal margins: DPG's default WindowPadding.x (8 per side = 16) + ItemSpacing.x (8) × 2 gaps between 3 columns.
+        self.h_margins = 2 * 8 + 2 * 8
+        initial_avatar_width = 1024
+        self.postprocessor_width = viewport_width - initial_avatar_width - self.control_width - self.h_margins
+
         self.current_input_image_path = None  # for the Refresh (reload current character) feature
 
         self.talking_animation_running = False  # simple mouth randomizing animation
@@ -785,7 +793,7 @@ class PostprocessorSettingsEditorGUI:
                                         assert False, f"{filter_name}.{param_name}: Unknown parameter type {type(default_value)}"
                         dpg.add_spacer(height=4)
 
-                with dpg.child_window(autosize_x=True, autosize_y=True):
+                with dpg.child_window(width=self.postprocessor_width, autosize_y=True):
                     dpg.add_checkbox(label="Postprocessor [Ctrl+click to set a numeric value]", default_value=True, callback=self.on_toggle_postprocessor)
                     # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
                     build_postprocessor_gui()
@@ -805,11 +813,14 @@ class PostprocessorSettingsEditorGUI:
         if w == 0 or h == 0:  # no meaningful main window size yet?
             return
 
+        avatar_width = w - self.control_width - self.postprocessor_width - self.h_margins
         with guiutils.nonexistent_ok():
+            dpg.set_item_width("avatar_child_window", avatar_width)
             dpg.set_item_height("avatar_child_window", h - 16)
 
-        self.dpg_avatar_renderer.reposition(new_y_bottom=h)
-        self.dpg_avatar_renderer.configure_backdrop(new_width=1024,
+        self.dpg_avatar_renderer.reposition(new_x_center=(avatar_width // 2),
+                                            new_y_bottom=h)
+        self.dpg_avatar_renderer.configure_backdrop(new_width=avatar_width,
                                                     new_height=h,
                                                     new_blur_state=dpg.get_value("backdrop_blur_checkbox"))
 
