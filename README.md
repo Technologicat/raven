@@ -11,7 +11,7 @@
     - [Raven-visualizer: Visualize research literature](#raven-visualizer-visualize-research-literature)
     - [Raven-librarian: Multiversal LLM frontend](#raven-librarian-multiversal-llm-frontend)
     - [Raven-avatar: AI-animated anime avatar](#raven-avatar-ai-animated-anime-avatar)
-    - [Raven-xdot-viewer: Small standalone GraphViz graph viewer](#raven-xdot-viewer-small-standalone-graphviz-graph-viewer)
+    - [Raven-xdot-viewer: Interactive GraphViz graph viewer](#raven-xdot-viewer-interactive-graphviz-graph-viewer)
     - [Raven-cherrypick: Triage images quickly](#raven-cherrypick-triage-images-quickly)
     - [Raven-conference-timer: Countdown timer for talks](#raven-conference-timer-countdown-timer-for-talks)
     - [Raven-server: Web API server](#raven-server-web-api-server)
