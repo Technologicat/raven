@@ -57,7 +57,9 @@ dependencies = [
     "emoji>=1.7.0",  # TTS, emoji stripping
     "accelerate>=1.11.0",  # faster loading of `whisper-large-v3-turbo`, according to model card
     "pvrecorder>=1.2.7",
-    "PyTurboJPEG<2"
+    "PyTurboJPEG<2",
+    "requests>=2.31",  # client, librarian, papers (arXiv tools)
+    "tqdm>=4.0",  # server.stt, papers (arXiv download)
 ]
 
 keywords=["visualization", "semantic-analysis", "application", "AI", "NLP", "GUI"]
