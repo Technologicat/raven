@@ -1075,6 +1075,117 @@ class Postprocessor:
         image[:, :, :] = torchvision.transforms.GaussianBlur((ks, 1), sigma=sigma)(image)  # blur along x
         image[:, :, :] = torchvision.transforms.GaussianBlur((1, ks), sigma=sigma)(image)  # blur along y
 
+    @with_metadata(mode=["analog", "digital"],
+                   subsampling=["4:2:0", "4:2:2"],
+                   upscale=["nearest", "bilinear"],
+                   double_size=[False, True],
+                   sigma=[0.1, 7.0],
+                   _priority=5.5)
+    def chroma_subsample(self, image: torch.tensor, *,
+                         mode: str = "analog",
+                         subsampling: str = "4:2:0",
+                         upscale: str = "nearest",
+                         double_size: bool = True,
+                         sigma: float = 4.0) -> None:
+        """[static] Chroma subsampling — lo-fi YUV color resolution reduction.
+
+        Reduces chrominance (color) resolution while keeping luminance (brightness)
+        at full resolution. This is done by all analog and digital video systems,
+        each in their own way, thus improving compression by exploiting the human
+        visual system's lower spatial acuity for color than for brightness.
+
+        Two modes model the two main mechanisms:
+
+        ``"analog"``:  Bandwidth-limited chroma, as in analog broadcast (NTSC/PAL).
+                       Applies a horizontal low-pass filter to the U and V channels,
+                       simulating the limited chroma bandwidth of analog video
+                       (~500 kHz chroma vs. ~3 MHz luma on VHS). The `subsampling`,
+                       `upscale`, and `double_size` parameters are ignored in this mode.
+
+        ``"digital"``: Block-subsampled chroma, as in digital codecs (DV, MPEG, H.264).
+                       Downsamples the chroma planes by bilinear filtering, then
+                       upsamples back to luma resolution. Produces the characteristic
+                       blocky color fringing of early digital video.
+
+        `subsampling` (digital mode only):
+            ``"4:2:0"``: Half resolution in both dimensions (isotropic).
+                         Standard in MPEG, H.264, most consumer digital video.
+            ``"4:2:2"``: Half resolution horizontally only (anisotropic).
+                         Used in DV, professional MPEG-2, broadcast contribution feeds.
+
+        `upscale` (digital mode only): How subsampled chroma is reconstructed.
+            ``"nearest"``:  Nearest-neighbour — blocky chroma edges. Retro digital look.
+            ``"bilinear"``: Bilinear interpolation — smoother color transitions.
+                            Closer to what a proper decoder does.
+
+        `double_size` (digital mode only): If ``True``, each chroma block covers twice
+                      the normal area — effectively 4:1:0 or 4:1:1 instead of 4:2:0 or
+                      4:2:2. Exaggerates the blocky digital look for artistic effect.
+
+        `sigma` (analog mode only): Standard deviation for the horizontal chroma blur,
+                in pixels. Larger values simulate lower chroma bandwidth. Works up to 7.0
+                (kernel size saturates around sigma 5, but the effect is already heavy).
+
+        Note: uses BT.709 (HDTV) YCbCr, not BT.601 (SDTV). The visual difference
+        is subtle for this kind of lo-fi effect.
+        """
+        c, h, w = image.shape
+        image_yuv = rgb_to_yuv(image[:3, :, :])  # [3, h, w]
+
+        if mode == "analog":
+            ks = _blur_kernel_size(sigma)
+            image_yuv[1:3, :, :] = torchvision.transforms.GaussianBlur((ks, 1), sigma=sigma)(image_yuv[1:3, :, :])
+        elif mode == "digital":
+            chroma = image_yuv[1:3, :, :]  # [2, h, w]
+
+            if subsampling == "4:2:0":
+                sub_h = (h + 1) // 2
+                sub_w = (w + 1) // 2
+            elif subsampling == "4:2:2":
+                sub_h = h
+                sub_w = (w + 1) // 2
+            else:
+                raise ValueError(f"chroma_subsample: unknown subsampling {subsampling!r}; expected '4:2:0' or '4:2:2'")
+
+            if double_size:
+                sub_h = (sub_h + 1) // 2
+                sub_w = (sub_w + 1) // 2
+
+            # Downsample chroma by strided slicing (pick every Nth sample).
+            # Strided selection intentionally drops samples, introducing aliasing
+            # that makes the subsampling visible.
+            stride_h = (h + sub_h - 1) // sub_h  # 2 when subsampled, 1 when not
+            stride_w = (w + sub_w - 1) // sub_w
+            chroma_sub = chroma[:, ::stride_h, ::stride_w]  # [2, ~sub_h, ~sub_w]
+
+            # # Downsample chroma bilinearly — real encoders filter, not drop.
+            # # The quality of this approach is too good for the subsampling
+            # # to be visible.
+            # chroma_sub = torch.nn.functional.interpolate(
+            #     chroma.unsqueeze(0), size=(sub_h, sub_w), mode="bilinear", align_corners=False,
+            # ).squeeze(0)  # [2, sub_h, sub_w]
+
+            # Reconstruct chroma to luma resolution
+            if upscale == "bilinear":
+                chroma_up = torch.nn.functional.interpolate(
+                    chroma_sub.unsqueeze(0), size=(h, w), mode="bilinear", align_corners=False,
+                ).squeeze(0)
+            elif upscale == "nearest":
+                # Compute per-axis repeat factor from the actual subsampled size
+                repeat_h = (h + sub_h - 1) // sub_h
+                repeat_w = (w + sub_w - 1) // sub_w
+                chroma_up = (chroma_sub
+                             .repeat_interleave(repeat_w, dim=-1)
+                             .repeat_interleave(repeat_h, dim=-2)[:, :h, :w])
+            else:
+                raise ValueError(f"chroma_subsample: unknown upscale {upscale!r}; expected 'nearest' or 'bilinear'")
+
+            image_yuv[1:3, :, :] = chroma_up
+        else:
+            raise ValueError(f"chroma_subsample: unknown mode {mode!r}; expected 'analog' or 'digital'")
+
+        image[:3, :, :] = yuv_to_rgb(image_yuv)
+
     @with_metadata(speed=[1.0, 16.0],
                    amplitude1=[0.001, 0.01],
                    density1=[1.0, 100.0],
