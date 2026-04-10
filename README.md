@@ -15,6 +15,7 @@
     - [Raven-cherrypick: Triage images quickly](#raven-cherrypick-triage-images-quickly)
     - [Raven-conference-timer: Countdown timer for talks](#raven-conference-timer-countdown-timer-for-talks)
     - [Raven-server: Web API server](#raven-server-web-api-server)
+        - [Quickstart](#quickstart)
 - [Install & run](#install--run)
     - [From source](#from-source)
         - [Install PDM in your Python environment](#install-pdm-in-your-python-environment)
@@ -154,7 +155,8 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
     - Thumbnails are generated on the fly, into a RAM cache. (Noise shown in thumbnail until it has loaded.)
     - Image state is encoded by directory path: `base/cherries`, `base/lemons`, where `base` is the directory you are viewing.
   - The same virtual view combines the cherry/lemon/neutral directories.
-  - Easy two-hand operation: arrows navigate; X=lemon, C=cherry, V=clear mark (drop back to base level).
+    - Can optionally be filtered to show just cherries, lemons, or neutral.
+  - Easy two-hand operation: arrows navigate; X=lemon, C=cherry, V=clear mark (drop back to neutral).
   - Zoom/pan preserved when switching between images with the same dimensions.
     - Makes it easy to compare a detail in variations of the same shot, by flicking back and forth.
     - Especially useful for mobile photos taken of someone's conference slides from 20m away, without optical zoom.
@@ -201,6 +203,36 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
 - Partially compatible with *SillyTavern*. Originally developed as a continuation of *SillyTavern-extras*.
 - Python bindings (client for web API) provided.
   - JS bindings possible, but not implemented yet. See [#2](https://github.com/Technologicat/raven/issues/2).
+
+### Quickstart
+
+To start the server, the basic command sequence is:
+
+```bash
+$(pdm venv activate)  # activate Raven venv
+source env.sh  # set up paths for CUDA libraries
+raven-server
+```
+
+Other scripts that can be sourced before starting `raven-server`:
+
+```bash
+source run-on-internal-gpu.sh  # set GPU that is visible to Torch as cuda:0
+```
+
+```bash
+source no-hammer-hf.sh  # use the installed AI models without checking for new versions
+```
+
+Full sequence:
+
+```bash
+$(pdm venv activate)
+source env.sh
+source run-on-internal-gpu.sh
+source no-hammer-hf.sh
+raven-server
+```
 
 
 # Install & run
