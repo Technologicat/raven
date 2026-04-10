@@ -20,6 +20,7 @@
     - Shared `bibtex_escape`/`bibtex_unescape` — single source of truth, replacing duplicate definitions in `csv2bib` and `wos2bib`.
     - Consolidated arXiv ID handling: `identifiers.strip_version()` replaces three separate implementations.
     - New dependency: `feedparser>=6.0`.
+- *Raven-cherrypick*: new "mark winner" action (Ctrl+Shift+C, or Ctrl+Shift+click cherry button). Marks the current image as cherry and all other selected images as lemon — one keystroke to commit a compare-mode choice.
 
 **Changed**:
 

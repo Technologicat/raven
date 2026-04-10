@@ -439,6 +439,40 @@ def _mark_triage(state: TriageState, *, use_selection: bool = False) -> None:
     _update_status()
 
 
+def _mark_winner() -> None:
+    """Mark current image as cherry; all other selected images as lemon.
+
+    Designed for committing a compare-mode choice: the winner gets cherry,
+    the rest get lemon. If there are no other selected images, falls back
+    to marking just the current image as cherry (same as bare C).
+    """
+    grid = _app_state["grid"]
+    triage = _app_state["triage"]
+    if grid is None or triage is None:
+        return
+
+    current = grid.current
+    if current < 0:
+        return
+    others = [i for i in grid.selected if i != current]
+
+    # Lemon the losers (if any), cherry the winner.
+    if others:
+        errors = triage.set_state(others, TriageState.LEMON)
+        for err in errors:
+            logger.warning("_mark_winner: %s", err)
+        for idx in others:
+            grid.update_triage_state(idx, triage[idx].state)
+
+    errors = triage.set_state([current], TriageState.CHERRY)
+    for err in errors:
+        logger.warning("_mark_winner: %s", err)
+    grid.update_triage_state(current, triage[current].state)
+
+    _sync_triage_mark()
+    _update_status()
+
+
 def _sync_triage_mark() -> None:
     """Push the current image's triage state to the imageview overlay."""
     iv = _app_state["image_view"]
@@ -694,9 +728,11 @@ def _on_key(sender, app_data) -> None:
         elif iv is not None:
             iv.zoom_to_fit()
         return
-    # Debug keys (Ctrl+Shift).
+    # Ctrl+Shift: winner commit + debug keys.
     if ctrl and shift:
-        if key == dpg.mvKey_M:
+        if key == dpg.mvKey_C:
+            _mark_winner()
+        elif key == dpg.mvKey_M:
             dpg.show_metrics()
             global _debug
             _debug = not _debug
@@ -1169,11 +1205,19 @@ def main() -> int:
 
             dpg.add_spacer(width=8)
 
-            # Triage buttons. Click = current image; Ctrl+click = all selected.
+            # Triage buttons. Click = current; Ctrl+click = all selected;
+            # Ctrl+Shift+click on cherry = winner (current → cherry, rest → lemon).
             def _triage_btn_callback(sender, app_data, user_data):
                 ctrl_held = (dpg.is_key_down(dpg.mvKey_LControl)
                              or dpg.is_key_down(dpg.mvKey_RControl))
-                _mark_triage(user_data, use_selection=ctrl_held)
+                shift_held = (dpg.is_key_down(dpg.mvKey_LShift)
+                              or dpg.is_key_down(dpg.mvKey_RShift))
+                if ctrl_held and shift_held and user_data is TriageState.CHERRY:
+                    _mark_winner()
+                elif ctrl_held:
+                    _mark_triage(user_data, use_selection=True)
+                else:
+                    _mark_triage(user_data)
 
             btn = dpg.add_button(label=fa.ICON_STAR,
                                  tag="cherrypick_mark_cherry_btn",
@@ -1183,7 +1227,7 @@ def main() -> int:
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
             dpg.bind_item_theme(btn, "disablable_button_theme")
             with dpg.tooltip(btn):
-                dpg.add_text("Mark cherry [C]\n    with Ctrl: all selected")
+                dpg.add_text("Mark cherry [C]\n    with Ctrl: all selected\n    with Ctrl+Shift: winner; others selected -> lemon")
 
             btn = dpg.add_button(label=fa.ICON_LEMON,
                                  tag="cherrypick_mark_lemon_btn",
@@ -1351,6 +1395,7 @@ def main() -> int:
         env(key_indent=0, key="Ctrl+O", action_indent=0, action="Open folder", notes=""),
         env(key_indent=0, key="C", action_indent=0, action="Mark cherry", notes=""),
         env(key_indent=1, key="Ctrl+C", action_indent=1, action="...all selected", notes=""),
+        env(key_indent=1, key="Ctrl+Shift+C", action_indent=1, action="...winner", notes="Others selected -> lemon"),
         env(key_indent=0, key="X", action_indent=0, action="Mark lemon", notes=""),
         env(key_indent=1, key="Ctrl+X", action_indent=1, action="...all selected", notes=""),
         env(key_indent=0, key="V", action_indent=0, action="Clear mark", notes=""),
