@@ -1,5 +1,11 @@
 # Deferred TODOs
 
+## wos2bib: escaping bug breaks import for some WoS export files
+
+`bibtex_escape()` in `wos2bib.py` doesn't escape all BibTeX-special characters. Some files in the hydrogen test set fail to import. Likely culprits: `#` (BibTeX string concatenation), `$` (math mode), or unbalanced quotes. Fix in the shared `bibtex_escape()` after the `raven.papers` extraction (see `briefs/papers-submodule.md`).
+
+Moved from `TODO.md` (2026-04-10).
+
 ## torch.compile for the postprocessor
 
 `torch.compile()` on THA3 was investigated (2026-04-09) and yields only ~6% speedup (20.3ms → 19.0ms on 3070 Ti) at the cost of 37s compilation startup. Not worth it for THA3 — the model is already lean with separable convolutions + FP16. Also hangs in the server (works in standalone; cause unresolved — possibly Triton subprocess interaction with waitress/threads).

@@ -87,8 +87,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 - **[Medium]** Time granularity: currently year only. Scientific papers may need month; news analysis needs date; syslogs need nanosecond timestamps. Design for arbitrary granularity.
   - Timeline visualization: show also month/day when available; for log analysis, full timestamps.
 
-- **[Medium]** Web of Science: fix character escape bug (quotes, braces, etc.) breaking import for several files in the hydrogen test set.
-
 - **[Medium]** More import sources: Semantic Scholar, Scopus, ERIC (educational sciences/didactics), and others.
 
 - **[Low]** Data file format: replace `.pickle` with `npz` or similar (not portable across Python/app versions). Also rename dataset vs. NLP cache file extensions to avoid the current `.pickle`/`.pickle` collision.
