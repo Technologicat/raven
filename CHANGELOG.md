@@ -5,12 +5,21 @@
 **Added**:
 
 - New submodule: `raven.papers` — consolidates all paper and bibliography tools.
-  - Integrates the standalone `arxiv-api-search` tool as `raven-arxiv-search` — search arXiv with boolean expressions (AND/OR/ANDNOT, quoted phrases, parenthesized grouping), export results as BibTeX.
-  - Relocated from `raven.tools`: `raven-arxiv2id`, `raven-arxiv-download`, `raven-burstbib`, `raven-csv2bib`, `raven-pdf2bib`, `raven-wos2bib`. CLI command names unchanged.
-  - Shared `RateLimiter` (thread-safe, tqdm progress bar) — extracted from the arXiv downloader, now also used by the search tool.
-  - Shared `bibtex_escape`/`bibtex_unescape` — single source of truth, replacing duplicate definitions in `csv2bib` and `wos2bib`.
-  - Consolidated arXiv ID handling: `identifiers.strip_version()` replaces three separate implementations.
-  - New dependency: `feedparser>=6.0`.
+  - New tool: `raven-arxiv-search`.
+    - Usage: `raven-arxiv-search query.txt -o sometopic.bib`
+    - Search arXiv with boolean expressions (AND/OR/ANDNOT, quoted phrases, parenthesized grouping), export results as BibTeX.
+    - This was originally a standalone tool, [`arxiv-api-search`](https://github.com/Technologicat/arxiv-api-search).
+  - New CLI option: `raven-arxiv-download --from-bib sometopic.bib -o papers/`.
+    - Does as it says on the tin.
+    - Takes the arXiv ID for each BibTeX entry from the `eprint` field.
+      - Metadata records returned by arXiv's API (e.g. via `raven-arxiv-search`) include that field.
+      - Additionally, if the `archiveprefix` field is present, it is checked that its value is `arxiv` before attempting to download the paper.
+  - Internal changes:
+    - Relocated from `raven.tools`: `raven-arxiv2id`, `raven-arxiv-download`, `raven-burstbib`, `raven-csv2bib`, `raven-pdf2bib`, `raven-wos2bib`. CLI command names unchanged.
+    - Shared `RateLimiter` (thread-safe, tqdm progress bar) — extracted from the arXiv downloader, now also used by the search tool.
+    - Shared `bibtex_escape`/`bibtex_unescape` — single source of truth, replacing duplicate definitions in `csv2bib` and `wos2bib`.
+    - Consolidated arXiv ID handling: `identifiers.strip_version()` replaces three separate implementations.
+    - New dependency: `feedparser>=6.0`.
 
 **Changed**:
 
