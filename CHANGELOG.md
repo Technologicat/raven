@@ -15,6 +15,10 @@
     - Quality difference is unnoticeable with the postprocessor enabled (with the default chain).
     - Main difference between Anime4K and `bicubic` is in details with thin lines, such as the rims of a character's glasses.
 
+- *Video processing* (`raven.common.video`):
+  - `chroma_subsample` filter to simulate a lo-fi video look.
+    - Reduces chrominance (color) resolution while keeping luminance (brightness) at full resolution. Real video systems use this to improve compression, because human vision isn't as sensitive to color as it is to brightness.
+
 **Fixed**:
 
 - *Video processing* (`raven.common.video`):
