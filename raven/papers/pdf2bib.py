@@ -36,7 +36,7 @@ import subprocess
 import sys
 from textwrap import dedent
 import traceback
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
 from unpythonic import sym, timer, ETAEstimator, uniqify
 from unpythonic.env import env

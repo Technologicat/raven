@@ -76,7 +76,7 @@ import numpy as np
 
 from mcpyrate import colorizer
 
-import torch  # noqa: F401: import torch before spaCy, so that spaCy finds the GPU (otherwise spaCy will complain that CuPy is not installed, which is not true)
+import torch  # noqa: F401 -- import torch before spaCy, so that spaCy finds the GPU
 
 import spacy
 
@@ -84,11 +84,11 @@ from ..common import netutil
 from ..common import nlptools
 from ..server.modules import avatarutil
 
-from .tts import tts_list_voices, tts_prepare, tts_speak, tts_speak_lipsynced, tts_stop, tts_speaking, tts_warmup  # noqa: F401: re-export
+from .tts import tts_list_voices, tts_prepare, tts_speak, tts_speak_lipsynced, tts_stop, tts_speaking, tts_warmup  # noqa: F401 -- re-export
 from . import util  # for the `api_initialized` flag (must be looked up on the `util` module each time it is used, because the flag is not boxed)  # TODO: box it, or wrap it in a property?
 
-from .util import api_config, yell_on_error  # noqa: F401: re-export
-from .util import initialize_api as initialize  # noqa: F401: re-export
+from .util import api_config, yell_on_error  # noqa: F401 -- re-export
+from .util import initialize_api as initialize  # noqa: F401 -- re-export
 
 from ..vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 
@@ -112,9 +112,7 @@ def raven_server_available() -> bool:
     except requests.exceptions.ConnectionError as exc:
         logger.error(f"raven_server_available: {type(exc)}: {exc}")
         return False
-    if response.status_code != 200:
-        return False
-    return True
+    return response.status_code == 200
 
 def test_connection(quiet: bool = False) -> bool:
     """Test the connection to Raven-server.

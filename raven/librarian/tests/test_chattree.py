@@ -391,7 +391,7 @@ class TestCopy:
     def test_copy_subtree(self, branching):
         f, root, left, right = branching
         # Add a grandchild to test recursion.
-        gc = f.create_node("grandchild", parent_id=left)
+        gc = f.create_node("grandchild", parent_id=left)  # noqa: F841 -- side effect: creates the node
 
         new_root = f.copy_subtree(root, new_parent_id=None)
         assert new_root != root

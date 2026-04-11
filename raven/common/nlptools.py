@@ -33,7 +33,6 @@ import collections
 import copy
 import math
 import operator
-import re
 from typing import Container, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -50,7 +49,6 @@ import flair
 import dehyphen
 
 from . import utils as common_utils
-from . import numutils
 
 # --------------------------------------------------------------------------------
 # Stopword management

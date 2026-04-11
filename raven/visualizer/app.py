@@ -3820,7 +3820,7 @@ def _update_info_panel(*, task_env=None, env=None):
             # Update search controls. Do this last.
             if search_string:  # is a search active?
                 num = len(info_panel_search_result_widgets)  # how many search results are actually shown in the info panel
-                search_results_info_panel_str = f"[{'no' if not num else num} search result{'s' if num != 1 else ''} shown]"
+                search_results_info_panel_str = f"[{num if num else 'no'} search result{'s' if num != 1 else ''} shown]"
             else:
                 search_results_info_panel_str = "[no search active]"  # TODO: DRY duplicate definitions for labels
             dpg.set_value("item_information_search_controls_item_count", search_results_info_panel_str)  # tag
@@ -4214,7 +4214,7 @@ def hotkeys_callback(sender, app_data):
         toggle_fullscreen()
 
     # Hotkeys while the Help card is shown - helpcard handles its own hotkeys
-    elif help_window.is_visible():
+    elif help_window.is_visible():  # noqa: SIM114 -- semantically distinct guards
         return
 
     # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys

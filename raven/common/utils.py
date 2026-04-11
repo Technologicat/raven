@@ -52,9 +52,7 @@ def validate_cache_mtime(cachefullpath: Union[str, pathlib.Path], origfullpath: 
     """Return whether a cache file at `cachefullpath` is valid, by comparing its mtime to that of the original file at `origfullpath`."""
     stat_result_cache = os.stat(cachefullpath)
     stat_result_orig = os.stat(origfullpath)
-    if stat_result_orig.st_mtime_ns <= stat_result_cache.st_mtime_ns:
-        return True
-    return False
+    return stat_result_orig.st_mtime_ns <= stat_result_cache.st_mtime_ns
 
 # def delete_directory_recursively(path: str) -> None:
 #     """Delete a directory recursively, like 'rm -rf' in the shell.

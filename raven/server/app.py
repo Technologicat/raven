@@ -732,7 +732,7 @@ def api_embeddings_compute():
         abort(400, 'api_embeddings_compute: "text" is required')
 
     sentences: Union[str, List[str]] = data["text"]
-    model: str = data["model"] if "model" in data else "default"  # See `embedding_models` in `raven.server.config`. Both the keys (roles) and the values (raw model names) are valid here.
+    model: str = data.get("model", "default")  # See `embedding_models` in `raven.server.config`. Both the keys (roles) and the values (raw model names) are valid here.
 
     if not (isinstance(sentences, str) or (isinstance(sentences, list) and all(isinstance(x, str) for x in sentences))):
         abort(400, 'api_embeddings_compute: "text" must be string or array of strings')
@@ -1114,8 +1114,8 @@ def api_stt_transcribe():
         file = request.files["file"]
         parameters = netutil.unpack_parameters_from_json_file_attachment(request.files["json"].stream)
 
-        prompt = parameters["prompt"] if "prompt" in parameters else None
-        language = parameters["language"] if "language" in parameters else None
+        prompt = parameters.get("prompt", None)
+        language = parameters.get("language", None)
 
         result = stt.speech_to_text(file.stream,
                                     prompt=prompt,

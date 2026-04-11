@@ -50,7 +50,7 @@ class TestSearchState:
 
     def test_single_fragment(self, search_state):
         """Single fragment matches nodes containing it."""
-        results = search_state.search("catalyst")  # noqa: F841: this updates the search state
+        results = search_state.search("catalyst")  # noqa: F841 -- updates search state
         ids = search_state.get_result_ids()
         assert "catalyst" in ids
 
@@ -112,7 +112,7 @@ class TestSearchState:
 
     def test_case_insensitive_lowercase_query(self, search_state):
         """Lowercase query matches case-insensitively."""
-        results = search_state.search("catalyst")  # noqa: F841: this updates the search state
+        results = search_state.search("catalyst")  # noqa: F841 -- updates search state
         ids = search_state.get_result_ids()
         assert "catalyst" in ids
 

@@ -53,7 +53,7 @@ def _invert_lightness(color: Color) -> Color:
     Alpha passthrough. Preserves hue and saturation.
     """
     r, g, b, a = color
-    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    h, l, s = colorsys.rgb_to_hls(r, g, b)  # noqa: E741  # standard name for lightness
     new_l = _DARK_MODE_L_MAX - l * (_DARK_MODE_L_MAX - _DARK_MODE_L_MIN)
     r2, g2, b2 = colorsys.hls_to_rgb(h, new_l, s)
     return (r2, g2, b2, a)

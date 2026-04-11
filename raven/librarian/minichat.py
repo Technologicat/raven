@@ -211,7 +211,7 @@ def minimal_chat_client(backend_url) -> None:
             elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
                 with datastore.lock:
                     candidates = list(sorted(datastore.nodes.keys()))
-            elif buffer_content.startswith("!speculate"):  # in `!speculate` command, expecting an argument?
+            elif buffer_content.startswith("!speculate"):  # noqa: SIM114 -- separate commands, match-casing
                 candidates = ["True", "False"]
             elif buffer_content.startswith("!tools"):  # in `!tools` command, expecting an argument?
                 candidates = ["True", "False"]

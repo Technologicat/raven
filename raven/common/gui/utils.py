@@ -371,9 +371,9 @@ class nonexistent_ok:
     def __exit__(self, exctype, excvalue, traceback):
         if exctype is not None:
             self.errored = True
-            if _is_dpg_item_not_found(excvalue):
-                return True  # handled, suppress it
-            return False
+            if _is_dpg_item_not_found(excvalue):  # noqa: SIM103 -- __exit__ return semantics
+                return True  # suppress
+            return False  # reraise
 
 def maybe_delete_item(item: Union[str, int]) -> None:
     """Delete `item` (DPG ID or tag), if it exists. If not, the error is ignored."""
@@ -383,10 +383,7 @@ def maybe_delete_item(item: Union[str, int]) -> None:
 
 def has_child_items(widget: Union[str, int]) -> bool:
     """Return whether `widget` (DPG tag or ID) has child items in any of its slots."""
-    for slot in range(4):
-        if len(dpg.get_item_children(widget, slot=slot)):
-            return True
-    return False
+    return any(len(dpg.get_item_children(widget, slot=slot)) for slot in range(4))
 
 # ---------------------------------------------------------------------------
 # Widget geometry
@@ -445,9 +442,7 @@ def is_mouse_inside_widget(widget: Union[str, int]) -> bool:
     x0, y0 = get_widget_pos(widget)
     w, h = get_widget_size(widget)
     m = dpg.get_mouse_pos(local=False)  # in viewport coordinates
-    if m[0] < x0 or m[0] >= x0 + w or m[1] < y0 or m[1] >= y0 + h:
-        return False
-    return True
+    return not (m[0] < x0 or m[0] >= x0 + w or m[1] < y0 or m[1] >= y0 + h)
 
 # ---------------------------------------------------------------------------
 # Viewport pan/zoom math (shared by xdot widget, image viewer, etc.)

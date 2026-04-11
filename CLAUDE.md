@@ -37,12 +37,14 @@ pytest                   # runs all tests (currently minimal coverage)
 ### Linting
 
 ```bash
-flake8 --config=flake8rc  # lint check (note: non-standard config filename)
+ruff check <changed .py files>   # primary linter (config in pyproject.toml)
 ```
+
+Legacy `flake8rc` also present (used by Emacs flycheck, not by CI or CC).
 
 ### Workflow Rules
 
-1. **Lint after every code change**: `flake8 --config=flake8rc <changed .py files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
+1. **Lint after every code change**: `ruff check <changed .py files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
 
 ### DPG Pitfalls
 

@@ -236,7 +236,7 @@ def _do_search(*_args) -> None:
         return
 
     query = dpg.get_value(search_input)
-    results = widget.search(query)  # noqa: F841: kept for documentation purposes; you could access the result set from here
+    results = widget.search(query)  # noqa: F841 -- updates search state; result set accessible from here
     count = widget.get_search_count()  # includes both nodes and edges
 
     if not query:
@@ -471,9 +471,7 @@ def _is_busy() -> bool:
     if (time.monotonic_ns() - _last_input_ns) < config.INPUT_ACTIVE_S * 1e9:
         return True
     widget = _app_state["widget"]
-    if widget is not None and widget.is_animating():
-        return True
-    return False
+    return bool(widget is not None and widget.is_animating())
 
 
 def _on_key(sender, app_data) -> None:

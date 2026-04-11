@@ -1019,7 +1019,7 @@ class PostprocessorSettingsEditorGUI:
             with open(filename, "r", encoding="utf-8") as json_file:
                 animator_settings = json.load(json_file)
 
-            ppc = animator_settings["postprocessor_chain"] if "postprocessor_chain" in animator_settings else {}
+            ppc = animator_settings.get("postprocessor_chain", {})
             ppc = self.strip_postprocessor_chain_for_gui(ppc)
             ppc = self.canonize_postprocessor_parameters_for_gui(ppc)
             self.populate_gui_from_canonized_postprocessor_chain(ppc)

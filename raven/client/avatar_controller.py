@@ -85,7 +85,7 @@ def _translate_sentence(sentence: str,
     return subtitle
 
 @functools.lru_cache(maxsize=128)
-def _natlang_analyze(text: str) -> List[List["spacy.tokens.token.Token"]]:  # noqa: F821: we don't want to import (torch and) spaCy just for one type annotation.
+def _natlang_analyze(text: str) -> List[List["spacy.tokens.token.Token"]]:  # noqa: F821 -- type annotation only, avoid importing spaCy here
     """Internal helper for natural-language translation with LRU caching."""
     docs = api.natlang_analyze(text,
                                pipes=["tok2vec", "parser", "senter"])

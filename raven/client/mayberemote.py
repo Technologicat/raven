@@ -210,7 +210,7 @@ class NLP(MaybeRemoteService):
 
     def analyze(self,
                 text: Union[str, List[str]],
-                pipes: Optional[List[str]] = None) -> List[List["spacy.tokens.token.Token"]]:  # noqa: F821: type annotation only; no point importing spaCy into this module just for this.
+                pipes: Optional[List[str]] = None) -> List[List["spacy.tokens.token.Token"]]:  # noqa: F821 -- type annotation only, avoid importing spaCy here
         """Perform NLP analysis on `text`.
 
         `pipes`: If provided, enable only the listed pipes. Which ones exist depend on the loaded spaCy model.

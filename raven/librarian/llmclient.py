@@ -785,7 +785,7 @@ def perform_tool_calls(settings: env,
                 logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': ignoring exception from event handler `on_call_done`: {type(exc)}: {exc}")
 
     for request_record in tool_calls:
-        toolcall_id = request_record["id"] if "id" in request_record else None
+        toolcall_id = request_record.get("id", None)
 
         if "type" not in request_record:
             # The response message is intended for the LLM, whereas the log message (with all technical details) goes into the log.

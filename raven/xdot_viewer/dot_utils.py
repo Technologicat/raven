@@ -67,7 +67,7 @@ def _strip_xdot_layout_attrs(xdotcode: str) -> str:
                     # Strip quotes/brackets for name comparison (scanner
                     # returns raw text, unlike the lexer's _filter).
                     name = tok_text
-                    if tok_type == xdot_parser.STR_ID and len(name) >= 2:
+                    if tok_type == xdot_parser.STR_ID and len(name) >= 2:  # noqa: SIM114 -- match-casing, semantically distinct token types
                         name = name[1:-1]
                     elif tok_type == xdot_parser.HTML_ID and len(name) >= 2:
                         name = name[1:-1]

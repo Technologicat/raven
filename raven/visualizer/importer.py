@@ -1086,9 +1086,7 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
 
 def _is_cancelled():
     """Internal function, for the task to check whether it has been cancelled while it is still running."""
-    if "task_env" in dyn and dyn.task_env.cancelled:
-        return True
-    return False
+    return bool("task_env" in dyn and dyn.task_env.cancelled)
 
 def has_task():
     """Return whether an importer task currently exists.

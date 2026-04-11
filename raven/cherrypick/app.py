@@ -129,9 +129,7 @@ def _is_busy() -> bool:
         return True
     if _noise_pool_pending_size is not None:
         return True
-    if gui_animation.animator.active_count > 0:
-        return True
-    return False
+    return gui_animation.animator.active_count > 0
 
 
 # ---------------------------------------------------------------------------
