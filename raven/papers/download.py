@@ -33,6 +33,8 @@ from .ratelimit import RateLimiter
 from .utils import deduplicate_arxiv_ids
 
 GLOBE = "\U0001f310"  # 🌐 — for progress messages indicating internet access
+CHECKMARK = "\u2713"  # ✓
+CROSS = "\u2717"      # ✗
 
 
 def get_paper_metadata(arxiv_id: str,
@@ -185,9 +187,9 @@ def download_papers(arxiv_ids: List[str],
                             pdf_response.raise_for_status()
                             with open(save_path, "wb") as f:
                                 f.write(pdf_response.content)
-                            print(f"{colorizer.colorize('\u2713', colorizer.Style.BRIGHT, colorizer.Fore.GREEN)} {arxiv_id}{resolved_id_str} PDF saved as '{save_path}'")
+                            print(f"{colorizer.colorize(CHECKMARK, colorizer.Style.BRIGHT, colorizer.Fore.GREEN)} {arxiv_id}{resolved_id_str} PDF saved as '{save_path}'")
                         else:
-                            print(f"{colorizer.colorize('\u2717', colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id}{resolved_id_str} no PDF found")
+                            print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id}{resolved_id_str} no PDF found")
                     else:
                         print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already downloaded (by this tool) as '{save_path}'")
                 else:
@@ -197,7 +199,7 @@ def download_papers(arxiv_ids: List[str],
             else:
                 print(f"{colorizer.colorize('-', colorizer.Style.BRIGHT, colorizer.Fore.YELLOW)} {arxiv_id}{resolved_id_str} already processed (during this session), skipping")
         except Exception as e:
-            print(f"{colorizer.colorize('\u2717', colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id} failed: {str(e)}")
+            print(f"{colorizer.colorize(CROSS, colorizer.Style.BRIGHT, colorizer.Fore.RED)} {arxiv_id} failed: {str(e)}")
             traceback.print_exc()
 
 
