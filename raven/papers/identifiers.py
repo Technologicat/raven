@@ -1,7 +1,14 @@
 """arXiv identifier parsing and extraction from filenames.
 
-Provides regex-based extraction of arXiv IDs (``yymm.nnnnn``) from PDF filenames,
-version parsing, and de-duplication (keeping the latest version of each paper).
+Provides regex-based extraction of arXiv IDs from PDF filenames, version
+parsing, and de-duplication (keeping the latest version of each paper).
+
+Supports all three arXiv ID eras:
+
+- **New-style 5-digit** (Jan 2015 onwards): ``YYMM.NNNNN``
+- **New-style 4-digit** (Apr 2007 – Dec 2014): ``YYMM.NNNN``
+- **Old-style** (pre-Apr 2007): ``subject-class/YYMMNNN``
+  (in filenames, the ``/`` is commonly replaced by ``-``, ``_``, or ``.``)
 
 The CLI entry point (``raven-arxiv2id``) lists unique arXiv IDs found in a directory
 of PDF files.
@@ -10,7 +17,8 @@ of PDF files.
 from __future__ import annotations
 
 __all__ = [
-    "ARXIV_ID_RE",
+    "ARXIV_NEW_ID_RE",
+    "ARXIV_OLD_ID_RE",
     "extract_id",
     "split_version",
     "strip_version",
@@ -30,20 +38,44 @@ from unpythonic import uniqify
 
 from .. import __version__
 
-# Matches arXiv identifiers of the form ``yymm.nnnnn``, optionally followed
-# by a version suffix like ``v2``.  Old-style IDs (e.g. ``hep-ex/0307015``)
-# are not matched by this regex — they are rare and handled separately where
-# needed.
-ARXIV_ID_RE = re.compile(r"\b(\d{4}\.\d{5})(v\d+)?\b")
+# New-style arXiv IDs: YYMM.NNNN (2007-2014) or YYMM.NNNNN (2015+).
+# Digit lookaround instead of \b so that IDs embedded between underscores,
+# letters, or hyphens in filenames still match.
+ARXIV_NEW_ID_RE = re.compile(r"(?<!\d)(\d{4}\.\d{4,5})(v\d+)?(?!\d)")
+
+# Old-style arXiv IDs: subject-class/YYMMNNN (pre-Apr 2007).
+# In filenames, the canonical ``/`` is commonly replaced by ``-``, ``_``,
+# or ``.``.  Subject classes: ``math``, ``hep-th``, ``cs.AI``, etc.
+# Length limits on each segment keep false positives low.
+ARXIV_OLD_ID_RE = re.compile(
+    r"(?<![a-zA-Z])"                        # not preceded by a letter
+    r"([a-z]{1,7}(?:-[a-z]{1,3})?(?:\.[A-Z][A-Z])?)"  # subject class
+    r"[-_./]"                               # separator
+    r"(\d{7})"                              # 7-digit paper number
+    r"(v\d+)?"                              # optional version
+    r"(?!\d)",                              # not followed by a digit
+)
 
 
 def extract_id(filename: str) -> str | None:
-    """Extract an arXiv identifier from *filename*, or return ``None``."""
-    matches = ARXIV_ID_RE.findall(filename)
+    """Extract an arXiv identifier from *filename*, or return ``None``.
+
+    Tries new-style IDs (``YYMM.NNNN(N)``) first, then old-style
+    (``subject-class/YYMMNNN``).  Old-style IDs are returned in canonical
+    form with ``/`` regardless of the separator used in the filename.
+    """
+    # New-style (more common in active collections)
+    matches = ARXIV_NEW_ID_RE.findall(filename)
     matches = ["".join(parts) for parts in matches]
     if matches:
         assert len(matches) == 1
         return matches[0]
+    # Old-style
+    matches = ARXIV_OLD_ID_RE.findall(filename)
+    if matches:
+        assert len(matches) == 1
+        subject, number, version = matches[0]
+        return f"{subject}/{number}{version}"
     return None
 
 
