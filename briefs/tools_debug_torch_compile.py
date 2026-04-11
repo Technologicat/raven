@@ -109,7 +109,7 @@ def phase1_explain(modules, inputs):
             explanation = torch._dynamo.explain(module)(*args)
             print(f"  Graph breaks: {explanation.graph_break_count}")
             if explanation.graph_break_count > 0:
-                print(f"  Break reasons:")
+                print("  Break reasons:")
                 for reason in explanation.break_reasons:
                     print(f"    - {reason}")
             print(f"  Graphs captured: {explanation.graph_count}")

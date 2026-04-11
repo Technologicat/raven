@@ -134,7 +134,7 @@ def measure_individual(run_fn, name, n):
 
 if __name__ == "__main__":
     print(f"Pipeline overlap benchmark (device={DEVICE}, dtype={DTYPE})")
-    print(f"THA3 separable_half, Anime4K C/low 512→1024, default postproc chain")
+    print("THA3 separable_half, Anime4K C/low 512→1024, default postproc chain")
     print(f"{N_MEASURE} iterations per measurement, {N_WARMUP} warmup\n")
 
     print("Loading workloads...")
