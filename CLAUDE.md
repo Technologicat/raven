@@ -22,8 +22,9 @@ Version is defined in `raven/__init__.py` (`__version__`), read by PDM via `[too
 ```bash
 pdm install              # creates .venv/ and installs deps
 pdm use --venv in-project
-source .venv/bin/activate
 ```
+
+Prefix commands with `pdm run` if the venv is not active.
 
 Entry points defined in `pyproject.toml` under `[project.scripts]` — main apps are `raven-visualizer`, `raven-librarian`, `raven-server`, `raven-importer`, `raven-minichat`, `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`.
 
@@ -41,8 +42,7 @@ flake8 --config=flake8rc  # lint check (note: non-standard config filename)
 
 ### Workflow Rules
 
-1. **Always activate the venv** before running `python`, `pytest`, `flake8`, or any project tool: `source .venv/bin/activate && ...`. The system Python lacks project dependencies — imports will silently fall back to slower paths or fail.
-2. **Lint after every code change**: `flake8 --config=flake8rc <changed .py files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
+1. **Lint after every code change**: `flake8 --config=flake8rc <changed .py files>`. Do this before review, testing, or committing. Catches unused imports and dead names early.
 
 ### DPG Pitfalls
 
