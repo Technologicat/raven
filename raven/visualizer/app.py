@@ -4214,7 +4214,7 @@ def hotkeys_callback(sender, app_data):
         toggle_fullscreen()
 
     # Hotkeys while the Help card is shown - helpcard handles its own hotkeys
-    elif help_window.is_visible():  # noqa: SIM114 -- semantically distinct guards
+    elif help_window.is_visible():
         return
 
     # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys

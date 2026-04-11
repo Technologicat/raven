@@ -51,7 +51,7 @@ def encode(audio_data: Union[np.array, List[np.array]],
 
     # `StreamingAudioWriter` will reshape the input data array, but it needs to be of a compatible size, and something that reshapes sensibly.
     dims = np.shape(audio_data[0])
-    if len(dims) == 1:  # noqa: SIM114 -- match-casing, each is a separate case
+    if len(dims) == 1:
         channels = 1
     elif len(dims) == 2 and dims[-1] == 1:
         channels = 1
