@@ -371,7 +371,7 @@ class nonexistent_ok:
     def __exit__(self, exctype, excvalue, traceback):
         if exctype is not None:
             self.errored = True
-            if _is_dpg_item_not_found(excvalue):  # noqa: SIM103 -- __exit__ return semantics
+            if _is_dpg_item_not_found(excvalue):
                 return True  # suppress
             return False  # reraise
 
