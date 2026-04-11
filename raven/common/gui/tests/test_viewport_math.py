@@ -1,14 +1,11 @@
-"""Tests for the viewport coordinate math in raven.common.gui.utils.
+"""Tests for the layout coordinate math in raven.common.gui.layout_math.
 
 These functions are pure math — no DPG dependency.
-Skips in CI because the module transitively imports DPG (decoupling TODO).
 """
-import pytest
-pytest.importorskip("dearpygui", reason="gui.utils transitively imports DPG")
 
 from raven.common.tests import approx
-from raven.common.gui.utils import (screen_to_content, content_to_screen,
-                                     zoom_keep_point, compute_zoom_to_fit)
+from raven.common.gui.layout_math import (screen_to_content, content_to_screen,
+                                           zoom_keep_point, compute_zoom_to_fit)
 
 
 # ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@ from typing import Optional, Tuple
 
 from ... import numutils
 from ...smoothvalue import SmoothValue
-from .. import utils as guiutils
+from .. import layout_math
 
 from .constants import Point
 from .graph import Graph
@@ -67,14 +67,14 @@ class Viewport:
 
     def graph_to_screen(self, gx: float, gy: float) -> Point:
         """Convert graph coordinates to screen coordinates."""
-        return guiutils.content_to_screen(gx, gy,
+        return layout_math.content_to_screen(gx, gy,
                                           self.pan_x.current, self.pan_y.current,
                                           self.zoom.current,
                                           self.width, self.height)
 
     def screen_to_graph(self, sx: float, sy: float) -> Point:
         """Convert screen coordinates to graph coordinates."""
-        return guiutils.screen_to_content(sx, sy,
+        return layout_math.screen_to_content(sx, sy,
                                           self.pan_x.current, self.pan_y.current,
                                           self.zoom.current,
                                           self.width, self.height)
@@ -157,7 +157,7 @@ class Viewport:
 
         if center_sx is not None and center_sy is not None:
             # Adjust pan so the point at (center_sx, center_sy) stays in place.
-            new_pan_x, new_pan_y = guiutils.zoom_keep_point(
+            new_pan_x, new_pan_y = layout_math.zoom_keep_point(
                 old_zoom, new_zoom,
                 center_sx, center_sy,
                 self.pan_x.current, self.pan_y.current,

@@ -2,6 +2,13 @@
 <img src="img/logo.png" alt="Logo of Raven" height="200"/> <br/>
 </p>
 
+![100% Python](https://img.shields.io/github/languages/top/Technologicat/raven)
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
+![CI status](https://img.shields.io/github/actions/workflow/status/Technologicat/raven/ci.yml?branch=main)
+[![codecov](https://codecov.io/gh/Technologicat/raven/branch/main/graph/badge.svg)](https://codecov.io/gh/Technologicat/raven)
+![license](https://img.shields.io/github/license/Technologicat/raven)
+![open issues](https://img.shields.io/github/issues/Technologicat/raven)
+
 -----
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->

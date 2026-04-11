@@ -1,9 +1,4 @@
-"""Tests for the viewport transforms.
-
-Skips in CI: viewport → gui.utils → DPG (decoupling TODO).
-"""
-import pytest
-pytest.importorskip("dearpygui", reason="transitive DPG dependency via gui.utils")
+"""Tests for the viewport transforms."""
 
 from raven.common.tests import approx
 
