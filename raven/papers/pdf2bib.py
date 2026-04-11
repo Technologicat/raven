@@ -262,7 +262,8 @@ def setup_prompts(llm_settings: env,
         #           In the ORIGINAL INPUT, is there any text that appears AFTER the title (which you extracted), BEFORE the start of the main text (whose first sentence you extracted)?
         #           The final "YES" or "NO" will be sent to a computer program, which cannot understand natural language, so it needs to be in a standard format. For that final word, use plain text, without formatting.
         #           IMPORTANT: Please print a final answer at the end of your reply; the analysis program needs it.
-        prompt_check_authorlist = dedent("""Attached is an ORIGINAL INPUT text.
+        prompt_check_authorlist = dedent(  # noqa: F841 -- WIP, used in commented-out call below
+            """Attached is an ORIGINAL INPUT text.
 
         Please analyze it, following the detailed instructions below. As for how the ORIGINAL INPUT is formatted, consult the FORMAT EXAMPLE below.
 
