@@ -41,6 +41,9 @@
 
 **Fixed**:
 
+- *arXiv tools* (`raven.papers`):
+  - `raven-arxiv2id` (and other tools using arXiv ID extraction from filenames): fix detection of IDs embedded between underscores, letters, or hyphens in filenames. Previously, filenames like `Smith_2301.12345_notes.pdf` silently failed to match. Also adds support for 4-digit new-style IDs (2007–2014 era, e.g. `0704.0001`) and old-style IDs with subject class prefix (pre-2007, e.g. `hep-th/0601001`).
+
 - *BibTeX tools* (`raven.papers`):
   - Fix `bibtex_escape`: unmatched `{` in source text (e.g. WoS abstracts) produced unbalanced braces that broke bibtexparser parsing. The old approach doubled braces (`{` → `{{`); now uses proper LaTeX escapes (`\{`, `\}`).
   - Add missing `#` and `$` escaping — both are BibTeX/LaTeX specials that could cause parse or render errors in downstream tools.
