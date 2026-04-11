@@ -228,12 +228,6 @@ The postprocessor filter parameters (noise `channel`, `ntsc_chroma`, `double_siz
 
 Discovered during NTSC VHS noise development (2026-04-08).
 
-## f-string escape sequences invalid on Python 3.11
-
-`download.py` (lines 188, 190) uses `\u2713` and `\u2717` inside f-strings, which is 3.12+ syntax. Since `requires-python` includes 3.11, these are bugs. Audit the whole codebase for similar cases — any `\` escape inside an f-string `{...}` expression is invalid before 3.12.
-
-Discovered during ruff migration (2026-04-11).
-
 ## raven-server: CUDA sanity check at startup
 
 raven-server boots without complaint even when NVRTC is broken (missing `libnvrtc-builtins.so`). The error only surfaces later when something triggers JIT compilation. Server startup should probe CUDA early (e.g. a trivial JIT-compiled kernel or `torch.cuda.is_available()` + an NVRTC smoke test) and log a clear warning/error if the environment is misconfigured.
