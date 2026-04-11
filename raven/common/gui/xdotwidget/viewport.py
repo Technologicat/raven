@@ -68,16 +68,16 @@ class Viewport:
     def graph_to_screen(self, gx: float, gy: float) -> Point:
         """Convert graph coordinates to screen coordinates."""
         return layout_math.content_to_screen(gx, gy,
-                                          self.pan_x.current, self.pan_y.current,
-                                          self.zoom.current,
-                                          self.width, self.height)
+                                             self.pan_x.current, self.pan_y.current,
+                                             self.zoom.current,
+                                             self.width, self.height)
 
     def screen_to_graph(self, sx: float, sy: float) -> Point:
         """Convert screen coordinates to graph coordinates."""
         return layout_math.screen_to_content(sx, sy,
-                                          self.pan_x.current, self.pan_y.current,
-                                          self.zoom.current,
-                                          self.width, self.height)
+                                             self.pan_x.current, self.pan_y.current,
+                                             self.zoom.current,
+                                             self.width, self.height)
 
     def zoom_to_fit(self, graph: Graph, margin: int = 12, animate: bool = True) -> None:
         """Adjust pan and zoom to fit the entire graph in the viewport.
