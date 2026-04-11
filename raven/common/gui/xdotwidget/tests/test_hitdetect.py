@@ -1,6 +1,9 @@
-"""Tests for hit detection: point-in-polygon, point-to-segment, get_edge."""
+"""Tests for hit detection: point-in-polygon, point-to-segment, get_edge.
 
+Skips in CI: hitdetect → viewport → gui.utils → DPG (decoupling TODO).
+"""
 import pytest
+pytest.importorskip("dearpygui", reason="transitive DPG dependency via gui.utils")
 
 from raven.common.tests import approx
 
