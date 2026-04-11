@@ -193,7 +193,8 @@ ignore = [
     "SIM118",  # in-dict-keys — explicit .keys() marks the variable as a dictlike
     "SIM300",  # yoda conditions — H > threshold reads naturally, threshold < H does not
     "SIM910",  # dict.get with None default — explicit None documents programmer intent
-    "SIM103",  # return condition directly — advisory only, but no CI yet to run it non-blocking
+    # Note: SIM103 (return condition directly) is intentionally NOT ignored here.
+    # It is enabled as an advisory — CI runs it in a non-failing second pass.
     "SIM114",  # combine if branches — match-casing style keeps branches separate; autofix would damage semantics
 ]
 

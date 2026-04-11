@@ -10,6 +10,9 @@ import textwrap
 
 import pytest
 
+chromadb = pytest.importorskip("chromadb", reason="chromadb not installed (needs full dependency stack)")
+bm25s = pytest.importorskip("bm25s", reason="bm25s not installed (needs full dependency stack)")
+
 from raven.librarian import hybridir
 
 
