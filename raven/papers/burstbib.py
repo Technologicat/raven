@@ -6,15 +6,42 @@ especially if the records contain an abstract.
 
 # TODO: Robustify. Ideally, do this with `bibtexparser` (need to create a single-entry library for each output).
 
+from __future__ import annotations
+
+__all__ = ["is_headerline", "get_slug", "main"]
+
 from .. import __version__
 
 import argparse
 import io
 import pathlib
-from typing import Union
 
 from ..common import stringmaps
 from ..common import utils as common_utils
+
+
+def is_headerline(line: str) -> str | bool:
+    """Detect whether *line* is a BibTeX record header. Return stripped *line* or ``False``."""
+    line = line.strip()
+    if line.startswith("@") and line.endswith(","):
+        return line
+    return False
+
+
+def get_slug(headerline: str) -> str:
+    """Get the BibTeX unique identifier from a BibTeX record header line.
+
+    The slug is sanitized for use as a filename.
+    """
+    start_of_slug = headerline.find("{")
+    end_of_slug = headerline.rfind(",")
+    if start_of_slug == -1 or end_of_slug == -1:
+        assert False
+    slug = headerline[(start_of_slug + 1):end_of_slug]
+    # Make safe for filename, to tolerate broken `.bib` files (users not familiar
+    # with BibTeX may have used e.g. a DOI or an URL as the slug)
+    slug = "".join(c for c in slug if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)
+    return slug
 
 
 def main() -> None:
@@ -38,24 +65,6 @@ def main() -> None:
         if opts.verbose:
             print(f"Processing '{input_filename}' (resolved to '{str(input_path)}')")
         with open(input_path, "r") as input_file:
-            def is_headerline(line) -> Union[str, bool]:
-                """Detect whether `line` is a BibTeX record header. Return `line` or `False`."""
-                line = line.strip()
-                if line.startswith("@") and line.endswith(","):
-                    return line
-                return False
-
-            def get_slug(headerline):
-                """Get the BibTeX unique identifier from a BibTeX record header line."""
-                start_of_slug = headerline.find("{")
-                end_of_slug = headerline.rfind(",")
-                if start_of_slug == -1 or end_of_slug == -1:
-                    assert False
-                slug = headerline[(start_of_slug + 1):end_of_slug]
-                # Make safe for filename, to tolerate broken `.bib` files (users not familiar with BibTeX may have used e.g. a DOI or an URL as the slug)
-                slug = "".join(c for c in slug if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)
-                return slug
-
             def get_output_path(slug):
                 primary_output_path = output_dir / f"{slug}.bib"
                 output_path = primary_output_path
