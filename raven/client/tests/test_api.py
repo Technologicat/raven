@@ -15,6 +15,8 @@ import numpy as np
 import PIL.Image
 import pytest
 
+pytest.importorskip("qoi", reason="qoi not installed (needs full dependency stack)")
+
 from raven.client import api
 from raven.client import config as client_config
 

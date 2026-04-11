@@ -228,6 +228,14 @@ The postprocessor filter parameters (noise `channel`, `ntsc_chroma`, `double_siz
 
 Discovered during NTSC VHS noise development (2026-04-08).
 
+## Split raven.common.gui.utils into pure math and DPG helpers
+
+`raven/common/gui/utils.py` mixes pure coordinate math (screen_to_content, content_to_screen, zoom_keep_point, compute_zoom_to_fit) with DPG widget helpers (get_widget_pos, maybe_delete_item, etc.). The module-level `import dearpygui` means anything that imports the math functions also pulls in DPG, which prevents running those tests in CI without DPG installed.
+
+Split into `raven/common/gui/viewport_math.py` (pure) and keep the DPG helpers in `utils.py`. Update imports across the codebase.
+
+Discovered during CI setup (2026-04-12).
+
 ## raven-server: CUDA sanity check at startup
 
 raven-server boots without complaint even when NVRTC is broken (missing `libnvrtc-builtins.so`). The error only surfaces later when something triggers JIT compilation. Server startup should probe CUDA early (e.g. a trivial JIT-compiled kernel or `torch.cuda.is_available()` + an NVRTC smoke test) and log a clear warning/error if the environment is misconfigured.

@@ -1,7 +1,10 @@
 """Tests for the viewport coordinate math in raven.common.gui.utils.
 
 These functions are pure math — no DPG dependency.
+Skips in CI because the module transitively imports DPG (decoupling TODO).
 """
+import pytest
+pytest.importorskip("dearpygui", reason="gui.utils transitively imports DPG")
 
 from raven.common.tests import approx
 from raven.common.gui.utils import (screen_to_content, content_to_screen,

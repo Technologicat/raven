@@ -42,4 +42,11 @@ Example usage::
 __all__ = ["XDotWidget", "parse_xdot"]
 
 from .parser import parse_xdot
-from .widget import XDotWidget
+
+
+def __getattr__(name):
+    """Lazy import for XDotWidget — avoids pulling in DPG at package import time."""
+    if name == "XDotWidget":
+        from .widget import XDotWidget
+        return XDotWidget
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
