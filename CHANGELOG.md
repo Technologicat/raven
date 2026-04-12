@@ -34,6 +34,7 @@
     - This trades off image quality for ~18× faster upscaling - which may upgrade an avatar from 20 FPS to 25 FPS.
     - Quality difference is unnoticeable with the postprocessor enabled (with the default chain).
     - Main difference between Anime4K and `bicubic` is in details with thin lines, such as the rims of a character's glasses.
+  - `bicubic` is now the default upscaler. The quality is good enough with the default smoke and mirrors enabled (and can now get 25 FPS at 1024x1024 on a laptop RTX 3070 Ti).
 
 - *Video processing* (`raven.common.video`):
   - `chroma_subsample` filter to simulate a lo-fi video look.
