@@ -244,9 +244,9 @@ animator_defaults = {
     "format": "PNG",
 
     # Upscaler settings.
-    "upscale": 1.0,  # 1.0 = send as-is (512x512); e.g. 2.0 = upscale 2x -> 1024x1024 using anime4k before sending
-    "upscale_preset": "C",  # only used if upscale != 1.0; "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
-    "upscale_quality": "low",  # only used if upscale != 1.0; quality "low": fast, acceptable image quality; "high": slow, good image quality
+    "upscale": 1.0,  # 1.0 = send as-is (512x512); e.g. 2.0 = upscale 2x -> 1024x1024 before sending
+    "upscale_preset": "C",  # only used if upscale != 1.0 and upscale_quality is one of "low" or "high"; "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
+    "upscale_quality": "bicubic",  # only used if upscale != 1.0; quality "low": anime4k fast, acceptable image quality; "high": anime4k slow, good image quality; "bilinear": lightning-fast, bad quality; "bicubic": very fast, often acceptable quality.
 
     # Performance profiling settings.
     "metrics_enabled": False,  # Detailed performance logging for the renderer; slows the renderer down, but shows where the rendering time goes. Average FPS calculation is always on, and doesn't slow down anything.

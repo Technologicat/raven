@@ -416,7 +416,7 @@ class PostprocessorSettingsEditorGUI:
 
         self.upscale = 2.0  # ...but the animator has a realtime super-resolution filter (anime4k). E.g. upscale=1.5 -> 768x768; upscale=2.0 -> 1024x1024.
         self.upscale_preset = "C"  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
-        self.upscale_quality = "low"  # "low": fast, acceptable quality; "high": slow, good quality
+        self.upscale_quality = "bicubic"  # "low": anime4k fast, acceptable image quality; "high": anime4k slow, good image quality; "bilinear": lightning-fast, bad quality; "bicubic": very fast, often acceptable quality.
 
         self.postprocessor_enabled = True
 

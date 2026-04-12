@@ -174,8 +174,8 @@ avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image 
                     animator_settings_overrides={"format": "QOI",
                                                  "target_fps": 20,
                                                  "upscale": 1.5,
-                                                 "upscale_preset": "C",
-                                                 "upscale_quality": "low",
+                                                 "upscale_preset": "C",  # "A", "B" or "C"; these roughly correspond to the presets of Anime4K  https://github.com/bloc97/Anime4K/blob/master/md/GLSL_Instructions_Advanced.md
+                                                 "upscale_quality": "bicubic",  # "low": anime4k fast, acceptable image quality; "high": anime4k slow, good image quality; "bilinear": lightning-fast, bad quality; "bicubic": very fast, often acceptable quality.
                                                  "backdrop_path": str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "backdrops", "cyberspace.png")).expanduser().resolve()),
                                                  "backdrop_blur": True,  # The blur is applied once, when the backdrop is loaded, so it doesn't affect rendering performance.
                                                  }
