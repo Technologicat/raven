@@ -233,3 +233,14 @@ Discovered during NTSC VHS noise development (2026-04-08).
 raven-server boots without complaint even when NVRTC is broken (missing `libnvrtc-builtins.so`). The error only surfaces later when something triggers JIT compilation. Server startup should probe CUDA early (e.g. a trivial JIT-compiled kernel or `torch.cuda.is_available()` + an NVRTC smoke test) and log a clear warning/error if the environment is misconfigured.
 
 Discovered during demo prep (2026-03-26).
+
+## raven.papers user manual
+
+The `raven.papers` tool collection has grown to the point where it deserves its own user manual, like Visualizer, Librarian and Server already have.
+
+There are existing usage instructions for `raven-arxiv-search` in the README of the separate `arxiv-api-search` project, which the tool was created from. These should be included in the manual.
+
+For the others, some instructions are scattered in Raven's main `README.md`.
+
+Some instructions don't yet exist, and need to be written.
+
