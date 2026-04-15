@@ -42,6 +42,9 @@
 
 **Fixed**:
 
+- *Raven-minichat*:
+  - `raven-minichat` no longer crashes on MS Windows. Previously, the command would fail at startup with `ImportError: No module named 'readline'` because Python's stdlib `readline` module is POSIX-only. The fix is a three-tier hybrid load: try stdlib `readline` first (Linux/macOS), fall back to `pyreadline3` (a drop-in Windows replacement; `pip install pyreadline3` to get the full experience), and finally degrade gracefully to plain `input()` if neither is available — the chat loop still works, you just lose command history, tab completion, and persistent cross-session history. When running in the degraded mode, a startup notice explains what's missing and how to restore it.
+
 - *arXiv tools* (`raven.papers`):
   - `raven-arxiv2id` (and other tools using arXiv ID extraction from filenames): fix detection of IDs embedded between underscores, letters, or hyphens in filenames. Previously, filenames like `Smith_2301.12345_notes.pdf` silently failed to match. Also adds support for 4-digit new-style IDs (2007–2014 era, e.g. `0704.0001`) and old-style IDs with subject class prefix (pre-2007, e.g. `hep-th/0601001`).
 

@@ -106,23 +106,46 @@ def minimal_chat_client(backend_url) -> None:
         print(f"    Search indices are saved in '{str(librarian_config.llm_database_dir)}'.")
         print()
 
-        import readline  # noqa: F401, side effect: enable GNU readline in builtin input()
-        # import rlcompleter  # noqa: F401, side effects: readline tab completion for Python code
-        print(colorizer.colorize(f"GNU readline available. Saving user inputs to '{str(history_file)}'.", colorizer.Style.BRIGHT))
-        print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
-        print()
+        # Hybrid readline loading: try the stdlib module first (POSIX:
+        # Linux and macOS ship it), fall back to `pyreadline3` (third-
+        # party Windows replacement with a compatible API surface), and
+        # finally degrade gracefully if neither is available.  Without
+        # readline, the chat loop still works through plain `input()` —
+        # you just lose command history, tab completion, and persistent
+        # cross-session history.  The `_has_readline` flag is used
+        # throughout this function to guard every `readline.*` site.
         try:
-            readline.read_history_file(history_file)
-        except FileNotFoundError:
-            pass
+            import readline  # noqa: F401, side effect: enable GNU readline in builtin input()
+        except ImportError:
+            try:
+                import pyreadline3 as readline  # type: ignore  # noqa: F401
+            except ImportError:
+                readline = None
+        _has_readline = readline is not None
+
+        if _has_readline:
+            print(colorizer.colorize(f"GNU readline available. Saving user inputs to '{str(history_file)}'.", colorizer.Style.BRIGHT))
+            print(colorizer.colorize("Use up/down arrows to browse previous inputs. Enter to send. ", colorizer.Style.BRIGHT))
+            print()
+            try:
+                readline.read_history_file(history_file)
+            except FileNotFoundError:
+                pass
+        else:
+            print(colorizer.colorize("Note: `readline` unavailable — command history and tab completion are disabled.", colorizer.Style.BRIGHT))
+            print(colorizer.colorize("      On Windows, `pip install pyreadline3` restores both.", colorizer.Style.BRIGHT))
+            print()
 
         # Set up autosave at exit.
         def persist() -> None:
             librarian_config.llmclient_userdata_dir.mkdir(parents=True, exist_ok=True)
 
-            # Save readline history
-            readline.set_history_length(1000)
-            readline.write_history_file(history_file)
+            # Save readline history (if readline is available — Windows
+            # without `pyreadline3` has `_has_readline = False` and simply
+            # skips this block; the chat database pruning below still runs).
+            if _has_readline:
+                readline.set_history_length(1000)
+                readline.write_history_file(history_file)
 
             # Before saving the chat database (which happens automatically at exit),
             # remove any nodes not reachable from the initial message, and also remove dead links.
@@ -166,84 +189,92 @@ def minimal_chat_client(backend_url) -> None:
             print()
         chat_show_help()
 
-        # We prefill the space for commands that take an argument.
-        commands = ["!clear",
-                    "!docs ",
-                    "!dump",
-                    "!head ",
-                    "!help",
-                    "!history",
-                    "!model",
-                    "!models",
-                    "!reroll",
-                    "!speculate",
-                    "!tools"]
-        def get_completions(candidates: List[str], text: str) -> List[str]:
-            """Return a list of matching completions for `text`.
+        # Tab completion setup — only meaningful when `readline` is
+        # available, since `readline.set_completer` is what wires the
+        # completer function into the user-input flow.  When readline
+        # is absent (Windows without `pyreadline3`), skipping this
+        # entire block is fine: no completer gets registered, so the
+        # `completer()` function below (which calls `readline.
+        # get_line_buffer()`) would never be invoked anyway.
+        if _has_readline:
+            # We prefill the space for commands that take an argument.
+            commands = ["!clear",
+                        "!docs ",
+                        "!dump",
+                        "!head ",
+                        "!help",
+                        "!history",
+                        "!model",
+                        "!models",
+                        "!reroll",
+                        "!speculate",
+                        "!tools"]
+            def get_completions(candidates: List[str], text: str) -> List[str]:
+                """Return a list of matching completions for `text`.
 
-            `candidates`: Every possible completion the system knows of, in the current context.
-            `text`: Prefix text to complete. Can be the empty string, which matches all candidates.
-            """
-            if not text:  # If no text, all candidates match.
-                return candidates
-            assert text  # we have text
+                `candidates`: Every possible completion the system knows of, in the current context.
+                `text`: Prefix text to complete. Can be the empty string, which matches all candidates.
+                """
+                if not text:  # If no text, all candidates match.
+                    return candidates
+                assert text  # we have text
 
-            # Score the completions for the given prefix `text`.
-            # https://stackoverflow.com/questions/6718196/determine-the-common-prefix-of-multiple-strings
-            scores = [len(os.path.commonprefix([text, candidate])) for candidate in candidates]
-            max_score = max(scores)
-            if max_score == 0:  # no match
-                return None
-            assert max_score > 0  # we have at least one match, of at least one character
+                # Score the completions for the given prefix `text`.
+                # https://stackoverflow.com/questions/6718196/determine-the-common-prefix-of-multiple-strings
+                scores = [len(os.path.commonprefix([text, candidate])) for candidate in candidates]
+                max_score = max(scores)
+                if max_score == 0:  # no match
+                    return None
+                assert max_score > 0  # we have at least one match, of at least one character
 
-            # Possible completions are those that scored best (i.e. match the longest matched prefix).
-            completions = [candidate for candidate, score in zip(candidates, scores) if score == max_score]
-            return completions
-        # https://docs.python.org/3/library/readline.html#readline-completion
-        def completer(text: str, state: int) -> str:  # completer for special commands
-            buffer_content = readline.get_line_buffer()  # context: text before the part being completed (up to last delim)
+                # Possible completions are those that scored best (i.e. match the longest matched prefix).
+                completions = [candidate for candidate, score in zip(candidates, scores) if score == max_score]
+                return completions
+            # https://docs.python.org/3/library/readline.html#readline-completion
+            def completer(text: str, state: int) -> str:  # completer for special commands
+                buffer_content = readline.get_line_buffer()  # context: text before the part being completed (up to last delim)
 
-            # TODO: fix one more failure mode, e.g. "!help !<tab>"
-            if buffer_content.startswith("!") and text.startswith("!"):  # completing a command?
-                candidates = commands
-            elif buffer_content.startswith("!docs"):  # in `!docs` command, expecting an argument?
-                candidates = ["True", "False"]
-            elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
-                with datastore.lock:
-                    candidates = list(sorted(datastore.nodes.keys()))
-            elif buffer_content.startswith("!speculate"):  # in `!speculate` command, expecting an argument?
-                candidates = ["True", "False"]
-            elif buffer_content.startswith("!tools"):  # in `!tools` command, expecting an argument?
-                candidates = ["True", "False"]
-            else:  # anything else -> no completions
-                return None
+                # TODO: fix one more failure mode, e.g. "!help !<tab>"
+                if buffer_content.startswith("!") and text.startswith("!"):  # completing a command?
+                    candidates = commands
+                elif buffer_content.startswith("!docs"):  # in `!docs` command, expecting an argument?
+                    candidates = ["True", "False"]
+                elif buffer_content.startswith("!head"):  # in `!head` command, expecting an argument?
+                    with datastore.lock:
+                        candidates = list(sorted(datastore.nodes.keys()))
+                elif buffer_content.startswith("!speculate"):  # in `!speculate` command, expecting an argument?
+                    candidates = ["True", "False"]
+                elif buffer_content.startswith("!tools"):  # in `!tools` command, expecting an argument?
+                    candidates = ["True", "False"]
+                else:  # anything else -> no completions
+                    return None
 
-            completions = get_completions(candidates, text)
-            if completions is None:  # no match
-                return None
-            if state >= len(completions):  # no more completions
-                return None
-            return completions[state]
-        readline.set_completer(completer)
-        readline.set_completer_delims(" ")
+                completions = get_completions(candidates, text)
+                if completions is None:  # no match
+                    return None
+                if state >= len(completions):  # no more completions
+                    return None
+                return completions[state]
+            readline.set_completer(completer)
+            readline.set_completer_delims(" ")
 
-        # Support tab completion also on MacOSX. Not sure which way is better here.
-        # Neither seems The Right Thing:
-        #   - Detecting the platform (as we do now) assumes that MacOSX will always use `libedit`
-        #     to provide `readline`.
-        #   - Detecting the `readline` module's `__doc__` assumes that any future versions of `libedit`
-        #     keep the mention of `libedit` in the docstring.
-        # https://stackoverflow.com/questions/7116038/python-repl-tab-completion-on-macos
-        # https://stackoverflow.com/questions/1854/how-to-identify-which-os-python-is-running-on
-        #
-        # if 'libedit' in readline.__doc__:  # MacOSX uses libedit, not GNU readline
-        #     readline.parse_and_bind("bind ^I rl_complete")
-        # else:  # Linux, Windows
-        #     readline.parse_and_bind("tab: complete")
-        if platform.system() == "Darwin":  # MacOSX
-            readline.parse_and_bind("bind ^I rl_complete")
-        else:  # "Linux", "Windows"
-            readline.parse_and_bind("tab: complete")
+            # Support tab completion also on MacOSX. Not sure which way is better here.
+            # Neither seems The Right Thing:
+            #   - Detecting the platform (as we do now) assumes that MacOSX will always use `libedit`
+            #     to provide `readline`.
+            #   - Detecting the `readline` module's `__doc__` assumes that any future versions of `libedit`
+            #     keep the mention of `libedit` in the docstring.
+            # https://stackoverflow.com/questions/7116038/python-repl-tab-completion-on-macos
+            # https://stackoverflow.com/questions/1854/how-to-identify-which-os-python-is-running-on
+            #
+            # if 'libedit' in readline.__doc__:  # MacOSX uses libedit, not GNU readline
+            #     readline.parse_and_bind("bind ^I rl_complete")
+            # else:  # Linux, Windows
+            #     readline.parse_and_bind("tab: complete")
+            if platform.system() == "Darwin":  # macOS
+                readline.parse_and_bind("bind ^I rl_complete")
+            else:  # Linux, Windows (pyreadline3)
+                readline.parse_and_bind("tab: complete")  # PyPy ignores this, but not needed there.
 
         def chat_show_list_of_models() -> None:
             available_models = llmclient.list_models(backend_url)
