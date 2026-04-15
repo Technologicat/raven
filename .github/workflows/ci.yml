@@ -32,8 +32,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Full Python matrix on Linux; newest supported Python only on macOS
+        # and Windows.  Raven's Python range is currently capped at <3.13 by
+        # kokoro/misaki (TTS stack) — see `CLAUDE.md` → "Why the 3.12 upper
+        # cap" for the rationale and the plan to lift the cap.  Once that
+        # cap lifts, add 3.13/3.14 to the Linux matrix and bump the mac/
+        # Windows includes to the new newest version.
+        #
+        # The test job installs dependencies hand-picked via pip + `-e .
+        # --no-deps` rather than pulling raven's full dep set (which would
+        # include kokoro/misaki and is heavy), so expanding to mac/Windows
+        # does not risk resolver explosions — we only install the subset
+        # the test suite actually needs.  The torch CPU wheel index
+        # (download.pytorch.org/whl/cpu) has Linux/macOS/Windows wheels,
+        # so the torch install line works unchanged on every OS.
+        os: [ubuntu-latest]
         python-version: ["3.11", "3.12"]
-    runs-on: ubuntu-latest
+        include:
+          - os: macos-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v6
