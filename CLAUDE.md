@@ -15,7 +15,16 @@ Local research assistant constellation. Privacy-first, 100% local.
 
 ## Build and Development
 
-Uses PDM with `pdm-backend`. Python 3.11–3.14 (see `pyproject.toml`). Optional CUDA extras via `pdm install -G cuda`.
+Uses PDM with `pdm-backend`. **Python 3.11–3.12** (see `pyproject.toml`: `requires-python = "<3.13,>=3.11"`). Optional CUDA extras via `pdm install -G cuda`.
+
+### Why the 3.12 upper cap
+
+The cap comes from `kokoro` (Kokoro TTS) and its phonemizer `misaki`, which currently require `<3.13`. Raven's own code and every other dependency (`mcpyrate`, `unpythonic`, `torch`, `Pillow`, `numpy`, …) already support Python 3.13 and 3.14. The plan to lift the cap has two branches:
+
+- **(a)** Kokoro/Misaki upstream expand their supported Python range — in which case we just bump `requires-python` and widen the CI matrix.
+- **(b)** If those projects look dead after a reasonable wait, we vendor both. Kokoro is the TTS engine, Misaki is its English phonemizer; together they're self-contained enough to be absorbed into `raven/vendor/` alongside `tha3/`, `DearPyGui_Markdown/`, etc.
+
+Until one of those branches lands, **don't add `3.13`/`3.14` to the CI matrix** — it would fail at dependency resolution time. The test CI currently works around this by using `pip install -e . --no-deps` and hand-picking a minimal dependency subset for the test suite, which avoids pulling in kokoro/misaki at all. That's how the test matrix can stay lightweight even though kokoro lives in the full `[project] dependencies`.
 
 Version is defined in `raven/__init__.py` (`__version__`), read by PDM via `[tool.pdm.version]` in `pyproject.toml`. Tag format: `vX.Y.Z`.
 
