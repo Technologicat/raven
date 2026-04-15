@@ -45,6 +45,9 @@
 - *Raven-minichat*:
   - `raven-minichat` no longer crashes on MS Windows. Previously, the command would fail at startup with `ImportError: No module named 'readline'` because Python's stdlib `readline` module is POSIX-only. The fix is a three-tier hybrid load: try stdlib `readline` first (Linux/macOS), fall back to `pyreadline3` (a drop-in Windows replacement; `pip install pyreadline3` to get the full experience), and finally degrade gracefully to plain `input()` if neither is available — the chat loop still works, you just lose command history, tab completion, and persistent cross-session history. When running in the degraded mode, a startup notice explains what's missing and how to restore it.
 
+- *Numerical utilities* (`raven.common.numutils`):
+  - `psi()` (mollifier helper, also used via `nonanalytic_smooth_transition()`) no longer emits a stray `RuntimeWarning: divide by zero encountered in divide` when evaluated at `x = 0`. The function is correct — it uses the standard "compute-then-mask" idiom `np.exp(-1.0 / x**m) * (x > 0.0)` where `-1/0 = -inf`, `exp(-inf) = 0`, and the mask zeros the result — but numpy was still emitting the warning from the division step. A previous suppression attempt used `warnings.filterwarnings(..., module="__main__")`, which silently failed in practice (numpy emits the warning from its own internal module, not `__main__`). Replaced with `np.errstate(divide='ignore', invalid='ignore')`, numpy's own mechanism for suppressing float-error warnings within a dynamic extent.
+
 - *arXiv tools* (`raven.papers`):
   - `raven-arxiv2id` (and other tools using arXiv ID extraction from filenames): fix detection of IDs embedded between underscores, letters, or hyphens in filenames. Previously, filenames like `Smith_2301.12345_notes.pdf` silently failed to match. Also adds support for 4-digit new-style IDs (2007–2014 era, e.g. `0704.0001`) and old-style IDs with subject class prefix (pre-2007, e.g. `hep-th/0601001`).
 

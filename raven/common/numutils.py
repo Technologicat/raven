@@ -11,7 +11,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from typing import Union
-import warnings
 
 import numpy as np
 
@@ -58,11 +57,19 @@ def psi(x: Union[float, np.array], m: float = 1.0) -> Union[float, np.array]:  #
     This is the helper function used in the construction of the standard
     mollifier in PDE theory.
     """
-    with warnings.catch_warnings():  # for NumPy arrays
-        warnings.filterwarnings(action="ignore",
-                                message="^divide by zero .*$",
-                                category=RuntimeWarning,
-                                module="__main__")
+    # Compute-then-mask: -1/0 = -inf, exp(-inf) = 0, then (x > 0.0)
+    # zeroes the masked part.  NumPy still emits a RuntimeWarning for
+    # the divide-by-zero during the computation even though the masked
+    # result is correct, so we suppress it locally.
+    #
+    # Use `np.errstate`, not `warnings.filterwarnings`: the latter was
+    # previously attempted with `module="__main__"` but never actually
+    # matched in practice, because numpy emits the warning from its own
+    # internal module (not from the caller's `__main__`), so the filter
+    # silently failed to apply.  `np.errstate` is numpy's own mechanism
+    # for toggling float-error handling within a dynamic extent and
+    # doesn't depend on the warnings-module machinery at all.
+    with np.errstate(divide="ignore", invalid="ignore"):
         try:
             return np.exp(-1.0 / x**m) * (x > 0.0)
         except (ZeroDivisionError, OverflowError):  # for scalar x
