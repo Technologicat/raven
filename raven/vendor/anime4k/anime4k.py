@@ -367,8 +367,13 @@ def main():
         if USE_FP16:
             pipeline = pipeline.to(device).half()
             rand_image = rand_image.half()
-        #Is this legal?
-        pipeline = torch.compile(torch.jit.script(torch.jit.trace(pipeline, rand_image)), backend="tensorrt")
+        # `torch.jit.script` is deprecated in modern PyTorch in favor of
+        # `torch.compile`/`torch.export`; since `torch.compile` is already
+        # wrapping here, drop the redundant script layer.  `torch.jit.trace`
+        # is still current API and is kept: the TensorRT backend
+        # (`torch_tensorrt`) is historically happier consuming a traced
+        # module, not a raw `nn.Module`.
+        pipeline = torch.compile(torch.jit.trace(pipeline, rand_image), backend="tensorrt")
     else:
         device = "cuda"
         if USE_FP16:
