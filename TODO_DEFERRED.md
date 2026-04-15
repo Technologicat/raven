@@ -6,6 +6,8 @@ Implement in-process REPL tests for `raven-minichat` using the `scripted_repl` c
 
 **Why `builtins.input` rather than `sys.stdin`**: `input()` reads through `PyOS_Readline` at the C level (file descriptor 0), not through Python-level `sys.stdin`. Replacing `sys.stdin` silently does nothing and the REPL hangs waiting for real keyboard input. This is the single biggest gotcha in REPL testing and the reason `raven-minichat` has no tests today.
 
+**Important framing (scope of tier 1)**: this is a *REPL-logic test*, not a terminal-UX test.  Monkey-patching `builtins.input` replaces the entire `input()` pathway before `PyOS_Readline` is ever called, so readline's line editor, history, and tab completion (as rendered to the user via key events) will be **0% covered**, not partially covered.  Line-editing regressions, history-recall bugs, and SIGINT-during-readline issues would pass tier 1 silently.  If those ever matter for `minichat`, a tier 2 (subprocess + `pexpect` driving a real pty) is the principled fix — but that's a separate design problem and probably not worth it unless a real regression bites.  For the planned tier 1, this framing just means: don't write assertions that expect tab completion or up-arrow history to work during the test — they won't run.
+
 **Where to put the tests**: new file `raven/librarian/tests/test_minichat.py`. Raven uses pytest (unlike mcpyrate/unpythonic which have their own runners), so the `scripted_repl` helper is used as a plain context manager inside pytest test functions — no adaptation to pytest fixtures is strictly needed, though it could be promoted to a fixture if multiple tests grow to share state.
 
 **Mocking required** — minichat has real dependencies that must be stubbed:
@@ -40,7 +42,7 @@ Implement in-process REPL tests for `raven-minichat` using the `scripted_repl` c
 - `mcpyrate` TODO_DEFERRED D5 — tier 2 (subprocess+pty) notes; we might never need it.
 - `mcpyrate` TODO_DEFERRED D6 — macro-import test isolation problem (not relevant to minichat, which doesn't import macros at runtime).
 - `unpythonic` TODO_DEFERRED D10 — tier 2 for `unpythonic.net` client/server.
-- `unpythonic` TODO_DEFERRED D11 — the sibling of this entry: tier 1 for `unpythonic.net.client/server`.
+- `unpythonic/net/tests/test_client.py` — the sibling of this entry, landed 2026-04-15: tier 1 for `unpythonic.net.client/server`, including a two-REPL-in-one-process variant of the `scripted_repl` helper (needed there because the server *also* calls `builtins.input` internally, so a global monkey-patch would hijack both ends — unpythonic instead uses a private `_input` seam on `client._connect`).
 
 Discovered during the cross-project interactive-REPL testing-strategy design (2026-04-15).
 
