@@ -38,8 +38,18 @@ class TestAbsolutizeFilename:
         assert "~" not in result
 
     def test_already_absolute(self):
-        result = utils.absolutize_filename("/tmp/foo.txt")
-        assert result == "/tmp/foo.txt"
+        # Use this test file's own path as a known-absolute input: it exists,
+        # it's absolute on every OS, and `absolutize_filename` (which calls
+        # `Path.resolve()`) should return it as a fixed point.  A hardcoded
+        # POSIX path like "/tmp/foo.txt" does NOT work cross-platform:
+        #  - On macOS, `/tmp` is a symlink to `/private/tmp`, so `resolve()`
+        #    returns `/private/tmp/foo.txt` — assertion fails.
+        #  - On Windows, `/tmp/foo.txt` is not absolute at all; `resolve()`
+        #    drive-prefixes it to something like `D:\tmp\foo.txt`.
+        # Resolving the reference first makes the comparison symlink-proof.
+        already_absolute = str(pathlib.Path(__file__).resolve())
+        result = utils.absolutize_filename(already_absolute)
+        assert result == already_absolute
 
 
 class TestStripExt:
@@ -54,13 +64,18 @@ class TestStripExt:
 
 
 class TestMakeCacheFilename:
+    # `make_cache_filename` uses `os.path.join` internally, which returns
+    # results with the native path separator — `/` on POSIX, `\` on
+    # Windows.  Compare against `os.path.join` (same idiom) rather than
+    # hardcoded forward-slash strings, so the expected value matches the
+    # function's actual output on every OS.
     def test_basic(self):
         result = utils.make_cache_filename("data/papers.bib", "vectors", "npy")
-        assert result == "data/papers_vectors.npy"
+        assert result == os.path.join("data", "papers_vectors.npy")
 
     def test_pathlib_input(self):
         result = utils.make_cache_filename(pathlib.Path("data/papers.bib"), "cache", "pkl")
-        assert result == "data/papers_cache.pkl"
+        assert result == os.path.join("data", "papers_cache.pkl")
 
     def test_no_directory(self):
         result = utils.make_cache_filename("papers.bib", "vectors", "npy")
