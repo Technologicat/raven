@@ -26,6 +26,18 @@ The cap comes from `kokoro` (Kokoro TTS) and its phonemizer `misaki`, which curr
 
 Until one of those branches lands, **don't add `3.13`/`3.14` to the CI matrix** — it would fail at dependency resolution time. The test CI currently works around this by using `pip install -e . --no-deps` and hand-picking a minimal dependency subset for the test suite, which avoids pulling in kokoro/misaki at all. That's how the test matrix can stay lightweight even though kokoro lives in the full `[project] dependencies`.
 
+### Working-tree state: `config.py` files are edited in place
+
+Raven is configured via in-place edits to tracked `config.py` files — paths, model choices, hardware-specific tweaks. On any dev machine, expect some subset of the following to show up as `M` in `git status` as the **normal steady state**, not as a pending change that needs committing:
+
+- `raven/client/config.py`
+- `raven/librarian/config.py`
+- `raven/visualizer/config.py`
+
+The specific files and the specific contents differ between dev machines; the pattern is the same everywhere — at least some config.py somewhere carries local overrides.
+
+**Implication for `git add`**: add specific files by name. **Never** `git add -A`, `git add .`, or `git add raven/`. If a commit you're working on touches one of these files coincidentally (e.g. a refactor sweeps through them), check with me before staging — there may be an unrelated local override mixed in that shouldn't be part of the commit.
+
 Version is defined in `raven/__init__.py` (`__version__`), read by PDM via `[tool.pdm.version]` in `pyproject.toml`. Tag format: `vX.Y.Z`.
 
 ```bash
@@ -137,6 +149,20 @@ This coupling limits TTS engine choices (most don't expose timestamped phoneme d
 - Minimal: only `raven/client/tests/test_api.py` and `raven/librarian/tests/test_hybridir.py`
 - Visualizer has **zero tests**
 - **Priority: expand test coverage** (especially before refactoring Visualizer)
+
+## Upstream warning noise in `pytest raven/`
+
+The pytest summary normally shows a handful of `DeprecationWarning`/`UserWarning` captures. They look alarming but are **all upstream** and not fixable from raven's side. Catalogued here so we don't re-investigate each time. (This subsection is temporary; eventually factor it out to a dedicated `.md`.)
+
+- **`DeprecationWarning: builtin type SwigPyPacked/SwigPyObject has no __module__ attribute`** — from `sentencepiece`, whose Python wrapper is SWIG-generated. Verify with `find .venv -name "*.so" | xargs -I{} sh -c 'if strings "{}" 2>/dev/null | grep -q swigvarlink; then echo "{}"; fi'`. Python 3.12+ warns when built-in types don't set `__module__`; SWIG's generated helper types (`SwigPyPacked`, `SwigPyObject`, `swigvarlink`) pre-date that convention. Upstream fix has to happen in the SWIG project itself; every SWIG-wrapped library inherits the warning. `sentencepiece` is a transitive dep via NLP tokenizers (`transformers`, `kokoro`'s phonemizer chain).
+
+- **`DeprecationWarning: torch.jit.script is deprecated`** — from `transformers` (HuggingFace). Many of its model files use `@torch.jit.script` as a decorator at module load: `deberta`, `deberta_v2`, `gpt_bigcode`, `zoedepth`, `sew_d`, `vits`, `sam3_video`, … When raven's tests import `sentence-transformers` (via `raven.librarian.hybridir` for embeddings), transformers eagerly loads these model modules and the decorators fire. Verify with `grep -rn "@torch.jit.script" .venv/lib/python3.12/site-packages/transformers/`. Upstream fix waits on HuggingFace migrating these decorators to `torch.compile`/`torch.export`. Raven's own code no longer calls `torch.jit.script`.
+
+- **`UserWarning: pkg_resources is deprecated as an API`** — from `pygame` 2.6.1 (currently the latest on PyPI). Its `pkgdata.py` still imports from `pkg_resources`. Upstream fix waits on a pygame release that stops using it. Pinning `Setuptools<81` would silence it but isn't worth the collateral; just wait for the next pygame.
+
+### Fixed locally (for reference)
+
+- **`RuntimeWarning: divide by zero encountered in divide` — `raven/common/numutils.py:psi()`**: the mollifier helper computes `np.exp(-1.0 / x**m) * (x > 0.0)` and relies on the `(x > 0.0)` mask to zero the divide-by-zero. A previous attempt used `warnings.filterwarnings(..., module="__main__")` which silently failed (numpy emits the warning from its own internal module, not `__main__`). Correct fix: `with np.errstate(divide='ignore', invalid='ignore'):` — numpy's own mechanism for suppressing float-error warnings within a dynamic extent.
 
 ## LLM Backend
 Uses text-generation-webui with OpenAI-compatible API.
