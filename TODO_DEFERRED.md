@@ -49,7 +49,7 @@ Discovered during the cross-project interactive-REPL testing-strategy design (20
 
 ## Replace local utilities with unpythonic 2.1.0 equivalents
 
-`raven/common/utils.py` and `raven/common/numutils.py` contain four utilities that were ported to `unpythonic` in 2.1.0: `environ_override` (now `unpythonic.environ.override`), `maybe_open` (`unpythonic.misc`), `UnionFilter` (`unpythonic.misc`), and `si_prefix` (`unpythonic.misc`). The unpythonic versions have bugfixes (si_prefix negative numbers), additional features (si_prefix binary mode, negative SI prefixes), and type annotations. Replace the local copies with imports from unpythonic once raven bumps its unpythonic dependency to >= 2.1.0. The local `# TODO: move to unpythonic` comments mark the exact locations.
+`raven/common/utils.py` and `raven/common/numutils.py` contain four utilities that were ported to `unpythonic` in 2.1.0: `environ_override`, `maybe_open`, `UnionFilter`, and `si_prefix`. All are available as top-level imports (`from unpythonic import environ_override, maybe_open, UnionFilter, si_prefix`). The unpythonic versions have bugfixes (si_prefix negative numbers), additional features (si_prefix binary mode, negative SI prefixes), and type annotations. Replace the local copies with imports from unpythonic once raven bumps its unpythonic dependency to >= 2.1.0. The local `# TODO: move to unpythonic` comments mark the exact locations.
 
 Discovered during unpythonic 2.1.0 development (2026-04-16).
 
