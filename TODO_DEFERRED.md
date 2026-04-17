@@ -1,5 +1,67 @@
 # Deferred TODOs
 
+## Additional `MaybeRemoteService` candidates (classify, translate)
+
+`raven.client.mayberemote` currently wraps `Dehyphenator` (→ sanitize), `Embedder` (→ embeddings), `NLP` (→ natlang). Once the in-progress speech-extract-to-common work lands `TTS` / `STT`, the ML-engine server modules that *still* have no local fallback are:
+
+- `classify` — sentiment/emotion classification. Already wraps `raven.common.nlptools`; lifting it to MaybeRemote is mechanical.
+- `translate` — neural machine translation. Also wraps `nlptools` (via the `_Translator` callable and `translate`/`_translate_chunked` functions).
+
+Both have all the pieces in place — the common-layer code exists, model loading is already memoized via `nlptools._translators` / spaCy pipelines. The missing piece is just the `MaybeRemoteService` subclass, a local-mode `__init__` path, and wiring in any client apps that currently assume the server is reachable.
+
+The remaining server modules don't fit the MaybeRemote pattern for different reasons: `avatar`/`avatarutil`/`imagefx` have a licensing constraint (see "Client-local avatar animator" below); `websearch` depends on external URL state and doesn't really have a "local model" story; `tts`/`stt` will have MaybeRemote once the speech extraction is done.
+
+Goal: any Raven app running in isolation should be able to do all its ML work locally, with the server only needed for synergy when multiple Raven apps run concurrently (shared model weights in VRAM). Visualizer importer already has this; cherrypick and librarian partially have it; bringing `classify` and `translate` into the MaybeRemote family closes most of the remaining gap.
+
+Discovered during speech-extract-to-common discussion (2026-04-17).
+
+## Client-local avatar animator (licensing-bounded)
+
+The avatar animator currently lives only in `raven.server.modules.avatar` under AGPL. Reason: the module has contributors beyond the user (Juha Jeronen) and can't be unilaterally relicensed. THA3 upstream (the underlying ML model, vendored in `raven/vendor/tha3/`) is actually MIT — so the AGPL tax comes from Raven-side extensions, not the model itself.
+
+A client-local animator would be valuable even though the server one stays: it would skip the network transport plus QOI encode/decode round-trip, which dominates latency on non-localhost server setups.
+
+Open legal/scoping questions:
+
+- Which of the server-side animator extensions are the user's solo work, and which have shared authorship? (Only solo-authored code can be relicensed to BSD without consent from co-authors.)
+- Is a clean-room client-local animator, built on MIT-licensed THA3 plus only the user's own BSD-licensable contributions, feasible? — Or is too much of the Raven-specific behaviour entangled with shared-authorship AGPL code?
+- Can a BSD-licensed client module legally call into the AGPL server module *at runtime* (HTTP over the network) without pulling the client under AGPL? — Important for the existing MaybeRemote pattern: if remote-mode is allowed, what does the AGPL's "combined work" test say about a BSD client that *optionally* communicates with an AGPL server over HTTP? (General consensus: network RPC doesn't create a combined work in the AGPL-copyleft sense, but worth getting confirmed rather than assumed.)
+
+A client-local animator is not going away from the server — the server's avatar remains indefinitely useful, especially once a JavaScript avatar client exists. Nothing here conflicts with that.
+
+No action until the scope question is answered. Discovered during speech-extract-to-common discussion (2026-04-17).
+
+## Untested but test-worthy modules in `raven.common`
+
+Cross-referencing `raven/common/**/*.py` against existing `tests/` dirs, the following have non-trivial algorithmic content but no tests:
+
+- `raven/common/bgtask.py` — background task queue / lifecycle primitives. Pure orchestration; testable with fake tasks.
+- `raven/common/gui/layout_math.py` — coordinate / packing math for DPG layouts. Pure functions despite living under `gui/`; testable the same way `viewport_math` and the xdotwidget math modules are.
+- `raven/common/hfutil.py` — HuggingFace model installer. Side-effectful but the path-computation / repo-name-parsing parts are testable with tmpdir + monkeypatched `snapshot_download`.
+- `raven/common/deviceinfo.py` — GPU detection, dual-GPU ordering. Small surface area; the logic that matters (device counting, visibility filtering, user-facing string formatting) can be tested with a monkeypatched `torch.cuda`.
+
+The following are deliberately untested and should stay that way (consistent with the "test the algorithm layer, not GUI code" principle recorded in memory):
+
+- `raven/common/audio/{player,recorder}.py` — audio hardware I/O.
+- `raven/common/gui/{animation,fontsetup,helpcard,messagebox,utils,vumeter,widgetfinder}.py` — DPG glue.
+- `raven/common/gui/xdotwidget/{widget,renderer,highlight,constants}.py` — rendering / DPG-bound.
+
+Priority if picking one up: `bgtask` (most likely to harbour concurrency bugs; test-time cost is low), then `layout_math` (easy win), then `hfutil`/`deviceinfo` (requires monkeypatching but small).
+
+Discovered during speech-extract-to-common discussion (2026-04-17).
+
+## Postprocessor crop support on the client
+
+The server-side avatar postprocessor supports cropping the output image via the `crop_left`/`crop_right`/`crop_top`/`crop_bottom` settings in `raven.server.modules.avatar` (around lines 1415 and 1516–1519). Applied, this buys up to ~50% more processing speed on the avatar rendering pipeline — proportional to how much is cropped away.
+
+The client side currently ignores this: `raven/client/avatar_renderer.py:18` has a standing TODO ("support non-square avatar video stream (after server-side crop filter)") confirming the omission is known. Today the client assumes the incoming frame fills the full unit bbox, so if the server crops, the client displays a squashed / mis-positioned image.
+
+Fix: the client needs to receive the animator's crop settings (already sent by the client itself when configuring the server) and use them to align the cropped frame within the unit bbox that would have been occupied by the full non-cropped image. The math is straightforward — the crop settings are already in `[0, 1]` normalized coordinates, symmetric around the centre; the client just places the received image at the appropriate offset and scale within its render target.
+
+This unlocks the 50% speedup for clients that actually use heavy cropping (e.g. head-and-shoulders framing in typical chat use).
+
+Discovered during speech-extract-to-common discussion (2026-04-17).
+
 ## torch / torchaudio CUDA version alignment on fresh installs
 
 `torchaudio>=2.4.0` was added as a direct dep alongside the existing `torch>=2.4.0`. Bare `pip install torchaudio` on a machine with `torch==2.10.0+cu128` fetched `torchaudio==2.11.0` from PyPI, which is built against CUDA 13 and fails to load (`libcudart.so.13: cannot open shared object file`). Workaround used on the dev box: `pip install "torchaudio==2.10.0" --index-url https://download.pytorch.org/whl/cu128`.
