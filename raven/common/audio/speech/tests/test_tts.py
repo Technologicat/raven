@@ -118,10 +118,12 @@ class TestMetadataInvariants:
 class TestTwoLayerAPIEquivalence:
     def test_synthesize_equals_concatenated_iter(self, pipeline, voice):
         # `synthesize` is documented as a thin wrapper over `synthesize_iter`.
-        # Can't check bit-equality — Kokoro is nondeterministic across identical calls
-        # (same text / voice / speed produce audio differing in the 7th decimal, likely
-        # from an unseeded jitter/flow component). What we CAN check: both paths produce
-        # matching shape, duration, sample rate, and word-count.
+        # Can't check bit-equality — Kokoro is nondeterministic across identical calls.
+        # Measured on CPU: length & sample count are identical, zero phase offset, normalized
+        # cross-correlation ≈ 0.993 — but sample-wise RMS difference is ~3 % of peak amplitude
+        # (-30 dB), consistent with unseeded stochastic sampling in the neural vocoder
+        # (the same pattern VITS-family TTS uses for naturalness). What we CAN check: both
+        # paths produce matching shape, duration, sample rate, and word-count.
         text = "The quick brown fox jumps over the lazy dog."
 
         result = speech_tts.synthesize(pipeline, voice=voice, text=text, get_metadata=True)
