@@ -26,7 +26,12 @@ Raised during step 3 of the refactor (2026-04-17).
 
 Both have all the pieces in place — the common-layer code exists, model loading is already memoized via `nlptools._translators` / spaCy pipelines. The missing piece is just the `MaybeRemoteService` subclass, a local-mode `__init__` path, and wiring in any client apps that currently assume the server is reachable.
 
-The remaining server modules don't fit the MaybeRemote pattern for different reasons: `avatar`/`avatarutil`/`imagefx` have a licensing constraint (see "Client-local avatar animator" below); `websearch` depends on external URL state and doesn't really have a "local model" story; `tts`/`stt` will have MaybeRemote once the speech extraction is done.
+The remaining server modules don't fit the MaybeRemote pattern for different reasons:
+
+- `avatar`, `avatarutil` — licensing-constrained (see "Client-local avatar animator" below). Also the rendering pipeline is tied to real-time animation driver state that's server-local; a client-local path would be effectively a parallel rewrite, not a wrapper.
+- `imagefx` — 100 % user-authored, no licensing constraint. Doesn't fit MaybeRemote because its job is to apply the server-side postprocessor / upscaler to the avatar video stream; in a client-local avatar scenario the client would run the same `raven.common.video.{postprocessor,upscaler}` directly, without the `imagefx` layer in the middle. (i.e. `imagefx` *is* the server-side thin wrapper — there's no separate engine to lift out.)
+- `websearch` — AGPL-constrained (~90 % from SillyTavern-extras, rest ported from SillyTavern-selenium's JS version — see the licensing item below). Also heavy to run locally: Selenium + headless browser.
+- `tts`, `stt` — will have MaybeRemote once the speech extraction is done.
 
 Goal: any Raven app running in isolation should be able to do all its ML work locally, with the server only needed for synergy when multiple Raven apps run concurrently (shared model weights in VRAM). Visualizer importer already has this; cherrypick and librarian partially have it; bringing `classify` and `translate` into the MaybeRemote family closes most of the remaining gap.
 
@@ -41,11 +46,24 @@ A client-local animator would be valuable even though the server one stays:
 - It skips the network transport plus QOI encode/decode round-trip, which dominates latency on non-localhost server setups.
 - It extends the "server-optional" story (the goal behind the existing MaybeRemote pattern) to the avatar: a Raven app running standalone could still show the avatar, without requiring the server to be running.
 
-**External / shared-authorship code on the server side** (can't be unilaterally relicensed):
+**Per-module authorship provenance on the server side** (for scoping what can / can't be unilaterally relicensed):
 
-- The Raven server app proper (`raven.server.app` and much of `raven.server.modules`).
-- `raven.server.modules.websearch` — loosely based on SillyTavern-extras, updated with tricks from SillyTavern-selenium's JS version.
-- The **first version** of the avatar animator — the two-thread loop, THA3 engine wiring, and `x-multipart-replace` image stream. The animation drivers on top of this foundation have since been completely rewritten by the user, but not from a blank slate — so the original two-thread / streaming scaffolding is likely still recognisable in the current code and retains shared authorship.
+- `raven.server.app` — the Flask application proper. Has external contributors from the SillyTavern-extras era (and possibly earlier). Shared authorship.
+- `raven.server.modules.websearch` — ~90 % from SillyTavern-extras, then patched by porting later modifications from SillyTavern-selenium (JS) into Python. AGPL lineage; not the user's code to relicense.
+- `raven.server.modules.avatar` — mostly user-authored *now*, but with a tangled lineage:
+  - The very original avatar module (in SillyTavern-extras, pre-user) was based on example code from THA3 (MIT).
+  - Just before the user's first commit on it, it had a `result_feed`, a rudimentary `Animator` class (including its Discordian class docstring, which was a keeper), and little else.
+  - Everything that makes the current avatar actually work at 10+ FPS — the optimised animator, sway animation, breathing, blinking, the postprocessor, the addon cel machinery, animefx, morph overriding — is user-authored, added during Raven's development.
+  - A clean-room scoping job would diff SillyTavern-extras just before the user's first commit vs. its final (post-deprecation) state to identify the ST-era delta, then treat everything added since within Raven as user-solo.
+- `raven.server.modules.classify` — thin shim over `raven.common.nlptools`. User-authored.
+- `raven.server.modules.embeddings` — thin shim over `raven.common.nlptools`. User-authored.
+- `raven.server.modules.imagefx` — new in Raven, 100 % user-authored.
+- `raven.server.modules.natlang` — new in Raven, 100 % user-authored.
+- `raven.server.modules.sanitize` — new in Raven, 100 % user-authored.
+- `raven.server.modules.translate` — new in Raven, 100 % user-authored.
+- `raven.server.modules.tts`, `raven.server.modules.stt` — new in Raven; the ST-extras versions were discarded when the final ST-extras was converted into the first Raven-Server. 100 % user-authored.
+
+So the AGPL tax on the server side is concentrated in three places: the Flask app scaffolding (`server.app`), `websearch`, and the pre-rewrite foundation of `avatar`. Everything else is user-authored and could in principle be relicensed BSD — but the server as a whole still ships AGPL because of those three.
 
 **Licensing distinction the open question really hinges on:**
 
@@ -58,9 +76,10 @@ A client-local animator would be valuable even though the server one stays:
 
 **What a client-local animator would require:**
 
-- A clean-room implementation built on MIT-licensed THA3 plus *only* the user's own BSD-licensable contributions — specifically, the post-rewrite animation drivers and newer pipeline work.
-- Explicit triage of which code in `raven.server.modules.avatar` is user-solo vs. shared-authorship. The first-version foundation (two threads, THA3 engine wiring, x-multipart-replace) is the shared-authorship part; the rewritten drivers on top should be user-solo and relicensable.
-- No code copy-paste from the AGPL module — even small fragments with shared authorship would re-infect.
+- A clean-room implementation built on MIT-licensed THA3 plus the user's own BSD-licensable contributions (the bulk of the current animator — see authorship breakdown above).
+- A diff against the final SillyTavern-extras (post-deprecation) avatar module to pin down exactly what's ST-era and must not be copied. Everything added within Raven since the user's first commit on the module is solo-authored.
+- No code copy-paste from the ST-era portions of the AGPL module — even small fragments with shared authorship would re-infect.
+- The server-side animator keeps its tangled lineage and stays AGPL; the BSD client-local animator lives in `raven.common.avatar` (new) or similar, with a cleaner, from-scratch scaffolding around THA3.
 
 The server animator is not going away — it remains indefinitely useful, especially once a JavaScript avatar client exists. A BSD client-local animator is purely additive.
 
