@@ -53,8 +53,8 @@ A client-local animator would be valuable even though the server one stays:
 - `raven.server.modules.avatar` — mostly user-authored *now*, but with a tangled lineage:
   - The very original avatar module (in SillyTavern-extras, pre-user) was based on example code from THA3 (MIT).
   - Just before the user's first commit on it, it had a `result_feed`, a rudimentary `Animator` class (including its Discordian class docstring, which was a keeper), and little else.
-  - Everything that makes the current avatar actually work at 10+ FPS — the optimised animator, sway animation, breathing, blinking, the postprocessor, the addon cel machinery, animefx, morph overriding — is user-authored, added during Raven's development.
-  - A clean-room scoping job would diff SillyTavern-extras just before the user's first commit vs. its final (post-deprecation) state to identify the ST-era delta, then treat everything added since within Raven as user-solo.
+  - Everything that makes the current avatar actually work at 10+ FPS — the optimised animator, sway animation, breathing, blinking, the postprocessor, the addon cel machinery, animefx, morph overriding — is user-authored. Some of this landed already during the SillyTavern-extras era (inside the AGPL project, but authored by the user and therefore his to relicense), the rest was added during Raven's development.
+  - Clean-room scoping therefore isn't just "Raven-era = clean": the user's authored contributions pre-date the ST-extras → Raven conversion. The actual scoping would be per-line `git blame` on the final post-deprecation ST-extras snapshot to identify user-authored lines there, combined with all of Raven-era avatar work. Non-user-authored lines from the ST-extras era are the only ones that must not be reused.
 - `raven.server.modules.classify` — thin shim over `raven.common.nlptools`. User-authored.
 - `raven.server.modules.embeddings` — thin shim over `raven.common.nlptools`. User-authored.
 - `raven.server.modules.imagefx` — new in Raven, 100 % user-authored.
@@ -77,8 +77,8 @@ So the AGPL tax on the server side is concentrated in three places: the Flask ap
 **What a client-local animator would require:**
 
 - A clean-room implementation built on MIT-licensed THA3 plus the user's own BSD-licensable contributions (the bulk of the current animator — see authorship breakdown above).
-- A diff against the final SillyTavern-extras (post-deprecation) avatar module to pin down exactly what's ST-era and must not be copied. Everything added within Raven since the user's first commit on the module is solo-authored.
-- No code copy-paste from the ST-era portions of the AGPL module — even small fragments with shared authorship would re-infect.
+- Per-line `git blame` on the final post-deprecation SillyTavern-extras avatar module to classify each line by author. User-authored lines (from either the ST-extras era or Raven) are reusable; non-user lines from the ST-extras era are the only ones that must not be copied. The Raven-era delta is entirely user-authored and reusable wholesale.
+- No code copy-paste from the non-user-authored ST-era portions — even small fragments with shared authorship would re-infect.
 - The server-side animator keeps its tangled lineage and stays AGPL; the BSD client-local animator lives in `raven.common.avatar` (new) or similar, with a cleaner, from-scratch scaffolding around THA3.
 
 The server animator is not going away — it remains indefinitely useful, especially once a JavaScript avatar client exists. A BSD client-local animator is purely additive.
