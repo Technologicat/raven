@@ -44,7 +44,7 @@ Discovered during step 5 review (2026-04-18).
 
 `tts_prepare` is the offline-precomputation helper for lipsync — it runs TTS on CPU while the previous sentence is still speaking, so perceived latency stays bounded by the first-sentence synthesis time rather than the full sequence. Currently it's HTTP-only (calls the server's `/api/tts/speak`), and duplicates logic that already exists at the common layer (timestamp cleanup).
 
-Since Raven is the only consumer of its own TTS service, there's no external compatibility to preserve — drop the legacy dict format entirely, migrate all callers to `WordTiming`. Final shape:
+Since Raven is the only consumer of its own TTS service, there's no external compatibility to preserve — drop the legacy dict format entirely from in-process code, migrate all callers to `WordTiming`. Dict form survives only as the wire-transfer shape (JSON in the `x-word-timestamps` HTTP header), converted to/from `WordTiming` at the HTTP boundary only (the step-5 `_remote_tts_speak_raw` already does this correctly). Final shape:
 
 - **`raven.common.audio.speech.tts`** — one module hosts engine + post-processing + cached convenience:
   - Move the `dipthong_vowel_to_ipa` table from `raven.client.tts` to here. Misaki shorthand → canonical IPA, a Kokoro/Misaki engine concern.
