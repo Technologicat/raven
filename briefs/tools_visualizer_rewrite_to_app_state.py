@@ -28,9 +28,11 @@ create cycles with `app.py` at the top) we stash them as attributes on
 
 ## Usage
 
-Edit `NAMES_TO_MIGRATE` below to the set of bare identifiers you want to migrate, then::
+Pass the path to rewrite, followed by the bare identifiers to migrate::
 
-    python briefs/tools_visualizer_rewrite_to_app_state.py raven/visualizer/app.py
+    python briefs/tools_visualizer_rewrite_to_app_state.py raven/visualizer/app.py \
+        dataset bg themes_and_fonts selection_data_idxs_box filedialog_save \
+        enter_modal_mode exit_modal_mode
 
 Follow up with ``python -c "import ast; ast.parse(open('raven/visualizer/app.py').read())"``
 to catch any syntax errors before moving on, and scan `git diff` for any changes that
@@ -55,16 +57,9 @@ import sys
 import tokenize
 from collections import defaultdict
 
-NAMES_TO_MIGRATE = {"dataset",
-                    "bg",
-                    "themes_and_fonts",
-                    "selection_data_idxs_box",
-                    "filedialog_save",
-                    "enter_modal_mode",
-                    "exit_modal_mode"}
 
-
-def rewrite(source: str) -> str:
+def rewrite(source: str, names_to_migrate: set) -> str:
+    NAMES_TO_MIGRATE = names_to_migrate  # keep the original variable name for readability below
     tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
 
     # Pass 1: find `global NAME(, NAME)*` declarations whose names are all migrated;
@@ -153,10 +148,14 @@ def rewrite(source: str) -> str:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print(f"usage: {sys.argv[0]} <path> <name> [<name>...]", file=sys.stderr)
+        sys.exit(2)
     path = sys.argv[1]
+    names = set(sys.argv[2:])
     with open(path, encoding="utf-8") as f:
         src = f.read()
-    new_src = rewrite(src)
+    new_src = rewrite(src, names)
     with open(path, "w", encoding="utf-8") as f:
         f.write(new_src)
-    print(f"Rewrote {path}")
+    print(f"Rewrote {path}  (migrated: {', '.join(sorted(names))})")

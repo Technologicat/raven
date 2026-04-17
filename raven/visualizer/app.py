@@ -71,6 +71,7 @@ with timer() as tim:
     from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
     from . import config as visualizer_config
     from . import importer  # BibTeX importer
+    from . import selection
     from . import word_cloud
 
     gui_config = visualizer_config.gui_config  # shorthand, this is used a lot
@@ -194,227 +195,9 @@ def reset_plotter_zoom():
 
 
 # --------------------------------------------------------------------------------
-# Selection management (related to datapoints in the plotter)
+# Selection management — extracted to `raven.visualizer.selection` (2026-04-17).
+selection.reset_undo_history(_update_gui=False)  # GUI not initialized yet. This is the only time the flag should be set to `False`!
 
-def reset_undo_history(_update_gui=True):  # This creates the global variables.
-    """Reset the selection undo history. Used when loading a new dataset.
-
-    `_update_gui`: internal, used during app initialization.
-                   Everywhere else, should be the default `True`.
-    """
-    global selection_undo_stack
-    global selection_undo_pos
-    global selection_changed
-    global selection_anchor_data_idxs_set
-    app_state.selection_data_idxs_box = box(common_utils.make_blank_index_array())
-    selection_undo_stack = [unbox(app_state.selection_data_idxs_box)]
-    selection_undo_pos = 0
-    selection_changed = False  # ...after last completed info panel update (that was finalized); used for scroll anchoring
-    selection_anchor_data_idxs_set = set()  # items common across previous and current selection; used for scroll anchoring  # indices to `sorted_xxx`
-    if _update_gui:
-        dpg.disable_item("selection_undo_button")  # tag
-        dpg.disable_item("selection_redo_button")  # tag
-reset_undo_history(_update_gui=False)  # GUI not initialized yet. This is the only time the flag should be set to `False`!
-
-def commit_selection_change_to_undo_history():
-    """Update the selection undo history, and update the state of the undo/redo GUI buttons.
-
-    If the current selection is the same as that at the current position in the undo stack,
-    then do nothing.
-
-    Return whether a commit was actually needed.
-    """
-    global selection_undo_stack
-    global selection_undo_pos
-
-    # Only proceed with the commit if the selection is actually different from what we have at the current undo position.
-    old_selection_data_idxs = selection_undo_stack[selection_undo_pos]
-    new_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-    old_selection_data_idxs_set = set(old_selection_data_idxs)
-    new_selection_data_idxs_set = set(new_selection_data_idxs)
-    if new_selection_data_idxs_set == old_selection_data_idxs_set:
-        return False
-
-    selection_undo_stack = selection_undo_stack[:selection_undo_pos + 1]
-    selection_undo_stack.append(new_selection_data_idxs)
-    selection_undo_pos = len(selection_undo_stack) - 1
-
-    dpg.enable_item("selection_undo_button")  # tag
-    dpg.disable_item("selection_redo_button")  # tag
-
-    return True
-
-def selection_undo():
-    """Walk one step back in the selection undo history, and update the state of the undo/redo GUI buttons.
-
-    Do nothing if already at the beginning.
-
-    No return value.
-    """
-    global selection_undo_pos
-    global selection_changed
-    global selection_anchor_data_idxs_set
-    if selection_undo_pos == 0:
-        return
-    selection_undo_pos -= 1
-    if selection_undo_pos == 0:
-        dpg.disable_item("selection_undo_button")  # tag
-    dpg.enable_item("selection_redo_button")  # tag
-
-    # See also `commit_selection_change_to_undo_history` and `update_selection`; we must do some of the same things here.
-    old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-    new_selection_data_idxs = selection_undo_stack[selection_undo_pos]
-
-    app_state.selection_data_idxs_box << new_selection_data_idxs
-
-    selection_anchor_data_idxs_set = set(new_selection_data_idxs).intersection(set(old_selection_data_idxs))
-    selection_changed = True
-
-    update_selection_highlight()
-    update_info_panel(wait=True)  # wait, because undo may be clicked/hotkeyed several times quickly in succession
-    update_mouse_hover(force=True, wait=True)
-    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=True)
-
-def selection_redo():
-    """Walk one step forward in the selection undo history, and update the state of the undo/redo GUI buttons.
-
-    Do nothing if already at the end.
-
-    No return value.
-    """
-    global selection_undo_pos
-    global selection_changed
-    global selection_anchor_data_idxs_set
-    if selection_undo_pos == len(selection_undo_stack) - 1:
-        return
-    selection_undo_pos += 1
-    if selection_undo_pos == len(selection_undo_stack) - 1:
-        dpg.disable_item("selection_redo_button")  # tag
-    dpg.enable_item("selection_undo_button")  # tag
-
-    # See also `commit_selection_change_to_undo_history` and `update_selection`; we must do some of the same things here.
-    old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-    new_selection_data_idxs = selection_undo_stack[selection_undo_pos]
-
-    app_state.selection_data_idxs_box << new_selection_data_idxs
-
-    selection_anchor_data_idxs_set = set(new_selection_data_idxs).intersection(set(old_selection_data_idxs))
-    selection_changed = True
-
-    update_selection_highlight()
-    update_info_panel(wait=True)  # wait, because redo may be clicked/hotkeyed several times quickly in succession
-    update_mouse_hover(force=True, wait=True)
-    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=True)
-
-def update_selection(new_selection_data_idxs, mode="replace", *, force=False, wait=False, update_selection_undo_history=True):
-    """Update `selection_data_idxs_box`, updating also the selection undo stack (optionally) and the GUI.
-
-    `new_selection_data_idxs`: `np.array` (or `list`) of indices to `sorted_xxx`
-    `mode`: one of:
-        "replace" (current selection with `new_selection_data_idxs`)
-        "add" (`new_selection_data_idxs` to current selection)
-        "subtract" (`new_selection_data_idxs` from current selection)
-        "intersect" (`new_selection_data_idxs` with current selection)
-    `force`: if `True`, don't care whether the selection set actually changes, but update the GUI regardless.
-             Used when loading a new dataset.
-    `wait`: bool, whether to wait for more keyboard/mouse input before starting long-running GUI updates.
-            Used by mouse-draw select.
-    `update_selection_undo_history`: as it says on the tin. Mouse-draw mode sets this to `False` so that
-                                     every small movement of the mouse won't emit a separate undo entry.
-
-                                     When this is `False`, you can later commit changes to undo history
-                                     by calling `commit_selection_change_to_undo_history`.
-
-    Returns whether any changes were made.
-      - "replace" mode will not make any changes, if the new selection is the same as the old one.
-      - "add" mode will not make any changes if all datapoints in the new selection were already selected.
-      - "subtract" mode will not make any changes if none of the datapoints in the new selection were selected.
-      - "intersect" mode will not make any changes if the new selection covers the whole current selection.
-
-    When no changes are made, this does nothing and exits early, without updating the GUI (unless `force=True`).
-    """
-    global selection_changed
-    global selection_anchor_data_idxs_set
-
-    old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)  # `np.array` of indices to `sorted_xxx`
-    old_set = set(old_selection_data_idxs)
-    new_set = set(new_selection_data_idxs)
-    if mode == "add":
-        if not force and not len(new_set.difference(old_set)):  # no new points?
-            return False
-        new_selection_data_idxs = np.array(list(old_set.union(new_set)))
-    elif mode == "subtract":
-        if not force and not len(new_set.intersection(old_set)):  # not removing any existing points?
-            return False
-        new_selection_data_idxs = np.array(list(old_set.difference(new_set)))
-    elif mode == "intersect":
-        common_selection_data_idxs_set = new_set.intersection(old_set)
-        if not force and common_selection_data_idxs_set == old_set:
-            return False
-        new_selection_data_idxs = np.array(list(common_selection_data_idxs_set))
-    else:  # mode == "replace":
-        if not force and new_set == old_set:  # no changes?
-            return False
-        new_selection_data_idxs = np.array(new_selection_data_idxs)
-    # The selection has changed (or `force=True`).
-    #
-    # Now `new_selection_data_idxs` contains the indices (to `sorted_xxx`) of datapoints
-    # that comprise the final new selection, after accounting for `mode`.
-    final_new_set = set(new_selection_data_idxs)
-
-    # Info panel scroll anchoring.
-    # We must do this here (not in `commit_selection_change_to_undo_history`) for two reasons:
-    #   - Update order in mouse-draw select; it updates the selection continuously, but commits only when the mouse button is released.
-    #   - This isn't really even related to the undo history, but to which items are currently shown, whether recorded in undo history or not.
-    selection_anchor_data_idxs_set = final_new_set.intersection(old_set)  # Items common between the old and new selection are applicable as scroll anchors.
-    selection_changed = True
-    # logger.debug(f"update_selection: new selection anchor set is {selection_anchor_data_idxs_set}")
-
-    app_state.selection_data_idxs_box << new_selection_data_idxs  # Send the new data into the box.
-    if update_selection_undo_history:
-        commit_selection_change_to_undo_history()
-
-    # Update GUI elements.
-    update_selection_highlight()
-
-    # Selection updates don't typically happen quickly in succession, so we can usually
-    # tell the deferred updates to start immediately. The exception to the rule is the
-    # mouse-draw select, which calls us with `wait=True`.
-    update_info_panel(wait=wait)
-    update_mouse_hover(force=True, wait=wait)
-    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=wait)
-
-    return True  # the selection has changed (or `force=True`)
-
-def update_selection_highlight():
-    """Update highlight for datapoints currently in selection.
-
-    Low-level function. `update_selection` calls this automatically.
-
-    Generally, this only needs to be called if you manually send something
-    into `selection_data_idxs_box` (like undo and redo do).
-    """
-    selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-    if len(selection_data_idxs):
-        dpg.set_value("my_selection_scatter_series", [list(app_state.dataset.sorted_lowdim_data[selection_data_idxs, 0]),  # tag
-                                                      list(app_state.dataset.sorted_lowdim_data[selection_data_idxs, 1])])
-    else:
-        dpg.set_value("my_selection_scatter_series", [[], []])  # tag
-
-def keyboard_state_to_selection_mode():
-    """Map current keyboard modifier state (Shift, Ctrl) to selection mode (replace, add, subtract, intersect).
-
-    Helper for features that call `update_selection`.
-    """
-    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
-    if shift_pressed and ctrl_pressed:
-        return "intersect"
-    elif shift_pressed:
-        return "add"
-    elif ctrl_pressed:
-        return "subtract"
-    return "replace"
 
 # --------------------------------------------------------------------------------
 # Modal window related utilities
@@ -427,7 +210,7 @@ def enter_modal_mode():
     """
     logger.debug("enter_modal_mode: App entering modal mode.")
     dpg.split_frame()
-    update_mouse_hover(force=True, wait=False)  # hide annotation (just in case it's there)
+    app_state.update_mouse_hover(force=True, wait=False)  # hide annotation (just in case it's there)
     _info_panel_scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` disables its highlight
 
 def exit_modal_mode():
@@ -439,7 +222,7 @@ def exit_modal_mode():
     logger.debug("exit_modal_mode: App returning to main window mode.")
     dpg.split_frame()
     _info_panel_scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` enables its highlight
-    update_mouse_hover(force=True, wait=False)  # show annotation if relevant
+    app_state.update_mouse_hover(force=True, wait=False)  # show annotation if relevant
 
 # Register the modal-mode helpers on `app_state` so extracted submodules can reach them.
 app_state.enter_modal_mode = enter_modal_mode
@@ -609,8 +392,8 @@ def reset_app_state(_update_gui=True):
         gui_animation.animator.add(CurrentItemControlsGlow(cycle_duration=gui_config.glow_cycle_duration))
 
         # Clear undo history and selection
-        reset_undo_history()
-        update_selection(common_utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
+        selection.reset_undo_history()
+        selection.update(common_utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
 
         # Clear the search
         dpg.set_value("search_field", "")  # tag
@@ -673,7 +456,7 @@ def load_data_into_plotter(ds):
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
     # Trigger an info panel update
-    update_selection(common_utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
+    selection.update(common_utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
 
 def open_file(filename):
     """Load new data into the GUI. Public API."""
@@ -1003,8 +786,8 @@ def update_search(wait=True):
     # TODO: Currently, this may cause the set of data points considered to be under the mouse cursor to change
     #       the first time this happens at a given mouse position (upon a click in the plot area). Debug this.
     #       If the plot mouse position is one frame out of date (update order?), that would explain it.
-    update_info_panel(wait=wait)
-    update_mouse_hover(force=True, wait=wait)
+    app_state.update_info_panel(wait=wait)
+    app_state.update_mouse_hover(force=True, wait=wait)
 
 
 class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is set up by `reset_app_state`
@@ -1527,7 +1310,7 @@ with timer() as tim:
 
                 dpg.add_button(label=fa.ICON_ARROW_ROTATE_LEFT,
                                tag="selection_undo_button",
-                               callback=selection_undo,
+                               callback=selection.undo,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w,
                                enabled=False)
@@ -1539,7 +1322,7 @@ with timer() as tim:
 
                 dpg.add_button(label=fa.ICON_ARROW_ROTATE_RIGHT,
                                tag="selection_redo_button",
-                               callback=selection_redo,
+                               callback=selection.redo,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w,
                                enabled=False)
@@ -1551,8 +1334,8 @@ with timer() as tim:
 
                 def select_search_results():
                     """Select all datapoints matching the current search."""
-                    update_selection(unbox(search_result_data_idxs_box),
-                                     keyboard_state_to_selection_mode())
+                    selection.update(unbox(search_result_data_idxs_box),
+                                     selection.keyboard_state_to_mode())
                 dpg.add_button(label=fa.ICON_MAGNIFYING_GLASS,
                                tag="select_search_results_button",
                                callback=select_search_results,
@@ -1565,8 +1348,8 @@ with timer() as tim:
 
                 def select_visible_all():
                     """Select those datapoints that are currently visible in the plotter view."""
-                    update_selection(get_visible_datapoints(),
-                                     keyboard_state_to_selection_mode())
+                    selection.update(get_visible_datapoints(),
+                                     selection.keyboard_state_to_mode())
                 dpg.add_button(label=fa.ICON_SQUARE,
                                tag="select_visible_all_button",
                                callback=select_visible_all,
@@ -1960,6 +1743,9 @@ def update_mouse_hover(*, force=False, wait=True, wait_duration=0.05, env=None):
                                                 pending_wait_duration=wait_duration)
     annotation_task_manager.submit(annotation_render_task, envcls(wait=wait))
 
+# Register on `app_state` so extracted submodules (e.g. `selection`) can call it.
+app_state.update_mouse_hover = update_mouse_hover
+
 # Worker.
 @dlet(internal_build_number=0)  # For making unique DPG tags. Incremented each time, regardless of whether completed or cancelled.
 def _update_annotation(*, task_env, env=None):
@@ -2310,6 +2096,9 @@ def update_info_panel(*, wait=True, wait_duration=0.25):
                                                 pending_wait_duration=wait_duration)
     info_panel_task_manager.submit(info_panel_render_task, envcls(wait=wait))
 
+# Register on `app_state` so extracted submodules (e.g. `selection`) can call it.
+app_state.update_info_panel = update_info_panel
+
 # ----------------------------------------
 # Item detectors for GUI widget search utilities
 
@@ -2644,11 +2433,11 @@ def _search_or_select_entry(entry):
     ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
 
     if shift_pressed:
-        update_selection([entry.data_idx],  # index to `sorted_xxx`
+        selection.update([entry.data_idx],  # index to `sorted_xxx`
                          mode="replace",
                          wait=False)
     elif ctrl_pressed:
-        update_selection([entry.data_idx],  # index to `sorted_xxx`
+        selection.update([entry.data_idx],  # index to `sorted_xxx`
                          mode="subtract",
                          wait=False)
     else:
@@ -2925,8 +2714,8 @@ def select_cluster_by_id(cluster_id):
     Triggers an info panel update if the selection changes.
     """
     data_idxs = [data_idx for data_idx, entry in enumerate(app_state.dataset.sorted_entries) if entry.cluster_id == cluster_id]  # indices to `sorted_xxx`
-    update_selection(data_idxs,
-                     keyboard_state_to_selection_mode(),
+    selection.update(data_idxs,
+                     selection.keyboard_state_to_mode(),
                      wait=False)
 
 def select_current_cluster():
@@ -2969,8 +2758,6 @@ def _update_info_panel(*, task_env=None, env=None):
     global scroll_animation
 
     # For scroll anchoring.
-    global selection_changed
-    global selection_anchor_data_idxs_set
 
     # For "double-buffering"
     global info_panel_content_group
@@ -3045,7 +2832,7 @@ def _update_info_panel(*, task_env=None, env=None):
         # but the scroll anchor search (later, after the update completes) finds nothing.
         #
         # logger.debug(f"_update_info_panel: {task_env.task_name}: Old data: selection_anchor_data_idxs_set is {selection_anchor_data_idxs_set}")
-        if (not selection_changed) or len(selection_anchor_data_idxs_set):
+        if (not app_state.selection_changed) or len(app_state.selection_anchor_data_idxs_set):
             logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data: Start finding scroll anchor item...")
 
             # Before we do anything else, store the current scrollbar position. We need this to compute the offset (in pixels) between the scrollbar value and viewport y coordinate.
@@ -3061,10 +2848,10 @@ def _update_info_panel(*, task_env=None, env=None):
             #
             # NOTE: We scan the *old entries*, because we want to get the anchor from the old content before the new update is applied.
             env.scroll_anchor_data.clear()
-            if selection_changed:
+            if app_state.selection_changed:
                 # logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: selected data_idxs in info panel: {list(sorted(info_panel_entry_title_widgets.keys()))}")
                 # logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: selected data_idxs common between old and new selection: {list(sorted(selection_anchor_data_idxs_set))}")
-                possible_anchors_only = [item for data_idx, item in info_panel_entry_title_widgets.items() if data_idx in selection_anchor_data_idxs_set]  # `data_idx`: index to `sorted_xxx`
+                possible_anchors_only = [item for data_idx, item in info_panel_entry_title_widgets.items() if data_idx in app_state.selection_anchor_data_idxs_set]  # `data_idx`: index to `sorted_xxx`
                 logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Selection changed; old info panel selection_data_idxs common with new selection: {list(sorted(info_panel_widget_to_data_idx[x] for x in possible_anchors_only))}")
             else:
                 logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Selection not changed; can anchor on any info panel item.")
@@ -3625,10 +3412,10 @@ def _update_info_panel(*, task_env=None, env=None):
                 logger.debug(f"_update_info_panel: {task_env.task_name}: New data: at least one anchor exists, but none are shown after update. Resetting scroll position.")
                 dpg.set_y_scroll("item_information_panel", 0)  # tag
             _info_panel_scroll_position_changed(reset=True)  # for `update_current_search_result_status` (do this *after* swapping in the new content!)
-            selection_changed = False
+            app_state.selection_changed = False
 
             # Which items are shown in info panel may have changed. Re-render the annotation tooltip in case it is active, to update the items' "shown in info panel" status there.
-            update_mouse_hover(force=True, wait=False)
+            app_state.update_mouse_hover(force=True, wait=False)
 
             # Update search controls. Do this last.
             if search_string:  # is a search active?
@@ -3797,7 +3584,7 @@ def _resize_gui():
     logger.debug("_resize_gui: Recentering help window.")
     help_window.reposition()
     logger.debug("_resize_gui: Updating annotation tooltip.")
-    update_mouse_hover(force=True, wait=False)
+    app_state.update_mouse_hover(force=True, wait=False)
     logger.debug("_resize_gui: Rebuilding dimmer overlay.")
     if info_panel_dimmer_overlay is not None:
         info_panel_dimmer_overlay.build(rebuild=True)
@@ -3892,7 +3679,7 @@ def mouse_wheel_callback(sender, app_data):
 
     # Zooming in the plotter may change which data points are under the cursor within the tooltip-trigger pixel distance.
     if mouse_inside_plot_widget():
-        update_mouse_hover(force=True, wait=True)
+        app_state.update_mouse_hover(force=True, wait=True)
 
 lmb_pressed_inside_plot = False  # for tracking whether a drag started inside the plot (to prevent losing selection while scrolling info panel using the scrollbar, with the mouse then entering the plot area while LMB is down)
 def mouse_click_callback(sender, app_data):
@@ -3912,8 +3699,8 @@ def mouse_click_callback(sender, app_data):
     if mouse_button == dpg.mvMouseButton_Left:
         lmb_pressed_inside_plot = True
         draw_select_radius_indicator()
-        update_selection(get_data_idxs_at_mouse(),
-                         keyboard_state_to_selection_mode(),
+        selection.update(get_data_idxs_at_mouse(),
+                         selection.keyboard_state_to_mode(),
                          wait=False,
                          update_selection_undo_history=False)  # `mouse_release_callback` will commit regardless of if this event is actually a click or a starting mouse-draw
 
@@ -3989,13 +3776,13 @@ def mouse_move_callback():
     # mouse-draw select (but only when drag began inside the plot)
     if lmb_pressed_inside_plot and dpg.is_mouse_button_down(dpg.mvMouseButton_Left):
         draw_select_radius_indicator()
-        update_selection(get_data_idxs_at_mouse(),
-                         keyboard_state_to_selection_mode(),
+        selection.update(get_data_idxs_at_mouse(),
+                         selection.keyboard_state_to_mode(),
                          wait=True,
                          update_selection_undo_history=False)  # mouse release will commit later.
 
     # plotter data tooltip
-    update_mouse_hover(force=False, wait=True)
+    app_state.update_mouse_hover(force=False, wait=True)
 
 def mouse_release_callback(sender, app_data):
     """Finalize a mouse-click select or mouse-draw select."""
@@ -4010,7 +3797,7 @@ def mouse_release_callback(sender, app_data):
     # commit new selection to undo history when mouse-draw select ends
     if mouse_button == dpg.mvMouseButton_Left:
         clear_select_radius_indicator()
-        commit_selection_change_to_undo_history()
+        selection.commit_change_to_undo_history()
 
 def hotkeys_callback(sender, app_data):
     """Handle hotkeys."""
@@ -4082,9 +3869,9 @@ def hotkeys_callback(sender, app_data):
     # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_Z and dpg.is_item_enabled("selection_undo_button"):  # tag
-            selection_undo()
+            selection.undo()
         elif key == dpg.mvKey_Y and dpg.is_item_enabled("selection_redo_button"):  # tag
-            selection_redo()
+            selection.redo()
         elif key == dpg.mvKey_C:
             copy_current_entry_to_clipboard()
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
