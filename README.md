@@ -33,6 +33,7 @@
             - [Install on Windows (if Windows Defender gets angry)](#install-on-windows-if-windows-defender-gets-angry)
         - [Check that CUDA works (optional)](#check-that-cuda-works-optional)
         - [Activate the Raven venv (to run Raven commands such as `raven-visualizer` or `raven-server`)](#activate-the-raven-venv-to-run-raven-commands-such-as-raven-visualizer-or-raven-server)
+        - [Stopgap: run Raven commands from any terminal (bash functions)](#stopgap-run-raven-commands-from-any-terminal-bash-functions)
         - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
         - [Choose which GPU to use (optional)](#choose-which-gpu-to-use-optional)
         - [Exit from the Raven venv (optional, to end the session)](#exit-from-the-raven-venv-optional-to-end-the-session)
@@ -158,6 +159,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
   - **Status**: :white_check_mark: Fully operational prototype, usage: `raven-cherrypick some/path/to/images/`
 - **Features**:
   - GPU-accelerated, mipmapped Lanczos scaling for high quality.
+    - *Optional*: install `libturbojpeg` (Debian/Ubuntu: `sudo apt install libturbojpeg`) for fast JPEG decoding. Falls back to PIL if not present.
   - No on-disk thumbnail cache, no metadata files.
     - Thumbnails are generated on the fly, into a RAM cache. (Noise shown in thumbnail until it has loaded.)
     - Image state is encoded by directory path: `base/cherries`, `base/lemons`, where `base` is the directory you are viewing.
@@ -171,6 +173,7 @@ For my stance on AI contributions, see the [collaboration guidelines](https://gi
     - Adjustable speed (0.5–15 FPS), pause/resume, zoom while cycling.
     - Numbered badges on grid tiles, large overlay number on the main view.
     - Press a digit key (1–9) to pick a winner and exit.
+    - Press Ctrl+Shift+C (or Ctrl+Shift+click the "mark cherry" button) to commit the winner as cherry and the other compared images as lemon.
 
 
 ## Raven-conference-timer: Countdown timer for talks
@@ -454,6 +457,48 @@ Alternatively, you can run the venv activation script directly. You can find the
 :exclamation: *For Linux and Mac OS X, the script is typically named `.venv/bin/activate`; for Windows, typically `.venv/bin/activate.ps1` or `./venv/bin/activate.bat`.* :exclamation:
 
 Whenever Raven's venv is active, you can use Raven commands, such as `raven-visualizer`.
+
+### Stopgap: run Raven commands from any terminal (bash functions)
+
+By default, Raven commands such as `raven-visualizer` only work when the Raven venv is active in the current shell, and some commands (such as `raven-server`) additionally need `env.sh` and other helper scripts sourced. Until a more permanent solution exists, you can define `bash` functions in your `~/.bashrc` that handle activation transparently, so the commands work right in a fresh terminal.
+
+First, point a variable at your Raven checkout (adjust the path to match your setup):
+
+```bash
+export RAVEN_DIR="$HOME/Documents/raven"
+```
+
+Then, the pattern for any single Raven command:
+
+```bash
+raven-cherrypick() {
+    (
+        cd "$RAVEN_DIR" &&
+        eval "$(pdm venv activate)" &&
+        source env.sh &&
+        cd - > /dev/null &&
+        command raven-cherrypick "$@"
+    )
+}
+```
+
+The subshell (`( ... )`) keeps the activation local to the function call, so it doesn't leak into your interactive shell. `cd - > /dev/null` returns to the original directory before invoking the command, which matters for commands that take paths as arguments (e.g. `raven-cherrypick some/path/`). `command` skips the function lookup so the wrapper doesn't recurse.
+
+For `raven-server`, also source `run-on-internal-gpu.sh` and `no-hammer-hf.sh` if you want the GPU pinning and HuggingFace offline-mode behaviour from the [Quickstart](#quickstart):
+
+```bash
+raven-server() {
+    (
+        cd "$RAVEN_DIR" &&
+        eval "$(pdm venv activate)" &&
+        source env.sh &&
+        source run-on-internal-gpu.sh &&
+        source no-hammer-hf.sh &&
+        cd - > /dev/null &&
+        command raven-server "$@"
+    )
+}
+```
 
 ### Activate GPU compute support (optional)
 
