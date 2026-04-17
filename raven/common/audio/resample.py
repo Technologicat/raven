@@ -37,8 +37,8 @@ AudioT = TypeVar("AudioT", np.ndarray, torch.Tensor)
 # "kaiser_fast" / "kaiser_best" — Kaiser-windowed sinc, matching librosa's presets of the same name.
 #                                 Beta values are librosa's tuned constants (see `librosa.resample`
 #                                 source): β = π·√((width/2 · roll)² − 0.5²) with roll ≈ 0.85 / 0.945.
-_QUALITY_PARAMS = {"default":     {"resampling_method": "sinc_interp_hann",
-                                   "lowpass_filter_width": 6},
+_QUALITY_PARAMS = {"default": {"resampling_method": "sinc_interp_hann",
+                               "lowpass_filter_width": 6},
                    "kaiser_fast": {"resampling_method": "sinc_interp_kaiser",
                                    "lowpass_filter_width": 16,
                                    "beta": 8.555504641634386},
