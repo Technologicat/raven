@@ -44,6 +44,7 @@ dependencies = [
     "flask-cors>=6.0.0",  # server
     "flask-compress>=1.17",  # server
     "torchvision>=0.22.0",  # raven.common.video
+    "torchaudio>=2.4.0",  # raven.common.audio.resample (device-agnostic resampler)
     "huggingface-hub>=0.31.4",  # server (AI models autodownloader)
     "waitress>=3.0.2",  # server
     "kokoro>=0.9.4",  # server.tts; you may also need the `espeak-ng` software; on Linux, `sudo apt install espeak-ng`. For Windows, see instructions at https://github.com/hexgrad/kokoro
