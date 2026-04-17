@@ -1,7 +1,7 @@
 # ML test tier — markers + importorskip for ML-dependent tests
 
 **Date:** 2026-04-17
-**Status:** Proposed
+**Status:** Implemented (commit `25f469c`)
 **Trigger:** `raven/common/nlptools.py` (~30 public functions) has no tests, and is the actual logic behind the server's `sanitize`, `natlang`, `classify`, `translate`, `embeddings` modules.  The server-module tests should exercise the logic in `common`, not in `server`, since that's where it's loaded from.
 
 ## Context
