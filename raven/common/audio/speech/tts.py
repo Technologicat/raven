@@ -56,8 +56,10 @@ SAMPLE_RATE = 24000
 
 # Misaki's (Kokoro's phonemizer) shorthand for diphthongs → canonical IPA.
 # Kokoro emits the single-letter form; most downstream consumers (lipsync, captioning)
-# want the two-character IPA form. `expand_phoneme_diphthongs` does the substitution
-# in-place on a `WordTiming` list.
+# want the two-character IPA form. `expand_phoneme_diphthongs` does the substitution.
+#
+# Phoneme characters and per-phoneme comments come from Misaki docs:
+#   https://github.com/hexgrad/misaki/blob/main/EN_PHONES.md
 dipthong_vowel_to_ipa = {
     "A": "eɪ",  # The "eh" vowel sound, like hey => hˈA.
     "I": "aɪ",  # The "eye" vowel sound, like high => hˈI.

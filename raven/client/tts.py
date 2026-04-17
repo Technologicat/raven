@@ -32,26 +32,16 @@ from unpythonic.env import env as envcls
 from . import api  # for calling the avatar_* functions during lipsync
 from . import util
 
+from ..common.audio.speech import tts as speech_tts
+
 # --------------------------------------------------------------------------------
 # Data
 
-# Phoneme characters and individual phoneme comments come from Misaki docs.
-# The Kokoro TTS engine uses the Misaki engine for phonemization.
-#   https://github.com/hexgrad/misaki/blob/main/EN_PHONES.md
-
-# Misaki dipthong to IPA notation expansion table.
-dipthong_vowel_to_ipa = {
-    "A": "eɪ",  # The "eh" vowel sound, like hey => hˈA. Expands to eɪ in IPA.
-    "I": "aɪ",  # The "eye" vowel sound, like high => hˈI. Expands to aɪ in IPA.
-    "W": "aʊ",  # The "ow" vowel sound, like how => hˌW. Expands to aʊ in IPA.
-    "Y": "ɔɪ",  # The "oy" vowel sound, like soy => sˈY. Expands to ɔɪ in IPA.
-    # 🇺🇸 American-only
-    "O": "oʊ",  # Capital letter representing the American "oh" vowel sound. Expands to oʊ in IPA.
-    # 🇬🇧 British-only
-    "Q": "əʊ",  # Capital letter representing the British "oh" vowel sound. Expands to əʊ in IPA.
-}
-
 # Phoneme to avatar animator morph table.
+#
+# Phoneme characters and individual-phoneme comments come from Misaki docs
+# (Kokoro TTS uses the Misaki engine for phonemization):
+#   https://github.com/hexgrad/misaki/blob/main/EN_PHONES.md
 #
 # For the animator morph names, see `raven.server.modules.avatarutil`.
 #
@@ -180,12 +170,9 @@ def tts_prepare(text: str,
 
     Returns a `dict`, with the following entries:
         "audio_bytes": `bytes`, the speech audio file in MP3 format.
-        "timestamps": `List[Dict[str, Any]]`, the timestamp and phoneme data for each word of input.
-
-                      Format example::
-
-                          [{"word": "apple","start_time": 0.575, "end_time": 0.875, "phonemes": "ˈæpᵊl"},
-                           ...]
+        "timestamps": `List[raven.common.audio.speech.tts.WordTiming]`, lipsync-ready
+                      per-word timings. Already cleaned (`clean_timestamps`) and with
+                      diphthongs expanded to canonical IPA (`expand_phoneme_diphthongs`).
 
     The "timestamps" entry is present only if `get_metadata=True`.
 
@@ -207,6 +194,7 @@ def _tts_prepare(text: str,
     headers["Content-Type"] = "application/json"
 
     result = {}
+    timings: List[speech_tts.WordTiming] = []
 
     # Get audio, and if getting metadata, also the word-level timestamps
     with timer() as tim:
@@ -220,31 +208,15 @@ def _tts_prepare(text: str,
         stream_response = requests.post(f"{util.api_config.raven_server_url}/api/tts/speak", headers=headers, json=data, stream=True)
         util.yell_on_error(stream_response)
 
-        # Get word-level timestamps from HTTP header
+        # Parse the word-level timestamps at the wire boundary: URL-decoded JSON dicts → WordTiming dataclasses.
+        # From here on, the in-process representation is WordTiming; dicts only live on the wire.
         if get_metadata:
-            def isword(s: str) -> bool:
-                # Keep also the most common punctuation, used for closing the mouth.
-                return len(s) > 1 or s.isalnum() or s in ",.!?:;"
-
-            # I got duplicate timestamps from Kokoro-FastAPI; Raven now always uses the internal Kokoro TTS, but since I'm not sure if the cause was FastAPI or the engine itself, I'm keeping the precaution here.
-            def clean_timestamps(timestamps: List[Dict]) -> List[Dict]:
-                """Remove consecutive duplicate timestamps and some punctuation timestamps."""
-                out = []
-                last_start_time = None
-                for record in timestamps:  # format: [{"word": "blah", "start_time": 1.23, "end_time": 1.45}, ...]
-                    if record["start_time"] != last_start_time and isword(record["word"]):
-                        out.append(record)
-                        last_start_time = record["start_time"]
-                return out
-
-            timestamps = json.loads(stream_response.headers["x-word-timestamps"])
-
-            # The words and phonemes are URL-encoded to ASCII with percent-escaped UTF-8, due to HTTP limitations (can't send Unicode in HTTP headers).
-            for timestamp in timestamps:
-                timestamp["word"] = urllib.parse.unquote(timestamp["word"])
-                timestamp["phonemes"] = urllib.parse.unquote(timestamp["phonemes"])
-
-            timestamps = clean_timestamps(timestamps)
+            raw_timestamps = json.loads(stream_response.headers["x-word-timestamps"])
+            timings = [speech_tts.WordTiming(word=urllib.parse.unquote(ts["word"]),
+                                             phonemes=urllib.parse.unquote(ts["phonemes"]),
+                                             start_time=ts.get("start_time"),
+                                             end_time=ts.get("end_time"))
+                       for ts in raw_timestamps]
 
         # Stream the audio from the response body.
         # Save the audio in an in-memory buffer, thus obtaining a filelike that can be fed into the audio player.
@@ -264,25 +236,23 @@ def _tts_prepare(text: str,
     audio_duration_str = f" (duration {total_audio_duration:0.6g}s)"
     logger.info(f"tts_prepare: got TTS audio{audio_duration_str} in {tim.dt:0.6g}s.")
 
-    # Postprocess per-word phoneme data
+    # Postprocess per-word phoneme data: dedup + lipsync filter, then expand diphthong shorthand to canonical IPA.
     if get_metadata:
         logger.info("tts_prepare: postprocessing per-word phoneme data")
         with timer() as tim:
-            # Expand dipthongs to IPA notation.
-            for timestamp in timestamps:
-                for dipthong, ipa_expansion in dipthong_vowel_to_ipa.items():
-                    timestamp["phonemes"] = timestamp["phonemes"].replace(dipthong, ipa_expansion)
+            timings = speech_tts.clean_timestamps(timings, for_lipsync=True)
+            timings = speech_tts.expand_phoneme_diphthongs(timings)
 
             logger.info("tts_prepare: timestamped phonemes:")
-            for record in timestamps:
-                logger.info(f"    {record}")  # DEBUG once more, with feeling! (show timestamps, with phoneme data)
+            for timing in timings:
+                logger.info(f"    {timing}")  # DEBUG once more, with feeling! (show timestamps, with phoneme data)
 
-            if not timestamps:
+            if not timings:
                 logger.info("tts_prepare: Metadata was requested, but the TTS did not generate any phonemes. Cancelled. The text was:")
                 logger.info(text)
                 return None
 
-            result["timestamps"] = timestamps
+            result["timestamps"] = timings
         logger.info(f"tts_prepare: postprocessed per-word phoneme data in {tim.dt:0.6g}s.")
 
     return result
@@ -438,11 +408,12 @@ def tts_speak_lipsynced(instance_id: str,
 
         # Transform word-level timestamp data into a phoneme stream with interpolated timestamps.
         #
-        # The input is in the timestamp format from `tts_prepare`. Example::
+        # The input is the `timestamps` list from `tts_prepare` — a list of
+        # `raven.common.audio.speech.tts.WordTiming` dataclasses. Example::
         #
         # [
-        #  {"word": "Sharon", "start_time": 0.275, "end_time": 0.575, "phonemes": "ʃˈɛɹən"},
-        #  {"word": "Apple", "start_time": 0.575, "end_time": 0.875, "phonemes": "ˈæpᵊl"},
+        #  WordTiming(word="Sharon", phonemes="ʃˈɛɹən", start_time=0.275, end_time=0.575),
+        #  WordTiming(word="Apple",  phonemes="ˈæpᵊl",  start_time=0.575, end_time=0.875),
         #  ...,
         # ]
         #
@@ -472,16 +443,16 @@ def tts_speak_lipsynced(instance_id: str,
             t_end = t0 + dt * rel_end
             return t_start, t_end
         phoneme_stream = []  # [(phoneme0, morph0, t_start, t_end), ...]
-        for record in timestamps:
-            phonemes = record["phonemes"]
+        for timing in timestamps:
+            phonemes = timing.phonemes
             if not phonemes:
-                logger.warning(f"tts_speak_lipsynced.speak: TTS returned empty phonemes for word '{record['word']}'. Skipping this word.")
+                logger.warning(f"tts_speak_lipsynced.speak: TTS returned empty phonemes for word '{timing.word}'. Skipping this word.")
                 continue
-            if record["start_time"] is None or record["end_time"] is None:
-                logger.warning(f"tts_speak_lipsynced.speak: TTS missing timestamps for word '{record['word']}', cannot compute phoneme timings. Skipping this word.")
+            if timing.start_time is None or timing.end_time is None:
+                logger.warning(f"tts_speak_lipsynced.speak: TTS missing timestamps for word '{timing.word}', cannot compute phoneme timings. Skipping this word.")
                 continue
             for idx, phoneme in enumerate(phonemes):  # mˈaɪnd -> m, ˈ, a, ɪ, n, d
-                t_start, t_end = interpolate_timestamp_for_phoneme(record["start_time"], record["end_time"], phonemes, idx)
+                t_start, t_end = interpolate_timestamp_for_phoneme(timing.start_time, timing.end_time, phonemes, idx)
                 if phoneme in phoneme_to_morph:  # accept only phonemes we know about (leaving time gaps in the phoneme stream doesn't matter)
                     phoneme_stream.append((phoneme, phoneme_to_morph[phoneme], t_start, t_end))
         phoneme_start_times = [item[2] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
