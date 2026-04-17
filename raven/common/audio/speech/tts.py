@@ -165,6 +165,14 @@ def load_tts_pipeline(repo_id: str,
         Word-level metadata (`get_metadata=True` in `synthesize`) currently
         supports English only (`"a"` or `"b"`).
 
+    **System-package prerequisite**: Kokoro's phonemizer (Misaki) falls back to
+    `espeak-ng` for out-of-dictionary words. If Misaki fails to initialise or
+    silently mis-pronounces uncommon text, the OS-level `espeak-ng` is probably
+    missing.
+
+    - Linux: `sudo apt install espeak-ng`
+    - Windows: see installation notes at https://github.com/hexgrad/kokoro
+
     Repeat calls with the same `(repo_id, device_string, lang_code)` return
     the cached pipeline; the underlying model is loaded at most once per process.
     """
