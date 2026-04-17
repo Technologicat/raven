@@ -22,6 +22,16 @@ from unpythonic.env import env
 from . import chattree
 from . import chatutil
 
+# Default values for the persistent per-app state flags (the toggles that the Librarian apps
+# expose to the user). `load` uses these to fill any missing keys from an on-disk state file;
+# `save` uses the keys to validate that the state dict has all required flags. Adding or removing
+# a flag means touching this one mapping — `load`, `save`, and the tests derive from it.
+_DEFAULT_FLAGS = {"tools_enabled": True,
+                  "docs_enabled": True,
+                  "speculate_enabled": False,
+                  "avatar_speech_enabled": True,
+                  "avatar_subtitles_enabled": True}
+
 # --------------------------------------------------------------------------------
 # Helper functions
 
@@ -142,7 +152,8 @@ def _refresh_greeting(llm_settings: env,
 
 def load(llm_settings: env,
          datastore_file: Union[str, pathlib.Path],
-         state_file: Union[str, pathlib.Path]) -> Tuple[chattree.Forest, Dict]:
+         state_file: Union[str, pathlib.Path],
+         autosave: bool = True) -> Tuple[chattree.Forest, Dict]:
     """Load chat app state.
 
     `llm_settings`: LLM client settings; this is the return value of `llmclient.setup`.
@@ -153,6 +164,13 @@ def load(llm_settings: env,
     `state_file`: Path to the app state JSON file to load things such as the
                   new-chat HEAD, the current chat HEAD, and various settings.
                   Will be auto-persisted to the same path at app exit.
+
+    `autosave`: If `True` (default), register automatic `atexit` persistence for both the datastore
+                and the app state file. This is the right behaviour for app lifecycle use.
+
+                If `False`, skip both `atexit` registrations. The caller is responsible for calling
+                `save(state_file, state)` and `datastore.save()` explicitly if persistence is wanted.
+                Primarily useful for tests and ad-hoc inspection.
 
     Return value is the tuple `(datastore, state)`, where:
         `datastore`: `chattree.PersistentForest` containing the chat database,
@@ -199,7 +217,7 @@ def load(llm_settings: env,
         logger.info(f"load: Loaded app state from '{mayberel_state_file}' (resolved to '{state_file}').")
 
     # Load datastore
-    datastore = chattree.PersistentForest(datastore_file)  # This autoloads and auto-persists.
+    datastore = chattree.PersistentForest(datastore_file, autosave=autosave)  # This autoloads; auto-persists iff autosave.
     with datastore.lock:
         if datastore.nodes:
             logger.info(f"load: Loaded chat datastore from '{mayberel_datastore_file}' (resolved to '{datastore_file}'). Found {len(datastore.nodes)} chat nodes in datastore.")
@@ -207,27 +225,11 @@ def load(llm_settings: env,
             logger.info("load: No chat nodes in datastore at '{mayberel_datastore_file}' (resolved to '{datastore_file}'). Creating new datastore, will be saved at app exit.")
             _reset_datastore_and_update_state(llm_settings, datastore, state)
 
-    # Set any missing app state to defaults
-    #
-    if "tools_enabled" not in state:
-        state["tools_enabled"] = True
-        logger.info(f"load: Missing key 'tools_enabled' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['tools_enabled']}'")
-
-    if "docs_enabled" not in state:
-        state["docs_enabled"] = True
-        logger.info(f"load: Missing key 'docs_enabled' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['docs_enabled']}'")
-
-    if "speculate_enabled" not in state:
-        state["speculate_enabled"] = False
-        logger.info(f"load: Missing key 'speculate_enabled' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['speculate_enabled']}'")
-
-    if "avatar_speech_enabled" not in state:
-        state["avatar_speech_enabled"] = True
-        logger.info(f"load: Missing key 'avatar_speech_enabled' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['avatar_speech_enabled']}'")
-
-    if "avatar_subtitles_enabled" not in state:
-        state["avatar_subtitles_enabled"] = True
-        logger.info(f"load: Missing key 'avatar_subtitles' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{state['avatar_subtitles']}'")
+    # Set any missing app state flags to their defaults.
+    for key, default in _DEFAULT_FLAGS.items():
+        if key not in state:
+            state[key] = default
+            logger.info(f"load: Missing key '{key}' in '{mayberel_state_file}' (resolved to '{state_file}'), using default '{default}'")
 
     # Refresh the system prompt and AI greeting to the ones configured in `raven.librarian.config`.
     #
@@ -261,9 +263,10 @@ def load(llm_settings: env,
                                system_prompt_node_id=state["system_prompt_node_id"])
 
     # Set up auto-persist for app state
-    atexit.register(functools.partial(save,
-                                      state_file=mayberel_state_file,
-                                      state=state))
+    if autosave:
+        atexit.register(functools.partial(save,
+                                          state_file=mayberel_state_file,
+                                          state=state))
 
     return datastore, state
 
@@ -280,13 +283,7 @@ def save(state_file: Union[str, pathlib.Path],
     """
     # validate
     required_keys = ("new_chat_HEAD",  # HEAD node for starting a new chat
-                     "HEAD",  # current HEAD node (last message of currently open chat)
-                     # various Raven-librarian GUI state
-                     "tools_enabled",
-                     "docs_enabled",
-                     "speculate_enabled",
-                     "avatar_speech_enabled",
-                     "avatar_subtitles_enabled")
+                     "HEAD") + tuple(_DEFAULT_FLAGS.keys())  # current HEAD + per-app GUI flags
     if any(key not in state for key in required_keys):
         raise KeyError(f"At least one required setting is missing from `state`; required keys = {list(sorted(required_keys))}; got existing keys = {list(sorted(state.keys()))}")
 

@@ -1,52 +1,5 @@
 # Deferred TODOs
 
-## Tier 1 REPL tests for `raven.librarian.minichat`
-
-Implement in-process REPL tests for `raven-minichat` using the `scripted_repl` context manager pattern established in a 2026-04-15 cross-project session. The canonical reference implementation lives at `mcpyrate/test/test_126_repl.py` (mcpyrate commit `0fee81b`) — the helper is ~50 lines, inline, and the pattern is: monkey-patch `builtins.input` with a fake that pops scripted lines and raises `EOFError` at end-of-script; swap `sys.stdout` / `sys.stderr` for `io.StringIO` captures; state changes inside `try`, restoration and `.getvalue()` materialization inside `finally` so the helper is atomic from the caller's perspective.
-
-**Why `builtins.input` rather than `sys.stdin`**: `input()` reads through `PyOS_Readline` at the C level (file descriptor 0), not through Python-level `sys.stdin`. Replacing `sys.stdin` silently does nothing and the REPL hangs waiting for real keyboard input. This is the single biggest gotcha in REPL testing and the reason `raven-minichat` has no tests today.
-
-**Important framing (scope of tier 1)**: this is a *REPL-logic test*, not a terminal-UX test.  Monkey-patching `builtins.input` replaces the entire `input()` pathway before `PyOS_Readline` is ever called, so readline's line editor, history, and tab completion (as rendered to the user via key events) will be **0% covered**, not partially covered.  Line-editing regressions, history-recall bugs, and SIGINT-during-readline issues would pass tier 1 silently.  If those ever matter for `minichat`, a tier 2 (subprocess + `pexpect` driving a real pty) is the principled fix — but that's a separate design problem and probably not worth it unless a real regression bites.  For the planned tier 1, this framing just means: don't write assertions that expect tab completion or up-arrow history to work during the test — they won't run.
-
-**Where to put the tests**: new file `raven/librarian/tests/test_minichat.py`. Raven uses pytest (unlike mcpyrate/unpythonic which have their own runners), so the `scripted_repl` helper is used as a plain context manager inside pytest test functions — no adaptation to pytest fixtures is strictly needed, though it could be promoted to a fixture if multiple tests grow to share state.
-
-**Mocking required** — minichat has real dependencies that must be stubbed:
-
-1. **LLM backend (`llmclient`)**: tests must not depend on a live text-generation-webui. Inject a fake `llmclient.chat_completion` (and friends) that returns deterministic canned responses. Either via dependency injection (if the code already supports it — check) or via `unittest.mock.patch` on `raven.librarian.llmclient`.
-2. **Paths in `librarian_config`**: `llmclient_userdata_dir`, `llm_database_dir`, `llm_docs_dir` all point at real filesystem locations. Tests should redirect them to `pytest`'s `tmp_path` fixture so they don't touch the user's home directory or collide between runs.
-3. **`datastore`** (chat-node datastore): minichat persists chat history. Tests should either use an in-memory variant if available, or let it write to `tmp_path` and wipe between tests.
-4. **`retriever`** (RAG / hybridir): if enabled, this loads documents and indexes. Simplest: start tests with `!docs False` in the scripted input, or mock the retriever to return empty results for every query.
-5. **`readline`**: already handled by the three-tier hybrid fallback landed in this same 2026-04-15 session. Tests inherit the graceful-degrade behaviour automatically — no special handling needed.
-
-**Tests to start with** (5–7 is a good starting coverage):
-
-- `test_help_command` — script: `["!help"]`. Expect help text in stdout (tab-completion list, special commands).
-- `test_simple_chat` — script: `["Hello"]`. With the LLM mock returning `"Hi there"`, expect both the user input echo and the canned response to appear in captured stdout.
-- `test_special_command_docs_toggle` — script: `["!docs True", "!docs False"]`. Expect the docs-enabled state to toggle, visible in status messages.
-- `test_model_commands` — script: `["!model", "!models"]` (with `llmclient.list_models` mocked to return a fixed list). Expect both to print.
-- `test_syntax_of_chat_commands` — script: `["!clear", "!history"]`. Verify clear starts a new chat, history shows the empty state.
-- `test_clean_exit` — script: `[]` (empty → EOFError on first input → clean exit). Verify no traceback leaks to stderr.
-- *Stretch*: `test_chat_history_persistence` — submit two messages, verify both appear in `!history`.
-
-**Watch out for**:
-
-- **`atexit.register(persist)`** — minichat registers a chat-database pruning handler at atexit. Under tests, this may fire at pytest teardown and touch real filesystem state. Consider unregistering it manually after each test, or arranging the `datastore` mock so `persist()` is a no-op.
-- **app_state dict** — minichat keeps its state in a module-level `app_state` dict that persists across invocations within a process. If tests share a process, reset `app_state` between tests via a pytest fixture.
-- **Prompt colour codes** — minichat uses a colorizer for the input prompt. The `scripted_repl` helper's `fake_input` echoes whatever prompt string it receives; tests should probably assert on substrings that skip the ANSI escape sequences (e.g., assert `"!help" in output` rather than asserting on the exact prompt rendering).
-
-**Why deferred**: the helper pattern is straightforward, but the per-test mocking surface (LLM, datastore, retriever, paths, atexit) deserves focused design attention rather than being squeezed in at the end of an already-long session. A fresh CC session in raven can pick this up cold using this entry plus the `mcpyrate/test/test_126_repl.py` reference.
-
-**Related work** landed in the same 2026-04-15 session:
-
-- `mcpyrate/test/test_126_repl.py` — canonical tier-1 `scripted_repl` implementation.
-- `mcpyrate` TODO_DEFERRED D5 — tier 2 (subprocess+pty) notes; we might never need it.
-- `mcpyrate` TODO_DEFERRED D6 — macro-import test isolation problem (not relevant to minichat, which doesn't import macros at runtime).
-- `unpythonic` TODO_DEFERRED D10 — tier 2 for `unpythonic.net` client/server.
-- `unpythonic/net/tests/test_client.py` — the sibling of this entry, landed 2026-04-15: tier 1 for `unpythonic.net.client/server`, including a two-REPL-in-one-process variant of the `scripted_repl` helper (needed there because the server *also* calls `builtins.input` internally, so a global monkey-patch would hijack both ends — unpythonic instead uses a private `_input` seam on `client._connect`).
-
-Discovered during the cross-project interactive-REPL testing-strategy design (2026-04-15).
-
-
 ## Replace local utilities with unpythonic 2.1.0 equivalents
 
 `raven/common/utils.py` and `raven/common/numutils.py` contain four utilities that were ported to `unpythonic` in 2.1.0: `environ_override`, `maybe_open`, `UnionFilter`, and `si_prefix`. All are available as top-level imports (`from unpythonic import environ_override, maybe_open, UnionFilter, si_prefix`). The unpythonic versions have bugfixes (si_prefix negative numbers), additional features (si_prefix binary mode, negative SI prefixes), and type annotations. Replace the local copies with imports from unpythonic once raven bumps its unpythonic dependency to >= 2.1.0. The local `# TODO: move to unpythonic` comments mark the exact locations.

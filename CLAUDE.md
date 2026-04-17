@@ -146,9 +146,10 @@ This coupling limits TTS engine choices (most don't expose timestamped phoneme d
 - `raven/visualizer/importer.py` - 1286 lines, pipeline architecture, lower priority but could benefit from stage separation
 
 ### Test coverage
-- Minimal: only `raven/client/tests/test_api.py` and `raven/librarian/tests/test_hybridir.py`
-- Visualizer has **zero tests**
-- **Priority: expand test coverage** (especially before refactoring Visualizer)
+- Library/utility code is reasonably covered: `common/` (numutils, smoothvalue, utils, image/lanczos, image/utils, video/{colorspace,compositor,postprocessor,upscaler}), `common/gui/{viewport_math,xdotwidget/*}`, `client/api`, `papers/*`, `cherrypick/*`, `xdot_viewer/dot_utils`, librarian (`chattree`, `chatutil`, `hybridir`, `appstate`, `scaffold`).
+- Untested librarian layer: `llmclient` (HTTP/SSE-bound, awkward to fake).
+- Visualizer has **zero tests**.
+- **Priority: a first pass of tests on Visualizer** (especially before refactoring).
 
 ## Upstream warning noise in `pytest raven/`
 
@@ -170,7 +171,7 @@ Recommended model: Qwen3-VL-30B-A3B (24GB+ VRAM) or Qwen3-VL-4B (8GB VRAM).
 
 ## Known Issues / TODOs
 - Visualizer refactoring needed (see `raven/visualizer/CLAUDE.md` for plan)
-- Test coverage very low (Visualizer has none)
+- Visualizer has zero tests; librarian `scaffold`/`appstate`/`llmclient` untested
 - DearPyGui_Markdown URL highlight bug (threading-related, untracked)
 - FontAwesome version outdated
 - Hindsight integration pending (PDM dependency conflicts; likely separate container with optional backend, keeping BM25+vector backend as primary)

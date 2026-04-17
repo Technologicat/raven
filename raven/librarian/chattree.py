@@ -697,14 +697,26 @@ class Forest:
 
 class PersistentForest(Forest):
     def __init__(self,
-                 datastore_file: Union[str, pathlib.Path]):
+                 datastore_file: Union[str, pathlib.Path],
+                 autosave: bool = True):
         """Exactly like `Forest`, but with persistent storage as JSON.
 
         `datastore_file`: Where to store the data (for the specific collection you're creating/loading).
+
+        `autosave`: If `True` (default), register `self.save` to be called at interpreter exit via `atexit`.
+                    This is the right behaviour for app lifecycle use — whatever state the datastore is in
+                    when the app exits, that's what gets persisted.
+
+                    If `False`, skip the `atexit` registration. In-memory mutations still work; the caller
+                    is responsible for calling `self.save()` explicitly when (or if) persistence is wanted.
+                    This is primarily useful for tests and for ad-hoc inspection of a real datastore file
+                    from a Python session, where unconditional autosave would silently rewrite the file
+                    at interpreter exit.
         """
         super().__init__()
 
         self.datastore_file = datastore_file
+        self._autosave = autosave
 
         # Load persisted state, if any.
         self._load()
@@ -714,16 +726,23 @@ class PersistentForest(Forest):
         # In `Forest`, we are extra careful in any operations that edit the data, to check and raise errors first,
         # before making any edits. Hence whatever the state is at shutdown, it is the latest valid state, and
         # it is always safe to persist it.
-        atexit.register(self._save)
+        if autosave:
+            atexit.register(self.save)
 
-    def _save(self) -> None:
-        """Save the forest to a file, so that it can be reloaded later with `_load`.
+    def _get_autosave(self) -> bool:
+        return self._autosave
+    autosave = property(fget=_get_autosave,
+                        doc="Whether this instance auto-persists at interpreter exit via `atexit`. Read-only; determined at construction time (changing it post-construction would not affect the already-registered hook, so we prevent the trap by making it immutable).")
 
-        This is called automatically at app exit time.
+    def save(self) -> None:
+        """Save the forest to its `datastore_file`, as JSON.
+
+        With `autosave=True` (the default), this is called automatically at interpreter exit via `atexit`.
+        With `autosave=False`, the caller must invoke this explicitly if persistence is wanted.
         """
         with self.lock:
             absolute_path = self.datastore_file.expanduser().resolve()
-            logger.info(f"PersistentForest._save: Saving datastore to '{str(self.datastore_file)}' (resolved to '{str(absolute_path)}').")
+            logger.info(f"PersistentForest.save: Saving datastore to '{str(self.datastore_file)}' (resolved to '{str(absolute_path)}').")
 
             directory = self.datastore_file.parent
             common_utils.create_directory(directory)
@@ -731,7 +750,7 @@ class PersistentForest(Forest):
             with open(absolute_path, "w", encoding="utf-8") as json_file:
                 json.dump(self.nodes, json_file, indent=2)
 
-            logger.info("PersistentForest._save: All done.")
+            logger.info("PersistentForest.save: All done.")
 
     def _load(self) -> None:
         """Load the forest from a file.

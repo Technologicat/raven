@@ -612,7 +612,7 @@ class TestPersistentForestRoundtrip:
         root = pf1.create_node({"role": "system", "content": "hello"}, parent_id=None)
         child = pf1.create_node({"role": "user", "content": "world"}, parent_id=root)
         r2 = pf1.add_revision(child, {"role": "user", "content": "world (edited)"}, revision_name="typo fix")
-        pf1._save()
+        pf1.save()
 
         # --- Load into a fresh instance ---
         pf2 = PersistentForest(datastore_file=pathlib.Path(filepath))
