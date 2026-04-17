@@ -217,22 +217,25 @@ def _audio_duration(audio: np.ndarray, sample_rate: int) -> float:
 
 
 def _is_word(s: str) -> bool:
-    """True if `s` is a lipsync-meaningful token (not an incidental single-char glyph)."""
-    # Multi-char strings pass through unconditionally. Single-char: alphanumeric or a common
-    # punctuation mark (used to close the mouth between phrases).
+    """True if `s` is a lipsync-meaningful token (not an incidental single-char glyph).
+
+    Multi-char string -> `True` unconditionally.
+
+    Single-char string -> `True` if alphanumeric, or a common punctuation mark
+                          (the latter are used in lipsync, to close the avatar's
+                           mouth between phrases).
+    """
     return len(s) > 1 or s.isalnum() or s in ",.!?:;"
 
 
 def clean_timestamps(timings: list[WordTiming], for_lipsync: bool = True) -> list[WordTiming]:
     """Filter raw Kokoro word metadata.
 
-    Two filters compose this:
+    Consists of two filters:
 
     - **Always**: drop consecutive entries with the same `start_time`. Originally
       seen with Kokoro-FastAPI; not yet confirmed with the in-process Kokoro path
-      but kept as a precaution — cost is one comparison per entry. Not lipsync-
-      specific; the duplicate timestamps are engine-level noise regardless of
-      downstream use.
+      but kept as a precaution — cost is one comparison per entry.
 
     - **Only when `for_lipsync=True`**: drop incidental single-char tokens that
       aren't letters, digits, or common end-of-phrase punctuation (``,.!?:;``).
@@ -261,7 +264,9 @@ def synthesize_iter(pipeline: TTSPipeline,
                     text: str,
                     speed: float = 1.0,
                     get_metadata: bool = True) -> Iterator[TTSSegment]:
-    """Yield one `TTSSegment` per Kokoro output segment, in order.
+    """Synthesize `text` as an iterable of `TTSSegment` objects.
+
+    Yields one `TTSSegment` per Kokoro output segment, in order.
 
     Timestamps in `segment.word_metadata` are **absolute** (from start of whole audio),
     not segment-relative as Kokoro natively emits them — `t0` is accumulated across
@@ -334,7 +339,7 @@ def synthesize(pipeline: TTSPipeline,
     flatten metadata, compute duration. Use this when you want one blob
     of audio + one flat metadata list (the current HTTP server path).
 
-    For future streaming consumers, prefer `synthesize_iter`.
+    For streaming consumers, prefer `synthesize_iter`.
     """
     segments = list(synthesize_iter(pipeline, voice, text, speed=speed, get_metadata=get_metadata))
 
