@@ -42,7 +42,8 @@ def linear_to_dBFS(level: Union[float, int, np.int16]) -> float:
         raise TypeError(f"linear_to_dBFS: expected `level` to be float or s16 int; got {type(level)}.")
     # We use "20" here because `level` is the signal amplitude, which is a root-power quantity (P ~ level²).
     #     https://en.wikipedia.org/wiki/Decibel#Root-power_(field)_quantities
-    dB = 20 * np.log10(abs(level) / fs)  # yes, -np.inf is fine (and the correct answer) if `level` is exactly zero
+    with np.errstate(divide="ignore"):  # -np.inf is fine (and the correct answer) when `level` is exactly zero
+        dB = 20 * np.log10(abs(level) / fs)
     return dB
 
 def dBFS_to_linear(dB: float, format: type) -> Union[float, int]:
