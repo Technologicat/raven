@@ -36,7 +36,10 @@ Discovered during speech-extract-to-common discussion (2026-04-17).
 
 The avatar animator currently lives only in `raven.server.modules.avatar` under AGPL. THA3 upstream (the underlying ML model, vendored in `raven/vendor/tha3/`) is actually MIT — so the AGPL tax comes from Raven-side extensions, not the model itself.
 
-A client-local animator would be valuable even though the server one stays: it would skip the network transport plus QOI encode/decode round-trip, which dominates latency on non-localhost server setups. It would also enable the BSD Raven apps (librarian, cherrypick, visualizer, xdot viewer, …) to use the avatar without the AGPL reach.
+A client-local animator would be valuable even though the server one stays:
+
+- It skips the network transport plus QOI encode/decode round-trip, which dominates latency on non-localhost server setups.
+- It extends the "server-optional" story (the goal behind the existing MaybeRemote pattern) to the avatar: a Raven app running standalone could still show the avatar, without requiring the server to be running.
 
 **External / shared-authorship code on the server side** (can't be unilaterally relicensed):
 
