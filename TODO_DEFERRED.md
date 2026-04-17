@@ -42,23 +42,25 @@ Discovered during step 5 review (2026-04-18).
 
 ## Generalize `raven.client.tts.tts_prepare` for local-mode offline precomputation
 
-`tts_prepare` is the offline-precomputation helper for lipsync — it runs TTS on CPU while the previous sentence is still speaking, so perceived latency stays bounded by the first-sentence synthesis time rather than the full sequence. Currently it's HTTP-only (calls the server's `/api/tts/speak`).
+`tts_prepare` is the offline-precomputation helper for lipsync — it runs TTS on CPU while the previous sentence is still speaking, so perceived latency stays bounded by the first-sentence synthesis time rather than the full sequence. Currently it's HTTP-only (calls the server's `/api/tts/speak`), and duplicates logic that already exists at the common layer (timestamp cleanup).
 
-Worth lifting to work uniformly across local / remote modes. Natural home: `MaybeRemote.TTS.prepare(text, voice, ...)` that returns the same precomputed structure (audio + cleaned timestamps) regardless of mode, so callers don't care which path.
+Target layout — pure engine pieces stay in `raven.common.audio.speech.tts`, stateful caching lives at the MaybeRemote layer:
 
-Side benefit: DRY — the current `tts_prepare` inlines a copy of the timestamp cleanup logic. After generalization it would just use `speech_tts.clean_timestamps`.
+- In `raven.common.audio.speech.tts`, add:
+  - A module constant table `dipthong_vowel_to_ipa` (move from `raven.client.tts`). Misaki shorthand → canonical IPA, a Kokoro/Misaki engine concern.
+  - `expand_phoneme_diphthongs(timings: list[WordTiming]) -> list[WordTiming]` — applies the table above. Reusable post-processing helper.
+  - `prepare(pipeline, voice, text, speed, get_metadata) -> PreparedSpeech` (or a decorated `TTSResult`) — calls `synthesize`, applies `expand_phoneme_diphthongs` + `clean_timestamps(for_lipsync=True)`. One-stop "give me speech ready for the lipsync driver." No caching at this layer.
+- In `raven.client.mayberemote.TTS`, add `prepare(text, voice, speed, get_metadata)` method:
+  - Remote mode: reuses the existing HTTP path (via `_remote_tts_speak_raw`), applies the same common-layer post-processing so the result structure matches the local path byte-for-byte.
+  - Local mode: delegates straight to `speech_tts.prepare`.
+  - Wrap the method (or its body) in `functools.lru_cache(maxsize=128)` — the caching is user-facing and deserves a stable home tied to the service instance.
+- Rewrite `raven.client.tts.tts_prepare` as a thin adapter that calls `MaybeRemote.TTS.prepare` and converts the result to the legacy dict format (`{"audio_bytes": ..., "timestamps": [dicts]}`). Keeps the existing lipsync driver working unchanged during the transition.
 
-Not urgent; the current `tts_prepare` works fine for the server-mode use case. Lift when the client-local animator work touches this area anyway.
+Side benefit captured by this layout: the inline `clean_timestamps` duplicate and the diphthong expansion in `raven.client.tts._tts_prepare` both disappear in favour of the common-layer helpers.
 
-Discovered during step 5 review (2026-04-18).
+Not urgent — the current `tts_prepare` works fine for the server-mode use case. Lift when the client-local animator work touches this area anyway.
 
-## DRY: `raven.client.tts._tts_prepare` inlines its own timestamp cleanup
-
-`raven.client.tts._tts_prepare` has an inline `clean_timestamps` (dict-based) that duplicates the logic in `raven.common.audio.speech.tts.clean_timestamps` (WordTiming-based). Same rules: drop duplicate start_times, drop incidental single-char non-punctuation.
-
-Tied to the item above: when `tts_prepare` is generalized into `MaybeRemote.TTS.prepare`, the inline copy disappears in favour of the common-layer helper. Filed separately because someone might fix it before tackling the bigger generalization.
-
-Discovered during step 5 review (2026-04-18).
+Discovered during step 5 review (2026-04-18); design refined to "one-file common layer + MaybeRemote caching wrapper" during deferred-items follow-up.
 
 ## Additional `MaybeRemoteService` candidates (classify, translate)
 
