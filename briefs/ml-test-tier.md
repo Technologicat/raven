@@ -107,18 +107,18 @@ Test runtime budget: with CPU inference on small models, the full suite should l
 
 ### 5. Run environment
 
-Before running tests locally:
+The venv and `env.sh` (CUDA paths for pip-installed `nvidia/*` libs) are sourced by the user **before** starting Claude Code — CC inherits `VIRTUAL_ENV`, `LD_LIBRARY_PATH`, and `PATH`, so no `source` calls are needed from CC's side.  (`source` would trigger a permission prompt on every invocation, which is why we keep it out of the CC session.)
+
+Once CC is running, just call `pytest` directly:
 
 ```bash
-source .venv/bin/activate
-source env.sh       # CUDA paths for pip-installed nvidia/* libs (needed even if models run on CPU, since torch probes CUDA at import)
 pytest                                      # full suite including ML tier
 pytest -m "not ml"                          # iterate on pure-logic bugs quickly
 pytest -m ml                                # just after touching nlptools
 pytest --cov --cov-branch --cov-report=term # full coverage, ML tier included
 ```
 
-`env.sh` is idempotent; sourcing it again in a session already set up is a no-op (except for echoing the ready message).
+Sanity-check at the start of the session: `python -c "import torch; print(torch.cuda.is_available())"` should print `True` if the user set up the environment correctly.  If it prints `False` and tests that need GPU start failing, flag it — it likely means CC was started without `env.sh` sourced, and the user needs to restart the session.
 
 ## Out of scope (for this pass)
 
