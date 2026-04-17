@@ -18,7 +18,7 @@ in the server wrapper at `raven.server.modules.tts`. Client-side
 remote/local dispatch lives in `raven.client.mayberemote.TTS`.
 """
 
-__all__ = ["KOKORO_SAMPLE_RATE",
+__all__ = ["SAMPLE_RATE",
            "WordTiming",
            "TTSSegment",
            "TTSResult",
@@ -44,10 +44,12 @@ import kokoro
 from ...hfutil import maybe_install_models
 
 
-# Kokoro's native output sample rate. Documented in Kokoro's own README.
-# Kept as a module constant so callers can reference it by name rather than
-# reading it off `TTSPipeline.sample_rate` when they don't have a pipeline handy.
-KOKORO_SAMPLE_RATE = 24000
+# Native output sample rate of the TTS engine (currently Kokoro, which runs at 24 kHz —
+# documented in Kokoro's own README). Exposed as a module constant so callers can reference
+# it by name rather than reading it off `TTSPipeline.sample_rate` when they don't have a
+# pipeline handy. If the engine is ever swapped, update this value and any fixed-rate
+# assumptions that follow.
+SAMPLE_RATE = 24000
 
 
 @dataclass
@@ -76,7 +78,7 @@ class TTSSegment:
              (Kokoro produces torch tensors; `synthesize_iter` does the one
              `.cpu().numpy()` per segment at this boundary).
 
-    `sample_rate`: always `KOKORO_SAMPLE_RATE` today. Stored per-segment so
+    `sample_rate`: always `SAMPLE_RATE` today. Stored per-segment so
                    a future TTS engine could vary rate per segment without
                    breaking this interface.
 
@@ -127,7 +129,7 @@ class TTSPipeline:
     `lang_code`: e.g. `"a"` for American English, `"b"` for British.
                  See `load_tts_pipeline` for the full list.
 
-    `sample_rate`: mirror of `KOKORO_SAMPLE_RATE`, for API symmetry with `STTModel`.
+    `sample_rate`: mirror of `SAMPLE_RATE`, for API symmetry with `STTModel`.
     """
     kpipeline: kokoro.KPipeline
     modelsdir: str
@@ -180,7 +182,7 @@ def load_tts_pipeline(repo_id: str,
     pipeline = TTSPipeline(kpipeline=kpipeline,
                            modelsdir=modelsdir,
                            lang_code=lang_code,
-                           sample_rate=KOKORO_SAMPLE_RATE)
+                           sample_rate=SAMPLE_RATE)
 
     _tts_pipelines[cache_key] = pipeline
     return pipeline

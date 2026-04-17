@@ -32,7 +32,7 @@ def voice(pipeline) -> str:
 
 class TestLoad:
     def test_pipeline_has_expected_sample_rate(self, pipeline):
-        assert pipeline.sample_rate == speech_tts.KOKORO_SAMPLE_RATE == 24000
+        assert pipeline.sample_rate == speech_tts.SAMPLE_RATE == 24000
 
     def test_pipeline_modelsdir_exists(self, pipeline):
         import os

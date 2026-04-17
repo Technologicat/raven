@@ -385,7 +385,7 @@ class TTS(MaybeRemoteService):
         self.device_string = device_string
         self.lang_code = lang_code
 
-        self.sample_rate = speech_tts.KOKORO_SAMPLE_RATE
+        self.sample_rate = speech_tts.SAMPLE_RATE
 
         if "tts" in self.server_modules:
             logger.info(f"TTS.__init__: Using `tts` module on Raven-server at '{client_config.raven_server_url}'.")
