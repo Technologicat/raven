@@ -293,7 +293,9 @@ class STT(MaybeRemoteService):
                    language: Optional[str] = None) -> str:
         """Transcribe mono `audio` to text.
 
-        `audio`: rank-1 float numpy array, mono.
+        `audio`: rank-1 float numpy array, mono, samples in [-1, 1] (standard float
+                 audio convention; the remote path scales to s16 at the transport
+                 boundary, the local path feeds Whisper's processor directly).
 
         `sample_rate`: sample rate of `audio`, any rate. Rate conversion to Whisper's
                        native 16 kHz happens inside the engine (locally via

@@ -93,8 +93,9 @@ def transcribe(stt_model: STTModel,
                progress_callback: Optional[Callable[[int, int], None]] = None) -> str:
     """Transcribe mono audio to text.
 
-    `audio`: rank-1 float numpy array, mono. Any sample rate — this function
-             resamples to the model's native rate (Whisper is 16 kHz) via
+    `audio`: rank-1 float numpy array, mono, samples in [-1, 1] (standard float
+             audio convention). Any sample rate — this function resamples to the
+             model's native rate (Whisper is 16 kHz) via
              `raven.common.audio.resample.resample` if they don't match.
 
     `sample_rate`: the sample rate of `audio`. Must match the actual rate of the
