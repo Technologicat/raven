@@ -20,23 +20,76 @@
 ## Proposed module layout
 
 ```
-raven/common/audio/speech/
-├── __init__.py
-├── tts.py       # Kokoro wrapper
-├── stt.py       # Whisper wrapper
-└── tests/
+raven/common/audio/
+├── codec.py         # existing
+├── player.py        # existing
+├── recorder.py      # existing
+├── utils.py         # existing
+├── resample.py      # NEW — torchaudio-backed, device-agnostic resampler
+└── speech/
     ├── __init__.py
-    └── test_tts_stt_roundtrip.py   # ml-tier, in-process
+    ├── tts.py       # Kokoro wrapper
+    ├── stt.py       # Whisper wrapper
+    └── tests/
+        ├── __init__.py
+        └── test_tts_stt_roundtrip.py   # ml-tier, in-process
 ```
+
+### `raven.common.audio.resample`
+
+New companion module for `audio.codec`, needed because TTS (Kokoro @ 24 kHz) and STT (Whisper @ 16 kHz) run at different sample rates and the round-trip test path feeds one into the other in-process.  Today the mismatch is papered over by `audio_codec.decode(stream, target_sample_rate=...)` on the server side (PyAV resamples as a side-effect of container decoding), but that helper takes a filelike, not a numpy array — useless for the in-process numpy → numpy path.
+
+Backend: `torchaudio.functional.resample`.  Rationale over `scipy.signal.resample_poly`:
+
+- **Device-agnostic.**  Operates on whatever device the input tensor lives on.  Aligns with the Raven convention of running heavy signal processing on the GPU when possible.
+- **Future-proofs** a GPU-flow-through path (e.g. streaming lipsync keeping audio on device between TTS and audio output) — the resampler doesn't change, only the caller.
+- `torchaudio` is a small addition (~20 MB wheel) next to `torch`, already a direct dep.
+
+For today's TTS→STT round-trip the audio is already on CPU (Kokoro output is moved host-side inside `synthesize_iter` — see below), so GPU resampling would be a net slowdown.  The point of choosing torchaudio is the option, not the default.
+
+API — polymorphic on input type, with a constrained `TypeVar` so the type checker tracks "same type in, same type out":
+
+```python
+from typing import Literal, TypeVar
+
+Quality = Literal["default", "kaiser_fast", "kaiser_best"]
+AudioT = TypeVar("AudioT", np.ndarray, torch.Tensor)
+
+def resample(audio: AudioT,
+             from_rate: int,
+             to_rate: int,
+             quality: Quality = "default") -> AudioT:
+    """Resample a 1-D float audio signal.
+
+    Returns the same type as input:
+      - numpy in  → numpy out (torch stays on CPU under the hood)
+      - tensor in → tensor out on the same device
+
+    `quality`:
+      "default"     — sinc_interp_hann, width=6.   Fast; speech-grade.
+      "kaiser_fast" — sinc_interp_kaiser, beta≈8.56, width=16.   librosa "fast" preset.
+      "kaiser_best" — sinc_interp_kaiser, beta≈14.77, width=64.  librosa "best" preset; music-grade.
+
+    No-op when `from_rate == to_rate`.
+    """
+```
+
+No caching or model loading — pure function.  The `quality` preset is there so the helper can carry its weight beyond speech (music, upscaled audio in cel animations, anything future).
 
 ### `raven.common.audio.speech.tts`
 
-Proposed API:
+Proposed API — two layers, so streaming is a natural extension later:
 
 ```python
 def load_tts_pipeline(repo_id: str, device_string: str, lang_code: str = "a") -> TTSPipeline: ...
 
 def get_voices(pipeline: TTSPipeline) -> list[str]: ...
+
+def synthesize_iter(pipeline: TTSPipeline,
+                    voice: str,
+                    text: str,
+                    speed: float = 1.0,
+                    get_metadata: bool = True) -> Iterator[TTSSegment]: ...
 
 def synthesize(pipeline: TTSPipeline,
                voice: str,
@@ -45,27 +98,47 @@ def synthesize(pipeline: TTSPipeline,
                get_metadata: bool = True) -> TTSResult: ...
 ```
 
-Where `TTSResult` is a plain dataclass / `TypedDict`:
+`synthesize_iter` yields one `TTSSegment` per Kokoro segment.  `synthesize` is a thin wrapper that concatenates the segments into a single `TTSResult`.  Current server usage (one big audio response per request) calls `synthesize`; a future streaming endpoint can consume `synthesize_iter` directly.
+
+All four container types in this module are `@dataclass` (stdlib) — they are pure data records with no methods.  This is a local deviation from Raven's prevailing plain-class style, justified because dataclasses are a genuinely better fit here and uniform treatment inside the module beats matching the fleet default.
 
 ```python
 @dataclass
-class TTSResult:
-    audio: np.ndarray                    # rank-1 s16, shape [n_samples]
-    sample_rate: int                     # Kokoro = 24000
-    duration: float                      # seconds
-    word_metadata: list[WordTiming] | None   # None if get_metadata=False
+class TTSPipeline:
+    kpipeline: kokoro.KPipeline
+    modelsdir: str            # needed by get_voices — Kokoro doesn't expose it
+    lang_code: str
+    sample_rate: int          # 24000 for Kokoro
 ```
+
+Caching: follow the `nlptools._spacy_pipelines = {}` pattern — cache key `(repo_id, device_string, lang_code)`.
 
 ```python
 @dataclass
 class WordTiming:
     word: str                 # raw, NOT URL-encoded — encoding is a transport concern
     phonemes: str             # raw, NOT URL-encoded
-    start_time: float | None  # seconds from audio start
+    start_time: float | None  # seconds from start of whole audio (absolute, not segment-relative)
     end_time: float | None
+
+@dataclass
+class TTSSegment:
+    audio: np.ndarray                          # rank-1 float32 in [-1, 1], shape [n_samples]
+    sample_rate: int                           # Kokoro = 24000
+    t0: float                                  # offset of this segment from start of whole audio, seconds
+    word_metadata: list[WordTiming] | None     # None if get_metadata=False; timings already absolute
+
+@dataclass
+class TTSResult:
+    audio: np.ndarray                          # rank-1 float32 in [-1, 1], concatenated
+    sample_rate: int
+    duration: float                            # seconds
+    word_metadata: list[WordTiming] | None
 ```
 
-Caching: follow the `nlptools._spacy_pipelines = {}` pattern — cache key `(repo_id, device_string, lang_code)`.
+Audio is float32 in the common layer — Kokoro's native output.  The server wrapper casts to s16 right before `audio_codec.encode` (transport concern).  This avoids a pointless `float→s16→float` round-trip when the common-layer API is consumed in-process (e.g. by the STT test fixture).
+
+**Absolute timestamps throughout.**  Kokoro emits segment-relative timestamps.  `synthesize_iter` accumulates `t0` internally and rewrites every `WordTiming.start_time` / `end_time` to whole-audio-absolute before yielding.  Consumers of either API get the same convention — a streaming consumer does not have to re-implement accumulation.
 
 ### `raven.common.audio.speech.stt`
 
@@ -82,7 +155,16 @@ def transcribe(model: STTModel,
                language: str | None = None) -> str: ...
 ```
 
-`STTModel` wraps the (`transformers.AutoModelForSpeechSeq2Seq`, `transformers.AutoProcessor`, `torch.device`, `dtype`) tuple — same small-dataclass style as `nlptools._Translator`.
+```python
+@dataclass
+class STTModel:
+    model: transformers.AutoModelForSpeechSeq2Seq
+    processor: transformers.AutoProcessor
+    device: torch.device
+    dtype: torch.dtype
+```
+
+An optional `progress_callback: Callable[[int, int], None] | None` parameter on `transcribe` lets the server wrapper plug in its `tqdm` adapter without the common layer growing a UX dependency.
 
 The `transcribe` signature takes a decoded numpy array, not a filelike — audio container decoding is `audio.codec.decode`'s job, not STT's.  The server wrapper continues to call `audio_codec.decode` before handing off to `transcribe`.
 
@@ -94,7 +176,9 @@ Only the HTTP-facing parts:
 def text_to_speech(voice, text, speed, format, get_metadata, stream) -> flask.Response:
     result = speech_tts.synthesize(_pipeline, voice, text, speed, get_metadata=get_metadata)
 
-    audio_bytes_or_streamer = audio_codec.encode(result.audio, format=format, sample_rate=result.sample_rate, stream=stream)
+    # float32 [-1, 1] -> s16 (transport format)
+    audio_s16 = np.asarray(result.audio * 32767.0, dtype=np.int16)
+    audio_bytes_or_streamer = audio_codec.encode(audio_s16, format=format, sample_rate=result.sample_rate, stream=stream)
 
     headers = {"Content-Type": f"audio/{format}",
                "x-audio-duration": result.duration}
@@ -109,7 +193,9 @@ def text_to_speech(voice, text, speed, format, get_metadata, stream) -> flask.Re
     return flask.Response(audio_bytes_or_streamer, headers=headers)
 ```
 
-The URL-encoding, the `x-*` header packing, the audio-format encoding, the Flask `Response` construction — all belong in the server wrapper.  They are transport concerns, not engine concerns.
+The URL-encoding, the `x-*` header packing, the float→s16 cast, the audio-format encoding, the Flask `Response` construction — all belong in the server wrapper.  They are transport concerns, not engine concerns.
+
+(The current in-process consumer of `word_metadata` is the **lipsync driver** in `raven/client/tts.py`, which today parses the URL-encoded `x-word-timestamps` header.  Once the common layer exists, a future local-mode lipsync path can consume `WordTiming` objects directly, with no URL-encoding on either end.)
 
 ### What stays in `raven.server.modules.stt`
 
@@ -156,9 +242,9 @@ def test_tts_stt_roundtrip_recognizes_word(tts, stt):
     original = "The quick brown fox jumps over the lazy dog."
     synth = speech_tts.synthesize(tts, voice=speech_tts.get_voices(tts)[0], text=original, get_metadata=False)
 
-    # STT wants float mono at the model's native sample rate — resample if needed.
-    audio_f = synth.audio.astype(np.float32) / 32767.0
-    transcribed = speech_stt.transcribe(stt, audio=audio_f, sample_rate=synth.sample_rate, prompt=original, language="en")
+    # Common-layer TTS already emits float32 mono — feed straight into STT.
+    # (If sample rates differ between Kokoro and the Whisper feature extractor, resample here.)
+    transcribed = speech_stt.transcribe(stt, audio=synth.audio, sample_rate=synth.sample_rate, prompt=original, language="en")
 
     low = transcribed.lower()
     # At least one recognizable noun from the original should survive the round-trip.
@@ -203,7 +289,8 @@ The existing `raven/client/tests/test_api.py::TestStt::test_tts_stt_roundtrip` s
 ## Sequencing
 
 1. `briefs/speech-extract-to-common.md` lands (this document).
-2. Extract STT first: `raven/common/audio/speech/stt.py` + server wrapper update + test.  Commit.
-3. Extract TTS: `raven/common/audio/speech/tts.py` + server wrapper update + test.  Commit.
-4. Add `MaybeRemoteService` subclasses (`TTS`, `STT`).  Commit.
-5. Manual smoke test: Librarian + Avatar in both remote (server on) and local (server off) modes; confirm lipsync still works.
+2. Add `raven/common/audio/resample.py` + tests + `torchaudio` dependency.  Commit.  (Needed before the round-trip test in step 3 can run.)
+3. Extract STT first: `raven/common/audio/speech/stt.py` + server wrapper update + test.  Commit.
+4. Extract TTS: `raven/common/audio/speech/tts.py` + server wrapper update + test.  Commit.
+5. Add `MaybeRemoteService` subclasses (`TTS`, `STT`).  Commit.
+6. Manual smoke test: Librarian + Avatar in both remote (server on) and local (server off) modes; confirm lipsync still works.
