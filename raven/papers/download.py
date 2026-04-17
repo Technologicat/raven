@@ -10,7 +10,14 @@ Thanks to Qwen3-30B-A3B-Thinking-2507 and the documentation:
 
 from __future__ import annotations
 
-__all__ = ["get_paper_metadata", "download_papers", "extract_ids_from_bib", "main"]
+__all__ = [
+    "format_filename",
+    "parse_metadata_response",
+    "get_paper_metadata",
+    "download_papers",
+    "extract_ids_from_bib",
+    "main",
+]
 
 import argparse
 import os
@@ -37,65 +44,21 @@ CHECKMARK = "\u2713"  # ✓
 CROSS = "\u2717"      # ✗
 
 
-def get_paper_metadata(arxiv_id: str,
-                       title_length_limit: int = 128) -> Dict[str, str]:
-    """Fetch and parse metadata from arXiv API, including PDF link."""
-    api_url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
+def format_filename(arxiv_id: str,
+                    authors: list[str],
+                    original_year: str,
+                    version_year: str | None,
+                    title: str,
+                    version: str,
+                    title_length_limit: int = 128) -> tuple[str, str, str]:
+    """Build the canonical output filename for an arXiv paper.
 
-    response = requests.get(api_url)
-    response.raise_for_status()
-
-    ns = {"atom": "http://www.w3.org/2005/Atom"}
-    root = ET.fromstring(response.content)
-
-    # Descend into entry element
-    entry = root.find(".//atom:entry", ns)
-
-    # Extract title
-    title_elem = entry.find(".//atom:title", ns)
-    title = title_elem.text.strip() if title_elem is not None else "untitled"
-
-    # Extract authors
-    authors = []
-    for author_elem in entry.findall(".//atom:author", ns):
-        name_elem = author_elem.find("atom:name", ns)
-        if name_elem is not None:
-            authors.append(name_elem.text.strip())
-
-    # Extract both years (original posting, current revision)
-    published_elem = entry.find(".//atom:published", ns)
-    updated_elem = entry.find(".//atom:updated", ns)
-
-    original_year = "unknown"
-    version_year = None
-
-    if published_elem is not None and published_elem.text:
-        original_year = published_elem.text[:4]
-
-    if updated_elem is not None and updated_elem.text:
-        version_year = updated_elem.text[:4]
-
-    # Extract abstract
-    summary_elem = entry.find(".//atom:summary", ns)
-    abstract = summary_elem.text.strip() if summary_elem is not None else "No abstract available"
-
-    # Extract PDF link
-    pdf_url = None
-    for link_elem in entry.findall(".//atom:link", ns):
-        if link_elem.get("title") == "pdf" and link_elem.get("rel") == "related":
-            pdf_url = link_elem.get("href")
-            break
-
-    # Extract version from ID URL
-    # Example URL: http://arxiv.org/abs/hep-ex/0307015v1
-    id_elem = entry.find(".//atom:id", ns)
-    version = "v1"  # default version
-    if id_elem is not None and "http://arxiv.org/abs/" in id_elem.text:
-        abs_url = id_elem.text
-        if "v" in abs_url:
-            version = f"v{abs_url.split('v')[-1].split('/')[0]}"
-
-    # Format filename
+    Returns ``(author_str, resolved_id, filename)`` where *filename* has the
+    shape ``"Authors (Year[, revised Year2]) - Title - arxivid.pdf"`` and
+    *resolved_id* is the input *arxiv_id* with its version suffix replaced
+    by the supplied *version* (so bare IDs get canonicalized to include
+    their version, and a mismatched version is overwritten).
+    """
     author_str = " and ".join(authors[:2])
     if len(authors) > 2:
         author_str += " et al."
@@ -118,6 +81,61 @@ def get_paper_metadata(arxiv_id: str,
     safe_resolved_id = "".join(c for c in safe_resolved_id if c.isalnum() or c in stringmaps.filename_safe_nonalphanum)
 
     filename = f"{author_str} ({original_year}{version_year_str}) - {safe_title} - {safe_resolved_id}.pdf"
+    return author_str, resolved_id, filename
+
+
+def parse_metadata_response(xml_content: bytes,
+                            arxiv_id: str,
+                            title_length_limit: int = 128) -> Dict[str, str]:
+    """Parse an arXiv API Atom response into our internal metadata dict.
+
+    Pure function — no network access.  *xml_content* is the raw body from
+    a call to ``http://export.arxiv.org/api/query?id_list=<arxiv_id>``;
+    *arxiv_id* is the original query ID, used to derive ``resolved_id``.
+    """
+    ns = {"atom": "http://www.w3.org/2005/Atom"}
+    root = ET.fromstring(xml_content)
+    entry = root.find(".//atom:entry", ns)
+
+    title_elem = entry.find(".//atom:title", ns)
+    title = title_elem.text.strip() if title_elem is not None else "untitled"
+
+    authors = []
+    for author_elem in entry.findall(".//atom:author", ns):
+        name_elem = author_elem.find("atom:name", ns)
+        if name_elem is not None:
+            authors.append(name_elem.text.strip())
+
+    published_elem = entry.find(".//atom:published", ns)
+    updated_elem = entry.find(".//atom:updated", ns)
+
+    original_year = "unknown"
+    version_year = None
+    if published_elem is not None and published_elem.text:
+        original_year = published_elem.text[:4]
+    if updated_elem is not None and updated_elem.text:
+        version_year = updated_elem.text[:4]
+
+    summary_elem = entry.find(".//atom:summary", ns)
+    abstract = summary_elem.text.strip() if summary_elem is not None else "No abstract available"
+
+    pdf_url = None
+    for link_elem in entry.findall(".//atom:link", ns):
+        if link_elem.get("title") == "pdf" and link_elem.get("rel") == "related":
+            pdf_url = link_elem.get("href")
+            break
+
+    # Extract version from entry ID URL, e.g. http://arxiv.org/abs/hep-ex/0307015v1
+    id_elem = entry.find(".//atom:id", ns)
+    version = "v1"
+    if id_elem is not None and "http://arxiv.org/abs/" in id_elem.text:
+        abs_url = id_elem.text
+        if "v" in abs_url:
+            version = f"v{abs_url.split('v')[-1].split('/')[0]}"
+
+    author_str, resolved_id, filename = format_filename(
+        arxiv_id, authors, original_year, version_year, title, version, title_length_limit
+    )
 
     return {
         "original_id": arxiv_id,
@@ -131,6 +149,15 @@ def get_paper_metadata(arxiv_id: str,
         "pdf_url": pdf_url,
         "filename": filename,
     }
+
+
+def get_paper_metadata(arxiv_id: str,
+                       title_length_limit: int = 128) -> Dict[str, str]:
+    """Fetch and parse metadata from arXiv API, including PDF link."""
+    api_url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
+    response = requests.get(api_url)
+    response.raise_for_status()
+    return parse_metadata_response(response.content, arxiv_id, title_length_limit)
 
 
 def download_papers(arxiv_ids: List[str],
@@ -228,7 +255,7 @@ def extract_ids_from_bib(bib_path: str) -> list[str]:
     return deduplicate_arxiv_ids(raw_ids)
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(
         description="Download arXiv papers by their IDs, and name the files "
         "automatically using the metadata. If an ID specifies a version, "
