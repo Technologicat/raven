@@ -10,8 +10,7 @@ Needed because different speech engines run at different native sample rates
 path passes audio between them as plain numpy arrays.
 
 Also useful more generally — the `quality` preset covers both speech-grade
-(fast) and music-grade (slow) resampling, so this helper can carry its
-weight beyond the speech pipeline.
+(fast) and music-grade (slow) resampling.
 """
 
 __all__ = ["Quality", "AudioT", "resample"]
