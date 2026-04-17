@@ -10,7 +10,7 @@ Two-layer API:
   flatten the audio, concatenate the metadata list, return one
   `TTSResult`. The single-response server path uses this.
 
-Audio is float32 in [-1, 1] throughout — Kokoro's native output.
+Audio is float32 in [-1, 1] throughout, at 24 kHz, mono — Kokoro's native output.
 
 Transport concerns (s16 cast, URL-encoding raw phonemes for ASCII-only
 HTTP headers, audio-format encoding, Flask Response construction) live
@@ -18,7 +18,8 @@ in the server wrapper at `raven.server.modules.tts`. Client-side
 remote/local dispatch lives in `raven.client.mayberemote.TTS`.
 """
 
-__all__ = ["WordTiming",
+__all__ = ["KOKORO_SAMPLE_RATE",
+           "WordTiming",
            "TTSSegment",
            "TTSResult",
            "TTSPipeline",
@@ -53,12 +54,13 @@ KOKORO_SAMPLE_RATE = 24000
 class WordTiming:
     """One word (or word-like token) in the synthesized speech, with absolute timing.
 
-    `word`, `phonemes`: raw Unicode strings — not URL-encoded. Any transport
-                       that needs ASCII-only headers (e.g. HTTP) encodes at its own boundary.
+    `word`, `phonemes`: raw Unicode strings. Any transport that needs ASCII-only headers
+                        (e.g. HTTP) URL-encodes this data at its own boundary.
 
     `start_time`, `end_time`: seconds from start of the whole audio (absolute, not segment-relative).
                               May be `None` if Kokoro didn't produce a timestamp for this token
-                              (happens occasionally for short function words).
+                              (conditions under which this happens are not documented upstream;
+                              handle defensively).
     """
     word: str
     phonemes: str
