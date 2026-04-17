@@ -7,15 +7,22 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 
 from unpythonic import sym, Values
 from unpythonic.env import env
 
 from . import chattree
 from . import chatutil
-from . import hybridir
 from . import llmclient
+
+# `hybridir` is only referenced by scaffold for type annotations (retriever
+# parameters); all runtime access to the retriever goes through duck-typed
+# `.query(...)` calls. Importing it at runtime would drag in the full
+# `chromadb`/`bm25s`/`watchdog` stack, which isn't needed by scaffold itself
+# or by scaffold's test suite — so defer the import to type-checking only.
+if TYPE_CHECKING:
+    from . import hybridir
 
 action_continue = sym("continue")  # continue this turn (e.g. when docs were searched and at least one match was found)
 action_done = sym("done")  # this turn (user/AI) is complete
@@ -56,7 +63,7 @@ def user_turn(llm_settings: env,
 
 def _search_docs_with_bypass(llm_settings: env,
                              datastore: chattree.Forest,
-                             retriever: hybridir.HybridIR,
+                             retriever: "hybridir.HybridIR",
                              head_node_id: str,
                              speculate: bool,
                              query: str,
@@ -204,7 +211,7 @@ def _perform_injects(llm_settings: env,
 # TODO: `tools_enabled` is a blunt hammer; maybe have also an optional tool name list for fine-grained control?
 def ai_turn(llm_settings: env,
             datastore: chattree.Forest,
-            retriever: Optional[hybridir.HybridIR],
+            retriever: "Optional[hybridir.HybridIR]",
             head_node_id: str,
             tools_enabled: bool,
             continue_: bool,
