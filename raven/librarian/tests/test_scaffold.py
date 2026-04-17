@@ -2,9 +2,17 @@
 
 import pytest
 
-from unpythonic.env import env
+# `scaffold` transitively imports `llmclient` → `raven.client.api`, which pulls
+# the heavy dep stack (qoi, spaCy, the TTS stack). The CI test job runs a
+# hand-picked minimal subset of dependencies; when the heavy stack is missing,
+# skip this whole module. Mirrors the pattern in `test_api.py` (importorskip on
+# qoi) and `test_hybridir.py` (importorskip on chromadb/bm25s).
+pytest.importorskip("raven.librarian.scaffold",
+                    reason="scaffold transitively needs the full raven-client dep stack")
 
-from raven.librarian import chattree, chatutil, scaffold
+from unpythonic.env import env  # noqa: E402 -- after importorskip by design
+
+from raven.librarian import chattree, chatutil, scaffold  # noqa: E402 -- after importorskip by design
 
 
 # ---------------------------------------------------------------------------
