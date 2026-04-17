@@ -1,11 +1,5 @@
 """Text-to-speech engine (Kokoro), as an in-process library.
 
-Split out from `raven.server.modules.tts` so the engine can be exercised
-without running Flask. The server wrapper now calls into this module
-and applies transport-layer concerns (URL-encoding the raw phonemes,
-s16 cast, audio-format encoding, Flask Response construction) at its
-own boundary.
-
 Two-layer API:
 
 - `synthesize_iter` yields one `TTSSegment` per Kokoro segment, with
@@ -14,12 +8,14 @@ Two-layer API:
 
 - `synthesize` is a thin concatenating wrapper: collect all segments,
   flatten the audio, concatenate the metadata list, return one
-  `TTSResult`. Current single-response server path uses this.
+  `TTSResult`. The single-response server path uses this.
 
 Audio is float32 in [-1, 1] throughout — Kokoro's native output.
-The server wrapper casts to s16 right before `audio_codec.encode`.
 
-No Flask, no URL-encoding, no header packing.
+Transport concerns (s16 cast, URL-encoding raw phonemes for ASCII-only
+HTTP headers, audio-format encoding, Flask Response construction) live
+in the server wrapper at `raven.server.modules.tts`. Client-side
+remote/local dispatch lives in `raven.client.mayberemote.TTS`.
 """
 
 __all__ = ["WordTiming",

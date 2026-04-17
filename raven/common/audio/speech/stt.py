@@ -1,11 +1,8 @@
 """Speech-to-text engine (Whisper), as an in-process library.
 
-Split out from `raven.server.modules.stt` so the engine can be exercised
-without running Flask. The server wrapper now decodes the audio container,
-then hands off a numpy array to `transcribe` here.
-
-No Flask, no HTTP header packing, no URL-quoting. Transport concerns live in
-`raven.server.modules.stt` and the MaybeRemote glue in `raven.client.mayberemote`.
+Transport concerns (HTTP upload handling, audio container decoding, tqdm
+progress reporting) live in the server wrapper at `raven.server.modules.stt`.
+Client-side remote/local dispatch lives in `raven.client.mayberemote.STT`.
 """
 
 __all__ = ["STTModel", "load_stt_model", "transcribe"]

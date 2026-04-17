@@ -1,11 +1,10 @@
 """In-process TTS → resample → STT round-trip.
 
-The payoff test of the speech-extract-to-common work: text goes in,
-Kokoro synthesizes, resample converts 24 kHz → 16 kHz, Whisper transcribes,
-text comes out — no Flask, no HTTP, no file I/O.
+Text goes in, Kokoro synthesizes at 24 kHz float, resample converts to
+16 kHz, Whisper transcribes, text comes out. All in-process.
 
-The existing client-side integration test in `test_api.py::TestStt::test_tts_stt_roundtrip`
-remains as the transport-layer regression gate; this one is the engine-layer gate.
+The client-side integration test in `test_api.py::TestStt::test_tts_stt_roundtrip`
+covers the transport layer (HTTP stack); this one covers the engines.
 """
 
 import pytest

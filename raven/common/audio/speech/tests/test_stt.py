@@ -1,8 +1,8 @@
-"""Smoke test for the in-process Whisper wrapper.
+"""Smoke tests for the in-process Whisper wrapper.
 
-Full TTS→STT round-trip lives in `test_tts_stt_roundtrip.py` (added with
-the TTS extraction). This file only verifies that STT alone loads, accepts
-a float mono numpy array, and produces a string.
+Full TTS→STT round-trip lives in `test_tts_stt_roundtrip.py`. This file
+covers STT in isolation: load, caching, sample-rate auto-resample, a
+silence-in-string-out smoke, and the progress-callback plumbing.
 
 Uses `whisper-base` (74 M params) for CPU friendliness. The first run
 downloads the model via `maybe_install_models` — subsequent runs hit the
