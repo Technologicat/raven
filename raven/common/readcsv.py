@@ -44,25 +44,23 @@ def parse_csv(file_path: Union[pathlib.Path, str],
 
             # Handle header detection
             if has_header is None:
-                # Attempt automatic header detection
+                # Autodetect: if the first row has any alphabetic character, assume it's a header.
+                # Heuristic, not perfect — users can override with an explicit `has_header`.
                 try:
                     first_row = next(reader)
-                    # Check if first row contains likely header values
-                    # (This is heuristic and may not be reliable)
                     has_header = any(
                         any(c.isalpha() for c in field)
                         for field in first_row
                     )
-                    # If header detected, reposition reader
-                    if has_header:
-                        reader = csv.reader(f, delimiter=delimiter)
-                        reader.__next__()  # Move back to header line
                 except StopIteration:
                     has_header = False
-            elif has_header is False:
-                # Ensure we're at the beginning of the file
-                f.seek(0)
-                reader = csv.reader(f, delimiter=delimiter)
+
+            # Rewind for the main parse loop. We consumed up to one row above in the
+            # autodetect path; the explicit `has_header=False` path also needs a fresh
+            # reader. The explicit `has_header=True` path hasn't touched the reader yet,
+            # but rewinding is harmless.
+            f.seek(0)
+            reader = csv.reader(f, delimiter=delimiter)
 
             # Parse entries
             entries = []

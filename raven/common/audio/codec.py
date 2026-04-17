@@ -147,7 +147,12 @@ def decode(stream: BinaryIO,
         # The name isn't uppercase; correct name (lowercase) mentioned here:
         #     https://pyav.org/docs/stable/api/container.html?highlight=time_base#av.container.InputContainer.seek
         # print(av.time_base)  # 1000000
-        logger.info(f"decode: Detected container type '{container.format.name}', bitrate {si_prefix(container.bit_rate)}bps, duration {container.duration / av.time_base:0.6g}s, size {si_prefix(container.size)}B.")
+        # Some containers (e.g. FLAC over an in-memory stream) report `None` for one or more
+        # of these fields; render those as "?" rather than crashing the decoder at the log line.
+        duration_str = f"{container.duration / av.time_base:0.6g}s" if container.duration is not None else "?s"
+        bitrate_str = f"{si_prefix(container.bit_rate)}bps" if container.bit_rate else "?bps"
+        size_str = f"{si_prefix(container.size)}B" if container.size else "?B"
+        logger.info(f"decode: Detected container type '{container.format.name}', bitrate {bitrate_str}, duration {duration_str}, size {size_str}.")
         for packet in container.demux():
             for frame in packet.decode():
                 if isinstance(frame, av.audio.frame.AudioFrame):

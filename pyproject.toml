@@ -164,6 +164,11 @@ verify_ssl = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+# Use the modern importlib-based import mode so that multiple `tests/` packages
+# (e.g. `raven/common/tests/`, `raven/common/audio/tests/`, `raven/common/video/tests/`)
+# don't collide under pytest's default `prepend` mode.
+#   https://docs.pytest.org/en/stable/explanation/pythonpath.html#import-modes
+addopts = "--import-mode=importlib"
 markers = [
     "ml: tests that require the full ML stack (spaCy, Flair, torch models). Skipped on CI; run locally by default.",
 ]
