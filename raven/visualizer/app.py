@@ -23,7 +23,6 @@ logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
     import argparse
-    import array
     import collections
     import concurrent.futures
     from copy import deepcopy
@@ -53,8 +52,6 @@ with timer() as tim:
     envcls = env  # for functions that need an `env` parameter due to `@dlet`, so that they can also instantiate env objects (oops)
     from unpythonic import window, dlet, call, box, unbox, sym, islice
 
-    from wordcloud import WordCloud
-
     import dearpygui.dearpygui as dpg
 
     # Vendored libraries
@@ -71,8 +68,10 @@ with timer() as tim:
     from ..common.gui import utils as guiutils
     from ..common.gui import widgetfinder
 
+    from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
     from . import config as visualizer_config
     from . import importer  # BibTeX importer
+    from . import word_cloud
 
     gui_config = visualizer_config.gui_config  # shorthand, this is used a lot
 
@@ -99,8 +98,7 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 def get_visible_datapoints():
     """Return a list of all data points (indices to `sorted_xxx`) currently visible in the plotter."""
-    global dataset  # only for documenting intent (we don't write to it)
-    if dataset is None:  # nothing plotted when no dataset loaded
+    if app_state.dataset is None:  # nothing plotted when no dataset loaded
         return common_utils.make_blank_index_array()
 
     xmin, xmax = dpg.get_axis_limits("axis0")  # in data space  # tag
@@ -111,19 +109,18 @@ def get_visible_datapoints():
     y_range = ymax - ymin
     eps = 1e-5
 
-    filtxmin = dataset.sorted_lowdim_data[:, 0] >= xmin - eps * x_range
-    filtxmax = dataset.sorted_lowdim_data[:, 0] <= xmax + eps * x_range
+    filtxmin = app_state.dataset.sorted_lowdim_data[:, 0] >= xmin - eps * x_range
+    filtxmax = app_state.dataset.sorted_lowdim_data[:, 0] <= xmax + eps * x_range
     filtx = filtxmin * filtxmax
-    filtymin = dataset.sorted_lowdim_data[:, 1] >= ymin - eps * y_range
-    filtymax = dataset.sorted_lowdim_data[:, 1] <= ymax + eps * y_range
+    filtymin = app_state.dataset.sorted_lowdim_data[:, 1] >= ymin - eps * y_range
+    filtymax = app_state.dataset.sorted_lowdim_data[:, 1] <= ymax + eps * y_range
     filty = filtymin * filtymax
     filt = filtx * filty
     return np.where(filt)[0]
 
 def get_data_idxs_at_mouse():
     """Return a list of data points (indices to `sorted_xxx`) that are currently under the mouse cursor."""
-    global dataset  # only for documenting intent (we don't write to it)
-    if dataset is None:  # nothing plotted when no dataset loaded
+    if app_state.dataset is None:  # nothing plotted when no dataset loaded
         return common_utils.make_blank_index_array()
     pixels_per_data_unit_x, pixels_per_data_unit_y = guiutils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
     if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:
@@ -140,10 +137,10 @@ def get_data_idxs_at_mouse():
     # Find `k` data points nearest to the mouse cursor.
     # Since the plot aspect ratio is not necessarily square, we need x/y distances separately to judge the pixel distance.
     # Hence the data space distances the `kdtree` gives us are not meaningful for our purposes.
-    data_space_distances_, data_idxs = dataset.kdtree.query(p, k=gui_config.datapoints_at_mouse_max_neighbors)  # `data_idxs`: item indices into `sorted_xxx`
+    data_space_distances_, data_idxs = app_state.dataset.kdtree.query(p, k=gui_config.datapoints_at_mouse_max_neighbors)  # `data_idxs`: item indices into `sorted_xxx`
 
     # Compute pixel distance, from mouse cursor, of each matched data point.
-    deltas = dataset.sorted_lowdim_data[data_idxs, :] - p  # Distances from mouse cursor in data space, tensor of shape [k, 2].
+    deltas = app_state.dataset.sorted_lowdim_data[data_idxs, :] - p  # Distances from mouse cursor in data space, tensor of shape [k, 2].
     deltas[:, 0] *= pixels_per_data_unit_x  # pixel distance, x
     deltas[:, 1] *= pixels_per_data_unit_y  # pixel distance, y
     pixel_distance = (deltas[:, 0]**2 + deltas[:, 1]**2)**0.5
@@ -205,13 +202,12 @@ def reset_undo_history(_update_gui=True):  # This creates the global variables.
     `_update_gui`: internal, used during app initialization.
                    Everywhere else, should be the default `True`.
     """
-    global selection_data_idxs_box  # This is boxed so we can easily replace immutable contents (`np.array`).
     global selection_undo_stack
     global selection_undo_pos
     global selection_changed
     global selection_anchor_data_idxs_set
-    selection_data_idxs_box = box(common_utils.make_blank_index_array())
-    selection_undo_stack = [unbox(selection_data_idxs_box)]
+    app_state.selection_data_idxs_box = box(common_utils.make_blank_index_array())
+    selection_undo_stack = [unbox(app_state.selection_data_idxs_box)]
     selection_undo_pos = 0
     selection_changed = False  # ...after last completed info panel update (that was finalized); used for scroll anchoring
     selection_anchor_data_idxs_set = set()  # items common across previous and current selection; used for scroll anchoring  # indices to `sorted_xxx`
@@ -233,7 +229,7 @@ def commit_selection_change_to_undo_history():
 
     # Only proceed with the commit if the selection is actually different from what we have at the current undo position.
     old_selection_data_idxs = selection_undo_stack[selection_undo_pos]
-    new_selection_data_idxs = unbox(selection_data_idxs_box)
+    new_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
     old_selection_data_idxs_set = set(old_selection_data_idxs)
     new_selection_data_idxs_set = set(new_selection_data_idxs)
     if new_selection_data_idxs_set == old_selection_data_idxs_set:
@@ -266,10 +262,10 @@ def selection_undo():
     dpg.enable_item("selection_redo_button")  # tag
 
     # See also `commit_selection_change_to_undo_history` and `update_selection`; we must do some of the same things here.
-    old_selection_data_idxs = unbox(selection_data_idxs_box)
+    old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
     new_selection_data_idxs = selection_undo_stack[selection_undo_pos]
 
-    selection_data_idxs_box << new_selection_data_idxs
+    app_state.selection_data_idxs_box << new_selection_data_idxs
 
     selection_anchor_data_idxs_set = set(new_selection_data_idxs).intersection(set(old_selection_data_idxs))
     selection_changed = True
@@ -277,7 +273,7 @@ def selection_undo():
     update_selection_highlight()
     update_info_panel(wait=True)  # wait, because undo may be clicked/hotkeyed several times quickly in succession
     update_mouse_hover(force=True, wait=True)
-    update_word_cloud(new_selection_data_idxs, only_if_visible=True, wait=True)
+    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=True)
 
 def selection_redo():
     """Walk one step forward in the selection undo history, and update the state of the undo/redo GUI buttons.
@@ -297,10 +293,10 @@ def selection_redo():
     dpg.enable_item("selection_undo_button")  # tag
 
     # See also `commit_selection_change_to_undo_history` and `update_selection`; we must do some of the same things here.
-    old_selection_data_idxs = unbox(selection_data_idxs_box)
+    old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)
     new_selection_data_idxs = selection_undo_stack[selection_undo_pos]
 
-    selection_data_idxs_box << new_selection_data_idxs
+    app_state.selection_data_idxs_box << new_selection_data_idxs
 
     selection_anchor_data_idxs_set = set(new_selection_data_idxs).intersection(set(old_selection_data_idxs))
     selection_changed = True
@@ -308,7 +304,7 @@ def selection_redo():
     update_selection_highlight()
     update_info_panel(wait=True)  # wait, because redo may be clicked/hotkeyed several times quickly in succession
     update_mouse_hover(force=True, wait=True)
-    update_word_cloud(new_selection_data_idxs, only_if_visible=True, wait=True)
+    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=True)
 
 def update_selection(new_selection_data_idxs, mode="replace", *, force=False, wait=False, update_selection_undo_history=True):
     """Update `selection_data_idxs_box`, updating also the selection undo stack (optionally) and the GUI.
@@ -340,7 +336,7 @@ def update_selection(new_selection_data_idxs, mode="replace", *, force=False, wa
     global selection_changed
     global selection_anchor_data_idxs_set
 
-    old_selection_data_idxs = unbox(selection_data_idxs_box)  # `np.array` of indices to `sorted_xxx`
+    old_selection_data_idxs = unbox(app_state.selection_data_idxs_box)  # `np.array` of indices to `sorted_xxx`
     old_set = set(old_selection_data_idxs)
     new_set = set(new_selection_data_idxs)
     if mode == "add":
@@ -374,7 +370,7 @@ def update_selection(new_selection_data_idxs, mode="replace", *, force=False, wa
     selection_changed = True
     # logger.debug(f"update_selection: new selection anchor set is {selection_anchor_data_idxs_set}")
 
-    selection_data_idxs_box << new_selection_data_idxs  # Send the new data into the box.
+    app_state.selection_data_idxs_box << new_selection_data_idxs  # Send the new data into the box.
     if update_selection_undo_history:
         commit_selection_change_to_undo_history()
 
@@ -386,7 +382,7 @@ def update_selection(new_selection_data_idxs, mode="replace", *, force=False, wa
     # mouse-draw select, which calls us with `wait=True`.
     update_info_panel(wait=wait)
     update_mouse_hover(force=True, wait=wait)
-    update_word_cloud(new_selection_data_idxs, only_if_visible=True, wait=wait)
+    word_cloud.update(new_selection_data_idxs, only_if_visible=True, wait=wait)
 
     return True  # the selection has changed (or `force=True`)
 
@@ -398,10 +394,10 @@ def update_selection_highlight():
     Generally, this only needs to be called if you manually send something
     into `selection_data_idxs_box` (like undo and redo do).
     """
-    selection_data_idxs = unbox(selection_data_idxs_box)
+    selection_data_idxs = unbox(app_state.selection_data_idxs_box)
     if len(selection_data_idxs):
-        dpg.set_value("my_selection_scatter_series", [list(dataset.sorted_lowdim_data[selection_data_idxs, 0]),  # tag
-                                                      list(dataset.sorted_lowdim_data[selection_data_idxs, 1])])
+        dpg.set_value("my_selection_scatter_series", [list(app_state.dataset.sorted_lowdim_data[selection_data_idxs, 0]),  # tag
+                                                      list(app_state.dataset.sorted_lowdim_data[selection_data_idxs, 1])])
     else:
         dpg.set_value("my_selection_scatter_series", [[], []])  # tag
 
@@ -445,199 +441,18 @@ def exit_modal_mode():
     _info_panel_scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` enables its highlight
     update_mouse_hover(force=True, wait=False)  # show annotation if relevant
 
+# Register the modal-mode helpers on `app_state` so extracted submodules can reach them.
+app_state.enter_modal_mode = enter_modal_mode
+app_state.exit_modal_mode = exit_modal_mode
+
 def is_any_modal_window_visible():
     """Return whether *some* modal window is open.
 
     Currently these are the help card, the "open file" dialog, and the "save word cloud" dialog.
     """
-    return (is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible() or
+    return (is_open_file_dialog_visible() or word_cloud.is_save_dialog_visible() or
             is_open_import_dialog_visible() or is_save_import_dialog_visible() or
             help_window.is_visible())
-
-# --------------------------------------------------------------------------------
-# Word cloud
-
-# See also `initialize_filedialogs` further below.
-
-word_cloud_last_dataset_addr = None  # for storing the `id()` of the last dataset the word cloud was generated for (to detect the user opening a different file)
-word_cloud_last_data_idxs = set()  # for detecting selection changes
-word_cloud_image_box = box(np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4],  # For texture data. We currently mutate the array, although we could avoid that since it's boxed.
-                                    dtype=np.float64))
-word_cloud_data_box = box(None)  # the last generated `WordCloud` object
-
-def update_word_cloud(data_idxs, *, only_if_visible=False, wait=False):
-    """Compute a word cloud for the given data points, updating the texture. Show the window when done.
-
-    Task submitter.
-
-    We only actually update the word cloud if the selection has changed or a new dataset has been loaded;
-    otherwise we just (re-)show the existing word cloud.
-
-    `data_idxs`: rank-1 np.array, indices into `sorted_xxx`.
-    `only_if_visible`: bool. If `True`, only actually run the update if the word cloud window is already visible.
-                       Used for live-updating when the selection changes (no point in updating if hidden).
-    `wait`: bool, whether to wait for more keyboard/mouse input before starting the update.
-    """
-    doit = True
-    if only_if_visible and not dpg.is_item_visible(word_cloud_window):
-        doit = False
-    if not doit:
-        return
-
-    word_cloud_render_task = bgtask.ManagedTask(category="raven_visualizer_word_cloud_render",
-                                                entrypoint=_update_word_cloud,
-                                                running_poll_interval=0.1,
-                                                pending_wait_duration=0.1)
-    word_cloud_task_manager.submit(word_cloud_render_task, envcls(wait=wait,
-                                                                  data_idxs=data_idxs))
-
-def _update_word_cloud(*, task_env):
-    """Compute a word cloud for the given data points, updating the texture. Show the window when done.
-
-    Worker.
-
-    This handles also updating the GUI, to indicate that the word cloud is being updated,
-    as well as resetting those notifications when done.
-
-    `task_env`: Handled by `update_word_cloud`. Importantly, contains the `cancelled` flag for the task.
-                Also contains `data_idxs`, specifying which entries to render the word cloud for.
-    """
-    global word_cloud_last_dataset_addr
-    global word_cloud_last_data_idxs
-    global dataset  # document intent only
-
-    logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task running.")
-    try:
-        assert task_env is not None
-        if task_env.cancelled:
-            logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task cancelled (before starting).")
-            return
-
-        data_idxs = task_env.data_idxs
-
-        if dataset is None:
-            logger.debug(f"_update_word_cloud: {task_env.task_name}: No dataset loaded. Clearing texture.")
-            arr = unbox(word_cloud_image_box)
-            arr[:, :, :3] = 0.0
-        else:
-            # No need to recompute -> just show the window.
-            if id(dataset) == word_cloud_last_dataset_addr and set(data_idxs) == word_cloud_last_data_idxs:
-                logger.debug(f"_update_word_cloud: {task_env.task_name}: Same dataset and same selection as last time. Showing word cloud window. Task completed.")
-                dpg.show_item(word_cloud_window)
-                return
-
-            arr = unbox(word_cloud_image_box)
-            if not len(data_idxs):  # no selected data points?
-                logger.debug(f"_update_word_cloud: {task_env.task_name}: No data points selected. Clearing texture.")
-                arr[:, :, :3] = 0.0
-            else:
-                dpg.set_item_label("word_cloud_window", "Word cloud [updating]")  # tag
-                dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD_BOLT)
-                dpg.set_value("word_cloud_button_tooltip_text", "Generating word cloud, just for you. Please wait. [F10]")
-                gui_animation.animator.add(gui_animation.ButtonFlash(message=None,
-                                                                     target_button="word_cloud_button",
-                                                                     target_tooltip=None,  # we handle the tooltip manually
-                                                                     target_text=None,
-                                                                     original_theme=themes_and_fonts.global_theme,
-                                                                     duration=gui_config.acknowledgment_duration))
-
-                # Combine keyword counts of the specified items
-                logger.debug(f"_update_word_cloud: {task_env.task_name}: Collecting keywords for selected data points.")
-                keywords = collections.defaultdict(lambda: 0)
-                for data_idx in data_idxs:
-                    if task_env.cancelled:
-                        logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task cancelled (while collecting keywords).")
-                        return
-                    for kw, count in dataset.sorted_entries[data_idx].keywords.items():
-                        keywords[kw] += count
-
-                logger.debug(f"_update_word_cloud: {task_env.task_name}: Invoking word cloud generator.")
-                wc = WordCloud(width=gui_config.word_cloud_w,
-                               height=gui_config.word_cloud_h,
-                               background_color=gui_config.word_cloud_background_color,
-                               colormap=gui_config.word_cloud_colormap,
-                               max_words=1000)
-                wc.generate_from_frequencies(keywords)  # -> RGB tensor of shape [h, w, 3]
-                word_cloud_data_box << wc
-
-                logger.debug(f"_update_word_cloud: {task_env.task_name}: Updating texture.")
-                arr[:, :, :3] = wc.to_array() / 255  # RGB, range [0, 255] -> RGBA, range [0, 1]
-
-        logger.debug(f"_update_word_cloud: {task_env.task_name}: Sending updated texture to GUI. Showing word cloud window.")
-        raw_data = array.array('f', arr.ravel())  # shape [h, w, c] -> linearly indexed
-        dpg.set_value(word_cloud_texture, raw_data)
-        dpg.show_item(word_cloud_window)
-
-        word_cloud_last_dataset_addr = id(dataset)  # Conserve RAM by not storing the actual dataset object, but only its memory address. If this changes, it means that the dataset has changed.
-        word_cloud_last_data_idxs = set(data_idxs)
-
-        logger.debug(f"_update_word_cloud: {task_env.task_name}: Word cloud update task completed.")
-
-    finally:
-        dpg.set_item_label("word_cloud_window", "Word cloud")  # tag  # TODO: DRY duplicate definitions for labels
-        dpg.set_item_label("word_cloud_button", fa.ICON_CLOUD)
-        dpg.set_value("word_cloud_button_tooltip_text", "Toggle word cloud window [F10]")  # TODO: DRY duplicate definitions for labels
-
-def toggle_word_cloud_window():
-    """Show/hide the "save word cloud" window.
-
-    Will update the word cloud first if necessary.
-    """
-    if dpg.is_item_visible("word_cloud_window"):
-        dpg.hide_item("word_cloud_window")
-    else:
-        update_word_cloud(unbox(selection_data_idxs_box))  # will show the window when done
-
-def show_save_word_cloud_dialog():
-    """Button callback. Show the save word cloud file dialog, to ask the user for a filename to save the word cloud image as."""
-    logger.debug("show_save_word_cloud_dialog: Showing save word cloud dialog.")
-    filedialog_save.show_file_dialog()
-    enter_modal_mode()
-    logger.debug("show_save_word_cloud_dialog: Done.")
-
-def _save_word_cloud_callback(selected_files):
-    """Callback that fires when the "save word cloud" dialog closes."""
-    logger.debug("_save_word_cloud_callback: Save word cloud dialog callback triggered.")
-    if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
-        raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
-    exit_modal_mode()
-    if selected_files:
-        selected_file = selected_files[0]
-        logger.debug(f"_save_word_cloud_callback: User selected the file '{selected_file}'.")
-        write_word_cloud(selected_file)  # Overwrite confirmation is handled on the file dialog side. If the target file already exists, we only get here when the user already allowed the overwrite.
-    else:  # empty selection -> cancelled
-        logger.debug("_save_word_cloud_callback: Cancelled.")
-
-def write_word_cloud(filename):
-    """Dispatch a background task to save the word cloud image to a file, and acknowledge the action in the GUI.
-
-    This is called *after* the "save word cloud" dialog closes.
-    """
-    logger.debug(f"write_word_cloud: Dispatching a save to '{filename}', and acknowledging in GUI.")
-
-    # The animation can run while we're saving.
-    gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Saved to '{filename}'!",
-                                                         target_button="word_cloud_save_button",
-                                                         target_tooltip="word_cloud_save_tooltip",
-                                                         target_text="word_cloud_save_tooltip_text",
-                                                         original_theme=dpg.get_item_theme("word_cloud_save_tooltip"),
-                                                         duration=gui_config.acknowledgment_duration))
-
-    def write_task():
-        logger.debug(f"write_word_cloud.write_task: Saving word cloud image to '{filename}'.")
-        wc = unbox(word_cloud_data_box)
-        wc.to_file(filename)
-        logger.debug("write_word_cloud.write_task: Done.")
-    bg.submit(write_task)  # just add it manually to the thread pool executor; we don't need any fancy management here.
-
-def is_save_word_cloud_dialog_visible():
-    """Return whether the "save word cloud" dialog is open.
-
-    We have this abstraction (not just `dpg.is_item_visible`) because the window might not exist yet.
-    """
-    if filedialog_save is None:
-        return False
-    return dpg.is_item_visible("save_word_cloud_dialog")  # tag
 
 # --------------------------------------------------------------------------------
 # Set up DPG - basic startup, load fonts, set up global theme
@@ -648,7 +463,7 @@ logger.info("DPG bootup...")
 with timer() as tim:
     dpg.create_context()
 
-    themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
+    app_state.themes_and_fonts = guiutils.bootup(font_size=gui_config.font_size)
 
     # https://dearpygui.readthedocs.io/en/latest/documentation/themes.html#plot-colors
     with dpg.theme(tag="my_plotter_theme"):
@@ -662,11 +477,11 @@ with timer() as tim:
 
     # Initialize textures.
     with dpg.texture_registry(tag="app_textures"):
-        word_cloud_texture = dpg.add_raw_texture(width=gui_config.word_cloud_w,  # TODO: once we add a settings dialog, we may need to change the texture size while the app is running.
-                                                 height=gui_config.word_cloud_h,
-                                                 default_value=unbox(word_cloud_image_box),
-                                                 format=dpg.mvFormat_Float_rgba,
-                                                 tag="word_cloud_texture")
+        dpg.add_raw_texture(width=gui_config.word_cloud_w,  # TODO: once we add a settings dialog, we may need to change the texture size while the app is running.
+                            height=gui_config.word_cloud_h,
+                            default_value=np.ones([gui_config.word_cloud_h, gui_config.word_cloud_w, 4], dtype=np.float64),
+                            format=dpg.mvFormat_Float_rgba,
+                            tag="word_cloud_texture")
 
     if platform.system().upper() == "WINDOWS":
         icon_ext = "ico"
@@ -684,7 +499,7 @@ logger.info(f"    Done in {tim.dt:0.6g}s.")
 # --------------------------------------------------------------------------------
 # Dataset loading
 
-dataset = None  # currently loaded dataset (as an `unpythonic.env.env`)
+app_state.dataset = None  # currently loaded dataset (as an `unpythonic.env.env`)
 dynamically_created_cluster_color_coding_themes = []  # for cleaning up old cluster coloring themes when another dataset is loaded
 
 def _read_dataset_file(filename):
@@ -700,14 +515,14 @@ def parse_dataset_file(filename):
 
     Returns a dataset: `unpythonic.env` with the datafile contents, and some preprocessed fields to facilitate visualization.
     """
-    dataset = env()
+    app_state.dataset = env()
     absolute_filename = common_utils.absolutize_filename(filename)
-    dataset.filename = filename
-    dataset.absolute_filename = absolute_filename
+    app_state.dataset.filename = filename
+    app_state.dataset.absolute_filename = absolute_filename
 
     logger.info(f"Reading Raven-visualizer dataset '{filename}' (resolved to '{absolute_filename}')...")
     with timer() as tim:
-        dataset.file_content = _read_dataset_file(absolute_filename)
+        app_state.dataset.file_content = _read_dataset_file(absolute_filename)
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
     # In DPG (as of this writing, DPG v2.0), one scatter series has only a single global color.
@@ -722,14 +537,14 @@ def parse_dataset_file(filename):
     #
     logger.info("Sorting data by cluster...")
     with timer() as tim:  # set up `sorted_xxx`
-        dataset.sorted_orig_data_idxs = np.argsort(dataset.file_content.labels)  # sort by label (cluster ID)
-        dataset.sorted_labels = dataset.file_content.labels[dataset.sorted_orig_data_idxs]
-        dataset.sorted_lowdim_data = dataset.file_content.lowdim_data[dataset.sorted_orig_data_idxs, :]  # [data_idx, axis], where axis is 0 (x) or 1 (y).
-        dataset.sorted_entries = [dataset.file_content.vis_data[orig_data_idx] for orig_data_idx in dataset.sorted_orig_data_idxs]  # the actual data records, extracted from BibTeX (Python list)
+        app_state.dataset.sorted_orig_data_idxs = np.argsort(app_state.dataset.file_content.labels)  # sort by label (cluster ID)
+        app_state.dataset.sorted_labels = app_state.dataset.file_content.labels[app_state.dataset.sorted_orig_data_idxs]
+        app_state.dataset.sorted_lowdim_data = app_state.dataset.file_content.lowdim_data[app_state.dataset.sorted_orig_data_idxs, :]  # [data_idx, axis], where axis is 0 (x) or 1 (y).
+        app_state.dataset.sorted_entries = [app_state.dataset.file_content.vis_data[orig_data_idx] for orig_data_idx in app_state.dataset.sorted_orig_data_idxs]  # the actual data records, extracted from BibTeX (Python list)
         @call
         def _():
             # Compute normalized titles for searching, and insert a reverse lookup for the item's index in `sorted_xxx`.
-            for data_idx, entry in enumerate(dataset.sorted_entries):
+            for data_idx, entry in enumerate(app_state.dataset.sorted_entries):
                 entry.data_idx = data_idx  # index to `sorted_xxx`
                 entry.normalized_title = common_utils.normalize_search_string(entry.title.strip())  # for searching
 
@@ -737,16 +552,16 @@ def parse_dataset_file(filename):
         #     print(f"{k}: {v}")
 
         # Find contiguous blocks with the same label (cluster ID).
-        dataset.cluster_id_jump_data_idxs = np.where(np.diff(dataset.sorted_labels, prepend=np.nan))[0]  # https://stackoverflow.com/a/65657397
-        dataset.cluster_id_jump_data_idxs = list(itertools.chain(list(dataset.cluster_id_jump_data_idxs), (None,)))  # -> [i0, i1, ..., iN, None] -> used for slices, `None` = end
+        app_state.dataset.cluster_id_jump_data_idxs = np.where(np.diff(app_state.dataset.sorted_labels, prepend=np.nan))[0]  # https://stackoverflow.com/a/65657397
+        app_state.dataset.cluster_id_jump_data_idxs = list(itertools.chain(list(app_state.dataset.cluster_id_jump_data_idxs), (None,)))  # -> [i0, i1, ..., iN, None] -> used for slices, `None` = end
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
     # For mouseover support. We need to manually detect the data points closest to the mouse cursor.
     logger.info("Indexing dataset for nearest-neighbors search...")
     with timer() as tim:
-        dataset.kdtree = scipy.spatial.cKDTree(data=dataset.sorted_lowdim_data)
+        app_state.dataset.kdtree = scipy.spatial.cKDTree(data=app_state.dataset.sorted_lowdim_data)
     logger.info(f"    Done in {tim.dt:0.6g}s.")
-    return dataset
+    return app_state.dataset
 
 def _create_highlight_scatter_series():
     """Create some special scatterplot data series, used for highlighting datapoints in the plotter."""
@@ -769,7 +584,7 @@ def clear_background_tasks(wait: bool):
     """Stop (cancel) and delete all background tasks."""
     info_panel_task_manager.clear(wait=wait)
     annotation_task_manager.clear(wait=wait)
-    word_cloud_task_manager.clear(wait=wait)
+    word_cloud.clear_tasks(wait=wait)
 
 def reset_app_state(_update_gui=True):
     """Reset everything, to prepare for loading new data to the GUI.
@@ -813,22 +628,22 @@ def reset_app_state(_update_gui=True):
 
         dpg.set_item_label("plot", "Semantic map [no dataset loaded]")  # tag  # TODO: DRY duplicate definitions for labels
 
-def load_data_into_plotter(dataset):
-    """Load `dataset` (see `parse_dataset_file`) to the plotter.
+def load_data_into_plotter(ds):
+    """Load `ds` (see `parse_dataset_file`) to the plotter.
 
     IMPORTANT: call `reset_app_state()` just before calling this.
     """
-    logger.info(f"Plotting Raven-visualizer dataset '{dataset.absolute_filename}'...")
+    logger.info(f"Plotting Raven-visualizer dataset '{ds.absolute_filename}'...")
     with timer() as tim:
         # Group data points by label
         datas = []
-        for start, end in window(2, dataset.cluster_id_jump_data_idxs):  # indices to `sorted_xxx`
-            xs = list(dataset.sorted_lowdim_data[start:end, 0])
-            ys = list(dataset.sorted_lowdim_data[start:end, 1])
-            label = dataset.sorted_labels[start]  # all `dataset.sorted_labels[start:end]` are the same
+        for start, end in window(2, ds.cluster_id_jump_data_idxs):  # indices to `sorted_xxx`
+            xs = list(ds.sorted_lowdim_data[start:end, 0])
+            ys = list(ds.sorted_lowdim_data[start:end, 1])
+            label = ds.sorted_labels[start]  # all `ds.sorted_labels[start:end]` are the same
             datas.append((label, xs, ys))
 
-        max_label = dataset.sorted_labels[-1]  # The labels have been sorted in ascending order so the largest one is last.
+        max_label = ds.sorted_labels[-1]  # The labels have been sorted in ascending order so the largest one is last.
         for label, xs, ys in datas:
             series_tag = f"my_scatter_series_{label}"  # tag
             series_theme = f"my_plot_theme_{label}"  # tag
@@ -853,7 +668,7 @@ def load_data_into_plotter(dataset):
             dpg.bind_item_theme(series_tag, series_theme)
             dynamically_created_cluster_color_coding_themes.append(this_scatterplot_theme)
 
-        dpg.set_item_label("plot", f"Semantic map [{os.path.basename(dataset.absolute_filename)}]")  # tag
+        dpg.set_item_label("plot", f"Semantic map [{os.path.basename(ds.absolute_filename)}]")  # tag
         reset_plotter_zoom()
     logger.info(f"    Done in {tim.dt:0.6g}s.")
 
@@ -863,23 +678,21 @@ def load_data_into_plotter(dataset):
 def open_file(filename):
     """Load new data into the GUI. Public API."""
     logger.info(f"open_file: Opening file '{filename}'.")
-    global dataset
     reset_app_state()
-    dataset = parse_dataset_file(filename)
-    load_data_into_plotter(dataset)
+    app_state.dataset = parse_dataset_file(filename)
+    load_data_into_plotter(app_state.dataset)
 
 # --------------------------------------------------------------------------------
 # File dialog init
 
 filedialog_open = None
-filedialog_save = None
+app_state.filedialog_save = None
 filedialog_open_import = None
 filedialog_save_import = None
 
 def initialize_filedialogs(default_path):  # called at app startup, once we parse the default path from cmdline args (or set a default if not specified).
     """Create the file dialogs."""
     global filedialog_open
-    global filedialog_save
     global filedialog_open_import
     global filedialog_save_import
     filedialog_open = FileDialog(title="Open dataset",
@@ -891,9 +704,9 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                  multi_selection=False,
                                  allow_drag=False,
                                  default_path=default_path)
-    filedialog_save = FileDialog(title="Save word cloud as PNG",
+    app_state.filedialog_save = FileDialog(title="Save word cloud as PNG",
                                  tag="save_word_cloud_dialog",
-                                 callback=_save_word_cloud_callback,
+                                 callback=word_cloud.save_callback,
                                  modal=True,
                                  filter_list=[".png"],
                                  file_filter=".png",
@@ -932,13 +745,13 @@ def show_open_file_dialog():
     """
     logger.debug("show_open_file_dialog: Showing open file dialog.")
     filedialog_open.show_file_dialog()
-    enter_modal_mode()
+    app_state.enter_modal_mode()
     logger.debug("show_open_file_dialog: Done.")
 
 def _open_file_callback(selected_files):
     """Callback that fires when the open file dialog closes."""
     logger.debug("_open_file_callback: Open file dialog callback triggered.")
-    exit_modal_mode()
+    app_state.exit_modal_mode()
     if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
         raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
     if selected_files:
@@ -978,13 +791,13 @@ def show_open_import_dialog():
     """Button callback. Show the open import file dialog, for the user to pick which BibTeX files to import."""
     logger.debug("show_open_import_dialog: Showing open import dialog.")
     filedialog_open_import.show_file_dialog()
-    enter_modal_mode()
+    app_state.enter_modal_mode()
     logger.debug("show_open_import_dialog: Done.")
 
 def _open_import_callback(selected_files):
     """Callback that fires when the open import file dialog closes."""
     logger.debug("_open_import_callback: Open import dialog callback triggered.")
-    exit_modal_mode()
+    app_state.exit_modal_mode()
     if selected_files:
         logger.debug(f"_open_import_callback: User selected the file(s) {selected_files}.")
         importer_input_files_box << deepcopy(selected_files)  # Make a copy of the filename list, so that the GUI dialog can clear its own list without affecting ours.
@@ -1005,13 +818,13 @@ def show_save_import_dialog():
     """Button callback. Show the save import file dialog, to ask the user for a filename to save the imported dataset as."""
     logger.debug("show_save_import_dialog: Showing save import dialog.")
     filedialog_save_import.show_file_dialog()
-    enter_modal_mode()
+    app_state.enter_modal_mode()
     logger.debug("show_save_import_dialog: Done.")
 
 def _save_import_callback(selected_files):
     """Callback that fires when the save import file dialog closes."""
     logger.debug("_save_import_callback: Save import dialog callback triggered.")
-    exit_modal_mode()
+    app_state.exit_modal_mode()
     if len(selected_files) > 1:  # Should not happen, since we set `multi_selection=False`.
         raise ValueError(f"Expected at most one selected file, got {len(selected_files)}.")
     if selected_files:
@@ -1133,7 +946,7 @@ info_panel_scroll_end_flasher = gui_animation.ScrollEndFlasher(target="item_info
                                                                tag="scroll_end_flasher",
                                                                duration=gui_config.scroll_ends_here_duration,
                                                                custom_finish_pred=lambda self: is_any_modal_window_visible(),  # end animation (and hide the flasher) immediately if any modal window becomes visible
-                                                               font=themes_and_fonts.icon_font_solid,
+                                                               font=app_state.themes_and_fonts.icon_font_solid,
                                                                text_top=fa.ICON_ARROWS_UP_TO_LINE,
                                                                text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
 
@@ -1160,7 +973,7 @@ def update_search(wait=True):
         # TODO: With `raven.librarian.hybridir.HybridIR`, we could integrate also a semi-intelligent (keyword + semantic) fulltext search here. Think about the GUI, as the classic mode is useful too.
         case_sensitive_fragments, case_insensitive_fragments = common_utils.search_string_to_fragments(search_string, sort=False)  # minor speedup: don't need to sort, since all must match
         search_result_data_idxs = []
-        for data_idx, entry in enumerate(dataset.sorted_entries):  # `data_idx`: index to `sorted_xxx`
+        for data_idx, entry in enumerate(app_state.dataset.sorted_entries):  # `data_idx`: index to `sorted_xxx`
             text = entry.normalized_title
             text_lowercase = text.lower()
             if (all(term in text_lowercase for term in case_insensitive_fragments) and
@@ -1174,8 +987,8 @@ def update_search(wait=True):
 
     if len(search_result_data_idxs):
         # Highlight the search result data points (by plotting them as another series on top).
-        dpg.set_value("my_search_results_scatter_series", [list(dataset.sorted_lowdim_data[search_result_data_idxs, 0]),  # tag
-                                                           list(dataset.sorted_lowdim_data[search_result_data_idxs, 1])])
+        dpg.set_value("my_search_results_scatter_series", [list(app_state.dataset.sorted_lowdim_data[search_result_data_idxs, 0]),  # tag
+                                                           list(app_state.dataset.sorted_lowdim_data[search_result_data_idxs, 1])])
         # Re-use the "Search" header to show the number of matches.
         plural_s = "es" if len(search_result_data_idxs) != 1 else ""
         dpg.set_value(search_header_text, f"[{len(search_result_data_idxs)} match{plural_s}]")
@@ -1251,7 +1064,7 @@ class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is set up
                                            len(unbox(search_result_data_idxs_box)),
                                            gui_config.n_many_searchresults)
         alpha_selection = self._compute_alpha(1.0 - animation_pos,
-                                              len(unbox(selection_data_idxs_box)),
+                                              len(unbox(app_state.selection_data_idxs_box)),
                                               gui_config.n_many_selection)
         dpg.set_value(search_results_highlight_color, (*gui_config.plotter_search_results_highlight_color, alpha_search))
         dpg.set_value(selection_highlight_color, (*gui_config.plotter_selection_highlight_color, alpha_selection))
@@ -1483,7 +1296,7 @@ with timer() as tim:
                         copy_report_button = dpg.add_button(tag="copy_report_to_clipboard_button",
                                                             label=fa.ICON_COPY,
                                                             enabled=False)
-                        dpg.bind_item_font("copy_report_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_font("copy_report_to_clipboard_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("copy_report_to_clipboard_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("copy_report_to_clipboard_button") as copy_report_tooltip:  # tag
                             copy_report_tooltip_text = dpg.add_text("Copy report to clipboard [F8]\n    no modifier: as plain text\n    with Shift: as Markdown")  # TODO: DRY duplicate definitions for labels
@@ -1536,7 +1349,7 @@ with timer() as tim:
                                                           label=fa.ICON_ANGLES_UP,
                                                           width=gui_config.info_panel_button_w,
                                                           enabled=False)
-                        dpg.bind_item_font("go_to_top_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_font("go_to_top_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("go_to_top_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("go_to_top_button"):  # tag
                             dpg.add_text("To top [Home, when search field not focused]")
@@ -1545,7 +1358,7 @@ with timer() as tim:
                                                         label=fa.ICON_ANGLE_UP,
                                                         width=gui_config.info_panel_button_w,
                                                         enabled=False)
-                        dpg.bind_item_font("page_up_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_font("page_up_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("page_up_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("page_up_button"):  # tag
                             dpg.add_text("Page up [Page Up, when search field not focused]")
@@ -1554,7 +1367,7 @@ with timer() as tim:
                                                           label=fa.ICON_ANGLE_DOWN,
                                                           width=gui_config.info_panel_button_w,
                                                           enabled=False)
-                        dpg.bind_item_font("page_down_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_font("page_down_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("page_down_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("page_down_button"):  # tag
                             dpg.add_text("Page down [Page Down, when search field not focused]")
@@ -1563,7 +1376,7 @@ with timer() as tim:
                                                              label=fa.ICON_ANGLES_DOWN,
                                                              width=gui_config.info_panel_button_w,
                                                              enabled=False)
-                        dpg.bind_item_font("go_to_bottom_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_font("go_to_bottom_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("go_to_bottom_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("go_to_bottom_button"):  # tag
                             dpg.add_text("To bottom [End, when search field not focused]")
@@ -1577,7 +1390,7 @@ with timer() as tim:
                                                                   label=fa.ICON_CIRCLE_UP,
                                                                   width=gui_config.info_panel_button_w,
                                                                   enabled=False)
-                        dpg.bind_item_font("prev_search_match_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_font("prev_search_match_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("prev_search_match_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("prev_search_match_button"):  # tag
                             dpg.add_text("Previous search match [Shift+F3]")
@@ -1587,7 +1400,7 @@ with timer() as tim:
                                                                   label=fa.ICON_CIRCLE_DOWN,
                                                                   width=gui_config.info_panel_button_w,
                                                                   enabled=False)
-                        dpg.bind_item_font("next_search_match_button", themes_and_fonts.icon_font_solid)  # tag
+                        dpg.bind_item_font("next_search_match_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("next_search_match_button", "disablable_button_theme")  # tag
                         with dpg.tooltip("next_search_match_button"):  # tag
                             dpg.add_text("Next search match [F3]")
@@ -1666,7 +1479,7 @@ with timer() as tim:
                                callback=show_open_file_dialog,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("open_file_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("open_file_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("open_file_button", tag="open_file_tooltip"):  # tag
                     dpg.add_text("Open dataset [Ctrl+O]", tag="open_file_tooltip_text")
 
@@ -1675,7 +1488,7 @@ with timer() as tim:
                                callback=toggle_importer_window,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("open_importer_window_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("open_importer_window_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("open_importer_window_button", tag="open_importer_window_tooltip"):  # tag
                     dpg.add_text("Import BibTeX files [Ctrl+I]", tag="open_importer_window_tooltip_text")
 
@@ -1688,7 +1501,7 @@ with timer() as tim:
                                callback=reset_plotter_zoom,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("zoom_reset_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("zoom_reset_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("zoom_reset_button", tag="zoom_reset_tooltip"):  # tag
                     dpg.add_text("Reset zoom [Ctrl+Home]", tag="zoom_reset_tooltip_text")
 
@@ -1718,7 +1531,7 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w,
                                enabled=False)
-                dpg.bind_item_font("selection_undo_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("selection_undo_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 dpg.bind_item_theme("selection_undo_button", "disablable_button_theme")  # tag
                 with dpg.tooltip("selection_undo_button", tag="selection_undo_tooltip"):  # tag
                     dpg.add_text("Undo selection change [Ctrl+Shift+Z]",
@@ -1730,7 +1543,7 @@ with timer() as tim:
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w,
                                enabled=False)
-                dpg.bind_item_font("selection_redo_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("selection_redo_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 dpg.bind_item_theme("selection_redo_button", "disablable_button_theme")  # tag
                 with dpg.tooltip("selection_redo_button", tag="selection_redo_tooltip"):  # tag
                     dpg.add_text("Redo selection change [Ctrl+Shift+Y]",
@@ -1745,7 +1558,7 @@ with timer() as tim:
                                callback=select_search_results,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("select_search_results_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("select_search_results_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("select_search_results_button", tag="select_search_results_tooltip"):  # tag
                     dpg.add_text("Select items matched by current search [Enter, while the search field has focus]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
                                  tag="select_search_results_tooltip_text")
@@ -1759,17 +1572,17 @@ with timer() as tim:
                                callback=select_visible_all,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("select_visible_all_button", themes_and_fonts.icon_font_regular)  # tag
+                dpg.bind_item_font("select_visible_all_button", app_state.themes_and_fonts.icon_font_regular)  # tag
                 with dpg.tooltip("select_visible_all_button", tag="select_visible_all_tooltip"):  # tag
                     dpg.add_text("Select items currently on-screen in the plotter [F9]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
                                  tag="select_visible_all_tooltip_text")
 
                 dpg.add_button(label=fa.ICON_CLOUD,
                                tag="word_cloud_button",
-                               callback=toggle_word_cloud_window,
+                               callback=word_cloud.toggle_window,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("word_cloud_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("word_cloud_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("word_cloud_button", tag="word_cloud_tooltip"):  # tag
                     dpg.add_text("Toggle word cloud window [F10]",
                                  tag="word_cloud_button_tooltip_text")
@@ -1785,7 +1598,7 @@ with timer() as tim:
                                callback=toggle_fullscreen,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("fullscreen_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("fullscreen_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("fullscreen_button", tag="fullscreen_tooltip"):  # tag
                     dpg.add_text("Toggle fullscreen [F11]",
                                  tag="fullscreen_tooltip_text")
@@ -1797,7 +1610,7 @@ with timer() as tim:
                                tag="help_button",
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
-                dpg.bind_item_font("help_button", themes_and_fonts.icon_font_regular)  # tag
+                dpg.bind_item_font("help_button", app_state.themes_and_fonts.icon_font_regular)  # tag
                 with dpg.tooltip("help_button", tag="help_tooltip"):  # tag
                     dpg.add_text("Open the Help card [F1]",
                                  tag="help_tooltip_text")
@@ -1818,7 +1631,7 @@ with timer() as tim:
                         update_search()  # we should wait, because this button may get hammered.
                         dpg.focus_item("search_field")  # tag
                     dpg.add_button(label=fa.ICON_X, callback=clear_search, tag="clear_search_button")
-                    dpg.bind_item_font("clear_search_button", themes_and_fonts.icon_font_solid)  # tag
+                    dpg.bind_item_font("clear_search_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                     with dpg.tooltip("clear_search_button", tag="clear_search_tooltip"):  # tag
                         dpg.add_text("Clear the search",
                                      tag="clear_search_tooltip_text")
@@ -1889,15 +1702,15 @@ with timer() as tim:
     # Word cloud display.
     with dpg.window(show=False, modal=False, no_title_bar=False, tag="word_cloud_window",
                     label="Word cloud",
-                    no_scrollbar=True, autosize=True) as word_cloud_window:
-        dpg.add_image(word_cloud_texture, tag="word_cloud_image")
+                    no_scrollbar=True, autosize=True):
+        dpg.add_image("word_cloud_texture", tag="word_cloud_image")
         with dpg.group(horizontal=True, tag="word_cloud_toolbar"):
             dpg.add_button(label=fa.ICON_HARD_DRIVE,
                            tag="word_cloud_save_button",
-                           callback=show_save_word_cloud_dialog,
+                           callback=word_cloud.show_save_dialog,
                            indent=gui_config.toolbutton_indent,
                            width=gui_config.toolbutton_w)
-            dpg.bind_item_font("word_cloud_save_button", themes_and_fonts.icon_font_solid)  # tag
+            dpg.bind_item_font("word_cloud_save_button", app_state.themes_and_fonts.icon_font_solid)  # tag
             with dpg.tooltip("word_cloud_save_button", tag="word_cloud_save_tooltip"):  # tag
                 dpg.add_text("Save word cloud as PNG [Ctrl+S]", tag="word_cloud_save_tooltip_text")
 
@@ -1953,7 +1766,7 @@ with timer() as tim:
                                tag="importer_save_button",
                                width=gui_config.toolbutton_w,
                                callback=show_save_import_dialog)
-                dpg.bind_item_font("importer_save_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("importer_save_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("importer_save_button", tag="importer_save_tooltip"):  # tag
                     dpg.add_text("Select output dataset file to save as [Ctrl+S]", tag="importer_save_tooltip_text")  # TODO: DRY duplicate definitions for labels
 
@@ -1981,7 +1794,7 @@ with timer() as tim:
                                tag="importer_select_input_files_button",
                                width=gui_config.toolbutton_w,
                                callback=show_open_import_dialog)
-                dpg.bind_item_font("importer_select_input_files_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("importer_select_input_files_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 with dpg.tooltip("importer_select_input_files_button", tag="importer_select_input_files_tooltip"):  # tag
                     dpg.add_text("Select input BibTeX files [Ctrl+O]", tag="importer_select_input_files_tooltip_text")  # TODO: DRY duplicate definitions for labels
 
@@ -2007,7 +1820,7 @@ with timer() as tim:
                                width=gui_config.toolbutton_w,
                                callback=start_or_stop_importer,
                                enabled=True)
-                dpg.bind_item_font("importer_startstop_button", themes_and_fonts.icon_font_solid)  # tag
+                dpg.bind_item_font("importer_startstop_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                 dpg.bind_item_theme("importer_startstop_button", "disablable_button_theme")  # tag
                 with dpg.tooltip("importer_startstop_button", tag="importer_startstop_tooltip"):  # tag
                     dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="importer_startstop_tooltip_text")  # TODO: DRY duplicate definitions for labels
@@ -2043,7 +1856,7 @@ def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
     # Gather the relevant entries from the vis data.
     entries_by_cluster = collections.defaultdict(lambda: list())
     for data_idx in data_idxs:  # item indices into `sorted_xxx`
-        entry = dataset.sorted_entries[data_idx]
+        entry = app_state.dataset.sorted_entries[data_idx]
         entries_by_cluster[entry.cluster_id].append((data_idx, entry))
 
     # Alphabetize by `sort_field` (e.g. `title`) within each cluster, much faster to glance at.
@@ -2062,9 +1875,9 @@ def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
     def format_cluster_annotation(cluster_id):
         # The metadata for the cluster.
         if cluster_id != -1:  # the outlier set doesn't have a set of common keywords computed
-            if dataset.file_content.keywords_available:
+            if app_state.dataset.file_content.keywords_available:
                 cluster_title = f"#{cluster_id}"
-                cluster_keywords = f"[{', '.join(dataset.file_content.vis_keywords_by_cluster[cluster_id])}]\n"
+                cluster_keywords = f"[{', '.join(app_state.dataset.file_content.vis_keywords_by_cluster[cluster_id])}]\n"
             else:
                 cluster_title = f"#{cluster_id}"
                 cluster_keywords = ""
@@ -2133,8 +1946,8 @@ def update_mouse_hover(*, force=False, wait=True, wait_duration=0.05, env=None):
         # Highlight the mouse hover items (by plotting them as another series on top).
         data_idxs = get_data_idxs_at_mouse()  # item indices into `sorted_xxx`.
         if len(data_idxs):
-            dpg.set_value("my_mouse_hover_scatter_series", [list(dataset.sorted_lowdim_data[data_idxs, 0]),  # tag
-                                                            list(dataset.sorted_lowdim_data[data_idxs, 1])])
+            dpg.set_value("my_mouse_hover_scatter_series", [list(app_state.dataset.sorted_lowdim_data[data_idxs, 0]),  # tag
+                                                            list(app_state.dataset.sorted_lowdim_data[data_idxs, 1])])
         else:
             dpg.set_value("my_mouse_hover_scatter_series", [[], []])  # tag
     if m != env.m_prev:  # Hide the annotation tooltip as soon as the mouse moves. This allows the user to move the mouse where the tooltip was, and get correct plot coordinates.
@@ -2195,7 +2008,7 @@ def _update_annotation(*, task_env, env=None):
             # for highlighting
             search_string = unbox(search_string_box)
             search_result_data_idxs = unbox(search_result_data_idxs_box)
-            selection_data_idxs = unbox(selection_data_idxs_box)
+            selection_data_idxs = unbox(app_state.selection_data_idxs_box)
 
             # Actual content
             entries_by_cluster, formatter = get_entries_for_selection(data_idxs, max_n=gui_config.max_titles_in_tooltip)
@@ -2234,7 +2047,7 @@ def _update_annotation(*, task_env, env=None):
                         if data_idx in info_panel_entry_title_widgets:  # shown in the info panel
                             item_selection_status = item_ininfo
                             selection_mark_text = fa.ICON_CLIPBOARD_CHECK
-                            selection_mark_font = themes_and_fonts.icon_font_solid
+                            selection_mark_font = app_state.themes_and_fonts.icon_font_solid
                             if data_idx in selection_data_idxs:  # Usually, all items in the info panel are in the selection...
                                 selection_mark_color = (120, 180, 255)  # blue
                             else:  # ...but while the info panel is updating, the old content (shown until the update completes) may have some items that are no longer included in the new selection.
@@ -2242,7 +2055,7 @@ def _update_annotation(*, task_env, env=None):
                                 selection_mark_color = (80, 80, 80)  # very dark gray  # (255, 180, 120)  # orange
                         else:  # not shown in the info panel
                             selection_mark_text = fa.ICON_CLIPBOARD
-                            selection_mark_font = themes_and_fonts.icon_font_regular
+                            selection_mark_font = app_state.themes_and_fonts.icon_font_regular
                             if data_idx in selection_data_idxs:  # selected
                                 item_selection_status = item_selected
                                 selection_mark_color = (120, 180, 255)  # blue
@@ -2262,7 +2075,7 @@ def _update_annotation(*, task_env, env=None):
                                 item_search_status = item_nomatch
                                 search_mark_color = (80, 80, 80)  # very dark gray
                             mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=search_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_search_mark_build{env.internal_build_number}", parent=item_group)
-                            dpg.bind_item_font(mark_widget, themes_and_fonts.icon_font_solid)
+                            dpg.bind_item_font(mark_widget, app_state.themes_and_fonts.icon_font_solid)
                         else:  # no search active
                             item_search_status = item_searchoff
 
@@ -2290,26 +2103,26 @@ def _update_annotation(*, task_env, env=None):
                 annotation_help_selection_legend_group = dpg.add_group(horizontal=True, tag=f"annotation_help_selection_legend_group_build{env.internal_build_number}", parent=annotation_target_group)
 
                 selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD_CHECK, color=(120, 180, 255), tag=f"annotation_help_legend_ininfo_icon_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)  # blue
-                dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_solid)
+                dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_solid)
                 dpg.add_text(": selected, in info panel;", color=hint_color, tag=f"annotation_help_legend_ininfo_explanation_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)
 
                 selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD, color=(120, 180, 255), tag=f"annotation_help_legend_selected_icon_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)  # blue
-                dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_regular)
+                dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_regular)
                 dpg.add_text(": selected, not in info panel;", color=hint_color, tag=f"annotation_help_legend_selected_explanation_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)
 
                 selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD, color=(80, 80, 80), tag=f"annotation_help_legend_notselected_icon_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)  # very dark gray
-                dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_regular)
+                dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_regular)
                 dpg.add_text(": not selected", color=hint_color, tag=f"annotation_help_legend_notselected_explanation_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)
 
                 if search_string:
                     annotation_help_search_legend_group = dpg.add_group(horizontal=True, tag=f"annotation_help_search_legend_group_build{env.internal_build_number}", parent=annotation_target_group)
 
                     search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(180, 255, 180), tag=f"annotation_help_legend_match_icon_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
-                    dpg.bind_item_font(search_mark_widget, themes_and_fonts.icon_font_solid)
+                    dpg.bind_item_font(search_mark_widget, app_state.themes_and_fonts.icon_font_solid)
                     dpg.add_text(": match;", color=hint_color, tag=f"annotation_help_legend_match_explanation_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
 
                     search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(80, 80, 80), tag=f"annotation_help_legend_nomatch_icon_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
-                    dpg.bind_item_font(search_mark_widget, themes_and_fonts.icon_font_solid)
+                    dpg.bind_item_font(search_mark_widget, app_state.themes_and_fonts.icon_font_solid)
                     dpg.add_text(": no match", color=hint_color, tag=f"annotation_help_legend_nomatch_explanation_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
 
                 if have_jumpable_item:
@@ -2317,20 +2130,20 @@ def _update_annotation(*, task_env, env=None):
 
                     dpg.add_text("[Right-click to scroll info panel to topmost", color=hint_color, tag=f"annotation_help_jumpable_explanation_left_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
                     selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD_CHECK, color=(120, 180, 255), tag=f"annotation_help_jumpable_selection_icon_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
-                    dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_solid)
+                    dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_solid)
                     if search_string:
                         search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(180, 255, 180), tag=f"annotation_help_jumpable_search_icon_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
-                        dpg.bind_item_font(search_mark_widget, themes_and_fonts.icon_font_solid)
+                        dpg.bind_item_font(search_mark_widget, app_state.themes_and_fonts.icon_font_solid)
                     dpg.add_text("item]", color=hint_color, tag=f"annotation_help_jumpable_explanation_right_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
                 else:
                     annotation_help_notjumpable_group = dpg.add_group(horizontal=True, tag=f"annotation_help_notjumpable_group_build{env.internal_build_number}", parent=annotation_target_group)
 
                     dpg.add_text("[Right-click disabled, no", color=hint_color, tag=f"annotation_help_notjumpable_explanation_left_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
                     selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD_CHECK, color=(120, 180, 255), tag=f"annotation_help_notjumpable_selection_icon_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
-                    dpg.bind_item_font(selection_mark_widget, themes_and_fonts.icon_font_solid)
+                    dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_solid)
                     if search_string:
                         search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(180, 255, 180), tag=f"annotation_help_notjumpable_search_icon_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
-                        dpg.bind_item_font(search_mark_widget, themes_and_fonts.icon_font_solid)
+                        dpg.bind_item_font(search_mark_widget, app_state.themes_and_fonts.icon_font_solid)
                     dpg.add_text("item listed]", color=hint_color, tag=f"annotation_help_notjumpable_explanation_right_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
 
                 # Swap the new content in ("double-buffering")
@@ -2584,7 +2397,7 @@ def info_panel_find_next_or_prev_item(widgets, *, _next=True, kluge=True, extra_
 
     _, y0_content = get_info_panel_content_area_start_pos()  # The "current match" is positioned at the top of the content area.
     if kluge:  # In the position check, optionally reject the item too near the top of the content area (to look for the next/previous one, not the one currently at the top).
-        kluge = (+1 if _next else -1) * themes_and_fonts.font_size  # Pixels. We arbitrarily use one line of text as a guideline.
+        kluge = (+1 if _next else -1) * app_state.themes_and_fonts.font_size  # Pixels. We arbitrarily use one line of text as a guideline.
     else:
         kluge = 0
     def is_completely_below_top_of_content_area(widget):
@@ -2780,7 +2593,7 @@ def _copy_entry_to_clipboard(item):
     """
     with info_panel_content_lock:
         data_idx = info_panel_widget_to_data_idx[item]
-        entry = dataset.sorted_entries[data_idx]
+        entry = app_state.dataset.sorted_entries[data_idx]
 
         button = widgetfinder.find_widget_depth_first(item, accept=is_copy_entry_to_clipboard_button)
         user_data = get_user_data(button)
@@ -2810,7 +2623,7 @@ def search_or_select_current_entry():
             logger.debug("search_or_select_current_entry: No current item (info panel empty?)")
             return
         data_idx = info_panel_widget_to_data_idx[item]
-    entry = dataset.sorted_entries[data_idx]
+    entry = app_state.dataset.sorted_entries[data_idx]
     _search_or_select_entry(entry)
 
 def _search_or_select_entry(entry):
@@ -3022,7 +2835,7 @@ def _get_cluster_of_current_info_panel_item():
         current_item = _get_current_info_panel_item()
         if current_item is not None:
             data_idx = info_panel_widget_to_data_idx[current_item]  # item index to `sorted_xxx`
-            entry = dataset.sorted_entries[data_idx]
+            entry = app_state.dataset.sorted_entries[data_idx]
             cluster_id = entry.cluster_id
             return cluster_id
         logger.debug("_get_cluster_of_current_info_panel_item: No current item (info panel empty?)")
@@ -3111,7 +2924,7 @@ def select_cluster_by_id(cluster_id):
 
     Triggers an info panel update if the selection changes.
     """
-    data_idxs = [data_idx for data_idx, entry in enumerate(dataset.sorted_entries) if entry.cluster_id == cluster_id]  # indices to `sorted_xxx`
+    data_idxs = [data_idx for data_idx, entry in enumerate(app_state.dataset.sorted_entries) if entry.cluster_id == cluster_id]  # indices to `sorted_xxx`
     update_selection(data_idxs,
                      keyboard_state_to_selection_mode(),
                      wait=False)
@@ -3133,7 +2946,7 @@ def select_current_cluster():
             logger.debug("search_current_cluster: No current item (info panel empty?)")
             return
         data_idx = info_panel_widget_to_data_idx[item]
-    entry = dataset.sorted_entries[data_idx]
+    entry = app_state.dataset.sorted_entries[data_idx]
     select_cluster_by_id(entry.cluster_id)
 
 # ----------------------------------------
@@ -3172,7 +2985,7 @@ def _update_info_panel(*, task_env=None, env=None):
     # --------------------------------------------------------------------------------
     # Prepare search result highlighting.
 
-    selection_data_idxs = unbox(selection_data_idxs_box)  # item indices into `sorted_xxx`
+    selection_data_idxs = unbox(app_state.selection_data_idxs_box)  # item indices into `sorted_xxx`
     search_result_data_idxs = unbox(search_result_data_idxs_box)  # for deciding item colors (when a search active, dim non-matching items)
     search_string = unbox(search_string_box)
     if search_string:
@@ -3212,7 +3025,7 @@ def _update_info_panel(*, task_env=None, env=None):
             user_data = item_config["user_data"]
             if user_data is not None:
                 kind_, data_idx = user_data  # `data_idx`: index to `sorted_xxx`
-                entry = dataset.sorted_entries[data_idx]
+                entry = app_state.dataset.sorted_entries[data_idx]
                 return f"{entry.author} ({entry.year}): {entry.title}"
         except Exception:
             pass
@@ -3573,7 +3386,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                    direction=dpg.mvDir_Up,
                                    callback=make_scroll_info_panel_to_cluster(display_idx),
                                    parent=entry_buttons_column_1_group)
-                dpg.bind_item_font(b, themes_and_fonts.icon_font_solid)
+                dpg.bind_item_font(b, app_state.themes_and_fonts.icon_font_solid)
                 b_tooltip = dpg.add_tooltip(b)
                 b_tooltip_text = dpg.add_text(f"Back to top of cluster #{cluster_id} [Ctrl+U]" if cluster_id != -1 else "Back to top of Misc [Ctrl+U]",
                                               parent=b_tooltip)
@@ -3583,7 +3396,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                    tag=f"cluster_{cluster_id}_entry_{data_idx}_copy_to_clipboard_button_build{env.internal_build_number}",
                                    width=gui_config.info_panel_button_w,
                                    parent=entry_buttons_column_1_group)
-                dpg.bind_item_font(b, themes_and_fonts.icon_font_solid)
+                dpg.bind_item_font(b, app_state.themes_and_fonts.icon_font_solid)
                 b_tooltip = dpg.add_tooltip(b)
                 b_tooltip_text = dpg.add_text("Copy item authors, year and title to clipboard [Ctrl+Shift+C]",  # TODO: DRY duplicate definitions for labels
                                               parent=b_tooltip)
@@ -3600,7 +3413,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                    tag=f"cluster_{cluster_id}_entry_{data_idx}_search_in_plotter_button_build{env.internal_build_number}",
                                    width=gui_config.info_panel_button_w,
                                    parent=entry_buttons_column_2_group)
-                dpg.bind_item_font(b, themes_and_fonts.icon_font_solid)
+                dpg.bind_item_font(b, app_state.themes_and_fonts.icon_font_solid)
                 b_tooltip = dpg.add_tooltip(b)
                 dpg.add_text("Search for this item in the plotter [F6]\n(clear search if already searching for this item)\n    with Shift: set selection to this item only\n    with Ctrl: remove this item from selection",
                              parent=b_tooltip)
@@ -3610,7 +3423,7 @@ def _update_info_panel(*, task_env=None, env=None):
                                    tag=f"cluster_{cluster_id}_entry_{data_idx}_select_this_cluster_button_build{env.internal_build_number}",
                                    width=gui_config.info_panel_button_w,
                                    parent=entry_buttons_column_2_group)
-                dpg.bind_item_font(b, themes_and_fonts.icon_font_solid)
+                dpg.bind_item_font(b, app_state.themes_and_fonts.icon_font_solid)
                 b_tooltip = dpg.add_tooltip(b)
                 cluster_name_str = f"#{cluster_id}" if cluster_id != -1 else "Misc"
                 dpg.add_text(f"Select all items in the same cluster ({cluster_name_str}) as this item [F7]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
@@ -3930,7 +3743,7 @@ def render_help_extras(self: helpcard.HelpWindow,
                           parent=g2)
     dpg_markdown.add_text(f"- {self.c_txt}**Search result set**: The items matching the current search, {self.c_end}{c_search}**glowing**{self.c_end}{self.c_txt} in the plotter.{self.c_end}",
                           parent=g2)
-    dpg.add_spacer(width=1, height=themes_and_fonts.font_size, parent=g)
+    dpg.add_spacer(width=1, height=app_state.themes_and_fonts.font_size, parent=g)
 
     # Additional general help
     dpg_markdown.add_text(f"{self.c_hed}**How search works**{self.c_end}",
@@ -3949,10 +3762,10 @@ help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
                                   width=gui_config.help_window_w,
                                   height=gui_config.help_window_h,
                                   reference_window=main_window,
-                                  themes_and_fonts=themes_and_fonts,
+                                  themes_and_fonts=app_state.themes_and_fonts,
                                   on_render_extras=render_help_extras,
-                                  on_show=enter_modal_mode,
-                                  on_hide=exit_modal_mode)
+                                  on_show=app_state.enter_modal_mode,
+                                  on_hide=app_state.exit_modal_mode)
 dpg.set_item_callback("help_button", help_window.show)  # tag
 
 # --------------------------------------------------------------------------------
@@ -4218,14 +4031,14 @@ def hotkeys_callback(sender, app_data):
         return
 
     # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
-    elif (is_open_file_dialog_visible() or is_save_word_cloud_dialog_visible() or
+    elif (is_open_file_dialog_visible() or word_cloud.is_save_dialog_visible() or
           is_open_import_dialog_visible() or is_save_import_dialog_visible()):
         return
 
     # Hotkeys while the word cloud viewer is shown
-    elif dpg.is_item_visible(word_cloud_window):
+    elif dpg.is_item_visible("word_cloud_window"):
         if ctrl_pressed and key == dpg.mvKey_S:
-            show_save_word_cloud_dialog()
+            word_cloud.show_save_dialog()
             return
 
     # Hotkeys while the BibTeX importer window is shown
@@ -4265,7 +4078,7 @@ def hotkeys_callback(sender, app_data):
     elif key == dpg.mvKey_F9:  # Use an F-key, because this too needs selection mode modifiers.
         select_visible_all()
     elif key == dpg.mvKey_F10:
-        toggle_word_cloud_window()
+        word_cloud.toggle_window()
     # Ctrl+Shift+...
     elif ctrl_pressed and shift_pressed:
         if key == dpg.mvKey_Z and dpg.is_item_enabled("selection_undo_button"):  # tag
@@ -4369,17 +4182,15 @@ parser.add_argument(dest='filename', nargs='?', default=None, type=str, metavar=
                     help='dataset to open at startup (optional)')
 opts = parser.parse_args()
 
-bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
+app_state.bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
 annotation_task_manager = bgtask.TaskManager(name="annotation_update",
                                              mode="sequential",
-                                             executor=bg)
+                                             executor=app_state.bg)
 info_panel_task_manager = bgtask.TaskManager(name="info_panel_update",
                                              mode="sequential",
-                                             executor=bg)  # can re-use the same executor to place tasks in the same thread pool.
-word_cloud_task_manager = bgtask.TaskManager(name="word_cloud_update",
-                                             mode="sequential",
-                                             executor=bg)
-importer.init(executor=bg)  # BibTeX importer
+                                             executor=app_state.bg)  # can re-use the same executor to place tasks in the same thread pool.
+# Word cloud's task manager is created lazily inside `raven.visualizer.word_cloud` on first use.
+importer.init(executor=app_state.bg)  # BibTeX importer
 
 # import sys
 # print(dir(sys.modules["__main__"]))  # DEBUG: Check this occasionally to make sure we don't accidentally store any temporary variables in the module-level namespace.
