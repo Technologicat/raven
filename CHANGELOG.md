@@ -51,6 +51,15 @@
 - *Numerical utilities* (`raven.common.numutils`):
   - `psi()` (mollifier helper, also used via `nonanalytic_smooth_transition()`) no longer emits a stray `RuntimeWarning: divide by zero encountered in divide` when evaluated at `x = 0`. The function is correct — it uses the standard "compute-then-mask" idiom `np.exp(-1.0 / x**m) * (x > 0.0)` where `-1/0 = -inf`, `exp(-inf) = 0`, and the mask zeros the result — but numpy was still emitting the warning from the division step. A previous suppression attempt used `warnings.filterwarnings(..., module="__main__")`, which silently failed in practice (numpy emits the warning from its own internal module, not `__main__`). Replaced with `np.errstate(divide='ignore', invalid='ignore')`, numpy's own mechanism for suppressing float-error warnings within a dynamic extent.
 
+- *NLP tools* (`raven.common.nlptools`):
+  - `count_frequencies(..., lemmatize=False)` no longer crashes with `TypeError: 'int' object is not callable`. Latent bug: the non-lemmatize branch called `.lower()` on a spaCy `Token`, whose `.lower` attribute is the orth hash (an integer), not a method. The default `lemmatize=True` path rebinds the loop variable to `token.lemma_` (a `str`) before calling `.lower()`, so the default masked the bug. Every caller threading `lemmatize=False` through crashed.
+
+- *CSV parsing* (`raven.common.readcsv`):
+  - `parse_csv` with autodetected headers no longer silently drops the first data row. Latent bug: after sniffing the header via `next(reader)`, the code rebuilt a fresh `csv.reader` at the current (post-header) file position and then advanced another row via `reader.__next__()`, so the main parse loop effectively started at row 3. A `header + N`-row file returned `N - 1` rows; a `header + 1`-row file silently returned `[]`.
+
+- *Audio codec* (`raven.common.audio.codec`):
+  - `decode` no longer crashes on FLAC (and any other container that reports `duration=None` via pyav). A log-info line divided `None / av.time_base` on first frame, raising `TypeError`. Affected any caller decoding FLAC from a `BytesIO`.
+
 - *arXiv tools* (`raven.papers`):
   - `raven-arxiv2id` (and other tools using arXiv ID extraction from filenames): fix detection of IDs embedded between underscores, letters, or hyphens in filenames. Previously, filenames like `Smith_2301.12345_notes.pdf` silently failed to match. Also adds support for 4-digit new-style IDs (2007–2014 era, e.g. `0704.0001`) and old-style IDs with subject class prefix (pre-2007, e.g. `hep-th/0601001`).
 
