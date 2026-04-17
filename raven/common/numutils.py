@@ -3,8 +3,7 @@
 This module is licensed under the 2-clause BSD license, to facilitate integration anywhere.
 """
 
-__all__ = ["clamp", "nonanalytic_smooth_transition", "psi",
-           "si_prefix"]
+__all__ = ["clamp", "nonanalytic_smooth_transition", "psi"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -75,17 +74,3 @@ def psi(x: Union[float, np.array], m: float = 1.0) -> Union[float, np.array]:  #
         except (ZeroDivisionError, OverflowError):  # for scalar x
             return 0.0
 
-# TODO: si_prefix: very general utility, move to `unpythonic`
-# TODO: si_prefix: add binary mode (1024-based units Ki, Mi, Gi, ...)
-def si_prefix(number: Union[int, float]) -> str:
-    """Convert a number to SI format (1000 -> 1K).
-
-    https://medium.com/@ryan_forrester_/getting-file-sizes-in-python-a-complete-guide-01293aaa68ef
-    """
-    if number < 1000:
-        return f"{number:.2f}"
-    for unit in ['', 'K', 'M', 'G', 'T', 'P']:
-        if number < 1000:
-            return f"{number:.2f} {unit}"
-        number /= 1000
-    return f"{number:.2f} E"

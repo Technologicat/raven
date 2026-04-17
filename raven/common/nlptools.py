@@ -48,7 +48,7 @@ from spacy.tokens import DocBin
 import flair
 import dehyphen
 
-from . import utils as common_utils
+from unpythonic import environ_override
 
 # --------------------------------------------------------------------------------
 # Stopword management
@@ -379,7 +379,7 @@ def load_dehyphenator(model_name: str, device_string: str) -> dehyphen.FlairScor
     #   https://github.com/flairNLP/flair/issues/3263
     #   https://github.com/pytorch/pytorch/blob/main/torch/serialization.py#L1443
     logger.warning("load_dehyphenator: Temporarily forcing Torch into 'no weights only' load mode for Flair-NLP compatibility. The mode will be disabled immediately after Flair-NLP is loaded. The security warning is normal.")
-    with common_utils.environ_override(TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD="1"):
+    with environ_override(TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD="1"):
         try:
             # How to set CPU/GPU mode for Flair (used by `dehyphen`).
             # This needs to be done *before* instantiating the model.

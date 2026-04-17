@@ -17,13 +17,6 @@ Once done, remove the `pytest.importorskip` from `test_scaffold.py`; the scaffol
 Discovered during scaffold/appstate test work (2026-04-17).
 
 
-## Replace local utilities with unpythonic 2.1.0 equivalents
-
-`raven/common/utils.py` and `raven/common/numutils.py` contain four utilities that were ported to `unpythonic` in 2.1.0: `environ_override`, `maybe_open`, `UnionFilter`, and `si_prefix`. All are available as top-level imports (`from unpythonic import environ_override, maybe_open, UnionFilter, si_prefix`). The unpythonic versions have bugfixes (si_prefix negative numbers), additional features (si_prefix binary mode, negative SI prefixes), and type annotations. Replace the local copies with imports from unpythonic once raven bumps its unpythonic dependency to >= 2.1.0. The local `# TODO: move to unpythonic` comments mark the exact locations.
-
-Discovered during unpythonic 2.1.0 development (2026-04-16).
-
-
 ## torch.compile for the postprocessor
 
 `torch.compile()` on THA3 was investigated (2026-04-09) and yields only ~6% speedup (20.3ms → 19.0ms on 3070 Ti) at the cost of 37s compilation startup. Not worth it for THA3 — the model is already lean with separable convolutions + FP16. Also hangs in the server (works in standalone; cause unresolved — possibly Triton subprocess interaction with waitress/threads).

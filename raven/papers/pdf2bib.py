@@ -38,7 +38,7 @@ from textwrap import dedent
 import traceback
 from typing import Dict, List
 
-from unpythonic import sym, timer, ETAEstimator, uniqify
+from unpythonic import sym, timer, ETAEstimator, maybe_open, uniqify
 from unpythonic.env import env
 
 from ..client import mayberemote
@@ -903,8 +903,8 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
     # Process the PDFs
     #
     # bibtex_entries = []
-    with common_utils.maybe_open(opts.success_filename, mode="a", fallback=sys.stdout) as f_success:
-        with common_utils.maybe_open(opts.failed_filename, mode="a", fallback=sys.stdout) as f_failed:  # Actually the stdout from this is unused if the filename is not provided, since we send to the success output, wherever that is. Doesn't matter.
+    with maybe_open(opts.success_filename, mode="a", fallback=sys.stdout) as f_success:
+        with maybe_open(opts.failed_filename, mode="a", fallback=sys.stdout) as f_failed:  # Actually the stdout from this is unused if the filename is not provided, since we send to the success output, wherever that is. Doesn't matter.
             try:
                 for path in paths:
                     logger.info(f"Processing directory \"{path}\"...")

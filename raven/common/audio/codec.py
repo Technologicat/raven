@@ -13,7 +13,7 @@ import numpy as np
 
 import av
 
-from ..numutils import si_prefix
+from unpythonic import si_prefix
 
 from ...vendor.kokoro_fastapi.streaming_audio_writer import StreamingAudioWriter
 

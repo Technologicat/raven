@@ -112,59 +112,6 @@ class TestMakeBlankIndexArray:
         assert result.dtype == np.int64
 
 
-class TestEnvironOverride:
-    def test_sets_and_restores_existing_var(self):
-        os.environ["_RAVEN_TEST_VAR"] = "old"
-        with utils.environ_override(_RAVEN_TEST_VAR="new"):
-            assert os.environ["_RAVEN_TEST_VAR"] == "new"
-        assert os.environ["_RAVEN_TEST_VAR"] == "old"
-        del os.environ["_RAVEN_TEST_VAR"]
-
-    def test_new_var_removed_after(self):
-        key = "_RAVEN_TEST_NEWVAR"
-        assert key not in os.environ
-        with utils.environ_override(**{key: "value"}):
-            assert os.environ[key] == "value"
-        assert key not in os.environ
-
-    def test_multiple_vars(self):
-        with utils.environ_override(_RAVEN_A="1", _RAVEN_B="2"):
-            assert os.environ["_RAVEN_A"] == "1"
-            assert os.environ["_RAVEN_B"] == "2"
-        assert "_RAVEN_A" not in os.environ
-        assert "_RAVEN_B" not in os.environ
-
-
-class TestMaybeOpen:
-    def test_with_filename(self, tmp_path):
-        f = tmp_path / "test.txt"
-        f.write_text("hello")
-        with utils.maybe_open(str(f), "r", fallback=None) as fh:
-            assert fh.read() == "hello"
-
-    def test_with_none_uses_fallback(self):
-        import io
-        fallback = io.StringIO("fallback content")
-        with utils.maybe_open(None, "r", fallback=fallback) as fh:
-            assert fh.read() == "fallback content"
-
-
-class TestUnionFilter:
-    def test_matches_any_filter(self):
-        import logging
-        f = utils.UnionFilter(logging.Filter("raven.common"),
-                              logging.Filter("raven.librarian"))
-        record_common = logging.LogRecord("raven.common.utils", logging.INFO,
-                                          "", 0, "msg", (), None)
-        record_librarian = logging.LogRecord("raven.librarian.chat", logging.INFO,
-                                             "", 0, "msg", (), None)
-        record_other = logging.LogRecord("some.other.module", logging.INFO,
-                                         "", 0, "msg", (), None)
-        assert f.filter(record_common) is True
-        assert f.filter(record_librarian) is True
-        assert not f.filter(record_other)
-
-
 # ---------------------------------------------------------------------------
 # BibTeX author formatting
 # ---------------------------------------------------------------------------

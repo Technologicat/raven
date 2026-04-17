@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from raven.common.numutils import clamp, nonanalytic_smooth_transition, psi, si_prefix
+from raven.common.numutils import clamp, nonanalytic_smooth_transition, psi
 
 
 # ---------------------------------------------------------------------------
@@ -121,38 +121,3 @@ class TestNonanalyticSmoothTransition:
         assert val_m3 < val_m1
 
 
-# ---------------------------------------------------------------------------
-# si_prefix
-# ---------------------------------------------------------------------------
-
-class TestSiPrefix:
-    def test_small_number(self):
-        assert si_prefix(42) == "42.00"
-
-    def test_zero(self):
-        assert si_prefix(0) == "0.00"
-
-    def test_kilo(self):
-        assert si_prefix(1000) == "1.00 K"
-
-    def test_kilo_fractional(self):
-        assert si_prefix(1500) == "1.50 K"
-
-    def test_mega(self):
-        assert si_prefix(1_500_000) == "1.50 M"
-
-    def test_giga(self):
-        assert si_prefix(1e9) == "1.00 G"
-
-    def test_tera(self):
-        assert si_prefix(1e12) == "1.00 T"
-
-    def test_peta(self):
-        assert si_prefix(1e15) == "1.00 P"
-
-    def test_exa(self):
-        # Beyond P, falls through to E
-        assert si_prefix(1e18) == "1.00 E"
-
-    def test_just_below_kilo(self):
-        assert si_prefix(999) == "999.00"

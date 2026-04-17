@@ -40,6 +40,9 @@
   - `chroma_subsample` filter to simulate a lo-fi video look.
     - Reduces chrominance (color) resolution while keeping luminance (brightness) at full resolution. Real video systems use this to improve compression, because human vision isn't as sensitive to color as it is to brightness.
 
+- *Common utilities*: minimum `unpythonic` dependency bumped to 2.1.0. `environ_override`, `maybe_open`, `UnionFilter`, and `si_prefix` graduated to `unpythonic` in that release — Raven's local copies have been removed; the names now come from `unpythonic`.
+  - Visible side effect: SI-prefixed numbers in log messages (bitrate, byte-rate, pixel-rate strings in the avatar renderer and audio codec) now use correct SI casing — lowercase `k` for kilo (previously uppercase `K`, which is the symbol for kelvin). `si_prefix` also gained binary (base-1024) mode, sub-unity prefixes (`m`, `µ`, ...), and correct handling of negative and zero values.
+
 **Fixed**:
 
 - *Raven-minichat*:

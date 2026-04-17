@@ -20,7 +20,7 @@ from .. import __version__
 logger.info(f"Raven-visualizer version {__version__} starting.")
 
 logger.info("Loading libraries...")
-from unpythonic import timer
+from unpythonic import timer, UnionFilter
 with timer() as tim:
     import argparse
     import collections
@@ -75,20 +75,20 @@ with timer() as tim:
 
     # Emit further log messages only from a few select modules (our own plus some vendored)
     for handler in logging.root.handlers:
-        handler.addFilter(common_utils.UnionFilter(logging.Filter(__name__),
-                                                   logging.Filter("raven.client.mayberemote"),
-                                                   logging.Filter("raven.client.api"),
-                                                   logging.Filter("raven.client.util"),
-                                                   logging.Filter("raven.common.bgtask"),
-                                                   logging.Filter("raven.common.deviceinfo"),
-                                                   logging.Filter("raven.common.gui.animation"),
-                                                   logging.Filter("raven.common.gui.fontsetup"),
-                                                   logging.Filter("raven.common.gui.utils"),
-                                                   logging.Filter("raven.common.gui.widgetfinder"),
-                                                   logging.Filter("raven.common.utils"),
-                                                   logging.Filter("raven.librarian.llmclient"),
-                                                   logging.Filter("raven.visualizer.importer"),
-                                                   logging.Filter("raven.vendor.file_dialog.fdialog")))
+        handler.addFilter(UnionFilter(logging.Filter(__name__),
+                                      logging.Filter("raven.client.mayberemote"),
+                                      logging.Filter("raven.client.api"),
+                                      logging.Filter("raven.client.util"),
+                                      logging.Filter("raven.common.bgtask"),
+                                      logging.Filter("raven.common.deviceinfo"),
+                                      logging.Filter("raven.common.gui.animation"),
+                                      logging.Filter("raven.common.gui.fontsetup"),
+                                      logging.Filter("raven.common.gui.utils"),
+                                      logging.Filter("raven.common.gui.widgetfinder"),
+                                      logging.Filter("raven.common.utils"),
+                                      logging.Filter("raven.librarian.llmclient"),
+                                      logging.Filter("raven.visualizer.importer"),
+                                      logging.Filter("raven.vendor.file_dialog.fdialog")))
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------

@@ -11,10 +11,11 @@ import argparse
 import pathlib
 import sys
 
+from unpythonic import maybe_open
+
 from ..client import api
 from ..client import config as client_config
 from ..client import mayberemote
-from ..common import utils as common_utils
 from ..visualizer import config as visualizer_config
 
 def main() -> None:
@@ -58,7 +59,7 @@ def main() -> None:
             output_location_str = "stdout" if output_filename_absolute is None else f"'{str(output_filename_absolute)}'"
             print(f"Processing {input_location_str}. Writing to {output_location_str}.", file=sys.stderr)
 
-        with common_utils.maybe_open(input_filename_absolute, "r", fallback=sys.stdin, encoding="utf-8") as input_file:
+        with maybe_open(input_filename_absolute, "r", fallback=sys.stdin, encoding="utf-8") as input_file:
             text = input_file.read()
             if opts.join_paragraphs:
                 text = dehyphenator.dehyphenate(text)
@@ -66,7 +67,7 @@ def main() -> None:
                 text = text.split("\n\n")
                 text = dehyphenator.dehyphenate(text)
                 text = "\n\n".join(text)
-            with common_utils.maybe_open(output_filename_absolute, "w", fallback=sys.stdout, encoding="utf-8") as output_file:
+            with maybe_open(output_filename_absolute, "w", fallback=sys.stdout, encoding="utf-8") as output_file:
                 output_file.write(text)
             if output_file is sys.stdout:
                 output_file.flush()

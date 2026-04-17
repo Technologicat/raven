@@ -31,7 +31,7 @@ dependencies = [
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",  # spaCy
     "sseclient-py>=1.8.0",  # librarian: streaming transport for receiving data from LLM
     "torch>=2.4.0",
-    "unpythonic>=2.0.0",
+    "unpythonic>=2.1.0",
     "wordcloud>=1.9.3",  # visualizer
     "wosfile>=0.6",  # wos2bib
     "chromadb>=1.0.8",  # RAG semantic search

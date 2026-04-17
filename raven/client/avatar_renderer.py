@@ -36,6 +36,7 @@ from typing import Callable, Optional, Tuple, Union
 
 import PIL.Image
 
+from unpythonic import si_prefix
 from unpythonic.env import env as envcls
 
 import numpy as np
@@ -45,7 +46,6 @@ import dearpygui.dearpygui as dpg
 from ..common import bgtask
 from ..common.gui import utils as guiutils
 from ..common.running_average import RunningAverage
-from ..common.numutils import si_prefix
 
 from . import api
 
