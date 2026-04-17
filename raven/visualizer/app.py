@@ -29,11 +29,9 @@ with timer() as tim:
     import functools
     import gc
     from io import StringIO
-    import itertools
     import math
     import os
     import pathlib
-    import pickle
     import platform
     import re
     import threading
@@ -42,15 +40,13 @@ with timer() as tim:
 
     import numpy as np
 
-    import scipy.spatial.ckdtree
-
     from spacy.lang.en import English
     nlp_en = English()
     stopwords = nlp_en.Defaults.stop_words
 
     from unpythonic.env import env
     envcls = env  # for functions that need an `env` parameter due to `@dlet`, so that they can also instantiate env objects (oops)
-    from unpythonic import window, dlet, call, box, unbox, sym, islice
+    from unpythonic import dlet, call, box, unbox, sym, islice
 
     import dearpygui.dearpygui as dpg
 
@@ -71,6 +67,7 @@ with timer() as tim:
     from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
     from . import config as visualizer_config
     from . import importer  # BibTeX importer
+    from . import plotter
     from . import selection
     from . import word_cloud
 
@@ -95,105 +92,7 @@ with timer() as tim:
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
-# Utilities for working with the plotter
-
-def get_visible_datapoints():
-    """Return a list of all data points (indices to `sorted_xxx`) currently visible in the plotter."""
-    if app_state.dataset is None:  # nothing plotted when no dataset loaded
-        return common_utils.make_blank_index_array()
-
-    xmin, xmax = dpg.get_axis_limits("axis0")  # in data space  # tag
-    ymin, ymax = dpg.get_axis_limits("axis1")  # in data space  # tag
-
-    # fix: accept also data points at the edges of the plotter bounding box
-    x_range = xmax - xmin
-    y_range = ymax - ymin
-    eps = 1e-5
-
-    filtxmin = app_state.dataset.sorted_lowdim_data[:, 0] >= xmin - eps * x_range
-    filtxmax = app_state.dataset.sorted_lowdim_data[:, 0] <= xmax + eps * x_range
-    filtx = filtxmin * filtxmax
-    filtymin = app_state.dataset.sorted_lowdim_data[:, 1] >= ymin - eps * y_range
-    filtymax = app_state.dataset.sorted_lowdim_data[:, 1] <= ymax + eps * y_range
-    filty = filtymin * filtymax
-    filt = filtx * filty
-    return np.where(filt)[0]
-
-def get_data_idxs_at_mouse():
-    """Return a list of data points (indices to `sorted_xxx`) that are currently under the mouse cursor."""
-    if app_state.dataset is None:  # nothing plotted when no dataset loaded
-        return common_utils.make_blank_index_array()
-    pixels_per_data_unit_x, pixels_per_data_unit_y = guiutils.get_pixels_per_plotter_data_unit("plot", "axis0", "axis1")  # tag
-    if pixels_per_data_unit_x == 0.0 or pixels_per_data_unit_y == 0.0:
-        return common_utils.make_blank_index_array()
-
-    # FIXME: DPG BUG WORKAROUND: when not initialized yet, `get_plot_mouse_pos` returns `[0, 0]`.
-    # This happens especially if the mouse cursor starts outside the plot area when the app starts.
-    # For many t-SNE plots, there are likely some data points near the origin.
-    p = np.array(dpg.get_plot_mouse_pos())
-    first_time = (p == np.array([0.0, 0.0])).all()  # exactly zero - unlikely to happen otherwise (since we likely get asymmetric axis limits from t-SNE)
-    if first_time:
-        return common_utils.make_blank_index_array()
-
-    # Find `k` data points nearest to the mouse cursor.
-    # Since the plot aspect ratio is not necessarily square, we need x/y distances separately to judge the pixel distance.
-    # Hence the data space distances the `kdtree` gives us are not meaningful for our purposes.
-    data_space_distances_, data_idxs = app_state.dataset.kdtree.query(p, k=gui_config.datapoints_at_mouse_max_neighbors)  # `data_idxs`: item indices into `sorted_xxx`
-
-    # Compute pixel distance, from mouse cursor, of each matched data point.
-    deltas = app_state.dataset.sorted_lowdim_data[data_idxs, :] - p  # Distances from mouse cursor in data space, tensor of shape [k, 2].
-    deltas[:, 0] *= pixels_per_data_unit_x  # pixel distance, x
-    deltas[:, 1] *= pixels_per_data_unit_y  # pixel distance, y
-    pixel_distance = (deltas[:, 0]**2 + deltas[:, 1]**2)**0.5
-
-    # Filter for data points within the maximum allowed pixel distance (selection brush size).
-    filt = (pixel_distance <= gui_config.selection_brush_radius_pixels)
-
-    # logger.debug(f"get_data_idxs_at_mouse: p = {p}, data_idxs[filt] = {data_idxs[filt]}, pixel_distance = {pixel_distance[filt]}")
-
-    return data_idxs[filt]
-
-def reset_plotter_zoom():
-    """Reset the plotter's zoom level to show all data."""
-    dpg.fit_axis_data("axis0")  # tag
-    dpg.fit_axis_data("axis1")  # tag
-
-    # # Leave some empty space at the edges.
-    # # This ensures all data points are *inside* the plotter view,
-    # # not exactly on the edges (which may cause them not to be selected with a "select visible").
-    #
-    # # First, wait until the fit takes.
-    # wait_frames_max = 5
-    # orig_xmin, orig_xmax = dpg.get_axis_limits("axis0")  # in data space  # tag
-    # orig_ymin, orig_ymax = dpg.get_axis_limits("axis1")  # in data space  # tag
-    # for waited in range(wait_frames_max):
-    #     dpg.split_frame()
-    #     xmin, xmax = dpg.get_axis_limits("axis0")  # in data space  # tag
-    #     ymin, ymax = dpg.get_axis_limits("axis1")  # in data space  # tag
-    #     if xmin != orig_xmin or ymin != orig_ymin or xmax != orig_xmax or ymax != orig_ymax:
-    #         logger.info(f"reset_plotter_zoom: waited {waited} frame{'s' if waited != 1 else ''} for fit_axis_data")
-    #         break
-    # else:
-    #     logger.info(f"reset_plotter_zoom: timeout ({wait_frames_max} frames) when waiting for fit_axis_data")
-    #
-    # # Then compute the new axis limits.
-    # x_center = xmin + (xmax - xmin) / 2.0
-    # y_center = ymin + (ymax - ymin) / 2.0
-    # x_range = xmax - xmin
-    # y_range = ymax - ymin
-    # boost = 1.01
-    # dpg.set_axis_limits("axis0",
-    #                     x_center - (boost * x_range) / 2.0,
-    #                     x_center + (boost * x_range) / 2.0)
-    # dpg.set_axis_limits("axis1",
-    #                     y_center - (boost * y_range) / 2.0,
-    #                     y_center + (boost * y_range) / 2.0)
-    # # https://stackoverflow.com/questions/75069012/set-initial-axis-limits-while-preserving-pan-zoom-in-dearpygui
-    # dpg.split_frame()  # important
-    # dpg.set_axis_limits_auto("axis0")
-    # dpg.set_axis_limits_auto("axis1")
-
-
+# Plotter utilities — extracted to `raven.visualizer.plotter` (2026-04-17).
 # --------------------------------------------------------------------------------
 # Selection management — extracted to `raven.visualizer.selection` (2026-04-17).
 selection.reset_undo_history(_update_gui=False)  # GUI not initialized yet. This is the only time the flag should be set to `False`!
@@ -283,85 +182,9 @@ logger.info(f"    Done in {tim.dt:0.6g}s.")
 # Dataset loading
 
 app_state.dataset = None  # currently loaded dataset (as an `unpythonic.env.env`)
-dynamically_created_cluster_color_coding_themes = []  # for cleaning up old cluster coloring themes when another dataset is loaded
 
-def _read_dataset_file(filename):
-    """Load a dataset file. Low-level helper."""
-    with open(filename, "rb") as visdata_file:
-        data = pickle.load(visdata_file)
-    if data["version"] != 1:
-        raise NotImplementedError(f"Dataset {filename} has version '{data['version']}', expected '1'. Don't know how to visualize this dataset.")
-    return env(**data)
+# Dataset parsing and plotter rendering — extracted to `raven.visualizer.plotter` (2026-04-17).
 
-def parse_dataset_file(filename):
-    """Parse a dataset file and process it for visualization. Public API.
-
-    Returns a dataset: `unpythonic.env` with the datafile contents, and some preprocessed fields to facilitate visualization.
-    """
-    app_state.dataset = env()
-    absolute_filename = common_utils.absolutize_filename(filename)
-    app_state.dataset.filename = filename
-    app_state.dataset.absolute_filename = absolute_filename
-
-    logger.info(f"Reading Raven-visualizer dataset '{filename}' (resolved to '{absolute_filename}')...")
-    with timer() as tim:
-        app_state.dataset.file_content = _read_dataset_file(absolute_filename)
-    logger.info(f"    Done in {tim.dt:0.6g}s.")
-
-    # In DPG (as of this writing, DPG v2.0), one scatter series has only a single global color.
-    #
-    # To color the data by cluster ID, we create a separate scatter plot for each cluster.
-    # Fortunately, DPG is fast enough that it can render hundreds of scatter plots in realtime.
-    #
-    # For this we need to sort the data by label (cluster ID).
-    #
-    # An easy way is to argsort the labels and make a copy of the data, so we get logically contiguous blocks
-    # of data for each label. The O(n log(n)) sorting cost upon dataset loading is cheap enough.
-    #
-    logger.info("Sorting data by cluster...")
-    with timer() as tim:  # set up `sorted_xxx`
-        app_state.dataset.sorted_orig_data_idxs = np.argsort(app_state.dataset.file_content.labels)  # sort by label (cluster ID)
-        app_state.dataset.sorted_labels = app_state.dataset.file_content.labels[app_state.dataset.sorted_orig_data_idxs]
-        app_state.dataset.sorted_lowdim_data = app_state.dataset.file_content.lowdim_data[app_state.dataset.sorted_orig_data_idxs, :]  # [data_idx, axis], where axis is 0 (x) or 1 (y).
-        app_state.dataset.sorted_entries = [app_state.dataset.file_content.vis_data[orig_data_idx] for orig_data_idx in app_state.dataset.sorted_orig_data_idxs]  # the actual data records, extracted from BibTeX (Python list)
-        @call
-        def _():
-            # Compute normalized titles for searching, and insert a reverse lookup for the item's index in `sorted_xxx`.
-            for data_idx, entry in enumerate(app_state.dataset.sorted_entries):
-                entry.data_idx = data_idx  # index to `sorted_xxx`
-                entry.normalized_title = common_utils.normalize_search_string(entry.title.strip())  # for searching
-
-        # for k, v in dataset.sorted_entries[0].items():  # DEBUG: print one input data record (it's a dict)
-        #     print(f"{k}: {v}")
-
-        # Find contiguous blocks with the same label (cluster ID).
-        app_state.dataset.cluster_id_jump_data_idxs = np.where(np.diff(app_state.dataset.sorted_labels, prepend=np.nan))[0]  # https://stackoverflow.com/a/65657397
-        app_state.dataset.cluster_id_jump_data_idxs = list(itertools.chain(list(app_state.dataset.cluster_id_jump_data_idxs), (None,)))  # -> [i0, i1, ..., iN, None] -> used for slices, `None` = end
-    logger.info(f"    Done in {tim.dt:0.6g}s.")
-
-    # For mouseover support. We need to manually detect the data points closest to the mouse cursor.
-    logger.info("Indexing dataset for nearest-neighbors search...")
-    with timer() as tim:
-        app_state.dataset.kdtree = scipy.spatial.cKDTree(data=app_state.dataset.sorted_lowdim_data)
-    logger.info(f"    Done in {tim.dt:0.6g}s.")
-    return app_state.dataset
-
-def _create_highlight_scatter_series():
-    """Create some special scatterplot data series, used for highlighting datapoints in the plotter."""
-    # Data items hovered over. Data points to be filled in by mouse move handler.
-    series_tag = "my_mouse_hover_scatter_series"
-    dpg.add_scatter_series([], [], tag=series_tag, parent="axis1")
-    dpg.bind_item_theme(series_tag, "my_selection_theme")  # tag
-
-    # Data items currently selected. Data points to be filled in by selection handler.
-    series_tag = "my_selection_scatter_series"
-    dpg.add_scatter_series([], [], tag=series_tag, parent="axis1")
-    dpg.bind_item_theme(series_tag, "my_selection_datapoints_theme")  # tag
-
-    # Data items matching the current search. Data points to be filled in by search handler.
-    series_tag = "my_search_results_scatter_series"
-    dpg.add_scatter_series([], [], tag=series_tag, parent="axis1")
-    dpg.bind_item_theme(series_tag, "my_search_results_theme")  # tag
 
 def clear_background_tasks(wait: bool):
     """Stop (cancel) and delete all background tasks."""
@@ -403,67 +226,20 @@ def reset_app_state(_update_gui=True):
         dpg.delete_item("axis1", children_only=True)  # tag
 
         # But restore the highlights for the next dataset
-        _create_highlight_scatter_series()
+        plotter.create_highlight_series()
 
         # Delete old cluster-color-coding scatterplot themes
-        for theme in dynamically_created_cluster_color_coding_themes:
-            dpg.delete_item(theme)
+        plotter.clear_cluster_color_themes()
 
         dpg.set_item_label("plot", "Semantic map [no dataset loaded]")  # tag  # TODO: DRY duplicate definitions for labels
 
-def load_data_into_plotter(ds):
-    """Load `ds` (see `parse_dataset_file`) to the plotter.
-
-    IMPORTANT: call `reset_app_state()` just before calling this.
-    """
-    logger.info(f"Plotting Raven-visualizer dataset '{ds.absolute_filename}'...")
-    with timer() as tim:
-        # Group data points by label
-        datas = []
-        for start, end in window(2, ds.cluster_id_jump_data_idxs):  # indices to `sorted_xxx`
-            xs = list(ds.sorted_lowdim_data[start:end, 0])
-            ys = list(ds.sorted_lowdim_data[start:end, 1])
-            label = ds.sorted_labels[start]  # all `ds.sorted_labels[start:end]` are the same
-            datas.append((label, xs, ys))
-
-        max_label = ds.sorted_labels[-1]  # The labels have been sorted in ascending order so the largest one is last.
-        for label, xs, ys in datas:
-            series_tag = f"my_scatter_series_{label}"  # tag
-            series_theme = f"my_plot_theme_{label}"  # tag
-            colormap = gui_config.plotter_colormap
-
-            # Render this data series, placing it before the first highlight series so that all highlights render on top.
-            dpg.add_scatter_series(xs, ys, tag=series_tag, parent="axis1", before="my_mouse_hover_scatter_series")  # tag
-
-            # Compute the color for this series, and create a theme for it.
-            # See:
-            #     https://dearpygui.readthedocs.io/en/latest/reference/dearpygui.html#dearpygui.dearpygui.sample_colormap
-            #     https://dearpygui.readthedocs.io/en/latest/documentation/themes.html
-            color = dpg.sample_colormap(colormap, t=(label + 1) / (max_label + 1))
-            color = [int(255 * component) for component in color]  # RGBA
-            color[-1] = int(0.5 * color[-1])  # A; make translucent
-            with dpg.theme(tag=series_theme) as this_scatterplot_theme:
-                with dpg.theme_component(dpg.mvScatterSeries):
-                    dpg.add_theme_color(dpg.mvPlotCol_Line, color, category=dpg.mvThemeCat_Plots)
-                    # # We could customize other stuff, too.
-                    # dpg.add_theme_style(dpg.mvPlotStyleVar_Marker, dpg.mvPlotMarker_Circle, category=dpg.mvThemeCat_Plots)
-                    # dpg.add_theme_style(dpg.mvPlotStyleVar_MarkerSize, 4, category=dpg.mvThemeCat_Plots)
-            dpg.bind_item_theme(series_tag, series_theme)
-            dynamically_created_cluster_color_coding_themes.append(this_scatterplot_theme)
-
-        dpg.set_item_label("plot", f"Semantic map [{os.path.basename(ds.absolute_filename)}]")  # tag
-        reset_plotter_zoom()
-    logger.info(f"    Done in {tim.dt:0.6g}s.")
-
-    # Trigger an info panel update
-    selection.update(common_utils.make_blank_index_array(), mode="replace", force=True, wait=False, update_selection_undo_history=False)
 
 def open_file(filename):
     """Load new data into the GUI. Public API."""
     logger.info(f"open_file: Opening file '{filename}'.")
     reset_app_state()
-    app_state.dataset = parse_dataset_file(filename)
-    load_data_into_plotter(app_state.dataset)
+    app_state.dataset = plotter.parse_dataset_file(filename)
+    plotter.load_dataset(app_state.dataset)
 
 # --------------------------------------------------------------------------------
 # File dialog init
@@ -1281,7 +1057,7 @@ with timer() as tim:
 
                 dpg.add_button(label=fa.ICON_HOUSE,
                                tag="zoom_reset_button",
-                               callback=reset_plotter_zoom,
+                               callback=plotter.reset_zoom,
                                indent=gui_config.toolbutton_indent,
                                width=gui_config.toolbutton_w)
                 dpg.bind_item_font("zoom_reset_button", app_state.themes_and_fonts.icon_font_solid)  # tag
@@ -1348,7 +1124,7 @@ with timer() as tim:
 
                 def select_visible_all():
                     """Select those datapoints that are currently visible in the plotter view."""
-                    selection.update(get_visible_datapoints(),
+                    selection.update(plotter.get_visible_datapoints(),
                                      selection.keyboard_state_to_mode())
                 dpg.add_button(label=fa.ICON_SQUARE,
                                tag="select_visible_all_button",
@@ -1479,7 +1255,7 @@ with timer() as tim:
                                 search_results_highlight_color = dpg.add_theme_color(dpg.mvPlotCol_Line, color, category=dpg.mvThemeCat_Plots)
                                 dpg.add_theme_style(dpg.mvPlotStyleVar_MarkerSize, 6, category=dpg.mvThemeCat_Plots)
 
-                        _create_highlight_scatter_series()  # some utilities may access the highlight series before the app has completely booted up
+                        plotter.create_highlight_series()  # some utilities may access the highlight series before the app has completely booted up
                 dpg.bind_item_theme("plot", "my_plotter_theme")
 
     # Word cloud display.
@@ -1727,7 +1503,7 @@ def update_mouse_hover(*, force=False, wait=True, wait_duration=0.05, env=None):
     m = dpg.get_mouse_pos(local=False)
     if force or m != env.m_prev:
         # Highlight the mouse hover items (by plotting them as another series on top).
-        data_idxs = get_data_idxs_at_mouse()  # item indices into `sorted_xxx`.
+        data_idxs = plotter.get_data_idxs_at_mouse()  # item indices into `sorted_xxx`.
         if len(data_idxs):
             dpg.set_value("my_mouse_hover_scatter_series", [list(app_state.dataset.sorted_lowdim_data[data_idxs, 0]),  # tag
                                                             list(app_state.dataset.sorted_lowdim_data[data_idxs, 1])])
@@ -1771,7 +1547,7 @@ def _update_annotation(*, task_env, env=None):
         return
 
     mouse_pos = dpg.get_mouse_pos(local=False)
-    data_idxs = get_data_idxs_at_mouse()  # item indices into `sorted_xxx`.
+    data_idxs = plotter.get_data_idxs_at_mouse()  # item indices into `sorted_xxx`.
 
     with annotation_content_lock:
         old_mouse_hover_data_idxs_set = set(annotation_data_idxs)  # For checking if we need to resize/reposition (reduces flickering). Ordering doesn't matter, because the tooltip is always populated in the same order.
@@ -3699,14 +3475,14 @@ def mouse_click_callback(sender, app_data):
     if mouse_button == dpg.mvMouseButton_Left:
         lmb_pressed_inside_plot = True
         draw_select_radius_indicator()
-        selection.update(get_data_idxs_at_mouse(),
+        selection.update(plotter.get_data_idxs_at_mouse(),
                          selection.keyboard_state_to_mode(),
                          wait=False,
                          update_selection_undo_history=False)  # `mouse_release_callback` will commit regardless of if this event is actually a click or a starting mouse-draw
 
     # Right-click to scroll to item at mouse cursor (if it is shown in the info panel)
     elif mouse_button == dpg.mvMouseButton_Right:
-        data_idxs_at_mouse = get_data_idxs_at_mouse()  # item indices into `sorted_xxx`
+        data_idxs_at_mouse = plotter.get_data_idxs_at_mouse()  # item indices into `sorted_xxx`
         if not len(data_idxs_at_mouse):
             return
 
@@ -3776,7 +3552,7 @@ def mouse_move_callback():
     # mouse-draw select (but only when drag began inside the plot)
     if lmb_pressed_inside_plot and dpg.is_mouse_button_down(dpg.mvMouseButton_Left):
         draw_select_radius_indicator()
-        selection.update(get_data_idxs_at_mouse(),
+        selection.update(plotter.get_data_idxs_at_mouse(),
                          selection.keyboard_state_to_mode(),
                          wait=True,
                          update_selection_undo_history=False)  # mouse release will commit later.
@@ -3892,7 +3668,7 @@ def hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_I:
             toggle_importer_window()
         elif key == dpg.mvKey_Home:
-            reset_plotter_zoom()
+            plotter.reset_zoom()
         elif key == dpg.mvKey_N:
             scroll_info_panel_to_next_cluster()
         elif key == dpg.mvKey_P:
