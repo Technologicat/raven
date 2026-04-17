@@ -59,6 +59,7 @@
   - Add missing `#` and `$` escaping — both are BibTeX/LaTeX specials that could cause parse or render errors in downstream tools.
   - `pdf2bib` now applies `bibtex_escape` to all field values (literal, LLM-extracted, and function-generated). Previously, LLM output was written unescaped.
   - `requests` and `tqdm` added as explicit dependencies (were used directly but only present as transitive deps).
+  - `raven-csv2bib` now converts **all** input files when given more than one. Previously, entries from all but the last file on the command line were silently dropped — the aggregation loop collected rows into an accumulator that a later loop never read, so only the last file's entries made it into the output.
 
 - *Video processing* (`raven.common.video`):
   - Fix filter cache invalidation on resolution change. Filters using texture caches now check their own tensor dimensions instead of relying on the video frame dimensions, preventing stale data when the image resolution changes mid-session.

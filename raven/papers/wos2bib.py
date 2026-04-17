@@ -8,6 +8,10 @@ Usage::
   python wos2bib.py input1.txt ... inputn.txt >output.bib
 """
 
+from __future__ import annotations
+
+__all__ = ["ptmap", "record_to_bibtex_entry", "records_to_library", "main"]
+
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,6 +19,7 @@ logger = logging.getLogger(__name__)
 from .. import __version__
 
 import argparse
+from typing import Iterable
 
 from unpythonic import timer
 
@@ -28,7 +33,126 @@ ptmap = {"J": "article",
          "B": "book"}  # TODO: "S" (series), "P" (patent)
 
 
-def main():
+def _format_author_addresses(author_addresses) -> str:
+    """Normalize WOS author-affiliation data (field C1) to a single string.
+
+    *author_addresses* may be:
+
+    - a ``dict`` of ``{author_name: [affiliation, ...]}``,
+    - a plain ``list`` of affiliation strings (no authors attached),
+    - falsy (``None`` / empty), in which case the result is ``""``,
+    - any other shape, treated as unrecognized and reported by the caller.
+    """
+    if not author_addresses:
+        return ""
+    if isinstance(author_addresses, dict):
+        def affiliate(author, affiliations):
+            affiliations = list(set(affiliations))  # dedupe per author
+            return f"{author}, {'. '.join(affiliations)}"
+        return "\n".join(affiliate(k, v) for k, v in author_addresses.items())
+    if isinstance(author_addresses, list):
+        return ". ".join(list(set(author_addresses)))
+    return ""  # unrecognized — caller logs, result empty
+
+
+def record_to_bibtex_entry(rec) -> tuple[Entry | None, str | None]:
+    """Convert a single WOS record to a ``bibtexparser`` Entry.
+
+    *rec* is any object with a dict-like ``.get(key, default=None)`` and an
+    ``author_address`` attribute (this matches ``wosfile.Record``; tests can
+    substitute a plain stub).
+
+    Returns ``(entry, None)`` on success, or ``(None, reason)`` when a required
+    field (UT, PT, AU, PY, TI) is missing — in which case *reason* is a short
+    human-readable string for logging.
+    """
+    accession_number = rec.get("UT")
+    if accession_number is None:
+        return None, "unique identifier missing"
+
+    publication_type = rec.get("PT")
+    if not publication_type:
+        return None, f"entry '{accession_number}': no publication type specified"
+
+    authors_list = rec.get("AU")
+    if not authors_list:
+        return None, f"entry '{accession_number}': no authors specified"
+
+    year_published = rec.get("PY")
+    if year_published is None:
+        return None, f"entry '{accession_number}': no year specified"
+
+    title = rec.get("TI")
+    if title is None:
+        return None, f"entry '{accession_number}': no title specified"
+
+    authors_str = " and ".join(authors_list)
+
+    publication_name = rec.get("SO")
+    volume = rec.get("VL")
+    issue = rec.get("IS")
+    page_beginning = rec.get("BP")
+    page_end = rec.get("EP")
+    pages = f"{page_beginning}-{page_end}" if page_beginning is not None and page_end is not None else ""
+    doi = rec.get("DI")
+    wos_categories_list = rec.get("WC")
+    author_addresses_str = _format_author_addresses(getattr(rec, "author_address", None))
+    cited_references = rec.get("CR")
+    n_cited_references = rec.get("NR")
+    abstract = rec.get("AB")
+
+    fields = [Field(key="Author", value=f"{{{authors_str}}}"),
+              Field(key="Year", value=f"{{{year_published}}}"),
+              Field(key="Title", value=f"{{{title}}}")]
+    if publication_name is not None:
+        fields.append(Field(key="Journal", value=f"{{{bibtex_escape(publication_name)}}}"))
+    if volume is not None:
+        fields.append(Field(key="Volume", value=f"{{{volume}}}"))
+    if issue is not None:
+        fields.append(Field(key="Number", value=f"{{{issue}}}"))  # yes, "Number".
+    if pages != "":
+        fields.append(Field(key="Pages", value=f"{{{pages}}}"))
+    if doi is not None:
+        fields.append(Field(key="DOI", value=f"{{{doi}}}"))
+    if wos_categories_list:
+        fields.append(Field(key="Web-Of-Science-Categories",
+                            value=f"{{{bibtex_escape('; '.join(wos_categories_list))}}}"))
+    if abstract is not None:
+        fields.append(Field(key="Abstract", value=f"{{{bibtex_escape(abstract)}}}"))
+    if author_addresses_str != "":
+        fields.append(Field(key="Affiliation", value=f"{{{bibtex_escape(author_addresses_str)}}}"))
+    if cited_references is not None:
+        newline = "\n"
+        fields.append(Field(key="Cited-References",
+                            value=f"{{{bibtex_escape(newline.join(cited_references))}}}"))
+    if n_cited_references is not None and n_cited_references > 0:
+        fields.append(Field(key="Number-Of-Cited-References", value=f"{{{n_cited_references}}}"))
+
+    entry = Entry(entry_type=ptmap[publication_type],
+                  key=accession_number,
+                  fields=fields)
+    return entry, None
+
+
+def records_to_library(records: Iterable) -> tuple[bibtexparser.Library, list[str]]:
+    """Convert an iterable of WOS records to a BibTeX library.
+
+    Returns ``(library, skip_reasons)``: *library* contains every record that
+    converted cleanly; *skip_reasons* lists one short string per skipped record
+    (missing required field), in the order the skips occurred.
+    """
+    library = bibtexparser.Library()
+    skip_reasons: list[str] = []
+    for rec in records:
+        entry, reason = record_to_bibtex_entry(rec)
+        if entry is None:
+            skip_reasons.append(reason)
+        else:
+            library.add(entry)
+    return library, skip_reasons
+
+
+def main() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(description="""Convert Web of Science plain text export (.wos/.txt) to BibTeX.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
@@ -36,138 +160,16 @@ def main():
     opts = parser.parse_args()
 
     logger.info(f"Reading input file{'s' if len(opts.filenames) != 1 else ''} {opts.filenames}...")
-    library = bibtexparser.Library()
-    n_skipped = 0
     with timer() as tim:
         # https://webofscience.help.clarivate.com/en-us/Content/export-records.htm
         # https://images.webofknowledge.com/images/help/WOS/hs_wos_fieldtags.html
-        for rec in wosfile.records_from(opts.filenames):
-            # mandatory fields
-
-            accession_number = rec.get("UT")  # unique identifier (like BibTeX entry key)
-            if accession_number is None:  # TODO: generate a unique ID if missing
-                logger.warning("    Skipping entry, reason: unique identifier missing")
-                n_skipped += 1
-                continue
-
-            publication_type = rec.get("PT")
-            if not publication_type:
-                logger.warning(f"    Skipping entry '{accession_number}', reason: no publication type specified")
-                n_skipped += 1
-                continue
-
-            authors_list = rec.get("AU")
-            if not authors_list:
-                logger.warning(f"    Skipping entry '{accession_number}', reason: no authors specified")
-                n_skipped += 1
-                continue
-
-            year_published = rec.get("PY")
-            if year_published is None:
-                logger.warning(f"    Skipping entry '{accession_number}', reason: no year specified")
-                n_skipped += 1
-                continue
-
-            # date_published = rec.get("PD")  # TODO: no place for this in BibTeX?
-
-            title = rec.get("TI")
-            if title is None:
-                logger.warning(f"    Skipping entry '{accession_number}', reason: no title specified")
-                n_skipped += 1
-                continue
-
-            authors_str = " and ".join(authors_list)
-
-            # optional fields
-
-            publication_name = rec.get("SO")  # journal name
-            volume = rec.get("VL")
-            issue = rec.get("IS")
-
-            # TODO
-            # conference_title = rec.get("CT")
-            # conference_date = rec.get("CY")
-            # conference_location = rec.get("CL")
-
-            # book_authors = rec.get("BA")
-            # isbn = rec.get("BN")
-            # publisher = rec.get("PU")
-
-            # book_series_title = rec.get("SE")
-            # book_series_subtitle = rec.get("BS")
-            # issn = rec.get("SN")
-
-            page_beginning = rec.get("BP")
-            page_end = rec.get("EP")
-            pages = f"{page_beginning}-{page_end}" if page_beginning is not None and page_end is not None else ""
-
-            doi = rec.get("DI")
-
-            wos_categories_list = rec.get("WC")
-            # wos_core_collection_times_cited = rec.get("TC")  # Often this is just 0.
-
-            author_addresses = rec.author_address  # This is stored in the undocumented field "C1".
-            if author_addresses:
-                # See `wosfile/record.py` for details.
-                def affiliate(author, affiliations):
-                    affiliations = list(set(affiliations))  # remove duplicates for the same author
-                    return f"{author}, {'. '.join(affiliations)}"
-
-                if isinstance(author_addresses, dict):  # Addresses with authors
-                    author_addresses_str = "\n".join(affiliate(k, v) for k, v in author_addresses.items())
-                elif isinstance(author_addresses, list):  # Only addresses, no authors
-                    author_addresses_str = ". ".join(list(set(author_addresses)))
-                else:
-                    logger.warning(f"    In entry '{accession_number}': skipping affiliation, reason: unrecognized format.")
-                    author_addresses_str = ""
-            else:
-                author_addresses_str = ""
-
-            cited_references = rec.get("CR")
-            n_cited_references = rec.get("NR")
-
-            abstract = rec.get("AB")
-            if abstract is None:
-                logger.warning(f"    Entry '{accession_number}' has no abstract. Including anyway.")
-                # # TODO: optionally skip entries with no abstract?
-                # n_skipped += 1
-                # continue
-
-            # author_keywords = rec.get("DE")  # often there seem to be no keywords
-
-            # Build the corresponding BibTeX entry
-            fields = [Field(key="Author", value=f"{{{authors_str}}}"),
-                      Field(key="Year", value=f"{{{year_published}}}"),
-                      Field(key="Title", value=f"{{{title}}}")]
-            if publication_name is not None:
-                fields.append(Field(key="Journal", value=f"{{{bibtex_escape(publication_name)}}}"))
-            if volume is not None:
-                fields.append(Field(key="Volume", value=f"{{{volume}}}"))
-            if issue is not None:
-                fields.append(Field(key="Number", value=f"{{{issue}}}"))  # yes, "Number".
-            if pages != "":
-                fields.append(Field(key="Pages", value=f"{{{pages}}}"))
-            if doi is not None:
-                fields.append(Field(key="DOI", value=f"{{{doi}}}"))
-            if wos_categories_list:
-                fields.append(Field(key="Web-Of-Science-Categories", value=f"{{{bibtex_escape('; '.join(wos_categories_list))}}}"))
-            if abstract is not None:
-                fields.append(Field(key="Abstract", value=f"{{{bibtex_escape(abstract)}}}"))
-            if author_addresses_str != "":
-                fields.append(Field(key="Affiliation", value=f"{{{bibtex_escape(author_addresses_str)}}}"))
-            if cited_references is not None:
-                newline = "\n"
-                fields.append(Field(key="Cited-References", value=f"{{{bibtex_escape(newline.join(cited_references))}}}"))
-            if n_cited_references is not None and n_cited_references > 0:
-                fields.append(Field(key="Number-Of-Cited-References", value=f"{{{n_cited_references}}}"))
-            entry = Entry(entry_type=ptmap[publication_type],
-                          key=accession_number,
-                          fields=fields)
-            library.add(entry)
+        library, skip_reasons = records_to_library(wosfile.records_from(opts.filenames))
+    for reason in skip_reasons:
+        logger.warning(f"    Skipping entry: {reason}")
     print(bibtexparser.writer.write(library))
     logger.info(f"    Done in {tim.dt:0.6g}s.")
-    if n_skipped > 0:
-        logger.info(f"    {n_skipped} entries skipped (see full log above).")
+    if skip_reasons:
+        logger.info(f"    {len(skip_reasons)} entries skipped (see full log above).")
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ especially if the records contain an abstract.
 
 from __future__ import annotations
 
-__all__ = ["is_headerline", "get_slug", "main"]
+__all__ = ["is_headerline", "get_slug", "burst_bibtex", "main"]
 
 from .. import __version__
 
@@ -44,7 +44,53 @@ def get_slug(headerline: str) -> str:
     return slug
 
 
-def main() -> None:
+def burst_bibtex(source: str) -> list[tuple[str, str]]:
+    """Split a BibTeX file's contents into individual records.
+
+    Returns ``[(slug, record_text), ...]`` — one pair per ``@type{key,...}``
+    record found in *source*, in the order they appear.  Each ``record_text``
+    is the full record (from its ``@type{...,`` header up to, but not
+    including, the next record's header or end of input), and *slug* is the
+    BibTeX key from the header, sanitized for use as a filename (see
+    :func:`get_slug`).
+
+    Anything before the first header line is silently skipped, matching the
+    CLI's tolerance for leading comments, blank lines, or ``@preamble`` /
+    ``@string`` blocks that don't look like entries.
+    """
+    records: list[tuple[str, str]] = []
+    buf = io.StringIO(source)
+    record = io.StringIO()
+    slug: str | None = None
+
+    # Sync to the first real record
+    while True:
+        line = buf.readline()
+        if line == "":  # EOF before any record
+            return records
+        if is_headerline(line):
+            slug = get_slug(line)
+            record.write(line)
+            break
+
+    # Accumulate remaining lines into records
+    while True:
+        line = buf.readline()
+        if line == "":  # EOF — flush the last record
+            assert slug is not None
+            records.append((slug, record.getvalue()))
+            return records
+        if is_headerline(line):  # start of next record — flush the current one
+            assert slug is not None
+            records.append((slug, record.getvalue()))
+            record = io.StringIO()
+            slug = get_slug(line)
+            record.write(line)
+        else:
+            record.write(line)
+
+
+def main() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(description="""Burst a BibTeX file into individual entries, for Raven-librarian's document database.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="myreferences.bib", help="BibTeX file(s) to burst")
@@ -60,66 +106,27 @@ def main() -> None:
         print(f"Creating output directory '{opts.output_dir}' (resolved to '{str(output_dir)}')")
     common_utils.create_directory(output_dir)
 
+    def get_output_path(slug: str) -> pathlib.Path:
+        primary_output_path = output_dir / f"{slug}.bib"
+        output_path = primary_output_path
+        counter = 2
+        while output_path.exists():
+            output_path = output_dir / f"{slug}_{counter}.bib"
+            counter += 1
+        if counter > 2:
+            print(f"    '{str(primary_output_path)}' already exists, writing to '{str(output_path)}' instead.")
+        return output_path
+
     for input_filename in opts.filenames:
         input_path = pathlib.Path(input_filename).expanduser().resolve()
         if opts.verbose:
             print(f"Processing '{input_filename}' (resolved to '{str(input_path)}')")
-        with open(input_path, "r") as input_file:
-            def get_output_path(slug):
-                primary_output_path = output_dir / f"{slug}.bib"
-                output_path = primary_output_path
-
-                # make unique path
-                counter = 2
-                while output_path.exists():
-                    output_path = output_dir / f"{slug}_{counter}.bib"
-                    counter += 1
-
-                if counter > 2:
-                    print(f"    '{str(primary_output_path)}' already exists, writing to '{str(output_path)}' instead.")
-
-                return output_path
-
-            def sync():
-                """Find first BibTeX record header."""
-                while True:
-                    line = input_file.readline()
-                    if line == "":  # EOF
-                        return None
-                    if is_headerline(line):
-                        return line
-
-            # Sync to first BibTeX record in this file
-            record = io.StringIO()
-            headerline = sync()
-            if headerline is None:
-                continue  # next file
-            slug = get_slug(headerline)
-            record.write(headerline)
-
-            # Process all records
-            while True:
-                line = input_file.readline()
-                if line == "":  # EOF
-                    output_path = get_output_path(slug)
-                    if opts.verbose:
-                        print(f"    Writing '{str(output_path)}'")
-                    with open(output_path, "w") as output_file:
-                        output_file.write(record.getvalue())
-                    break
-
-                if is_headerline(line):  # start of next record
-                    output_path = get_output_path(slug)
-                    if opts.verbose:
-                        print(f"    Writing '{str(output_path)}'")
-                    with open(output_path, "w") as output_file:
-                        output_file.write(record.getvalue())
-                    record = io.StringIO()
-                    headerline = line
-                    slug = get_slug(headerline)
-                    record.write(headerline)
-                else:  # part of current record
-                    record.write(line)
+        source = input_path.read_text()
+        for slug, record_text in burst_bibtex(source):
+            output_path = get_output_path(slug)
+            if opts.verbose:
+                print(f"    Writing '{str(output_path)}'")
+            output_path.write_text(record_text)
 
 
 if __name__ == "__main__":

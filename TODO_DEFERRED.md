@@ -17,24 +17,6 @@ Once done, remove the `pytest.importorskip` from `test_scaffold.py`; the scaffol
 Discovered during scaffold/appstate test work (2026-04-17).
 
 
-## Coverage: exercise `raven.papers` converters without their CLI frontends
-
-The converter modules `raven/papers/csv2bib.py` (0%), `raven/papers/wos2bib.py` (0%), `raven/papers/burstbib.py` (24%), and `raven/papers/search.py` (0%) are almost entirely untested because coverage stops at their `main()` CLI entry points. The core parsing/transformation logic inside them is pure and testable — we just need to bypass argparse and call the module-level functions directly on sample input.
-
-Data formats are simple and real samples exist in `00_stuff/rawdata/`:
-
-- BibTeX in/out: `ai_papers_20251209.bib`, `ai_papers_202510.bib`, `arxiv_papers2.bib` — well-suited for `burstbib` (split bib into per-entry files) and for exercising the `pdf2bib`/BibTeX-emitting helpers.
-- Web of Science exports: `100000_most_relevant_refs_of_hydrogen_productionzip/savedrecs.txt` (tab-separated WOS format) — input for `wos2bib`.
-- CSV: any of the small research CSVs in the same directory — input for `csv2bib`.
-- arXiv search: `search.py` makes live HTTP requests; test the query-string / boolean-expression parser against canned queries, and mock/record the arXiv API response to test the response-parsing layer. Don't hit the network in unit tests.
-
-Pattern (same as what we did for `identifiers.py::collect_latest_ids`): extract the side-effect-free pipeline from each `main()` into a named helper (e.g. `csv_rows_to_bibtex_entries(rows)`, `parse_wos_records(text)`, `split_bibtex(bib_source)`), `# pragma: no cover` the thin argparse/print shim, and write unit tests against the helpers using small snippets of the rawdata files as fixtures. Expected coverage lift: ~250 statements across the four modules moving from 0–24% into the 80–95% band.
-
-Caveat: `search.py` also needs a small HTTP-mock layer (or canned response files). The query-expression parser can be tested pure; the feed-parsing will need `feedparser.parse(canned_xml_string)` fixtures.
-
-Discovered during coverage-expansion session (2026-04-17), after completing the `identifiers.py` / `ratelimit.py` quick wins.
-
-
 ## torch.compile for the postprocessor
 
 `torch.compile()` on THA3 was investigated (2026-04-09) and yields only ~6% speedup (20.3ms → 19.0ms on 3070 Ti) at the cost of 37s compilation startup. Not worth it for THA3 — the model is already lean with separable convolutions + FP16. Also hangs in the server (works in standalone; cause unresolved — possibly Triton subprocess interaction with waitress/threads).

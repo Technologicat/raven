@@ -29,6 +29,10 @@ Format:
   - For your own item tracking purposes, providing an "Url" or "Doi" field (where available), or some other unique identifier, can be useful.
 """
 
+from __future__ import annotations
+
+__all__ = ["rows_to_library", "main"]
+
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,6 +41,7 @@ from .. import __version__
 
 import argparse
 import uuid
+from typing import Callable
 
 import bibtexparser
 from bibtexparser.model import Entry, Field
@@ -45,7 +50,30 @@ from ..common import readcsv
 from .utils import bibtex_escape
 
 
-def main():
+def _default_key() -> str:
+    return str(uuid.uuid4())
+
+
+def rows_to_library(rows: list[dict[str, str]], key_fn: Callable[[], str] = _default_key) -> bibtexparser.Library:
+    """Turn CSV rows (already parsed into dicts) into a ``bibtexparser.Library``.
+
+    Each row becomes an ``@article`` entry whose BibTeX fields are the row's
+    (column-name, value) pairs.  Values are passed through :func:`bibtex_escape`
+    and wrapped in braces.
+
+    *key_fn*: zero-argument callable producing a BibTeX key for each entry.
+    Defaults to ``str(uuid.uuid4())``; override for deterministic output
+    (e.g. in tests).
+    """
+    library = bibtexparser.Library()
+    for row in rows:
+        fields = [Field(key=k, value=f"{{{bibtex_escape(v)}}}") for k, v in row.items()]
+        entry = Entry(entry_type="article", key=key_fn(), fields=fields)
+        library.add(entry)
+    return library
+
+
+def main() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(description="""Convert CSV (comma-separated values) files to BibTeX. The first line must be a header with field names; fields with those names will be populated in the output.""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
@@ -53,27 +81,13 @@ def main():
     parser.add_argument('-d', '--delimiter', dest="delimiter", type=str, metavar="x", default=None, help="Column delimiter. If omitted, autodetects tab/semicolon.")
     opts = parser.parse_args()
 
-    # Read in all input files
     logger.info(f"Reading input file{'s' if len(opts.filenames) != 1 else ''} {opts.filenames}...")
-    all_entries = []
+    all_rows: list[dict] = []
     for filename in opts.filenames:
-        entries = readcsv.parse_csv(filename,
-                                    has_header=True,
-                                    delimiter=opts.delimiter)
-        all_entries.extend(entries)
+        all_rows.extend(readcsv.parse_csv(filename, has_header=True, delimiter=opts.delimiter))
 
-    # Create the BibTeX database
     logger.info("Creating BibTeX database...")
-    library = bibtexparser.Library()
-    for entry in entries:
-        fields = []
-        for key, value in entry.items():
-            fields.append(Field(key=key, value=f"{{{bibtex_escape(value)}}}"))
-        slug = str(uuid.uuid4())
-        entry = Entry(entry_type="article",
-                      key=slug,
-                      fields=fields)
-        library.add(entry)
+    library = rows_to_library(all_rows)
     print(bibtexparser.writer.write(library))
 
 
