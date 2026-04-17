@@ -1,4 +1,10 @@
-"""Speech to text."""
+"""Speech to text — Flask wrapper around `raven.common.audio.speech.stt`.
+
+The engine logic (model loading, token generation, Whisper-specific
+preprocessing) lives in the common layer. This module handles only the
+transport concerns: audio container decoding, config-module lookup,
+and the tqdm progress bar for server console output.
+"""
 
 __all__ = ["init_module", "is_available", "speech_to_text"]
 
@@ -8,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 import importlib
 import traceback
-import transformers
 from typing import Optional, Union
 
 from colorama import Fore, Style
@@ -18,60 +23,29 @@ import torch
 from tqdm import tqdm
 
 from ...common.audio import codec as audio_codec
-from ...common.hfutil import maybe_install_models
+from ...common.audio.speech import stt as speech_stt
 
-server_config = None
-model = None
-processor = None
-# pipe = None
-loaded_model_device = None
-loaded_model_dtype = None
+_stt_model: Optional[speech_stt.STTModel] = None
 
 def init_module(config_module_name: str, device_string: str, dtype: Union[str, torch.dtype]) -> None:
     """Initialize the speech recognizer (speech to text)."""
-    global server_config
-    global model
-    global processor
-    # global pipe
-    global loaded_model_device
-    global loaded_model_dtype
+    global _stt_model
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}stt{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
     try:
         server_config = importlib.import_module(config_module_name)
         model_name = server_config.speech_recognition_model
 
-        logger.info(f"init_module: Ensuring model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}' is installed...")
-        maybe_install_models(server_config.speech_recognition_model)
-
-        logger.info(f"init_module: Loading model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}' on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
-        loaded_model_device = torch.device(device_string)
-        loaded_model_dtype = dtype
-        processor = transformers.AutoProcessor.from_pretrained(model_name)
-        model = transformers.AutoModelForSpeechSeq2Seq.from_pretrained(model_name,
-                                                                       dtype=dtype,
-                                                                       use_safetensors=True).to(loaded_model_device)
-    #     pipe = transformers.pipeline("automatic-speech-recognition",
-    #                                  model=model,
-    #                                  tokenizer=processor.tokenizer,
-    #                                  feature_extractor=processor.feature_extractor,
-    #                                  chunk_length_s=30,
-    #                                  batch_size=16,  # batch size for inference - set based on your device
-    #                                  dtype=dtype,
-    #                                  device=loaded_model_device)
+        logger.info(f"init_module: loading model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}' on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'.")
+        _stt_model = speech_stt.load_stt_model(model_name, device_string, dtype)
     except Exception as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'embeddings'.{Style.RESET_ALL} Details follow.")
+        _stt_model = None
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'stt'.{Style.RESET_ALL} Details follow.")
         traceback.print_exc()
         logger.error(f"init_module: failed: {type(exc)}: {exc}")
-        server_config = None
-        model = None
-        processor = None
-        # pipe = None
-        loaded_model_device = None
-        loaded_model_dtype = None
 
 def is_available() -> bool:
     """Return whether this module is up and running."""
-    return (server_config is not None)
+    return (_stt_model is not None)
 
 # TODO: the input is a flask.request.file.stream; what's the type of that?
 def speech_to_text(stream,
@@ -79,104 +53,32 @@ def speech_to_text(stream,
                    language: Optional[str]) -> str:
     """Transcribe speech to text.
 
-    `stream`: a `flask.request.file.stream` containing an audio file
+    `stream`: a `flask.request.file.stream` containing an audio file (any format supported by PyAV).
 
-    `prompt`: Can be used to list correct spellings of rare proper names,
-              and/or to nudge the model's transcription style.
+    `prompt`: optional Whisper conditioning text (list rare proper names, set context,
+              or nudge transcription style). See `raven.server.app.api_stt_transcribe`.
 
-              See `raven.server.app.api_stt_transcribe` for a more detailed
-              explanation.
+    `language`: optional ISO-639-1 code (e.g. `"en"`). Default is to autodetect.
 
-    `language`: Can be used to explicitly set the input audio language,
-                such as "en" for English.
-
-                Default is to autodetect from the audio.
-
-    Output is the transcribed text.
+    Returns the transcribed text.
     """
-    prompt_log_msg_str = f"'{prompt}'" if prompt is not None else None
-    language_log_msg_str = f"'{language}'" if language is not None else None
-    logger.info(f"speech_to_text: Request received with prompt = {prompt_log_msg_str}, language = {language_log_msg_str}.")
+    # Decode the audio container to mono float at Whisper's native sample rate,
+    # then hand off to the engine.
+    _unused_metadata, audio_numpy = audio_codec.decode(stream,
+                                                       target_sample_format="fltp",
+                                                       target_sample_rate=_stt_model.sample_rate,
+                                                       target_layout="mono")
 
-    # See:
-    # https://huggingface.co/docs/transformers/en/model_doc/whisper
-    # https://huggingface.co/openai/whisper-large-v3-turbo
-    # Parameters of `transformers.models.whisper.generation_whisper.WhisperGenerationMixin.generate`
-    # Parameters of `transformers.models.whisper.modeling_whisper.WhisperForConditionalGeneration.forward` (some are passed here by `generate`)
-
-    kwargs = {  # "max_new_tokens": 448,  # Whisper maximum - better to just use the default, since we don't know the number of "special start tokens", or the number of overlap tokens in long-form transcription.
-              "return_timestamps": True,  # Needed for long-form transcription. To actually return them, may also need `return_dict=True`? (see the `forward` method mentioned above)
-              "compression_ratio_threshold": 1.35,  # zlib compression ratio threshold (in token space)
-              "temperature": (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
-              "logprob_threshold": -1.0,
-              # "no_speech_threshold": 0.6,  # Doesn't work, causes crash inside `transformers` (disregard repo name, actually this bug has nothing to do with PEFT): https://github.com/huggingface/peft/issues/1988
-              "condition_on_prev_tokens": True,
-             }
-
-    if language is not None:  # input audio language (optional)
-        kwargs["language"] = language
-
-    if prompt is not None:  # input prompt (optional), e.g. to spell rare proper names correctly
-        prompt_ids = processor.get_prompt_ids(prompt, return_tensors="pt").to(loaded_model_device)  # IMPORTANT and not well documented: send the prompt tensor to the correct device, it will be used as-is.
-        kwargs["prompt_ids"] = prompt_ids
-        kwargs["prompt_condition_type"] = "all-segments"
-        # kwargs["max_new_tokens"] -= (prompt_ids.shape[0] + 3)  # also the prompt tokens and "special start tokens" (TODO: whatever those are?) count toward the output limit
-
-    unused_metadata, numpy_audio_data = audio_codec.decode(stream,
-                                                           target_sample_format="fltp",  # float
-                                                           target_sample_rate=processor.feature_extractor.sampling_rate,
-                                                           target_layout="mono")
-
-    # # With high-level pipeline API
-    # # TODO: Even the high-level API doesn't seem to return anything but the "text" field, though `return_timestamps=True`.
-    # result = pipe(numpy_audio_data,
-    #               generate_kwargs=kwargs)
-    # pred_text = result["text"].strip()
-
-    # With low-level API -->
-    logger.info("speech_to_text: Preprocessing audio for STT.")
-    inputs = processor(audio=numpy_audio_data,
-                       sampling_rate=processor.feature_extractor.sampling_rate,
-                       return_tensors="pt",
-                       truncation=False,
-                       padding="longest",
-                       return_attention_mask=True).to(loaded_model_device, dtype=loaded_model_dtype)
-    # https://github.com/huggingface/transformers/issues/30740
-    if inputs.input_features.shape[-1] < 3000:
-        logger.info(f"speech_to_text: Length of feature stream is {inputs.input_features.shape[-1]}. Using short-form transcription.")
-        # We in-fact have short-form -> pre-process accordingly.
-        inputs = processor(audio=numpy_audio_data,
-                           sampling_rate=processor.feature_extractor.sampling_rate,
-                           return_tensors="pt",
-                           return_attention_mask=True).to(loaded_model_device, dtype=loaded_model_dtype)
-    else:
-        logger.info(f"speech_to_text: Length of feature stream is {inputs.input_features.shape[-1]}. Using long-form transcription.")
-
-    logger.info("speech_to_text: Transcribing.")
-    # Transcription progress callback.
-    #
-    # NOTE: As of 11/2025, requires a recent `transformers` (4.57.1 has this).
+    # Log a tqdm progress bar to the server console during transcription.
+    # `leave=True` keeps the completed bar visible in the log.
     with tqdm(desc="Transcribing", leave=True) as pbar:
-        # The function takes a tensor argument p of shape (n, 2), where n is the batch size.
-        # p[i, 0] contains the index of the audio frame that is currently being transcribed
-        # for batch item i. p[i, 1] contains the total number of frames for batch item i.
-        # No return value is expected.
-        def monitor_progress(p_batch):
-            i = torch.argmax(p_batch[:, 1])
-            p = p_batch[i].detach().cpu()
-            pbar.total = int(p[1])
-            pbar.n = int(p[0])
-            pbar.refresh()  # note `refresh`, not `update` (`update` also increments the progress)
-        def finish_progress():
-            pbar.n = pbar.total
-            pbar.refresh()
-        pred_ids = model.generate(**inputs, **kwargs, monitor_progress=monitor_progress)
-        finish_progress()
-
-    logger.info("speech_to_text: Decoding transcribed tokens into text.")
-    pred_text = processor.batch_decode(pred_ids, skip_special_tokens=True, decode_with_timestamps=False)
-    pred_text = ' '.join([item.strip() for item in pred_text])
-    # <-- end with low-level API
-
-    logger.info("speech_to_text: All done.")
-    return pred_text
+        def on_progress(current: int, total: int) -> None:
+            pbar.total = total
+            pbar.n = current
+            pbar.refresh()  # note `refresh`, not `update` — `update` also increments `n`
+        return speech_stt.transcribe(_stt_model,
+                                     audio=audio_numpy,
+                                     sample_rate=_stt_model.sample_rate,
+                                     prompt=prompt,
+                                     language=language,
+                                     progress_callback=on_progress)

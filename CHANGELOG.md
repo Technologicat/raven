@@ -23,6 +23,7 @@
 - *Raven-cherrypick*: new "mark winner" action (Ctrl+Shift+C, or Ctrl+Shift+click cherry button). Marks the current image as cherry and all other selected images as lemon — one keystroke to commit a compare-mode choice.
 - New module `raven.common.audio.resample` — device-agnostic sample-rate conversion (torchaudio-backed). Works on numpy arrays and torch tensors; three quality presets (`"default"`, `"kaiser_fast"`, `"kaiser_best"`) matching librosa's naming.
   - New dependency: `torchaudio>=2.4.0`.
+- New module `raven.common.audio.speech.stt` — Whisper wrapper callable in-process (no Flask). `raven.server.modules.stt` is now a thin wrapper that decodes the audio container and forwards to the common layer.
 
 **Changed**:
 
