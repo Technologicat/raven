@@ -43,8 +43,8 @@ The avatar animator currently lives only in `raven.server.modules.avatar` under 
 
 A client-local animator would be valuable even though the server one stays:
 
-- It skips the network transport plus QOI encode/decode round-trip, which dominates latency on non-localhost server setups.
 - It extends the "server-optional" story (the goal behind the existing MaybeRemote pattern) to the avatar: a Raven app running standalone could still show the avatar, without requiring the server to be running.
+- It skips the QOI encode/decode + loopback-socket round-trip. This *may* be a meaningful latency contributor even on localhost setups — needs measuring before being used as justification. On a non-localhost server setup, the user has put the server elsewhere for a reason (shared GPU across machines, a specific box with the VRAM, etc.), so "skip the network" isn't really the escape for those cases — a client-local animator helps only standalone / localhost use.
 
 **Per-module authorship provenance on the server side** (for scoping what can / can't be unilaterally relicensed):
 
