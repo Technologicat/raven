@@ -44,21 +44,19 @@ Discovered during step 5 review (2026-04-18).
 
 `tts_prepare` is the offline-precomputation helper for lipsync — it runs TTS on CPU while the previous sentence is still speaking, so perceived latency stays bounded by the first-sentence synthesis time rather than the full sequence. Currently it's HTTP-only (calls the server's `/api/tts/speak`), and duplicates logic that already exists at the common layer (timestamp cleanup).
 
-Target layout — three layers, each strictly one thing:
+Since Raven is the only consumer of its own TTS service, there's no external compatibility to preserve — drop the legacy dict format entirely, migrate all callers to `WordTiming`. Final shape:
 
-- **Engine** (`raven.common.audio.speech.tts`) — pure functions, no caching, no state beyond the already-memoized pipeline loader:
-  - Module-level table `dipthong_vowel_to_ipa` (move from `raven.client.tts`). Misaki shorthand → canonical IPA, a Kokoro/Misaki engine concern.
-  - `expand_phoneme_diphthongs(timings: list[WordTiming]) -> list[WordTiming]` — applies the table above. Reusable post-processing helper.
-  - `prepare(pipeline, voice, text, speed, get_metadata) -> PreparedSpeech` (or a decorated `TTSResult`) — calls `synthesize`, applies `expand_phoneme_diphthongs` + `clean_timestamps(for_lipsync=True)`. One-stop "give me speech ready for the lipsync driver."
-- **Dispatch** (`raven.client.mayberemote.TTS.prepare`) — pure delegator, no added functionality:
-  - Remote mode: reuses `_remote_tts_speak_raw` + the same common-layer post-processing so the result structure matches the local path byte-for-byte.
-  - Local mode: delegates straight to `speech_tts.prepare`.
-  - No caching here. MaybeRemote's rule is "optional remote delegator, nothing else" — caching would be the same kind of "adding a service" we already moved out (auto-resample).
-- **Caching adapter** (`raven.client.tts.tts_prepare`) — the outer, caller-facing layer where caching actually lives:
-  - Wrap the call to `MaybeRemote.TTS.prepare` in the existing `functools.lru_cache(maxsize=128)`.
-  - Convert the result to the legacy dict format (`{"audio_bytes": ..., "timestamps": [dicts]}`) so the lipsync driver keeps working unchanged during the transition.
+- **`raven.common.audio.speech.tts`** — one module hosts engine + post-processing + cached convenience:
+  - Move the `dipthong_vowel_to_ipa` table from `raven.client.tts` to here. Misaki shorthand → canonical IPA, a Kokoro/Misaki engine concern.
+  - `expand_phoneme_diphthongs(timings: list[WordTiming]) -> list[WordTiming]` — applies the table above.
+  - `prepare(pipeline, voice, text, speed, get_metadata) -> TTSResult` — pure. Calls `synthesize`, applies `expand_phoneme_diphthongs` + `clean_timestamps(for_lipsync=True)`. Use for fresh renders.
+  - `prepare_cached(pipeline, voice, text, speed, get_metadata) -> TTSResult` — same, wrapped in `functools.lru_cache(maxsize=128)`. Default for lipsync use (stochastic vocoder means re-running is a waste).
 
-New callers who want caching at the new API directly can wrap `mayberemote_tts.prepare(...)` in their own `lru_cache`, or they can go through the legacy adapter — the caching is a property of the legacy call path, not of the engine or the dispatcher.
+- **`raven.client.mayberemote.TTS.prepare(text, voice, speed, get_metadata, cache=True) -> TTSResult`** — pure delegator, no added functionality. Local mode → `speech_tts.prepare_cached` (or `prepare` if `cache=False`). Remote mode → `_remote_tts_speak_raw` + post-processing; remote-mode caching either stays inside `_remote_tts_speak_raw` as a sibling cached variant, or the whole method wraps its own lru_cache. Pick at migration time.
+
+- **`raven.client.tts`** — drop `tts_prepare` as a public name. Inline `dipthong_vowel_to_ipa` table also goes (moved to common). The lipsync driver (`tts_speak_lipsynced` and friends) migrates to `TTSResult` / `WordTiming` as its native format: `.word` / `.phonemes` / `.start_time` / `.end_time` attribute access instead of `["word"]` / `["phonemes"]` / `["start_time"]` / `["end_time"]`.
+
+One type (`WordTiming`) end-to-end. No format conversion step, no legacy adapter.
 
 Side benefit captured by this layout: the inline `clean_timestamps` duplicate and the diphthong expansion in `raven.client.tts._tts_prepare` both disappear in favour of the common-layer helpers.
 
