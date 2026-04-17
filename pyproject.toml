@@ -164,6 +164,9 @@ verify_ssl = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+markers = [
+    "ml: tests that require the full ML stack (spaCy, Flair, torch models). Skipped on CI; run locally by default.",
+]
 
 [tool.ruff]
 line-length = 130

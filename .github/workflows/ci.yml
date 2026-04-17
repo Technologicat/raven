@@ -70,4 +70,4 @@ jobs:
           pip install -e . --no-deps
 
       - name: Run tests
-        run: pytest raven/ -v --tb=short
+        run: pytest raven/ -v --tb=short -m "not ml"

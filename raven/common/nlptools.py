@@ -849,9 +849,11 @@ def count_frequencies(tokens: Union[List[spacy.tokens.token.Token],
 
             if lemmatize:
                 x = x.lemma_
+            else:
+                x = x.text  # spaCy's `Token.lower` is an int (orth hash), not a callable — go through `.text` to get a plain str
             x = x.lower()
 
-            if len(x) < min_length or x.lower() in stopwords:
+            if len(x) < min_length or x in stopwords:
                 continue
 
             out.append(x)
