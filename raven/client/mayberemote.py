@@ -294,8 +294,9 @@ class STT(MaybeRemoteService):
         """Transcribe mono `audio` to text.
 
         `audio`: rank-1 float numpy array, mono, samples in [-1, 1] (standard float
-                 audio convention; the remote path scales to s16 at the transport
-                 boundary, the local path feeds Whisper's processor directly).
+                 audio convention). The remote path's s16 cast happens in
+                 `api.stt_transcribe_array` at the wire-format boundary; the local
+                 path feeds Whisper's processor directly.
 
         `sample_rate`: sample rate of `audio`, any rate. Rate conversion to Whisper's
                        native 16 kHz happens inside the engine (locally via
@@ -305,10 +306,9 @@ class STT(MaybeRemoteService):
         `prompt`, `language`: see `raven.common.audio.speech.stt.transcribe`.
         """
         if self._local_model is None:
-            # Remote: the existing HTTP endpoint takes s16 audio via `api.stt_transcribe_array`.
+            # Remote: `api.stt_transcribe_array` accepts float or s16 and handles the cast internally.
             # The server resamples during its container-decode pass, so any sample rate works.
-            audio_s16 = np.asarray(audio * 32767.0, dtype=np.int16)
-            return api.stt_transcribe_array(audio_s16, sample_rate=sample_rate, prompt=prompt, language=language)
+            return api.stt_transcribe_array(audio, sample_rate=sample_rate, prompt=prompt, language=language)
 
         return speech_stt.transcribe(self._local_model,
                                      audio=audio,

@@ -725,9 +725,22 @@ def stt_transcribe_array(audio_data: np.array,
                          language: Optional[str] = None) -> List[str]:
     """Exactly like `stt_transcribe`, but take audio data from in-memory array.
 
-    The `audio_data` array is expected to be mono audio data, type `np.int16`, sampled at `sample_rate`.
+    `audio_data`: mono, rank-1 `np.ndarray`, sampled at `sample_rate`. Accepted dtypes:
+
+        `np.int16`    — raw s16 PCM, the historical format (produced by
+                        `raven.common.audio.recorder`).
+        `np.floating` — samples in [-1, 1], the standard float audio convention.
+                        Scaled to s16 internally before wire transport.
+
+    Dtype polymorphism lives here rather than at callers because the s16 cast is
+    a wire-format concern — the server ingests MP3, which requires s16 at the
+    encoding step.
     """
-    # Encode audio
+    if np.issubdtype(audio_data.dtype, np.floating):
+        audio_data = np.asarray(audio_data * 32767.0, dtype=np.int16)
+    elif audio_data.dtype != np.int16:
+        raise TypeError(f"stt_transcribe_array: expected np.int16 or floating-point dtype; got {audio_data.dtype}.")
+
     logger.info(f"stt_transcribe_array: encoding {len(audio_data) / sample_rate:0.6g}s of audio for sending to server.")
     audio_encoder = StreamingAudioWriter(format="mp3",
                                          sample_rate=sample_rate,
