@@ -24,6 +24,7 @@
 - New module `raven.common.audio.resample` — device-agnostic sample-rate conversion (torchaudio-backed). Works on numpy arrays and torch tensors; three quality presets (`"default"`, `"kaiser_fast"`, `"kaiser_best"`) matching librosa's naming.
   - New dependency: `torchaudio>=2.4.0`.
 - New module `raven.common.audio.speech.stt` — Whisper wrapper callable in-process (no Flask). `raven.server.modules.stt` is now a thin wrapper that decodes the audio container and forwards to the common layer.
+- New module `raven.common.audio.speech.tts` — Kokoro wrapper callable in-process (no Flask). Two-layer API: `synthesize_iter` yields per-segment `TTSSegment` with already-absolute word timestamps, `synthesize` is the concatenating wrapper returning a single `TTSResult`. `raven.server.modules.tts` is now a thin wrapper that casts float→s16 at the transport boundary, URL-encodes Unicode phonemes for HTTP headers, and handles Flask response construction.
 
 **Changed**:
 
