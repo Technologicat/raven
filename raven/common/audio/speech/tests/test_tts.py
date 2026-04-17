@@ -213,3 +213,40 @@ class TestCleanTimestamps:
         t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5)]
         cleaned = speech_tts.clean_timestamps(t)
         assert cleaned[0] is t[0]
+
+
+class TestExpandPhonemeDiphthongs:
+    # Pure function — no model needed.
+
+    def test_expands_each_shorthand_to_canonical_ipa(self):
+        t = [speech_tts.WordTiming(word="hey",   phonemes="hˈA", start_time=0.0, end_time=0.5),
+             speech_tts.WordTiming(word="high",  phonemes="hˈI", start_time=0.5, end_time=1.0),
+             speech_tts.WordTiming(word="how",   phonemes="hˌW", start_time=1.0, end_time=1.5),
+             speech_tts.WordTiming(word="soy",   phonemes="sˈY", start_time=1.5, end_time=2.0),
+             speech_tts.WordTiming(word="go",    phonemes="ɡˈO", start_time=2.0, end_time=2.5),
+             speech_tts.WordTiming(word="go_uk", phonemes="ɡˈQ", start_time=2.5, end_time=3.0)]
+        out = speech_tts.expand_phoneme_diphthongs(t)
+        assert out[0].phonemes == "hˈeɪ"
+        assert out[1].phonemes == "hˈaɪ"
+        assert out[2].phonemes == "hˌaʊ"
+        assert out[3].phonemes == "sˈɔɪ"
+        assert out[4].phonemes == "ɡˈoʊ"
+        assert out[5].phonemes == "ɡˈəʊ"
+
+    def test_leaves_non_shorthand_phonemes_alone(self):
+        # Ordinary IPA strings without Misaki shorthand pass through unchanged.
+        t = [speech_tts.WordTiming(word="fox",  phonemes="fˈɑks",  start_time=0.0, end_time=0.5),
+             speech_tts.WordTiming(word="lazy", phonemes="lˈeɪzi", start_time=0.5, end_time=1.0)]
+        out = speech_tts.expand_phoneme_diphthongs(t)
+        assert [w.phonemes for w in out] == ["fˈɑks", "lˈeɪzi"]
+
+    def test_does_not_mutate_input(self):
+        t = [speech_tts.WordTiming(word="hey", phonemes="hˈA", start_time=0.0, end_time=0.5)]
+        speech_tts.expand_phoneme_diphthongs(t)
+        assert t[0].phonemes == "hˈA", "expand_phoneme_diphthongs mutated its input"
+
+    def test_is_idempotent(self):
+        t = [speech_tts.WordTiming(word="hey", phonemes="hˈA", start_time=0.0, end_time=0.5)]
+        once = speech_tts.expand_phoneme_diphthongs(t)
+        twice = speech_tts.expand_phoneme_diphthongs(once)
+        assert once[0].phonemes == twice[0].phonemes == "hˈeɪ"

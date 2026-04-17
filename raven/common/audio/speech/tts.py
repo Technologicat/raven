@@ -27,14 +27,16 @@ __all__ = ["SAMPLE_RATE",
            "get_voices",
            "synthesize_iter",
            "synthesize",
-           "clean_timestamps"]
+           "clean_timestamps",
+           "dipthong_vowel_to_ipa",
+           "expand_phoneme_diphthongs"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Iterator, Optional
 
 import numpy as np
@@ -50,6 +52,22 @@ from ...hfutil import maybe_install_models
 # pipeline handy. If the engine is ever swapped, update this value and any fixed-rate
 # assumptions that follow.
 SAMPLE_RATE = 24000
+
+
+# Misaki's (Kokoro's phonemizer) shorthand for diphthongs → canonical IPA.
+# Kokoro emits the single-letter form; most downstream consumers (lipsync, captioning)
+# want the two-character IPA form. `expand_phoneme_diphthongs` does the substitution
+# in-place on a `WordTiming` list.
+dipthong_vowel_to_ipa = {
+    "A": "eɪ",  # The "eh" vowel sound, like hey => hˈA.
+    "I": "aɪ",  # The "eye" vowel sound, like high => hˈI.
+    "W": "aʊ",  # The "ow" vowel sound, like how => hˌW.
+    "Y": "ɔɪ",  # The "oy" vowel sound, like soy => sˈY.
+    # 🇺🇸 American-only
+    "O": "oʊ",  # American "oh" vowel sound.
+    # 🇬🇧 British-only
+    "Q": "əʊ",  # British "oh" vowel sound.
+}
 
 
 @dataclass
@@ -257,6 +275,25 @@ def clean_timestamps(timings: list[WordTiming], for_lipsync: bool = True) -> lis
         out.append(timing)
         last_start_time = timing.start_time
     return out
+
+
+def expand_phoneme_diphthongs(timings: list[WordTiming]) -> list[WordTiming]:
+    """Expand Misaki's single-letter diphthong shorthand to canonical IPA.
+
+    Misaki (Kokoro's phonemizer) emits diphthongs as single capital letters:
+    `A`, `I`, `W`, `Y`, `O`, `Q` (see `dipthong_vowel_to_ipa` for the mapping).
+    Most downstream consumers want two-character IPA — lipsync phoneme lookup,
+    captioning, display.
+
+    Returns new `WordTiming` instances with expanded `.phonemes` (does not mutate
+    the input). Idempotent: the IPA expansions contain none of the source letters,
+    so running twice produces the same result as running once.
+    """
+    def _expand(phonemes: str) -> str:
+        for shorthand, ipa in dipthong_vowel_to_ipa.items():
+            phonemes = phonemes.replace(shorthand, ipa)
+        return phonemes
+    return [replace(t, phonemes=_expand(t.phonemes)) for t in timings]
 
 
 def synthesize_iter(pipeline: TTSPipeline,
