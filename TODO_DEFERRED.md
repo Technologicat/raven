@@ -17,6 +17,28 @@ Files to scrutinise after all steps land (step numbering from the brief):
 
 Raised during step 3 of the refactor (2026-04-17).
 
+## Language-neutral wire format for the `natlang` (spaCy) endpoint
+
+`raven.server.modules.natlang` / `raven.common.nlptools.spacy_analyze` currently serialize results with `DocBin.to_bytes()` (see `raven/common/nlptools.py:254`) and reconstruct on the client side via `DocBin().from_bytes()` (line 274). `DocBin` is a spaCy-internal binary blob — efficient and lossless for Python clients, but invisible to any other language runtime. A future JavaScript client can't talk to this endpoint.
+
+Background: this was the simplest thing that worked when the endpoint was first wired up under time pressure. Raven had a Python-only client, the serialization Just Worked, shipping won over compatibility.
+
+Fix is mostly mechanical — spaCy has native `Doc.to_json()` / `Doc.from_json()`, verified against `en_core_web_sm` (Raven's default model):
+
+- `Doc.to_json()` emits per-token `{id, start, end, tag, pos, morph, lemma, dep, head}`, plus top-level `ents` (entity spans with `{start, end, label}`) and `sents` (sentence boundaries). Round-trip via `Doc(vocab).from_json(j)` reconstructs text / POS / lemma / dep / entities identically. **Not** included: word vectors (intentional — they'd be huge; any Raven code that currently reads `token.vector` after a remote call would need to load them locally instead).
+- Server side: replace the `DocBin.to_bytes()` serialization with `[doc.to_json() for doc in docs]` → JSON list.
+- Python client: consume via `Doc(vocab).from_json(j)` (needs a shared vocab, e.g. from `spacy.blank(lang)` since we don't ship the full pipeline on the Python client in remote mode). Alternative: a lighter in-process wrapper exposing only the fields Raven actually uses — audit `raven.client.mayberemote.NLP.analyze` call sites if the vocab-sharing feels like overhead.
+- JS client: consumes the JSON structure directly as-is.
+
+Sub-decisions at migration time:
+
+- Whether `raven.common.nlptools.spacy_analyze` / the DocBin reconstruction helpers stay in the common layer for the Python-client reconstruction path, or move to a client-side `nlp_reconstruct` module. Depends on whether any other consumer needs the reconstruction.
+- Audit whether any Raven caller depends on `token.vector` from a *remote* analyze call. If yes, need either a separate embeddings roundtrip or a wire-format extension.
+
+Reference for the design constraint: JSON-serializable dicts on the wire, native types in-process, conversion at the boundary. Same principle the speech endpoints already follow. See also the speech `tts_prepare` generalization item below.
+
+Discovered during step 5 review (2026-04-18).
+
 ## Server info endpoint: expose STT/TTS native sample rates
 
 `raven.client.mayberemote.STT` and `.TTS` both need to know their engine's native sample rate. In local mode they read it off the loaded model; in remote mode they currently hardcode the canonical value (Whisper 16 kHz, Kokoro 24 kHz). That couples the MaybeRemote client's assumption to the server's actual model choice — fine today (both architectures have fixed rates), fragile long-term.
