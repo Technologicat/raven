@@ -8,22 +8,35 @@ NOTE: Before using this module, you must `raven.client.api.initialize` first.
 __all__ = ["MaybeRemoteService",
            "Dehyphenator",
            "Embedder",
-           "NLP"]
+           "NLP",
+           "STT",
+           "TTS"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import copy
+import io
+import json
+import urllib.parse
 from typing import List, Optional, Union
 
 import numpy as np
+
+import requests
 
 import torch
 
 from ..client import api
 from ..client import config as client_config
+from ..client import util as client_util
 
 from ..common import nlptools
+from ..common.audio import codec as audio_codec
+from ..common.audio import resample as audio_resample
+from ..common.audio.speech import stt as speech_stt
+from ..common.audio.speech import tts as speech_tts
 
 
 class MaybeRemoteService:
@@ -230,3 +243,209 @@ class NLP(MaybeRemoteService):
         return docs
 
 
+class STT(MaybeRemoteService):
+    def __init__(self,
+                 allow_local: bool,
+                 model_name: Optional[str] = None,
+                 device_string: Optional[str] = None,
+                 dtype: Optional[Union[str, torch.dtype]] = None):
+        """Speech-to-text (Whisper).
+
+        `allow_local`: See `MaybeRemoteService`. Note that Whisper models are heavy
+                       (74 MB for whisper-base, 800 MB for whisper-large-v3-turbo);
+                       apps that only occasionally need STT should prefer
+                       `allow_local=False` and fail clearly when the server is down
+                       rather than trigger a multi-hundred-megabyte download.
+
+        `model_name`: Required if `allow_local=True`. HuggingFace model name, e.g.
+                      `"openai/whisper-base"`, `"openai/whisper-large-v3-turbo"`.
+
+        `device_string`: Required if `allow_local=True`. E.g. `"cpu"`, `"cuda:0"`.
+
+        `dtype`: Required if `allow_local=True`. E.g. `torch.float32`, `torch.float16`,
+                 or a string like `"float32"`.
+        """
+        super().__init__(allow_local)
+        self.model_name = model_name
+        self.device_string = device_string
+        self.dtype = dtype
+
+        # Whisper's canonical input sample rate. In local mode we read this off the
+        # loaded model; in remote mode we assume the canonical value so `sample_rate`
+        # is populated before the first call. If upstream ever changes this, both
+        # modes fail loud (local: validation in `speech_stt.transcribe`; remote: the
+        # server mirrors the same value).
+        self.sample_rate = 16000
+
+        if "stt" in self.server_modules:
+            logger.info(f"STT.__init__: Using `stt` module on Raven-server at '{client_config.raven_server_url}'.")
+        else:
+            if self.server_available:
+                logger.info(f"STT.__init__: No `stt` module loaded on Raven-server at '{client_config.raven_server_url}', loading Whisper model locally.")
+            self._local_model = speech_stt.load_stt_model(model_name=model_name,
+                                                          device_string=device_string,
+                                                          dtype=dtype)
+            self.sample_rate = self._local_model.sample_rate
+
+    def transcribe(self,
+                   audio: np.ndarray,
+                   sample_rate: int,
+                   prompt: Optional[str] = None,
+                   language: Optional[str] = None) -> str:
+        """Transcribe mono `audio` to text.
+
+        `audio`: rank-1 float numpy array, mono.
+
+        `sample_rate`: sample rate of `audio`. If it does not match `self.sample_rate`
+                       (Whisper's 16 kHz), the audio is resampled here before dispatch.
+                       Same convenience both modes.
+
+        `prompt`, `language`: see `raven.common.audio.speech.stt.transcribe`.
+        """
+        if sample_rate != self.sample_rate:
+            audio = audio_resample.resample(audio, from_rate=sample_rate, to_rate=self.sample_rate)
+            sample_rate = self.sample_rate
+
+        if self._local_model is None:
+            # Remote: the existing HTTP endpoint takes s16 audio via `api.stt_transcribe_array`.
+            audio_s16 = np.asarray(audio * 32767.0, dtype=np.int16)
+            return api.stt_transcribe_array(audio_s16, sample_rate=sample_rate, prompt=prompt, language=language)
+
+        return speech_stt.transcribe(self._local_model,
+                                     audio=audio,
+                                     sample_rate=sample_rate,
+                                     prompt=prompt,
+                                     language=language)
+
+
+# Direct HTTP call to the server's /api/tts/speak endpoint, bypassing
+# `raven.client.tts.tts_prepare`. Reasons:
+#   (a) `tts_prepare` applies lipsync-specific cleanup (drops consecutive
+#       duplicate timestamps, filters out non-common-punctuation single-char
+#       tokens). We want raw Kokoro metadata here so `TTS.synthesize` returns
+#       the same data shape regardless of remote/local mode.
+#   (b) `tts_prepare` hard-codes `format="mp3"` and streaming mode; fine for
+#       MaybeRemote's use (we decode back to float anyway), no change needed.
+def _remote_tts_speak_raw(voice: str,
+                          text: str,
+                          speed: float,
+                          get_metadata: bool) -> tuple[bytes, Optional[list]]:
+    """Return `(mp3_bytes, word_timestamps_raw_or_None)` from the server's /api/tts/speak.
+
+    Word timestamps are URL-decoded but otherwise untouched — no filtering.
+    """
+    if not client_util.api_initialized:
+        raise RuntimeError("_remote_tts_speak_raw: `raven.client.api` must be initialized first.")
+
+    headers = copy.copy(client_util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    data = {"voice": voice,
+            "text": text,
+            "format": "mp3",
+            "speed": speed,
+            "stream": False,
+            "get_metadata": get_metadata}
+    response = requests.post(f"{client_util.api_config.raven_server_url}/api/tts/speak",
+                             headers=headers, json=data)
+    client_util.yell_on_error(response)
+
+    if get_metadata:
+        timestamps = json.loads(response.headers["x-word-timestamps"])
+        # Words and phonemes travel URL-encoded (ASCII headers only); decode to raw Unicode.
+        for ts in timestamps:
+            ts["word"] = urllib.parse.unquote(ts["word"])
+            ts["phonemes"] = urllib.parse.unquote(ts["phonemes"])
+    else:
+        timestamps = None
+
+    return response.content, timestamps
+
+
+class TTS(MaybeRemoteService):
+    def __init__(self,
+                 allow_local: bool,
+                 repo_id: Optional[str] = None,
+                 device_string: Optional[str] = None,
+                 lang_code: str = "a"):
+        """Text-to-speech (Kokoro).
+
+        `allow_local`: See `MaybeRemoteService`. Kokoro-82M weighs ~360 MB;
+                       apps that only occasionally need TTS should prefer
+                       `allow_local=False`.
+
+        `repo_id`: Required if `allow_local=True`. HuggingFace repo, e.g.
+                   `"hexgrad/Kokoro-82M"`.
+
+        `device_string`: Required if `allow_local=True`. E.g. `"cpu"`, `"cuda:0"`.
+
+        `lang_code`: phonemizer language code. Word-level metadata currently
+                     supports English only (`"a"` or `"b"`). See
+                     `raven.common.audio.speech.tts.load_tts_pipeline` for the
+                     full list.
+        """
+        super().__init__(allow_local)
+        self.repo_id = repo_id
+        self.device_string = device_string
+        self.lang_code = lang_code
+
+        self.sample_rate = speech_tts.KOKORO_SAMPLE_RATE
+
+        if "tts" in self.server_modules:
+            logger.info(f"TTS.__init__: Using `tts` module on Raven-server at '{client_config.raven_server_url}'.")
+        else:
+            if self.server_available:
+                logger.info(f"TTS.__init__: No `tts` module loaded on Raven-server at '{client_config.raven_server_url}', loading Kokoro pipeline locally.")
+            self._local_model = speech_tts.load_tts_pipeline(repo_id=repo_id,
+                                                             device_string=device_string,
+                                                             lang_code=lang_code)
+
+    def list_voices(self) -> List[str]:
+        """List installed voices. Remote uses the server's /api/tts/list_voices; local scans the modelsdir."""
+        if self._local_model is None:
+            return api.tts_list_voices()
+        return speech_tts.get_voices(self._local_model)
+
+    def synthesize(self,
+                   voice: str,
+                   text: str,
+                   speed: float = 1.0,
+                   get_metadata: bool = True) -> speech_tts.TTSResult:
+        """Synthesize `text` to a `TTSResult` with float32 mono audio and optional word timings.
+
+        Uniform return type across modes:
+          - `audio`: float32 in [-1, 1], at `self.sample_rate` (24 kHz).
+          - `word_metadata`: list of `WordTiming` (raw, not URL-encoded), or `None`.
+
+        Remote mode: the server returns MP3 over HTTP; we decode it back to float here.
+        Note this round-trips through a lossy codec, so sample values differ slightly
+        from the server's internal float output — inaudible, but not bit-identical.
+        """
+        if self._local_model is None:
+            mp3_bytes, raw_timestamps = _remote_tts_speak_raw(voice=voice, text=text, speed=speed, get_metadata=get_metadata)
+
+            # MP3 → float32 mono at Kokoro's native 24 kHz.
+            _metadata, audio = audio_codec.decode(io.BytesIO(mp3_bytes),
+                                                  target_sample_format="fltp",
+                                                  target_sample_rate=self.sample_rate,
+                                                  target_layout="mono")
+            audio = audio.astype(np.float32, copy=False)
+
+            if get_metadata:
+                word_metadata = [speech_tts.WordTiming(word=ts["word"],
+                                                       phonemes=ts["phonemes"],
+                                                       start_time=ts.get("start_time"),
+                                                       end_time=ts.get("end_time"))
+                                 for ts in raw_timestamps]
+            else:
+                word_metadata = None
+
+            return speech_tts.TTSResult(audio=audio,
+                                        sample_rate=self.sample_rate,
+                                        duration=len(audio) / self.sample_rate,
+                                        word_metadata=word_metadata)
+
+        return speech_tts.synthesize(self._local_model,
+                                     voice=voice,
+                                     text=text,
+                                     speed=speed,
+                                     get_metadata=get_metadata)

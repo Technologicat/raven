@@ -25,6 +25,7 @@
   - New dependency: `torchaudio>=2.4.0`.
 - New module `raven.common.audio.speech.stt` — Whisper wrapper callable in-process (no Flask). `raven.server.modules.stt` is now a thin wrapper that decodes the audio container and forwards to the common layer.
 - New module `raven.common.audio.speech.tts` — Kokoro wrapper callable in-process (no Flask). Two-layer API: `synthesize_iter` yields per-segment `TTSSegment` with already-absolute word timestamps, `synthesize` is the concatenating wrapper returning a single `TTSResult`. `raven.server.modules.tts` is now a thin wrapper that casts float→s16 at the transport boundary, URL-encodes Unicode phonemes for HTTP headers, and handles Flask response construction.
+- `raven.client.mayberemote`: new `TTS` and `STT` services, mirroring the existing `Dehyphenator` / `Embedder` / `NLP` pattern. Apps can now use speech locally when the server is down (or skip the round-trip entirely for latency), with a uniform API across modes. `STT.transcribe` auto-resamples mismatched input; `TTS.synthesize` returns float32 audio even in remote mode (decoded from the server's MP3 stream).
 
 **Changed**:
 
