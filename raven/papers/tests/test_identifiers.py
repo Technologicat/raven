@@ -1,5 +1,7 @@
 """Tests for arXiv identifier parsing and extraction."""
 
+import pathlib
+
 from raven.papers.identifiers import (
     ARXIV_NEW_ID_RE,
     ARXIV_OLD_ID_RE,
@@ -7,6 +9,9 @@ from raven.papers.identifiers import (
     split_version,
     strip_version,
     extract_ids_from_filenames,
+    list_subfolders,
+    list_pdf_files,
+    collect_latest_ids,
 )
 
 
@@ -340,3 +345,126 @@ class TestExtractIdsFromFilenames:
         filenames = ["hep-th_0601001.pdf"]
         result = extract_ids_from_filenames(filenames, canonize=True)
         assert result == [("hep-th/0601001v1", "hep-th_0601001.pdf")]
+
+
+# ---- list_subfolders --------------------------------------------------------
+
+class TestListSubfolders:
+    """Verify recursive directory listing with ``00_``-prefix filtering."""
+
+    def test_single_directory(self, tmp_path):
+        result = list_subfolders(str(tmp_path))
+        assert result == [str(tmp_path.resolve())]
+
+    def test_nested_directories_included(self, tmp_path):
+        (tmp_path / "a").mkdir()
+        (tmp_path / "a" / "b").mkdir()
+        (tmp_path / "c").mkdir()
+        result = list_subfolders(str(tmp_path))
+        # Expect root, a, a/b, c — all resolved
+        expected = {
+            str(tmp_path.resolve()),
+            str((tmp_path / "a").resolve()),
+            str((tmp_path / "a" / "b").resolve()),
+            str((tmp_path / "c").resolve()),
+        }
+        assert set(result) == expected
+
+    def test_skips_00_prefixed(self, tmp_path):
+        """Directories starting with ``00_`` are not recursed into."""
+        (tmp_path / "00_workfiles").mkdir()
+        (tmp_path / "00_workfiles" / "hidden").mkdir()
+        (tmp_path / "published").mkdir()
+        result = list_subfolders(str(tmp_path))
+        # Root and "published" are listed; the 00_ tree is skipped entirely.
+        joined = " ".join(result)
+        assert "00_workfiles" not in joined
+        assert "hidden" not in joined
+        assert str((tmp_path / "published").resolve()) in result
+
+    def test_result_is_sorted_and_unique(self, tmp_path):
+        for name in ("b", "a", "c"):
+            (tmp_path / name).mkdir()
+        result = list_subfolders(str(tmp_path))
+        assert result == sorted(result)
+        assert len(result) == len(set(result))
+
+
+# ---- list_pdf_files ---------------------------------------------------------
+
+class TestListPdfFiles:
+    """Verify filtering and sorting of PDF files in a directory."""
+
+    def test_returns_only_pdfs(self, tmp_path):
+        (tmp_path / "paper.pdf").write_bytes(b"")
+        (tmp_path / "notes.txt").write_bytes(b"")
+        (tmp_path / "data.csv").write_bytes(b"")
+        result = list_pdf_files(str(tmp_path))
+        assert result == ["paper.pdf"]
+
+    def test_sorted_output(self, tmp_path):
+        for name in ("c.pdf", "a.pdf", "b.pdf"):
+            (tmp_path / name).write_bytes(b"")
+        assert list_pdf_files(str(tmp_path)) == ["a.pdf", "b.pdf", "c.pdf"]
+
+    def test_case_insensitive_extension(self, tmp_path):
+        """Uppercase .PDF and mixed-case extensions are also recognized."""
+        for name in ("x.pdf", "y.PDF", "z.Pdf"):
+            (tmp_path / name).write_bytes(b"")
+        assert list_pdf_files(str(tmp_path)) == ["x.pdf", "y.PDF", "z.Pdf"]
+
+    def test_empty_directory(self, tmp_path):
+        assert list_pdf_files(str(tmp_path)) == []
+
+    def test_pathlib_input(self, tmp_path):
+        (tmp_path / "a.pdf").write_bytes(b"")
+        assert list_pdf_files(pathlib.Path(tmp_path)) == ["a.pdf"]
+
+
+# ---- collect_latest_ids -----------------------------------------------------
+
+class TestCollectLatestIds:
+    """Verify recursive scan + latest-version dedup."""
+
+    def test_lists_unique_ids(self, tmp_path):
+        for name in ("2301.12345.pdf", "2302.67890v1.pdf", "not_an_arxiv_paper.pdf"):
+            (tmp_path / name).write_bytes(b"")
+        result = collect_latest_ids(str(tmp_path))
+        assert {raw_id for raw_id, _ in result} == {"2301.12345", "2302.67890v1"}
+
+    def test_picks_latest_version_same_dir(self, tmp_path):
+        for name in ("2301.12345v1.pdf", "2301.12345v3.pdf", "2301.12345v2.pdf"):
+            (tmp_path / name).write_bytes(b"")
+        result = collect_latest_ids(str(tmp_path))
+        assert [raw_id for raw_id, _ in result] == ["2301.12345v3"]
+
+    def test_picks_latest_version_across_dirs(self, tmp_path):
+        """The same paper under different subdirs: keep the newest version."""
+        (tmp_path / "old").mkdir()
+        (tmp_path / "new").mkdir()
+        (tmp_path / "old" / "2301.12345v1.pdf").write_bytes(b"")
+        (tmp_path / "new" / "2301.12345v4.pdf").write_bytes(b"")
+        result = collect_latest_ids(str(tmp_path))
+        assert [raw_id for raw_id, _ in result] == ["2301.12345v4"]
+
+    def test_empty_directory(self, tmp_path):
+        assert collect_latest_ids(str(tmp_path)) == []
+
+    def test_recurses_into_subfolders(self, tmp_path):
+        sub = tmp_path / "subset"
+        sub.mkdir()
+        (sub / "2301.12345.pdf").write_bytes(b"")
+        result = collect_latest_ids(str(tmp_path))
+        assert [raw_id for raw_id, _ in result] == ["2301.12345"]
+
+    def test_result_sorted(self, tmp_path):
+        for name in ("2303.11111.pdf", "2301.22222.pdf", "2302.33333.pdf"):
+            (tmp_path / name).write_bytes(b"")
+        result = collect_latest_ids(str(tmp_path))
+        raw_ids = [raw_id for raw_id, _ in result]
+        assert raw_ids == sorted(raw_ids)
+
+    def test_returns_filename(self, tmp_path):
+        (tmp_path / "Smith_2301.12345_preprint.pdf").write_bytes(b"")
+        result = collect_latest_ids(str(tmp_path))
+        assert result == [("2301.12345", "Smith_2301.12345_preprint.pdf")]

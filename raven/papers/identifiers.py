@@ -25,6 +25,7 @@ __all__ = [
     "list_subfolders",
     "list_pdf_files",
     "extract_ids_from_filenames",
+    "collect_latest_ids",
     "main",
 ]
 
@@ -152,9 +153,41 @@ def extract_ids_from_filenames(filenames: list[str],
     return ids_and_paths
 
 
+def collect_latest_ids(input_dir: str) -> list[tuple[str, str]]:
+    """Scan *input_dir* recursively; return unique arXiv IDs in sorted order.
+
+    When the same paper (same base ID) appears under different filenames
+    or in different subdirectories, only the newest version is kept.
+
+    Returns ``[(raw_id, filename), ...]`` sorted by ID.  The filename is
+    the basename of the PDF where the ID was matched (not a full path).
+
+    Directories whose names start with ``00_`` are skipped (see
+    :func:`list_subfolders`).
+    """
+    arxiv_pdf_files: dict[str, tuple[str, str, int]] = {}
+    for path in list_subfolders(input_dir):
+        pdf_files = list_pdf_files(path)
+        if not pdf_files:
+            continue
+        ids_and_paths = extract_ids_from_filenames(pdf_files)
+        base_ids_and_versions = [split_version(raw_id) for raw_id, p in ids_and_paths]
+
+        # Pick the latest version for each identifier discovered so far
+        for (raw_id, p), (base_id, version) in zip(ids_and_paths, base_ids_and_versions):
+            if base_id not in arxiv_pdf_files:
+                arxiv_pdf_files[base_id] = (raw_id, p, version)
+            else:
+                _, _, recorded_version = arxiv_pdf_files[base_id]
+                if version > recorded_version:
+                    arxiv_pdf_files[base_id] = (raw_id, p, version)
+
+    return [(raw_id, filename) for raw_id, filename, _ in sorted(arxiv_pdf_files.values())]
+
+
 # ---- CLI -------------------------------------------------------------------
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(
         description="List identifiers of arXiv papers in the specified directory. "
         "The papers are assumed to be PDF files with the arXiv identifier "
@@ -176,29 +209,7 @@ def main() -> None:
                         "debugging your collection.")
     opts = parser.parse_args()
 
-    if opts.input_dir is None:
-        opts.input_dir = "."
-
-    arxiv_pdf_files: dict[str, tuple[str, str, int]] = {}
-    paths = list_subfolders(opts.input_dir)
-    for path in sorted(paths):
-        pdf_files = list_pdf_files(path)
-        if not pdf_files:
-            continue
-        arxiv_pdf_files_in_this_dir = extract_ids_from_filenames(pdf_files)
-        base_ids_and_versions = [split_version(raw_id) for raw_id, p in arxiv_pdf_files_in_this_dir]
-
-        # Pick the latest version for each identifier discovered so far
-        for (raw_id, p), (base_id, version) in zip(arxiv_pdf_files_in_this_dir, base_ids_and_versions):
-            if base_id not in arxiv_pdf_files:
-                arxiv_pdf_files[base_id] = (raw_id, p, version)
-            else:
-                recorded_raw_id, recorded_p, recorded_version = arxiv_pdf_files[base_id]
-                if version > recorded_version:
-                    arxiv_pdf_files[base_id] = (raw_id, p, version)
-
-    arxiv_pdf_files_sorted = list(sorted(arxiv_pdf_files.values()))
-    for identifier, filename, version in arxiv_pdf_files_sorted:
+    for identifier, filename in collect_latest_ids(opts.input_dir or "."):
         if opts.verbose:
             print(identifier, filename)
         else:

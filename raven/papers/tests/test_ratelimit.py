@@ -44,6 +44,15 @@ class TestRateLimiter:
         elapsed = time.monotonic() - t0
         assert 0.15 <= elapsed <= 0.35
 
+    def test_show_progress_branch(self):
+        """The ``show_progress=True`` path runs the tqdm loop to completion."""
+        rl = RateLimiter(delay=0.2)
+        rl.wait(show_progress=True)  # first call returns immediately
+        t0 = time.monotonic()
+        rl.wait(show_progress=True)
+        elapsed = time.monotonic() - t0
+        assert 0.15 <= elapsed <= 0.5
+
     def test_thread_safety(self):
         """Multiple threads waiting should each respect the delay."""
         rl = RateLimiter(delay=0.15)
