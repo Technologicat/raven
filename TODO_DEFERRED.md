@@ -1,5 +1,22 @@
 # Deferred TODOs
 
+## ⚠️ HIGH PRIORITY — JJ review of the TTS/STT refactor
+
+The speech-extract-to-common work (briefs/speech-extract-to-common.md) is infrastructure code, and infra needs to be *right*, not merely passing tests. Once the six-step sequence in that brief is complete, the whole changeset needs a careful human review by JJ before any downstream code starts relying on it.
+
+Files to scrutinise after all steps land (step numbering from the brief):
+
+- **Step 2** — `raven/common/audio/resample.py` + `tests/test_resample.py`. Constrained-TypeVar API; quality presets; torchaudio vs. scipy trade-off.
+- **Step 3** — `raven/common/audio/speech/stt.py` + `tests/test_stt.py`. `STTModel` dataclass; memoized loader; progress-callback adapter; sample-rate validation.
+- **Step 4** — `raven/common/audio/speech/tts.py` + round-trip test. `synthesize_iter` / `synthesize`; absolute-timestamp accumulation; per-segment `TTSSegment` design; `TTSPipeline` / `TTSResult` / `WordTiming` dataclasses.
+- **Step 4** — rewritten `raven/server/modules/tts.py` (float → s16 cast at the transport boundary; URL-encoding at the transport boundary; verify lipsync metadata matches the old wire format byte-for-byte).
+- **Step 5** — `raven.client.mayberemote.TTS` / `.STT` additions.
+- **Step 6** — manual smoke: Librarian + Avatar in remote and local modes; lipsync visually correct.
+
+**When CC is asked in a future session "what's on the deferred list?"**, this item should be highlighted explicitly, not just listed. Do not assume "tests pass" means "review complete" — the point of the review is to catch design-level issues that tests don't.
+
+Raised during step 3 of the refactor (2026-04-17).
+
 ## Additional `MaybeRemoteService` candidates (classify, translate)
 
 `raven.client.mayberemote` currently wraps `Dehyphenator` (→ sanitize), `Embedder` (→ embeddings), `NLP` (→ natlang). Once the in-progress speech-extract-to-common work lands `TTS` / `STT`, the ML-engine server modules that *still* have no local fallback are:
@@ -17,19 +34,34 @@ Discovered during speech-extract-to-common discussion (2026-04-17).
 
 ## Client-local avatar animator (licensing-bounded)
 
-The avatar animator currently lives only in `raven.server.modules.avatar` under AGPL. Reason: the module has contributors beyond the user (Juha Jeronen) and can't be unilaterally relicensed. THA3 upstream (the underlying ML model, vendored in `raven/vendor/tha3/`) is actually MIT — so the AGPL tax comes from Raven-side extensions, not the model itself.
+The avatar animator currently lives only in `raven.server.modules.avatar` under AGPL. THA3 upstream (the underlying ML model, vendored in `raven/vendor/tha3/`) is actually MIT — so the AGPL tax comes from Raven-side extensions, not the model itself.
 
-A client-local animator would be valuable even though the server one stays: it would skip the network transport plus QOI encode/decode round-trip, which dominates latency on non-localhost server setups.
+A client-local animator would be valuable even though the server one stays: it would skip the network transport plus QOI encode/decode round-trip, which dominates latency on non-localhost server setups. It would also enable the BSD Raven apps (librarian, cherrypick, visualizer, xdot viewer, …) to use the avatar without the AGPL reach.
 
-Open legal/scoping questions:
+**External / shared-authorship code on the server side** (can't be unilaterally relicensed):
 
-- Which of the server-side animator extensions are the user's solo work, and which have shared authorship? (Only solo-authored code can be relicensed to BSD without consent from co-authors.)
-- Is a clean-room client-local animator, built on MIT-licensed THA3 plus only the user's own BSD-licensable contributions, feasible? — Or is too much of the Raven-specific behaviour entangled with shared-authorship AGPL code?
-- Can a BSD-licensed client module legally call into the AGPL server module *at runtime* (HTTP over the network) without pulling the client under AGPL? — Important for the existing MaybeRemote pattern: if remote-mode is allowed, what does the AGPL's "combined work" test say about a BSD client that *optionally* communicates with an AGPL server over HTTP? (General consensus: network RPC doesn't create a combined work in the AGPL-copyleft sense, but worth getting confirmed rather than assumed.)
+- The Raven server app proper (`raven.server.app` and much of `raven.server.modules`).
+- `raven.server.modules.websearch` — loosely based on SillyTavern-extras, updated with tricks from SillyTavern-selenium's JS version.
+- The **first version** of the avatar animator — the two-thread loop, THA3 engine wiring, and `x-multipart-replace` image stream. The animation drivers on top of this foundation have since been completely rewritten by the user, but not from a blank slate — so the original two-thread / streaming scaffolding is likely still recognisable in the current code and retains shared authorship.
 
-A client-local animator is not going away from the server — the server's avatar remains indefinitely useful, especially once a JavaScript avatar client exists. Nothing here conflicts with that.
+**Licensing distinction the open question really hinges on:**
 
-No action until the scope question is answered. Discovered during speech-extract-to-common discussion (2026-04-17).
+- **Web-API RPC between processes** (the current MaybeRemote pattern): two separate products, networked, already clearly fine. No combined-work question.
+- **In-process linking** (importing the AGPL module from a BSD caller): analogous to linking object files. *This* is the real AGPL question — does the combined work inherit AGPL, and can AGPL make the BSD caller's effective requirements *stricter* than BSD's?
+  - GPL-family consensus: yes, a combined work inherits the strictest applicable license, which is AGPL's intent (prevent embrace-and-extinguish).
+  - BSD's permissive posture doesn't change that — BSD code can be used *in* a stricter work, it just can't be *stripped of* attribution.
+  - Practical consequence: if a BSD client module imports AGPL server code into the same process, the resulting program is effectively AGPL for distribution purposes.
+  - Takeaway: the server stays server-only (RPC boundary, clean); an in-process client-local animator has to be a separate implementation that doesn't import the AGPL module.
+
+**What a client-local animator would require:**
+
+- A clean-room implementation built on MIT-licensed THA3 plus *only* the user's own BSD-licensable contributions — specifically, the post-rewrite animation drivers and newer pipeline work.
+- Explicit triage of which code in `raven.server.modules.avatar` is user-solo vs. shared-authorship. The first-version foundation (two threads, THA3 engine wiring, x-multipart-replace) is the shared-authorship part; the rewritten drivers on top should be user-solo and relicensable.
+- No code copy-paste from the AGPL module — even small fragments with shared authorship would re-infect.
+
+The server animator is not going away — it remains indefinitely useful, especially once a JavaScript avatar client exists. A BSD client-local animator is purely additive.
+
+No action until the user decides whether to pursue the clean-room path. Discovered during speech-extract-to-common discussion (2026-04-17).
 
 ## Untested but test-worthy modules in `raven.common`
 
@@ -58,7 +90,7 @@ The client side currently ignores this: `raven/client/avatar_renderer.py:18` has
 
 Fix: the client needs to receive the animator's crop settings (already sent by the client itself when configuring the server) and use them to align the cropped frame within the unit bbox that would have been occupied by the full non-cropped image. The math is straightforward — the crop settings are already in `[0, 1]` normalized coordinates, symmetric around the centre; the client just places the received image at the appropriate offset and scale within its render target.
 
-This unlocks the 50% speedup for clients that actually use heavy cropping (e.g. head-and-shoulders framing in typical chat use).
+This unlocks the 50% speedup for clients that actually use cropping. Typical target framing is a **cowboy shot** (roughly knees up) with side margins cropped away — the standing character sits centred horizontally in a narrower-than-square output. Not head-and-shoulders (that would keep roughly the full square).
 
 Discovered during speech-extract-to-common discussion (2026-04-17).
 
