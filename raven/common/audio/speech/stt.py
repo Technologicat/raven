@@ -27,8 +27,10 @@ from .. import resample as audio_resample
 class STTModel:
     """Loaded Whisper model + its processor + the device and dtype it lives on.
 
-    `sample_rate` is a convenience mirror of `processor.feature_extractor.sampling_rate`;
-    callers need it to know what rate to resample to before calling `transcribe`.
+    `sample_rate` mirrors `processor.feature_extractor.sampling_rate` — the model's
+    native input rate (Whisper is 16 kHz). `transcribe` auto-resamples mismatched
+    input, so callers don't have to pre-convert; the field is available as metadata
+    for callers that want to inspect or display it.
     """
     model: transformers.AutoModelForSpeechSeq2Seq
     processor: transformers.AutoProcessor
