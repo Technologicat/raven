@@ -1,5 +1,22 @@
 # Deferred TODOs
 
+## Lazy `api.initialize` in `llmclient` (would unblock `test_scaffold` in minimal CI)
+
+`raven/librarian/llmclient.py` calls `api.initialize(...)` at module top (lines 55–58). This means `from raven.librarian import llmclient` both (a) requires the full `raven.client.api` import chain to succeed (qoi, spaCy, Kokoro TTS, …), and (b) runs the initialization side effect. As a result, `scaffold` — which imports `llmclient` at module level — is not importable in environments without the full dep stack.
+
+Concrete cost observed 2026-04-17: `test_scaffold.py` has to `pytest.importorskip("raven.librarian.scaffold")` at the top, so the scaffold tests skip entirely in the CI minimal-deps job (matching the existing pattern for `test_api.py` and `test_hybridir.py`). Scaffold coverage is visible only in dev environments — not a regression, just a cap on what CI can report.
+
+Refactor sketch:
+
+- Move `api.initialize(...)` out of the module body into a lazy setup function. The natural home is probably `llmclient.setup`, which app startup already calls.
+- Audit `llmclient`'s module-top imports for other side effects; move to lazy/TYPE_CHECKING where possible. `scaffold.py` now uses `TYPE_CHECKING` for its `hybridir` import, which is a good model.
+- Verify no other module relies on `api.initialize` being called as a side effect of importing `llmclient`.
+
+Once done, remove the `pytest.importorskip` from `test_scaffold.py`; the scaffold tests then contribute to CI coverage too (~90% of scaffold.py's 119 statements).
+
+Discovered during scaffold/appstate test work (2026-04-17).
+
+
 ## Replace local utilities with unpythonic 2.1.0 equivalents
 
 `raven/common/utils.py` and `raven/common/numutils.py` contain four utilities that were ported to `unpythonic` in 2.1.0: `environ_override`, `maybe_open`, `UnionFilter`, and `si_prefix`. All are available as top-level imports (`from unpythonic import environ_override, maybe_open, UnionFilter, si_prefix`). The unpythonic versions have bugfixes (si_prefix negative numbers), additional features (si_prefix binary mode, negative SI prefixes), and type annotations. Replace the local copies with imports from unpythonic once raven bumps its unpythonic dependency to >= 2.1.0. The local `# TODO: move to unpythonic` comments mark the exact locations.
