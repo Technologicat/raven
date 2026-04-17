@@ -7,7 +7,7 @@ The speech-extract-to-common work (briefs/speech-extract-to-common.md) is infras
 Files to scrutinise after all steps land (step numbering from the brief):
 
 - **Step 2** — `raven/common/audio/resample.py` + `tests/test_resample.py`. Constrained-TypeVar API; quality presets; torchaudio vs. scipy trade-off.
-- **Step 3** — `raven/common/audio/speech/stt.py` + `tests/test_stt.py`. `STTModel` dataclass; memoized loader; progress-callback adapter; sample-rate validation.
+- **Step 3** — `raven/common/audio/speech/stt.py` + `tests/test_stt.py`. `STTModel` dataclass; memoized loader; progress-callback adapter; automatic resampling to Whisper's native rate.
 - **Step 4** — `raven/common/audio/speech/tts.py` + round-trip test. `synthesize_iter` / `synthesize`; absolute-timestamp accumulation; per-segment `TTSSegment` design; `TTSPipeline` / `TTSResult` / `WordTiming` dataclasses.
 - **Step 4** — rewritten `raven/server/modules/tts.py` (float → s16 cast at the transport boundary; URL-encoding at the transport boundary; verify lipsync metadata matches the old wire format byte-for-byte).
 - **Step 5** — `raven.client.mayberemote.TTS` / `.STT` additions.
@@ -16,6 +16,49 @@ Files to scrutinise after all steps land (step numbering from the brief):
 **When CC is asked in a future session "what's on the deferred list?"**, this item should be highlighted explicitly, not just listed. Do not assume "tests pass" means "review complete" — the point of the review is to catch design-level issues that tests don't.
 
 Raised during step 3 of the refactor (2026-04-17).
+
+## Server info endpoint: expose STT/TTS native sample rates
+
+`raven.client.mayberemote.STT` and `.TTS` both need to know their engine's native sample rate. In local mode they read it off the loaded model; in remote mode they currently hardcode the canonical value (Whisper 16 kHz, Kokoro 24 kHz). That couples the MaybeRemote client's assumption to the server's actual model choice — fine today (both architectures have fixed rates), fragile long-term.
+
+Concrete fix: a small info endpoint like `/api/stt/info` / `/api/tts/info` returning e.g. `{"sample_rate": 16000, "model": "openai/whisper-base"}`. MaybeRemote queries it at `__init__` time in remote mode, caches the result. No hardcoded canonical constants on the client side.
+
+Could also cover `/api/embeddings/info` for the embedding model name / dim, etc. — small uniformity win.
+
+Discovered during step 5 review (2026-04-18).
+
+## FLAC instead of MP3 for MaybeRemote TTS transport
+
+`raven.client.mayberemote.TTS` currently asks the server for MP3 (the default format `raven.server.modules.tts.text_to_speech` serves). MP3 is lossy — samples come back slightly altered from what the server synthesized. Inaudible in practice, but not bit-identical.
+
+MP3 was chosen historically because it was what Kokoro-FastAPI could reliably produce; FLAC either crashed it or produced duplicated audio. Raven no longer routes through Kokoro-FastAPI (in-process Kokoro since the refactor), so FLAC probably works now and is worth trying for two reasons:
+
+- **Lossless**: exact sample values round-trip, matching the local-mode path byte-for-byte.
+- **Licensing**: FLAC is royalty-free; MP3 is historically patent-encumbered (US patents expired 2017, but the ecosystem caution persists).
+
+Not a functional blocker — mention in the same session where a user hits some MP3-specific quirk, or pair with a broader audio-format cleanup.
+
+Discovered during step 5 review (2026-04-18).
+
+## Generalize `raven.client.tts.tts_prepare` for local-mode offline precomputation
+
+`tts_prepare` is the offline-precomputation helper for lipsync — it runs TTS on CPU while the previous sentence is still speaking, so perceived latency stays bounded by the first-sentence synthesis time rather than the full sequence. Currently it's HTTP-only (calls the server's `/api/tts/speak`).
+
+Worth lifting to work uniformly across local / remote modes. Natural home: `MaybeRemote.TTS.prepare(text, voice, ...)` that returns the same precomputed structure (audio + cleaned timestamps) regardless of mode, so callers don't care which path.
+
+Side benefit: DRY — the current `tts_prepare` inlines a copy of the timestamp cleanup logic. After generalization it would just use `speech_tts.clean_timestamps`.
+
+Not urgent; the current `tts_prepare` works fine for the server-mode use case. Lift when the client-local animator work touches this area anyway.
+
+Discovered during step 5 review (2026-04-18).
+
+## DRY: `raven.client.tts._tts_prepare` inlines its own timestamp cleanup
+
+`raven.client.tts._tts_prepare` has an inline `clean_timestamps` (dict-based) that duplicates the logic in `raven.common.audio.speech.tts.clean_timestamps` (WordTiming-based). Same rules: drop duplicate start_times, drop incidental single-char non-punctuation.
+
+Tied to the item above: when `tts_prepare` is generalized into `MaybeRemote.TTS.prepare`, the inline copy disappears in favour of the common-layer helper. Filed separately because someone might fix it before tackling the bigger generalization.
+
+Discovered during step 5 review (2026-04-18).
 
 ## Additional `MaybeRemoteService` candidates (classify, translate)
 
@@ -44,6 +87,7 @@ The avatar animator currently lives only in `raven.server.modules.avatar` under 
 A client-local animator would be valuable even though the server one stays:
 
 - It extends the "server-optional" story (the goal behind the existing MaybeRemote pattern) to the avatar: a Raven app running standalone could still show the avatar, without requiring the server to be running.
+- It enables a **fully-BSD Raven distribution** — simpler to configure for single-app users, and avoids the "license: it's complicated" friction that tends to drive people away from otherwise-perfectly-serviceable software.
 - It skips the QOI encode/decode + loopback-socket round-trip. This *may* be a meaningful latency contributor even on localhost setups — needs measuring before being used as justification. On a non-localhost server setup, the user has put the server elsewhere for a reason (shared GPU across machines, a specific box with the VRAM, etc.), so "skip the network" isn't really the escape for those cases — a client-local animator helps only standalone / localhost use.
 
 **Per-module authorship provenance on the server side** (for scoping what can / can't be unilaterally relicensed):

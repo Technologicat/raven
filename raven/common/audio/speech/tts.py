@@ -29,7 +29,8 @@ __all__ = ["WordTiming",
            "load_tts_pipeline",
            "get_voices",
            "synthesize_iter",
-           "synthesize"]
+           "synthesize",
+           "clean_timestamps"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -205,6 +206,46 @@ def get_voices(pipeline: TTSPipeline) -> list[str]:
 def _audio_duration(audio: np.ndarray, sample_rate: int) -> float:
     """Seconds of audio in a rank-1 array."""
     return len(audio) / sample_rate
+
+
+def _is_word(s: str) -> bool:
+    """True if `s` is a lipsync-meaningful token (not an incidental single-char glyph)."""
+    # Multi-char strings pass through unconditionally. Single-char: alphanumeric or a common
+    # punctuation mark (used to close the mouth between phrases).
+    return len(s) > 1 or s.isalnum() or s in ",.!?:;"
+
+
+def clean_timestamps(timings: list[WordTiming], for_lipsync: bool = True) -> list[WordTiming]:
+    """Filter raw Kokoro word metadata.
+
+    Two filters compose this:
+
+    - **Always**: drop consecutive entries with the same `start_time`. Originally
+      seen with Kokoro-FastAPI; not yet confirmed with the in-process Kokoro path
+      but kept as a precaution — cost is one comparison per entry. Not lipsync-
+      specific; the duplicate timestamps are engine-level noise regardless of
+      downstream use.
+
+    - **Only when `for_lipsync=True`**: drop incidental single-char tokens that
+      aren't letters, digits, or common end-of-phrase punctuation (``,.!?:;``).
+      These tokens tend to be tokenization artifacts (stray apostrophes, dashes,
+      whitespace markers) and confuse the lipsync driver if they slip through.
+      For captioning / transcript display, these tokens may be relevant —
+      disable the filter there.
+
+    The filter preserves the `WordTiming` instances themselves (no copying) — the
+    returned list is a subset of the input list.
+    """
+    out = []
+    last_start_time = None
+    for timing in timings:
+        if timing.start_time == last_start_time:
+            continue
+        if for_lipsync and not _is_word(timing.word):
+            continue
+        out.append(timing)
+        last_start_time = timing.start_time
+    return out
 
 
 def synthesize_iter(pipeline: TTSPipeline,

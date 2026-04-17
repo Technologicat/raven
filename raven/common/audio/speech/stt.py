@@ -23,6 +23,7 @@ import torch
 import transformers
 
 from ...hfutil import maybe_install_models
+from .. import resample as audio_resample
 
 
 @dataclass
@@ -93,13 +94,15 @@ def transcribe(stt_model: STTModel,
                progress_callback: Optional[Callable[[int, int], None]] = None) -> str:
     """Transcribe mono audio to text.
 
-    `audio`: rank-1 float numpy array, mono, at the model's native sample rate.
-             Whisper's feature extractor runs at 16 kHz — resample first if your
-             source is at a different rate (see `raven.common.audio.resample`).
+    `audio`: rank-1 float numpy array, mono. Any sample rate — this function
+             resamples to the model's native rate (Whisper is 16 kHz) via
+             `raven.common.audio.resample.resample` if they don't match.
 
-    `sample_rate`: must equal `stt_model.sample_rate`. Passed explicitly rather
-                   than inferred, so accidental rate mismatches fail loud instead
-                   of silently producing gibberish.
+    `sample_rate`: the sample rate of `audio`. Must match the actual rate of the
+                   samples — a raw numpy array carries no rate metadata, so this
+                   parameter is how the function knows what the bytes mean. Passing
+                   the wrong value produces speed-shifted and resampled audio, which
+                   Whisper then transcribes as gibberish.
 
     `prompt`: optional conditioning text. See `raven.server.app.api_stt_transcribe`
               for Whisper prompting guidance (list rare proper names, set context,
@@ -116,8 +119,9 @@ def transcribe(stt_model: STTModel,
     whitespace-stripped string.
     """
     if sample_rate != stt_model.sample_rate:
-        raise ValueError(f"transcribe: sample_rate={sample_rate} does not match model's native {stt_model.sample_rate} Hz. "
-                         f"Resample the audio first (see raven.common.audio.resample).")
+        logger.info(f"transcribe: resampling audio from {sample_rate} Hz → {stt_model.sample_rate} Hz before inference.")
+        audio = audio_resample.resample(audio, from_rate=sample_rate, to_rate=stt_model.sample_rate)
+        sample_rate = stt_model.sample_rate
 
     prompt_log = f"'{prompt}'" if prompt is not None else None
     language_log = f"'{language}'" if language is not None else None

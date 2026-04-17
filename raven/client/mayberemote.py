@@ -34,7 +34,6 @@ from ..client import util as client_util
 
 from ..common import nlptools
 from ..common.audio import codec as audio_codec
-from ..common.audio import resample as audio_resample
 from ..common.audio.speech import stt as speech_stt
 from ..common.audio.speech import tts as speech_tts
 
@@ -296,18 +295,16 @@ class STT(MaybeRemoteService):
 
         `audio`: rank-1 float numpy array, mono.
 
-        `sample_rate`: sample rate of `audio`. If it does not match `self.sample_rate`
-                       (Whisper's 16 kHz), the audio is resampled here before dispatch.
-                       Same convenience both modes.
+        `sample_rate`: sample rate of `audio`, any rate. Rate conversion to Whisper's
+                       native 16 kHz happens inside the engine (locally via
+                       `raven.common.audio.speech.stt.transcribe`, or remotely via
+                       the server's `audio_codec.decode` call on the uploaded audio).
 
         `prompt`, `language`: see `raven.common.audio.speech.stt.transcribe`.
         """
-        if sample_rate != self.sample_rate:
-            audio = audio_resample.resample(audio, from_rate=sample_rate, to_rate=self.sample_rate)
-            sample_rate = self.sample_rate
-
         if self._local_model is None:
             # Remote: the existing HTTP endpoint takes s16 audio via `api.stt_transcribe_array`.
+            # The server resamples during its container-decode pass, so any sample rate works.
             audio_s16 = np.asarray(audio * 32767.0, dtype=np.int16)
             return api.stt_transcribe_array(audio_s16, sample_rate=sample_rate, prompt=prompt, language=language)
 
@@ -414,7 +411,8 @@ class TTS(MaybeRemoteService):
 
         Uniform return type across modes:
           - `audio`: float32 in [-1, 1], at `self.sample_rate` (24 kHz).
-          - `word_metadata`: list of `WordTiming` (raw, not URL-encoded), or `None`.
+          - `word_metadata`: list of `WordTiming` (raw Unicode, not URL-encoded),
+            with `speech_tts.clean_timestamps` applied for lipsync readiness.
 
         Remote mode: the server returns MP3 over HTTP; we decode it back to float here.
         Note this round-trips through a lossy codec, so sample values differ slightly
@@ -439,13 +437,18 @@ class TTS(MaybeRemoteService):
             else:
                 word_metadata = None
 
-            return speech_tts.TTSResult(audio=audio,
-                                        sample_rate=self.sample_rate,
-                                        duration=len(audio) / self.sample_rate,
-                                        word_metadata=word_metadata)
+            result = speech_tts.TTSResult(audio=audio,
+                                          sample_rate=self.sample_rate,
+                                          duration=len(audio) / self.sample_rate,
+                                          word_metadata=word_metadata)
+        else:
+            result = speech_tts.synthesize(self._local_model,
+                                           voice=voice,
+                                           text=text,
+                                           speed=speed,
+                                           get_metadata=get_metadata)
 
-        return speech_tts.synthesize(self._local_model,
-                                     voice=voice,
-                                     text=text,
-                                     speed=speed,
-                                     get_metadata=get_metadata)
+        # Kokoro emits raw engine output; apply cleanup for lipsync readiness, same in both modes.
+        if result.word_metadata is not None:
+            result.word_metadata = speech_tts.clean_timestamps(result.word_metadata)
+        return result

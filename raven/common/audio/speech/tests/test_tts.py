@@ -171,3 +171,45 @@ class TestTwoLayerAPIEquivalence:
         assert t0_values == sorted(t0_values)
         # First segment starts at zero.
         assert t0_values[0] == 0.0
+
+
+class TestCleanTimestamps:
+    # `clean_timestamps` is pure — no model needed. Tests don't need the pipeline fixture.
+
+    def test_dedup_applies_in_both_modes(self):
+        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
+             speech_tts.WordTiming(word="world", phonemes="w", start_time=0.0, end_time=0.6),  # dup start_time
+             speech_tts.WordTiming(word="after", phonemes="a", start_time=0.7, end_time=1.0)]
+        for for_lipsync in (True, False):
+            cleaned = speech_tts.clean_timestamps(t, for_lipsync=for_lipsync)
+            assert [w.word for w in cleaned] == ["hello", "after"], f"for_lipsync={for_lipsync}"
+
+    def test_lipsync_drops_incidental_single_char(self):
+        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
+             speech_tts.WordTiming(word="-",     phonemes="-", start_time=0.5, end_time=0.6),
+             speech_tts.WordTiming(word="world", phonemes="w", start_time=0.6, end_time=1.0)]
+        cleaned = speech_tts.clean_timestamps(t, for_lipsync=True)
+        assert [w.word for w in cleaned] == ["hello", "world"]
+
+    def test_non_lipsync_keeps_incidental_single_char(self):
+        # For captioning / transcript uses, single-char tokens are kept.
+        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
+             speech_tts.WordTiming(word="-",     phonemes="-", start_time=0.5, end_time=0.6),
+             speech_tts.WordTiming(word="world", phonemes="w", start_time=0.6, end_time=1.0)]
+        cleaned = speech_tts.clean_timestamps(t, for_lipsync=False)
+        assert [w.word for w in cleaned] == ["hello", "-", "world"]
+
+    def test_lipsync_keeps_common_punctuation_singletons(self):
+        # Common end-of-phrase punctuation is kept (used to close the mouth for lipsync).
+        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
+             speech_tts.WordTiming(word=".",     phonemes=".", start_time=0.6, end_time=0.7),
+             speech_tts.WordTiming(word="bye",   phonemes="b", start_time=0.8, end_time=1.1)]
+        cleaned = speech_tts.clean_timestamps(t, for_lipsync=True)
+        assert [w.word for w in cleaned] == ["hello", ".", "bye"]
+
+    def test_preserves_identity_not_copies(self):
+        # Cleaning should not copy WordTiming instances — the output list is a subset view
+        # into the input (cheap, composable).
+        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5)]
+        cleaned = speech_tts.clean_timestamps(t)
+        assert cleaned[0] is t[0]

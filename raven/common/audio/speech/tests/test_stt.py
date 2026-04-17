@@ -59,12 +59,14 @@ class TestTranscribe:
                                        sample_rate=stt_model.sample_rate)
         assert isinstance(result, str)
 
-    def test_wrong_sample_rate_raises(self, stt_model):
-        audio = np.zeros(24000, dtype=np.float32)  # 1 s at 24 kHz — wrong for Whisper
-        with pytest.raises(ValueError, match="does not match model's native"):
-            speech_stt.transcribe(stt_model,
-                                  audio=audio,
-                                  sample_rate=24000)
+    def test_wrong_sample_rate_is_resampled_transparently(self, stt_model):
+        # 1 s of silence at 24 kHz (Kokoro's native rate). The common layer should
+        # resample to Whisper's 16 kHz internally — not raise.
+        audio = np.zeros(24000, dtype=np.float32)
+        result = speech_stt.transcribe(stt_model,
+                                       audio=audio,
+                                       sample_rate=24000)
+        assert isinstance(result, str)
 
     def test_progress_callback_is_invoked(self, stt_model):
         silence = np.zeros(stt_model.sample_rate, dtype=np.float32)
