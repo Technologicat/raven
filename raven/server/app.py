@@ -1040,72 +1040,28 @@ def api_sanitize_dehyphenate():
 def api_stt_transcribe():
     """Transcribe speech audio into text.
 
-    This uses the speech recognition model configured in `raven.server.config`.
-    By default the model is `whisper-large-v3-turbo`, and this is mostly designed
-    to use that, or a model with similar functionality.
+    This uses the speech recognition model configured in `raven.server.config`
+    (default `whisper-large-v3-turbo`).
 
-    Input is POST, Content-Type "multipart/form-data", with two file attachments:
+    Request: POST, Content-Type "multipart/form-data", with two file attachments:
 
-        "file": the actual audio file (binary, any format supported by PyAV)
+        "file": the audio file (binary, any format supported by PyAV)
         "json": the API call parameters, in JSON format.
 
-    The parameters are::
+    Parameters in the JSON file::
 
-        {"prompt": "The following is a discussion on AI, particularly Qwen3.",
+        {"prompt":   "The following is a discussion on AI, particularly Qwen3.",
          "language": "en"}
 
-    Output is JSON::
+    Both fields are optional. `language` is an ISO-639-1 code; omit for
+    autodetect. `prompt` conditions the model on text that resembles the
+    expected transcription — see `raven.common.audio.speech.stt.transcribe`
+    for detailed Whisper-prompting guidance (pattern examples, the 224-token
+    limit, the "not an instruction-following model" nuance, further reading).
+
+    Response: JSON::
 
         {"text": "This is the speech transcribed as text."}
-
-    The "language" field is optional. It specifies the language of the speech audio.
-    If not specified, the model will autodetect, and transcribe the text in the
-    same language as the input.
-
-    The "prompt" field is optional. If provided, the model will be conditioned
-    on the prompt.
-
-    NOTE: `whisper` is NOT an instruction-following model. When writing prompts,
-    it'll work best if you treat it like a base LLM (raw predictor).
-
-    In other words, the prompt should "look like" the transcription result
-    of speech similar to the audio to be transcribed.
-
-    NOTE: `whisper` uses only the last 224 tokens of the prompt.
-
-    NOTE: For `whisper`, max_new_tokens = 448. This includes also the prompt tokens,
-          so a long prompt will reduce the length of speech the model can transcribe
-          at once. (Long speeches will be auto-chunked for processing.)
-
-    Below are some examples of prompts.
-
-    A prompt can help with transcribing proper names correctly::
-
-        "ZyntriQix, Digique Plus, CynapseFive, VortiQore V8, EchoNix Array,
-         OrbitalLink Seven, DigiFractal Matrix, PULSE, RAPT, B.R.I.C.K.,
-         Q.U.A.R.T.Z., F.L.I.N.T."
-
-    In this example, the prompt is just a comma-separated list of proper names.
-    This is fine.
-
-    A prompt can set the context::
-
-      "The following conversation is a lecture about the recent developments
-       around OpenAI, GPT-4.5 and the future of AI."
-
-    A prompt can nudge the model toward a given transcription style::
-
-      "Hello, welcome to my lecture."
-        --> Model attempts to transcribe into complete sentences, with punctuation.
-
-      "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking."
-        --> Model transcribes also common filler words used in spoken language, such as "umm".
-
-    See:
-        https://hackmd.io/@ll-24-25/r1RSCmxJxl/%2FIkddsjn9T2-dermdWP4BsQ
-        https://github.com/openai/openai-cookbook/blob/main/examples/Whisper_prompting_guide.ipynb
-        https://huggingface.co/openai/whisper-large-v3-turbo
-        https://huggingface.co/docs/transformers/en/model_doc/whisper
     """
     if not stt.is_available():
         abort(403, "Module 'stt' not running")

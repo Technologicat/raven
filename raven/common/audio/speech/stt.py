@@ -103,9 +103,45 @@ def transcribe(stt_model: STTModel,
                    the wrong value produces speed-shifted and resampled audio, which
                    Whisper then transcribes as gibberish.
 
-    `prompt`: optional conditioning text. See `raven.server.app.api_stt_transcribe`
-              for Whisper prompting guidance (list rare proper names, set context,
-              or nudge the transcription style). Whisper uses only the last 224 tokens.
+    `prompt`: optional conditioning text.
+
+              Whisper is **not** an instruction-following model — treat the prompt as
+              a continuation seed for a raw predictor, not as a directive. What works
+              is text that *looks like* what the transcription should look like.
+
+              Whisper uses only the **last 224 tokens** of the prompt.
+
+              For Whisper, `max_new_tokens = 448`, and prompt tokens count against
+              that limit — a long prompt shortens how much speech can be transcribed
+              in one forward pass. (Long speeches are auto-chunked anyway.)
+
+              Three patterns that work well:
+
+              - **Proper-name spelling**: a comma-separated list of names expected in
+                the audio. E.g.::
+
+                    "ZyntriQix, Digique Plus, CynapseFive, VortiQore V8, EchoNix Array,
+                     OrbitalLink Seven, DigiFractal Matrix, PULSE, RAPT, B.R.I.C.K.,
+                     Q.U.A.R.T.Z., F.L.I.N.T."
+
+              - **Context setting**: a short sentence that frames the topic. E.g.::
+
+                    "The following conversation is a lecture about the recent developments
+                     around OpenAI, GPT-4.5 and the future of AI."
+
+              - **Style nudging**: a sample sentence in the target style. E.g.::
+
+                    "Hello, welcome to my lecture."
+                        → complete sentences, with punctuation.
+
+                    "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking."
+                        → model transcribes filler words ("umm", "like") too.
+
+              Further reading:
+                https://hackmd.io/@ll-24-25/r1RSCmxJxl/%2FIkddsjn9T2-dermdWP4BsQ
+                https://github.com/openai/openai-cookbook/blob/main/examples/Whisper_prompting_guide.ipynb
+                https://huggingface.co/openai/whisper-large-v3-turbo
+                https://huggingface.co/docs/transformers/en/model_doc/whisper
 
     `language`: optional ISO-639-1 code (e.g. `"en"`, `"fi"`). `None` → autodetect.
 
