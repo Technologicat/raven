@@ -17,7 +17,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import io
-from dataclasses import replace
 from typing import List, Optional, Union
 
 import numpy as np
@@ -390,27 +389,20 @@ class TTS(MaybeRemoteService):
                                             word_metadata=[] if get_metadata else None)
 
             # MP3 → float32 mono at Kokoro's native 24 kHz.
-            _metadata, audio = audio_codec.decode(io.BytesIO(prep["audio_bytes"]),
+            _metadata, audio = audio_codec.decode(io.BytesIO(prep.audio_bytes),
                                                   target_sample_format="fltp",
                                                   target_sample_rate=self.sample_rate,
                                                   target_layout="mono")
             audio = audio.astype(np.float32, copy=False)
 
-            # `tts_prepare` already applied clean_timestamps + expand_phoneme_diphthongs.
-            word_metadata = prep.get("timestamps") if get_metadata else None
-
+            # `tts_prepare` already applied `speech_tts.finalize_metadata`.
             return speech_tts.TTSResult(audio=audio,
                                         sample_rate=self.sample_rate,
                                         duration=len(audio) / self.sample_rate,
-                                        word_metadata=word_metadata)
+                                        word_metadata=prep.word_metadata)
 
-        result = speech_tts.synthesize(self._local_model,
-                                       voice=voice,
-                                       text=text,
-                                       speed=speed,
-                                       get_metadata=get_metadata)
-        if result.word_metadata is not None:
-            cleaned = speech_tts.clean_timestamps(result.word_metadata, for_lipsync=True)
-            cleaned = speech_tts.expand_phoneme_diphthongs(cleaned)
-            result = replace(result, word_metadata=cleaned)
-        return result
+        return speech_tts.prepare(self._local_model,
+                                  voice=voice,
+                                  text=text,
+                                  speed=speed,
+                                  get_metadata=get_metadata)

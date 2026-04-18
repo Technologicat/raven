@@ -732,7 +732,7 @@ class DPGAvatarController:
                                      "config": input_record["config"]}
 
                     if (on_audio_ready := input_record["on_audio_ready"]) is not None:
-                        audio_bytes = prep["audio_bytes"]
+                        audio_bytes = prep.audio_bytes
                         on_audio_ready(output_record, audio_bytes)
 
                     self.tts_output_queue.put(output_record)

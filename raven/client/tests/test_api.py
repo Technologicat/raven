@@ -290,9 +290,10 @@ class TestTts:
                                speed=1.0,
                                get_metadata=False)
         assert prep is not None
-        assert "audio_bytes" in prep
-        assert isinstance(prep["audio_bytes"], bytes)
-        assert len(prep["audio_bytes"]) > 0
+        assert isinstance(prep.audio_bytes, bytes)
+        assert len(prep.audio_bytes) > 0
+        assert prep.audio_format == "mp3"
+        assert prep.word_metadata is None
 
     def test_prepare_with_metadata(self, initialized_api):
         prep = api.tts_prepare(text="Hello world.",
@@ -300,9 +301,9 @@ class TestTts:
                                speed=1.0,
                                get_metadata=True)
         assert prep is not None
-        assert "audio_bytes" in prep
-        assert "timestamps" in prep
-        assert isinstance(prep["timestamps"], list)
+        assert isinstance(prep.audio_bytes, bytes)
+        assert isinstance(prep.word_metadata, list)
+        assert len(prep.word_metadata) > 0
 
 
 class TestStt:
@@ -313,7 +314,7 @@ class TestStt:
         prep = api.tts_prepare(text=original, voice="af_nova", speed=1.0, get_metadata=False)
         assert prep is not None
 
-        audio_buffer = io.BytesIO(prep["audio_bytes"])
+        audio_buffer = io.BytesIO(prep.audio_bytes)
         transcribed = api.stt_transcribe(stream=audio_buffer, prompt=original)
         assert isinstance(transcribed, str)
         assert len(transcribed) > 0

@@ -23,7 +23,7 @@ import json
 import requests
 import time
 import traceback
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 import urllib.parse
 
 from unpythonic import timer
@@ -155,7 +155,7 @@ def tts_warmup(voice: str) -> None:
 def tts_prepare(text: str,
                 voice: str,
                 speed: float = 1.0,
-                get_metadata: bool = True) -> Optional[Dict[str, Any]]:
+                get_metadata: bool = True) -> Optional[speech_tts.EncodedTTSResult]:
     """Using the speech synthesizer, precompute TTS speech audio for `text` using `voice`.
 
     Optionally, compute also word-level timestamps and phoneme data.
@@ -165,25 +165,21 @@ def tts_prepare(text: str,
     `speed`: For each voice, 1.0 is the default speed the voice is designed to speak at.
              Raising this too high may cause skipped words.
 
-    `get_metadata`: If `True`, return also the timestamps and phoneme data.
-                    This data is needed by the avatar lipsync driver.
+    `get_metadata`: If `True`, the returned `EncodedTTSResult` has populated
+                    `word_metadata` (lipsync-ready — `clean_timestamps` + diphthong
+                    expansion already applied). If `False`, `word_metadata` is `None`.
 
-    Returns a `dict`, with the following entries:
-        "audio_bytes": `bytes`, the speech audio file in MP3 format.
-        "timestamps": `List[raven.common.audio.speech.tts.WordTiming]`, lipsync-ready
-                      per-word timings. Already cleaned (`clean_timestamps`) and with
-                      diphthongs expanded to canonical IPA (`expand_phoneme_diphthongs`).
+    Returns an `EncodedTTSResult` on success. The audio is MP3-encoded.
 
-    The "timestamps" entry is present only if `get_metadata=True`.
-
-    If anything goes wrong, returns `None`.
+    Returns `None` if the input text is blank, or if `get_metadata=True` and the
+    TTS produced no phoneme data (unusual — treat as an error).
     """
     return _tts_prepare(text, voice, speed, get_metadata)
 
 def _tts_prepare(text: str,
                  voice: str,
                  speed: float = 1.0,
-                 get_metadata: bool = True) -> Optional[Dict[str, Any]]:
+                 get_metadata: bool = True) -> Optional[speech_tts.EncodedTTSResult]:
     """Internal. Non-cached variant of `tts_prepare`, containing the actual implementation."""
     if not util.api_initialized:
         raise RuntimeError("tts_prepare: The `raven.client.api` module must be initialized before using the API.")
@@ -193,8 +189,7 @@ def _tts_prepare(text: str,
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
 
-    result = {}
-    timings: List[speech_tts.WordTiming] = []
+    timings: Optional[List[speech_tts.WordTiming]] = None
 
     # Get audio, and if getting metadata, also the word-level timestamps
     with timer() as tim:
@@ -208,7 +203,7 @@ def _tts_prepare(text: str,
         stream_response = requests.post(f"{util.api_config.raven_server_url}/api/tts/speak", headers=headers, json=data, stream=True)
         util.yell_on_error(stream_response)
 
-        # Parse the word-level timestamps at the wire boundary: URL-decoded JSON dicts → WordTiming dataclasses.
+        # Parse word-level timestamps at the wire boundary: URL-decoded JSON dicts → WordTiming dataclasses.
         # From here on, the in-process representation is WordTiming; dicts only live on the wire.
         if get_metadata:
             raw_timestamps = json.loads(stream_response.headers["x-word-timestamps"])
@@ -230,18 +225,16 @@ def _tts_prepare(text: str,
         except StopIteration:
             pass
     audio_buffer.seek(0)
-    result["audio_bytes"] = audio_buffer.getvalue()
+    audio_bytes = audio_buffer.getvalue()
 
     total_audio_duration = json.loads(stream_response.headers["x-audio-duration"])
-    audio_duration_str = f" (duration {total_audio_duration:0.6g}s)"
-    logger.info(f"tts_prepare: got TTS audio{audio_duration_str} in {tim.dt:0.6g}s.")
+    logger.info(f"tts_prepare: got TTS audio (duration {total_audio_duration:0.6g}s) in {tim.dt:0.6g}s.")
 
-    # Postprocess per-word phoneme data: dedup + lipsync filter, then expand diphthong shorthand to canonical IPA.
+    # Postprocess per-word phoneme data via the common-layer pipeline (dedup + lipsync filter + IPA expansion).
     if get_metadata:
         logger.info("tts_prepare: postprocessing per-word phoneme data")
         with timer() as tim:
-            timings = speech_tts.clean_timestamps(timings, for_lipsync=True)
-            timings = speech_tts.expand_phoneme_diphthongs(timings)
+            timings = speech_tts.finalize_metadata(timings)
 
             logger.info("tts_prepare: timestamped phonemes:")
             for timing in timings:
@@ -251,11 +244,13 @@ def _tts_prepare(text: str,
                 logger.info("tts_prepare: Metadata was requested, but the TTS did not generate any phonemes. Cancelled. The text was:")
                 logger.info(text)
                 return None
-
-            result["timestamps"] = timings
         logger.info(f"tts_prepare: postprocessed per-word phoneme data in {tim.dt:0.6g}s.")
 
-    return result
+    return speech_tts.EncodedTTSResult(audio_bytes=audio_bytes,
+                                       audio_format="mp3",
+                                       sample_rate=speech_tts.SAMPLE_RATE,
+                                       duration=total_audio_duration,
+                                       word_metadata=timings)
 
 def tts_speak(text: str,
               voice: str,
@@ -263,7 +258,7 @@ def tts_speak(text: str,
               on_audio_ready: Optional[Callable] = None,
               on_start: Optional[Callable] = None,
               on_stop: Optional[Callable] = None,
-              prep: Optional[Dict[str, Any]] = None) -> None:
+              prep: Optional[speech_tts.EncodedTTSResult] = None) -> None:
     """Using the speech synthesizer, speak `text` using `voice`.
 
     To get the list of available voices, call `tts_list_voices`.
@@ -302,7 +297,7 @@ def tts_speak(text: str,
         else:
             logger.info(f"tts_speak.speak: instance {task_env.task_name}: using precomputed audio")
             final_prep = prep
-        audio_bytes = final_prep["audio_bytes"]
+        audio_bytes = final_prep.audio_bytes
 
         # Send TTS speech audio data (mp3) to caller if they want it
         if on_audio_ready is not None:
@@ -354,7 +349,7 @@ def tts_speak_lipsynced(instance_id: str,
                         on_audio_ready: Optional[Callable] = None,
                         on_start: Optional[Callable] = None,
                         on_stop: Optional[Callable] = None,
-                        prep: Optional[Dict[str, Any]] = None) -> None:
+                        prep: Optional[speech_tts.EncodedTTSResult] = None) -> None:
     """Like `tts_speak`, but with lipsync for the avatar.
 
     Using the speech synthesizer, speak `text` using `voice`.
@@ -399,8 +394,8 @@ def tts_speak_lipsynced(instance_id: str,
         else:
             logger.info("tts_speak_lipsynced.speak: using precomputed audio and phonemes")
             final_prep = prep
-        audio_bytes = final_prep["audio_bytes"]
-        timestamps = final_prep["timestamps"]
+        audio_bytes = final_prep.audio_bytes
+        timestamps = final_prep.word_metadata
 
         # Send TTS speech audio data (mp3) to caller if they want it
         if on_audio_ready is not None:
@@ -408,8 +403,9 @@ def tts_speak_lipsynced(instance_id: str,
 
         # Transform word-level timestamp data into a phoneme stream with interpolated timestamps.
         #
-        # The input is the `timestamps` list from `tts_prepare` — a list of
-        # `raven.common.audio.speech.tts.WordTiming` dataclasses. Example::
+        # The input is the `word_metadata` list from an `EncodedTTSResult` (returned
+        # by `tts_prepare`) — a list of `raven.common.audio.speech.tts.WordTiming`
+        # dataclasses. Example::
         #
         # [
         #  WordTiming(word="Sharon", phonemes="ʃˈɛɹən", start_time=0.275, end_time=0.575),
