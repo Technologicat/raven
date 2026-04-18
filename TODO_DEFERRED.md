@@ -1,21 +1,49 @@
 # Deferred TODOs
 
-## ⚠️ HIGH PRIORITY — JJ review of the TTS/STT refactor
+## Extract lipsync driver logic into `raven.common.audio.speech.lipsync`
 
-The speech-extract-to-common work (briefs/speech-extract-to-common.md) is infrastructure code, and infra needs to be *right*, not merely passing tests. Once the six-step sequence in that brief is complete, the whole changeset needs a careful human review by JJ before any downstream code starts relying on it.
+`raven.client.tts.tts_speak_lipsynced` mixes three concerns in one function:
 
-Files to scrutinise after all steps land (step numbering from the brief):
+1. Get the audio + word timings (via `tts_prepare`).
+2. Transform word timings into a phoneme stream with interpolated per-phoneme start/end times (using the `phoneme_to_morph` table).
+3. Play the audio and drive an avatar via `api.avatar_set_overrides` at each phoneme boundary.
 
-- **Step 2** — `raven/common/audio/resample.py` + `tests/test_resample.py`. Constrained-TypeVar API; quality presets; torchaudio vs. scipy trade-off.
-- **Step 3** — `raven/common/audio/speech/stt.py` + `tests/test_stt.py`. `STTModel` dataclass; memoized loader; progress-callback adapter; automatic resampling to Whisper's native rate.
-- **Step 4** — `raven/common/audio/speech/tts.py` + round-trip test. `synthesize_iter` / `synthesize`; absolute-timestamp accumulation; per-segment `TTSSegment` design; `TTSPipeline` / `TTSResult` / `WordTiming` dataclasses.
-- **Step 4** — rewritten `raven/server/modules/tts.py` (float → s16 cast at the transport boundary; URL-encoding at the transport boundary; verify lipsync metadata matches the old wire format byte-for-byte).
-- **Step 5** — `raven.client.mayberemote.TTS` / `.STT` additions.
-- **Step 6** — manual smoke: Librarian + Avatar in remote and local modes; lipsync visually correct.
+Concerns (1) and (3) are today specialised to a **remote** avatar (server-side animator). A future client-local avatar (see separate item) would want to reuse (2) verbatim — the timing math is engine-agnostic — but swap (3) for in-process morph calls.
 
-**When CC is asked in a future session "what's on the deferred list?"**, this item should be highlighted explicitly, not just listed. Do not assume "tests pass" means "review complete" — the point of the review is to catch design-level issues that tests don't.
+Target common-layer API:
 
-Raised during step 3 of the refactor (2026-04-17).
+```python
+# raven.common.audio.speech.lipsync
+
+@dataclass
+class PhonemeEvent:
+    phoneme: str              # e.g. "ʃ", "æ", "n"
+    morph: str                # e.g. "mouth_ooo_index", "!close_mouth", "!keep"
+    start_time: float         # seconds, absolute (from start of whole audio)
+    end_time: float
+
+def build_phoneme_stream(timings: list[WordTiming],
+                         phoneme_to_morph: dict[str, str]) -> list[PhonemeEvent]:
+    """word-level timings → per-phoneme stream with interpolated start/end."""
+
+def drive(phoneme_stream: list[PhonemeEvent],
+          on_phoneme: Callable[[PhonemeEvent], None],
+          clock: Callable[[], float]) -> None:
+    """Play the stream: given a clock and a side-effect callback, fire
+    `on_phoneme` whenever the current phoneme changes."""
+```
+
+`phoneme_to_morph` stays avatar-specific; the caller supplies it. `lipsync` itself is the generic "WordTiming stream → time-driven callback" part.
+
+Consumers after the refactor:
+
+- **Current remote-avatar driver** (`raven.client.tts.tts_speak_lipsynced`): caller that passes an `on_phoneme` closure calling `api.avatar_set_overrides(...)` for each event.
+- **Future client-local avatar driver**: caller that passes an `on_phoneme` closure poking morphs on an in-process animator (see the "Client-local avatar animator" item below).
+- **Subtitle / captioning consumer**: same `drive`, callback writes text to a display.
+
+Prototyping suggestion: build the three functions as **in-place helpers inside `raven.client.tts`** first, to validate the shape end-to-end against the existing avatar integration without touching file layout. Move them into `raven.common.audio.speech.lipsync` once the interface has settled, and update the client-tts caller to import from the new location.
+
+Not urgent; the current `tts_speak_lipsynced` works fine as a server-driven lipsync driver. Lift when the client-local animator work actually starts, since that's when the duplication becomes concrete. Discovered during speech-extract-to-common final review (2026-04-18).
 
 ## Language-neutral wire format for the `natlang` (spaCy) endpoint
 
