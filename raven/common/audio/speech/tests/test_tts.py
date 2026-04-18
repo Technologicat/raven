@@ -250,3 +250,46 @@ class TestExpandPhonemeDiphthongs:
         once = speech_tts.expand_phoneme_diphthongs(t)
         twice = speech_tts.expand_phoneme_diphthongs(once)
         assert once[0].phonemes == twice[0].phonemes == "hˈeɪ"
+
+
+class TestFinalizeMetadata:
+    # Pure composition — no model needed.
+
+    def test_applies_both_filters(self):
+        # Input: a dup timestamp, a single-char incidental, and a diphthong shorthand.
+        # Expected: dedup drops the dup, lipsync filter drops the incidental, diphthong
+        # expansion rewrites the phonemes.
+        t = [speech_tts.WordTiming(word="hey",   phonemes="hˈA", start_time=0.0, end_time=0.5),
+             speech_tts.WordTiming(word="again", phonemes="əɡˈɛn", start_time=0.0, end_time=0.6),  # dup start_time
+             speech_tts.WordTiming(word="-",     phonemes="-",   start_time=0.6, end_time=0.7),   # incidental
+             speech_tts.WordTiming(word="high",  phonemes="hˈI", start_time=0.7, end_time=1.2)]
+        out = speech_tts.finalize_metadata(t)
+        assert [w.word for w in out] == ["hey", "high"]
+        assert out[0].phonemes == "hˈeɪ"
+        assert out[1].phonemes == "hˈaɪ"
+
+    def test_empty_input_returns_empty(self):
+        assert speech_tts.finalize_metadata([]) == []
+
+    def test_does_not_mutate_input(self):
+        t = [speech_tts.WordTiming(word="hey", phonemes="hˈA", start_time=0.0, end_time=0.5)]
+        speech_tts.finalize_metadata(t)
+        assert t[0].phonemes == "hˈA"
+
+
+class TestPrepare:
+    # Engine-dependent; runs in ml tier via the session-scoped `pipeline` + `voice` fixtures.
+    def test_returns_ttsresult_with_lipsync_ready_metadata(self, pipeline, voice):
+        result = speech_tts.prepare(pipeline, voice=voice, text="Hello world.", get_metadata=True)
+        assert isinstance(result, speech_tts.TTSResult)
+        assert result.word_metadata is not None
+        # Finalized metadata: no dup timestamps, no incidentals, phonemes use canonical IPA only.
+        for w in result.word_metadata:
+            assert w.word, f"empty-word slot survived cleanup: {w!r}"
+            # Canonical IPA: none of the Misaki single-letter diphthongs should remain.
+            for shorthand in speech_tts.dipthong_vowel_to_ipa:
+                assert shorthand not in w.phonemes, f"unexpanded shorthand {shorthand!r} in {w!r}"
+
+    def test_get_metadata_false_returns_none(self, pipeline, voice):
+        result = speech_tts.prepare(pipeline, voice=voice, text="Hello world.", get_metadata=False)
+        assert result.word_metadata is None

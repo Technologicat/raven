@@ -22,6 +22,7 @@ __all__ = ["SAMPLE_RATE",
            "WordTiming",
            "TTSSegment",
            "TTSResult",
+           "EncodedTTSResult",
            "TTSPipeline",
            "load_tts_pipeline",
            "get_voices",
@@ -29,7 +30,9 @@ __all__ = ["SAMPLE_RATE",
            "synthesize",
            "clean_timestamps",
            "dipthong_vowel_to_ipa",
-           "expand_phoneme_diphthongs"]
+           "expand_phoneme_diphthongs",
+           "finalize_metadata",
+           "prepare"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -130,6 +133,33 @@ class TTSResult:
                      Timings are absolute. `None` when `get_metadata=False`.
     """
     audio: np.ndarray
+    sample_rate: int
+    duration: float
+    word_metadata: Optional[list[WordTiming]]
+
+
+@dataclass
+class EncodedTTSResult:
+    """A `TTSResult` where the audio is encoded (to a file format) instead of raw.
+
+    Produced by the HTTP wire path (`raven.client.tts.tts_prepare`) and by any
+    future local-mode precompute that wants to cache encoded bytes rather than
+    numpy arrays. Consumed by audio players (pygame mixer, etc.) and by wire
+    transports that forward the bytes as-is.
+
+    `audio_bytes`: encoded audio file contents.
+    `audio_format`: encoder format — `"mp3"`, `"wav"`, `"flac"`, `"opus"`, `"aac"`.
+    `sample_rate`: the sample rate of the encoded audio, in Hz. Preserved across
+                   all supported formats (encoders don't resample).
+    `duration`: seconds of speech audio *before* encoding. Some codecs pad the
+                tail to their frame size (on the time axis), so the decoded file
+                may be slightly longer.
+    `word_metadata`: flat list of `WordTiming`, ordered by start time; timings
+                     are absolute (relative to start of whole audio). `None`
+                     when `get_metadata=False`.
+    """
+    audio_bytes: bytes
+    audio_format: str
     sample_rate: int
     duration: float
     word_metadata: Optional[list[WordTiming]]
@@ -408,3 +438,42 @@ def synthesize(pipeline: TTSPipeline,
                      sample_rate=sample_rate,
                      duration=duration,
                      word_metadata=word_metadata)
+
+
+def finalize_metadata(timings: list[WordTiming]) -> list[WordTiming]:
+    """Apply the standard post-processing pipeline to raw Kokoro word metadata.
+
+    Composes `clean_timestamps(for_lipsync=True)` and `expand_phoneme_diphthongs`
+    into a single call. Single source of truth for "what does lipsync-ready TTS
+    metadata look like?" — both the in-process `prepare` and the HTTP wire path
+    in `raven.client.tts.tts_prepare` use this helper, so the sequence can't
+    drift between paths.
+
+    Returns a new list of new `WordTiming` instances (`clean_timestamps` returns
+    a filtered subset, `expand_phoneme_diphthongs` then returns copies with
+    expanded phonemes).
+    """
+    timings = clean_timestamps(timings, for_lipsync=True)
+    timings = expand_phoneme_diphthongs(timings)
+    return timings
+
+
+def prepare(pipeline: TTSPipeline,
+            voice: str,
+            text: str,
+            speed: float = 1.0,
+            get_metadata: bool = True) -> TTSResult:
+    """Synthesize `text`, with `word_metadata` post-processed for lipsync use.
+
+    Thin composition over `synthesize` + `finalize_metadata`. Parallel to the
+    single common-layer call that every other `MaybeRemoteService` delegates to
+    in local mode.
+
+    Use this when you want a ready-to-consume `TTSResult` and don't want to
+    remember the post-processing sequence. Use bare `synthesize` when you want
+    access to the raw Kokoro output (e.g. inspecting pre-cleanup timestamps).
+    """
+    result = synthesize(pipeline, voice, text, speed=speed, get_metadata=get_metadata)
+    if result.word_metadata is not None:
+        result = replace(result, word_metadata=finalize_metadata(result.word_metadata))
+    return result
