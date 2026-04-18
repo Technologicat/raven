@@ -702,8 +702,8 @@ class DPGAvatarController:
                                            voice=input_record["config"].voice,
                                            speed=input_record["config"].voice_speed,
                                            get_metadata=True)
-                    if prep is None:
-                        logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): error during precomputing, skipping sentence")
+                    if not prep.audio_bytes:  # blank input or no-phoneme case — `tts_prepare` flags it via empty audio_bytes
+                        logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): no audio produced during precomputing, skipping sentence")
                         continue
 
                     logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): processing done")

@@ -293,3 +293,33 @@ class TestPrepare:
     def test_get_metadata_false_returns_none(self, pipeline, voice):
         result = speech_tts.prepare(pipeline, voice=voice, text="Hello world.", get_metadata=False)
         assert result.word_metadata is None
+
+
+class TestDecode:
+    # Pure function wrapping audio_codec.decode — empty-bytes fast path is pure, full
+    # decoding path needs a real encoded audio blob. The roundtrip via tts_prepare is
+    # covered by the server integration tests; here we cover the branches that don't
+    # need the server.
+
+    def test_empty_bytes_returns_empty_ttsresult(self):
+        encoded = speech_tts.EncodedTTSResult(audio_bytes=b"",
+                                              audio_format="mp3",
+                                              sample_rate=speech_tts.SAMPLE_RATE,
+                                              duration=0.0,
+                                              word_metadata=[])
+        result = speech_tts.decode(encoded)
+        assert isinstance(result, speech_tts.TTSResult)
+        assert result.audio.dtype == np.float32
+        assert len(result.audio) == 0
+        assert result.sample_rate == speech_tts.SAMPLE_RATE
+        assert result.duration == 0.0
+        assert result.word_metadata == []
+
+    def test_empty_bytes_preserves_none_metadata(self):
+        encoded = speech_tts.EncodedTTSResult(audio_bytes=b"",
+                                              audio_format="mp3",
+                                              sample_rate=speech_tts.SAMPLE_RATE,
+                                              duration=0.0,
+                                              word_metadata=None)
+        result = speech_tts.decode(encoded)
+        assert result.word_metadata is None

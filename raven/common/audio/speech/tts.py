@@ -32,12 +32,14 @@ __all__ = ["SAMPLE_RATE",
            "dipthong_vowel_to_ipa",
            "expand_phoneme_diphthongs",
            "finalize_metadata",
-           "prepare"]
+           "prepare",
+           "decode"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import io
 import os
 from dataclasses import dataclass, replace
 from typing import Iterator, Optional
@@ -47,6 +49,7 @@ import numpy as np
 import kokoro
 
 from ...hfutil import maybe_install_models
+from .. import codec as audio_codec
 
 
 # Native output sample rate of the TTS engine (currently Kokoro, which runs at 24 kHz —
@@ -477,3 +480,37 @@ def prepare(pipeline: TTSPipeline,
     if result.word_metadata is not None:
         result = replace(result, word_metadata=finalize_metadata(result.word_metadata))
     return result
+
+
+def decode(encoded: EncodedTTSResult) -> TTSResult:
+    """Convert an `EncodedTTSResult` to a `TTSResult` by decoding the audio.
+
+    Companion to `EncodedTTSResult`: takes wire/playback-encoded audio (MP3 etc.)
+    and decodes it to the raw float format expected for in-process consumption.
+    Format is read from `encoded.audio_format`; sample rate, duration, and
+    word_metadata pass through unchanged.
+
+    Used by `raven.client.mayberemote.TTS.synthesize` on the remote path (server
+    serves encoded audio; MaybeRemote's public API is float), and usable by any
+    caller that has cached encoded bytes and wants to play or analyze them as
+    float numpy.
+
+    Empty `audio_bytes` → empty `TTSResult` (zero-length float array). That
+    supports the "cancelled / no audio produced" case from `tts_prepare` without
+    a special code path.
+    """
+    if not encoded.audio_bytes:
+        return TTSResult(audio=np.zeros(0, dtype=np.float32),
+                         sample_rate=encoded.sample_rate,
+                         duration=encoded.duration,
+                         word_metadata=encoded.word_metadata)
+
+    _metadata, audio = audio_codec.decode(io.BytesIO(encoded.audio_bytes),
+                                          target_sample_format="fltp",
+                                          target_sample_rate=encoded.sample_rate,
+                                          target_layout="mono")
+    audio = audio.astype(np.float32, copy=False)
+    return TTSResult(audio=audio,
+                     sample_rate=encoded.sample_rate,
+                     duration=encoded.duration,
+                     word_metadata=encoded.word_metadata)

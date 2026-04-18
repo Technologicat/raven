@@ -151,11 +151,24 @@ def tts_warmup(voice: str) -> None:
                  get_metadata=True)  # not sure if the phonemizer needs warmup, but let's do it anyway
     logger.info(f"tts_warmup: Warmup for voice '{voice}' done.")
 
+def _empty_encoded_result(get_metadata: bool) -> speech_tts.EncodedTTSResult:
+    """Zero-audio `EncodedTTSResult`, returned by `tts_prepare` on blank / no-phoneme input.
+
+    Callers check `not prep.audio_bytes` to detect the cancelled case; the structure
+    is otherwise uniform with a successful synthesis, so decode / consume paths don't
+    need special-case handling.
+    """
+    return speech_tts.EncodedTTSResult(audio_bytes=b"",
+                                       audio_format="mp3",
+                                       sample_rate=speech_tts.SAMPLE_RATE,
+                                       duration=0.0,
+                                       word_metadata=[] if get_metadata else None)
+
 @functools.lru_cache(maxsize=128)
 def tts_prepare(text: str,
                 voice: str,
                 speed: float = 1.0,
-                get_metadata: bool = True) -> Optional[speech_tts.EncodedTTSResult]:
+                get_metadata: bool = True) -> speech_tts.EncodedTTSResult:
     """Using the speech synthesizer, precompute TTS speech audio for `text` using `voice`.
 
     Optionally, compute also word-level timestamps and phoneme data.
@@ -169,23 +182,23 @@ def tts_prepare(text: str,
                     `word_metadata` (lipsync-ready — `clean_timestamps` + diphthong
                     expansion already applied). If `False`, `word_metadata` is `None`.
 
-    Returns an `EncodedTTSResult` on success. The audio is MP3-encoded.
-
-    Returns `None` if the input text is blank, or if `get_metadata=True` and the
-    TTS produced no phoneme data (unusual — treat as an error).
+    Always returns an `EncodedTTSResult`. On blank input, or if `get_metadata=True`
+    and the TTS produced no phoneme data, the returned value is a zero-audio result
+    (`audio_bytes == b""`, `duration == 0.0`) — callers detect this with
+    `not prep.audio_bytes`.
     """
     return _tts_prepare(text, voice, speed, get_metadata)
 
 def _tts_prepare(text: str,
                  voice: str,
                  speed: float = 1.0,
-                 get_metadata: bool = True) -> Optional[speech_tts.EncodedTTSResult]:
+                 get_metadata: bool = True) -> speech_tts.EncodedTTSResult:
     """Internal. Non-cached variant of `tts_prepare`, containing the actual implementation."""
     if not util.api_initialized:
         raise RuntimeError("tts_prepare: The `raven.client.api` module must be initialized before using the API.")
     if not text.strip():
         logger.info("tts_prepare: Ignoring blank `text`. Cancelled.")
-        return None
+        return _empty_encoded_result(get_metadata)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
 
@@ -243,7 +256,7 @@ def _tts_prepare(text: str,
             if not timings:
                 logger.info("tts_prepare: Metadata was requested, but the TTS did not generate any phonemes. Cancelled. The text was:")
                 logger.info(text)
-                return None
+                return _empty_encoded_result(get_metadata)
         logger.info(f"tts_prepare: postprocessed per-word phoneme data in {tim.dt:0.6g}s.")
 
     return speech_tts.EncodedTTSResult(audio_bytes=audio_bytes,
@@ -292,11 +305,12 @@ def tts_speak(text: str,
         if prep is None:
             logger.info(f"tts_speak.speak: instance {task_env.task_name}: getting audio")
             final_prep = tts_prepare(text, voice, speed, get_metadata=False)
-            if final_prep is None:
-                logger.info(f"tts_speak.speak: instance {task_env.task_name}: got `None` from `tts_prepare`. Cancelled.")
         else:
             logger.info(f"tts_speak.speak: instance {task_env.task_name}: using precomputed audio")
             final_prep = prep
+        if not final_prep.audio_bytes:  # blank input or no-phoneme case — `tts_prepare` flags it via empty audio_bytes
+            logger.info(f"tts_speak.speak: instance {task_env.task_name}: no audio produced. Cancelled.")
+            return
         audio_bytes = final_prep.audio_bytes
 
         # Send TTS speech audio data (mp3) to caller if they want it
@@ -389,11 +403,12 @@ def tts_speak_lipsynced(instance_id: str,
         if prep is None:
             logger.info("tts_speak_lipsynced.speak: getting audio and phonemes")
             final_prep = tts_prepare(text, voice, speed, get_metadata=True)
-            if final_prep is None:
-                logger.info("tts_speak_lipsynced.speak: got `None` from `tts_prepare`. Cancelled.")
         else:
             logger.info("tts_speak_lipsynced.speak: using precomputed audio and phonemes")
             final_prep = prep
+        if not final_prep.audio_bytes:  # blank input or no-phoneme case — `tts_prepare` flags it via empty audio_bytes
+            logger.info("tts_speak_lipsynced.speak: no audio produced. Cancelled.")
+            return
         audio_bytes = final_prep.audio_bytes
         timestamps = final_prep.word_metadata
 

@@ -289,7 +289,6 @@ class TestTts:
                                voice="af_nova",
                                speed=1.0,
                                get_metadata=False)
-        assert prep is not None
         assert isinstance(prep.audio_bytes, bytes)
         assert len(prep.audio_bytes) > 0
         assert prep.audio_format == "mp3"
@@ -300,10 +299,16 @@ class TestTts:
                                voice="af_nova",
                                speed=1.0,
                                get_metadata=True)
-        assert prep is not None
         assert isinstance(prep.audio_bytes, bytes)
         assert isinstance(prep.word_metadata, list)
         assert len(prep.word_metadata) > 0
+
+    def test_prepare_blank_input_returns_empty_result(self, initialized_api):
+        # Blank text no longer returns None; it returns an EncodedTTSResult with
+        # empty audio_bytes as the "cancelled" signal. Callers detect via `not prep.audio_bytes`.
+        prep = api.tts_prepare(text="   ", voice="af_nova", speed=1.0, get_metadata=False)
+        assert prep.audio_bytes == b""
+        assert prep.duration == 0.0
 
 
 class TestStt:
@@ -312,7 +317,7 @@ class TestStt:
         resemble the original."""
         original = "The quick brown fox jumps over the lazy dog."
         prep = api.tts_prepare(text=original, voice="af_nova", speed=1.0, get_metadata=False)
-        assert prep is not None
+        assert prep.audio_bytes  # non-empty = synthesis happened
 
         audio_buffer = io.BytesIO(prep.audio_bytes)
         transcribed = api.stt_transcribe(stream=audio_buffer, prompt=original)

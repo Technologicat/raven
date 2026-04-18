@@ -16,7 +16,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import io
 from typing import List, Optional, Union
 
 import numpy as np
@@ -27,7 +26,6 @@ from ..client import api
 from ..client import config as client_config
 
 from ..common import nlptools
-from ..common.audio import codec as audio_codec
 from ..common.audio.speech import stt as speech_stt
 from ..common.audio.speech import tts as speech_tts
 
@@ -365,44 +363,15 @@ class TTS(MaybeRemoteService):
         Uniform return type across modes:
           - `audio`: float32 in [-1, 1], at `self.sample_rate` (24 kHz).
           - `word_metadata`: list of `WordTiming` post-processed for lipsync —
-            `speech_tts.clean_timestamps(for_lipsync=True)` +
-            `speech_tts.expand_phoneme_diphthongs` applied in both modes.
+            `speech_tts.finalize_metadata` applied in both modes.
 
-        Remote mode: delegates to `api.tts_prepare`, which handles the HTTP call,
-        timestamp-JSON decoding, and the post-processing pipeline. We decode the
-        returned MP3 back to float here (note: lossy codec round-trip — sample
-        values differ slightly from the server's internal float output, inaudible
-        but not bit-identical).
+        Remote mode: delegates to `api.tts_prepare` (wire format → `EncodedTTSResult`)
+        then `speech_tts.decode` (MP3 → float). The lossy codec round-trip means
+        sample values differ slightly from the server's internal float output —
+        inaudible but not bit-identical.
 
-        Local mode: delegates to `speech_tts.synthesize`, then applies the same
-        post-processing the remote `tts_prepare` path does, to keep behaviour
-        uniform.
+        Local mode: delegates to `speech_tts.prepare` (synthesize + finalize).
         """
         if self._local_model is None:
-            prep = api.tts_prepare(voice=voice, text=text, speed=speed, get_metadata=get_metadata)
-            if prep is None:
-                # Blank input, or metadata requested but no phonemes generated.
-                # Mirror the common-layer `synthesize` empty-result shape.
-                return speech_tts.TTSResult(audio=np.zeros(0, dtype=np.float32),
-                                            sample_rate=self.sample_rate,
-                                            duration=0.0,
-                                            word_metadata=[] if get_metadata else None)
-
-            # MP3 → float32 mono at Kokoro's native 24 kHz.
-            _metadata, audio = audio_codec.decode(io.BytesIO(prep.audio_bytes),
-                                                  target_sample_format="fltp",
-                                                  target_sample_rate=self.sample_rate,
-                                                  target_layout="mono")
-            audio = audio.astype(np.float32, copy=False)
-
-            # `tts_prepare` already applied `speech_tts.finalize_metadata`.
-            return speech_tts.TTSResult(audio=audio,
-                                        sample_rate=self.sample_rate,
-                                        duration=len(audio) / self.sample_rate,
-                                        word_metadata=prep.word_metadata)
-
-        return speech_tts.prepare(self._local_model,
-                                  voice=voice,
-                                  text=text,
-                                  speed=speed,
-                                  get_metadata=get_metadata)
+            return speech_tts.decode(api.tts_prepare(voice=voice, text=text, speed=speed, get_metadata=get_metadata))
+        return speech_tts.prepare(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata)
