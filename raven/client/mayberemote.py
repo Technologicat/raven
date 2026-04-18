@@ -16,21 +16,16 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import copy
 import io
-import json
-import urllib.parse
+from dataclasses import replace
 from typing import List, Optional, Union
 
 import numpy as np
-
-import requests
 
 import torch
 
 from ..client import api
 from ..client import config as client_config
-from ..client import util as client_util
 
 from ..common import nlptools
 from ..common.audio import codec as audio_codec
@@ -317,49 +312,6 @@ class STT(MaybeRemoteService):
                                      language=language)
 
 
-# Direct HTTP call to the server's /api/tts/speak endpoint, bypassing
-# `raven.client.tts.tts_prepare`. Reasons:
-#   (a) `tts_prepare` applies lipsync-specific cleanup (drops consecutive
-#       duplicate timestamps, filters out non-common-punctuation single-char
-#       tokens). We want raw Kokoro metadata here so `TTS.synthesize` returns
-#       the same data shape regardless of remote/local mode.
-#   (b) `tts_prepare` hard-codes `format="mp3"` and streaming mode; fine for
-#       MaybeRemote's use (we decode back to float anyway), no change needed.
-def _remote_tts_speak_raw(voice: str,
-                          text: str,
-                          speed: float,
-                          get_metadata: bool) -> tuple[bytes, Optional[list]]:
-    """Return `(mp3_bytes, word_timestamps_raw_or_None)` from the server's /api/tts/speak.
-
-    Word timestamps are URL-decoded but otherwise untouched — no filtering.
-    """
-    if not client_util.api_initialized:
-        raise RuntimeError("_remote_tts_speak_raw: `raven.client.api` must be initialized first.")
-
-    headers = copy.copy(client_util.api_config.raven_default_headers)
-    headers["Content-Type"] = "application/json"
-    data = {"voice": voice,
-            "text": text,
-            "format": "mp3",
-            "speed": speed,
-            "stream": False,
-            "get_metadata": get_metadata}
-    response = requests.post(f"{client_util.api_config.raven_server_url}/api/tts/speak",
-                             headers=headers, json=data)
-    client_util.yell_on_error(response)
-
-    if get_metadata:
-        timestamps = json.loads(response.headers["x-word-timestamps"])
-        # Words and phonemes travel URL-encoded (ASCII headers only); decode to raw Unicode.
-        for ts in timestamps:
-            ts["word"] = urllib.parse.unquote(ts["word"])
-            ts["phonemes"] = urllib.parse.unquote(ts["phonemes"])
-    else:
-        timestamps = None
-
-    return response.content, timestamps
-
-
 class TTS(MaybeRemoteService):
     def __init__(self,
                  allow_local: bool,
@@ -413,44 +365,52 @@ class TTS(MaybeRemoteService):
 
         Uniform return type across modes:
           - `audio`: float32 in [-1, 1], at `self.sample_rate` (24 kHz).
-          - `word_metadata`: list of `WordTiming` (raw Unicode, not URL-encoded),
-            with `speech_tts.clean_timestamps` applied for lipsync readiness.
+          - `word_metadata`: list of `WordTiming` post-processed for lipsync —
+            `speech_tts.clean_timestamps(for_lipsync=True)` +
+            `speech_tts.expand_phoneme_diphthongs` applied in both modes.
 
-        Remote mode: the server returns MP3 over HTTP; we decode it back to float here.
-        Note this round-trips through a lossy codec, so sample values differ slightly
-        from the server's internal float output — inaudible, but not bit-identical.
+        Remote mode: delegates to `api.tts_prepare`, which handles the HTTP call,
+        timestamp-JSON decoding, and the post-processing pipeline. We decode the
+        returned MP3 back to float here (note: lossy codec round-trip — sample
+        values differ slightly from the server's internal float output, inaudible
+        but not bit-identical).
+
+        Local mode: delegates to `speech_tts.synthesize`, then applies the same
+        post-processing the remote `tts_prepare` path does, to keep behaviour
+        uniform.
         """
         if self._local_model is None:
-            mp3_bytes, raw_timestamps = _remote_tts_speak_raw(voice=voice, text=text, speed=speed, get_metadata=get_metadata)
+            prep = api.tts_prepare(voice=voice, text=text, speed=speed, get_metadata=get_metadata)
+            if prep is None:
+                # Blank input, or metadata requested but no phonemes generated.
+                # Mirror the common-layer `synthesize` empty-result shape.
+                return speech_tts.TTSResult(audio=np.zeros(0, dtype=np.float32),
+                                            sample_rate=self.sample_rate,
+                                            duration=0.0,
+                                            word_metadata=[] if get_metadata else None)
 
             # MP3 → float32 mono at Kokoro's native 24 kHz.
-            _metadata, audio = audio_codec.decode(io.BytesIO(mp3_bytes),
+            _metadata, audio = audio_codec.decode(io.BytesIO(prep["audio_bytes"]),
                                                   target_sample_format="fltp",
                                                   target_sample_rate=self.sample_rate,
                                                   target_layout="mono")
             audio = audio.astype(np.float32, copy=False)
 
-            if get_metadata:
-                word_metadata = [speech_tts.WordTiming(word=ts["word"],
-                                                       phonemes=ts["phonemes"],
-                                                       start_time=ts.get("start_time"),
-                                                       end_time=ts.get("end_time"))
-                                 for ts in raw_timestamps]
-            else:
-                word_metadata = None
+            # `tts_prepare` already applied clean_timestamps + expand_phoneme_diphthongs.
+            word_metadata = prep.get("timestamps") if get_metadata else None
 
-            result = speech_tts.TTSResult(audio=audio,
-                                          sample_rate=self.sample_rate,
-                                          duration=len(audio) / self.sample_rate,
-                                          word_metadata=word_metadata)
-        else:
-            result = speech_tts.synthesize(self._local_model,
-                                           voice=voice,
-                                           text=text,
-                                           speed=speed,
-                                           get_metadata=get_metadata)
+            return speech_tts.TTSResult(audio=audio,
+                                        sample_rate=self.sample_rate,
+                                        duration=len(audio) / self.sample_rate,
+                                        word_metadata=word_metadata)
 
-        # Kokoro emits raw engine output; apply cleanup for lipsync readiness, same in both modes.
+        result = speech_tts.synthesize(self._local_model,
+                                       voice=voice,
+                                       text=text,
+                                       speed=speed,
+                                       get_metadata=get_metadata)
         if result.word_metadata is not None:
-            result.word_metadata = speech_tts.clean_timestamps(result.word_metadata)
+            cleaned = speech_tts.clean_timestamps(result.word_metadata, for_lipsync=True)
+            cleaned = speech_tts.expand_phoneme_diphthongs(cleaned)
+            result = replace(result, word_metadata=cleaned)
         return result
