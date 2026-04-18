@@ -1,5 +1,18 @@
 # Deferred TODOs
 
+## `mayberemote.TTS.synthesize` return format
+
+`TTSResult` or `EncodedTTSResult`? Two use cases:
+
+- analysis, needs float (`TTSResult`)
+- playback, needs encoded in-memory audio file (`EncodedTTSResult`)
+
+The functions `api.tts_prepare` and `speec_tts.prepare` should really return the same type of thing, only produced remotely/locally. Both functions themselves always run locally.
+
+Add a parameter as to which type to return.
+
+Also maybe add a `speech_tts.encode` for symmetry with existing `speech_tts.decode`. Use that on the server side just before wire transport.
+
 ## Extract lipsync driver logic into `raven.common.audio.speech.lipsync`
 
 `raven.client.tts.tts_speak_lipsynced` mixes three concerns in one function:
