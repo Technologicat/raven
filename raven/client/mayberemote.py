@@ -87,8 +87,9 @@ class MaybeRemoteService:
             if allow_local:
                 logger.info(f"MaybeRemoteService.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}'; model will be loaded locally.")
             else:
-                logger.error(f"MaybeRemoteService.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}', and `allow_local` is disabled. Cannot proceed.")
-                raise RuntimeError(f"MaybeRemoteService.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}', and `allow_local` is disabled. Cannot proceed.")
+                msg = f"MaybeRemoteService.__init__: Could not connect to Raven-server at '{client_config.raven_server_url}', and `allow_local` is disabled. Cannot proceed."
+                logger.error(msg)
+                raise RuntimeError(msg)
         self.server_modules = server_modules
         self._local_model = None
 
