@@ -684,7 +684,7 @@ def stt_transcribe(stream,
     `prompt`: Optionally, condition the model with text that resembles the speech being
               transcribed. This can help e.g. with spelling rare proper names correctly.
 
-              See examples in server-side docs in `raven.server.app`.
+              See examples in `raven.common.audio.speech.stt`, function `transcribe`.
 
     `language`: Optionally, specify the speech language, such as "en" for English.
                 Default is to autodetect and transcribe in the detected language.
