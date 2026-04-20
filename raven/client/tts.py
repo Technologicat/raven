@@ -17,7 +17,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import bisect
 import copy
 import functools
 import io
@@ -25,15 +24,16 @@ import json
 import requests
 import time
 import traceback
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional
 import urllib.parse
 
-from unpythonic import timer
+from unpythonic import timer, sym
 from unpythonic.env import env as envcls
 
 from . import api  # for calling the avatar_* functions during lipsync
 from . import util
 
+from ..common.audio.speech import lipsync as speech_lipsync
 from ..common.audio.speech import tts as speech_tts
 
 # --------------------------------------------------------------------------------
@@ -458,62 +458,27 @@ def tts_speak_lipsynced(instance_id: str,
         if on_audio_ready is not None:
             on_audio_ready(audio_bytes)
 
-        # Transform word-level timestamp data into a phoneme stream with interpolated timestamps.
+        # Transform word-level timestamps into a phoneme stream with interpolated
+        # per-phoneme timings. Example input/output::
         #
-        # The input is the `word_metadata` list from an `EncodedTTSResult` (returned
-        # by `tts_prepare`) — a list of `raven.common.audio.speech.tts.WordTiming`
-        # dataclasses. Example::
+        #   [WordTiming(word="Sharon", phonemes="ʃˈɛɹən", start_time=0.275, end_time=0.575),
+        #    WordTiming(word="Apple",  phonemes="ˈæpᵊl",  start_time=0.575, end_time=0.875),
+        #    ...]
         #
-        # [
-        #  WordTiming(word="Sharon", phonemes="ʃˈɛɹən", start_time=0.275, end_time=0.575),
-        #  WordTiming(word="Apple",  phonemes="ˈæpᵊl",  start_time=0.575, end_time=0.875),
-        #  ...,
-        # ]
-        #
-        # becomes::
-        #
-        # [
-        #   ('ʃ', 'mouth_ooo_index', 0.275, 0.325),
-        #   ('ˈ', '!keep', 0.325, 0.375),
-        #   ('ɛ', 'mouth_eee_index', 0.375, 0.425),
-        #   ('ɹ', 'mouth_aaa_index', 0.425, 0.475),
-        #   ('ə', 'mouth_delta', 0.475, 0.5249999999999999),
-        #   ('n', 'mouth_eee_index', 0.5249999999999999, 0.575),
-        #   ('ˈ', '!keep', 0.575, 0.635),
-        #   ('æ', 'mouth_delta', 0.635, 0.695),
-        #   ('p', '!close_mouth', 0.695, 0.755),
-        #   ('ᵊ', 'mouth_delta', 0.755, 0.815),
-        #   ('l', 'mouth_eee_index', 0.815, 0.875),
-        #   ...,
-        # ]
-        def interpolate_timestamp_for_phoneme(t0: float, t1: float, phonemes: str, idx: int) -> Tuple[float, float]:
-            """Given word start/end times `t0` and `t1`, linearly interpolate the start/end times for a phoneme in the word."""
-            L = len(phonemes)
-            rel_start = idx / L
-            rel_end = (idx + 1) / L
-            dt = t1 - t0
-            t_start = t0 + dt * rel_start
-            t_end = t0 + dt * rel_end
-            return t_start, t_end
-        phoneme_stream = []  # [(phoneme0, morph0, t_start, t_end), ...]
-        for timing in timestamps:
-            phonemes = timing.phonemes
-            if not phonemes:
-                logger.warning(f"tts_speak_lipsynced.speak: TTS returned empty phonemes for word '{timing.word}'. Skipping this word.")
-                continue
-            if timing.start_time is None or timing.end_time is None:
-                logger.warning(f"tts_speak_lipsynced.speak: TTS missing timestamps for word '{timing.word}', cannot compute phoneme timings. Skipping this word.")
-                continue
-            for idx, phoneme in enumerate(phonemes):  # mˈaɪnd -> m, ˈ, a, ɪ, n, d
-                t_start, t_end = interpolate_timestamp_for_phoneme(timing.start_time, timing.end_time, phonemes, idx)
-                if phoneme in phoneme_to_morph:  # accept only phonemes we know about (leaving time gaps in the phoneme stream doesn't matter)
-                    phoneme_stream.append((phoneme, phoneme_to_morph[phoneme], t_start, t_end))
-        phoneme_start_times = [item[2] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
-        phoneme_end_times = [item[3] for item in phoneme_stream]  # for mapping playback time -> position in phoneme stream
-
-        # # DEBUG: show final phoneme stream (spammy!)
-        # for record in phoneme_stream:
-        #     logger.info(f"tts_speak_lipsynced.speak: phoneme data: {record}")
+        #   → [PhonemeEvent(phoneme='ʃ', morph='mouth_ooo_index', start_time=0.275, end_time=0.325),
+        #      PhonemeEvent(phoneme='ˈ', morph='!keep',           start_time=0.325, end_time=0.375),
+        #      PhonemeEvent(phoneme='ɛ', morph='mouth_eee_index', start_time=0.375, end_time=0.425),
+        #      PhonemeEvent(phoneme='ɹ', morph='mouth_aaa_index', start_time=0.425, end_time=0.475),
+        #      PhonemeEvent(phoneme='ə', morph='mouth_delta',     start_time=0.475, end_time=0.525),
+        #      PhonemeEvent(phoneme='n', morph='mouth_eee_index', start_time=0.525, end_time=0.575),
+        #      PhonemeEvent(phoneme='ˈ', morph='!keep',           start_time=0.575, end_time=0.635),  # stress mark at a word boundary → "!keep"
+        #      PhonemeEvent(phoneme='æ', morph='mouth_delta',     start_time=0.635, end_time=0.695),
+        #      PhonemeEvent(phoneme='p', morph='!close_mouth',    start_time=0.695, end_time=0.755),  # plosive → "!close_mouth"
+        #      PhonemeEvent(phoneme='ᵊ', morph='mouth_delta',     start_time=0.755, end_time=0.815),
+        #      PhonemeEvent(phoneme='l', morph='mouth_eee_index', start_time=0.815, end_time=0.875),
+        #      ...]
+        phoneme_stream = speech_lipsync.label_phoneme_stream(speech_lipsync.build_phoneme_stream(timestamps),
+                                                             phoneme_to_morph)
 
         try:
             # play audio
@@ -540,37 +505,35 @@ def tts_speak_lipsynced(instance_id: str,
                 "mouth_delta": 0.0,
             }
 
-            def apply_lipsync_at_audio_time(t: float) -> None:
-                # Sanity check: don't do anything before the first phoneme.
-                if t < phoneme_start_times[0]:
-                    return
+            def on_tick(t: float) -> sym:
+                if not util.api_config.audio_player.is_playing():
+                    return speech_lipsync.action_finish
+
+                event = speech_lipsync.phoneme_at(phoneme_stream, t)
+
+                # Pre-stream (before first phoneme): do nothing, let the avatar keep its current pose.
+                # Post-stream (after last phoneme, audio still playing out trailing silence): close the mouth.
+                if event is None:
+                    if phoneme_stream and t > phoneme_stream[-1].end_time:
+                        api.avatar_modify_overrides(instance_id, action="set", overrides=copy.copy(mouth_morph_overrides))
+                    return speech_lipsync.action_continue
 
                 overrides = copy.copy(mouth_morph_overrides)
+                morph = event.morph
 
-                # Close the mouth if the last phoneme has ended (but the audio stream is still running, likely with silence at the end).
-                if t > phoneme_end_times[-1]:
-                    api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
-                    return
-
-                # Find position in phoneme stream
-                idx = bisect.bisect_right(phoneme_start_times, t) - 1
-                assert 0 <= idx <= len(phoneme_start_times)
-
-                morph = phoneme_stream[idx][1]
-                # print(t, phoneme_stream[idx][0], morph)  # DEBUG (very spammy, 100 messages per second)
-
-                # Set mouth position
                 if morph == "!close_mouth":
                     api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)  # set all mouth morphs to zero -> close mouth
                 elif morph == "!keep":
                     pass  # keep previous mouth position
                 elif morph == "!maybe_close_mouth":  # close mouth only if the pause is at least half a second, else act like "!keep".
-                    phoneme_length = phoneme_end_times[idx] - phoneme_start_times[idx]
+                    phoneme_length = event.end_time - event.start_time
                     if phoneme_length >= 0.5:
                         api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
                 else:  # activate one mouth morph, set others to zero
                     overrides[morph] = 1.0
                     api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
+
+                return speech_lipsync.action_continue
 
             logger.info("tts_speak_lipsynced.speak: starting playback")
             if on_start is not None:
@@ -581,13 +544,12 @@ def tts_speak_lipsynced(instance_id: str,
                     traceback.print_exc()
 
             util.api_config.audio_player.start()
-            while util.api_config.audio_player.is_playing():
-                t = util.api_config.audio_player.get_position() - video_offset
-                apply_lipsync_at_audio_time(t)  # lipsync
-                time.sleep(0.01)
-                # NOTE: At this point, we don't take cancellations from `task_env.cancelled`; but the client can explicitly call `tts_stop`,
-                # which stops the audio, thus exiting the loop. We are likely running on a different thread pool than the main app, anyway,
-                # unless the main thread pool was passed to `raven.client.api.initialize` (implemented in `raven.client.util.initialize_api`).
+            # NOTE: `drive` doesn't take cancellations from `task_env.cancelled`; but the client can explicitly call `tts_stop`,
+            # which stops the audio, making `is_playing()` return False — the `on_tick` closure then returns `action_finish`
+            # and the loop exits. We are likely running on a different thread pool than the main app, anyway, unless the main
+            # thread pool was passed to `raven.client.api.initialize` (implemented in `raven.client.util.initialize_api`).
+            speech_lipsync.drive(on_tick=on_tick,
+                                 clock=lambda: util.api_config.audio_player.get_position() - video_offset)
         finally:
             logger.info("tts_speak_lipsynced.speak: playback finished")
             if on_stop is not None:

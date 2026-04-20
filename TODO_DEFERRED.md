@@ -14,62 +14,17 @@ Discovered during avatar-client-crop brief review (2026-04-20).
 
 The Raven Way for this is methods on `raven.client.mayberemote.TTS` — `speak` / `speak_lipsynced` — that dispatch to local / remote synthesis internally and then always play locally. Callers stop caring where Kokoro runs.
 
-Infrastructure that's already in place after the 2026-04-20 work:
+Infrastructure that's already in place:
 - `speech_tts.prepare_cached` (local-mode cached float synthesis).
 - `speech_tts.encode` / `speech_tts.decode` (conversion between `TTSResult` and `EncodedTTSResult`, orthogonal to where synthesis happened).
 - `mayberemote.TTS.synthesize(format=...)` — returns whichever shape the caller needs, transparent across local / remote.
+- `raven.common.audio.speech.lipsync` — engine-agnostic lipsync helpers (`build_phoneme_stream`, `phoneme_at`, `word_at`, `drive`). The avatar-specific mouth-morph logic stays in `tts_speak_lipsynced`'s callback closure.
 
 Remaining work:
 - Lift `tts_speak` into `MaybeRemote.TTS.speak(voice, text, speed, callbacks..., prep=None)`. Signature mirrors the existing function; precomputed `prep` is now a `Union[TTSResult, EncodedTTSResult]` — accept either, encode if needed before handing to the audio player. Local path: `self.synthesize(format="mp3")` (or whatever format the audio player prefers); remote path: `self.synthesize(format="mp3")` — same call, both modes.
-- Lift `tts_speak_lipsynced` similarly, but the lipsync driver itself is currently hardcoded to call `api.avatar_set_overrides` — that stays remote-only until the separate "Client-local avatar animator" item lands. Until then, the lipsynced variant drives a remote avatar from either a local or remote TTS.
-- The lipsync-driver logic (word timings → phoneme stream → time-driven callback) still wants to move into `raven.common.audio.speech.lipsync`, per the already-existing "Extract lipsync driver logic" item.
+- Lift `tts_speak_lipsynced` similarly, but the lipsync driver itself is currently hardcoded to call `api.avatar_modify_overrides` — that stays remote-only until the separate "Client-local avatar animator" item lands. Until then, the lipsynced variant drives a remote avatar from either a local or remote TTS.
 
 Not urgent — current server-mode playback works fine. Lift when an app wants to do TTS without the server running (e.g. a standalone librarian). Discovered during TTS return-format review (2026-04-20; replaces the earlier "`TTSResult` or `EncodedTTSResult`?" framing which has been resolved).
-
-## Extract lipsync driver logic into `raven.common.audio.speech.lipsync`
-
-`raven.client.tts.tts_speak_lipsynced` mixes three concerns in one function:
-
-1. Get the audio + word timings (via `tts_prepare`).
-2. Transform word timings into a phoneme stream with interpolated per-phoneme start/end times (using the `phoneme_to_morph` table).
-3. Play the audio and drive an avatar via `api.avatar_set_overrides` at each phoneme boundary.
-
-Concerns (1) and (3) are today specialised to a **remote** avatar (server-side animator). A future client-local avatar (see separate item) would want to reuse (2) verbatim — the timing math is engine-agnostic — but swap (3) for in-process morph calls.
-
-Target common-layer API:
-
-```python
-# raven.common.audio.speech.lipsync
-
-@dataclass
-class PhonemeEvent:
-    phoneme: str              # e.g. "ʃ", "æ", "n"
-    morph: str                # e.g. "mouth_ooo_index", "!close_mouth", "!keep"
-    start_time: float         # seconds, absolute (from start of whole audio)
-    end_time: float
-
-def build_phoneme_stream(timings: list[WordTiming],
-                         phoneme_to_morph: dict[str, str]) -> list[PhonemeEvent]:
-    """word-level timings → per-phoneme stream with interpolated start/end."""
-
-def drive(phoneme_stream: list[PhonemeEvent],
-          on_phoneme: Callable[[PhonemeEvent], None],
-          clock: Callable[[], float]) -> None:
-    """Play the stream: given a clock and a side-effect callback, fire
-    `on_phoneme` whenever the current phoneme changes."""
-```
-
-`phoneme_to_morph` stays avatar-specific; the caller supplies it. `lipsync` itself is the generic "WordTiming stream → time-driven callback" part.
-
-Consumers after the refactor:
-
-- **Current remote-avatar driver** (`raven.client.tts.tts_speak_lipsynced`): caller that passes an `on_phoneme` closure calling `api.avatar_set_overrides(...)` for each event.
-- **Future client-local avatar driver**: caller that passes an `on_phoneme` closure poking morphs on an in-process animator (see the "Client-local avatar animator" item below).
-- **Subtitle / captioning consumer**: same `drive`, callback writes text to a display.
-
-Prototyping suggestion: build the three functions as **in-place helpers inside `raven.client.tts`** first, to validate the shape end-to-end against the existing avatar integration without touching file layout. Move them into `raven.common.audio.speech.lipsync` once the interface has settled, and update the client-tts caller to import from the new location.
-
-Not urgent; the current `tts_speak_lipsynced` works fine as a server-driven lipsync driver. Lift when the client-local animator work actually starts, since that's when the duplication becomes concrete. Discovered during speech-extract-to-common final review (2026-04-18).
 
 ## Language-neutral wire format for the `natlang` (spaCy) endpoint
 
