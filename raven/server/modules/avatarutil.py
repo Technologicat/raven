@@ -129,7 +129,7 @@ def load_emotion_presets(directory: str) -> Tuple[Dict[str, Dict[str, float]], L
                 emotion_names.add(filename[:-5])  # drop the ".json"
 
     # Load the factory-default emotions as a fallback
-    with open(os.path.join(directory, "_defaults.json"), "r") as json_file:
+    with open(os.path.join(directory, "_defaults.json"), "r", encoding="utf-8") as json_file:
         factory_default_emotions = json.load(json_file)
     for key in factory_default_emotions:  # get keys from here too, in case some emotion files are missing
         if key != "zero":  # not an actual emotion, but a "reset character" feature
@@ -140,7 +140,7 @@ def load_emotion_presets(directory: str) -> Tuple[Dict[str, Dict[str, float]], L
 
     def load_emotion_with_fallback(emotion_name: str) -> Dict[str, float]:
         try:
-            with open(os.path.join(directory, f"{emotion_name}.json"), "r") as json_file:
+            with open(os.path.join(directory, f"{emotion_name}.json"), "r", encoding="utf-8") as json_file:
                 emotions_from_json = json.load(json_file)  # A single json file may contain presets for multiple emotions.
             emotion = emotions_from_json[emotion_name]
         except (FileNotFoundError, KeyError):  # If no separate json exists for the specified emotion, load the factory default (all 28 emotions have a default).

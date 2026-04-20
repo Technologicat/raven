@@ -958,13 +958,13 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                             error_info_filename = f"{unique_id}_errors.txt"
                             error_info_path = os.path.join(output_dir, error_info_filename)
                             logger.info(f"When processing {fullpath}: Heuristics flagged possible errors in output, treating this file as failed and writing details to {error_info_path}")
-                            with open(error_info_path, "w") as f_errors:
+                            with open(error_info_path, "w", encoding="utf-8") as f_errors:
                                 f_errors.write(error_info)
 
                             # Save a copy of the failed bib entry as a separate file, for easy inspection
                             error_bib_filename = f"{unique_id}.bib"
                             error_bib_path = os.path.join(output_dir, error_bib_filename)
-                            with open(error_bib_path, "w") as f_error_bib:
+                            with open(error_bib_path, "w", encoding="utf-8") as f_error_bib:
                                 f_error_bib.write(f"{bibtex_entry}\n\n")
 
                         # Move input file to done directory if specified (allows continuing later)

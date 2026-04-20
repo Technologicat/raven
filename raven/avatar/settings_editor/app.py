@@ -1357,7 +1357,7 @@ class PostprocessorSettingsEditorGUI:
                 common_utils.create_directory(recording_output_dir)
                 filename = os.path.join(str(recording_output_dir), "audio_timing.txt")
                 logger.info(f"PostprocessorSettingsEditorGUI.on_start_speaking.on_stop_batch: Saving audio timing report to '{filename}'")
-                with open(filename, "w") as timings_file:
+                with open(filename, "w", encoding="utf-8") as timings_file:
                     timings_file.write("Audio timing report\n")
                     timings_file.write("===================\n\n")
                     timings_file.write("<start video frame> - <end video frame> (<start time> - <end time>) (duration <duration>): line <line number>, sentence <sentence number>: 'spoken sentence'\n")

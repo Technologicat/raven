@@ -960,7 +960,7 @@ class PoseEditorGUI:
         try:
             # Load the emotion JSON file
             logger.info(f"PoseEditorGUI.load_json: Loading '{json_file_name}'.")
-            with open(json_file_name, "r") as json_file:
+            with open(json_file_name, "r", encoding="utf-8") as json_file:
                 emotions_from_json = json.load(json_file)
             # TODO: Here we just take the first emotion from the file.
             if not emotions_from_json:
@@ -1214,7 +1214,7 @@ class PoseEditorGUI:
         logger.info(f"Saving {dir_name}/_emotions.json...")
         trimmed_emotions = {k: v for k, v in self.emotions.items() if not (k.startswith("[") and k.endswith("]"))}
         emotions_json_file_name = os.path.join(dir_name, "_emotions.json")
-        with open(emotions_json_file_name, "w") as file:
+        with open(emotions_json_file_name, "w", encoding="utf-8") as file:
             json.dump(trimmed_emotions, file, indent=4)
 
         logger.info("Batch save finished.")
@@ -1255,7 +1255,7 @@ class PoseEditorGUI:
         data_dict_with_filename = {filename_without_extension: {"pose": posedict, "cels": celdict}}
 
         try:
-            with open(json_file_path, "w") as file:
+            with open(json_file_path, "w", encoding="utf-8") as file:
                 json.dump(data_dict_with_filename, file, indent=4)
         except Exception as exc:
             logger.error(f"Could not save '{json_file_path}', reason: {type(exc)}: {exc}")
@@ -1368,24 +1368,24 @@ args = parser.parse_args()
 # Blunder recovery options
 if args.factory_reset_all:
     print("Factory-resetting all emotion templates...")
-    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json")).expanduser().resolve(), "r") as json_file:
+    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json")).expanduser().resolve(), "r", encoding="utf-8") as json_file:
         factory_default_emotions = json.load(json_file)
     factory_default_emotions.pop("zero")  # not an actual emotion
     for key in factory_default_emotions:
-        with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json")).expanduser().resolve(), "w") as file:
+        with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json")).expanduser().resolve(), "w", encoding="utf-8") as file:
             json.dump({key: factory_default_emotions[key]}, file, indent=4)
     print("Done.")
     sys.exit(0)
 if args.factory_reset:
     key = args.factory_reset
     print(f"Factory-resetting emotion template '{key}'...")
-    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json")).expanduser().resolve(), "r") as json_file:
+    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", "_defaults.json")).expanduser().resolve(), "r", encoding="utf-8") as json_file:
         factory_default_emotions = json.load(json_file)
     factory_default_emotions.pop("zero")  # not an actual emotion
     if key not in factory_default_emotions:
         print(f"No such factory-defined emotion: '{key}'. Valid values: {sorted(list(factory_default_emotions.keys()))}")
         sys.exit(1)
-    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json")).expanduser().resolve(), "w") as file:
+    with open(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "emotions", f"{key}.json")).expanduser().resolve(), "w", encoding="utf-8") as file:
         json.dump({key: factory_default_emotions[key]}, file, indent=4)
     print("Done.")
     sys.exit(0)

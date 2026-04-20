@@ -786,7 +786,7 @@ class Animator:
 
         # Load server-side settings
         try:
-            with open(animator_settings_path / "animator.json", "r") as json_file:
+            with open(animator_settings_path / "animator.json", "r", encoding="utf-8") as json_file:
                 server_settings = json.load(json_file)
         except Exception as exc:
             logger.warning(f"load_animator_settings: skipping server settings, reason: {type(exc)}: {exc}")
