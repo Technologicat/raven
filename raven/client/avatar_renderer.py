@@ -190,7 +190,11 @@ class DPGAvatarRenderer:
         # state. When `None`, the overlay uses the wire bbox.
         self.show_crop_overlay = False
         self.overlay_bbox_preview: Optional[Mapping[str, Any]] = None
-        self.crop_overlay_drawlist_gui_widget = dpg.add_viewport_drawlist(tag="avatar_crop_overlay_drawlist", front=True, show=False)
+        # The viewport drawlist stays permanently `show=True` at the DPG level; visibility is
+        # controlled by whether we populate it with draw items. An empty viewport drawlist is a
+        # render no-op, and this avoids a DPG quirk where a hidden viewport drawlist sometimes fails
+        # to come back after a fullscreen toggle.
+        self.crop_overlay_drawlist_gui_widget = dpg.add_viewport_drawlist(tag="avatar_crop_overlay_drawlist", front=True, show=True)
 
         # For displaying current video FPS arriving from the server. Lives in its own viewport drawlist
         # (separate from the crop overlay's viewport drawlist, created AFTER it) so FPS renders on top
@@ -264,7 +268,7 @@ class DPGAvatarRenderer:
 
             effective = self.overlay_bbox_preview if self.overlay_bbox_preview is not None else self.crop_bbox
             if not self.show_crop_overlay or self.full_w is None or not self.first_frame_received:
-                dpg.hide_item(self.crop_overlay_drawlist_gui_widget)
+                # Leave the drawlist empty — no hide_item needed since an empty viewport drawlist renders nothing.
                 return
 
             # Convert avatar-panel-local coords to viewport-absolute by adding the panel's screen offset.
@@ -333,8 +337,6 @@ class DPGAvatarRenderer:
             draw_clipped_hline(y2, x1, x2)  # bottom
             draw_clipped_vline(x1, y1, y2)  # left
             draw_clipped_vline(x2, y1, y2)  # right
-
-            dpg.show_item(self.crop_overlay_drawlist_gui_widget)
 
     def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]) -> None:
         """Load a backdrop image. To clear the background (no image), use `filename=None`.
