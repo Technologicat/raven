@@ -835,14 +835,14 @@ class Animator:
         # Now our settings loading strategy is as simple as:
         settings = dict(settings)  # copy to avoid modifying the original, since we'll pop some stuff.
         if settings:
-            drop_unrecognized(settings, _server_config.animator_defaults, context="user settings")
-            typecheck(settings, _server_config.animator_defaults, context="user settings")
+            drop_unrecognized(settings, _server_config.animator_defaults, context="<user>")
+            typecheck(settings, _server_config.animator_defaults, context="<user>")
         if server_settings:
-            drop_unrecognized(server_settings, _server_config.animator_defaults, context="server settings")
-            typecheck(server_settings, _server_config.animator_defaults, context="server settings")
+            drop_unrecognized(server_settings, _server_config.animator_defaults, context="<server>")
+            typecheck(server_settings, _server_config.animator_defaults, context="<server>")
         # both `settings` and `server_settings` are fully valid at this point
-        aggregate(settings, fallback_settings=server_settings, fallback_context="server settings")  # first fill in from server-side settings
-        aggregate(settings, fallback_settings=_server_config.animator_defaults, fallback_context="built-in defaults")  # then fill in from hardcoded defaults
+        aggregate(settings, fallback_settings=server_settings, fallback_context="<server>")  # first fill in from server-side settings
+        aggregate(settings, fallback_settings=_server_config.animator_defaults, fallback_context="<built-in>")  # then fill in from hardcoded defaults
 
         logger.debug(f"load_animator_settings: final settings (filled in as necessary): {settings}")
 
