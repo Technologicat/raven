@@ -20,7 +20,7 @@ def parse_csv(file_path: Union[pathlib.Path, str],
     # Autodetect delimiter if not provided
     if delimiter is None:
         try:
-            with open(file_path, "r", newline="") as f:
+            with open(file_path, "r", newline="", encoding="utf-8") as f:
                 # Read first 10 lines to scan for delimiter patterns
                 lines = list(islice(f)[:10])
                 if not lines:  # Empty file
@@ -39,7 +39,7 @@ def parse_csv(file_path: Union[pathlib.Path, str],
 
     # Parse CSV
     try:
-        with open(file_path, "r", newline="") as f:
+        with open(file_path, "r", newline="", encoding="utf-8") as f:
             reader = csv.reader(f, delimiter=delimiter)
 
             # Handle header detection
