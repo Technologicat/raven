@@ -49,6 +49,7 @@ logger.info(f"Raven-avatar-pose-editor version {__version__} starting.")
 
 logger.info("Loading libraries...")
 from unpythonic import timer
+from unpythonic.env import env
 with timer() as tim:
     import argparse
     import functools
@@ -79,6 +80,7 @@ with timer() as tim:
 
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import fontsetup
+    from ...common.gui import helpcard
     from ...common.gui import messagebox
     from ...common.gui import utils as guiutils
     from ...common.hfutil import maybe_install_models
@@ -400,10 +402,11 @@ def is_save_all_emotions_dialog_visible():
 def is_any_modal_window_visible():
     """Return whether *some* modal window is open.
 
-    Currently these are file dialogs.
+    Currently these are file dialogs and the help card.
     """
     return (is_open_image_dialog_visible() or is_save_image_dialog_visible() or
-            is_open_json_dialog_visible() or is_save_all_emotions_dialog_visible())
+            is_open_json_dialog_visible() or is_save_all_emotions_dialog_visible() or
+            (_help_window is not None and _help_window.is_visible()))
 
 def get_slider_range(slider):
     slider_config = dpg.get_item_configuration(slider)
@@ -736,6 +739,7 @@ class PoseEditorGUI:
                 self.init_right_panel()
 
         self.fps_statistics = RunningAverage()
+        self._fps_warmup_remaining = 3  # skip N renders after startup / image load (THA3 JIT compile + cuDNN autotune both need a few frames to settle)
 
         self.last_pose = None
         self.last_base_image = None
@@ -892,6 +896,9 @@ class PoseEditorGUI:
                 self.save_all_emotions_button = dpg.add_button(label="Batch save image and emotion from all presets [Ctrl+Shift+S]",
                                                                width=self.image_size - 16,
                                                                callback=show_save_all_emotions_dialog)
+                self.help_button = dpg.add_button(label="Help [F1]",
+                                                  width=self.image_size - 16,
+                                                  callback=lambda: _help_window.show() if _help_window is not None else None)
 
             self.fps_text = dpg.add_text("FPS counter will appear here", color=(0, 255, 0))
 
@@ -960,6 +967,9 @@ class PoseEditorGUI:
                 self.celstack.append((celname, 0.0))
 
             self.render_needed = True
+            # Loading a new character may re-trigger the warmup costs. Clear stale stats from the previous character too.
+            self.fps_statistics = RunningAverage()
+            self._fps_warmup_remaining = 3
 
             logger.info(f"PoseEditorGUI.load_image: Loaded image '{image_file_name}'.")
         except Exception as exc:
@@ -1138,11 +1148,18 @@ class PoseEditorGUI:
                                         centering_reference_window=self.window)
                 return
             else:
-                # Update FPS counter, measuring the render speed only.
+                # Update FPS counter, measuring the render speed only. The first few renders after
+                # startup or a character load are skipped — the first frame does THA3 JIT compile
+                # and cuDNN autotune, and the next couple of frames can still be slower than steady
+                # state. Counting them would drag the rolling average down for a long time under
+                # idle throttling (few new samples push the old ones out slowly).
                 elapsed_time = time.monotonic_ns() - render_start_time
                 fps = 1.0 / (elapsed_time / 10**9)
                 if self.torch_base_image is not None:
-                    self.fps_statistics.add_datapoint(fps)
+                    if self._fps_warmup_remaining > 0:
+                        self._fps_warmup_remaining -= 1
+                    else:
+                        self.fps_statistics.add_datapoint(fps)
                 dpg.set_value(self.fps_text, f"Render (avg): {self.fps_statistics.average():0.2f} FPS")
             finally:
                 self.render_needed = False
@@ -1332,6 +1349,10 @@ def pose_editor_hotkeys_callback(sender, app_data):
     #
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
     else:
+        if key == dpg.mvKey_F1:
+            if _help_window is not None:
+                _help_window.show()
+            return
         # {widget_tag_or_id: list_of_choices}
         global combobox_choice_map
         if combobox_choice_map is None:  # build on first use
@@ -1367,6 +1388,34 @@ with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole 
     dpg.add_mouse_move_handler(callback=_on_any_input)
     dpg.add_mouse_click_handler(callback=_on_any_input)
     dpg.add_mouse_wheel_handler(callback=_on_any_input)
+
+# --------------------------------------------------------------------------------
+# Help card (F1)
+
+hotkey_info = (
+    # Column 1: file operations
+    env(key_indent=0, key="Ctrl+O", action_indent=0, action="Load character image", notes=""),
+    env(key_indent=0, key="Ctrl+S", action_indent=0, action="Save posed image + emotion", notes=""),
+    helpcard.hotkey_blank_entry,
+    env(key_indent=0, key="Ctrl+Shift+O", action_indent=0, action="Load emotion template JSON", notes=""),
+    env(key_indent=0, key="Ctrl+Shift+S", action_indent=0, action="Batch save all presets", notes=""),
+
+    helpcard.hotkey_new_column,
+
+    # Column 2: focus + combobox browsing + app
+    env(key_indent=0, key="Ctrl+P", action_indent=0, action="Focus emotion preset chooser", notes=""),
+    env(key_indent=0, key="Ctrl+I", action_indent=0, action="Focus output index chooser", notes=""),
+    env(key_indent=1, key="Up / Down", action_indent=0, action="Previous / next choice", notes="While focused"),
+    env(key_indent=1, key="Home / End", action_indent=0, action="First / last choice", notes="While focused"),
+    helpcard.hotkey_blank_entry,
+    env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
+)
+
+_help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
+                                   width=900,
+                                   height=380,
+                                   reference_window="pose_editor_window",
+                                   themes_and_fonts=env(font_size=font_size))
 
 # --------------------------------------------------------------------------------
 # Start the app

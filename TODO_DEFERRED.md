@@ -369,12 +369,6 @@ With ~84 nodes and defines-edges enabled (pyan3 output of 3 files, `--uses --def
 
 Discovered during tooltip feature development (2026-04-03).
 
-## Add F1 help card to Avatar pose editor
-
-The pose editor is the last GUI app missing an F1 help card. Follow the same pattern as the settings editor (add helpcard import, hotkey_info tuple, HelpWindow instance, F1 in keyboard handler, help button in toolbar). Check what hotkeys exist in the pose editor to populate the help card content. F11 fullscreen is not needed for this app.
-
-Discovered during F1/F11 consistency pass (2026-04-06).
-
 ## Avatar settings editor: custom postprocessor chain ordering
 
 The settings editor currently presents filters in a fixed priority order, with at most one copy of each filter. With the desaturate/monochrome_display and noise/analog_vhs_noise splits, the signal pipeline model is becoming richer — users may want to reorder filters or have multiple instances. The GUI needs drag-and-drop chain building: add/remove filters, reorder freely, support multiple instances of the same filter (with independent `name` keys). Currently, `strip_postprocessor_chain_for_gui` enforces fixed ordering and single instances.
