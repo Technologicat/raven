@@ -58,19 +58,6 @@ Could also cover `/api/embeddings/info` for the embedding model name / dim, etc.
 
 Discovered during step 5 review (2026-04-18).
 
-## FLAC instead of MP3 for MaybeRemote TTS transport
-
-`raven.client.mayberemote.TTS` currently asks the server for MP3 (the default format `raven.server.modules.tts.text_to_speech` serves). MP3 is lossy — samples come back slightly altered from what the server synthesized. Inaudible in practice, but not bit-identical.
-
-MP3 was chosen historically because it was what Kokoro-FastAPI could reliably produce; FLAC either crashed it or produced duplicated audio. Raven no longer routes through Kokoro-FastAPI (in-process Kokoro since the refactor), so FLAC probably works now and is worth trying for two reasons:
-
-- **Lossless**: exact sample values round-trip, matching the local-mode path byte-for-byte.
-- **Licensing**: FLAC is royalty-free; MP3 is historically patent-encumbered (US patents expired 2017, but the ecosystem caution persists).
-
-Not a functional blocker — mention in the same session where a user hits some MP3-specific quirk, or pair with a broader audio-format cleanup.
-
-Discovered during step 5 review (2026-04-18).
-
 ## Additional `MaybeRemoteService` candidates (classify, translate)
 
 `raven.client.mayberemote` currently wraps `Dehyphenator` (→ sanitize), `Embedder` (→ embeddings), `NLP` (→ natlang). Once the in-progress speech-extract-to-common work lands `TTS` / `STT`, the ML-engine server modules that *still* have no local fallback are:

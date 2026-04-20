@@ -291,7 +291,7 @@ class TestTts:
                                get_metadata=False)
         assert isinstance(prep.audio_bytes, bytes)
         assert len(prep.audio_bytes) > 0
-        assert prep.audio_format == "mp3"
+        assert prep.audio_format == "flac"
         assert prep.word_metadata is None
 
     def test_prepare_with_metadata(self, initialized_api):
@@ -384,7 +384,7 @@ class TestAvatar:
 
             # Receive a few frames.
             for _ in range(5):
-                image_format, image_data = next(gen)
+                image_format, _headers, image_data = next(gen)
                 assert isinstance(image_data, bytes)
                 assert len(image_data) > 0
                 # Verify the frame is a valid image.

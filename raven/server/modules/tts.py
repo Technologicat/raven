@@ -75,7 +75,7 @@ def get_voices() -> List[str]:
 def text_to_speech(voice: str,
                    text: str,
                    speed: float = 1.0,
-                   format: str = "mp3",
+                   format: str = "flac",
                    get_metadata: bool = True,
                    stream: bool = False) -> Response:
     """Convert `text` to speech with the speech synthesizer.

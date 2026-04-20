@@ -153,7 +153,7 @@ def tts_warmup(voice: str) -> None:
                 get_metadata=True)  # not sure if the phonemizer needs warmup, but let's do it anyway
     logger.info(f"tts_warmup: Warmup for voice '{voice}' done.")
 
-def _empty_encoded_result(get_metadata: bool, format: str = "mp3") -> speech_tts.EncodedTTSResult:
+def _empty_encoded_result(get_metadata: bool, format: str = "flac") -> speech_tts.EncodedTTSResult:
     """Zero-audio `EncodedTTSResult`, returned by `tts_prepare` on blank / no-phoneme input.
 
     Callers check `not prep.audio_bytes` to detect the cancelled case; the structure
@@ -170,7 +170,7 @@ def tts_prepare(text: str,
                 voice: str,
                 speed: float = 1.0,
                 get_metadata: bool = True,
-                format: str = "mp3") -> speech_tts.EncodedTTSResult:
+                format: str = "flac") -> speech_tts.EncodedTTSResult:
     """Using the speech synthesizer, precompute TTS speech audio for `text` using `voice`.
 
     Explicit remote mode. Not cached — each call round-trips to the server.
@@ -190,8 +190,10 @@ def tts_prepare(text: str,
 
     `format`: audio-file encoding to request from the server. Any format supported
               by the server's encoder (see `raven.common.audio.codec.encode`) —
-              e.g. `"mp3"`, `"flac"`. Default `"mp3"`. The chosen format is also
-              stored in the returned `EncodedTTSResult.audio_format`.
+              e.g. `"mp3"`, `"flac"`. Default `"flac"` — lossless, so the
+              samples round-trip bit-identical with the server's synthesis.
+              The chosen format is also stored in the returned
+              `EncodedTTSResult.audio_format`.
 
     Always returns an `EncodedTTSResult`. On blank input, or if `get_metadata=True`
     and the TTS produced no phoneme data, the returned value is a zero-audio result
@@ -275,7 +277,7 @@ def tts_prepare_cached(text: str,
                        voice: str,
                        speed: float = 1.0,
                        get_metadata: bool = True,
-                       format: str = "mp3") -> speech_tts.EncodedTTSResult:
+                       format: str = "flac") -> speech_tts.EncodedTTSResult:
     """Memoized `tts_prepare`. Same signature, cached across calls.
 
     Default choice for app code: precomputing the same sentence twice doesn't
@@ -294,17 +296,17 @@ def tts_prepare_decoded_cached(text: str,
                                get_metadata: bool = True) -> speech_tts.TTSResult:
     """Cached remote TTS in decoded (float `TTSResult`) form. Other-shape companion to `tts_prepare_cached`.
 
-    Fetches encoded audio via `tts_prepare_cached` (with `format="mp3"`, the
-    server's canonical wire format), then decodes to float. Two-level cache:
-    the MP3 bytes are cached by the inner call, and the decoded `TTSResult` is
-    cached here on top.
+    Fetches encoded audio via `tts_prepare_cached` (using FLAC on the wire for
+    lossless round-trip), then decodes to float. Two-level cache: the FLAC
+    bytes are cached by the inner call, and the decoded `TTSResult` is cached
+    here on top.
 
     Parallel to `raven.common.audio.speech.tts.prepare_encoded_cached` on the
     local side, modulo the direction of the conversion — local synthesizes
     float natively and encodes on top; remote receives encoded natively and
     decodes on top.
     """
-    return speech_tts.decode(tts_prepare_cached(text, voice, speed=speed, get_metadata=get_metadata, format="mp3"))
+    return speech_tts.decode(tts_prepare_cached(text, voice, speed=speed, get_metadata=get_metadata, format="flac"))
 
 
 def tts_speak(text: str,
@@ -322,7 +324,8 @@ def tts_speak(text: str,
              Raising this too high may cause skipped words.
 
     If `on_audio_ready` is provided, call it after TTS synthesis is complete, before playback starts.
-    It is expected to take one argument, `audio_data: bytes`, containing the speech audio in MP3 format.
+    It is expected to take one argument, `audio_data: bytes`, containing the speech audio encoded in whatever
+    format `tts_prepare_cached` returned (default FLAC; read `final_prep.audio_format` if you need to know).
     Return value is ignored.
 
     If `on_start` is provided, call it when the TTS starts speaking. No arguments. Return value is ignored.
@@ -355,7 +358,7 @@ def tts_speak(text: str,
             return
         audio_bytes = final_prep.audio_bytes
 
-        # Send TTS speech audio data (mp3) to caller if they want it
+        # Send TTS speech audio data (encoded per `final_prep.audio_format`, default FLAC) to caller if they want it
         if on_audio_ready is not None:
             on_audio_ready(audio_bytes)
 
@@ -423,7 +426,8 @@ def tts_speak_lipsynced(instance_id: str,
         - Negative values: Use if the video is late. Shifts video earlier with respect to the audio.
 
     If `on_audio_ready` is provided, call it after TTS synthesis is complete, before playback starts.
-    It is expected to take one argument, `audio_data: bytes`, containing the speech audio in MP3 format.
+    It is expected to take one argument, `audio_data: bytes`, containing the speech audio encoded in whatever
+    format `tts_prepare_cached` returned (default FLAC; read `final_prep.audio_format` if you need to know).
     Return value is ignored.
 
     If `on_start` is provided, call it when the TTS starts speaking. No arguments. Return value is ignored.
@@ -454,7 +458,7 @@ def tts_speak_lipsynced(instance_id: str,
         audio_bytes = final_prep.audio_bytes
         timestamps = final_prep.word_metadata
 
-        # Send TTS speech audio data (mp3) to caller if they want it
+        # Send TTS speech audio data (encoded per `final_prep.audio_format`, default FLAC) to caller if they want it
         if on_audio_ready is not None:
             on_audio_ready(audio_bytes)
 

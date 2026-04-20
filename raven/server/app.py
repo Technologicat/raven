@@ -1189,7 +1189,7 @@ def api_tts_speak():
         {"text": "Blah blah blah.",
          "voice": "af_bella",
          "speed": 1.0,
-         "format": "mp3",
+         "format": "flac",
          "get_metadata": true,
          "stream": false}
 
@@ -1227,7 +1227,7 @@ def api_tts_speak():
 
     voice = data.get("voice", "af_bella")  # TODO: sane default
     speed = float(data.get("speed", 1.0))
-    format = data.get("format", "mp3")
+    format = data.get("format", "flac")
     get_metadata = data.get("get_metadata", True)  # bool flag
     stream = data.get("stream", False)  # bool flag
 
