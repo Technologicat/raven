@@ -56,6 +56,7 @@ with timer() as tim:
     from ...common.gui import helpcard
     from ...common.gui import messagebox
     from ...common.gui import utils as guiutils
+    from ...common import bgtask
     from ...common import utils as common_utils
 
     from ...client import api  # convenient Python functions that abstract away the web API
@@ -106,7 +107,9 @@ dpg.create_viewport(title="Raven-avatar settings editor",
                     small_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_128_notext.{icon_ext}")).expanduser().resolve()),
                     large_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_256.{icon_ext}")).expanduser().resolve()),
                     width=viewport_width,
-                    height=viewport_height)  # OS window (DPG "viewport")
+                    height=viewport_height,
+                    min_width=viewport_width,  # prevent shrinking below the initial size; the layout assumes enough room for the full avatar panel + both side panels
+                    min_height=viewport_height)  # OS window (DPG "viewport")
 dpg.setup_dearpygui()
 
 # --------------------------------------------------------------------------------
@@ -439,6 +442,15 @@ class PostprocessorSettingsEditorGUI:
         self.speaking = False  # TTS
         self.animator_settings = None  # not loaded yet
 
+        # Debounce crop-setting pushes to the server. A slider drag fires the callback many times per
+        # second; each push triggers tensor reallocation (different cropped dims) on the server. The
+        # `ManagedTask` pending mechanism coalesces rapid calls — only the latest actually runs.
+        self.crop_push_task_manager = bgtask.TaskManager(name="avatar_settings_editor_crop_push", mode="sequential", executor=bg)
+        self.crop_push_task = bgtask.ManagedTask(category="raven_avatar_settings_editor_crop_push",
+                                                 entrypoint=self._push_crop_to_server_task,
+                                                 running_poll_interval=0.01,
+                                                 pending_wait_duration=0.15)
+
         dpg.add_texture_registry(tag="avatar_settings_editor_textures")  # the DPG live texture and the window backdrop texture will be stored here
         dpg.set_viewport_title(f"Raven-avatar settings editor [{client_config.raven_server_url}]")
 
@@ -458,6 +470,7 @@ class PostprocessorSettingsEditorGUI:
                     image_size = int(self.upscale * self.source_image_size)
                     self.dpg_avatar_renderer.configure_live_texture(image_size, image_size)
                     self.dpg_avatar_renderer.configure_fps_counter(show=True)
+                    self.dpg_avatar_renderer.configure_crop_overlay(show=True)  # calibration aid; defaults to checked in the settings editor (see `crop_show_overlay_checkbox`)
 
                     with dpg.group(pos=(8, 32), show=False, horizontal=True) as self.recording_indicator_group:
                         dpg.add_text(fa.ICON_CIRCLE, tag="recording_symbol")
@@ -793,7 +806,87 @@ class PostprocessorSettingsEditorGUI:
                                         assert False, f"{filter_name}.{param_name}: Unknown parameter type {type(default_value)}"
                         dpg.add_spacer(height=4)
 
+                def build_crop_gui():
+                    # Defaults for Reset: NO_CROP (enabled off, full bbox). This matches the server config
+                    # default and keeps Reset as a "disable crop" action — irrespective of the shipped
+                    # `animator.json`'s own (non-default) crop calibration.
+                    crop_edge_defaults = {"left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0}
+
+                    # Minimum gap between opposite edges. Prevents the kept region from collapsing to zero,
+                    # which on the server becomes a zero-width/height tensor slice and crashes the pipeline.
+                    MIN_CROP_GAP = 0.05
+
+                    def on_crop_edge_change(sender, app_data, user_data):
+                        """Slider callback. Enforces `left + MIN_CROP_GAP <= right` and
+                        `top + MIN_CROP_GAP <= bottom` by clamping the dragged slider, then routes
+                        through the overlay-preview + debounced server push."""
+                        edge = user_data
+                        value = dpg.get_value(f"crop_{edge}_slider")
+                        if edge == "left":
+                            max_allowed = dpg.get_value("crop_right_slider") - MIN_CROP_GAP
+                            if value > max_allowed:
+                                dpg.set_value("crop_left_slider", max_allowed)
+                        elif edge == "right":
+                            min_allowed = dpg.get_value("crop_left_slider") + MIN_CROP_GAP
+                            if value < min_allowed:
+                                dpg.set_value("crop_right_slider", min_allowed)
+                        elif edge == "top":
+                            max_allowed = dpg.get_value("crop_bottom_slider") - MIN_CROP_GAP
+                            if value > max_allowed:
+                                dpg.set_value("crop_top_slider", max_allowed)
+                        elif edge == "bottom":
+                            min_allowed = dpg.get_value("crop_top_slider") + MIN_CROP_GAP
+                            if value < min_allowed:
+                                dpg.set_value("crop_bottom_slider", min_allowed)
+                        self._refresh_crop_from_widgets(debounce_server_push=True)
+
+                    def on_crop_enabled_change(sender, app_data):
+                        """One-shot click — push to server immediately (no debounce) and update the overlay preview."""
+                        self._refresh_crop_from_widgets(debounce_server_push=False)
+
+                    def on_show_overlay_change(sender, app_data):
+                        """UI-only preference — not persisted to animator.json."""
+                        self.dpg_avatar_renderer.configure_crop_overlay(show=dpg.get_value("crop_show_overlay_checkbox"))
+
+                    def reset_crop_section():
+                        """Reset the five data controls to NO_CROP. Leave the Show toggle alone."""
+                        logger.info("reset_crop_section: resetting crop to NO_CROP (disabled, full bbox).")
+                        dpg.set_value("crop_enabled_checkbox", False)
+                        for edge, default_value in crop_edge_defaults.items():
+                            dpg.set_value(f"crop_{edge}_slider", default_value)
+                        self._refresh_crop_from_widgets(debounce_server_push=False)
+
+                    def make_reset_edge_callback(edge, default_value):  # freeze by closure
+                        def reset_edge():
+                            logger.info(f"reset_crop_edge: resetting crop.{edge} to {default_value}.")
+                            dpg.set_value(f"crop_{edge}_slider", default_value)
+                            # Resetting to a NO_CROP edge always leaves >= MIN_CROP_GAP (full-bbox values are 0 and 1),
+                            # so no partner clamping needed.
+                            self._refresh_crop_from_widgets(debounce_server_push=False)
+                        return reset_edge
+
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="Reset", tag="crop_section_reset_button", callback=reset_crop_section)
+                        dpg.add_checkbox(label="Crop", default_value=True, tag="crop_enabled_checkbox", callback=on_crop_enabled_change)
+                    with dpg.group(horizontal=True):
+                        dpg.add_spacer(width=4)
+                        with dpg.group(horizontal=False):
+                            # Show toggle — UI-only, not saved. Indented a bit more to align visually with the sliders
+                            # (which are preceded by the per-edge reset button).
+                            with dpg.group(horizontal=True):
+                                dpg.add_spacer(width=22)
+                                dpg.add_checkbox(label="Show", default_value=True, tag="crop_show_overlay_checkbox", callback=on_show_overlay_change)
+                            # Edge sliders, in PIL reading order (left, top, right, bottom).
+                            for edge in ("left", "top", "right", "bottom"):
+                                default_value = crop_edge_defaults[edge]
+                                with dpg.group(horizontal=True):
+                                    dpg.add_button(label="X", tag=f"crop_{edge}_reset_button", callback=make_reset_edge_callback(edge, default_value))
+                                    dpg.add_slider_float(label=edge.capitalize(), default_value=default_value, min_value=0.0, max_value=1.0, clamped=True, width=self.button_width,
+                                                         tag=f"crop_{edge}_slider", callback=on_crop_edge_change, user_data=edge)
+                    dpg.add_spacer(height=4)
+
                 with dpg.child_window(width=self.postprocessor_width, autosize_y=True):
+                    build_crop_gui()
                     dpg.add_checkbox(label="Postprocessor [Ctrl+click to set a numeric value]", default_value=True, callback=self.on_toggle_postprocessor)
                     # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
                     build_postprocessor_gui()
@@ -973,6 +1066,37 @@ class PostprocessorSettingsEditorGUI:
         self.upscale_quality = dpg.get_value("upscale_quality_choice")
         self.on_gui_settings_change(sender, app_data)
 
+    def _push_crop_to_server_task(self, task_env):
+        """`ManagedTask` entrypoint for debounced crop settings pushes.
+
+        Runs on a background thread once the `pending_wait_duration` elapses without a new submission.
+        A drag that fires many slider callbacks coalesces into a single actual push.
+        """
+        if task_env.cancelled:  # superseded by a later submission
+            return
+        self.on_gui_settings_change(None, None)
+
+    def _refresh_crop_from_widgets(self, *, debounce_server_push: bool) -> None:
+        """Read current crop widgets, update the renderer's overlay preview, and (debounced or immediate)
+        push the animator settings to the server.
+
+        Slider changes use `debounce_server_push=True` (drags fire many events). Enable checkbox and
+        Reset buttons use `debounce_server_push=False` (one-shot click, immediate feedback wanted).
+
+        The overlay preview is always updated immediately — cheap local operation, and lets the overlay
+        track the sliders in real time even while the server push is still debounced.
+        """
+        bbox = {"enabled": dpg.get_value("crop_enabled_checkbox"),
+                "left":    dpg.get_value("crop_left_slider"),
+                "top":     dpg.get_value("crop_top_slider"),
+                "right":   dpg.get_value("crop_right_slider"),
+                "bottom":  dpg.get_value("crop_bottom_slider")}
+        self.dpg_avatar_renderer.set_overlay_bbox_preview(bbox)
+        if debounce_server_push:
+            self.crop_push_task_manager.submit(self.crop_push_task, env(wait=True))
+        else:
+            self.on_gui_settings_change(None, None)
+
     def on_gui_settings_change(self, sender, app_data):
         """Send new animator/upscaler/postprocessor settings to Raven-server whenever a value changes in the GUI.
 
@@ -1000,7 +1124,12 @@ class PostprocessorSettingsEditorGUI:
                                         "upscale": self.upscale,
                                         "upscale_preset": self.upscale_preset,
                                         "upscale_quality": self.upscale_quality,
-                                        "animefx_enabled": dpg.get_value("animefx_checkbox")}
+                                        "animefx_enabled": dpg.get_value("animefx_checkbox"),
+                                        "crop": {"enabled": dpg.get_value("crop_enabled_checkbox"),
+                                                 "left":    dpg.get_value("crop_left_slider"),
+                                                 "top":     dpg.get_value("crop_top_slider"),
+                                                 "right":   dpg.get_value("crop_right_slider"),
+                                                 "bottom":  dpg.get_value("crop_bottom_slider")}}
             self.animator_settings.update(custom_animator_settings)
 
             # Send to server
@@ -1042,6 +1171,15 @@ class PostprocessorSettingsEditorGUI:
             if "animefx_enabled" in animator_settings:
                 dpg.set_value("animefx_checkbox", animator_settings["animefx_enabled"])
 
+            # Crop settings — populate the five data widgets (enable + four edges).
+            # The `Show` overlay toggle is a UI preference, not saved, so it's not touched here.
+            crop = animator_settings.get("crop", {"enabled": False, "left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0})
+            dpg.set_value("crop_enabled_checkbox", crop["enabled"])
+            dpg.set_value("crop_left_slider",   crop["left"])
+            dpg.set_value("crop_top_slider",    crop["top"])
+            dpg.set_value("crop_right_slider",  crop["right"])
+            dpg.set_value("crop_bottom_slider", crop["bottom"])
+
             backdrop_path = animator_settings.get("backdrop_path", None)  # Default to no backdrop image if the file doesn't have this key.
             self.dpg_avatar_renderer.load_backdrop_image(backdrop_path)
             if "backdrop_blur" in animator_settings:
@@ -1059,6 +1197,11 @@ class PostprocessorSettingsEditorGUI:
                                         "upscale_preset": self.upscale_preset,
                                         "upscale_quality": self.upscale_quality,
                                         "animefx_enabled": dpg.get_value("animefx_checkbox"),
+                                        "crop": {"enabled": dpg.get_value("crop_enabled_checkbox"),
+                                                 "left":    dpg.get_value("crop_left_slider"),
+                                                 "top":     dpg.get_value("crop_top_slider"),
+                                                 "right":   dpg.get_value("crop_right_slider"),
+                                                 "bottom":  dpg.get_value("crop_bottom_slider")},
                                         "backdrop_path": backdrop_path,
                                         "backdrop_blur": dpg.get_value("backdrop_blur_checkbox")}
             animator_settings.update(custom_animator_settings)

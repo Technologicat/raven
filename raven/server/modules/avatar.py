@@ -551,11 +551,33 @@ def result_feed(instance_id: str) -> Response:
                     content_length_header = f"Content-Length: {len(image_data)}\r\n".encode()
                     x_crop_header = f"X-Crop: {json.dumps(crop_snapshot, separators=(',', ':'))}\r\n".encode()
                     x_full_size_header = f"X-Full-Size: {full_w} {full_h}\r\n".encode()
+
+                    # Per-phase server-side timing stats. Non-intrusive, available whether `metrics_enabled`
+                    # is on or not. Clients may display these alongside their own receive-side FPS.
+                    render_avg_sec = animator.render_duration_statistics.average()
+                    encode_avg_sec = encoder.encode_duration_statistics.average()
+                    wait_avg_sec = encoder.wait_duration_statistics.average()
+                    output_avg_sec = send_duration_statistics.average()
+                    def _fps_from(sec: float) -> float:
+                        return (1.0 / sec) if sec > 0.0 else 0.0
+                    server_stats = {
+                        "render_ms":  round(1000 * render_avg_sec, 1),
+                        "render_fps": round(_fps_from(render_avg_sec), 1),
+                        "encode_ms":  round(1000 * encode_avg_sec, 1),
+                        "encode_fps": round(_fps_from(encode_avg_sec), 1),
+                        "wait_ms":    round(1000 * wait_avg_sec, 1),
+                        "output_ms":  round(1000 * output_avg_sec, 1),
+                        "output_fps": round(_fps_from(output_avg_sec), 1),
+                        "target_fps": round(animator.target_fps, 1),
+                    }
+                    x_server_stats_header = f"X-Server-Stats: {json.dumps(server_stats, separators=(',', ':'))}\r\n".encode()
+
                     yield (b"--frame\r\n" +
                            content_type_header +
                            content_length_header +
                            x_crop_header +
                            x_full_size_header +
+                           x_server_stats_header +
                            b'Pragma-directive: no-cache\r\n'
                            b'Cache-directive: no-cache\r\n'
                            b'Cache-control: no-cache\r\n'
@@ -1622,6 +1644,10 @@ class Encoder:
         self.output_format = _server_config.animator_defaults["format"]  # default until animator settings are loaded; note `output_format` is writable from other threads!
         self.instance_id = instance_id
         self.latest_frame_sent = None  # for co-operation with `result_feed` (NOTE: only one feed allowed per instance!) (TODO: relax this assumption? A bit difficult to do.)
+        # Running averages of encode and wait durations, for the per-frame X-Server-Stats header.
+        # Populated by the encoder thread (see `encoder_update`); read by `result_feed.generate`.
+        self.encode_duration_statistics = RunningAverage()
+        self.wait_duration_statistics = RunningAverage()
 
     def start(self) -> None:
         """Start the output encoder thread."""
@@ -1629,8 +1655,6 @@ class Encoder:
         self._terminated = False
         def encoder_update():
             last_report_time = None
-            encode_duration_statistics = RunningAverage()
-            wait_duration_statistics = RunningAverage()
 
             while not self._terminated:
                 time_encode_start = time.monotonic_ns()
@@ -1698,15 +1722,15 @@ class Encoder:
                     time_now = time.monotonic_ns()
                     walltime_elapsed_sec = (time_now - time_encode_start) / 10**9
                     encode_elapsed_sec = walltime_elapsed_sec - wait_elapsed_sec
-                    encode_duration_statistics.add_datapoint(encode_elapsed_sec)
-                    wait_duration_statistics.add_datapoint(wait_elapsed_sec)
+                    self.encode_duration_statistics.add_datapoint(encode_elapsed_sec)
+                    self.wait_duration_statistics.add_datapoint(wait_elapsed_sec)
 
                 # Log the FPS counter in 5-second intervals.
                 time_now = time.monotonic_ns()
                 if animator.animation_running and (last_report_time is None or time_now - last_report_time > 5e9):
-                    avg_encode_sec = encode_duration_statistics.average()
+                    avg_encode_sec = self.encode_duration_statistics.average()
                     msec = round(1000 * avg_encode_sec, 1)
-                    avg_wait_sec = wait_duration_statistics.average()
+                    avg_wait_sec = self.wait_duration_statistics.average()
                     wait_msec = round(1000 * avg_wait_sec, 1)
                     fps = round(1 / avg_encode_sec, 1) if avg_encode_sec > 0.0 else 0.0
                     logger.info(f"encode: {msec:.1f}ms [{fps} FPS available]; send sync wait {wait_msec:.1f}ms")

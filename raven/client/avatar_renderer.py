@@ -82,22 +82,27 @@ class ResultFeedReader:
                 self.gen.close()
                 self.gen = None
 
-    def get_frame(self) -> Tuple[Optional[str], Mapping[str, Any], Tuple[int, int], bytes]:
-        """-> (received_mimetype, crop_bbox, full_size, payload)
+    def get_frame(self) -> Tuple[Optional[str], Mapping[str, Any], Tuple[int, int], Mapping[str, float], bytes]:
+        """-> (received_mimetype, crop_bbox, full_size, server_stats, payload)
 
-        `crop_bbox` is parsed from the per-frame `X-Crop` header (a dict with keys
-        `{"enabled", "left", "top", "right", "bottom"}`). `full_size` is `(w, h)` of the
-        uncropped output (from `X-Full-Size`) — the client uses it to position the cropped
-        image where the full square would have been. If not running, raises `TypeError`.
+        - `crop_bbox` is parsed from the per-frame `X-Crop` header, which is a dict
+          with keys `{"enabled", "left", "top", "right", "bottom"}`).
+        - `full_size` is `(w, h)` of the uncropped output (from `X-Full-Size`).
+        - `server_stats` is the server-side per-phase timing averages:
+              render/encode/wait/output ms + fps, plus target_fps
+          from the `X-Server-Stats` header — useful for enriching the client-side FPS counter.
+
+        If not running, raises `TypeError`.
         """
         with self.lock:
             mimetype, extra_headers, payload = next(self.gen)  # next-gen lol
             # Per-frame metadata from the headers (case-normalized to lowercase by the parser).
-            # Both are mandatory; absence means a server/client version mismatch.
+            # All three are mandatory; absence means a server/client version mismatch.
             crop_bbox = json.loads(extra_headers["x-crop"])
             full_w, full_h = extra_headers["x-full-size"].split()
             full_size = (int(full_w), int(full_h))
-            return mimetype, crop_bbox, full_size, payload
+            server_stats = json.loads(extra_headers["x-server-stats"])
+            return mimetype, crop_bbox, full_size, server_stats, payload
 
 # --------------------------------------------------------------------------------
 # API
@@ -158,6 +163,7 @@ class DPGAvatarRenderer:
         self.full_w = None  # width of the full (uncropped) output, in pixels; from the X-Full-Size header
         self.full_h = None  # height of the full (uncropped) output, in pixels; from the X-Full-Size header
         self.crop_bbox: Mapping[str, Any] = NO_CROP  # current crop bbox; updated per-frame from the X-Crop header. `NO_CROP` is a `frozendict`; per-frame values from the wire are plain dicts.
+        self.first_frame_received = False  # set True once at least one frame has been processed; gates overlay visibility so the warmup state doesn't show a stale full-bbox outline
         self.avatar_x_center = avatar_x_center
         self.avatar_y_bottom = avatar_y_bottom
 
@@ -166,13 +172,32 @@ class DPGAvatarRenderer:
 
         self.backdrop_drawlist_gui_widget = dpg.add_drawlist(tag="avatar_backdrop_drawlist", width=1024, height=1024, pos=(0, 0))  # for backdrop image (bottommost GUI item in z-order)
 
-        # For displaying current video FPS arriving from the server
-        self.fps_text_gui_widget = dpg.add_text("Loading...",
-                                                color=(0, 255, 0),
-                                                pos=(8, 0),
-                                                show=False,
-                                                tag="avatar_fps_text",
-                                                parent=gui_parent)
+        # For showing the crop region — four lines at the current bbox edges, plus a semi-transparent mask
+        # over the cropped-away areas. Hidden by default; apps opt in via `configure_crop_overlay(True)`.
+        #
+        # Implemented as a **viewport drawlist** (`front=True`) rather than a regular drawlist, because
+        # `dpg.add_image` (used for the live avatar video) renders in a pass that covers in-window
+        # drawlists regardless of their position in the child list — z-order tricks (`before=`, `move_item`
+        # to the end) don't help. A viewport drawlist is DPG's canonical "always on top" mechanism:
+        # it draws at the viewport level, above everything in the window hierarchy.
+        #
+        # Consequence: draw coordinates are viewport-absolute, so `_redraw_crop_overlay` offsets local
+        # avatar-panel coords by `guiutils.get_widget_pos(gui_parent)`.
+        #
+        # `overlay_bbox_preview` lets calibration GUIs (e.g. the settings editor's crop sliders) drive
+        # the overlay live, without waiting for a server roundtrip. When set, it overrides the per-frame
+        # wire `crop_bbox` for overlay drawing only — widget positioning still follows the actual wire
+        # state. When `None`, the overlay uses the wire bbox.
+        self.show_crop_overlay = False
+        self.overlay_bbox_preview: Optional[Mapping[str, Any]] = None
+        self.crop_overlay_drawlist_gui_widget = dpg.add_viewport_drawlist(tag="avatar_crop_overlay_drawlist", front=True, show=False)
+
+        # For displaying current video FPS arriving from the server. Lives in its own viewport drawlist
+        # (separate from the crop overlay's viewport drawlist, created AFTER it) so FPS renders on top
+        # of the crop overlay's semi-transparent mask. A plain `add_text` widget wouldn't work: viewport
+        # drawlists render above all in-window content regardless of widget-vs-drawlist layering.
+        self.fps_text_viewport_drawlist = dpg.add_viewport_drawlist(tag="avatar_fps_viewport_drawlist", front=True, show=False)
+        self.fps_text_draw_item = dpg.draw_text((0, 0), "Loading...", color=(0, 255, 0), size=20, parent=self.fps_text_viewport_drawlist)
         # Text to show while paused. This will be positioned when shown.
         paused_str = paused_text if paused_text is not None else ""
         self.paused_text_gui_widget = dpg.add_text(paused_str,
@@ -188,14 +213,128 @@ class DPGAvatarRenderer:
         try:
             with guiutils.nonexistent_ok():
                 if show is None:
-                    show = not dpg.is_item_visible(self.fps_text_gui_widget)
+                    show = not dpg.is_item_visible(self.fps_text_viewport_drawlist)
 
                 if show:
-                    dpg.show_item(self.fps_text_gui_widget)
+                    dpg.show_item(self.fps_text_viewport_drawlist)
                 else:
-                    dpg.hide_item(self.fps_text_gui_widget)
+                    dpg.hide_item(self.fps_text_viewport_drawlist)
         except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
             pass
+
+    def configure_crop_overlay(self, show: Optional[bool]) -> None:
+        """Show or hide the crop-region overlay.
+
+        If `show is None`, toggle the state.
+
+        The overlay is orthogonal to whether crop is actually being applied — it shows the bbox edges
+        from the current `crop_bbox` (or overlay preview) regardless of the `enabled` master switch.
+        This lets a user dial in the crop region visually on the uncropped image (Show on, Crop off),
+        then flip Crop on when satisfied.
+        """
+        try:
+            with guiutils.nonexistent_ok():
+                if show is None:
+                    show = not self.show_crop_overlay
+                self.show_crop_overlay = show
+                self._redraw_crop_overlay()
+        except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
+            pass
+
+    def set_overlay_bbox_preview(self, bbox: Optional[Mapping[str, Any]]) -> None:
+        """Drive the overlay from an external source (e.g. live GUI sliders) instead of the wire bbox.
+
+        When set, `bbox` is used for overlay drawing only — widget positioning still follows the actual
+        wire state (the crop that the server is currently applying). When `None`, the overlay falls back
+        to the wire bbox. Cheap; safe to call on every slider tick.
+        """
+        self.overlay_bbox_preview = bbox
+        self._redraw_crop_overlay()
+
+    def _redraw_crop_overlay(self) -> None:
+        """Redraw the crop-region overlay. Call whenever layout, wire `crop_bbox`, or overlay preview changes.
+
+        All draw coordinates are viewport-absolute — the overlay is a `viewport_drawlist`, not a child of
+        `gui_parent`, so its items must be offset by `gui_parent`'s screen position. Additionally, draws
+        are clipped to the avatar panel's rect so the overlay doesn't spill onto sibling panels when the
+        window is too small for the full avatar.
+        """
+        with guiutils.nonexistent_ok():
+            dpg.delete_item(self.crop_overlay_drawlist_gui_widget, children_only=True)
+
+            effective = self.overlay_bbox_preview if self.overlay_bbox_preview is not None else self.crop_bbox
+            if not self.show_crop_overlay or self.full_w is None or not self.first_frame_received:
+                dpg.hide_item(self.crop_overlay_drawlist_gui_widget)
+                return
+
+            # Convert avatar-panel-local coords to viewport-absolute by adding the panel's screen offset.
+            parent_x0, parent_y0 = guiutils.get_widget_pos(self.gui_parent)
+            panel_w, panel_h = guiutils.get_widget_size(self.gui_parent)
+            panel = (parent_x0, parent_y0, parent_x0 + panel_w, parent_y0 + panel_h)
+
+            full_x_left = parent_x0 + self.avatar_x_center - (self.full_w // 2)
+            full_y_top = parent_y0 + self.avatar_y_bottom - self.full_h
+
+            left, top, right, bottom = (effective["left"], effective["top"],
+                                        effective["right"], effective["bottom"])
+            x1 = int(full_x_left + left * self.full_w)
+            x2 = int(full_x_left + right * self.full_w)
+            y1 = int(full_y_top + top * self.full_h)
+            y2 = int(full_y_top + bottom * self.full_h)
+
+            drawlist = self.crop_overlay_drawlist_gui_widget
+            mask_color = (0, 0, 0, 96)  # dark, ~38% alpha
+            transparent = (0, 0, 0, 0)
+            outline_color = (255, 220, 60, 220)
+            full_x_right = full_x_left + self.full_w
+            full_y_bottom = full_y_top + self.full_h
+
+            def draw_clipped_rect(rx1, ry1, rx2, ry2):
+                """Intersect a filled mask rect with the panel and draw. Skips empty intersections."""
+                px1, py1, px2, py2 = panel
+                cx1, cy1, cx2, cy2 = max(rx1, px1), max(ry1, py1), min(rx2, px2), min(ry2, py2)
+                if cx1 >= cx2 or cy1 >= cy2:
+                    return
+                dpg.draw_rectangle((cx1, cy1), (cx2, cy2), color=transparent, fill=mask_color, parent=drawlist)
+
+            def draw_clipped_hline(y, lx1, lx2):
+                """Clip a horizontal outline segment to the panel and draw. Edges fully outside are skipped
+                rather than being moved to the panel boundary (which would fake a crop edge that isn't there)."""
+                px1, py1, px2, py2 = panel
+                if y < py1 or y > py2:
+                    return
+                cx1, cx2 = max(lx1, px1), min(lx2, px2)
+                if cx1 >= cx2:
+                    return
+                dpg.draw_line((cx1, y), (cx2, y), color=outline_color, thickness=2, parent=drawlist)
+
+            def draw_clipped_vline(x, ly1, ly2):
+                """Clip a vertical outline segment to the panel and draw."""
+                px1, py1, px2, py2 = panel
+                if x < px1 or x > px2:
+                    return
+                cy1, cy2 = max(ly1, py1), min(ly2, py2)
+                if cy1 >= cy2:
+                    return
+                dpg.draw_line((x, cy1), (x, cy2), color=outline_color, thickness=2, parent=drawlist)
+
+            # Masks over the four cropped-away regions.
+            if left > 0.0:
+                draw_clipped_rect(full_x_left, full_y_top, x1, full_y_bottom)
+            if right < 1.0:
+                draw_clipped_rect(x2, full_y_top, full_x_right, full_y_bottom)
+            if top > 0.0:
+                draw_clipped_rect(x1, full_y_top, x2, y1)
+            if bottom < 1.0:
+                draw_clipped_rect(x1, y2, x2, full_y_bottom)
+
+            # Kept-region outline, four independent clipped edges.
+            draw_clipped_hline(y1, x1, x2)  # top
+            draw_clipped_hline(y2, x1, x2)  # bottom
+            draw_clipped_vline(x1, y1, y2)  # left
+            draw_clipped_vline(x2, y1, y2)  # right
+
+            dpg.show_item(self.crop_overlay_drawlist_gui_widget)
 
     def load_backdrop_image(self, filename: Optional[Union[pathlib.Path, str]]) -> None:
         """Load a backdrop image. To clear the background (no image), use `filename=None`.
@@ -317,6 +456,11 @@ class DPGAvatarRenderer:
         """
         if full_size is None:
             full_size = (new_w, new_h)
+
+        # When crop changes, the last frame was composed for a different bbox — rescaling it to the new
+        # size stretches a differently-cropped image and looks wrong. Seed from blank instead. Size-only
+        # changes (e.g. upscale settings) keep the rescale seed, which reduces flicker during the transition.
+        crop_changed = (self.crop_bbox != crop_bbox)
         old_texture_id = self.live_texture_id_counter
         new_texture_id = old_texture_id + 1
 
@@ -325,7 +469,7 @@ class DPGAvatarRenderer:
                                        new_w,  # width
                                        4],  # RGBA
                                       dtype=np.float32).ravel()
-        if self.last_image_rgba is not None:
+        if self.last_image_rgba is not None and not crop_changed:
             # To reduce flicker when the texture is replaced: take the last frame we have,
             # rescale it, and use that as the initial content of the new texture.
             image_rgba = self.last_image_rgba  # from the background thread
@@ -358,7 +502,7 @@ class DPGAvatarRenderer:
                                                show=self.animator_running,  # if paused, leave it hidden (note that we're initially paused when the `DPGAvatarRenderer` instance is created!)
                                                tag=f"avatar_live_image_{new_texture_id}",
                                                parent=self.gui_parent,
-                                               before=self.fps_text_gui_widget)
+                                               before=self.paused_text_gui_widget)  # z-order within the avatar panel: live image below the paused text (crop overlay and FPS counter are viewport drawlists, always on top of everything)
         self.reposition()
 
         if not first_time:
@@ -430,6 +574,17 @@ class DPGAvatarRenderer:
 
             if not self.animator_running:
                 self._reposition_paused_text()
+
+            # The crop overlay is positioned against the same `(avatar_x_center, avatar_y_bottom)` and
+            # `(full_w, full_h)` that we just used for the live image, so any layout change here must
+            # trigger a redraw to keep the overlay aligned.
+            self._redraw_crop_overlay()
+
+            # FPS text lives in a viewport drawlist (viewport-absolute coords), so it needs explicit
+            # repositioning whenever the gui_parent moves (resize, etc.). Match the pre-refactor widget
+            # offset of (8, 0) relative to gui_parent's top-left.
+            parent_x0, parent_y0 = guiutils.get_widget_pos(self.gui_parent)
+            dpg.configure_item(self.fps_text_draw_item, pos=(parent_x0 + 8, parent_y0 + 0))
         if nok.errored:  # window or live image widget does not exist
             logger.info("DPGAvatarRenderer.reposition: GUI widget doesn't exist; ignoring. (This is normal at app shutdown.)")
         else:
@@ -559,7 +714,7 @@ class DPGAvatarRenderer:
             assert task_env is not None
             logger.info(f"DPGAvatarRenderer.start.update_live_texture: instance {task_env.task_name}: Background task for avatar instance '{avatar_instance_id}' starting.")
 
-            def describe_performance(video_format: str, video_height: int, video_width: int):  # actual received video height/width of the frame being described
+            def describe_performance(video_format: str, video_height: int, video_width: int, server_stats: Optional[Mapping[str, float]]):  # actual received video height/width of the frame being described
                 if not self.animator_running:
                     return "RX (avg) -- B/s @ -- FPS; avg -- B per frame (--x--, -- px, --)"
 
@@ -567,12 +722,18 @@ class DPGAvatarRenderer:
                 avg_bytes = int(self.frame_size_statistics.average())
                 pixels = video_height * video_width
 
-                return f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({video_width}x{video_height}, {si_prefix(pixels)}px, {video_format})"
+                line1 = f"RX (avg) {si_prefix(avg_fps * avg_bytes)}B/s @ {avg_fps:0.2f} FPS; avg {si_prefix(avg_bytes)}B per frame ({video_width}x{video_height}, {si_prefix(pixels)}px, {video_format})"
+                if server_stats is None:
+                    return line1
+                # Second line: per-phase server-side timings from the X-Server-Stats header.
+                line2 = (f"Server: render {server_stats['render_ms']:.1f}ms [{server_stats['render_fps']:.1f} FPS] | "
+                         f"encode {server_stats['encode_ms']:.1f}ms [{server_stats['encode_fps']:.1f} FPS] | "
+                         f"output {server_stats['output_ms']:.1f}ms [{server_stats['output_fps']:.1f} FPS]; target {server_stats['target_fps']:.1f} FPS")
+                return f"{line1}\n{line2}"
 
             def maybe_set_fps_counter(text):
                 with guiutils.nonexistent_ok():
-                    dpg.set_value(self.fps_text_gui_widget,
-                                  text)
+                    dpg.configure_item(self.fps_text_draw_item, text=text)
 
             reader = ResultFeedReader(avatar_instance_id)
             reader.start()
@@ -583,12 +744,12 @@ class DPGAvatarRenderer:
                     # sync `ResultFeedReader` state from `animator_running` state
                     if not self.animator_running:
                         reader.stop()
-                        maybe_set_fps_counter(describe_performance(None, None, None))
+                        maybe_set_fps_counter(describe_performance(None, None, None, None))
                     elif self.animator_running:
                         reader.start()
 
                     try:  # EAFP to avoid TOCTTOU
-                        mimetype, crop_bbox, full_size, image_data = reader.get_frame()
+                        mimetype, crop_bbox, full_size, server_stats, image_data = reader.get_frame()
                     except TypeError:  # `reader.gen is None`
                         # If our `ResultFeedReader` isn't running, there's nothing to do at the moment.
                         time.sleep(0.04)   # 1/25 s
@@ -611,15 +772,30 @@ class DPGAvatarRenderer:
                         w, h = pil_image.size
                         image_rgba = np.asarray(pil_image.convert("RGBA"))
 
-                    # Sync the texture to the decoded frame. Any change — size, crop bbox, or full-square
-                    # size — triggers a reconfigure. None-vs-int on first frame compares via `!=`, which
-                    # returns True (no ordering comparison happens), so the first frame always reconfigures
-                    # and creates the texture even when no pre-seed was done.
-                    if (self.image_w != w or self.image_h != h
-                            or self.crop_bbox != crop_bbox
-                            or (self.full_w, self.full_h) != full_size):
+                    # Sync the texture to the decoded frame. None-vs-int on first frame compares via `!=`,
+                    # which returns True (no ordering comparison happens), so the first frame always
+                    # reconfigures and creates the texture even when no pre-seed was done.
+                    size_changed = (self.image_w != w or self.image_h != h or (self.full_w, self.full_h) != full_size)
+                    bbox_changed = (self.crop_bbox != crop_bbox)
+                    # A bbox change is only meaningful to the texture when crop is (or was) active —
+                    # dragging the edge sliders while crop is disabled doesn't change the rendered image,
+                    # so there's no need to churn the texture.
+                    bbox_affects_image = bbox_changed and (crop_bbox.get("enabled", False) or self.crop_bbox.get("enabled", False))
+                    if size_changed or bbox_affects_image:
                         logger.info(f"update_live_texture: (re)configuring texture for frame size {w}x{h}, full {full_size}, crop bbox {crop_bbox}.")
                         self.configure_live_texture(w, h, crop_bbox, full_size)
+                    elif bbox_changed:
+                        # Cosmetic-only bbox update (e.g. edge values changed while disabled). Sync state
+                        # so the overlay reflects it, but don't recreate the texture.
+                        self.crop_bbox = crop_bbox
+
+                    # First-frame flag for the overlay gate. Set here AFTER the reconfigure path so that
+                    # `_redraw_crop_overlay` (called from reposition inside configure_live_texture) sees
+                    # False on the very first frame, then True from the second onward. Redraw explicitly
+                    # on the transition to unhide the overlay.
+                    if not self.first_frame_received:
+                        self.first_frame_received = True
+                        self._redraw_crop_overlay()
 
                     tex = self.live_texture  # read after possible reconfigure; may still go away mid-frame (shutdown / texture swap), handled at the blit site below
 
@@ -641,7 +817,7 @@ class DPGAvatarRenderer:
                     elapsed_time = time.monotonic_ns() - frame_start_time
                     fps = 1.0 / (elapsed_time / 10**9)
                     self.fps_statistics.add_datapoint(fps)
-                    maybe_set_fps_counter(describe_performance(mimetype, h, w))
+                    maybe_set_fps_counter(describe_performance(mimetype, h, w, server_stats))
             except EOFError:  # `result_feed` has shut down (normal at app exit, after we call `api.avatar_unload`)
                 logger.info("DPGAvatarRenderer.start.update_live_texture: Stream closed, shutting down.")
             except Exception as exc:
@@ -651,7 +827,7 @@ class DPGAvatarRenderer:
                 # TODO: recovery if the server comes back online
                 dpg.set_value(self.paused_text_gui_widget, "[Connection lost]")
                 self.pause(action="pause")
-                maybe_set_fps_counter(describe_performance(None, None, None))
+                maybe_set_fps_counter(describe_performance(None, None, None, None))
             finally:
                 reader.stop()  # Close the stream to ensure that the server's network send thread serving our request exits.
                 self.avatar_instance_id = None
