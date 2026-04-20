@@ -166,6 +166,13 @@ class DPGAvatarRenderer:
         self.first_frame_received = False  # set True once at least one frame has been processed; gates overlay visibility so the warmup state doesn't show a stale full-bbox outline
         self.avatar_x_center = avatar_x_center
         self.avatar_y_bottom = avatar_y_bottom
+        # Intended panel size, used for the crop-overlay clip rect. DPG's `set_item_width`/`set_item_height`
+        # on a child window don't propagate synchronously, so `get_widget_size(gui_parent)` during a
+        # transition (e.g. fullscreen toggle) may report the pre-resize size. Letting the caller pass the
+        # target size via `reposition()` sidesteps this — overlay clipping uses the intended size, not a
+        # stale reading from DPG.
+        self.panel_w_hint: Optional[int] = None
+        self.panel_h_hint: Optional[int] = None
 
         self.fps_statistics = RunningAverage()
         self.frame_size_statistics = RunningAverage()
@@ -273,7 +280,13 @@ class DPGAvatarRenderer:
 
             # Convert avatar-panel-local coords to viewport-absolute by adding the panel's screen offset.
             parent_x0, parent_y0 = guiutils.get_widget_pos(self.gui_parent)
-            panel_w, panel_h = guiutils.get_widget_size(self.gui_parent)
+            # Prefer the caller-supplied intended size over DPG's current reported size — during a
+            # resize transition (e.g. fullscreen toggle) the reported size can lag, which would
+            # clip the overlay to a stale rect and make it invisible.
+            if self.panel_w_hint is not None and self.panel_h_hint is not None:
+                panel_w, panel_h = self.panel_w_hint, self.panel_h_hint
+            else:
+                panel_w, panel_h = guiutils.get_widget_size(self.gui_parent)
             panel = (parent_x0, parent_y0, parent_x0 + panel_w, parent_y0 + panel_h)
 
             full_x_left = parent_x0 + self.avatar_x_center - (self.full_w // 2)
@@ -545,10 +558,19 @@ class DPGAvatarRenderer:
 
     def reposition(self,
                    new_x_center: Optional[int] = None,
-                   new_y_bottom: Optional[int] = None) -> None:
+                   new_y_bottom: Optional[int] = None,
+                   new_panel_w: Optional[int] = None,
+                   new_panel_h: Optional[int] = None) -> None:
         """Position the avatar video and paused text widgets within the GUI parent.
 
         Optionally, update the position of the avatar video to `new_x_center` and/or `new_y_bottom`.
+
+        `new_panel_w` / `new_panel_h`: the intended `gui_parent` size, used for the crop-overlay clip
+        rect. If given, overrides the value queried from DPG — this is important during transitions
+        (fullscreen toggle, window resize) where `dpg.set_item_width`/`height` on a child window
+        doesn't propagate synchronously, so `get_widget_size(gui_parent)` would return a stale size
+        and cause the overlay to be clipped to the old (small) rect. Callers that resize the panel
+        themselves should pass the target size.
 
         The paused text is centered on the backdrop if it exists, and otherwise on the avatar video.
 
@@ -556,6 +578,10 @@ class DPGAvatarRenderer:
         """
         self.avatar_x_center = new_x_center if new_x_center is not None else self.avatar_x_center
         self.avatar_y_bottom = new_y_bottom if new_y_bottom is not None else self.avatar_y_bottom
+        if new_panel_w is not None:
+            self.panel_w_hint = new_panel_w
+        if new_panel_h is not None:
+            self.panel_h_hint = new_panel_h
         logger.info(f"DPGAvatarRenderer.reposition: Updating position to x_center = {self.avatar_x_center}, y_bottom = {self.avatar_y_bottom}")
 
         x0, y0 = guiutils.get_widget_pos(self.gui_parent)

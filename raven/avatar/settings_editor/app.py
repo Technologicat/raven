@@ -911,8 +911,12 @@ class PostprocessorSettingsEditorGUI:
             dpg.set_item_width("avatar_child_window", avatar_width)
             dpg.set_item_height("avatar_child_window", h - 16)
 
+        # Pass the intended panel size as a hint so the renderer's crop-overlay clipping uses the
+        # new size even during resize transitions (DPG's child-window size queries lag `set_item_width`).
         self.dpg_avatar_renderer.reposition(new_x_center=(avatar_width // 2),
-                                            new_y_bottom=h)
+                                            new_y_bottom=h,
+                                            new_panel_w=avatar_width,
+                                            new_panel_h=h - 16)
         self.dpg_avatar_renderer.configure_backdrop(new_width=avatar_width,
                                                     new_height=h,
                                                     new_blur_state=dpg.get_value("backdrop_blur_checkbox"))
