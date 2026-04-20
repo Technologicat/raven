@@ -1,5 +1,13 @@
 # Deferred TODOs
 
+## Audit fleet for dict constants that should be `frozendict`
+
+Several modules across Raven hold module-level dict constants that are used as immutable defaults or lookup tables, relying on "don't mutate this" by convention. `unpythonic.frozendict` (already a Raven dep) enforces it with teeth and costs nothing extra; Python 3.15 will also ship a stdlib `frozendict`.
+
+Worth a pass across the fleet to find these and convert them. Low-risk (any call site that was mutating a shared default was a bug anyway), non-urgent.
+
+Discovered during avatar-client-crop brief review (2026-04-20).
+
 ## `mayberemote.TTS.synthesize` return format
 
 `TTSResult` or `EncodedTTSResult`? Two use cases:
