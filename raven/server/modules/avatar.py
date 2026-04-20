@@ -1571,9 +1571,9 @@ class Animator:
                 with timer() as tim_crop:
                     if do_crop:
                         c, h, w = output_image.shape
-                        x1 = int(crop_snapshot["left"]   * w)
-                        x2 = int(crop_snapshot["right"]  * w)
-                        y1 = int(crop_snapshot["top"]    * h)
+                        x1 = int(crop_snapshot["left"] * w)
+                        x2 = int(crop_snapshot["right"] * w)
+                        y1 = int(crop_snapshot["top"] * h)
                         y2 = int(crop_snapshot["bottom"] * h)
                         output_image = output_image[:, y1:y2, x1:x2]
                         maybe_sync_cuda()
