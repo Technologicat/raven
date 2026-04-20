@@ -88,7 +88,7 @@ class TestMultipartExtractor:
         body = b"\xff\xd8hello-payload"
         stream = iter([_build_part(body)])
         gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, "image/jpeg")
-        mime, payload = next(gen)
+        mime, _headers, payload = next(gen)
         assert mime == "image/jpeg"
         assert payload == body
 
@@ -97,14 +97,14 @@ class TestMultipartExtractor:
         chunks = [_build_part(p) for p in payloads]
         gen = netutil.multipart_x_mixed_replace_payload_extractor(iter(chunks), BOUNDARY, "image/jpeg")
         for expected in payloads:
-            _mime, got = next(gen)
+            _mime, _headers, got = next(gen)
             assert got == expected
 
     def test_mimetype_passthrough_when_no_expected(self):
         # `expected_mimetype=None` means any mimetype is accepted — report what arrived.
         stream = iter([_build_part(b"x", mimetype="image/png")])
         gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, expected_mimetype=None)
-        mime, _payload = next(gen)
+        mime, _headers, _payload = next(gen)
         assert mime == "image/png"
 
     def test_mimetype_mismatch_raises(self):
@@ -140,7 +140,7 @@ class TestMultipartExtractor:
         split = len(part) - 5  # split the last 5 body bytes off into a second chunk
         stream = iter([part[:split], part[split:]])
         gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, "image/jpeg")
-        _mime, payload = next(gen)
+        _mime, _headers, payload = next(gen)
         assert payload == body
 
     def test_exhausted_source_raises_eof_on_next(self):
