@@ -103,7 +103,7 @@ else:
 
 viewport_width = 1900
 viewport_height = 980
-dpg.create_viewport(title="Raven-avatar settings editor",
+dpg.create_viewport(title=f"Raven-avatar settings editor {__version__}",
                     small_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_128_notext.{icon_ext}")).expanduser().resolve()),
                     large_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_256.{icon_ext}")).expanduser().resolve()),
                     width=viewport_width,
@@ -452,7 +452,7 @@ class PostprocessorSettingsEditorGUI:
                                                  pending_wait_duration=0.15)
 
         dpg.add_texture_registry(tag="avatar_settings_editor_textures")  # the DPG live texture and the window backdrop texture will be stored here
-        dpg.set_viewport_title(f"Raven-avatar settings editor [{client_config.raven_server_url}]")
+        dpg.set_viewport_title(f"Raven-avatar settings editor {__version__} [{client_config.raven_server_url}]")
 
         with dpg.window(tag="avatar_settings_editor_main_window",
                         label="Raven-avatar settings editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport

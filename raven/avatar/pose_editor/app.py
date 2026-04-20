@@ -163,7 +163,7 @@ else:
     icon_ext = "png"
 
 # Viewport size depends on the image size, so it needs to be tuned after `PoseEditorGUI` initializes
-dpg.create_viewport(title="Raven-avatar pose editor",
+dpg.create_viewport(title=f"Raven-avatar pose editor {__version__}",
                     small_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_128_notext.{icon_ext}")).expanduser().resolve()),
                     large_icon=str(pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "icons", f"app_256.{icon_ext}")).expanduser().resolve()),
                     width=1600,
@@ -702,7 +702,7 @@ class PoseEditorGUI:
             disp_device = torch.cuda.get_device_name(args.device)
         else:
             disp_device = "CPU"
-        dpg.set_viewport_title(f"Raven-avatar pose editor [{disp_device}] [THA3:{model}]")
+        dpg.set_viewport_title(f"Raven-avatar pose editor {__version__} [{disp_device}] [THA3:{model}]")
 
         with dpg.window(tag="pose_editor_window",
                         label="Raven-avatar poser editor main window") as self.window:  # label not actually shown, since this window is maximized to the whole viewport
