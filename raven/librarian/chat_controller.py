@@ -477,7 +477,7 @@ class DPGChatMessage:
                                        tag=f"message_think_toggle_button_{self.gui_uuid}",
                                        parent=widget)
                         dpg.bind_item_font(f"message_think_toggle_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-                        # dpg.bind_item_theme(f"message_think_toggle_button_{self.gui_uuid}", "disablable_blue_button_theme")  # tag
+                        # dpg.bind_item_theme(f"message_think_toggle_button_{self.gui_uuid}", "disablable_blue_widget_theme")  # tag
                         message_think_toggle_tooltip = dpg.add_tooltip(f"message_think_toggle_button_{self.gui_uuid}")  # tag
                         dpg.add_text("Show/hide thinking trace [Ctrl+T]", parent=message_think_toggle_tooltip)
                         text_content = dpg_markdown.add_text(colorized_text,
@@ -566,7 +566,7 @@ class DPGChatMessage:
                                              tag=f"message_copy_to_clipboard_button_{self.gui_uuid}",
                                              parent=g)
         dpg.bind_item_font(copy_message_button, self.parent_view.themes_and_fonts.icon_font_solid)
-        dpg.bind_item_theme(copy_message_button, "disablable_button_theme")  # tag
+        dpg.bind_item_theme(copy_message_button, "disablable_widget_theme")  # tag
         copy_message_tooltip = dpg.add_tooltip(copy_message_button)
         copy_message_tooltip_text = dpg.add_text("Copy message to clipboard\n    no modifier: as-is\n    with Shift: include message node ID", parent=copy_message_tooltip)
 
@@ -615,7 +615,7 @@ class DPGChatMessage:
                            tag=f"message_reroll_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_reroll_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_reroll_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"message_reroll_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             reroll_tooltip = dpg.add_tooltip(f"message_reroll_button_{self.gui_uuid}")  # tag
             dpg.add_text("Reroll AI response (create new sibling) [Ctrl+R]", parent=reroll_tooltip)
         else:
@@ -650,7 +650,7 @@ class DPGChatMessage:
                            tag=f"message_continue_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_continue_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_continue_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"message_continue_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             continue_message_tooltip = dpg.add_tooltip(f"message_continue_button_{self.gui_uuid}")  # tag
             dpg.add_text("Ask the AI to continue this response (create new revision) [Ctrl+U]", parent=continue_message_tooltip)
         else:
@@ -689,7 +689,7 @@ class DPGChatMessage:
                                                   tag=f"chat_speak_button_{self.gui_uuid}",
                                                   parent=g)
             dpg.bind_item_font(speak_message_button, self.parent_view.themes_and_fonts.icon_font_solid)
-            dpg.bind_item_theme(speak_message_button, "disablable_button_theme")  # tag
+            dpg.bind_item_theme(speak_message_button, "disablable_widget_theme")  # tag
             speak_message_tooltip = dpg.add_tooltip(speak_message_button)
             speak_message_tooltip_text = dpg.add_text("Have the avatar speak this message [Ctrl+S]", parent=speak_message_tooltip)
         else:
@@ -702,7 +702,7 @@ class DPGChatMessage:
                        tag=f"chat_edit_button_{self.gui_uuid}",
                        parent=g)
         dpg.bind_item_font(f"chat_edit_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-        dpg.bind_item_theme(f"chat_edit_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+        dpg.bind_item_theme(f"chat_edit_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
         edit_tooltip = dpg.add_tooltip(f"chat_edit_button_{self.gui_uuid}")  # tag
         dpg.add_text("Edit (revise)", parent=edit_tooltip)
 
@@ -722,7 +722,7 @@ class DPGChatMessage:
                        tag=f"message_new_branch_button_{self.gui_uuid}",
                        parent=g)
         dpg.bind_item_font(f"message_new_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-        dpg.bind_item_theme(f"message_new_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+        dpg.bind_item_theme(f"message_new_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
         new_branch_tooltip = dpg.add_tooltip(f"message_new_branch_button_{self.gui_uuid}")  # tag
         dpg.add_text("Branch from this node", parent=new_branch_tooltip)
 
@@ -777,7 +777,7 @@ class DPGChatMessage:
                                                tag=f"message_delete_branch_button_{self.gui_uuid}",
                                                parent=g)
         dpg.bind_item_font(f"message_delete_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-        dpg.bind_item_theme(f"message_delete_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+        dpg.bind_item_theme(f"message_delete_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
         delete_subtree_tooltip = dpg.add_tooltip(f"message_delete_branch_button_{self.gui_uuid}")  # tag
         delete_subtree_tooltip_text = dpg.add_text("Delete branch (subtree starting from this node, ALL descendants!)", parent=delete_subtree_tooltip)
 
@@ -847,7 +847,7 @@ class DPGChatMessage:
                            tag=f"message_prevend_branch_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_prevend_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_prevend_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"message_prevend_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             prevend_branch_tooltip = dpg.add_tooltip(f"message_prevend_branch_button_{self.gui_uuid}")  # tag
             dpg.add_text("Switch to first sibling", parent=prevend_branch_tooltip)
 
@@ -858,7 +858,7 @@ class DPGChatMessage:
                            tag=f"message_prev10_branch_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_prev10_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_prev10_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"message_prev10_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             prev10_branch_tooltip = dpg.add_tooltip(f"message_prev10_branch_button_{self.gui_uuid}")  # tag
             dpg.add_text("Switch 10 siblings left [Ctrl+Shift+Left]", parent=prev10_branch_tooltip)
 
@@ -869,7 +869,7 @@ class DPGChatMessage:
                            tag=f"message_prev1_branch_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_prev1_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_prev1_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"message_prev1_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             prev1_branch_tooltip = dpg.add_tooltip(f"message_prev1_branch_button_{self.gui_uuid}")  # tag
             dpg.add_text("Switch to previous sibling [Ctrl+Left]", parent=prev1_branch_tooltip)
 
@@ -880,7 +880,7 @@ class DPGChatMessage:
                            tag=f"message_show_chat_continuation_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_show_chat_continuation_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_show_chat_continuation_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"message_show_chat_continuation_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             show_chat_continuation_tooltip = dpg.add_tooltip(f"message_show_chat_continuation_button_{self.gui_uuid}")  # tag
             dpg.add_text("Show chat continuation (if any) [Ctrl+Down]", parent=show_chat_continuation_tooltip)
 
@@ -891,7 +891,7 @@ class DPGChatMessage:
                            tag=f"message_next1_branch_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_next1_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_next1_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"message_next1_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             next1_branch_tooltip = dpg.add_tooltip(f"message_next1_branch_button_{self.gui_uuid}")  # tag
             dpg.add_text("Switch to next sibling [Ctrl+Right]", parent=next1_branch_tooltip)
 
@@ -902,7 +902,7 @@ class DPGChatMessage:
                            tag=f"message_next10_branch_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_next10_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_next10_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"message_next10_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             next10_branch_tooltip = dpg.add_tooltip(f"message_next10_branch_button_{self.gui_uuid}")  # tag
             dpg.add_text("Switch 10 siblings right [Ctrl+Shift+Right]", parent=next10_branch_tooltip)
 
@@ -913,7 +913,7 @@ class DPGChatMessage:
                            tag=f"message_nextend_branch_button_{self.gui_uuid}",
                            parent=g)
             dpg.bind_item_font(f"message_nextend_branch_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
-            dpg.bind_item_theme(f"message_nextend_branch_button_{self.gui_uuid}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"message_nextend_branch_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             nextend_branch_tooltip = dpg.add_tooltip(f"message_nextend_branch_button_{self.gui_uuid}")  # tag
             dpg.add_text("Switch to last sibling", parent=nextend_branch_tooltip)
 

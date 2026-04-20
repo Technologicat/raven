@@ -549,7 +549,7 @@ def _on_compare_enter() -> None:
         target_button="cherrypick_compare_btn",
         target_tooltip=None,
         target_text=None,
-        original_theme="disablable_button_theme",
+        original_theme="disablable_widget_theme",
         duration=1.0))
     # Disable inapplicable toolbar items.
     for tag in _COMPARE_DISABLE_ITEMS:
@@ -1154,7 +1154,7 @@ def main() -> int:
                                  tag="cherrypick_open_btn",
                                  callback=_show_open_dialog, width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
-            dpg.bind_item_theme(btn, "disablable_button_theme")
+            dpg.bind_item_theme(btn, "disablable_widget_theme")
             with dpg.tooltip(btn):
                 dpg.add_text("Open folder [Ctrl+O]")
 
@@ -1223,7 +1223,7 @@ def main() -> int:
                                  user_data=TriageState.CHERRY,
                                  width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
-            dpg.bind_item_theme(btn, "disablable_button_theme")
+            dpg.bind_item_theme(btn, "disablable_widget_theme")
             with dpg.tooltip(btn):
                 dpg.add_text("Mark cherry [C]\n    with Ctrl: all selected\n    with Ctrl+Shift: winner; others selected -> lemon")
 
@@ -1233,7 +1233,7 @@ def main() -> int:
                                  user_data=TriageState.LEMON,
                                  width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
-            dpg.bind_item_theme(btn, "disablable_button_theme")
+            dpg.bind_item_theme(btn, "disablable_widget_theme")
             with dpg.tooltip(btn):
                 dpg.add_text("Mark lemon [X]\n    with Ctrl: all selected")
 
@@ -1243,7 +1243,7 @@ def main() -> int:
                                  user_data=TriageState.NEUTRAL,
                                  width=30)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
-            dpg.bind_item_theme(btn, "disablable_button_theme")
+            dpg.bind_item_theme(btn, "disablable_widget_theme")
             with dpg.tooltip(btn):
                 dpg.add_text("Clear mark (Neutral) [V]\n    with Ctrl: all selected")
 
@@ -1264,7 +1264,7 @@ def main() -> int:
                                  callback=_enter_compare_mode,
                                  width=30, enabled=False)
             dpg.bind_item_font(btn, themes_and_fonts.icon_font_solid)
-            dpg.bind_item_theme(btn, "disablable_button_theme")
+            dpg.bind_item_theme(btn, "disablable_widget_theme")
             with dpg.tooltip(btn):
                 dpg.add_text("Compare selected [Enter]",
                              tag="cherrypick_compare_tooltip_text")
@@ -1278,7 +1278,7 @@ def main() -> int:
                                   tag="cherrypick_filter_combo",
                                   callback=_on_filter_combo,
                                   width=90)
-            dpg.bind_item_theme(combo, "disablable_button_theme")
+            dpg.bind_item_theme(combo, "disablable_widget_theme")
             with dpg.tooltip("cherrypick_filter_combo"):
                 dpg.add_text("Filter view [G / Shift+G]")
 
@@ -1291,7 +1291,7 @@ def main() -> int:
                                   tag="cherrypick_tile_size_combo",
                                   callback=_on_tile_size_combo,
                                   width=60)
-            dpg.bind_item_theme(combo, "disablable_button_theme")
+            dpg.bind_item_theme(combo, "disablable_widget_theme")
             with dpg.tooltip("cherrypick_tile_size_combo"):
                 dpg.add_text("Tile size [Ctrl+1..5]")
 

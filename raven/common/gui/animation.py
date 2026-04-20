@@ -413,7 +413,7 @@ class ButtonFlash(Animation):
                         self.highlight_active_color = dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.flash_color)
                         # tooltip
                         self.highlight_popupbg_color = dpg.add_theme_color(dpg.mvThemeCol_PopupBg, self.flash_color)
-                    # Button in disabled state (see also "disablable_button_theme" in `raven.common.gui.utils`)
+                    # Button in disabled state (see also "disablable_widget_theme" in `raven.common.gui.utils`)
                     disabled_color = (0.50 * 255, 0.50 * 255, 0.50 * 255, 1.00 * 255)
                     with dpg.theme_component(dpg.mvButton, enabled_state=False):
                         dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
@@ -440,7 +440,7 @@ class ButtonFlash(Animation):
         """Clean up resources upon the end of the animation."""
         with self.instance_lock:
             with guiutils.nonexistent_ok():
-                dpg.bind_item_theme(self.target_button, "disablable_button_theme")  # tag
+                dpg.bind_item_theme(self.target_button, "disablable_widget_theme")  # tag
 
             if self.target_tooltip is not None:
                 with guiutils.nonexistent_ok():

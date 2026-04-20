@@ -856,7 +856,7 @@ with timer() as tim:
                                                             label=fa.ICON_COPY,
                                                             enabled=False)
                         dpg.bind_item_font("copy_report_to_clipboard_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("copy_report_to_clipboard_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("copy_report_to_clipboard_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("copy_report_to_clipboard_button") as copy_report_tooltip:  # tag
                             copy_report_tooltip_text = dpg.add_text("Copy report to clipboard [F8]\n    no modifier: as plain text\n    with Shift: as Markdown")  # TODO: DRY duplicate definitions for labels
 
@@ -909,7 +909,7 @@ with timer() as tim:
                                                           width=gui_config.info_panel_button_w,
                                                           enabled=False)
                         dpg.bind_item_font("go_to_top_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("go_to_top_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("go_to_top_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("go_to_top_button"):  # tag
                             dpg.add_text("To top [Home, when search field not focused]")
 
@@ -918,7 +918,7 @@ with timer() as tim:
                                                         width=gui_config.info_panel_button_w,
                                                         enabled=False)
                         dpg.bind_item_font("page_up_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("page_up_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("page_up_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("page_up_button"):  # tag
                             dpg.add_text("Page up [Page Up, when search field not focused]")
 
@@ -927,7 +927,7 @@ with timer() as tim:
                                                           width=gui_config.info_panel_button_w,
                                                           enabled=False)
                         dpg.bind_item_font("page_down_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("page_down_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("page_down_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("page_down_button"):  # tag
                             dpg.add_text("Page down [Page Down, when search field not focused]")
 
@@ -936,7 +936,7 @@ with timer() as tim:
                                                              width=gui_config.info_panel_button_w,
                                                              enabled=False)
                         dpg.bind_item_font("go_to_bottom_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("go_to_bottom_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("go_to_bottom_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("go_to_bottom_button"):  # tag
                             dpg.add_text("To bottom [End, when search field not focused]")
 
@@ -950,7 +950,7 @@ with timer() as tim:
                                                                   width=gui_config.info_panel_button_w,
                                                                   enabled=False)
                         dpg.bind_item_font("prev_search_match_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("prev_search_match_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("prev_search_match_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("prev_search_match_button"):  # tag
                             dpg.add_text("Previous search match [Shift+F3]")
                         next_search_match_button = dpg.add_button(tag="next_search_match_button",
@@ -960,7 +960,7 @@ with timer() as tim:
                                                                   width=gui_config.info_panel_button_w,
                                                                   enabled=False)
                         dpg.bind_item_font("next_search_match_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("next_search_match_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("next_search_match_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("next_search_match_button"):  # tag
                             dpg.add_text("Next search match [F3]")
 
@@ -1091,7 +1091,7 @@ with timer() as tim:
                                width=gui_config.toolbutton_w,
                                enabled=False)
                 dpg.bind_item_font("selection_undo_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("selection_undo_button", "disablable_button_theme")  # tag
+                dpg.bind_item_theme("selection_undo_button", "disablable_widget_theme")  # tag
                 with dpg.tooltip("selection_undo_button", tag="selection_undo_tooltip"):  # tag
                     dpg.add_text("Undo selection change [Ctrl+Shift+Z]",
                                  tag="selection_undo_tooltip_text")
@@ -1103,7 +1103,7 @@ with timer() as tim:
                                width=gui_config.toolbutton_w,
                                enabled=False)
                 dpg.bind_item_font("selection_redo_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("selection_redo_button", "disablable_button_theme")  # tag
+                dpg.bind_item_theme("selection_redo_button", "disablable_widget_theme")  # tag
                 with dpg.tooltip("selection_redo_button", tag="selection_redo_tooltip"):  # tag
                     dpg.add_text("Redo selection change [Ctrl+Shift+Y]",
                                  tag="selection_redo_tooltip_text")
@@ -1380,7 +1380,7 @@ with timer() as tim:
                                callback=start_or_stop_importer,
                                enabled=True)
                 dpg.bind_item_font("importer_startstop_button", app_state.themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("importer_startstop_button", "disablable_button_theme")  # tag
+                dpg.bind_item_theme("importer_startstop_button", "disablable_widget_theme")  # tag
                 with dpg.tooltip("importer_startstop_button", tag="importer_startstop_tooltip"):  # tag
                     dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="importer_startstop_tooltip_text")  # TODO: DRY duplicate definitions for labels
 
@@ -1388,7 +1388,7 @@ with timer() as tim:
                                tag="importer_startstop_heading_text_button",
                                width=gui_config.importer_w - gui_config.toolbutton_w - 11,
                                callback=start_or_stop_importer)
-                dpg.bind_item_theme("importer_startstop_heading_text_button", "disablable_button_theme")  # tag
+                dpg.bind_item_theme("importer_startstop_heading_text_button", "disablable_widget_theme")  # tag
                 with dpg.tooltip("importer_startstop_heading_text_button", tag="importer_startstop_heading_text_tooltip"):
                     dpg.add_text("Start BibTeX import [Ctrl+Enter]", tag="importer_startstop_heading_text_tooltip_text")
 
@@ -2878,7 +2878,7 @@ def _update_info_panel(*, task_env=None, env=None):
             # dpg.bind_item_font(f"cluster_{cluster_id}_up_button", themes_and_fonts.icon_font_solid)
             up_tooltip = dpg.add_tooltip(up_button)
             dpg.add_text("Previous cluster [Ctrl+P]", parent=up_tooltip)
-            dpg.bind_item_theme(f"cluster_{cluster_id}_up_button_build{env.internal_build_number}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"cluster_{cluster_id}_up_button_build{env.internal_build_number}", "disablable_widget_theme")  # tag
             # dpg.configure_item(f"cluster_{cluster_id}_up_button_build{env.internal_build_number}", enabled=up_enabled)  # tag
 
             down_enabled = (not last_cluster)
@@ -2892,7 +2892,7 @@ def _update_info_panel(*, task_env=None, env=None):
             # dpg.bind_item_font(f"cluster_{cluster_id}_down_button", themes_and_fonts.icon_font_solid)
             down_tooltip = dpg.add_tooltip(down_button)
             dpg.add_text("Next cluster [Ctrl+N]", parent=down_tooltip)
-            dpg.bind_item_theme(f"cluster_{cluster_id}_down_button_build{env.internal_build_number}", "disablable_button_theme")  # tag
+            dpg.bind_item_theme(f"cluster_{cluster_id}_down_button_build{env.internal_build_number}", "disablable_widget_theme")  # tag
             # dpg.configure_item(f"cluster_{cluster_id}_down_button_build{env.internal_build_number}", enabled=down_enabled)  # tag
 
             # Cluster title and keywords

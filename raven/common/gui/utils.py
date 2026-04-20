@@ -83,7 +83,7 @@ def bootup(font_size: int,
         - `icon_font_solid` (DPG font ID)
         - `global_theme` (DPG theme ID), in case you need to refer to the customized default theme explicitly.
         - `my_no_spacing_theme` (DPG theme ID), also registered under the DPG tag "my_no_spacing_theme".
-        - `disablable_button_theme` (DPG theme ID), also registered under the DPG tag "disablable_button_theme".
+        - `disablable_widget_theme` (DPG theme ID), also registered under the DPG tag "disablable_widget_theme".
 
 
     **About the Markdown renderer**
@@ -119,9 +119,9 @@ def bootup(font_size: int,
                icon_font_solid=icons.icon_font_solid,
                global_theme=themes.global_theme,
                my_no_spacing_theme=themes.my_no_spacing_theme,
-               disablable_button_theme=themes.disablable_button_theme,
-               disablable_red_button_theme=themes.disablable_red_button_theme,
-               disablable_blue_button_theme=themes.disablable_blue_button_theme)
+               disablable_widget_theme=themes.disablable_widget_theme,
+               disablable_red_widget_theme=themes.disablable_red_widget_theme,
+               disablable_blue_widget_theme=themes.disablable_blue_widget_theme)
 
 def load_extra_font(themes_and_fonts: env,
                     font_size: int,
@@ -264,15 +264,15 @@ def setup_themes() -> env:
     """Set up DPG themes: rounded global theme, tight-layout theme, and disabled control themes.
 
     Binds the global theme (rounded widgets) as the DPG default. Also registers named
-    themes: ``"my_no_spacing_theme"``, ``"disablable_button_theme"``,
-    ``"disablable_red_button_theme"``, ``"disablable_blue_button_theme"``.
+    themes: ``"my_no_spacing_theme"``, ``"disablable_widget_theme"``,
+    ``"disablable_red_widget_theme"``, ``"disablable_blue_widget_theme"``.
 
     Returns an `unpythonic.env` with:
         - `global_theme`
         - `my_no_spacing_theme`
-        - `disablable_button_theme`
-        - `disablable_red_button_theme`
-        - `disablable_blue_button_theme`
+        - `disablable_widget_theme`
+        - `disablable_red_widget_theme`
+        - `disablable_blue_widget_theme`
     """
     with dpg.theme() as global_theme:
         with dpg.theme_component(dpg.mvAll):
@@ -298,7 +298,7 @@ def setup_themes() -> env:
     disabled_button_color = (45, 45, 48)
     disabled_button_hover_color = (45, 45, 48)
     disabled_button_active_color = (45, 45, 48)
-    with dpg.theme(tag="disablable_button_theme") as disablable_button_theme:
+    with dpg.theme(tag="disablable_widget_theme") as disablable_widget_theme:
         # We customize just this. Everything else is inherited from the global theme.
         with dpg.theme_component(dpg.mvButton, enabled_state=False):
             dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
@@ -312,7 +312,7 @@ def setup_themes() -> env:
             dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, disabled_button_hover_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, disabled_button_active_color, category=dpg.mvThemeCat_Core)
 
-    with dpg.theme(tag="disablable_red_button_theme") as disablable_red_button_theme:  # useful for dangerous delete buttons and such
+    with dpg.theme(tag="disablable_red_widget_theme") as disablable_red_widget_theme:  # useful for dangerous delete buttons and such
         with dpg.theme_component(dpg.mvButton, enabled_state=False):
             dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
@@ -321,7 +321,7 @@ def setup_themes() -> env:
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
 
-    with dpg.theme(tag="disablable_blue_button_theme") as disablable_blue_button_theme:  # Librarian think block
+    with dpg.theme(tag="disablable_blue_widget_theme") as disablable_blue_widget_theme:  # Librarian think block
         with dpg.theme_component(dpg.mvButton, enabled_state=False):
             dpg.add_theme_color(dpg.mvThemeCol_Text, disabled_color, category=dpg.mvThemeCat_Core)
             dpg.add_theme_color(dpg.mvThemeCol_Button, disabled_button_color, category=dpg.mvThemeCat_Core)
@@ -332,9 +332,9 @@ def setup_themes() -> env:
 
     return env(global_theme=global_theme,
                my_no_spacing_theme=my_no_spacing_theme,
-               disablable_button_theme=disablable_button_theme,
-               disablable_red_button_theme=disablable_red_button_theme,
-               disablable_blue_button_theme=disablable_blue_button_theme)
+               disablable_widget_theme=disablable_widget_theme,
+               disablable_red_widget_theme=disablable_red_widget_theme,
+               disablable_blue_widget_theme=disablable_blue_widget_theme)
 
 # ---------------------------------------------------------------------------
 # DPG item management

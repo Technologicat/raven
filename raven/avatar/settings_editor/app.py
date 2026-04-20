@@ -91,7 +91,7 @@ themes_and_fonts = guiutils.bootup(font_size=20)
 # animation for REC indicator (cyclic, runs in the background)
 with dpg.theme(tag="my_pulsating_red_text_theme"):
     with dpg.theme_component(dpg.mvAll):
-        pulsating_red_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # color-matching the rec button, "disablable_red_button_theme"
+        pulsating_red_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # color-matching the rec button, "disablable_red_widget_theme"
     pulsating_red_text_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
                                                            theme_color_widget=pulsating_red_color)
     gui_animation.animator.add(pulsating_red_text_glow)
@@ -683,13 +683,13 @@ class PostprocessorSettingsEditorGUI:
                         # We use DPG's `user_data` feature to pass the information which speak button was clicked.
                         # Fixed button width is important here because the dynamic start/stop labels have different text extents.
                         dpg.add_button(label="Speak [Ctrl+S]", width=self.button_width - 36, callback=self.on_start_speaking, user_data="speak", enabled=tts_alive, tag="speak_button")  # TODO: DRY the GUI labels
-                        dpg.bind_item_theme("speak_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("speak_button", "disablable_widget_theme")  # tag
                         dpg.add_tooltip("speak_button", tag="speak_tooltip")  # tag
                         self.speak_tooltip_text = dpg.add_text("Speak the entered text", parent="speak_tooltip")  # tag  # TODO: DRY the GUI labels
 
                         dpg.add_button(label=fa.ICON_CIRCLE, width=28, callback=self.on_start_speaking, user_data="speak_and_record", enabled=tts_alive, tag="speak_and_record_button")
                         dpg.bind_item_font("speak_and_record_button", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("speak_and_record_button", "disablable_red_button_theme")  # tag
+                        dpg.bind_item_theme("speak_and_record_button", "disablable_red_widget_theme")  # tag
                         dpg.add_tooltip("speak_and_record_button", tag="speak_and_record_tooltip")  # tag
                         self.speak_and_record_tooltip_text = dpg.add_text(f"Speak and record the entered text (.mp3 + .{self.comm_format.lower()} sequence)",  # TODO: DRY the GUI labels
                                                                           parent="speak_and_record_tooltip")  # tag

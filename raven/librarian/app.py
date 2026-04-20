@@ -105,7 +105,7 @@ with timer() as tim:
     # animation for mic button (cyclic, runs in the background)
     with dpg.theme(tag="my_pulsating_red_text_theme"):
         with dpg.theme_component(dpg.mvAll):
-            pulsating_red_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # color-matching the rec button, "disablable_red_button_theme"
+            pulsating_red_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))  # color-matching the rec button, "disablable_red_widget_theme"
         pulsating_red_text_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
                                                                theme_color_widget=pulsating_red_color)
         gui_animation.animator.add(pulsating_red_text_glow)
@@ -256,7 +256,7 @@ with timer() as tim:
                             api.api_config.audio_recorder.start(on_autostop=stop_recording_audio_message)
                         def stop_recording_audio_message() -> None:
                             # Acknowledge in GUI
-                            dpg.bind_item_theme(record_audio_message_button, "disablable_button_theme")  # tag
+                            dpg.bind_item_theme(record_audio_message_button, "disablable_widget_theme")  # tag
                             dpg.set_value(record_audio_message_tooltip_text, "Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
 
                             # Stop recording (if still recording; we may have been triggered by autostop)
@@ -299,7 +299,7 @@ with timer() as tim:
                                        width=gui_config.toolbutton_w,
                                        tag="chat_send_button")  # TODO: disable this button while AI is writing
                         dpg.bind_item_font("chat_send_button", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("chat_send_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("chat_send_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("chat_send_button"):  # tag
                             dpg.add_text("Send to AI [Enter]")
 
@@ -308,7 +308,7 @@ with timer() as tim:
                                                                      width=gui_config.toolbutton_w,
                                                                      tag="record_audio_message_button")  # TODO: disable this button while AI is writing
                         dpg.bind_item_font("record_audio_message_button", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("record_audio_message_button", "disablable_button_theme")  # tag
+                        dpg.bind_item_theme("record_audio_message_button", "disablable_widget_theme")  # tag
                         with dpg.tooltip("record_audio_message_button") as record_audio_message_tooltip:  # tag
                             record_audio_message_tooltip_text = dpg.add_text("Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
                         mic_vu_meter = DPGVUMeter(width=gui_config.vu_meter_w,
@@ -477,7 +477,7 @@ with timer() as tim:
                                                  width=gui_config.toolbutton_w,
                                                  tag="chat_new_button")
                 dpg.bind_item_font("chat_new_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_new_button", "disablable_button_theme")  # tag
+                dpg.bind_item_theme("chat_new_button", "disablable_widget_theme")  # tag
                 new_chat_tooltip = dpg.add_tooltip("chat_new_button")  # tag
                 new_chat_tooltip_text = dpg.add_text("Start new chat [Ctrl+N]", parent=new_chat_tooltip)
 
@@ -487,7 +487,7 @@ with timer() as tim:
                                width=gui_config.toolbutton_w,
                                tag="chat_open_graph_button")
                 dpg.bind_item_font("chat_open_graph_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_open_graph_button", "disablable_button_theme")  # tag
+                dpg.bind_item_theme("chat_open_graph_button", "disablable_widget_theme")  # tag
                 open_graph_tooltip = dpg.add_tooltip("chat_open_graph_button")  # tag
                 dpg.add_text("Open graph view", parent=open_graph_tooltip)
 
@@ -498,7 +498,7 @@ with timer() as tim:
                                                   width=gui_config.toolbutton_w,
                                                   tag="chat_copy_to_clipboard_button")
                 dpg.bind_item_font("chat_copy_to_clipboard_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_copy_to_clipboard_button", "disablable_button_theme")  # tag
+                dpg.bind_item_theme("chat_copy_to_clipboard_button", "disablable_widget_theme")  # tag
                 copy_chat_tooltip = dpg.add_tooltip("chat_copy_to_clipboard_button")  # tag
                 copy_chat_tooltip_text = dpg.add_text("Copy this conversation to clipboard [F8]\n    no modifier: as-is\n    with Shift: include message node IDs", parent=copy_chat_tooltip)
 
@@ -508,7 +508,7 @@ with timer() as tim:
                                                         width=gui_config.toolbutton_w,
                                                         tag="chat_stop_generation_button")
                 dpg.bind_item_font("chat_stop_generation_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_stop_generation_button", "disablable_button_theme")  # tag
+                dpg.bind_item_theme("chat_stop_generation_button", "disablable_widget_theme")  # tag
                 stop_generation_tooltip = dpg.add_tooltip("chat_stop_generation_button")  # tag
                 stop_generation_tooltip_text = dpg.add_text("Interrupt the AI [Ctrl+G]\nThis stops the AI when it is writing.", parent=stop_generation_tooltip)
 
@@ -518,7 +518,7 @@ with timer() as tim:
                                                     width=gui_config.toolbutton_w,
                                                     tag="chat_stop_speech_button")
                 dpg.bind_item_font("chat_stop_speech_button", themes_and_fonts.icon_font_solid)  # tag
-                dpg.bind_item_theme("chat_stop_speech_button", "disablable_button_theme")  # tag
+                dpg.bind_item_theme("chat_stop_speech_button", "disablable_widget_theme")  # tag
                 stop_speech_tooltip = dpg.add_tooltip("chat_stop_speech_button")  # tag
                 stop_speech_tooltip_text = dpg.add_text("Stop speaking [Ctrl+S]", parent=stop_speech_tooltip)
 
@@ -563,7 +563,7 @@ with timer() as tim:
                 #                                 width=gui_config.toolbutton_w,
                 #                                 tag="chat_testing_button")
                 # dpg.bind_item_font("chat_testing_button", themes_and_fonts.icon_font_solid)  # tag
-                # dpg.bind_item_theme("chat_testing_button", "disablable_button_theme")  # tag
+                # dpg.bind_item_theme("chat_testing_button", "disablable_widget_theme")  # tag
                 # testing_tooltip = dpg.add_tooltip("chat_testing_button")  # tag
                 # testing_tooltip_text = dpg.add_text("Developer button for testing purposes. What will it do today?!", parent=testing_tooltip)
 
