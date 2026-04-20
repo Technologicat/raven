@@ -303,12 +303,6 @@ Librarian has an avatar idle auto-off, and a no-avatar mode is under considerati
 
 Discovered during idle throttle discussion (2026-04-05).
 
-## Idle throttle for Avatar pose editor
-
-Low priority — the pose editor is very rarely used. But if the pattern is cheap to add (same `_is_busy()` + sleep), could be worth it. The GUI is fully static when no slider is being dragged. Busy sources: avatar preview rendering (always-on while visible?), recent user input.
-
-Discovered during idle throttle discussion (2026-04-05).
-
 
 ## raven-cherrypick: low FPS with large images
 

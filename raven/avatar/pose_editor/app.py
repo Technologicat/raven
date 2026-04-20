@@ -133,6 +133,29 @@ gui_cel_blending_layout = ["blush1",
 # output_exts_and_descs_str = "|".join(format_fileformat_list(PIL_supported_output_formats))
 
 # --------------------------------------------------------------------------------
+# Idle throttle (same pattern as xdot_viewer and cherrypick)
+#
+# The pose editor is fully static when no slider is being dragged and no
+# animation (fdialog button flash) is running. We can sleep between frames
+# in the idle case, saving CPU. `mouse_move` fires during slider drags,
+# so dragging naturally counts as "input active" and keeps full fps.
+
+IDLE_SLEEP_S = 0.08   # ~12 fps when idle
+INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
+
+_last_input_ns: int = 0  # monotonic_ns timestamp of last user input
+
+def _is_busy() -> bool:
+    """True when the render loop should run at full frame rate."""
+    if (time.monotonic_ns() - _last_input_ns) < INPUT_ACTIVE_S * 1e9:
+        return True
+    return gui_animation.animator.active_count > 0  # e.g. fdialog button flash
+
+def _on_any_input(*_args) -> None:
+    global _last_input_ns
+    _last_input_ns = time.monotonic_ns()
+
+# --------------------------------------------------------------------------------
 # DPG init
 
 dpg.create_context()
@@ -680,7 +703,7 @@ class PoseEditorGUI:
         self.dtype = self.poser.get_dtype()
         self.device = device
         self.image_size = self.poser.get_image_size()
-        self.gui_extra_height = 510
+        self.gui_extra_height = 470  # tuned so the viewport fits a 1080p display minus Cinnamon's bottom panel + window chrome
 
         with dpg.texture_registry(tag="pose_editor_textures"):
             self.blank_texture = np.zeros([self.image_size,  # height
@@ -1265,6 +1288,8 @@ class PoseEditorGUI:
 # Hotkey support
 combobox_choice_map = None   # DPG tag or ID -> (choice_strings, callback)
 def pose_editor_hotkeys_callback(sender, app_data):
+    global _last_input_ns
+    _last_input_ns = time.monotonic_ns()
     if gui_instance is None:
         return
     # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
@@ -1338,6 +1363,10 @@ def pose_editor_hotkeys_callback(sender, app_data):
 
 with dpg.handler_registry(tag="pose_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="pose_editor_hotkeys_handler", callback=pose_editor_hotkeys_callback)
+    # Input tracking for idle throttle. Mouse-move fires during slider drags, which is exactly what we want.
+    dpg.add_mouse_move_handler(callback=_on_any_input)
+    dpg.add_mouse_click_handler(callback=_on_any_input)
+    dpg.add_mouse_wheel_handler(callback=_on_any_input)
 
 # --------------------------------------------------------------------------------
 # Start the app
@@ -1431,6 +1460,10 @@ def update_animations():
 while dpg.is_dearpygui_running():
     update_animations()
     dpg.render_dearpygui_frame()
+
+    # Idle throttle: sleep when nothing needs updating.
+    if not _is_busy():
+        time.sleep(IDLE_SLEEP_S)
 # dpg.start_dearpygui()  # automatic render loop
 
 dpg.destroy_context()
