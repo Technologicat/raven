@@ -36,7 +36,7 @@ import numpy as np
 import sys
 import threading
 import traceback
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 import uuid
 
 from colorama import Fore, Style
@@ -820,46 +820,44 @@ class Animator:
                 plural_s = "s" if len(filled_fields) != 1 else ""
                 logger.info(f"load_animator_settings: filling in field{plural_s} {filled_fields} from {fallback_context}")
 
-        def validate_subkeys(settings: Dict[str, Any], valid_subkeys: List[str], context: str) -> None:  # DANGER: MUTATING FUNCTION
-            """Warn on unknown keys in a (typically nested) settings dict, and drop them.
+        def validate_subkeys(settings: Dict[str, Any], defaults: Mapping[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
+            """Warn on unknown keys in a (typically nested) settings dict, drop them, then fill missing
+            keys from `defaults`.
 
-            `drop_unrecognized` handles this for the top-level animator settings, but doesn't recurse,
-            so nested dicts need their own pass. Not crop-specific; any nested dict with a known fixed
-            key set can be validated this way.
+            `drop_unrecognized` handles the warn-and-drop half for the top-level animator settings, and
+            `aggregate` handles the fill half there, but neither recurses into nested dicts — so nested
+            dicts need their own pass. Not crop-specific; any nested dict with a known fixed key set
+            and per-key defaults can be validated this way.
             """
-            valid_set = set(valid_subkeys)
+            valid_set = set(defaults.keys())
             unknown_fields = [k for k in settings if k not in valid_set]
             if unknown_fields:
                 logger.warning(f"load_animator_settings: in {context}: unrecognized keys {sorted(unknown_fields)}; ignoring them")
                 for k in unknown_fields:
                     settings.pop(k)
+            missing_fields = [k for k in defaults if k not in settings]
+            if missing_fields:
+                logger.info(f"load_animator_settings: in {context}: filling missing keys {sorted(missing_fields)} from defaults")
+                for k in missing_fields:
+                    settings[k] = defaults[k]
 
-        def validate_and_fill_crop(settings: Dict[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
-            """Validate the nested `crop` dict's subkeys and fill any missing ones from defaults.
-
-            Filling is crop-specific (other nested dicts may have their own semantics), so it stays
-            local to this function rather than piggybacking on the generic `validate_subkeys`.
-            """
-            if "crop" not in settings or not isinstance(settings["crop"], dict):
-                return
-            crop_defaults = _server_config.animator_defaults["crop"]
-            validate_subkeys(settings["crop"], list(crop_defaults), f"{context}.crop")
-            missing = [k for k in crop_defaults if k not in settings["crop"]]
-            if missing:
-                logger.info(f"load_animator_settings: in {context}.crop: filling missing keys {sorted(missing)} from defaults")
-                for k in missing:
-                    settings["crop"][k] = crop_defaults[k]
+        def maybe_validate_nested(settings: Dict[str, Any], key: str, context: str) -> None:
+            """Convenience wrapper: if `settings[key]` is a nested dict, validate its subkeys against
+            `animator_defaults[key]`. Top-level `drop_unrecognized` + `typecheck` have already run, so
+            any non-dict value at that key has been dropped; this handles "key present and is a dict"."""
+            if key in settings and isinstance(settings[key], dict):
+                validate_subkeys(settings[key], _server_config.animator_defaults[key], f"{context}.{key}")
 
         # Now our settings loading strategy is as simple as:
         settings = dict(settings)  # copy to avoid modifying the original, since we'll pop some stuff.
         if settings:
             drop_unrecognized(settings, context="user settings")
             typecheck(settings, context="user settings")
-            validate_and_fill_crop(settings, context="user settings")
+            maybe_validate_nested(settings, "crop", context="user settings")
         if server_settings:
             drop_unrecognized(server_settings, context="server settings")
             typecheck(server_settings, context="server settings")
-            validate_and_fill_crop(server_settings, context="server settings")
+            maybe_validate_nested(server_settings, "crop", context="server settings")
         # both `settings` and `server_settings` are fully valid at this point
         aggregate(settings, fallback_settings=server_settings, fallback_context="server settings")  # first fill in from server-side settings
         aggregate(settings, fallback_settings=_server_config.animator_defaults, fallback_context="built-in defaults")  # then fill in from hardcoded defaults
