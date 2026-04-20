@@ -227,18 +227,6 @@ Priority if picking one up: `bgtask` (most likely to harbour concurrency bugs; t
 
 Discovered during speech-extract-to-common discussion (2026-04-17).
 
-## Postprocessor crop support on the client
-
-The server-side avatar postprocessor supports cropping the output image via the `crop_left`/`crop_right`/`crop_top`/`crop_bottom` settings in `raven.server.modules.avatar` (around lines 1415 and 1516–1519). Applied, this buys up to ~50% more processing speed on the avatar rendering pipeline — proportional to how much is cropped away.
-
-The client side currently ignores this: `raven/client/avatar_renderer.py:18` has a standing TODO ("support non-square avatar video stream (after server-side crop filter)") confirming the omission is known. Today the client assumes the incoming frame fills the full unit bbox, so if the server crops, the client displays a squashed / mis-positioned image.
-
-Fix: the client needs to receive the animator's crop settings (already sent by the client itself when configuring the server) and use them to align the cropped frame within the unit bbox that would have been occupied by the full non-cropped image. The math is straightforward — the crop settings are already in `[0, 1]` normalized coordinates, symmetric around the centre; the client just places the received image at the appropriate offset and scale within its render target.
-
-This unlocks the 50% speedup for clients that actually use cropping. Typical target framing is a **cowboy shot** (roughly knees up) with side margins cropped away — the standing character sits centred horizontally in a narrower-than-square output. Not head-and-shoulders (that would keep roughly the full square).
-
-Discovered during speech-extract-to-common discussion (2026-04-17).
-
 ## torch / torchaudio CUDA version alignment on fresh installs
 
 `torchaudio>=2.4.0` was added as a direct dep alongside the existing `torch>=2.4.0`. Bare `pip install torchaudio` on a machine with `torch==2.10.0+cu128` fetched `torchaudio==2.11.0` from PyPI, which is built against CUDA 13 and fails to load (`libcudart.so.13: cannot open shared object file`). Workaround used on the dev box: `pip install "torchaudio==2.10.0" --index-url https://download.pytorch.org/whl/cu128`.
