@@ -105,11 +105,18 @@ Concrete example — `speech.tts`:
 
 | Layer | Module | Role |
 |---|---|---|
-| Common (impl) | `raven.common.audio.speech.tts` | `prepare`, `prepare_cached`, `encode`, `decode`, `synthesize`, `finalize_metadata` |
+| Common (impl) | `raven.common.audio.speech.tts` | `prepare` / `prepare_cached` (TTSResult), `prepare_encoded_cached` (EncodedTTSResult); `encode`, `decode`, `synthesize`, `finalize_metadata` |
 | Server module | `raven.server.modules.tts` | request handlers; uses common `synthesize_iter`, `audio_codec.encode` |
 | Server app | `raven.server.app` | registers `/api/tts/...` routes onto the handlers |
-| Client remote | `raven.client.tts`, re-exported via `raven.client.api` | `tts_prepare`, `tts_list_voices`, `tts_speak`, … → HTTP |
-| Client mayberemote | `raven.client.mayberemote.TTS` | remote mode → `api.tts_prepare`; local mode → `speech_tts.prepare_cached` |
+| Client remote | `raven.client.tts`, re-exported via `raven.client.api` | `tts_prepare` / `tts_prepare_cached` (EncodedTTSResult), `tts_prepare_decoded_cached` (TTSResult), `tts_list_voices`, `tts_speak`, … → HTTP |
+| Client mayberemote | `raven.client.mayberemote.TTS` | pure 2×2 dispatch, no cache state of its own; delegates to the cached bottom functions per (location, shape) |
+
+**Caching strategy** (used if a subsystem needs it — currently only `tts`; other subsystems like `nlp`, `stt`, `embeddings` don't cache because their inputs are essentially never repeated in a session). When a subsystem has two natural output shapes (e.g. raw vs. encoded for TTS), caching lives in the bottom layers, not in mayberemote. Each of `common` and `client.remote` exposes:
+
+- The "natural" cached shape for that side — `TTSResult` in common (local synthesizes float natively), `EncodedTTSResult` in client.remote (server returns encoded over the wire).
+- The other shape, composed on top via `encode` / `decode`, also cached.
+
+Mayberemote's `synthesize(format=...)` is then pure 2×2 dispatch — it picks one of the four cached bottom functions by `(location, shape)`. No cache state in the mayberemote class itself. This keeps the cache next to the engine (natural single-source-of-truth) while still giving the mayberemote caller the same "call it twice, second one is free" guarantee regardless of mode.
 
 Same shape applies to `nlp` (`nlptools` ↔ `natlang`), `stt`, `embeddings`, `sanitize`, etc. — cross-check `raven.client.mayberemote` for the current set.
 

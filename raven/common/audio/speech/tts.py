@@ -34,6 +34,7 @@ __all__ = ["SAMPLE_RATE",
            "finalize_metadata",
            "prepare",
            "prepare_cached",
+           "prepare_encoded_cached",
            "encode",
            "decode"]
 
@@ -504,9 +505,28 @@ def prepare_cached(pipeline: TTSPipeline,
 
     Keyed by `(pipeline, voice, text, speed, get_metadata)`. Pipeline identity
     is the cache key (see `TTSPipeline` docstring). Cache size 128 matches
-    `raven.client.tts.tts_prepare`.
+    `raven.client.tts.tts_prepare_cached`.
     """
     return prepare(pipeline, voice, text, speed=speed, get_metadata=get_metadata)
+
+
+@functools.lru_cache(maxsize=128)
+def prepare_encoded_cached(pipeline: TTSPipeline,
+                           voice: str,
+                           text: str,
+                           speed: float,
+                           get_metadata: bool,
+                           format: str) -> EncodedTTSResult:
+    """Cached `prepare` in encoded form. Other-shape companion to `prepare_cached`.
+
+    Synthesizes once via `prepare_cached`, then encodes on top. Two-level cache:
+    asking for the same text in two formats synthesizes once and encodes twice;
+    asking for the same text in the same format hits both levels.
+
+    `format`: any PyAV-supported encoding, e.g. `"mp3"`, `"flac"`. No default —
+              callers who ask for encoded audio always care which encoding.
+    """
+    return encode(prepare_cached(pipeline, voice, text, speed=speed, get_metadata=get_metadata), format)
 
 
 def encode(result: TTSResult, format: str) -> EncodedTTSResult:

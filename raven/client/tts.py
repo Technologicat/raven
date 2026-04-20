@@ -6,6 +6,8 @@ This module coordinates lipsync between the TTS and the avatar, and implements t
 __all__ = ["tts_list_voices",
            "tts_warmup",
            "tts_prepare",
+           "tts_prepare_cached",
+           "tts_prepare_decoded_cached",
            "tts_speak",
            "tts_speak_lipsynced",
            "tts_stop",
@@ -145,10 +147,10 @@ def tts_warmup(voice: str) -> None:
     """
     # Skip the LRU cache, as it would defeat the whole point of this function.
     logger.info(f"tts_warmup: Warming up TTS for voice '{voice}'.")
-    _tts_prepare(text="The quick brown fox jumps over the lazy dog.",
-                 voice=voice,
-                 speed=1.0,
-                 get_metadata=True)  # not sure if the phonemizer needs warmup, but let's do it anyway
+    tts_prepare(text="The quick brown fox jumps over the lazy dog.",
+                voice=voice,
+                speed=1.0,
+                get_metadata=True)  # not sure if the phonemizer needs warmup, but let's do it anyway
     logger.info(f"tts_warmup: Warmup for voice '{voice}' done.")
 
 def _empty_encoded_result(get_metadata: bool, format: str = "mp3") -> speech_tts.EncodedTTSResult:
@@ -164,13 +166,16 @@ def _empty_encoded_result(get_metadata: bool, format: str = "mp3") -> speech_tts
                                        duration=0.0,
                                        word_metadata=[] if get_metadata else None)
 
-@functools.lru_cache(maxsize=128)
 def tts_prepare(text: str,
                 voice: str,
                 speed: float = 1.0,
                 get_metadata: bool = True,
                 format: str = "mp3") -> speech_tts.EncodedTTSResult:
     """Using the speech synthesizer, precompute TTS speech audio for `text` using `voice`.
+
+    Explicit remote mode. Not cached — each call round-trips to the server.
+    For the cached variant (nearly always what callers want in app code, so
+    that re-rendering the same sentence is free), use `tts_prepare_cached`.
 
     Optionally, compute also word-level timestamps and phoneme data.
 
@@ -193,14 +198,6 @@ def tts_prepare(text: str,
     (`audio_bytes == b""`, `duration == 0.0`) — callers detect this with
     `not prep.audio_bytes`.
     """
-    return _tts_prepare(text, voice, speed, get_metadata, format)
-
-def _tts_prepare(text: str,
-                 voice: str,
-                 speed: float = 1.0,
-                 get_metadata: bool = True,
-                 format: str = "mp3") -> speech_tts.EncodedTTSResult:
-    """Internal. Non-cached variant of `tts_prepare`, containing the actual implementation."""
     if not util.api_initialized:
         raise RuntimeError("tts_prepare: The `raven.client.api` module must be initialized before using the API.")
     if not text.strip():
@@ -272,6 +269,44 @@ def _tts_prepare(text: str,
                                        duration=total_audio_duration,
                                        word_metadata=timings)
 
+
+@functools.lru_cache(maxsize=128)
+def tts_prepare_cached(text: str,
+                       voice: str,
+                       speed: float = 1.0,
+                       get_metadata: bool = True,
+                       format: str = "mp3") -> speech_tts.EncodedTTSResult:
+    """Memoized `tts_prepare`. Same signature, cached across calls.
+
+    Default choice for app code: precomputing the same sentence twice doesn't
+    re-hit the server. Parallel to `raven.common.audio.speech.tts.prepare_cached`
+    on the local side.
+
+    Keyed by `(text, voice, speed, get_metadata, format)`.
+    """
+    return tts_prepare(text, voice, speed=speed, get_metadata=get_metadata, format=format)
+
+
+@functools.lru_cache(maxsize=128)
+def tts_prepare_decoded_cached(text: str,
+                               voice: str,
+                               speed: float = 1.0,
+                               get_metadata: bool = True) -> speech_tts.TTSResult:
+    """Cached remote TTS in decoded (float `TTSResult`) form. Other-shape companion to `tts_prepare_cached`.
+
+    Fetches encoded audio via `tts_prepare_cached` (with `format="mp3"`, the
+    server's canonical wire format), then decodes to float. Two-level cache:
+    the MP3 bytes are cached by the inner call, and the decoded `TTSResult` is
+    cached here on top.
+
+    Parallel to `raven.common.audio.speech.tts.prepare_encoded_cached` on the
+    local side, modulo the direction of the conversion — local synthesizes
+    float natively and encodes on top; remote receives encoded natively and
+    decodes on top.
+    """
+    return speech_tts.decode(tts_prepare_cached(text, voice, speed=speed, get_metadata=get_metadata, format="mp3"))
+
+
 def tts_speak(text: str,
               voice: str,
               speed: float = 1.0,
@@ -296,7 +331,7 @@ def tts_speak(text: str,
     **Advanced mode**
 
     If `prep` is provided, ignore `voice`, `text`, and `speed`, and load preprocessed TTS audio from `prep`.
-    To get a `prep`, use `tts_prepare`. This allows precomputing TTS for more sentences while a previous one
+    To get a `prep`, use `tts_prepare_cached`. This allows precomputing TTS for more sentences while a previous one
     is still being spoken.
 
     The `on_audio_ready` event is called also in advanced mode, with precomputed audio.
@@ -311,7 +346,7 @@ def tts_speak(text: str,
     def speak(task_env) -> None:
         if prep is None:
             logger.info(f"tts_speak.speak: instance {task_env.task_name}: getting audio")
-            final_prep = tts_prepare(text, voice, speed, get_metadata=False)
+            final_prep = tts_prepare_cached(text, voice, speed, get_metadata=False)
         else:
             logger.info(f"tts_speak.speak: instance {task_env.task_name}: using precomputed audio")
             final_prep = prep
@@ -409,7 +444,7 @@ def tts_speak_lipsynced(instance_id: str,
     def speak(task_env: envcls) -> None:
         if prep is None:
             logger.info("tts_speak_lipsynced.speak: getting audio and phonemes")
-            final_prep = tts_prepare(text, voice, speed, get_metadata=True)
+            final_prep = tts_prepare_cached(text, voice, speed, get_metadata=True)
         else:
             logger.info("tts_speak_lipsynced.speak: using precomputed audio and phonemes")
             final_prep = prep

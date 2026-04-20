@@ -374,27 +374,17 @@ class TTS(MaybeRemoteService):
         `get_metadata=True` — a list of `WordTiming` post-processed for lipsync
         via `speech_tts.finalize_metadata`.
 
-        Remote mode: delegates to `api.tts_prepare` (wire-format encoded audio).
-        On `format=None`, the encoded wire bytes are decoded to float via
-        `speech_tts.decode` — a lossy round-trip if the wire format is lossy
-        (MP3 is; FLAC is not).
-
-        Local mode: delegates to `speech_tts.prepare_cached`. On `format=...`,
-        the float result is then encoded via `speech_tts.encode`. Cached keyed
-        on `(voice, text, speed, get_metadata)` — the Kokoro vocoder is
-        stochastic, so re-synthesis would otherwise both waste compute and
-        shift sample values.
+        Pure 2×2 dispatch; caching lives in the bottom layers. Local mode
+        calls `speech_tts.prepare_cached` or `speech_tts.prepare_encoded_cached`
+        in the common layer; remote mode calls `api.tts_prepare_decoded_cached`
+        or `api.tts_prepare_cached`. A remote `format=None` call therefore still
+        pays the MP3 wire cost once but caches the decoded `TTSResult`, not just
+        the encoded wire bytes — so repeat calls are free on both sides.
         """
-        # Remote: ask the server for the requested format (or MP3 if caller wants float — then decode client-side).
-        if self._local_model is None:
-            wire_format = format if format is not None else "mp3"
-            encoded = api.tts_prepare(voice=voice, text=text, speed=speed, get_metadata=get_metadata, format=wire_format)
+        if self._local_model is not None:
             if format is None:
-                return speech_tts.decode(encoded)
-            return encoded
-
-        # Local: synthesize once, cache the float result, encode on demand.
-        result = speech_tts.prepare_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata)
+                return speech_tts.prepare_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata)
+            return speech_tts.prepare_encoded_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata, format=format)
         if format is None:
-            return result
-        return speech_tts.encode(result, format)
+            return api.tts_prepare_decoded_cached(text=text, voice=voice, speed=speed, get_metadata=get_metadata)
+        return api.tts_prepare_cached(text=text, voice=voice, speed=speed, get_metadata=get_metadata, format=format)

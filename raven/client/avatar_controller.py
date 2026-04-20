@@ -698,10 +698,10 @@ class DPGAvatarController:
                     # Precompute TTS audio and phoneme data.
                     # We have plenty of wall time to precompute more, even when running the TTS on CPU, while the first sentence is being spoken.
                     logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): precomputing TTS audio and phoneme data")
-                    prep = api.tts_prepare(text=sentence,
-                                           voice=input_record["config"].voice,
-                                           speed=input_record["config"].voice_speed,
-                                           get_metadata=True)
+                    prep = api.tts_prepare_cached(text=sentence,
+                                                  voice=input_record["config"].voice,
+                                                  speed=input_record["config"].voice_speed,
+                                                  get_metadata=True)
                     if not prep.audio_bytes:  # blank input or no-phoneme case — `tts_prepare` flags it via empty audio_bytes
                         logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): no audio produced during precomputing, skipping sentence")
                         continue
