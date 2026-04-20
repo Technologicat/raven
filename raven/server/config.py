@@ -258,11 +258,11 @@ animator_defaults = {
     #
     # Applied after upscaling, but before postprocessing.
     #
-    # Note this means that the client receiving the video stream will need to read the image size from the stream (from each frame separately!).
-    "crop_left": 0.0,  # cut how much inward from left edge, in units where the image width is 2.0
-    "crop_right": 0.0,  # cut how much inward from right edge, in units where the image width is 2.0
-    "crop_top": 0.0,  # cut how much inward from top edge, in units where the image height is 2.0
-    "crop_bottom": 0.0,  # cut how much inward from bottom edge, in units where the image height is 2.0
+    # Represented as a bbox in [0, 1]² unit coordinates. `enabled` is the master switch; when false, the edges
+    # are still preserved (so the user's calibration survives a toggle off), but the server skips the crop step.
+    # The client receives the bbox in a per-frame `X-Crop` header so it can position each frame correctly
+    # regardless of in-flight settings changes.
+    "crop": {"enabled": False, "left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0},
 
     # Animation speed settings.
     "pose_interpolator_step": 0.3,  # 0 < this <= 1; relative change toward target at each frame at a reference of 25 FPS; FPS-corrected automatically. For details, see `interpolate` in `raven.server.modules.avatar`.

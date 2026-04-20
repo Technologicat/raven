@@ -545,12 +545,17 @@ def result_feed(instance_id: str) -> Response:
 
                 if time_until_frame_deadline <= 0.0:
                     time_now = time.monotonic_ns()
-                    image_format, image_data = current_frame
+                    image_format, image_data, crop_snapshot, full_size = current_frame
+                    full_w, full_h = full_size
                     content_type_header = f"Content-Type: image/{image_format.lower()}\r\n".encode()
                     content_length_header = f"Content-Length: {len(image_data)}\r\n".encode()
+                    x_crop_header = f"X-Crop: {json.dumps(crop_snapshot, separators=(',', ':'))}\r\n".encode()
+                    x_full_size_header = f"X-Full-Size: {full_w} {full_h}\r\n".encode()
                     yield (b"--frame\r\n" +
                            content_type_header +
                            content_length_header +
+                           x_crop_header +
+                           x_full_size_header +
                            b'Pragma-directive: no-cache\r\n'
                            b'Cache-directive: no-cache\r\n'
                            b'Cache-control: no-cache\r\n'
@@ -610,10 +615,12 @@ class Animator:
 
         self.source_image: Optional[torch.tensor] = None
         self.result_image: Optional[np.array] = None
+        self.result_crop: Optional[Dict[str, Any]] = None  # snapshot of crop settings applied to `result_image`; consumed by the encoder for the per-frame X-Crop header
+        self.result_full_size: Optional[Tuple[int, int]] = None  # (w, h) of the uncropped output; for the per-frame X-Full-Size header so the client can position the cropped image correctly
         self.torch_cels: Dict[str, torch.tensor] = {}  # loaded in `load_image`
         self.new_frame_available = False
         self.last_report_time = None
-        self.output_lock = threading.Lock()  # protect from concurrent access to `result_image` and the `new_frame_available` flag.
+        self.output_lock = threading.Lock()  # protect from concurrent access to `result_image`, `result_crop`, `result_full_size`, and the `new_frame_available` flag.
 
         self.animation_running = False  # used in initial bootup state, while loading a new image, and while explicitly paused
         self._warmup_pending = False  # set True by `load_image`; cleared by the first `render_animation_frame` call
@@ -734,6 +741,27 @@ class Animator:
         else:
             logger.info("load_emotion_templates: loaded default emotion templates")
 
+    def _validate_crop_subkeys(self, settings: Dict[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
+        """Catch typos inside the nested `crop` dict (top-level `drop_unrecognized` doesn't recurse).
+
+        Warn on unknown sub-keys and drop them; fill in any missing sub-keys from defaults (so a partial
+        user-supplied `crop` dict still produces a complete, consumable result).
+        """
+        if "crop" not in settings or not isinstance(settings["crop"], dict):
+            return
+        expected = set(_server_config.animator_defaults["crop"].keys())
+        got = set(settings["crop"].keys())
+        unknown = got - expected
+        missing = expected - got
+        if unknown:
+            logger.warning(f"load_animator_settings: in {context}: unknown keys in 'crop' dict: {sorted(unknown)}; ignoring them")
+            for key in unknown:
+                settings["crop"].pop(key)
+        if missing:
+            logger.info(f"load_animator_settings: in {context}: missing keys in 'crop' dict: {sorted(missing)}; filling from defaults")
+            for key in missing:
+                settings["crop"][key] = _server_config.animator_defaults["crop"][key]
+
     def load_animator_settings(self, settings: Optional[Dict[str, Any]] = None) -> None:
         """Load animator settings.
 
@@ -792,9 +820,11 @@ class Animator:
         if settings:
             drop_unrecognized(settings, context="user settings")
             typecheck(settings, context="user settings")
+            self._validate_crop_subkeys(settings, context="user settings")
         if server_settings:
             drop_unrecognized(server_settings, context="server settings")
             typecheck(server_settings, context="server settings")
+            self._validate_crop_subkeys(server_settings, context="server settings")
         # both `settings` and `server_settings` are fully valid at this point
         aggregate(settings, fallback_settings=server_settings, fallback_context="server settings")  # first fill in from server-side settings
         aggregate(settings, fallback_settings=_server_config.animator_defaults, fallback_context="built-in defaults")  # then fill in from hardcoded defaults
@@ -1412,7 +1442,11 @@ class Animator:
                     self.postprocessor.render_into(warmup_output)
             logger.info(f"render_animation_frame: warmup complete in {tim.dt:0.6g}s")
 
-        do_crop = any(self._settings[key] != 0 for key in ("crop_left", "crop_right", "crop_top", "crop_bottom"))
+        # Snapshot the crop settings for this frame. Taking a copy here (rather than reading `self._settings["crop"]` live later on)
+        # ensures the bbox we apply matches the bbox we report in the per-frame `X-Crop` header, even if the settings are updated
+        # between the crop step and the encoder stage.
+        crop_snapshot = dict(self._settings["crop"])
+        do_crop = crop_snapshot["enabled"]
 
         metrics_enabled = self._settings["metrics_enabled"]
         def maybe_sync_cuda():
@@ -1511,12 +1545,13 @@ class Animator:
             # A simple crop filter, for removing empty space around character.
             # Apply this now so that if we're cropping, the postprocessor has fewer pixels to process.
             with timer() as tim_crop:
+                c, h, w = output_image.shape
+                full_size = (w, h)  # snapshot the uncropped size for the per-frame header; client uses it for widget positioning
                 if do_crop:
-                    c, h, w = output_image.shape
-                    x1 = int((self._settings["crop_left"] / 2.0) * w)
-                    x2 = int((1 - (self._settings["crop_right"] / 2.0)) * w)
-                    y1 = int((self._settings["crop_top"] / 2.0) * h)
-                    y2 = int((1 - (self._settings["crop_bottom"] / 2.0)) * h)
+                    x1 = int(crop_snapshot["left"]   * w)
+                    x2 = int(crop_snapshot["right"]  * w)
+                    y1 = int(crop_snapshot["top"]    * h)
+                    y2 = int(crop_snapshot["bottom"] * h)
                     output_image = output_image[:, y1:y2, x1:x2]
                     maybe_sync_cuda()
 
@@ -1559,6 +1594,8 @@ class Animator:
         # Set the new rendered frame as the output image, and mark the frame as ready for consumption.
         with self.output_lock:
             self.result_image = output_image_numpy  # atomic replace
+            self.result_crop = crop_snapshot  # per-frame snapshot — the bbox that was actually applied (or the full-bbox "disabled" value)
+            self.result_full_size = full_size  # (w, h) of the uncropped output, for the client's widget-positioning math
             self.new_frame_available = True
 
         # Log the FPS counter in 5-second intervals. Note we only reach this when running (not paused).
@@ -1604,6 +1641,8 @@ class Encoder:
                 with animator.output_lock:
                     if animator.new_frame_available:
                         image_rgba = animator.result_image  # atomic get
+                        crop_snapshot = animator.result_crop  # the bbox applied to this specific frame
+                        full_size = animator.result_full_size  # uncropped (w, h) for this frame
                         animator.new_frame_available = False  # animation frame consumed; start rendering the next one
                         have_new_frame = True  # This flag is needed so we can release the animator lock as early as possible.
 
@@ -1616,7 +1655,7 @@ class Encoder:
                         # time_now = time.monotonic_ns()
                         if output_format.upper() == "QOI":  # Quite OK Image format - like PNG, but fast
                             # Ugh, we must copy because the data isn't C-contiguous... but this is still faster than the other formats.
-                            current_frame = (output_format.upper(), qoi.encode(image_rgba.copy(order="C")))  # input: uint8 array of shape (h, w, c)
+                            current_frame = (output_format.upper(), qoi.encode(image_rgba.copy(order="C")), crop_snapshot, full_size)  # input: uint8 array of shape (h, w, c)
                         else:  # use PIL
                             pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
                             if image_rgba.shape[2] == 4:
@@ -1633,7 +1672,7 @@ class Encoder:
                             pil_image.save(buffer,
                                            format=output_format.upper(),
                                            **kwargs)
-                            current_frame = (output_format, buffer.getvalue())
+                            current_frame = (output_format, buffer.getvalue(), crop_snapshot, full_size)
                         # pack_duration_sec = (time.monotonic_ns() - time_now) / 10**9  # DEBUG / benchmarking
 
                         # We now have a new encoded frame; but first, sync with network send.

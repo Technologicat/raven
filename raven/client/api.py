@@ -332,11 +332,13 @@ def avatar_modify_overrides(instance_id: str, action: str, overrides: Dict[str, 
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/modify_overrides", json=data, headers=headers)
     util.yell_on_error(response)
 
-def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], bytes], None, None]:
+def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], Dict[str, str], bytes], None, None]:
     """Return a generator that yields video frames, in the image file format received from the server.
 
-    The yielded value is the tuple `(received_mimetype, payload)`, where `received_mimetype` is set to whatever the server
-    sent in the Content-Type header. Avatar always sends a mimetype, which specifies the file format of `payload`.
+    The yielded value is the tuple `(received_mimetype, extra_headers, payload)`, where `received_mimetype` is whatever
+    the server sent in the Content-Type header (avatar always sends a mimetype specifying the file format of `payload`),
+    `extra_headers` is a lowercase-keyed dict of non-`Content-*` headers (e.g. the per-frame `x-crop` bbox for this frame),
+    and `payload` is the image bytes.
 
     `expected_mimetype`: If provided, string identifying the mimetype for video frames expected by your client, e.g. "image/png".
     If the server sends some other format, `ValueError` is raised. If not provided, no format checking is done.

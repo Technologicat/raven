@@ -14,11 +14,15 @@ from unpythonic.net.util import ReceiveBuffer
 
 def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
                                                 boundary_prefix: str,
-                                                expected_mimetype: Optional[str]) -> Generator[Tuple[Optional[str], bytes], None, None]:
-    """Instantiate a generator that yield payloads from `source`, which is reading from a "multipart/x-mixed-replace" stream.
+                                                expected_mimetype: Optional[str]) -> Generator[Tuple[Optional[str], Dict[str, str], bytes], None, None]:
+    """Instantiate a generator that yields payloads from `source`, which is reading from a "multipart/x-mixed-replace" stream.
 
-    The yielded value is the tuple `(received_mimetype, payload)`, where `received_mimetype` is set to whatever the server
-    sent in the Content-Type header. If Content-Type was not set, then `received_mimetype is None`.
+    The yielded value is the tuple `(received_mimetype, extra_headers, payload)`:
+
+    - `received_mimetype` is whatever the server sent in the Content-Type header, or `None` if not sent.
+    - `extra_headers` is a lowercase-keyed dict of every non-`Content-*` header from the part (e.g. custom
+      `X-*` headers). Values are the raw strings as sent. Empty dict if the part had no extras.
+    - `payload` is the body bytes.
 
     The server MUST send the Content-Length header for this reader to work. If it is missing, `ValueError` is raised.
 
@@ -55,8 +59,11 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
             payload_buffer.set(b"")
             read_more_input()
 
-    def read_headers() -> int:
-        """Read and validate headers for one payload. Return the length of the payload body, in bytes."""
+    def read_headers() -> Tuple[Optional[str], Dict[str, str], int]:
+        """Read and validate headers for one payload.
+
+        Return `(received_mimetype, extra_headers, body_length_bytes)`.
+        """
         while True:
             val = payload_buffer.getvalue()
             end_of_headers_idx = val.find(b"\r\n\r\n")
@@ -68,21 +75,30 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
             assert False
         received_mimetype = None
         body_length_bytes = None
+        extra_headers: Dict[str, str] = {}
         for field in headers[1:]:
             field = field.decode("utf-8")
-            field_name, field_value = [text.strip().lower() for text in field.split(":")]
+            # Split on the first colon only: header values (e.g. a JSON-encoded dict) may contain colons.
+            field_name, _, field_value = field.partition(":")
+            field_name = field_name.strip().lower()
+            field_value = field_value.strip()
             if field_name == "content-type":
-                if expected_mimetype is not None and field_value != expected_mimetype:  # wrong type of data?
-                    raise ValueError(f"multipart_x_mixed_replace_payload_extractor.read_headers: expected mimetype '{expected_mimetype}', got '{field_value}'")
-                received_mimetype = field_value
-            if field_name == "content-length":
+                lower_value = field_value.lower()
+                if expected_mimetype is not None and lower_value != expected_mimetype:  # wrong type of data?
+                    raise ValueError(f"multipart_x_mixed_replace_payload_extractor.read_headers: expected mimetype '{expected_mimetype}', got '{lower_value}'")
+                received_mimetype = lower_value
+            elif field_name == "content-length":
                 body_length_bytes = int(field_value)  # and let it raise if the value is invalid
+            elif field_name.startswith("content-"):
+                pass  # any other Content-* headers are transport details; drop them
+            else:
+                extra_headers[field_name] = field_value
         if expected_mimetype is not None and received_mimetype is None:
             raise ValueError(f"read_headers: payload is missing the 'Content-Type' header (mandatory when `expected_mimetype` is specified; it is '{expected_mimetype}')")
         if body_length_bytes is None:
             raise ValueError("read_headers: payload is missing the 'Content-Length' header (mandatory for this client)")
         payload_buffer.set(start_of_body)
-        return received_mimetype, body_length_bytes
+        return received_mimetype, extra_headers, body_length_bytes
 
     def read_body(body_length_bytes: int) -> bytes:
         """Read the payload body and return it as a `bytes` object."""
@@ -97,9 +113,9 @@ def multipart_x_mixed_replace_payload_extractor(source: Iterator[bytes],
 
     while True:
         synchronize()
-        received_mimetype, body_length_bytes = read_headers()
+        received_mimetype, extra_headers, body_length_bytes = read_headers()
         payload = read_body(body_length_bytes)
-        yield received_mimetype, payload
+        yield received_mimetype, extra_headers, payload
 
 def pack_parameters_into_json_file_attachment(parameters: Dict[str, Any]) -> str:
     """Pack API call parameters from a `dict`, for sending in the request as a JSON file attachment.

@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 import concurrent.futures
 import io
+import json
 import os
 import pathlib
 import platform
@@ -32,11 +33,11 @@ import qoi
 import threading
 import time
 import traceback
-from typing import Callable, Optional, Tuple, Union
+from typing import Any, Callable, Mapping, Optional, Tuple, Union
 
 import PIL.Image
 
-from unpythonic import si_prefix
+from unpythonic import frozendict, si_prefix
 from unpythonic.env import env as envcls
 
 import numpy as np
@@ -53,6 +54,12 @@ from . import api
 # https://github.com/hoffstadt/DearPyGui/issues/554
 if platform.system().upper() == "LINUX":
     os.environ["__GLVND_DISALLOW_PATCHING"] = "1"
+
+# The "no crop" default bbox, in [0, 1]² unit coordinates. Shared contract with the server
+# (see `raven/server/config.py`, `raven/server/modules/avatar.py`, and `briefs/avatar-client-crop.md`):
+# `enabled: bool` is the master switch; when False, edges are kept as-is but the server skips the
+# crop tensor slice. The four edges are bbox extents of the kept region.
+NO_CROP = frozendict({"enabled": False, "left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0})
 
 # --------------------------------------------------------------------------------
 # helpers
@@ -75,13 +82,22 @@ class ResultFeedReader:
                 self.gen.close()
                 self.gen = None
 
-    def get_frame(self) -> Tuple[Optional[str], bytes]:
-        """-> (received_mimetype, payload)
+    def get_frame(self) -> Tuple[Optional[str], Mapping[str, Any], Tuple[int, int], bytes]:
+        """-> (received_mimetype, crop_bbox, full_size, payload)
 
-        If not running, raises `TypeError`.
+        `crop_bbox` is parsed from the per-frame `X-Crop` header (a dict with keys
+        `{"enabled", "left", "top", "right", "bottom"}`). `full_size` is `(w, h)` of the
+        uncropped output (from `X-Full-Size`) — the client uses it to position the cropped
+        image where the full square would have been. If not running, raises `TypeError`.
         """
         with self.lock:
-            return next(self.gen)  # next-gen lol
+            mimetype, extra_headers, payload = next(self.gen)  # next-gen lol
+            # Per-frame metadata from the headers (case-normalized to lowercase by the parser).
+            # Both are mandatory; absence means a server/client version mismatch.
+            crop_bbox = json.loads(extra_headers["x-crop"])
+            full_w, full_h = extra_headers["x-full-size"].split()
+            full_size = (int(full_w), int(full_h))
+            return mimetype, crop_bbox, full_size, payload
 
 # --------------------------------------------------------------------------------
 # API
@@ -139,6 +155,9 @@ class DPGAvatarRenderer:
         self.animator_running = False
         self.image_w = None  # width of current texture/frame, in pixels; set by `configure_live_texture`
         self.image_h = None  # height of current texture/frame, in pixels; set by `configure_live_texture`
+        self.full_w = None  # width of the full (uncropped) output, in pixels; from the X-Full-Size header
+        self.full_h = None  # height of the full (uncropped) output, in pixels; from the X-Full-Size header
+        self.crop_bbox: Mapping[str, Any] = NO_CROP  # current crop bbox; updated per-frame from the X-Crop header. `NO_CROP` is a `frozendict`; per-frame values from the wire are plain dicts.
         self.avatar_x_center = avatar_x_center
         self.avatar_y_bottom = avatar_y_bottom
 
@@ -273,18 +292,31 @@ class DPGAvatarRenderer:
         if not self.animator_running:
             self._reposition_paused_text()
 
-    def configure_live_texture(self, new_w: int, new_h: int) -> None:
+    def configure_live_texture(self, new_w: int, new_h: int,
+                               crop_bbox: Mapping[str, Any] = NO_CROP,
+                               full_size: Optional[Tuple[int, int]] = None) -> None:
         """Set up (or re-set-up) the texture and image widgets for rendering the video stream of the live AI avatar.
 
         `new_w`, `new_h`: The image dimensions to receive, in pixels. We use these to make the texture pixel-perfect.
 
-        Calling this is **optional** in steady state — the renderer adapts automatically to the size of
-        incoming frames (see `update_live_texture`). Pre-seeding at app startup avoids a brief "no texture"
+        `crop_bbox`: The crop bbox applied to this frame (see `NO_CROP` for the shape). The widget is positioned
+                     so the bbox maps onto the region the full (uncropped) square would have occupied. When
+                     `crop_bbox["enabled"]` is False, the effective bbox is full — the edge values are ignored
+                     for positioning, matching the server's behaviour of not applying the crop tensor slice.
+
+        `full_size`: The `(w, h)` of the full (uncropped) output. If `None` (typical for pre-seed calls where
+                     no frame has been received yet), defaults to `(new_w, new_h)` — correct for the no-crop
+                     case. In the receive path, the renderer passes the value from the `X-Full-Size` header.
+
+        Calling this is **optional** in steady state — the renderer adapts automatically to the size and bbox
+        of incoming frames (see `update_live_texture`). Pre-seeding at app startup avoids a brief "no texture"
         flash before the first frame arrives.
 
         You can call this method again whenever you want to switch to a different size (e.g. when changing
         upscaler settings) — but again, you don't have to; the renderer will catch up on its own.
         """
+        if full_size is None:
+            full_size = (new_w, new_h)
         old_texture_id = self.live_texture_id_counter
         new_texture_id = old_texture_id + 1
 
@@ -317,6 +349,8 @@ class DPGAvatarRenderer:
         self.live_texture_id_counter += 1  # now the new texture exists so it's safe to write to (in the background thread)
         self.image_w = new_w
         self.image_h = new_h
+        self.full_w, self.full_h = full_size
+        self.crop_bbox = crop_bbox
 
         first_time = (self.live_image_widget is None)
         logger.info(f"DPGAvatarRenderer.configure_live_texture: Creating new GUI item avatar_live_image_{new_texture_id}")
@@ -338,6 +372,17 @@ class DPGAvatarRenderer:
 
         logger.info("DPGAvatarRenderer.configure_live_texture: done.")
 
+    def _effective_bbox(self) -> Tuple[float, float, float, float]:
+        """Return the current crop bbox as `(left, top, right, bottom)`, honouring the `enabled` master switch.
+
+        When crop is disabled, returns the full-bbox `(0.0, 0.0, 1.0, 1.0)` regardless of the stored edge values.
+        This matches the server's behaviour of not applying the crop tensor slice when disabled.
+        """
+        if self.crop_bbox.get("enabled", False):
+            return (self.crop_bbox["left"], self.crop_bbox["top"],
+                    self.crop_bbox["right"], self.crop_bbox["bottom"])
+        return (0.0, 0.0, 1.0, 1.0)
+
     def _reposition_paused_text(self) -> None:
         """Center the paused text on the backdrop if it exists, otherwise center it on the avatar video."""
         if self.backdrop_last_configured_image is not None:
@@ -345,7 +390,7 @@ class DPGAvatarRenderer:
             y_center = self.backdrop_height // 2
         else:
             x_center = self.avatar_x_center
-            y_center = self.avatar_y_bottom - (self.image_h // 2)  # *avatar* image size
+            y_center = self.avatar_y_bottom - (self.full_h // 2)  # center of the full (uncropped) square, where the avatar would be
         logger.info(f"DPGAvatarRenderer._reposition_paused_text: Updating paused text position to x_center = {x_center}, y_center = {y_center}")
         w_text, h_text = guiutils.get_widget_size(self.paused_text_gui_widget)
         dpg.set_item_pos(self.paused_text_gui_widget,
@@ -371,8 +416,15 @@ class DPGAvatarRenderer:
         w, h = guiutils.get_widget_size(self.gui_parent)
         logger.info(f"DPGAvatarRenderer.reposition: Gui parent is at ({x0}, {y0}), and has size {w}x{h}")
 
-        x_left = self.avatar_x_center - (self.image_w // 2)
-        y_top = self.avatar_y_bottom - self.image_h
+        # The avatar video widget occupies a rectangle of size (image_w, image_h), positioned so that its
+        # bbox maps onto the region the full (uncropped) square would have occupied. With the full bbox
+        # (no crop), this simplifies to: widget centered horizontally at avatar_x_center, bottom aligned
+        # with avatar_y_bottom.
+        left, top, _, _ = self._effective_bbox()
+        full_x_left = self.avatar_x_center - (self.full_w // 2)
+        full_y_top = self.avatar_y_bottom - self.full_h
+        x_left = int(full_x_left + left * self.full_w)
+        y_top = int(full_y_top + top * self.full_h)
         with guiutils.nonexistent_ok() as nok:
             dpg.set_item_pos(self.live_image_widget, (x_left, y_top))
 
@@ -536,7 +588,7 @@ class DPGAvatarRenderer:
                         reader.start()
 
                     try:  # EAFP to avoid TOCTTOU
-                        mimetype, image_data = reader.get_frame()
+                        mimetype, crop_bbox, full_size, image_data = reader.get_frame()
                     except TypeError:  # `reader.gen is None`
                         # If our `ResultFeedReader` isn't running, there's nothing to do at the moment.
                         time.sleep(0.04)   # 1/25 s
@@ -559,11 +611,15 @@ class DPGAvatarRenderer:
                         w, h = pil_image.size
                         image_rgba = np.asarray(pil_image.convert("RGBA"))
 
-                    # Sync the texture to the decoded frame size. This also covers the first-frame case
-                    # where no `configure_live_texture` pre-seed was done (self.image_w/h are None → mismatch → create).
-                    if self.image_w != w or self.image_h != h:
-                        logger.info(f"update_live_texture: (re)configuring texture for frame size {w}x{h} (was {self.image_w}x{self.image_h}).")
-                        self.configure_live_texture(w, h)
+                    # Sync the texture to the decoded frame. Any change — size, crop bbox, or full-square
+                    # size — triggers a reconfigure. None-vs-int on first frame compares via `!=`, which
+                    # returns True (no ordering comparison happens), so the first frame always reconfigures
+                    # and creates the texture even when no pre-seed was done.
+                    if (self.image_w != w or self.image_h != h
+                            or self.crop_bbox != crop_bbox
+                            or (self.full_w, self.full_h) != full_size):
+                        logger.info(f"update_live_texture: (re)configuring texture for frame size {w}x{h}, full {full_size}, crop bbox {crop_bbox}.")
+                        self.configure_live_texture(w, h, crop_bbox, full_size)
 
                     tex = self.live_texture  # read after possible reconfigure; may still go away mid-frame (shutdown / texture swap), handled at the blit site below
 

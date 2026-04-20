@@ -1,9 +1,6 @@
 {
     "target_fps": 25,
-    "crop_left": 0.0,
-    "crop_right": 0.0,
-    "crop_top": 0.0,
-    "crop_bottom": 0.0,
+    "crop": {"enabled": true, "left": 0.2, "top": 0.0, "right": 0.8, "bottom": 1.0},
     "pose_interpolator_step": 0.3,
     "blink_interval_min": 2.0,
     "blink_interval_max": 5.0,
