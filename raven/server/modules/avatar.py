@@ -561,12 +561,12 @@ def result_feed(instance_id: str) -> Response:
                     def _fps_from(sec: float) -> float:
                         return (1.0 / sec) if sec > 0.0 else 0.0
                     server_stats = {
-                        "render_ms":  round(1000 * render_avg_sec, 1),
+                        "render_ms": round(1000 * render_avg_sec, 1),
                         "render_fps": round(_fps_from(render_avg_sec), 1),
-                        "encode_ms":  round(1000 * encode_avg_sec, 1),
+                        "encode_ms": round(1000 * encode_avg_sec, 1),
                         "encode_fps": round(_fps_from(encode_avg_sec), 1),
-                        "wait_ms":    round(1000 * wait_avg_sec, 1),
-                        "output_ms":  round(1000 * output_avg_sec, 1),
+                        "wait_ms": round(1000 * wait_avg_sec, 1),
+                        "output_ms": round(1000 * output_avg_sec, 1),
                         "output_fps": round(_fps_from(output_avg_sec), 1),
                         "target_fps": round(animator.target_fps, 1),
                     }
