@@ -83,6 +83,7 @@ with timer() as tim:
     from ...common.gui import helpcard
     from ...common.gui import messagebox
     from ...common.gui import utils as guiutils
+    from ...vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     from ...common.hfutil import maybe_install_models
     from ...common.running_average import RunningAverage
     from ...common.video import compositor
@@ -172,6 +173,10 @@ with dpg.font_registry() as the_font_registry:
                   font_size) as default_font:
         fontsetup.setup_font_ranges()
     dpg.bind_font(default_font)
+
+# Set up the Markdown renderer — only used by the help card's extras section, but must be configured
+# before any `dpg_markdown.add_text` call.
+guiutils.setup_markdown(the_font_registry, font_size)
 
 # Modify global theme
 with dpg.theme() as global_theme:
@@ -1411,11 +1416,29 @@ hotkey_info = (
     env(key_indent=0, key="F1", action_indent=0, action="This help card", notes=""),
 )
 
+def _render_help_extras(self: helpcard.HelpWindow, gui_parent) -> None:
+    """Render app-specific extra information into the help card."""
+    dpg_markdown.add_text(f"{self.c_hed}**Editing emotion templates**{self.c_end}", parent=gui_parent)
+    g1 = dpg.add_group(parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_txt}Pose the character with the morph and pose sliders. "
+                          f"**Ctrl+S** opens a file dialog to save the current pose as a JSON emotion template.{self.c_end}",
+                          parent=g1)
+    dpg_markdown.add_text(f"{self.c_hed}**Where templates are used**{self.c_end}", parent=gui_parent)
+    g2 = dpg.add_group(parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_txt}Both **raven-server**'s live animator and **raven-avatar-settings-editor** "
+                          f"load emotion templates from `raven/avatar/assets/emotions/`.{self.c_end}",
+                          parent=g2)
+    g3 = dpg.add_group(parent=gui_parent)
+    dpg_markdown.add_text(f"{self.c_txt}For automatic emotion selection from LLM text (**raven-librarian**), "
+                          f"template names must match the classifier model's emotion labels.{self.c_end}",
+                          parent=g3)
+
 _help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
-                                   width=900,
-                                   height=380,
+                                   width=1100,
+                                   height=540,
                                    reference_window="pose_editor_window",
-                                   themes_and_fonts=env(font_size=font_size))
+                                   themes_and_fonts=env(font_size=font_size),
+                                   on_render_extras=_render_help_extras)
 
 # --------------------------------------------------------------------------------
 # Start the app
