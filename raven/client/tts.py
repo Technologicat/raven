@@ -151,7 +151,7 @@ def tts_warmup(voice: str) -> None:
                  get_metadata=True)  # not sure if the phonemizer needs warmup, but let's do it anyway
     logger.info(f"tts_warmup: Warmup for voice '{voice}' done.")
 
-def _empty_encoded_result(get_metadata: bool) -> speech_tts.EncodedTTSResult:
+def _empty_encoded_result(get_metadata: bool, format: str = "mp3") -> speech_tts.EncodedTTSResult:
     """Zero-audio `EncodedTTSResult`, returned by `tts_prepare` on blank / no-phoneme input.
 
     Callers check `not prep.audio_bytes` to detect the cancelled case; the structure
@@ -159,7 +159,7 @@ def _empty_encoded_result(get_metadata: bool) -> speech_tts.EncodedTTSResult:
     need special-case handling.
     """
     return speech_tts.EncodedTTSResult(audio_bytes=b"",
-                                       audio_format="mp3",
+                                       audio_format=format,
                                        sample_rate=speech_tts.SAMPLE_RATE,
                                        duration=0.0,
                                        word_metadata=[] if get_metadata else None)
@@ -168,7 +168,8 @@ def _empty_encoded_result(get_metadata: bool) -> speech_tts.EncodedTTSResult:
 def tts_prepare(text: str,
                 voice: str,
                 speed: float = 1.0,
-                get_metadata: bool = True) -> speech_tts.EncodedTTSResult:
+                get_metadata: bool = True,
+                format: str = "mp3") -> speech_tts.EncodedTTSResult:
     """Using the speech synthesizer, precompute TTS speech audio for `text` using `voice`.
 
     Optionally, compute also word-level timestamps and phoneme data.
@@ -182,23 +183,29 @@ def tts_prepare(text: str,
                     `word_metadata` (lipsync-ready — `clean_timestamps` + diphthong
                     expansion already applied). If `False`, `word_metadata` is `None`.
 
+    `format`: audio-file encoding to request from the server. Any format supported
+              by the server's encoder (see `raven.common.audio.codec.encode`) —
+              e.g. `"mp3"`, `"flac"`. Default `"mp3"`. The chosen format is also
+              stored in the returned `EncodedTTSResult.audio_format`.
+
     Always returns an `EncodedTTSResult`. On blank input, or if `get_metadata=True`
     and the TTS produced no phoneme data, the returned value is a zero-audio result
     (`audio_bytes == b""`, `duration == 0.0`) — callers detect this with
     `not prep.audio_bytes`.
     """
-    return _tts_prepare(text, voice, speed, get_metadata)
+    return _tts_prepare(text, voice, speed, get_metadata, format)
 
 def _tts_prepare(text: str,
                  voice: str,
                  speed: float = 1.0,
-                 get_metadata: bool = True) -> speech_tts.EncodedTTSResult:
+                 get_metadata: bool = True,
+                 format: str = "mp3") -> speech_tts.EncodedTTSResult:
     """Internal. Non-cached variant of `tts_prepare`, containing the actual implementation."""
     if not util.api_initialized:
         raise RuntimeError("tts_prepare: The `raven.client.api` module must be initialized before using the API.")
     if not text.strip():
         logger.info("tts_prepare: Ignoring blank `text`. Cancelled.")
-        return _empty_encoded_result(get_metadata)
+        return _empty_encoded_result(get_metadata, format=format)
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
 
@@ -206,10 +213,10 @@ def _tts_prepare(text: str,
 
     # Get audio, and if getting metadata, also the word-level timestamps
     with timer() as tim:
-        logger.info("tts_prepare: getting TTS audio with word-level timestamps and phonemes from Raven-server")
+        logger.info(f"tts_prepare: getting TTS audio ({format}) with word-level timestamps and phonemes from Raven-server")
         data = {"voice": voice,
                 "text": text,
-                "format": "mp3",
+                "format": format,
                 "speed": speed,
                 "stream": True,
                 "get_metadata": get_metadata}
@@ -256,11 +263,11 @@ def _tts_prepare(text: str,
             if not timings:
                 logger.info("tts_prepare: Metadata was requested, but the TTS did not generate any phonemes. Cancelled. The text was:")
                 logger.info(text)
-                return _empty_encoded_result(get_metadata)
+                return _empty_encoded_result(get_metadata, format=format)
         logger.info(f"tts_prepare: postprocessed per-word phoneme data in {tim.dt:0.6g}s.")
 
     return speech_tts.EncodedTTSResult(audio_bytes=audio_bytes,
-                                       audio_format="mp3",
+                                       audio_format=format,
                                        sample_rate=speech_tts.SAMPLE_RATE,
                                        duration=total_audio_duration,
                                        word_metadata=timings)

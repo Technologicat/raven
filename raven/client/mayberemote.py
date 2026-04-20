@@ -358,21 +358,43 @@ class TTS(MaybeRemoteService):
                    voice: str,
                    text: str,
                    speed: float = 1.0,
-                   get_metadata: bool = True) -> speech_tts.TTSResult:
-        """Synthesize `text` to a `TTSResult` with float32 mono audio and optional word timings.
+                   get_metadata: bool = True,
+                   format: Optional[str] = None) -> Union[speech_tts.TTSResult, speech_tts.EncodedTTSResult]:
+        """Synthesize `text`, with audio in the shape the caller asks for.
 
-        Uniform return type across modes:
-          - `audio`: float32 in [-1, 1], at `self.sample_rate` (24 kHz).
-          - `word_metadata`: list of `WordTiming` post-processed for lipsync —
-            `speech_tts.finalize_metadata` applied in both modes.
+        `format=None` (default): return a `TTSResult` with raw float32 mono audio
+        in [-1, 1] at `self.sample_rate` (24 kHz). Use for analysis paths
+        (embedding, STT round-trip, lipsync driver).
 
-        Remote mode: delegates to `api.tts_prepare` (wire format → `EncodedTTSResult`)
-        then `speech_tts.decode` (MP3 → float). The lossy codec round-trip means
-        sample values differ slightly from the server's internal float output —
-        inaudible but not bit-identical.
+        `format="mp3"` / `"flac"` / …: return an `EncodedTTSResult` with the audio
+        encoded in the requested format. Use for playback paths that want encoded
+        bytes ready to hand to an audio player (pygame mixer etc.).
 
-        Local mode: delegates to `speech_tts.prepare` (synthesize + finalize).
+        `word_metadata` is populated identically in both shapes when
+        `get_metadata=True` — a list of `WordTiming` post-processed for lipsync
+        via `speech_tts.finalize_metadata`.
+
+        Remote mode: delegates to `api.tts_prepare` (wire-format encoded audio).
+        On `format=None`, the encoded wire bytes are decoded to float via
+        `speech_tts.decode` — a lossy round-trip if the wire format is lossy
+        (MP3 is; FLAC is not).
+
+        Local mode: delegates to `speech_tts.prepare_cached`. On `format=...`,
+        the float result is then encoded via `speech_tts.encode`. Cached keyed
+        on `(voice, text, speed, get_metadata)` — the Kokoro vocoder is
+        stochastic, so re-synthesis would otherwise both waste compute and
+        shift sample values.
         """
+        # Remote: ask the server for the requested format (or MP3 if caller wants float — then decode client-side).
         if self._local_model is None:
-            return speech_tts.decode(api.tts_prepare(voice=voice, text=text, speed=speed, get_metadata=get_metadata))
-        return speech_tts.prepare(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata)
+            wire_format = format if format is not None else "mp3"
+            encoded = api.tts_prepare(voice=voice, text=text, speed=speed, get_metadata=get_metadata, format=wire_format)
+            if format is None:
+                return speech_tts.decode(encoded)
+            return encoded
+
+        # Local: synthesize once, cache the float result, encode on demand.
+        result = speech_tts.prepare_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata)
+        if format is None:
+            return result
+        return speech_tts.encode(result, format)

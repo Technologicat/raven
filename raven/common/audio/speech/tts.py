@@ -33,8 +33,11 @@ __all__ = ["SAMPLE_RATE",
            "expand_phoneme_diphthongs",
            "finalize_metadata",
            "prepare",
+           "prepare_cached",
+           "encode",
            "decode"]
 
+import functools
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -168,7 +171,7 @@ class EncodedTTSResult:
     word_metadata: Optional[list[WordTiming]]
 
 
-@dataclass
+@dataclass(eq=False)
 class TTSPipeline:
     """Loaded Kokoro pipeline + the on-disk location of its voice files.
 
@@ -183,6 +186,11 @@ class TTSPipeline:
                  See `load_tts_pipeline` for the full list.
 
     `sample_rate`: mirror of `SAMPLE_RATE`, for API symmetry with `STTModel`.
+
+    `eq=False` on the dataclass: identity-based hashing, so a `TTSPipeline`
+    instance is usable as an `lru_cache` key (see `prepare_cached`). Safe
+    because pipelines are singletons per `(repo_id, device_string, lang_code)`
+    via `_tts_pipelines`.
     """
     kpipeline: kokoro.KPipeline
     modelsdir: str
@@ -482,18 +490,59 @@ def prepare(pipeline: TTSPipeline,
     return result
 
 
+@functools.lru_cache(maxsize=128)
+def prepare_cached(pipeline: TTSPipeline,
+                   voice: str,
+                   text: str,
+                   speed: float = 1.0,
+                   get_metadata: bool = True) -> TTSResult:
+    """Memoized `prepare`. Same signature, cached across calls.
+
+    Kokoro's vocoder is stochastic, so re-synthesizing the same input
+    produces slightly different audio each time. The cached version returns
+    the same audio for the same arguments as long as it is in the cache.
+
+    Keyed by `(pipeline, voice, text, speed, get_metadata)`. Pipeline identity
+    is the cache key (see `TTSPipeline` docstring). Cache size 128 matches
+    `raven.client.tts.tts_prepare`.
+    """
+    return prepare(pipeline, voice, text, speed=speed, get_metadata=get_metadata)
+
+
+def encode(result: TTSResult, format: str) -> EncodedTTSResult:
+    """Convert a `TTSResult` to an `EncodedTTSResult` by encoding the audio.
+
+    Companion to `decode`: takes raw float audio and produces wire/playback-ready
+    encoded bytes. Handles the float → s16 transport cast internally.
+
+    `format`: any PyAV-supported audio format, e.g. `"mp3"`, `"flac"`, `"wav"`.
+              Sample rate, duration, and `word_metadata` pass through unchanged.
+
+    Empty `audio_bytes` → empty `EncodedTTSResult` (audio_bytes=b"").
+    """
+    if not len(result.audio):
+        return EncodedTTSResult(audio_bytes=b"",
+                                audio_format=format,
+                                sample_rate=result.sample_rate,
+                                duration=result.duration,
+                                word_metadata=result.word_metadata)
+    audio_s16 = np.array(result.audio * 32767.0, dtype=np.int16)
+    audio_bytes = audio_codec.encode(audio_data=audio_s16,
+                                     format=format,
+                                     sample_rate=result.sample_rate)
+    return EncodedTTSResult(audio_bytes=audio_bytes,
+                            audio_format=format,
+                            sample_rate=result.sample_rate,
+                            duration=result.duration,
+                            word_metadata=result.word_metadata)
+
+
 def decode(encoded: EncodedTTSResult) -> TTSResult:
     """Convert an `EncodedTTSResult` to a `TTSResult` by decoding the audio.
 
     Companion to `EncodedTTSResult`: takes wire/playback-encoded audio (MP3 etc.)
     and decodes it to the raw float format expected for in-process consumption.
-    Format is read from `encoded.audio_format`; sample rate, duration, and
-    word_metadata pass through unchanged.
-
-    Used by `raven.client.mayberemote.TTS.synthesize` on the remote path (server
-    serves encoded audio; MaybeRemote's public API is float), and usable by any
-    caller that has cached encoded bytes and wants to play or analyze them as
-    float numpy.
+    Sample rate, duration, and word_metadata pass through unchanged.
 
     Empty `audio_bytes` → empty `TTSResult` (zero-length float array). That
     supports the "cancelled / no audio produced" case from `tts_prepare` without

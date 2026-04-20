@@ -92,6 +92,33 @@ All ML inference in `raven/server/modules/` when Server is running:
 
 Client apps call Server via `raven/client/api.py`. Server can run on a different machine (trusted network only — no encryption). When Server isn't running, Visualizer's importer uses the `MaybeRemoteService` pattern to load models in-process, making the Visualizer deployable standalone.
 
+### The Raven Way: three-layer module organization for ML-bearing subsystems
+
+Each subsystem that has both a local (in-process) and remote (HTTP) mode follows the same three-layer pattern:
+
+1. **`raven.common.<subsystem>`** — the actual implementation, pure library code, runs on whichever machine calls it. Framed as "explicit local mode", but the framing is incidental: this is where the work happens regardless of which process is doing it.
+2. **`raven.server.modules.<subsystem>`** — the server-side subsystem module, delegating to `raven.common.<subsystem>`. Defines request handlers but not the routes themselves — routes and Flask plumbing live in `raven.server.app`, which wires each `modules.<subsystem>` handler onto its `/api/<subsystem>/...` URL. On the server, "local" means "server-side" — the server loads the same common-layer module the client would have loaded.
+3. **`raven.client.api.<subsystem>`** — explicit remote mode. Client functions that make HTTP calls to the server. Mirrors the server's API surface one-for-one. In practice most subsystems are *inlined* directly into `raven.client.api` (they're small — a handful of request-sending functions). Only `tts` got large enough to warrant its own `raven.client.tts` module, re-exported through `raven.client.api`. Whether we should split the others out for symmetry with `raven.server.modules.*` is an open design question; inlined is the current reality.
+4. **`raven.client.mayberemote.<Subsystem>`** — transparent remote/local mode. A class per subsystem; in remote mode it delegates to `raven.client.api.*`, in local mode it delegates to `raven.common.<subsystem>.*`. Callers don't need to know which mode is active.
+
+Concrete example — `speech.tts`:
+
+| Layer | Module | Role |
+|---|---|---|
+| Common (impl) | `raven.common.audio.speech.tts` | `prepare`, `prepare_cached`, `encode`, `decode`, `synthesize`, `finalize_metadata` |
+| Server module | `raven.server.modules.tts` | request handlers; uses common `synthesize_iter`, `audio_codec.encode` |
+| Server app | `raven.server.app` | registers `/api/tts/...` routes onto the handlers |
+| Client remote | `raven.client.tts`, re-exported via `raven.client.api` | `tts_prepare`, `tts_list_voices`, `tts_speak`, … → HTTP |
+| Client mayberemote | `raven.client.mayberemote.TTS` | remote mode → `api.tts_prepare`; local mode → `speech_tts.prepare_cached` |
+
+Same shape applies to `nlp` (`nlptools` ↔ `natlang`), `stt`, `embeddings`, `sanitize`, etc. — cross-check `raven.client.mayberemote` for the current set.
+
+**Implications:**
+- New ML work goes in `raven.common.<subsystem>` first. The server module and mayberemote wrapper come after and are thin shims.
+- Playback / audio output stays in `raven.client.*` even when synthesis is local — the user is on the client machine, audio hardware is local by definition.
+- `raven.client.tts.tts_prepare` and friends are **not** obsolete when `MaybeRemote.TTS` exists. They remain the explicit-remote path, used by `MaybeRemote` itself and by any app that wants to force remote mode.
+- Data conversion at the boundary: in-process uses dataclasses (`TTSResult`, `WordTiming`), HTTP wire uses JSON-friendly dicts. Converter functions (`decode`/`encode`, `finalize_metadata`) live in the common layer — neither "local" nor "remote", they're shape conversions.
+
 ### Common Subsystems
 - `raven/common/video/` - Postprocessor, upscaler (PyTorch Anime4K), colorspace conversions, cel compositor
 - `raven/common/audio/` - Player, recorder, codec (PyAV streaming)

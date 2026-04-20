@@ -8,18 +8,23 @@ Worth a pass across the fleet to find these and convert them. Low-risk (any call
 
 Discovered during avatar-client-crop brief review (2026-04-20).
 
-## `mayberemote.TTS.synthesize` return format
+## Local-mode `tts_speak` / `tts_speak_lipsynced`
 
-`TTSResult` or `EncodedTTSResult`? Two use cases:
+`raven.client.tts.tts_speak` and `tts_speak_lipsynced` are hardcoded to the remote path — they call `tts_prepare` (HTTP) for synthesis and then feed `util.api_config.audio_player` for playback. The audio player itself is correctly client-side (playback must happen where the user is, regardless of where synthesis runs), but there is currently no in-process synthesis fallback.
 
-- analysis, needs float (`TTSResult`)
-- playback, needs encoded in-memory audio file (`EncodedTTSResult`)
+The Raven Way for this is methods on `raven.client.mayberemote.TTS` — `speak` / `speak_lipsynced` — that dispatch to local / remote synthesis internally and then always play locally. Callers stop caring where Kokoro runs.
 
-The functions `api.tts_prepare` and `speec_tts.prepare` should really return the same type of thing, only produced remotely/locally. Both functions themselves always run locally.
+Infrastructure that's already in place after the 2026-04-20 work:
+- `speech_tts.prepare_cached` (local-mode cached float synthesis).
+- `speech_tts.encode` / `speech_tts.decode` (conversion between `TTSResult` and `EncodedTTSResult`, orthogonal to where synthesis happened).
+- `mayberemote.TTS.synthesize(format=...)` — returns whichever shape the caller needs, transparent across local / remote.
 
-Add a parameter as to which type to return.
+Remaining work:
+- Lift `tts_speak` into `MaybeRemote.TTS.speak(voice, text, speed, callbacks..., prep=None)`. Signature mirrors the existing function; precomputed `prep` is now a `Union[TTSResult, EncodedTTSResult]` — accept either, encode if needed before handing to the audio player. Local path: `self.synthesize(format="mp3")` (or whatever format the audio player prefers); remote path: `self.synthesize(format="mp3")` — same call, both modes.
+- Lift `tts_speak_lipsynced` similarly, but the lipsync driver itself is currently hardcoded to call `api.avatar_set_overrides` — that stays remote-only until the separate "Client-local avatar animator" item lands. Until then, the lipsynced variant drives a remote avatar from either a local or remote TTS.
+- The lipsync-driver logic (word timings → phoneme stream → time-driven callback) still wants to move into `raven.common.audio.speech.lipsync`, per the already-existing "Extract lipsync driver logic" item.
 
-Also maybe add a `speech_tts.encode` for symmetry with existing `speech_tts.decode`. Use that on the server side just before wire transport.
+Not urgent — current server-mode playback works fine. Lift when an app wants to do TTS without the server running (e.g. a standalone librarian). Discovered during TTS return-format review (2026-04-20; replaces the earlier "`TTSResult` or `EncodedTTSResult`?" framing which has been resolved).
 
 ## Extract lipsync driver logic into `raven.common.audio.speech.lipsync`
 
@@ -110,34 +115,6 @@ MP3 was chosen historically because it was what Kokoro-FastAPI could reliably pr
 Not a functional blocker — mention in the same session where a user hits some MP3-specific quirk, or pair with a broader audio-format cleanup.
 
 Discovered during step 5 review (2026-04-18).
-
-## Generalize `raven.client.tts.tts_prepare` for local-mode offline precomputation
-
-`tts_prepare` is the offline-precomputation helper for lipsync — it runs TTS on CPU while the previous sentence is still speaking, so perceived latency stays bounded by the first-sentence synthesis time rather than the full sequence. Currently it's HTTP-only (calls the server's `/api/tts/speak`), and duplicates logic that already exists at the common layer (timestamp cleanup).
-
-Since Raven is the only consumer of its own TTS service, there's no external compatibility to preserve — drop the legacy dict format entirely from in-process code, migrate all callers to `WordTiming`. Dict form survives only as the wire-transfer shape (JSON in the `x-word-timestamps` HTTP header), converted to/from `WordTiming` at the HTTP boundary only (the step-5 `_remote_tts_speak_raw` already does this correctly).
-
-**Design constraint for the wire format**: the HTTP API must stay language-neutral — Python `dict`s map cleanly to JSON objects, and a future JavaScript client must be able to consume the same endpoint. **Do not** send pickled `WordTiming` instances, msgpack dataclass encodings, or anything else that requires a Python-specific deserializer. That mistake already cost us cross-language reach on `raven.server.modules.natlang` (the spaCy endpoint currently returns Python-only structures); the speech endpoints should not repeat it. JSON-serializable dicts on the wire, dataclasses in-process, conversion at the boundary.
-
-Final shape:
-
-- **`raven.common.audio.speech.tts`** — one module hosts engine + post-processing + cached convenience:
-  - Move the `dipthong_vowel_to_ipa` table from `raven.client.tts` to here. Misaki shorthand → canonical IPA, a Kokoro/Misaki engine concern.
-  - `expand_phoneme_diphthongs(timings: list[WordTiming]) -> list[WordTiming]` — applies the table above.
-  - `prepare(pipeline, voice, text, speed, get_metadata) -> TTSResult` — pure. Calls `synthesize`, applies `expand_phoneme_diphthongs` + `clean_timestamps(for_lipsync=True)`. Use for fresh renders.
-  - `prepare_cached(pipeline, voice, text, speed, get_metadata) -> TTSResult` — same, wrapped in `functools.lru_cache(maxsize=128)`. Default for lipsync use (stochastic vocoder means re-running is a waste).
-
-- **`raven.client.mayberemote.TTS.prepare(text, voice, speed, get_metadata, cache=True) -> TTSResult`** — pure delegator, no added functionality. Local mode → `speech_tts.prepare_cached` (or `prepare` if `cache=False`). Remote mode → `_remote_tts_speak_raw` + post-processing; remote-mode caching either stays inside `_remote_tts_speak_raw` as a sibling cached variant, or the whole method wraps its own lru_cache. Pick at migration time.
-
-- **`raven.client.tts`** — drop `tts_prepare` as a public name. Inline `dipthong_vowel_to_ipa` table also goes (moved to common). The lipsync driver (`tts_speak_lipsynced` and friends) migrates to `TTSResult` / `WordTiming` as its native format: `.word` / `.phonemes` / `.start_time` / `.end_time` attribute access instead of `["word"]` / `["phonemes"]` / `["start_time"]` / `["end_time"]`.
-
-One type (`WordTiming`) end-to-end. No format conversion step, no legacy adapter.
-
-Side benefit captured by this layout: the inline `clean_timestamps` duplicate and the diphthong expansion in `raven.client.tts._tts_prepare` both disappear in favour of the common-layer helpers.
-
-Not urgent — the current `tts_prepare` works fine for the server-mode use case. Lift when the client-local animator work touches this area anyway.
-
-Discovered during step 5 review (2026-04-18); design refined to "one-file common layer + MaybeRemote caching wrapper" during deferred-items follow-up.
 
 ## Additional `MaybeRemoteService` candidates (classify, translate)
 
