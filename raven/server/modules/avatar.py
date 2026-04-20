@@ -792,72 +792,54 @@ class Animator:
             logger.warning(f"load_animator_settings: skipping server settings, reason: {type(exc)}: {exc}")
             server_settings = {}
 
-        # Let's define some helpers:
-        def drop_unrecognized(settings: Dict[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
-            unknown_fields = [field for field in settings if field not in _server_config.animator_defaults]
+        # Validation and filling helpers. Each recurses into nested dicts when the corresponding
+        # default value is itself a dict — so e.g. the `crop` sub-dict gets the same drop-unknowns,
+        # typecheck, and user→server→built-in fill cascade as the top level, without per-key
+        # scaffolding. All three are mutating.
+        def drop_unrecognized(settings: Dict[str, Any], defaults: Mapping[str, Any], context: str) -> None:
+            unknown_fields = [field for field in settings if field not in defaults]
             if unknown_fields:
-                logger.warning(f"load_animator_settings: in {context}: this server did not recognize the following settings, ignoring them: {unknown_fields}")
-            for field in unknown_fields:
-                settings.pop(field)
-            assert all(field in _server_config.animator_defaults for field in settings)  # contract: only known settings remaining
+                logger.warning(f"load_animator_settings: in {context}: unrecognized settings {sorted(unknown_fields)}; ignoring them")
+                for field in unknown_fields:
+                    settings.pop(field)
+            for field, default_value in defaults.items():
+                if field in settings and isinstance(default_value, dict) and isinstance(settings[field], dict):
+                    drop_unrecognized(settings[field], default_value, f"{context}.{field}")
 
-        def typecheck(settings: Dict[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
-            for field, default_value in _server_config.animator_defaults.items():
+        def typecheck(settings: Dict[str, Any], defaults: Mapping[str, Any], context: str) -> None:
+            for field, default_value in defaults.items():
                 if default_value is None:  # Can't infer expected type from a None default; skip.
                     continue
+                if field not in settings:
+                    continue
                 type_match = (int, float) if isinstance(default_value, (int, float)) else type(default_value)
-                if field in settings and not isinstance(settings[field], type_match):
+                if not isinstance(settings[field], type_match):
                     logger.warning(f"load_animator_settings: in {context}: incorrect type for '{field}': got {type(settings[field])} with value '{settings[field]}', expected {type_match}")
                     settings.pop(field)  # (safe; this is not the collection we are iterating over)
+                    continue
+                if isinstance(default_value, dict):
+                    typecheck(settings[field], default_value, f"{context}.{field}")
 
-        def aggregate(settings: Dict[str, Any], fallback_settings: Dict[str, Any], fallback_context: str) -> None:  # DANGER: MUTATING FUNCTION
+        def aggregate(settings: Dict[str, Any], fallback_settings: Mapping[str, Any], fallback_context: str) -> None:
             filled_fields = []
-            for field, default_value in fallback_settings.items():
+            for field, fallback_value in fallback_settings.items():
                 if field not in settings:
                     filled_fields.append(field)
-                    settings[field] = default_value
-            if filled_fields:  # less spammy logging: report everything at once
+                    settings[field] = fallback_value
+                elif isinstance(fallback_value, dict) and isinstance(settings[field], dict):
+                    aggregate(settings[field], fallback_value, f"{fallback_context}.{field}")
+            if filled_fields:  # less spammy logging: report everything at one level at a time
                 plural_s = "s" if len(filled_fields) != 1 else ""
                 logger.info(f"load_animator_settings: filling in field{plural_s} {filled_fields} from {fallback_context}")
-
-        def validate_subkeys(settings: Dict[str, Any], defaults: Mapping[str, Any], context: str) -> None:  # DANGER: MUTATING FUNCTION
-            """Warn on unknown keys in a (typically nested) settings dict, drop them, then fill missing
-            keys from `defaults`.
-
-            `drop_unrecognized` handles the warn-and-drop half for the top-level animator settings, and
-            `aggregate` handles the fill half there, but neither recurses into nested dicts — so nested
-            dicts need their own pass. Not crop-specific; any nested dict with a known fixed key set
-            and per-key defaults can be validated this way.
-            """
-            valid_set = set(defaults.keys())
-            unknown_fields = [k for k in settings if k not in valid_set]
-            if unknown_fields:
-                logger.warning(f"load_animator_settings: in {context}: unrecognized keys {sorted(unknown_fields)}; ignoring them")
-                for k in unknown_fields:
-                    settings.pop(k)
-            missing_fields = [k for k in defaults if k not in settings]
-            if missing_fields:
-                logger.info(f"load_animator_settings: in {context}: filling missing keys {sorted(missing_fields)} from defaults")
-                for k in missing_fields:
-                    settings[k] = defaults[k]
-
-        def maybe_validate_nested(settings: Dict[str, Any], key: str, context: str) -> None:
-            """Convenience wrapper: if `settings[key]` is a nested dict, validate its subkeys against
-            `animator_defaults[key]`. Top-level `drop_unrecognized` + `typecheck` have already run, so
-            any non-dict value at that key has been dropped; this handles "key present and is a dict"."""
-            if key in settings and isinstance(settings[key], dict):
-                validate_subkeys(settings[key], _server_config.animator_defaults[key], f"{context}.{key}")
 
         # Now our settings loading strategy is as simple as:
         settings = dict(settings)  # copy to avoid modifying the original, since we'll pop some stuff.
         if settings:
-            drop_unrecognized(settings, context="user settings")
-            typecheck(settings, context="user settings")
-            maybe_validate_nested(settings, "crop", context="user settings")
+            drop_unrecognized(settings, _server_config.animator_defaults, context="user settings")
+            typecheck(settings, _server_config.animator_defaults, context="user settings")
         if server_settings:
-            drop_unrecognized(server_settings, context="server settings")
-            typecheck(server_settings, context="server settings")
-            maybe_validate_nested(server_settings, "crop", context="server settings")
+            drop_unrecognized(server_settings, _server_config.animator_defaults, context="server settings")
+            typecheck(server_settings, _server_config.animator_defaults, context="server settings")
         # both `settings` and `server_settings` are fully valid at this point
         aggregate(settings, fallback_settings=server_settings, fallback_context="server settings")  # first fill in from server-side settings
         aggregate(settings, fallback_settings=_server_config.animator_defaults, fallback_context="built-in defaults")  # then fill in from hardcoded defaults
