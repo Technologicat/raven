@@ -27,11 +27,16 @@ from .. import resample as audio_resample
 class STTModel:
     """Loaded Whisper model + its processor + the device and dtype it lives on.
 
+    `model_name`: the HuggingFace repo identifier this instance was loaded from
+                  (e.g. `"openai/whisper-base"`). Available as metadata for
+                  diagnostics and info endpoints.
+
     `sample_rate` mirrors `processor.feature_extractor.sampling_rate` — the model's
     native input rate (Whisper is 16 kHz). `transcribe` auto-resamples mismatched
     input, so callers don't have to pre-convert; the field is available as metadata
     for callers that want to inspect or display it.
     """
+    model_name: str
     model: transformers.AutoModelForSpeechSeq2Seq
     processor: transformers.AutoProcessor
     device: torch.device
@@ -75,7 +80,8 @@ def load_stt_model(model_name: str,
                                                                    dtype=dtype,
                                                                    use_safetensors=True).to(device)
 
-    stt_model = STTModel(model=model,
+    stt_model = STTModel(model_name=model_name,
+                         model=model,
                          processor=processor,
                          device=device,
                          dtype=dtype if isinstance(dtype, torch.dtype) else getattr(torch, str(dtype)),

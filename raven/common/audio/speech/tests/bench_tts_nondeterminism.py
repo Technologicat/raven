@@ -66,11 +66,11 @@ def main() -> None:
     ap.add_argument("--voice", default=DEFAULT_VOICE, help="Voice name. Default: first voice alphabetically.")
     ap.add_argument("--device", default=DEFAULT_DEVICE, help=f"Torch device string. Default: {DEFAULT_DEVICE!r}")
     ap.add_argument("--runs", type=int, default=DEFAULT_RUNS, help=f"Number of runs to compare pairwise. Default: {DEFAULT_RUNS}")
-    ap.add_argument("--repo", default=DEFAULT_REPO, help=f"Kokoro HF repo. Default: {DEFAULT_REPO!r}")
+    ap.add_argument("--model-name", default=DEFAULT_REPO, help=f"Kokoro HF repo. Default: {DEFAULT_REPO!r}")
     args = ap.parse_args()
 
-    print(f"Loading Kokoro ({args.repo}) on {args.device}...")
-    pipeline = speech_tts.load_tts_pipeline(repo_id=args.repo, device_string=args.device)
+    print(f"Loading Kokoro ({args.model_name}) on {args.device}...")
+    pipeline = speech_tts.load_tts_pipeline(model_name=args.model_name, device_string=args.device)
 
     voice = args.voice or speech_tts.get_voices(pipeline)[0]
     print(f"Voice: {voice}")

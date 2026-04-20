@@ -176,6 +176,10 @@ class EncodedTTSResult:
 class TTSPipeline:
     """Loaded Kokoro pipeline + the on-disk location of its voice files.
 
+    `model_name`: the HuggingFace repo identifier this pipeline was loaded
+                  from (e.g. `"hexgrad/Kokoro-82M"`). Available as metadata
+                  for diagnostics and info endpoints.
+
     `kpipeline`: the live `kokoro.KPipeline` instance.
 
     `modelsdir`: filesystem path where the Kokoro model repo is installed.
@@ -190,28 +194,30 @@ class TTSPipeline:
 
     `eq=False` on the dataclass: identity-based hashing, so a `TTSPipeline`
     instance is usable as an `lru_cache` key (see `prepare_cached`). Safe
-    because pipelines are singletons per `(repo_id, device_string, lang_code)`
+    because pipelines are singletons per `(model_name, device_string, lang_code)`
     via `_tts_pipelines`.
     """
+    model_name: str
     kpipeline: kokoro.KPipeline
     modelsdir: str
     lang_code: str
     sample_rate: int
 
 
-# Cache, keyed by (repo_id, device_string, lang_code). Same pattern as `nlptools._spacy_pipelines`.
+# Cache, keyed by (model_name, device_string, lang_code). Same pattern as `nlptools._spacy_pipelines`.
 _tts_pipelines: dict[tuple[str, str, str], TTSPipeline] = {}
 
 
-def load_tts_pipeline(repo_id: str,
+def load_tts_pipeline(model_name: str,
                       device_string: str,
                       lang_code: str = "a") -> TTSPipeline:
     """Load (and cache) a Kokoro pipeline.
 
-    `repo_id`: HuggingFace repo, e.g. `"hexgrad/Kokoro-82M"`. Auto-downloaded
-               via `maybe_install_models` if not present. Downloading the full
-               repo is required even for in-process use, because `get_voices`
-               reads the voice files from disk (Kokoro has no voice-listing API).
+    `model_name`: HuggingFace repo identifier, e.g. `"hexgrad/Kokoro-82M"`.
+                  Auto-downloaded via `maybe_install_models` if not present.
+                  Downloading the full repo is required even for in-process
+                  use, because `get_voices` reads the voice files from disk
+                  (Kokoro has no voice-listing API).
 
     `device_string`: e.g. `"cpu"`, `"cuda:0"`. Forwarded to Kokoro.
 
@@ -235,21 +241,22 @@ def load_tts_pipeline(repo_id: str,
     - Linux: `sudo apt install espeak-ng`
     - Windows: see installation notes at https://github.com/hexgrad/kokoro
 
-    Repeat calls with the same `(repo_id, device_string, lang_code)` return
+    Repeat calls with the same `(model_name, device_string, lang_code)` return
     the cached pipeline; the underlying model is loaded at most once per process.
     """
-    cache_key = (repo_id, device_string, lang_code)
+    cache_key = (model_name, device_string, lang_code)
     if (cached := _tts_pipelines.get(cache_key)) is not None:
         logger.info(f"load_tts_pipeline: returning cached pipeline for {cache_key}")
         return cached
 
-    logger.info(f"load_tts_pipeline: ensuring Kokoro models are installed at '{repo_id}'.")
-    modelsdir = maybe_install_models(repo_id)
+    logger.info(f"load_tts_pipeline: ensuring Kokoro models are installed at '{model_name}'.")
+    modelsdir = maybe_install_models(model_name)
 
     logger.info(f"load_tts_pipeline: loading on '{device_string}', lang_code='{lang_code}'.")
-    kpipeline = kokoro.KPipeline(lang_code=lang_code, device=device_string, repo_id=repo_id)
+    kpipeline = kokoro.KPipeline(lang_code=lang_code, device=device_string, repo_id=model_name)  # Kokoro's parameter is still `repo_id`
 
-    pipeline = TTSPipeline(kpipeline=kpipeline,
+    pipeline = TTSPipeline(model_name=model_name,
+                           kpipeline=kpipeline,
                            modelsdir=modelsdir,
                            lang_code=lang_code,
                            sample_rate=SAMPLE_RATE)

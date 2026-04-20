@@ -25,7 +25,7 @@ from raven.common.audio.speech import tts as speech_tts  # noqa: E402
 
 @pytest.fixture(scope="session")
 def tts_pipeline() -> speech_tts.TTSPipeline:
-    return speech_tts.load_tts_pipeline(repo_id="hexgrad/Kokoro-82M",
+    return speech_tts.load_tts_pipeline(model_name="hexgrad/Kokoro-82M",
                                         device_string="cpu",
                                         lang_code="a")
 

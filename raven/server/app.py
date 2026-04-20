@@ -1036,6 +1036,29 @@ def api_sanitize_dehyphenate():
 
 # TODO: add OpenAI compatible "/api/v1/audio/transcriptions", for other client apps?
 
+@app.route("/api/stt/info")
+def api_stt_info():
+    """Return metadata about the loaded STT model.
+
+    No inputs.
+
+    Output is JSON::
+
+        {"sample_rate": 16000,
+         "model": "openai/whisper-base"}
+
+    `sample_rate` is the model's native input rate in Hz. `model` is the
+    HuggingFace repo identifier the server loaded. Clients use this to avoid
+    hardcoding canonical values that might drift if the server config changes.
+    """
+    if not stt.is_available():
+        abort(403, "Module 'stt' not running")
+    try:
+        return jsonify(stt.get_info())
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_stt_info: failed, reason: {type(exc)}: {exc}")
+
 @app.route("/api/stt/transcribe", methods=["POST"])
 def api_stt_transcribe():
     """Transcribe speech audio into text.
@@ -1157,6 +1180,29 @@ def _list_voices():
     except Exception as exc:
         traceback.print_exc()
         abort(400, f"_list_voices: failed, reason: {type(exc)}: {exc}")
+
+@app.route("/api/tts/info")
+def api_tts_info():
+    """Return metadata about the loaded TTS model.
+
+    No inputs.
+
+    Output is JSON::
+
+        {"sample_rate": 24000,
+         "model": "hexgrad/Kokoro-82M"}
+
+    `sample_rate` is the model's native output rate in Hz. `model` is the
+    HuggingFace repo identifier the server loaded. Clients use this to avoid
+    hardcoding canonical values that might drift if the server config changes.
+    """
+    if not tts.is_available():
+        abort(403, "Module 'tts' not running")
+    try:
+        return jsonify(tts.get_info())
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_tts_info: failed, reason: {type(exc)}: {exc}")
 
 @app.route("/api/tts/list_voices")
 def api_tts_list_voices():

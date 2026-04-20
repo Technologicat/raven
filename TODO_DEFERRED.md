@@ -48,16 +48,6 @@ Reference for the design constraint: JSON-serializable dicts on the wire, native
 
 Discovered during step 5 review (2026-04-18).
 
-## Server info endpoint: expose STT/TTS native sample rates
-
-`raven.client.mayberemote.STT` and `.TTS` both need to know their engine's native sample rate. In local mode they read it off the loaded model; in remote mode they currently hardcode the canonical value (Whisper 16 kHz, Kokoro 24 kHz). That couples the MaybeRemote client's assumption to the server's actual model choice — fine today (both architectures have fixed rates), fragile long-term.
-
-Concrete fix: a small info endpoint like `/api/stt/info` / `/api/tts/info` returning e.g. `{"sample_rate": 16000, "model": "openai/whisper-base"}`. MaybeRemote queries it at `__init__` time in remote mode, caches the result. No hardcoded canonical constants on the client side.
-
-Could also cover `/api/embeddings/info` for the embedding model name / dim, etc. — small uniformity win.
-
-Discovered during step 5 review (2026-04-18).
-
 ## Additional `MaybeRemoteService` candidates (classify, translate)
 
 `raven.client.mayberemote` currently wraps `Dehyphenator` (→ sanitize), `Embedder` (→ embeddings), `NLP` (→ natlang). Once the in-progress speech-extract-to-common work lands `TTS` / `STT`, the ML-engine server modules that *still* have no local fallback are:

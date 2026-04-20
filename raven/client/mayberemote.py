@@ -262,15 +262,9 @@ class STT(MaybeRemoteService):
         self.device_string = device_string
         self.dtype = dtype
 
-        # Whisper's canonical input sample rate. In local mode we read this off the
-        # loaded model; in remote mode we assume the canonical value so `sample_rate`
-        # is populated before the first call. If upstream ever changes this, both
-        # modes fail loud (local: validation in `speech_stt.transcribe`; remote: the
-        # server mirrors the same value).
-        self.sample_rate = 16000
-
         if "stt" in self.server_modules:
             logger.info(f"STT.__init__: Using `stt` module on Raven-server at '{client_config.raven_server_url}'.")
+            self.sample_rate = api.stt_info()["sample_rate"]
         else:
             if self.server_available:
                 logger.info(f"STT.__init__: No `stt` module loaded on Raven-server at '{client_config.raven_server_url}', loading Whisper model locally.")
@@ -313,7 +307,7 @@ class STT(MaybeRemoteService):
 class TTS(MaybeRemoteService):
     def __init__(self,
                  allow_local: bool,
-                 repo_id: Optional[str] = None,
+                 model_name: Optional[str] = None,
                  device_string: Optional[str] = None,
                  lang_code: str = "a"):
         """Text-to-speech (Kokoro).
@@ -322,8 +316,8 @@ class TTS(MaybeRemoteService):
                        apps that only occasionally need TTS should prefer
                        `allow_local=False`.
 
-        `repo_id`: Required if `allow_local=True`. HuggingFace repo, e.g.
-                   `"hexgrad/Kokoro-82M"`.
+        `model_name`: Required if `allow_local=True`. HuggingFace repo
+                      identifier, e.g. `"hexgrad/Kokoro-82M"`.
 
         `device_string`: Required if `allow_local=True`. E.g. `"cpu"`, `"cuda:0"`.
 
@@ -333,20 +327,20 @@ class TTS(MaybeRemoteService):
                      full list.
         """
         super().__init__(allow_local)
-        self.repo_id = repo_id
+        self.model_name = model_name
         self.device_string = device_string
         self.lang_code = lang_code
 
-        self.sample_rate = speech_tts.SAMPLE_RATE
-
         if "tts" in self.server_modules:
             logger.info(f"TTS.__init__: Using `tts` module on Raven-server at '{client_config.raven_server_url}'.")
+            self.sample_rate = api.tts_info()["sample_rate"]
         else:
             if self.server_available:
                 logger.info(f"TTS.__init__: No `tts` module loaded on Raven-server at '{client_config.raven_server_url}', loading Kokoro pipeline locally.")
-            self._local_model = speech_tts.load_tts_pipeline(repo_id=repo_id,
+            self._local_model = speech_tts.load_tts_pipeline(model_name=model_name,
                                                              device_string=device_string,
                                                              lang_code=lang_code)
+            self.sample_rate = self._local_model.sample_rate
 
     def list_voices(self) -> List[str]:
         """List installed voices. Remote uses the server's /api/tts/list_voices; local scans the modelsdir."""

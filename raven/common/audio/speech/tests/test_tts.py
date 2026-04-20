@@ -19,7 +19,7 @@ from raven.common.audio.speech import tts as speech_tts  # noqa: E402
 
 @pytest.fixture(scope="session")
 def pipeline() -> speech_tts.TTSPipeline:
-    return speech_tts.load_tts_pipeline(repo_id="hexgrad/Kokoro-82M",
+    return speech_tts.load_tts_pipeline(model_name="hexgrad/Kokoro-82M",
                                         device_string="cpu",
                                         lang_code="a")
 
@@ -39,7 +39,7 @@ class TestLoad:
         assert os.path.isdir(pipeline.modelsdir)
 
     def test_load_is_cached(self, pipeline):
-        second = speech_tts.load_tts_pipeline(repo_id="hexgrad/Kokoro-82M",
+        second = speech_tts.load_tts_pipeline(model_name="hexgrad/Kokoro-82M",
                                               device_string="cpu",
                                               lang_code="a")
         assert second is pipeline

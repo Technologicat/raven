@@ -6,7 +6,7 @@ transport concerns: audio container decoding, config-module lookup,
 and the tqdm progress bar for server console output.
 """
 
-__all__ = ["init_module", "is_available", "speech_to_text"]
+__all__ = ["init_module", "is_available", "get_info", "speech_to_text"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -46,6 +46,18 @@ def init_module(config_module_name: str, device_string: str, dtype: Union[str, t
 def is_available() -> bool:
     """Return whether this module is up and running."""
     return (_stt_model is not None)
+
+def get_info() -> dict:
+    """Return engine metadata as a JSON-serializable dict.
+
+    Current fields:
+        `sample_rate`: native input sample rate, Hz (Whisper: 16000).
+        `model`: HuggingFace repo identifier for the loaded STT model.
+    """
+    if _stt_model is None:
+        raise RuntimeError("get_info: model not initialized (did `init_module` succeed?)")
+    return {"sample_rate": _stt_model.sample_rate,
+            "model": _stt_model.model_name}
 
 # TODO: the input is a flask.request.file.stream; what's the type of that?
 def speech_to_text(stream,

@@ -12,7 +12,7 @@ per-word phoneme timings as URL-encoded JSON in the `x-word-timestamps`
 response header.
 """
 
-__all__ = ["init_module", "is_available", "get_voices", "text_to_speech"]
+__all__ = ["init_module", "is_available", "get_info", "get_voices", "text_to_speech"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +50,7 @@ def init_module(config_module_name: str, device_string: str, lang_code: str = "a
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}tts{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
     try:
         server_config = importlib.import_module(config_module_name)
-        _pipeline = speech_tts.load_tts_pipeline(repo_id=server_config.kokoro_models,
+        _pipeline = speech_tts.load_tts_pipeline(model_name=server_config.kokoro_models,
                                                  device_string=device_string,
                                                  lang_code=lang_code)
     except Exception as exc:
@@ -62,6 +62,18 @@ def init_module(config_module_name: str, device_string: str, lang_code: str = "a
 def is_available() -> bool:
     """Return whether this module is up and running."""
     return (_pipeline is not None)
+
+def get_info() -> dict:
+    """Return engine metadata as a JSON-serializable dict.
+
+    Current fields:
+        `sample_rate`: native output sample rate, Hz (Kokoro: 24000).
+        `model`: HuggingFace repo identifier for the loaded TTS model.
+    """
+    if _pipeline is None:
+        raise RuntimeError("get_info: pipeline not initialized (did `init_module` succeed?)")
+    return {"sample_rate": _pipeline.sample_rate,
+            "model": _pipeline.model_name}
 
 def get_voices() -> List[str]:
     """Get a list of available voices.

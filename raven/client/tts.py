@@ -3,7 +3,8 @@
 This module coordinates lipsync between the TTS and the avatar, and implements the actual client-side audio output.
 """
 
-__all__ = ["tts_list_voices",
+__all__ = ["tts_info",
+           "tts_list_voices",
            "tts_warmup",
            "tts_prepare",
            "tts_prepare_cached",
@@ -24,7 +25,7 @@ import json
 import requests
 import time
 import traceback
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 import urllib.parse
 
 from unpythonic import timer, sym
@@ -123,6 +124,20 @@ phoneme_to_morph = {
 
 # --------------------------------------------------------------------------------
 # API
+
+def tts_info() -> Dict[str, Any]:
+    """Get metadata about the speech synthesizer (native sample rate, HF repo name).
+
+    Returns a dict with `sample_rate` (Hz, int) and `model` (HuggingFace repo id, str).
+    Clients use this to avoid hardcoding canonical values that might drift if the
+    server config changes.
+    """
+    if not util.api_initialized:
+        raise RuntimeError("tts_info: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/tts/info", headers=headers)
+    util.yell_on_error(response)
+    return response.json()
 
 def tts_list_voices() -> List[str]:
     """Return a list of voice names supported by the TTS endpoint (if the endpoint is available).

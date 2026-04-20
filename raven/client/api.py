@@ -47,8 +47,10 @@ __all__ = ["initialize",
            "imagefx_upscale", "imagefx_upscale_file", "imagefx_upscale_array",
            "natlang_analyze",
            "sanitize_dehyphenate",
+           "stt_info",
            "stt_transcribe", "stt_transcribe_file", "stt_transcribe_array",
            "translate_translate",
+           "tts_info",
            "tts_list_voices",
            "tts_prepare",
            "tts_prepare_cached",
@@ -86,7 +88,7 @@ from ..common import netutil
 from ..common import nlptools
 from ..server.modules import avatarutil
 
-from .tts import tts_list_voices, tts_prepare, tts_prepare_cached, tts_prepare_decoded_cached, tts_speak, tts_speak_lipsynced, tts_stop, tts_speaking, tts_warmup  # noqa: F401 -- re-export
+from .tts import tts_info, tts_list_voices, tts_prepare, tts_prepare_cached, tts_prepare_decoded_cached, tts_speak, tts_speak_lipsynced, tts_stop, tts_speaking, tts_warmup  # noqa: F401 -- re-export
 from . import util  # for the `api_initialized` flag (must be looked up on the `util` module each time it is used, because the flag is not boxed)  # TODO: box it, or wrap it in a property?
 
 from .util import api_config, yell_on_error  # noqa: F401 -- re-export
@@ -673,6 +675,20 @@ def sanitize_dehyphenate(text: Union[str, List[str]]) -> Union[str, List[str]]:
 
 # --------------------------------------------------------------------------------
 # STT
+
+def stt_info() -> Dict[str, Any]:
+    """Get metadata about the speech recognition model (native sample rate, HF repo name).
+
+    Returns a dict with `sample_rate` (Hz, int) and `model` (HuggingFace repo id, str).
+    Clients use this to avoid hardcoding canonical values that might drift if the
+    server config changes.
+    """
+    if not util.api_initialized:
+        raise RuntimeError("stt_info: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/stt/info", headers=headers)
+    util.yell_on_error(response)
+    return response.json()
 
 def stt_transcribe(stream,
                    prompt: Optional[str] = None,
