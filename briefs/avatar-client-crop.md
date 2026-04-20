@@ -1,5 +1,13 @@
 # Client-side Crop Support — Implementation Plan
 
+**Status: implemented (2026-04-20).** All four phases landed end-to-end:
+- Phase 0 `d2fcf5b` — reactive texture sizing from decoded frame dims.
+- Phase 1 `9b6011d` — client honours the crop bbox; `X-Crop` + `X-Full-Size` per-frame headers; new `crop` dict format.
+- Phase 2 `7d5bfed` — Crop GUI panel in the settings editor (sliders with gap clamping, debounced push via `bgtask.ManagedTask`, live overlay preview via viewport drawlist with panel clipping, FPS counter moved to a second viewport drawlist so it stays readable on top of the overlay, `X-Server-Stats` for per-phase server timings shown in the FPS counter).
+- Phase 3 `81804a6` — server-side `crop → upscale → postprocess` reorder (was `upscale → crop → postprocess`). `Upscaler.reconfigure_output_size` is a cheap attribute update (no NN reinit needed — Anime4K handles variable input via `AutoDownscalePre`). `Animator.render_pipeline_lock` serializes the render thread against the settings handler.
+
+The rest of this document is the plan that drove the implementation, kept for historical reference.
+
 References:
 - `raven/client/avatar_renderer.py:18` (standing TODO: "support non-square avatar video stream")
 - `raven/server/modules/avatar.py:1415`, `1511–1521` (server-side crop)
