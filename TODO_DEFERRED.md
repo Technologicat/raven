@@ -26,6 +26,10 @@ Remaining work:
 
 Not urgent — current server-mode playback works fine. Lift when an app wants to do TTS without the server running (e.g. a standalone librarian). Discovered during TTS return-format review (2026-04-20; replaces the earlier "`TTSResult` or `EncodedTTSResult`?" framing which has been resolved).
 
+## `/api/embeddings/info` endpoint
+
+Parallel to the `/api/{stt,tts}/info` endpoints. Should expose at least model name and embedding dimension; add other engine metadata as use cases appear. Discovered during STT/TTS info-endpoint work (2026-04-21).
+
 ## Language-neutral wire format for the `natlang` (spaCy) endpoint
 
 `raven.server.modules.natlang` / `raven.common.nlptools.spacy_analyze` currently serialize results with `DocBin.to_bytes()` (see `raven/common/nlptools.py:254`) and reconstruct on the client side via `DocBin().from_bytes()` (line 274). `DocBin` is a spaCy-internal binary blob — efficient and lossless for Python clients, but invisible to any other language runtime. A future JavaScript client can't talk to this endpoint.
