@@ -627,6 +627,10 @@ class Animator:
 
         self.target_size = poser.get_image_size()
         self.upscaler = None
+        # Serializes the render pipeline's crop→upscale→postprocess region against settings-handler
+        # updates. Rendering proceeds at ~25 Hz and each call holds the lock for ~40 ms; settings
+        # updates are rare, so contention is negligible in practice.
+        self.render_pipeline_lock = threading.Lock()
         self.upscale_factor = None  # Nice to know; but also so that we can re-instantiate the upscaler only when the settings actually change.
         self.upscale_preset = None
         self.upscale_quality = None
@@ -861,33 +865,36 @@ class Animator:
         encoder = _avatar_instances[self.instance_id]["encoder"]
         encoder.output_format = settings.pop("format")
 
-        logger.debug("load_animator_settings: Sending new effect chain to postprocessor")
-        self.postprocessor.chain = settings.pop("postprocessor_chain")  # ...and that's where the postprocessor reads its filter settings from.
+        # Postprocessor chain swap and upscaler re-instantiation both touch pipeline state that the
+        # render thread reads mid-frame — serialize against render via `render_pipeline_lock`.
+        with self.render_pipeline_lock:
+            logger.debug("load_animator_settings: Sending new effect chain to postprocessor")
+            self.postprocessor.chain = settings.pop("postprocessor_chain")  # ...and that's where the postprocessor reads its filter settings from.
 
-        if settings["upscale"] != 1.0:
-            # Avoid unnecessary hiccup (if the settings are changed while the animator is running) by re-instantiating the upscaler only when we have to.
-            if settings["upscale"] == self.upscale_factor and settings["upscale_preset"] == self.upscale_preset and settings["upscale_quality"] == self.upscale_quality:
-                logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, preset {settings['upscale_preset']}, quality {settings['upscale_quality']}; reusing existing upscaler.")
-                # Can only happen when this is the second or later settings load in the same server session, so `self.target_size` has already been initialized.
+            if settings["upscale"] != 1.0:
+                # Avoid unnecessary hiccup (if the settings are changed while the animator is running) by re-instantiating the upscaler only when we have to.
+                if settings["upscale"] == self.upscale_factor and settings["upscale_preset"] == self.upscale_preset and settings["upscale_quality"] == self.upscale_quality:
+                    logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, preset {settings['upscale_preset']}, quality {settings['upscale_quality']}; reusing existing upscaler.")
+                    # Can only happen when this is the second or later settings load in the same server session, so `self.target_size` has already been initialized.
+                else:
+                    logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, preset {settings['upscale_preset']}, quality {settings['upscale_quality']}; configuring upscaler.")
+                    self.target_size = int(settings["upscale"] * self.poser.get_image_size())
+                    self.upscaler = Upscaler(device=self.device,
+                                             dtype=self.poser.dtype,
+                                             upscaled_width=self.target_size,
+                                             upscaled_height=self.target_size,
+                                             preset=settings["upscale_preset"],
+                                             quality=settings["upscale_quality"])
+                self.upscale_factor = settings["upscale"]
+                self.upscale_preset = settings["upscale_preset"]
+                self.upscale_quality = settings["upscale_quality"]
             else:
-                logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x, preset {settings['upscale_preset']}, quality {settings['upscale_quality']}; configuring upscaler.")
-                self.target_size = int(settings["upscale"] * self.poser.get_image_size())
-                self.upscaler = Upscaler(device=self.device,
-                                         dtype=self.poser.dtype,
-                                         upscaled_width=self.target_size,
-                                         upscaled_height=self.target_size,
-                                         preset=settings["upscale_preset"],
-                                         quality=settings["upscale_quality"])
-            self.upscale_factor = settings["upscale"]
-            self.upscale_preset = settings["upscale_preset"]
-            self.upscale_quality = settings["upscale_quality"]
-        else:
-            logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x; switching upscaler off.")
-            self.target_size = self.poser.get_image_size()
-            self.upscaler = None
-            self.upscale_factor = None
-            self.upscale_preset = None
-            self.upscale_quality = None
+                logger.debug(f"load_animator_settings: Upscale factor {settings['upscale']}x; switching upscaler off.")
+                self.target_size = self.poser.get_image_size()
+                self.upscaler = None
+                self.upscale_factor = None
+                self.upscale_preset = None
+                self.upscale_quality = None
 
         # The backdrop image is applied at the client end.
         # We just have the settings in the default config so that the server won't complain upon loading an animator settings file that contains them. This is also to document them.
@@ -1559,27 +1566,49 @@ class Animator:
                     output_image = compositor.render_celstack(output_image, fx_celstack, self.torch_cels)
                     maybe_sync_cuda()
 
-            with timer() as tim_upscale:
-                if self.upscaler is not None:
-                    output_image = self.upscaler.upscale(output_image)
-                    maybe_sync_cuda()
+            # Crop → upscale → postprocess. The crop goes BEFORE the upscaler so that with an expensive
+            # upscaler (Anime4K) and an aggressive crop, the upscaler only processes the kept region —
+            # this is what makes Anime4K viable on lower-end hardware when a narrow crop is in effect.
+            # The region is protected by `render_pipeline_lock`: mid-frame settings updates (upscaler
+            # reconfigure, postprocessor chain swap) wait their turn rather than tearing a frame.
+            with self.render_pipeline_lock:
+                # Snapshot the uncropped post-upscale size for the client's per-frame header.
+                # This is the size the full (non-cropped) upscaled frame *would* have occupied, so the
+                # client can position the cropped texture where the full square would have been.
+                _, h_poser, w_poser = output_image.shape
+                upscale_factor_for_header = self.upscale_factor if self.upscale_factor is not None else 1.0
+                full_size = (int(w_poser * upscale_factor_for_header), int(h_poser * upscale_factor_for_header))
 
-            # A simple crop filter, for removing empty space around character.
-            # Apply this now so that if we're cropping, the postprocessor has fewer pixels to process.
-            with timer() as tim_crop:
-                c, h, w = output_image.shape
-                full_size = (w, h)  # snapshot the uncropped size for the per-frame header; client uses it for widget positioning
-                if do_crop:
-                    x1 = int(crop_snapshot["left"]   * w)
-                    x2 = int(crop_snapshot["right"]  * w)
-                    y1 = int(crop_snapshot["top"]    * h)
-                    y2 = int(crop_snapshot["bottom"] * h)
-                    output_image = output_image[:, y1:y2, x1:x2]
-                    maybe_sync_cuda()
+                with timer() as tim_crop:
+                    if do_crop:
+                        c, h, w = output_image.shape
+                        x1 = int(crop_snapshot["left"]   * w)
+                        x2 = int(crop_snapshot["right"]  * w)
+                        y1 = int(crop_snapshot["top"]    * h)
+                        y2 = int(crop_snapshot["bottom"] * h)
+                        output_image = output_image[:, y1:y2, x1:x2]
+                        maybe_sync_cuda()
 
-            with timer() as tim_postproc:
-                self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
-                maybe_sync_cuda()
+                with timer() as tim_upscale:
+                    if self.upscaler is not None:
+                        # Track the cropped size through upscale: with crop-before-upscale, the target
+                        # is `upscale_factor × cropped_poser_size`, which changes whenever the crop
+                        # bbox changes. `reconfigure_output_size` is a cheap attribute update (no NN
+                        # re-instantiation) when input size varies, since the pipeline handles
+                        # variable input via `AutoDownscalePre`.
+                        _, cropped_h, cropped_w = output_image.shape
+                        target_w = int(cropped_w * self.upscale_factor)
+                        target_h = int(cropped_h * self.upscale_factor)
+                        self.upscaler.reconfigure_output_size(target_w, target_h)
+                        output_image = self.upscaler.upscale(output_image)
+                        maybe_sync_cuda()
+
+                with timer() as tim_postproc:
+                    # Postprocessor re-inits its per-resolution state lazily on first render_into at a
+                    # new size, so no explicit reconfigure is needed here even after the crop changes.
+                    # (See raven/common/video/postprocessor.py:512.)
+                    self.postprocessor.render_into(output_image)  # apply pixel-space glitch artistry
+                    maybe_sync_cuda()
 
             with timer() as tim_gamma:
                 output_image[:3, :, :] = torch_linear_to_srgb(output_image[:3, :, :])  # apply gamma correction
