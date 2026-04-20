@@ -74,11 +74,15 @@ class TestJsonAttachmentRoundtrip:
 BOUNDARY = "--frame"
 
 
-def _build_part(body: bytes, mimetype: str = "image/jpeg") -> bytes:
+def _build_part(body: bytes, mimetype: str = "image/jpeg", extra_headers: dict = None) -> bytes:
+    extras = ""
+    if extra_headers:
+        extras = "".join(f"{k}: {v}\r\n" for k, v in extra_headers.items())
     return (
         f"{BOUNDARY}\r\n"
         f"Content-Type: {mimetype}\r\n"
         f"Content-Length: {len(body)}\r\n"
+        f"{extras}"
         f"\r\n"
     ).encode("utf-8") + body
 
@@ -142,6 +146,60 @@ class TestMultipartExtractor:
         gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, "image/jpeg")
         _mime, _headers, payload = next(gen)
         assert payload == body
+
+    def test_no_extra_headers_yields_empty_dict(self):
+        stream = iter([_build_part(b"x")])
+        gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, "image/jpeg")
+        _mime, headers, _payload = next(gen)
+        assert headers == {}
+
+    def test_extra_headers_captured(self):
+        stream = iter([_build_part(b"x", extra_headers={"X-Foo": "bar", "X-Baz": "qux"})])
+        gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, "image/jpeg")
+        _mime, headers, _payload = next(gen)
+        assert headers == {"x-foo": "bar", "x-baz": "qux"}
+
+    def test_extra_header_keys_are_lowercased(self):
+        stream = iter([_build_part(b"x", extra_headers={"X-MiXeD-CaSe": "preserved"})])
+        gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, "image/jpeg")
+        _mime, headers, _payload = next(gen)
+        assert "x-mixed-case" in headers
+        assert headers["x-mixed-case"] == "preserved"
+
+    def test_extra_header_value_with_colons(self):
+        # Real-world case: avatar stream sends JSON-encoded dicts in X-* headers
+        # (e.g. x-crop bbox, x-server-stats). The JSON contains colons — the parser
+        # must split on the FIRST colon only to avoid corrupting the value.
+        json_value = json.dumps({"x": 10, "y": 20, "w": 100, "h": 200})
+        stream = iter([_build_part(b"x", extra_headers={"X-Crop": json_value})])
+        gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, "image/jpeg")
+        _mime, headers, _payload = next(gen)
+        assert json.loads(headers["x-crop"]) == {"x": 10, "y": 20, "w": 100, "h": 200}
+
+    def test_extra_content_star_headers_are_dropped(self):
+        # Content-Encoding / Content-Language and other Content-* headers are
+        # transport details — explicitly not surfaced via extra_headers.
+        stream = iter([_build_part(b"x", extra_headers={"Content-Encoding": "identity",
+                                                         "X-Keep": "me"})])
+        gen = netutil.multipart_x_mixed_replace_payload_extractor(stream, BOUNDARY, "image/jpeg")
+        _mime, headers, _payload = next(gen)
+        assert "content-encoding" not in headers
+        assert headers == {"x-keep": "me"}
+
+    def test_extra_headers_persist_across_parts(self):
+        # Each part's extras are independent; no leakage from one part to the next.
+        parts = [
+            _build_part(b"first", extra_headers={"X-Index": "0"}),
+            _build_part(b"second", extra_headers={"X-Index": "1", "X-Extra": "only-here"}),
+            _build_part(b"third"),
+        ]
+        gen = netutil.multipart_x_mixed_replace_payload_extractor(iter(parts), BOUNDARY, "image/jpeg")
+        _m, h0, _p = next(gen)
+        _m, h1, _p = next(gen)
+        _m, h2, _p = next(gen)
+        assert h0 == {"x-index": "0"}
+        assert h1 == {"x-index": "1", "x-extra": "only-here"}
+        assert h2 == {}
 
     def test_exhausted_source_raises_eof_on_next(self):
         # After yielding the one part, the generator tries to resync for the next;
