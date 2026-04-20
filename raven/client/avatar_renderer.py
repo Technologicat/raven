@@ -106,7 +106,7 @@ class DPGAvatarRenderer:
         Once you have instantiated `DPGAvatarRenderer`, you can call the `configure_*` methods at any time,
         and as many times as you need.
 
-        After you have called `configure_live_texture` (at least once), you can connect to Raven-server and start
+        You can optionally call `configure_live_texture` once at setup to pre-seed the size, then connect to Raven-server and start
         displaying the avatar video stream by calling `start`. You will need to provide the avatar instance ID of
         the avatar session to connect to; you get this ID by calling `raven.client.api.load_avatar`.
 
@@ -137,7 +137,8 @@ class DPGAvatarRenderer:
 
         self.avatar_instance_id = None  # initialized at `start`
         self.animator_running = False
-        self.image_size = None  # initialized at first call of `configure_live_texture`
+        self.image_w = None  # width of current texture/frame, in pixels; set by `configure_live_texture`
+        self.image_h = None  # height of current texture/frame, in pixels; set by `configure_live_texture`
         self.avatar_x_center = avatar_x_center
         self.avatar_y_bottom = avatar_y_bottom
 
@@ -272,22 +273,24 @@ class DPGAvatarRenderer:
         if not self.animator_running:
             self._reposition_paused_text()
 
-    def configure_live_texture(self, new_image_size: int) -> None:
+    def configure_live_texture(self, new_w: int, new_h: int) -> None:
         """Set up (or re-set-up) the texture and image widgets for rendering the video stream of the live AI avatar.
 
-        `new_image_size`: The image size to receive. We use this to make the texture pixel-perfect.
-                          The image has square aspect ratio; this is the length of one side.
+        `new_w`, `new_h`: The image dimensions to receive, in pixels. We use these to make the texture pixel-perfect.
 
-        If the server's video stream has a different size, it will be software-upscaled (slowly!) on the fly to `new_image_size`.
+        Calling this is **optional** in steady state — the renderer adapts automatically to the size of
+        incoming frames (see `update_live_texture`). Pre-seeding at app startup avoids a brief "no texture"
+        flash before the first frame arrives.
 
-        You can call this method again whenever you want to switch to a different image size (e.g. when changing upscaler settings).
+        You can call this method again whenever you want to switch to a different size (e.g. when changing
+        upscaler settings) — but again, you don't have to; the renderer will catch up on its own.
         """
         old_texture_id = self.live_texture_id_counter
         new_texture_id = old_texture_id + 1
 
-        logger.info(f"DPGAvatarRenderer.configure_live_texture: Creating new GUI item avatar_live_texture_{new_texture_id} for new size {new_image_size}x{new_image_size}")
-        self.blank_texture = np.zeros([new_image_size,  # height
-                                       new_image_size,  # width
+        logger.info(f"DPGAvatarRenderer.configure_live_texture: Creating new GUI item avatar_live_texture_{new_texture_id} for new size {new_w}x{new_h}")
+        self.blank_texture = np.zeros([new_h,  # height
+                                       new_w,  # width
                                        4],  # RGBA
                                       dtype=np.float32).ravel()
         if self.last_image_rgba is not None:
@@ -298,21 +301,22 @@ class DPGAvatarRenderer:
             if image_rgba.shape[2] == 4:
                 alpha_channel = image_rgba[:, :, 3]
                 pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
-            pil_image = pil_image.resize((new_image_size, new_image_size),
+            pil_image = pil_image.resize((new_w, new_h),
                                          resample=PIL.Image.LANCZOS)
             image_rgba = pil_image.convert("RGBA")
             image_rgba = np.asarray(image_rgba, dtype=np.float32) / 255
             default_image = image_rgba.ravel()
         else:
             default_image = self.blank_texture
-        self.live_texture = dpg.add_raw_texture(width=new_image_size,
-                                                height=new_image_size,
+        self.live_texture = dpg.add_raw_texture(width=new_w,
+                                                height=new_h,
                                                 default_value=default_image,
                                                 format=dpg.mvFormat_Float_rgba,
                                                 tag=f"avatar_live_texture_{new_texture_id}",
                                                 parent=self.texture_registry)
         self.live_texture_id_counter += 1  # now the new texture exists so it's safe to write to (in the background thread)
-        self.image_size = new_image_size
+        self.image_w = new_w
+        self.image_h = new_h
 
         first_time = (self.live_image_widget is None)
         logger.info(f"DPGAvatarRenderer.configure_live_texture: Creating new GUI item avatar_live_image_{new_texture_id}")
@@ -341,7 +345,7 @@ class DPGAvatarRenderer:
             y_center = self.backdrop_height // 2
         else:
             x_center = self.avatar_x_center
-            y_center = self.avatar_y_bottom - (self.image_size // 2)  # *avatar* image size
+            y_center = self.avatar_y_bottom - (self.image_h // 2)  # *avatar* image size
         logger.info(f"DPGAvatarRenderer._reposition_paused_text: Updating paused text position to x_center = {x_center}, y_center = {y_center}")
         w_text, h_text = guiutils.get_widget_size(self.paused_text_gui_widget)
         dpg.set_item_pos(self.paused_text_gui_widget,
@@ -367,8 +371,8 @@ class DPGAvatarRenderer:
         w, h = guiutils.get_widget_size(self.gui_parent)
         logger.info(f"DPGAvatarRenderer.reposition: Gui parent is at ({x0}, {y0}), and has size {w}x{h}")
 
-        x_left = self.avatar_x_center - (self.image_size // 2)
-        y_top = self.avatar_y_bottom - self.image_size
+        x_left = self.avatar_x_center - (self.image_w // 2)
+        y_top = self.avatar_y_bottom - self.image_h
         with guiutils.nonexistent_ok() as nok:
             dpg.set_item_pos(self.live_image_widget, (x_left, y_top))
 
@@ -543,39 +547,26 @@ class DPGAvatarRenderer:
                         if on_frame_received is not None:
                             on_frame_received(timestamp, mimetype, image_data)
 
-                    with guiutils.nonexistent_ok() as nok:
-                        # Before blitting, make sure the texture is of the expected size. When an upscale change is underway, it will be temporarily of the wrong size.
-                        tex = self.live_texture  # Get the reference only once, since it could change in another thread at any time (by the user calling `configure_live_texture`), if the user changes the upscaler settings.
-                        config = dpg.get_item_configuration(tex)
-                        expected_w = config["width"]
-                        expected_h = config["height"]
-                    if nok.errored:  # does not exist (can happen at least during app shutdown, or during a texture object swap)
-                        time.sleep(0.04)   # 1/25 s
-                        continue  # can't do anything without a texture to blit to, so discard this frame
-
+                    # Decode the frame. The decoded size is the source of truth for the texture size —
+                    # if the current texture doesn't match (or doesn't exist yet), we (re)configure from it.
+                    # No software rescale bridge.
                     if mimetype == "image/qoi":
                         image_rgba = qoi.decode(image_data)  # -> uint8 array of shape (h, w, c)
-                        # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
                         h, w = image_rgba.shape[:2]
-                        if w != expected_w or h != expected_h:
-                            logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {expected_w}x{expected_h}")
-                            pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
-                            if image_rgba.shape[2] == 4:
-                                alpha_channel = image_rgba[:, :, 3]
-                                pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
-                            pil_image = pil_image.resize((expected_w, expected_h),
-                                                         resample=PIL.Image.LANCZOS)
-                            image_rgba = np.asarray(pil_image.convert("RGBA"))
                     else:  # use PIL
                         image_file = io.BytesIO(image_data)
                         pil_image = PIL.Image.open(image_file)
-                        # Don't crash if we get frames at a different size from what is expected. But log a warning, as software rescaling is slow.
                         w, h = pil_image.size
-                        if w != expected_w or h != expected_h:
-                            logger.warning(f"update_live_texture: Got frame at wrong (old?) size {w}x{h}; slow CPU resizing to {expected_w}x{expected_h}")
-                            pil_image = pil_image.resize((expected_w, expected_h),
-                                                         resample=PIL.Image.LANCZOS)
                         image_rgba = np.asarray(pil_image.convert("RGBA"))
+
+                    # Sync the texture to the decoded frame size. This also covers the first-frame case
+                    # where no `configure_live_texture` pre-seed was done (self.image_w/h are None → mismatch → create).
+                    if self.image_w != w or self.image_h != h:
+                        logger.info(f"update_live_texture: (re)configuring texture for frame size {w}x{h} (was {self.image_w}x{self.image_h}).")
+                        self.configure_live_texture(w, h)
+
+                    tex = self.live_texture  # read after possible reconfigure; may still go away mid-frame (shutdown / texture swap), handled at the blit site below
+
                     self.last_image_rgba = image_rgba  # for reducing flicker when upscaler settings change (to be able to initialize the new texture from the latest received video frame, by rescaling it)
                     if on_frame_decoded is not None:
                         on_frame_decoded(timestamp, image_rgba)

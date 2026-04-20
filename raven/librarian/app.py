@@ -335,7 +335,8 @@ with timer() as tim:
                                                             paused_text="[Video is off]",
                                                             executor=bg)
                     # DRY, just so that `_load_initial_animator_settings` at app bootup is guaranteed to use the same values
-                    dpg_avatar_renderer.configure_live_texture(new_image_size=int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * librarian_config.avatar_config.source_image_size))
+                    _initial_image_size = int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * librarian_config.avatar_config.source_image_size)
+                    dpg_avatar_renderer.configure_live_texture(_initial_image_size, _initial_image_size)
 
                     with dpg.group(pos=(16, 16), show=False, horizontal=True) as llm_indicator_group:
                         dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")

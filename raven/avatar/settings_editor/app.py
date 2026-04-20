@@ -456,7 +456,7 @@ class PostprocessorSettingsEditorGUI:
                                                                  paused_text="[Animator is paused]",
                                                                  executor=bg)
                     image_size = int(self.upscale * self.source_image_size)
-                    self.dpg_avatar_renderer.configure_live_texture(image_size)
+                    self.dpg_avatar_renderer.configure_live_texture(image_size, image_size)
                     self.dpg_avatar_renderer.configure_fps_counter(show=True)
 
                     with dpg.group(pos=(8, 32), show=False, horizontal=True) as self.recording_indicator_group:
@@ -965,12 +965,9 @@ class PostprocessorSettingsEditorGUI:
 
     def on_upscaler_settings_change(self, sender, app_data):
         """Update the upscaler status and send changes to server."""
-        old_image_size = self.dpg_avatar_renderer.image_size
         new_upscale = dpg.get_value("upscale_slider") / 10
-        new_image_size = int(new_upscale * self.source_image_size)
-        if new_image_size != old_image_size:
-            self.dpg_avatar_renderer.configure_live_texture(new_image_size)
-
+        # No preemptive `configure_live_texture` call — the renderer adapts automatically to the
+        # new frame size once the server catches up to the new upscale setting.
         self.upscale = new_upscale
         self.upscale_preset = dpg.get_value("upscale_preset_choice")
         self.upscale_quality = dpg.get_value("upscale_quality_choice")
