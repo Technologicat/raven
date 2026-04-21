@@ -145,7 +145,7 @@ class Classifier(MaybeRemoteService):
         remote modes — the local path normalizes nlptools' list-of-dicts form to match
         the wire format.
         """
-        if self._local_model is None:
+        if not self.is_local():
             return api.classify(text)
         sorted_records = nlptools.classify(self._local_model, text)  # [{"label": ..., "score": ...}, ...]
         return {record["label"]: record["score"] for record in sorted_records}
@@ -156,7 +156,7 @@ class Classifier(MaybeRemoteService):
         The set is fixed by the underlying model (e.g. 28 emotions for the default
         go-emotions model). Sorted alphabetically.
         """
-        if self._local_model is None:
+        if not self.is_local():
             return api.classify_labels()
         return sorted(self._local_model.model.config.id2label.values())
 
@@ -194,7 +194,7 @@ class Dehyphenator(MaybeRemoteService):
 
         Returns `str` (one input) or `list` of `str` (more inputs).
         """
-        if self._local_model is None:
+        if not self.is_local():
             dehyphenated_text = api.sanitize_dehyphenate(text)
         else:
             dehyphenated_text = nlptools.dehyphenate(self._local_model,
@@ -241,7 +241,7 @@ class Embedder(MaybeRemoteService):
 
         Each text produces a vector.
         """
-        if self._local_model is None:
+        if not self.is_local():
             vectors = api.embeddings_compute(text=text,
                                              model=self.model_name)  # -> np.array
         else:
@@ -295,7 +295,7 @@ class NLP(MaybeRemoteService):
 
         In remote mode, the pipeline at the client side is blank, but the tokens have all the usual data.
         """
-        if self._local_model is None:
+        if not self.is_local():
             docs = api.natlang_analyze(text,
                                        pipes,
                                        with_vectors=with_vectors)
@@ -363,7 +363,7 @@ class Translator(MaybeRemoteService):
 
         Returns `str` for a single input, `list[str]` for a list of inputs.
         """
-        if self._local_model is None:
+        if not self.is_local():
             return api.translate_translate(text,
                                            source_lang=self.source_lang,
                                            target_lang=self.target_lang)
@@ -427,7 +427,7 @@ class STT(MaybeRemoteService):
 
         `prompt`, `language`: see `raven.common.audio.speech.stt.transcribe`.
         """
-        if self._local_model is None:
+        if not self.is_local():
             # Remote: `api.stt_transcribe_array` accepts float or s16 and handles the cast internally.
             # The server resamples during its container-decode pass, so any sample rate works.
             return api.stt_transcribe_array(audio, sample_rate=sample_rate, prompt=prompt, language=language)
@@ -479,7 +479,7 @@ class TTS(MaybeRemoteService):
 
     def list_voices(self) -> List[str]:
         """List installed voices. Remote uses the server's /api/tts/list_voices; local scans the modelsdir."""
-        if self._local_model is None:
+        if not self.is_local():
             return api.tts_list_voices()
         return speech_tts.get_voices(self._local_model)
 
@@ -511,7 +511,7 @@ class TTS(MaybeRemoteService):
         `TTSResult`, not just the encoded wire bytes — so repeat calls are free
         on both sides.
         """
-        if self._local_model is not None:
+        if self.is_local():
             if format is None:
                 return speech_tts.prepare_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata)
             return speech_tts.prepare_encoded_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata, format=format)
@@ -566,7 +566,7 @@ class Postprocessor(MaybeRemoteService):
 
         Returns the processed image as float32 `np.ndarray` in [0, 1], shape `(h, w, 4)`.
         """
-        if self._local_model is None:
+        if not self.is_local():
             return api.imagefx_process_array(image, filters=filters)
 
         # Local path: HWC float → CHW tensor → postprocess in-place → HWC float.
