@@ -21,12 +21,6 @@
     - Consolidated arXiv ID handling: `identifiers.strip_version()` replaces three separate implementations.
     - New dependency: `feedparser>=6.0`.
 - *Raven-cherrypick*: new "mark winner" action (Ctrl+Shift+C, or Ctrl+Shift+click cherry button). Marks the current image as cherry and all other selected images as lemon — one keystroke to commit a compare-mode choice.
-- New module `raven.common.audio.resample` — device-agnostic sample-rate conversion (torchaudio-backed). Works on numpy arrays and torch tensors; three quality presets (`"default"`, `"kaiser_fast"`, `"kaiser_best"`) matching librosa's naming.
-  - New dependency: `torchaudio>=2.4.0`.
-- New module `raven.common.audio.speech.stt` — Whisper wrapper callable in-process (no Flask). `raven.server.modules.stt` is now a thin wrapper that decodes the audio container and forwards to the common layer.
-- New module `raven.common.audio.speech.tts` — Kokoro wrapper callable in-process (no Flask). Two-layer API: `synthesize_iter` yields per-segment `TTSSegment` with already-absolute word timestamps, `synthesize` is the concatenating wrapper returning a single `TTSResult`. `raven.server.modules.tts` is now a thin wrapper that casts float→s16 at the transport boundary, URL-encodes Unicode phonemes for HTTP headers, and handles Flask response construction.
-- `raven.client.mayberemote`: new `TTS` and `STT` services, mirroring the existing `Dehyphenator` / `Embedder` / `NLP` pattern. Apps can now use speech locally when the server is down (or skip the round-trip entirely for latency), with a uniform API across modes. `STT.transcribe` auto-resamples mismatched input; `TTS.synthesize(format=...)` is shape-agnostic: no argument returns float32 `TTSResult` in both modes; `format="flac"`/`"mp3"`/… returns `EncodedTTSResult` ready for playback or storage. Caching lives in the bottom layers (one source of truth per (location, shape)), so the mayberemote dispatcher has no cache state of its own.
-- New module `raven.common.audio.speech.lipsync` — engine-agnostic lipsync and subtitle driver. Pure time-slicing for phoneme and word tracks, plus a callback-driven tick loop (`drive(on_tick, clock, tick_seconds)`). Consumers compose tracks inside their own `on_tick` closure, calling `phoneme_at(stream, t)` / `word_at(timings, t)` as needed — lets the same loop drive avatar morphs, per-phoneme subtitles, word-level captions, or any combination. No dependency on Kokoro or any other TTS engine.
 - HTTP API: new `/api/stt/info` and `/api/tts/info` endpoints return the currently loaded model name and the model's native sample rate. Lets clients avoid hardcoding values that drift when the server config changes.
 - *Raven-avatar*: client-side crop.
   - New crop panel in the settings editor — drag a rectangle on a viewport overlay, debounced push to the server, live preview. Works on the rendered avatar, independent of upscaler and postprocessor.
@@ -59,9 +53,38 @@
 
 - *Speech STT wire format* (client → server): MP3 → FLAC, for symmetry with the TTS direction and for the same reason — lossless on a trusted LAN beats lossy. `raven.client.api.stt_transcribe_array` now encodes the audio as FLAC before upload; the server continues to auto-detect the container format via PyAV, so no server-side change was needed.
 
-- *Client-side MaybeRemote* grows four more service classes alongside the new `STT` and `TTS` additions noted above: `Classifier` (text sentiment), `Translator` (machine translation), `Postprocessor` and `Upscaler` (imagefx). Each dispatches to the corresponding Raven-server module in remote mode and to a local in-process instance in local mode, with identical call surfaces. With these, every server module that isn't license-constrained (avatar, websearch) is reachable via `MaybeRemote`. `Translator` takes a `spacy_model_name` for local-mode sentence chunking; `Upscaler` caches local `_LocalUpscaler` instances per `(width, height, preset, quality)` config, since Anime4K model choice depends on preset/quality and the constructor loads real weights.
+- *Client-side MaybeRemote* new services:
 
-- *Image codec*: new module `raven.common.image.codec` with `encode` / `decode` — the unified image I/O layer. Parallel to `raven.common.audio.codec`. Lifts the previously-duplicated decode logic out of `raven.server.modules.imagefx` (AGPL) and `raven.common.image.utils` (BSD) into a single BSD-licensed home. `decode` accepts bytes, binary streams, or filesystem paths interchangeably, and returns natural channel count (no forced RGBA). `IMAGE_EXTENSIONS` moved here from `image.utils`. Callers that need a guaranteed 4-channel output use the new `raven.common.image.utils.ensure_rgba` helper.
+- New module `raven.common.audio.resample` — device-agnostic sample-rate conversion (torchaudio-backed). Works on numpy arrays and torch tensors; three quality presets (`"default"`, `"kaiser_fast"`, `"kaiser_best"`) matching librosa's naming.
+  - New dependency: `torchaudio>=2.4.0`.
+
+- *TTS/STT* plumbing improvements:
+  - New module `raven.common.audio.speech.stt` — Whisper wrapper callable in-process (no Flask).
+    - `raven.server.modules.stt` is now a thin wrapper that decodes the audio container and forwards to the common layer.
+  - New module `raven.common.audio.speech.tts` — Kokoro wrapper callable in-process (no Flask).
+    - Two-layer API: `synthesize_iter` yields per-segment `TTSSegment` with already-absolute word timestamps, `synthesize` is the concatenating wrapper returning a single `TTSResult`.
+    - `raven.server.modules.tts` is now a thin wrapper that casts float→s16 at the transport boundary, URL-encodes Unicode phonemes for HTTP headers, and handles Flask response construction.
+  - New module `raven.common.audio.speech.lipsync` — engine-agnostic lipsync and subtitle driver.
+    - Pure time-slicing for phoneme and word tracks, plus a callback-driven tick loop (`drive(on_tick, clock, tick_seconds)`).
+    - Consumers compose tracks inside their own `on_tick` closure, calling `phoneme_at(stream, t)` / `word_at(timings, t)` as needed — lets the same loop drive avatar morphs, per-phoneme subtitles, word-level captions, or any combination.
+    - No dependency on Kokoro or any other TTS engine.
+
+- `raven.client.mayberemote` new services, , mirroring the existing `Dehyphenator` / `Embedder` / `NLP` pattern.
+  - `TTS` and `STT`. Apps can now use speech locally when the server is down (or skip the round-trip entirely for latency), with a uniform API across modes.
+    - `STT.transcribe` auto-resamples mismatched input.
+    - `TTS.synthesize(format=...)` is shape-agnostic: no argument returns float32 `TTSResult` in both modes; `format="flac"`/`"mp3"`/… returns `EncodedTTSResult` ready for playback or storage.
+      - Caching lives in the bottom layers (one source of truth per (location, shape)), so the mayberemote dispatcher has no cache state of its own.
+  - `Classifier` (text sentiment), `Translator` (machine translation), `Postprocessor` and `Upscaler` (imagefx).
+    - Each dispatches to the corresponding Raven-server module in remote mode and to a local in-process instance in local mode, with identical call surfaces.
+    - `Translator` takes a `spacy_model_name` for local-mode sentence chunking.
+    - `Upscaler` caches local `_LocalUpscaler` instances per `(width, height, preset, quality)` config, since Anime4K model choice depends on preset/quality and the constructor loads real weights.
+  - With these, now every server module that isn't license-constrained (avatar, websearch) is reachable via `MaybeRemote` - and the same functionality is transparently available in-process in local mode.
+
+- *Image codec*: new module `raven.common.image.codec` with `encode` / `decode` — the unified image I/O layer. Parallel to `raven.common.audio.codec`.
+  - Lifts the previously-duplicated decode logic out of `raven.server.modules.imagefx` (AGPL, this module 100% by @Technologicat) and `raven.common.image.utils` (BSD) into a single BSD-licensed home.
+  - `decode` accepts bytes, binary streams, or filesystem paths interchangeably, and returns natural channel count (no forced RGBA).
+  - Callers that need a guaranteed 4-channel output use the new `raven.common.image.utils.ensure_rgba` helper.
+  - `IMAGE_EXTENSIONS` moved here from `image.utils`.
 
 - *XDot viewer*: dense graphs no longer burn CPU while the cursor is outside the widget. The hover-refresh path was unconditionally marking the frame dirty every tick, which defeated the idle throttle; now the flag is only raised when hover state actually changes. Visible on graphs with many edges — idle FPS drops back to the background rate instead of pegging at the redraw rate.
 
