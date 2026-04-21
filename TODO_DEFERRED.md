@@ -1,5 +1,13 @@
 # Deferred TODOs
 
+## `dpg_markdown` bullet-list rendering: bullet untethered from item
+
+`raven/vendor/DearPyGui_Markdown/` (already locally robustified) renders unordered lists with the bullet glyph drawn at the parent `<ul>`'s y-position rather than each `<li>`'s, so a list at the top of a tooltip shows ONE stray bullet at the top-left and the items appear as plain text below. Reproduces with any 2+ item bulleted list rendered into a tooltip; saw it on a chromatic-aberration tooltip during postprocessor docstring work (2026-04-21).
+
+Pipeline: `mistletoe` converts the `- item` markdown to `<ul><li>...</li></ul>`, then dpg_markdown's `_HTMLToParser` (`raven/vendor/DearPyGui_Markdown/parser.py`, `case "li":` branch) wires it up via `MessageEntityList` / `MessageEntityUnorderedList`. Bullet rendering likely lives in `line_atributes.py` (`get_task_width` and friends). Investigate why the per-item glyph y-coordinate isn't being computed per `<li>`.
+
+Workaround in the meantime: don't use `- ` markdown bullets in docstrings that get rendered through dpg_markdown — convert to prose.
+
 ## Audit fleet for dict constants that should be `frozendict`
 
 Several modules across Raven hold module-level dict constants that are used as immutable defaults or lookup tables, relying on "don't mutate this" by convention. `unpythonic.frozendict` (already a Raven dep) enforces it with teeth and costs nothing extra; Python 3.15 will also ship a stdlib `frozendict`.
@@ -368,12 +376,6 @@ Discovered during tooltip feature session (2026-04-03).
 The settings editor currently presents filters in a fixed priority order, with at most one copy of each filter. With the desaturate/monochrome_display and noise/analog_vhs_noise splits, the signal pipeline model is becoming richer — users may want to reorder filters or have multiple instances. The GUI needs drag-and-drop chain building: add/remove filters, reorder freely, support multiple instances of the same filter (with independent `name` keys). Currently, `strip_postprocessor_chain_for_gui` enforces fixed ordering and single instances.
 
 Discovered during postprocessor chain ordering redesign (2026-04-09).
-
-## Avatar settings editor: dynamic parameter help from docstrings
-
-The postprocessor filter parameters (noise `channel`, `ntsc_chroma`, `double_size`, etc.) have detailed docstrings, but the settings editor GUI shows only bare parameter names and value dropdowns — no descriptions. Add a dynamically generated info button (ⓘ or similar) next to each parameter that extracts the relevant section from the filter's docstring, converts RST markup to Markdown, and displays it via `dpg_markdown`. This would make the growing number of filter options self-documenting in the GUI.
-
-Discovered during NTSC VHS noise development (2026-04-08).
 
 ## raven-server: CUDA sanity check at startup
 

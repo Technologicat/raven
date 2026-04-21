@@ -591,7 +591,8 @@ def api_avatar_get_available_filters():
                       [filter_name, {"defaults": {param0_name: default_value0,
                                                   ...},
                                      "ranges": {param0_name: [min_value0, max_value0],
-                                                ...}}],
+                                                ...},
+                                     "docstring": "Filter description with `param`: notes per param."}],
                        ...
                     ]
         }

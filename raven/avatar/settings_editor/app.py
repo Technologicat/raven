@@ -57,6 +57,7 @@ with timer() as tim:
     from ...common.gui import messagebox
     from ...common.gui import utils as guiutils
     from ...common import bgtask
+    from ...common import docstring_utils
     from ...common import utils as common_utils
 
     from ...client import api  # convenient Python functions that abstract away the web API
@@ -745,9 +746,39 @@ class PostprocessorSettingsEditorGUI:
                         pretty = pretty[0].upper() + pretty[1:]
                         return pretty
 
+                    def add_filter_info_button(filter_name):
+                        """If the filter docstring has a summary preamble, add an info button showing it."""
+                        docstring = self.all_postprocessor_filters[filter_name].get("docstring", "")
+                        summary = docstring_utils.extract_summary(docstring)
+                        if summary is None:
+                            return
+                        summary_markdown = docstring_utils.rst_inline_to_markdown(summary)
+                        btn_tag = f"{filter_name}_info_button"
+                        dpg.add_button(label=fa.ICON_INFO, tag=btn_tag, width=28)
+                        dpg.bind_item_font(btn_tag, themes_and_fonts.icon_font_solid)
+                        with dpg.tooltip(btn_tag):
+                            dpg_markdown.add_text(summary_markdown)
+
+                    def add_param_info_button(filter_name, param_name):
+                        """If the filter docstring has per-parameter help, add an info button with a tooltip showing it."""
+                        docstring = self.all_postprocessor_filters[filter_name].get("docstring", "")
+                        help_text = docstring_utils.extract_param_help(docstring, param_name)
+                        if help_text is None:
+                            return
+                        # Strip the redundant `name`: header — the GUI already shows which parameter
+                        # this tooltip belongs to, and leaving the header in can confuse the markdown
+                        # renderer when the description contains bulleted continuations later.
+                        help_markdown = docstring_utils.rst_inline_to_markdown(docstring_utils.strip_param_header(help_text))
+                        btn_tag = f"{filter_name}_{param_name}_info_button"
+                        dpg.add_button(label=fa.ICON_INFO, tag=btn_tag, width=28)
+                        dpg.bind_item_font(btn_tag, themes_and_fonts.icon_font_solid)
+                        with dpg.tooltip(btn_tag):
+                            dpg_markdown.add_text(help_markdown)
+
                     for filter_name, param_info in self.all_postprocessor_filters.items():
                         with dpg.group(horizontal=True):
                             dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
+                            add_filter_info_button(filter_name)
                             dpg.add_checkbox(label=prettify(filter_name), default_value=False,
                                              tag=f"{filter_name}_checkbox", callback=self.on_gui_settings_change)
                         with dpg.group(horizontal=True):
@@ -769,24 +800,28 @@ class PostprocessorSettingsEditorGUI:
                                     if isinstance(default_value, bool):
                                         with dpg.group(horizontal=True):
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            add_param_info_button(filter_name, param_name)
                                             dpg.add_checkbox(label=prettify(param_name), default_value=default_value,
                                                              tag=f"{filter_name}_{param_name}_checkbox", callback=self.on_gui_settings_change)
                                     elif isinstance(default_value, float):
                                         assert len(param_range) == 2  # param_range = [min, max]
                                         with dpg.group(horizontal=True):
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            add_param_info_button(filter_name, param_name)
                                             dpg.add_slider_float(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
                                                                  tag=f"{filter_name}_{param_name}_slider", callback=self.on_gui_settings_change)
                                     elif isinstance(default_value, int):
                                         assert len(param_range) == 2  # param_range = [min, max]
                                         with dpg.group(horizontal=True):
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            add_param_info_button(filter_name, param_name)
                                             dpg.add_slider_int(label=prettify(param_name), default_value=default_value, min_value=param_range[0], max_value=param_range[1], clamped=True, width=self.button_width,
                                                                tag=f"{filter_name}_{param_name}_slider", callback=self.on_gui_settings_change)
                                     elif isinstance(default_value, str):
                                         # param_range = list of choices
                                         with dpg.group(horizontal=True):
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            add_param_info_button(filter_name, param_name)
                                             dpg.add_combo(items=param_range,
                                                           default_value=param_range[0],
                                                           width=self.button_width,
@@ -796,6 +831,7 @@ class PostprocessorSettingsEditorGUI:
                                         # no param_range (it was used for the GUI hint)
                                         with dpg.group(horizontal=True):
                                             dpg.add_button(label="X", tag=f"{filter_name}_{param_name}_reset_button", callback=make_reset_param_callback(filter_name, param_name, default_value))
+                                            add_param_info_button(filter_name, param_name)
                                             dpg.add_text(prettify(param_name))
                                         dpg.add_color_picker(default_value=[int(x * 255) for x in default_value],  # float -> uint8 for DPG color picker
                                                              width=self.button_width + 54,

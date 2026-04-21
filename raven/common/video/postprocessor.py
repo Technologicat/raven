@@ -500,8 +500,11 @@ class Postprocessor:
             settings = {v.name: v.default for v in sig.parameters.values() if v.default is not inspect.Parameter.empty}
             # Parameter ranges are specified at definition site via our internal `with_metadata` mechanism.
             ranges = {name: meth.metadata[name] for name in settings}
+            # Ship the docstring too, so GUI editors can render per-parameter help dynamically
+            # without needing to import the filter implementation client-side.
             param_info = {"defaults": settings,
-                          "ranges": ranges}
+                          "ranges": ranges,
+                          "docstring": inspect.getdoc(func) or ""}
             filters.append((name, param_info))
         def rendering_priority(metadata_record):
             name, _ = metadata_record
@@ -765,9 +768,10 @@ class Postprocessor:
         `sigma`: Transverse CA blur parameter. Works up to 3.0.
 
         Note that in a real lens:
-          - Axial CA is typical at long focal lengths (e.g. tele/zoom lens)
-          - Axial CA increases at high F-stops (low depth of field, i.e. sharp focus at all distances)
-          - Transverse CA is typical at short focal lengths (e.g. macro lens)
+
+        - Axial CA is typical at long focal lengths (e.g. tele/zoom lens).
+        - Axial CA increases at high F-stops (low depth of field, i.e. sharp focus at all distances).
+        - Transverse CA is typical at short focal lengths (e.g. macro lens).
 
         However, in an RGB postproc effect, it is useful to apply both together, to help hide the clear-cut red/blue bands
         resulting from the different geometric scalings of just three wavelengths (instead of a continuous spectrum, like
@@ -820,6 +824,10 @@ class Postprocessor:
         The profile used here is [cos(strength * d * pi)]**2, where `d` is the distance
         from the center, scaled such that `d = 1.0` is reached at the corners.
         Thus, at the midpoints of the frame edges, `d = 1 / sqrt(2) ~ 0.707`.
+
+        `strength`: Falloff rate of the cosine-squared profile. 0 leaves the image unchanged;
+                    larger values darken the corners more aggressively. At `strength = 0.5`
+                    the corners go fully black.
         """
         euclidean_distance_from_center = (self._meshy**2 + self._meshx**2)**0.5 / 2**0.5  # [h, w]
         brightness = torch.cos(strength * euclidean_distance_from_center * math.pi)**2  # [h, w]
@@ -1098,7 +1106,7 @@ class Postprocessor:
         each in their own way, thus improving compression by exploiting the human
         visual system's lower spatial acuity for color than for brightness.
 
-        Two modes model the two main mechanisms:
+        `mode`: Which chroma-reduction mechanism to model. The two options below cover the two main real-world mechanisms.
 
         ``"analog"``:  Bandwidth-limited chroma, as in analog broadcast (NTSC/PAL).
                        Applies a horizontal low-pass filter to the U and V channels,
@@ -1207,19 +1215,23 @@ class Postprocessor:
 
         In practice, this looks like a rippling effect added to the outline of the character.
 
-        We superpose three waves with different densities (1 / cycle length)
-        to make the pattern look more irregular.
-
-        E.g. density of 2.0 means that two full waves fit into the image height.
-
-        Amplitudes are given in units where the height and width of the image
-        are both 2.0.
+        We superpose three sine waves (with per-wave `amplitudeN` / `densityN` parameters)
+        to make the ripple pattern look irregular rather than periodic.
 
         `speed`: At speed 1.0, a wave of `density = 1.0` completes a full cycle every
                  `image_height` frames. So effectively the cycle position updates by
-                 `speed * (1 / image_height)` at each frame.
+                 `speed * (1 / image_height)` at each frame. "Frame" here refers to the
+                 normalized frame number, at a reference of 25 FPS.
 
-        NOTE: "frame" here refers to the normalized frame number, at a reference of 25 FPS.
+        `amplitude1`, `amplitude2`, `amplitude3`: peak horizontal displacement of each
+                wave component, in units where the image width (and height) is 2.0.
+                Set a component's amplitude to 0 to disable that wave.
+
+        `density1`, `density2`, `density3`: spatial frequency of each wave component
+                along the vertical axis, in cycles per image height. E.g. density 2.0
+                means two full waves fit into the image height. Larger values = finer
+                ripples. Using three different density values gives the shimmering,
+                non-repeating look.
         """
         c, h, w = image.shape
 
@@ -1559,6 +1571,16 @@ class Postprocessor:
 
         Offsets are given in units where the height of the image is 2.0.
 
+        `base_offset`: Baseline height of the noise band, measured upward from the bottom
+                       of the image. The band always hugs the bottom edge; this parameter
+                       sets its nominal thickness, on top of which the floating animation
+                       modulates it.
+
+        `max_dynamic_offset`: Peak amplitude of the vertical floating motion (sine wave).
+                              The image drifts up and down by ±this value over each cycle,
+                              and the noise band grows and shrinks in sync (taller when the
+                              image is displaced upward, shorter when displaced downward).
+
         `speed`: At speed 1.0, the floating motion completes a full cycle every
                  `image_height` frames. So effectively the cycle position updates by
                  `speed * (1 / image_height)` at each frame.
@@ -1695,6 +1717,11 @@ class Postprocessor:
         """[static] Translucent display (e.g. scifi hologram).
 
         Multiplicatively adjusts the alpha channel.
+
+        `alpha`: Opacity multiplier in [0, 1]. 1.0 leaves the image unchanged;
+                 lower values make the whole character progressively more see-through.
+                 Only affects pixels that already have non-zero alpha, so the outline
+                 of the character stays sharp.
         """
         image[3, :, :].mul_(alpha)
 
