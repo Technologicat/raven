@@ -34,6 +34,7 @@ from unpythonic.env import env as envcls
 from . import api  # for calling the avatar_* functions during lipsync
 from . import util
 
+from ..common.audio.speech import datatypes as speech_datatypes
 from ..common.audio.speech import lipsync as speech_lipsync
 from ..common.audio.speech import tts as speech_tts
 
@@ -168,14 +169,14 @@ def tts_warmup(voice: str) -> None:
                 get_metadata=True)  # not sure if the phonemizer needs warmup, but let's do it anyway
     logger.info(f"tts_warmup: Warmup for voice '{voice}' done.")
 
-def _empty_encoded_result(get_metadata: bool, format: str = "flac") -> speech_tts.EncodedTTSResult:
+def _empty_encoded_result(get_metadata: bool, format: str = "flac") -> speech_datatypes.EncodedTTSResult:
     """Zero-audio `EncodedTTSResult`, returned by `tts_prepare` on blank / no-phoneme input.
 
     Callers check `not prep.audio_bytes` to detect the cancelled case; the structure
     is otherwise uniform with a successful synthesis, so decode / consume paths don't
     need special-case handling.
     """
-    return speech_tts.EncodedTTSResult(audio_bytes=b"",
+    return speech_datatypes.EncodedTTSResult(audio_bytes=b"",
                                        audio_format=format,
                                        sample_rate=speech_tts.SAMPLE_RATE,
                                        duration=0.0,
@@ -185,7 +186,7 @@ def tts_prepare(text: str,
                 voice: str,
                 speed: float = 1.0,
                 get_metadata: bool = True,
-                format: str = "flac") -> speech_tts.EncodedTTSResult:
+                format: str = "flac") -> speech_datatypes.EncodedTTSResult:
     """Using the speech synthesizer, precompute TTS speech audio for `text` using `voice`.
 
     Explicit remote mode. Not cached — each call round-trips to the server.
@@ -223,7 +224,7 @@ def tts_prepare(text: str,
     headers = copy.copy(util.api_config.raven_default_headers)
     headers["Content-Type"] = "application/json"
 
-    timings: Optional[List[speech_tts.WordTiming]] = None
+    timings: Optional[List[speech_datatypes.WordTiming]] = None
 
     # Get audio, and if getting metadata, also the word-level timestamps
     with timer() as tim:
@@ -241,7 +242,7 @@ def tts_prepare(text: str,
         # From here on, the in-process representation is WordTiming; dicts only live on the wire.
         if get_metadata:
             raw_timestamps = json.loads(stream_response.headers["x-word-timestamps"])
-            timings = [speech_tts.WordTiming(word=urllib.parse.unquote(ts["word"]),
+            timings = [speech_datatypes.WordTiming(word=urllib.parse.unquote(ts["word"]),
                                              phonemes=urllib.parse.unquote(ts["phonemes"]),
                                              start_time=ts.get("start_time"),
                                              end_time=ts.get("end_time"))
@@ -280,7 +281,7 @@ def tts_prepare(text: str,
                 return _empty_encoded_result(get_metadata, format=format)
         logger.info(f"tts_prepare: postprocessed per-word phoneme data in {tim.dt:0.6g}s.")
 
-    return speech_tts.EncodedTTSResult(audio_bytes=audio_bytes,
+    return speech_datatypes.EncodedTTSResult(audio_bytes=audio_bytes,
                                        audio_format=format,
                                        sample_rate=speech_tts.SAMPLE_RATE,
                                        duration=total_audio_duration,
@@ -292,7 +293,7 @@ def tts_prepare_cached(text: str,
                        voice: str,
                        speed: float = 1.0,
                        get_metadata: bool = True,
-                       format: str = "flac") -> speech_tts.EncodedTTSResult:
+                       format: str = "flac") -> speech_datatypes.EncodedTTSResult:
     """Memoized `tts_prepare`. Same signature, cached across calls.
 
     Default choice for app code: precomputing the same sentence twice doesn't
@@ -308,7 +309,7 @@ def tts_prepare_cached(text: str,
 def tts_prepare_decoded_cached(text: str,
                                voice: str,
                                speed: float = 1.0,
-                               get_metadata: bool = True) -> speech_tts.TTSResult:
+                               get_metadata: bool = True) -> speech_datatypes.TTSResult:
     """Cached remote TTS in decoded (float `TTSResult`) form. Other-shape companion to `tts_prepare_cached`.
 
     Fetches encoded audio via `tts_prepare_cached` (using FLAC on the wire for
@@ -330,7 +331,7 @@ def tts_speak(text: str,
               on_audio_ready: Optional[Callable] = None,
               on_start: Optional[Callable] = None,
               on_stop: Optional[Callable] = None,
-              prep: Optional[speech_tts.EncodedTTSResult] = None) -> None:
+              prep: Optional[speech_datatypes.EncodedTTSResult] = None) -> None:
     """Using the speech synthesizer, speak `text` using `voice`.
 
     To get the list of available voices, call `tts_list_voices`.
@@ -423,7 +424,7 @@ def tts_speak_lipsynced(instance_id: str,
                         on_audio_ready: Optional[Callable] = None,
                         on_start: Optional[Callable] = None,
                         on_stop: Optional[Callable] = None,
-                        prep: Optional[speech_tts.EncodedTTSResult] = None) -> None:
+                        prep: Optional[speech_datatypes.EncodedTTSResult] = None) -> None:
     """Like `tts_speak`, but with lipsync for the avatar.
 
     Using the speech synthesizer, speak `text` using `voice`.

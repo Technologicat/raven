@@ -14,6 +14,7 @@ pytestmark = pytest.mark.ml
 
 import numpy as np  # noqa: E402
 
+from raven.common.audio.speech import datatypes as speech_datatypes  # noqa: E402
 from raven.common.audio.speech import tts as speech_tts  # noqa: E402
 
 
@@ -177,40 +178,40 @@ class TestCleanTimestamps:
     # `clean_timestamps` is pure — no model needed. Tests don't need the pipeline fixture.
 
     def test_dedup_applies_in_both_modes(self):
-        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
-             speech_tts.WordTiming(word="world", phonemes="w", start_time=0.0, end_time=0.6),  # dup start_time
-             speech_tts.WordTiming(word="after", phonemes="a", start_time=0.7, end_time=1.0)]
+        t = [speech_datatypes.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
+             speech_datatypes.WordTiming(word="world", phonemes="w", start_time=0.0, end_time=0.6),  # dup start_time
+             speech_datatypes.WordTiming(word="after", phonemes="a", start_time=0.7, end_time=1.0)]
         for for_lipsync in (True, False):
             cleaned = speech_tts.clean_timestamps(t, for_lipsync=for_lipsync)
             assert [w.word for w in cleaned] == ["hello", "after"], f"for_lipsync={for_lipsync}"
 
     def test_lipsync_drops_incidental_single_char(self):
-        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
-             speech_tts.WordTiming(word="-",     phonemes="-", start_time=0.5, end_time=0.6),
-             speech_tts.WordTiming(word="world", phonemes="w", start_time=0.6, end_time=1.0)]
+        t = [speech_datatypes.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
+             speech_datatypes.WordTiming(word="-",     phonemes="-", start_time=0.5, end_time=0.6),
+             speech_datatypes.WordTiming(word="world", phonemes="w", start_time=0.6, end_time=1.0)]
         cleaned = speech_tts.clean_timestamps(t, for_lipsync=True)
         assert [w.word for w in cleaned] == ["hello", "world"]
 
     def test_non_lipsync_keeps_incidental_single_char(self):
         # For captioning / transcript uses, single-char tokens are kept.
-        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
-             speech_tts.WordTiming(word="-",     phonemes="-", start_time=0.5, end_time=0.6),
-             speech_tts.WordTiming(word="world", phonemes="w", start_time=0.6, end_time=1.0)]
+        t = [speech_datatypes.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
+             speech_datatypes.WordTiming(word="-",     phonemes="-", start_time=0.5, end_time=0.6),
+             speech_datatypes.WordTiming(word="world", phonemes="w", start_time=0.6, end_time=1.0)]
         cleaned = speech_tts.clean_timestamps(t, for_lipsync=False)
         assert [w.word for w in cleaned] == ["hello", "-", "world"]
 
     def test_lipsync_keeps_common_punctuation_singletons(self):
         # Common end-of-phrase punctuation is kept (used to close the mouth for lipsync).
-        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
-             speech_tts.WordTiming(word=".",     phonemes=".", start_time=0.6, end_time=0.7),
-             speech_tts.WordTiming(word="bye",   phonemes="b", start_time=0.8, end_time=1.1)]
+        t = [speech_datatypes.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5),
+             speech_datatypes.WordTiming(word=".",     phonemes=".", start_time=0.6, end_time=0.7),
+             speech_datatypes.WordTiming(word="bye",   phonemes="b", start_time=0.8, end_time=1.1)]
         cleaned = speech_tts.clean_timestamps(t, for_lipsync=True)
         assert [w.word for w in cleaned] == ["hello", ".", "bye"]
 
     def test_preserves_identity_not_copies(self):
         # Cleaning should not copy WordTiming instances — the output list is a subset view
         # into the input (cheap, composable).
-        t = [speech_tts.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5)]
+        t = [speech_datatypes.WordTiming(word="hello", phonemes="h", start_time=0.0, end_time=0.5)]
         cleaned = speech_tts.clean_timestamps(t)
         assert cleaned[0] is t[0]
 
@@ -219,12 +220,12 @@ class TestExpandPhonemeDiphthongs:
     # Pure function — no model needed.
 
     def test_expands_each_shorthand_to_canonical_ipa(self):
-        t = [speech_tts.WordTiming(word="hey",   phonemes="hˈA", start_time=0.0, end_time=0.5),
-             speech_tts.WordTiming(word="high",  phonemes="hˈI", start_time=0.5, end_time=1.0),
-             speech_tts.WordTiming(word="how",   phonemes="hˌW", start_time=1.0, end_time=1.5),
-             speech_tts.WordTiming(word="soy",   phonemes="sˈY", start_time=1.5, end_time=2.0),
-             speech_tts.WordTiming(word="go",    phonemes="ɡˈO", start_time=2.0, end_time=2.5),
-             speech_tts.WordTiming(word="go_uk", phonemes="ɡˈQ", start_time=2.5, end_time=3.0)]
+        t = [speech_datatypes.WordTiming(word="hey",   phonemes="hˈA", start_time=0.0, end_time=0.5),
+             speech_datatypes.WordTiming(word="high",  phonemes="hˈI", start_time=0.5, end_time=1.0),
+             speech_datatypes.WordTiming(word="how",   phonemes="hˌW", start_time=1.0, end_time=1.5),
+             speech_datatypes.WordTiming(word="soy",   phonemes="sˈY", start_time=1.5, end_time=2.0),
+             speech_datatypes.WordTiming(word="go",    phonemes="ɡˈO", start_time=2.0, end_time=2.5),
+             speech_datatypes.WordTiming(word="go_uk", phonemes="ɡˈQ", start_time=2.5, end_time=3.0)]
         out = speech_tts.expand_phoneme_diphthongs(t)
         assert out[0].phonemes == "hˈeɪ"
         assert out[1].phonemes == "hˈaɪ"
@@ -235,18 +236,18 @@ class TestExpandPhonemeDiphthongs:
 
     def test_leaves_non_shorthand_phonemes_alone(self):
         # Ordinary IPA strings without Misaki shorthand pass through unchanged.
-        t = [speech_tts.WordTiming(word="fox",  phonemes="fˈɑks",  start_time=0.0, end_time=0.5),
-             speech_tts.WordTiming(word="lazy", phonemes="lˈeɪzi", start_time=0.5, end_time=1.0)]
+        t = [speech_datatypes.WordTiming(word="fox",  phonemes="fˈɑks",  start_time=0.0, end_time=0.5),
+             speech_datatypes.WordTiming(word="lazy", phonemes="lˈeɪzi", start_time=0.5, end_time=1.0)]
         out = speech_tts.expand_phoneme_diphthongs(t)
         assert [w.phonemes for w in out] == ["fˈɑks", "lˈeɪzi"]
 
     def test_does_not_mutate_input(self):
-        t = [speech_tts.WordTiming(word="hey", phonemes="hˈA", start_time=0.0, end_time=0.5)]
+        t = [speech_datatypes.WordTiming(word="hey", phonemes="hˈA", start_time=0.0, end_time=0.5)]
         speech_tts.expand_phoneme_diphthongs(t)
         assert t[0].phonemes == "hˈA", "expand_phoneme_diphthongs mutated its input"
 
     def test_is_idempotent(self):
-        t = [speech_tts.WordTiming(word="hey", phonemes="hˈA", start_time=0.0, end_time=0.5)]
+        t = [speech_datatypes.WordTiming(word="hey", phonemes="hˈA", start_time=0.0, end_time=0.5)]
         once = speech_tts.expand_phoneme_diphthongs(t)
         twice = speech_tts.expand_phoneme_diphthongs(once)
         assert once[0].phonemes == twice[0].phonemes == "hˈeɪ"
@@ -259,10 +260,10 @@ class TestFinalizeMetadata:
         # Input: a dup timestamp, a single-char incidental, and a diphthong shorthand.
         # Expected: dedup drops the dup, lipsync filter drops the incidental, diphthong
         # expansion rewrites the phonemes.
-        t = [speech_tts.WordTiming(word="hey",   phonemes="hˈA", start_time=0.0, end_time=0.5),
-             speech_tts.WordTiming(word="again", phonemes="əɡˈɛn", start_time=0.0, end_time=0.6),  # dup start_time
-             speech_tts.WordTiming(word="-",     phonemes="-",   start_time=0.6, end_time=0.7),   # incidental
-             speech_tts.WordTiming(word="high",  phonemes="hˈI", start_time=0.7, end_time=1.2)]
+        t = [speech_datatypes.WordTiming(word="hey",   phonemes="hˈA", start_time=0.0, end_time=0.5),
+             speech_datatypes.WordTiming(word="again", phonemes="əɡˈɛn", start_time=0.0, end_time=0.6),  # dup start_time
+             speech_datatypes.WordTiming(word="-",     phonemes="-",   start_time=0.6, end_time=0.7),   # incidental
+             speech_datatypes.WordTiming(word="high",  phonemes="hˈI", start_time=0.7, end_time=1.2)]
         out = speech_tts.finalize_metadata(t)
         assert [w.word for w in out] == ["hey", "high"]
         assert out[0].phonemes == "hˈeɪ"
@@ -272,7 +273,7 @@ class TestFinalizeMetadata:
         assert speech_tts.finalize_metadata([]) == []
 
     def test_does_not_mutate_input(self):
-        t = [speech_tts.WordTiming(word="hey", phonemes="hˈA", start_time=0.0, end_time=0.5)]
+        t = [speech_datatypes.WordTiming(word="hey", phonemes="hˈA", start_time=0.0, end_time=0.5)]
         speech_tts.finalize_metadata(t)
         assert t[0].phonemes == "hˈA"
 
@@ -281,7 +282,7 @@ class TestPrepare:
     # Engine-dependent; runs in ml tier via the session-scoped `pipeline` + `voice` fixtures.
     def test_returns_ttsresult_with_lipsync_ready_metadata(self, pipeline, voice):
         result = speech_tts.prepare(pipeline, voice=voice, text="Hello world.", get_metadata=True)
-        assert isinstance(result, speech_tts.TTSResult)
+        assert isinstance(result, speech_datatypes.TTSResult)
         assert result.word_metadata is not None
         # Finalized metadata: no dup timestamps, no incidentals, phonemes use canonical IPA only.
         for w in result.word_metadata:
@@ -302,13 +303,13 @@ class TestDecode:
     # need the server.
 
     def test_empty_bytes_returns_empty_ttsresult(self):
-        encoded = speech_tts.EncodedTTSResult(audio_bytes=b"",
+        encoded = speech_datatypes.EncodedTTSResult(audio_bytes=b"",
                                               audio_format="mp3",
                                               sample_rate=speech_tts.SAMPLE_RATE,
                                               duration=0.0,
                                               word_metadata=[])
         result = speech_tts.decode(encoded)
-        assert isinstance(result, speech_tts.TTSResult)
+        assert isinstance(result, speech_datatypes.TTSResult)
         assert result.audio.dtype == np.float32
         assert len(result.audio) == 0
         assert result.sample_rate == speech_tts.SAMPLE_RATE
@@ -316,7 +317,7 @@ class TestDecode:
         assert result.word_metadata == []
 
     def test_empty_bytes_preserves_none_metadata(self):
-        encoded = speech_tts.EncodedTTSResult(audio_bytes=b"",
+        encoded = speech_datatypes.EncodedTTSResult(audio_bytes=b"",
                                               audio_format="mp3",
                                               sample_rate=speech_tts.SAMPLE_RATE,
                                               duration=0.0,

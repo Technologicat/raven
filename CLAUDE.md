@@ -125,6 +125,7 @@ Same shape applies to `nlp` (`nlptools` ↔ `natlang`), `stt`, `embeddings`, `sa
 - Playback / audio output stays in `raven.client.*` even when synthesis is local — the user is on the client machine, audio hardware is local by definition.
 - `raven.client.tts.tts_prepare` and friends are **not** obsolete when `MaybeRemote.TTS` exists. They remain the explicit-remote path, used by `MaybeRemote` itself and by any app that wants to force remote mode.
 - Data conversion at the boundary: in-process uses dataclasses (`TTSResult`, `WordTiming`), HTTP wire uses JSON-friendly dicts. Converter functions (`decode`/`encode`, `finalize_metadata`) live in the common layer — neither "local" nor "remote", they're shape conversions.
+- Engine-agnostic data shapes live in their own module, separate from the engine wrapper. For TTS, `WordTiming`, `TTSSegment`, `TTSResult`, `EncodedTTSResult` are in `raven.common.audio.speech.datatypes`; only `TTSPipeline` (which holds a `kokoro.KPipeline`) stays in `raven.common.audio.speech.tts`. This lets consumers that only need the shapes (e.g. `lipsync`) import them without dragging in Kokoro/PyAV/huggingface_hub.
 
 ### Common Subsystems
 - `raven/common/video/` - Postprocessor, upscaler (PyTorch Anime4K), colorspace conversions, cel compositor

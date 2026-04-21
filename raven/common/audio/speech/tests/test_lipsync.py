@@ -3,7 +3,7 @@
 import pytest
 
 from raven.common.audio.speech import lipsync
-from raven.common.audio.speech.tts import WordTiming
+from raven.common.audio.speech.datatypes import WordTiming
 
 
 # --------------------------------------------------------------------------------

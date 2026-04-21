@@ -26,6 +26,7 @@ from ..client import api
 from ..client import config as client_config
 
 from ..common import nlptools
+from ..common.audio.speech import datatypes as speech_datatypes
 from ..common.audio.speech import stt as speech_stt
 from ..common.audio.speech import tts as speech_tts
 
@@ -353,7 +354,7 @@ class TTS(MaybeRemoteService):
                    text: str,
                    speed: float = 1.0,
                    get_metadata: bool = True,
-                   format: Optional[str] = None) -> Union[speech_tts.TTSResult, speech_tts.EncodedTTSResult]:
+                   format: Optional[str] = None) -> Union[speech_datatypes.TTSResult, speech_datatypes.EncodedTTSResult]:
         """Synthesize `text`, with audio in the shape the caller asks for.
 
         `format=None` (default): return a `TTSResult` with raw float32 mono audio

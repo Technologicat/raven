@@ -53,7 +53,7 @@ from typing import Callable, Mapping, Optional, Sequence
 
 from unpythonic import sym
 
-from .tts import WordTiming
+from .datatypes import WordTiming
 
 logger = logging.getLogger(__name__)
 
