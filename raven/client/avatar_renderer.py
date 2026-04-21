@@ -196,6 +196,13 @@ class DPGAvatarRenderer:
         # wire `crop_bbox` for overlay drawing only — widget positioning still follows the actual wire
         # state. When `None`, the overlay uses the wire bbox.
         self.show_crop_overlay = False
+        # Independent of `show_crop_overlay` — toggled by callers when a modal window
+        # (fdialog, helpcard, messagebox) is on top of the avatar. The crop overlay lives
+        # in a `front=True` viewport drawlist that DPG renders above all windows, including
+        # modals — so even though those windows are properly modal at the input layer
+        # (clicks outside them are blocked), the overlay still draws over them visually.
+        # Suppressing it from the renderer side is the only way to hide it.
+        self._overlay_suppressed = False
         self.overlay_bbox_preview: Optional[Mapping[str, Any]] = None
         # The viewport drawlist stays permanently `show=True` at the DPG level; visibility is
         # controlled by whether we populate it with draw items. An empty viewport drawlist is a
@@ -262,6 +269,20 @@ class DPGAvatarRenderer:
         self.overlay_bbox_preview = bbox
         self._redraw_crop_overlay()
 
+    def set_overlay_suppressed(self, suppressed: bool) -> None:
+        """When True, hide the crop overlay regardless of `show_crop_overlay`.
+
+        Used by the host app when a modal window (fdialog, helpcard, messagebox) is on top
+        of the avatar — DPG's `front=True` viewport drawlist draws over modals visually,
+        even though input is properly blocked. Callers typically poll their app's
+        "any modal visible" state each frame and call this when the state flips; the
+        renderer no-ops when the value is unchanged.
+        """
+        if suppressed == self._overlay_suppressed:
+            return
+        self._overlay_suppressed = suppressed
+        self._redraw_crop_overlay()
+
     def _redraw_crop_overlay(self) -> None:
         """Redraw the crop-region overlay. Call whenever layout, wire `crop_bbox`, or overlay preview changes.
 
@@ -274,7 +295,7 @@ class DPGAvatarRenderer:
             dpg.delete_item(self.crop_overlay_drawlist_gui_widget, children_only=True)
 
             effective = self.overlay_bbox_preview if self.overlay_bbox_preview is not None else self.crop_bbox
-            if not self.show_crop_overlay or self.full_w is None or not self.first_frame_received:
+            if not self.show_crop_overlay or self._overlay_suppressed or self.full_w is None or not self.first_frame_received:
                 # Leave the drawlist empty — no hide_item needed since an empty viewport drawlist renders nothing.
                 return
 

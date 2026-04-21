@@ -1722,8 +1722,18 @@ def update_animations():
 
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
+    # Also, the crop overlay lives in a `front=True` viewport drawlist that DPG renders above all
+    # windows including properly-modal ones — see `DPGAvatarRenderer.set_overlay_suppressed` — so
+    # we forward the "any modal visible" state to the renderer each frame so it suppresses the
+    # overlay during helpcard/fdialog/messagebox display.
+    _last_modal_state = False
     while dpg.is_dearpygui_running():
         update_animations()
+        if gui_instance is not None:
+            modal_visible = is_any_modal_window_visible()
+            if modal_visible != _last_modal_state:
+                gui_instance.dpg_avatar_renderer.set_overlay_suppressed(modal_visible)
+                _last_modal_state = modal_visible
         dpg.render_dearpygui_frame()
     # dpg.start_dearpygui()  # automatic render loop
 except KeyboardInterrupt:
