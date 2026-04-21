@@ -4,100 +4,18 @@
 
 All tests in this module are automatically skipped when the server is
 unreachable. Start `raven-server` before running these tests.
+
+Shared fixtures (`initialized_api`, `assets_base`, `sample_text`,
+`scientific_abstract_1`, `scientific_abstract_2`) live in the sibling
+`conftest.py` so that `test_mayberemote.py` can reuse them.
 """
 
 import io
-import os
-import pathlib
-import textwrap
 
 import numpy as np
 import PIL.Image
-import pytest
-
-pytest.importorskip("qoi", reason="qoi not installed (needs full dependency stack)")
 
 from raven.client import api
-from raven.client import config as client_config
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="module")
-def initialized_api():
-    """Initialize the API and check server availability.
-
-    If the server is not running, the entire module is skipped.
-    """
-    api.initialize(raven_server_url=client_config.raven_server_url,
-                   raven_api_key_file=client_config.raven_api_key_file,
-                   tts_playback_audio_device=client_config.tts_playback_audio_device,
-                   stt_capture_audio_device=client_config.stt_capture_audio_device)
-    if not api.test_connection():
-        pytest.skip("raven-server is not running")
-
-
-@pytest.fixture(scope="module")
-def assets_base():
-    """Path to the avatar assets directory."""
-    return pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "..", "avatar", "assets")).expanduser().resolve()
-
-
-# Reusable sample text for classify/embeddings/etc.
-SAMPLE_TEXT = "What is the airspeed velocity of an unladen swallow?"
-
-# Neumann & Gros 2023, https://arxiv.org/abs/2210.00849
-SCIENTIFIC_ABSTRACT_1 = textwrap.dedent("""
-    The recent observation of neural power-law scaling relations has made a signifi-
-    cant impact in the field of deep learning. A substantial amount of attention has
-    been dedicated as a consequence to the description of scaling laws, although
-    mostly for supervised learning and only to a reduced extent for reinforcement
-    learning frameworks. In this paper we present an extensive study of performance
-    scaling for a cornerstone reinforcement learning algorithm, AlphaZero. On the ba-
-    sis of a relationship between Elo rating, playing strength and power-law scaling,
-    we train AlphaZero agents on the games Connect Four and Pentago and analyze
-    their performance. We find that player strength scales as a power law in neural
-    network parameter count when not bottlenecked by available compute, and as a
-    power of compute when training optimally sized agents. We observe nearly iden-
-    tical scaling exponents for both games. Combining the two observed scaling laws
-    we obtain a power law relating optimal size to compute similar to the ones ob-
-    served for language models. We find that the predicted scaling of optimal neural
-    network size fits our data for both games. We also show that large AlphaZero
-    models are more sample efficient, performing better than smaller models with the
-    same amount of training data.
-""").strip()
-
-# Brown et al. 2020, p. 40, https://arxiv.org/abs/2005.14165
-SCIENTIFIC_ABSTRACT_2 = textwrap.dedent("""
-    Giving multi-task models instructions in natural language was first formalized in a supervised setting with [MKXS18]
-    and utilized for some tasks (such as summarizing) in a language model with [RWC+ 19]. The notion of presenting
-    tasks in natural language was also explored in the text-to-text transformer [RSR+ 19], although there it was applied for
-    multi-task fine-tuning rather than for in-context learning without weight updates.
-
-    Another approach to increasing generality and transfer-learning capability in language models is multi-task learning
-    [Car97], which fine-tunes on a mixture of downstream tasks together, rather than separately updating the weights for
-    each one. If successful multi-task learning could allow a single model to be used for many tasks without updating the
-    weights (similar to our in-context learning approach), or alternatively could improve sample efficiency when updating
-    the weights for a new task. Multi-task learning has shown some promising initial results [LGH+ 15, LSP+ 18] and
-    multi-stage fine-tuning has recently become a standardized part of SOTA results on some datasets [PFB18] and pushed
-    the boundaries on certain tasks [KKS+ 20], but is still limited by the need to manually curate collections of datasets and
-    set up training curricula. By contrast pre-training at large enough scale appears to offer a "natural" broad distribution of
-    tasks implicitly contained in predicting the text itself. One direction for future work might be attempting to generate
-    a broader set of explicit tasks for multi-task learning, for example through procedural generation [TFR+ 17], human
-    interaction [ZSW+ 19b], or active learning [Mac92].
-
-    Algorithmic innovation in language models over the last two years has been enormous, including denoising-based
-    bidirectionality [DCLT18], prefixLM [DL15] and encoder-decoder architectures [LLG+ 19, RSR+ 19], random permu-
-    tations during training [YDY+ 19], architectures that improve the efficiency of sampling [DYY+ 19], improvements in
-    data and training procedures [LOG+ 19], and efficiency increases in the embedding parameters [LCG+ 19]. Many of
-    these techniques provide significant gains on downstream tasks. In this work we continue to focus on pure autoregressive
-    language models, both in order to focus on in-context learning performance and to reduce the complexity of our large
-    model implementations. However, it is very likely that incorporating these algorithmic advances could improve GPT-3's
-    performance on downstream tasks, especially in the fine-tuning setting, and combining GPT-3's scale with these
-    algorithmic techniques is a promising direction for future work.
-""").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -136,21 +54,21 @@ class TestClassify:
         assert isinstance(labels, list)
         assert len(labels) > 0
 
-    def test_classify_returns_dict(self, initialized_api):
-        result = api.classify(SAMPLE_TEXT)
+    def test_classify_returns_dict(self, initialized_api, sample_text):
+        result = api.classify(sample_text)
         assert isinstance(result, dict)
         assert len(result) > 0
 
-    def test_classify_scores_are_floats(self, initialized_api):
-        result = api.classify(SAMPLE_TEXT)
+    def test_classify_scores_are_floats(self, initialized_api, sample_text):
+        result = api.classify(sample_text)
         for label, score in result.items():
             assert isinstance(label, str)
             assert isinstance(score, (int, float))
 
-    def test_classify_labels_match(self, initialized_api):
+    def test_classify_labels_match(self, initialized_api, sample_text):
         """The classify result keys should be a subset of the known labels."""
         labels = set(api.classify_labels())
-        result = api.classify(SAMPLE_TEXT)
+        result = api.classify(sample_text)
         assert set(result.keys()).issubset(labels)
 
 
@@ -243,20 +161,20 @@ class TestNatlang:
 # ---------------------------------------------------------------------------
 
 class TestSanitize:
-    def test_dehyphenate_joins_broken_words(self, initialized_api):
-        result = api.sanitize_dehyphenate(SCIENTIFIC_ABSTRACT_1)
+    def test_dehyphenate_joins_broken_words(self, initialized_api, scientific_abstract_1):
+        result = api.sanitize_dehyphenate(scientific_abstract_1)
         assert isinstance(result, str)
         # "signifi-\ncant" should become "significant".
         assert "significant" in result
         assert "signifi-" not in result
 
-    def test_dehyphenate_preserves_real_hyphens(self, initialized_api):
-        result = api.sanitize_dehyphenate(SCIENTIFIC_ABSTRACT_1)
+    def test_dehyphenate_preserves_real_hyphens(self, initialized_api, scientific_abstract_1):
+        result = api.sanitize_dehyphenate(scientific_abstract_1)
         # "power-law" is a real hyphenated compound and should be preserved.
         assert "power-law" in result
 
-    def test_dehyphenate_second_abstract(self, initialized_api):
-        result = api.sanitize_dehyphenate(SCIENTIFIC_ABSTRACT_2)
+    def test_dehyphenate_second_abstract(self, initialized_api, scientific_abstract_2):
+        result = api.sanitize_dehyphenate(scientific_abstract_2)
         assert isinstance(result, str)
         assert len(result) > 0
 
@@ -273,9 +191,9 @@ class TestTranslate:
         assert isinstance(result, str)
         assert len(result) > 0
 
-    def test_translate_scientific_text(self, initialized_api):
+    def test_translate_scientific_text(self, initialized_api, scientific_abstract_1):
         # Use the dehyphenated version for cleaner translation input.
-        clean_text = api.sanitize_dehyphenate(SCIENTIFIC_ABSTRACT_1)
+        clean_text = api.sanitize_dehyphenate(scientific_abstract_1)
         result = api.translate_translate(clean_text, source_lang="en", target_lang="fi")
         assert isinstance(result, str)
         assert len(result) > 0
@@ -348,22 +266,22 @@ class TestStt:
 # ---------------------------------------------------------------------------
 
 class TestEmbeddings:
-    def test_single_text_returns_1d(self, initialized_api):
-        embedding = api.embeddings_compute(SAMPLE_TEXT)
+    def test_single_text_returns_1d(self, initialized_api, sample_text):
+        embedding = api.embeddings_compute(sample_text)
         assert isinstance(embedding, np.ndarray)
         assert embedding.ndim == 1
         assert embedding.shape[0] > 0
 
-    def test_batch_returns_2d(self, initialized_api):
-        embedding = api.embeddings_compute([SAMPLE_TEXT, "Testing, 1, 2, 3."])
+    def test_batch_returns_2d(self, initialized_api, sample_text):
+        embedding = api.embeddings_compute([sample_text, "Testing, 1, 2, 3."])
         assert isinstance(embedding, np.ndarray)
         assert embedding.ndim == 2
         assert embedding.shape[0] == 2
         assert embedding.shape[1] > 0
 
-    def test_single_and_batch_same_dimension(self, initialized_api):
-        single = api.embeddings_compute(SAMPLE_TEXT)
-        batch = api.embeddings_compute([SAMPLE_TEXT])
+    def test_single_and_batch_same_dimension(self, initialized_api, sample_text):
+        single = api.embeddings_compute(sample_text)
+        batch = api.embeddings_compute([sample_text])
         assert single.shape[0] == batch.shape[1]
 
 

@@ -50,21 +50,6 @@ For symmetry, if we ever start splitting, we should do all five backends, not ju
 
 Discovered during natlang wire-format migration (2026-04-21). Original framing lived in the now-resolved "Language-neutral wire format for the natlang (spaCy) endpoint" item, superseded by this follow-up.
 
-## MaybeRemote test coverage for Dehyphenator, Embedder, STT, TTS
-
-`raven.client.mayberemote` has five service classes. `NLP` gained a dedicated test file during the natlang wire-format migration (`raven/client/tests/test_mayberemote.py`); the other four (`Dehyphenator`, `Embedder`, `STT`, `TTS`) still have zero direct tests.
-
-Each would benefit from a small remote-mode roundtrip test (live server required) mirroring the `TestMaybeRemoteNLP` shape — ~30 lines per class. Minimal assertions per service:
-
-- `Dehyphenator.dehyphenate("signifi-\ncant")` → `"significant"`.
-- `Embedder.embed_sentences(["hello"])` → non-zero vector of expected dim.
-- `STT.transcribe(<small bundled sample>)` → non-empty string (needs a few hundred ms of audio fixture).
-- `TTS.synthesize("Hello.", voice=...)` → non-empty result; one test per shape (float `TTSResult` vs. encoded `EncodedTTSResult`).
-
-Not urgent — the APIs have been stable for a while and the natlang session didn't change any of them. Natural companion to the deferred "Local-mode `tts_speak` / `tts_speak_lipsynced`" item: the local-mode `TTS.speak` lift will need these tests as scaffolding anyway.
-
-Discovered during natlang wire-format migration (2026-04-21).
-
 ## Enable HTTP response compression on raven-server
 
 The natlang wire-format migration (JSON via `Doc.to_json()` instead of DocBin) lost DocBin's vocab-sharing optimization — categorical strings (POS tags, dep labels, lemmas) now appear once per token rather than once per batch. gzip/deflate recovers most of the loss because those are exactly the patterns dictionary-based compression eats for breakfast; natively we're probably 1.5×–2.5× bigger uncompressed, within 10–20% after gzip.

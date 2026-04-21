@@ -381,8 +381,9 @@ class TTS(MaybeRemoteService):
         calls `speech_tts.prepare_cached` or `speech_tts.prepare_encoded_cached`
         in the common layer; remote mode calls `api.tts_prepare_decoded_cached`
         or `api.tts_prepare_cached`. A remote `format=None` call therefore still
-        pays the MP3 wire cost once but caches the decoded `TTSResult`, not just
-        the encoded wire bytes — so repeat calls are free on both sides.
+        pays the encoded-wire cost once (default FLAC) but caches the decoded
+        `TTSResult`, not just the encoded wire bytes — so repeat calls are free
+        on both sides.
         """
         if self._local_model is not None:
             if format is None:

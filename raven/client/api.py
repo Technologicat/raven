@@ -779,8 +779,11 @@ def stt_transcribe_array(audio_data: np.array,
                         Scaled to s16 internally before wire transport.
 
     Dtype polymorphism lives here rather than at callers because the s16 cast is
-    a wire-format concern — the server ingests MP3, which requires s16 at the
-    encoding step.
+    a wire-format concern — the PyAV FLAC encoder expects integer samples at the
+    encoding step, and FLAC is the wire format (symmetric with the server→client
+    TTS direction, which also defaults to FLAC). Lossless, so Whisper sees bit-
+    identical audio whether the client goes through this path or calls a local
+    Whisper directly.
     """
     if np.issubdtype(audio_data.dtype, np.floating):
         audio_data = np.asarray(audio_data * 32767.0, dtype=np.int16)
@@ -788,7 +791,7 @@ def stt_transcribe_array(audio_data: np.array,
         raise TypeError(f"stt_transcribe_array: expected np.int16 or floating-point dtype; got {audio_data.dtype}.")
 
     logger.info(f"stt_transcribe_array: encoding {len(audio_data) / sample_rate:0.6g}s of audio for sending to server.")
-    audio_encoder = StreamingAudioWriter(format="mp3",
+    audio_encoder = StreamingAudioWriter(format="flac",
                                          sample_rate=sample_rate,
                                          channels=1)
     audio_buffer = io.BytesIO()
