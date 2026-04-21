@@ -53,8 +53,6 @@
 
 - *Speech STT wire format* (client → server): MP3 → FLAC, for symmetry with the TTS direction and for the same reason — lossless on a trusted LAN beats lossy. `raven.client.api.stt_transcribe_array` now encodes the audio as FLAC before upload; the server continues to auto-detect the container format via PyAV, so no server-side change was needed.
 
-- *Client-side MaybeRemote* new services:
-
 - New module `raven.common.audio.resample` — device-agnostic sample-rate conversion (torchaudio-backed). Works on numpy arrays and torch tensors; three quality presets (`"default"`, `"kaiser_fast"`, `"kaiser_best"`) matching librosa's naming.
   - New dependency: `torchaudio>=2.4.0`.
 
@@ -69,7 +67,7 @@
     - Consumers compose tracks inside their own `on_tick` closure, calling `phoneme_at(stream, t)` / `word_at(timings, t)` as needed — lets the same loop drive avatar morphs, per-phoneme subtitles, word-level captions, or any combination.
     - No dependency on Kokoro or any other TTS engine.
 
-- `raven.client.mayberemote` new services, , mirroring the existing `Dehyphenator` / `Embedder` / `NLP` pattern.
+- `raven.client.mayberemote` new services, mirroring the existing `Dehyphenator` / `Embedder` / `NLP` pattern.
   - `TTS` and `STT`. Apps can now use speech locally when the server is down (or skip the round-trip entirely for latency), with a uniform API across modes.
     - `STT.transcribe` auto-resamples mismatched input.
     - `TTS.synthesize(format=...)` is shape-agnostic: no argument returns float32 `TTSResult` in both modes; `format="flac"`/`"mp3"`/… returns `EncodedTTSResult` ready for playback or storage.
