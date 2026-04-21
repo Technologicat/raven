@@ -711,16 +711,24 @@ class XDotWidget(gui_animation.Animation):
         by `update` (viewport moved during pan/zoom animation).
         """
         if not self._input_enabled or not self._is_mouse_inside():
-            # Mouse left widget or input suppressed — clear hover.
-            self._highlight.set_hover(None)
-            self._hide_tooltip()
+            # Mouse left widget or input suppressed — clear hover state.
+            # Only flip `_needs_render` when something visible actually changed;
+            # in the common steady-state (cursor outside, nothing to update), an
+            # unconditional re-render here costs O(edges) per frame on dense graphs.
+            visual_changed = False
+            if self._highlight.get_hover() is not None:
+                self._highlight.set_hover(None)  # starts fade; `highlight.update()` drives renders during the fade
+                visual_changed = True
+            self._hide_tooltip()  # tooltip is its own DPG window, not part of the drawlist — no render needed
             if self._highlight.has_link_highlights():
-                self._highlight.clear_link_highlights()
+                self._highlight.clear_link_highlights()  # instant clear, no fade — render once to make it take effect
+                visual_changed = True
             if self._last_hover_desc is not None:
                 self._last_hover_desc = None
                 if self._on_hover:
                     self._on_hover(None)
-            self._needs_render = True
+            if visual_changed:
+                self._needs_render = True
             return
         if self._graph is None:
             return
