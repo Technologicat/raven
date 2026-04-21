@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 import importlib
 import traceback
-from typing import Optional, Union
+from typing import BinaryIO, Optional, Union
 
 from colorama import Fore, Style
 
@@ -59,13 +59,13 @@ def get_info() -> dict:
     return {"sample_rate": _stt_model.sample_rate,
             "model": _stt_model.model_name}
 
-# TODO: the input is a flask.request.file.stream; what's the type of that?
-def speech_to_text(stream,
+def speech_to_text(stream: BinaryIO,
                    prompt: Optional[str],
                    language: Optional[str]) -> str:
     """Transcribe speech to text.
 
-    `stream`: a `flask.request.file.stream` containing an audio file (any format supported by PyAV).
+    `stream`: a `flask.request.file.stream` (werkzeug `FileStorage.stream`, typed as `BinaryIO`)
+              containing an audio file in any format supported by PyAV.
 
     `prompt`: optional Whisper conditioning text (list rare proper names, set context,
               or nudge transcription style). See `raven.server.app.api_stt_transcribe`.

@@ -68,7 +68,7 @@ default_stopwords = set(x.lower() for x in _load_stopwords())
 # NLP backend: spaCy NLP pipeline
 
 _spacy_pipelines = {}
-def load_spacy_pipeline(model_name: str, device_string: str):
+def load_spacy_pipeline(model_name: str, device_string: str) -> spacy.Language:
     """Load and return a spaCy NLP pipeline.
 
     `model_name`: spaCy NLP model name. This is NOT a HuggingFace model name, but is auto-downloaded (by spaCy) on first use.
@@ -124,7 +124,7 @@ def load_spacy_pipeline(model_name: str, device_string: str):
     _spacy_pipelines[cache_key] = nlp
     return nlp
 
-def spacy_analyze(nlp,
+def spacy_analyze(nlp: spacy.Language,
                   text: Union[str, List[str]],
                   pipes: Optional[List[str]] = None) -> List[List[spacy.tokens.token.Token]]:
     """Run spaCy NLP analysis on `text`.
@@ -687,7 +687,7 @@ def load_translator(model_name: str, device_string: str, dtype: Union[str, torch
 #     translation = output[0]["translation_text"]
 #     return translation
 
-def _translate_chunked(translator: _Translator, nlp_pipe, text: str) -> str:
+def _translate_chunked(translator: _Translator, nlp_pipe: spacy.Language, text: str) -> str:
     """Internal function. Translate a text that may require chunking before it fits into the translation model's context window."""
     # Translate one sentence at a time (reliable and keeps the chunks short).
     # TODO: Can sometimes give bad results:
@@ -723,7 +723,7 @@ def _translate_chunked(translator: _Translator, nlp_pipe, text: str) -> str:
     #          _translate_chunked(translator, nlp_pipe, secondhalf)]
     #     )
 
-def translate(translator: _Translator, nlp_pipe, text: Union[str, List[str]]) -> Union[str, List[str]]:
+def translate(translator: _Translator, nlp_pipe: spacy.Language, text: Union[str, List[str]]) -> Union[str, List[str]]:
     """Translate `text` to another natural language.
 
     `translator`: return value of `load_translator`

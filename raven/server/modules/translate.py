@@ -8,10 +8,11 @@ logger = logging.getLogger(__name__)
 
 import importlib
 import traceback
-from typing import List, Union
+from typing import List, Optional, Union
 
 from colorama import Fore, Style
 
+import spacy
 import torch
 
 from ...common import hfutil
@@ -19,7 +20,7 @@ from ...common import nlptools
 
 server_config = None
 translators = {}
-nlp_pipe = None  # for breaking text into sentences (smart chunking)
+nlp_pipe: Optional[spacy.Language] = None  # for breaking text into sentences (smart chunking)
 
 def init_module(config_module_name: str,
                 device_string: str,

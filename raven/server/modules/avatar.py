@@ -37,7 +37,7 @@ import numpy as np
 import sys
 import threading
 import traceback
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, BinaryIO, Dict, List, Mapping, Optional, Tuple
 import uuid
 
 from colorama import Fore, Style
@@ -153,11 +153,11 @@ atexit.register(shutdown)
 # --------------------------------------------------------------------------------
 # Implementations for API endpoints served by `server.py`
 
-# TODO: the `stream` is a flask.request.file.stream; what's the type of that?
-def load(stream, cel_streams: Dict) -> str:
+def load(stream: BinaryIO, cel_streams: Dict[str, BinaryIO]) -> str:
     """Create a new avatar instance, loading a character image (512x512 RGBA PNG) from `stream`.
 
-    The `stream` is a `flask.request.file.stream` containing the character's base image.
+    The `stream` is a `flask.request.file.stream` (werkzeug `FileStorage.stream`, typed as `BinaryIO`)
+    containing the character's base image.
 
     `cel_streams` is a dict `{celname: flask.request.file.stream, ...}` containing the add-on cels, if any.
     If there are no add-on cels, you can pass an empty dict.

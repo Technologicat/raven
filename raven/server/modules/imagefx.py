@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 import io
 import threading
 import traceback
-from typing import Any, Dict, List, Union
+from typing import Any, BinaryIO, Dict, List, Union
 
 from colorama import Fore, Style
 
@@ -54,7 +54,7 @@ def is_available() -> bool:
 
 # --------------------------------------------------------------------------------
 
-def decode_image(stream) -> np.array:
+def decode_image(stream: BinaryIO) -> np.array:
     """Read an image from a Flask stream or anything duck-compatible with it.
 
     Supported input formats are QOI (Quite Ok Image; fast lossless),
@@ -122,13 +122,12 @@ def encode_image(image_rgba: np.array, output_format: str) -> bytes:
 
 # --------------------------------------------------------------------------------
 
-# TODO: the input is a flask.request.file.stream; what's the type of that?
-def process(input_stream,
+def process(input_stream: BinaryIO,
             output_format: str,
             postprocessor_chain: List[Dict[str, Any]]) -> bytes:
     """Process an image through Raven-avatar's postprocessor.
 
-    `input_stream`: a `flask.request.file.stream` containing an image file
+    `input_stream`: a `flask.request.file.stream` (werkzeug `FileStorage.stream`, typed as `BinaryIO`) containing an image file
     `output_format`: format to encode output to (e.g. "png")
     `postprocessor_chain`: formatted as in `raven.server.config.postprocessor_defaults`
 
@@ -159,8 +158,7 @@ def process(input_stream,
 
     return encoded_image_bytes
 
-# TODO: the input is a flask.request.file.stream; what's the type of that?
-def upscale(input_stream,
+def upscale(input_stream: BinaryIO,
             output_format: str,
             upscaled_width: int,
             upscaled_height: int,
@@ -168,7 +166,7 @@ def upscale(input_stream,
             quality: str) -> bytes:
     """Upscale an image with Anime4K.
 
-    `input_stream`: a `flask.request.file.stream` containing an image file
+    `input_stream`: a `flask.request.file.stream` (werkzeug `FileStorage.stream`, typed as `BinaryIO`) containing an image file
     `output_format`: format to encode output to (e.g. "png")
     `upscaled_width`, `upscaled_height`: desired output image resolution.
 

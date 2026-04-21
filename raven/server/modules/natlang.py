@@ -19,9 +19,11 @@ from colorama import Fore, Style
 
 from flask import jsonify, Response
 
+import spacy
+
 from ...common import nlptools
 
-nlp_pipeline = None
+nlp_pipeline: Optional[spacy.Language] = None
 
 def init_module(model_name: str, device_string: str) -> None:
     global nlp_pipeline
