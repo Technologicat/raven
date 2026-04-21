@@ -25,7 +25,17 @@
   - New dependency: `torchaudio>=2.4.0`.
 - New module `raven.common.audio.speech.stt` — Whisper wrapper callable in-process (no Flask). `raven.server.modules.stt` is now a thin wrapper that decodes the audio container and forwards to the common layer.
 - New module `raven.common.audio.speech.tts` — Kokoro wrapper callable in-process (no Flask). Two-layer API: `synthesize_iter` yields per-segment `TTSSegment` with already-absolute word timestamps, `synthesize` is the concatenating wrapper returning a single `TTSResult`. `raven.server.modules.tts` is now a thin wrapper that casts float→s16 at the transport boundary, URL-encodes Unicode phonemes for HTTP headers, and handles Flask response construction.
-- `raven.client.mayberemote`: new `TTS` and `STT` services, mirroring the existing `Dehyphenator` / `Embedder` / `NLP` pattern. Apps can now use speech locally when the server is down (or skip the round-trip entirely for latency), with a uniform API across modes. `STT.transcribe` auto-resamples mismatched input; `TTS.synthesize` returns float32 audio even in remote mode (decoded from the server's MP3 stream).
+- `raven.client.mayberemote`: new `TTS` and `STT` services, mirroring the existing `Dehyphenator` / `Embedder` / `NLP` pattern. Apps can now use speech locally when the server is down (or skip the round-trip entirely for latency), with a uniform API across modes. `STT.transcribe` auto-resamples mismatched input; `TTS.synthesize(format=...)` is shape-agnostic: no argument returns float32 `TTSResult` in both modes; `format="flac"`/`"mp3"`/… returns `EncodedTTSResult` ready for playback or storage. Caching lives in the bottom layers (one source of truth per (location, shape)), so the mayberemote dispatcher has no cache state of its own.
+- New module `raven.common.audio.speech.lipsync` — engine-agnostic lipsync and subtitle driver. Pure time-slicing for phoneme and word tracks, plus a callback-driven tick loop (`drive(on_tick, clock, tick_seconds)`). Consumers compose tracks inside their own `on_tick` closure, calling `phoneme_at(stream, t)` / `word_at(timings, t)` as needed — lets the same loop drive avatar morphs, per-phoneme subtitles, word-level captions, or any combination. No dependency on Kokoro or any other TTS engine.
+- HTTP API: new `/api/stt/info` and `/api/tts/info` endpoints return the currently loaded model name and the model's native sample rate. Lets clients avoid hardcoding values that drift when the server config changes. Parameter naming also standardized to `model_name` across these endpoints (previously `repo_id`).
+- *Raven-avatar*: client-side crop.
+  - New crop panel in the settings editor — drag a rectangle on a viewport overlay, debounced push to the server, live preview. Works on the rendered avatar, independent of upscaler and postprocessor.
+  - Server-side: crop happens *before* upscale in the pipeline, making the Anime4K upscaler viable on lower-end hardware — fewer pixels through the most expensive stage.
+  - Avatar renderer now sizes its texture reactively from decoded frame dimensions (previously fixed-size, mismatched when the server changed resolution mid-session).
+  - New server-side telemetry: `X-Server-Stats` response header with per-request server time, so the client can display a true end-to-end latency breakdown instead of guessing.
+- *Raven-avatar*: avatar apps (settings editor, pose editor) now show the Raven version in the viewport title — makes it obvious at a glance whether an installed app is up to date.
+- *Raven-avatar*: settings editor now has per-parameter help as Markdown tooltips, sourced from each filter's docstring. An info button next to every postprocessor parameter shows that parameter's description, rendered via `dpg_markdown`. Filter-level info buttons show each filter's preamble. New helper module `raven.common.docstring_utils` parses Raven-style docstrings (`` `name`: description``) into summary + per-parameter sections.
+- *Raven-avatar*: pose editor F1 help card with a prose section explaining the posing workflow. Hotkey table + two-column layout matching the settings editor / xdot viewer style.
 
 **Changed**:
 
@@ -44,6 +54,10 @@
 - *Video processing* (`raven.common.video`):
   - `chroma_subsample` filter to simulate a lo-fi video look.
     - Reduces chrominance (color) resolution while keeping luminance (brightness) at full resolution. Real video systems use this to improve compression, because human vision isn't as sensitive to color as it is to brightness.
+
+- *Speech TTS wire format* default: MP3 → FLAC. FLAC is lossless, so the remote path now produces bit-identical audio to the local path; MP3's historical advantage (smaller files over the wire) doesn't matter on the trusted local network Raven targets. MP3 was originally chosen because Kokoro-FastAPI couldn't produce FLAC reliably; Raven no longer routes through Kokoro-FastAPI. The OpenAI-compatible `/v1/audio/speech` endpoint stays on MP3 (SillyTavern-facing; OpenAI spec defaults to MP3). Callers can still request any PyAV-supported format explicitly via `format=`.
+
+- *XDot viewer*: dense graphs no longer burn CPU while the cursor is outside the widget. The hover-refresh path was unconditionally marking the frame dirty every tick, which defeated the idle throttle; now the flag is only raised when hover state actually changes. Visible on graphs with many edges — idle FPS drops back to the background rate instead of pegging at the redraw rate.
 
 - *Common utilities*: minimum `unpythonic` dependency bumped to 2.1.0. `environ_override`, `maybe_open`, `UnionFilter`, and `si_prefix` graduated to `unpythonic` in that release — Raven's local copies have been removed; the names now come from `unpythonic`.
   - Visible side effect: SI-prefixed numbers in log messages (bitrate, byte-rate, pixel-rate strings in the avatar renderer and audio codec) now use correct SI casing — lowercase `k` for kilo (previously uppercase `K`, which is the symbol for kelvin). `si_prefix` also gained binary (base-1024) mode, sub-unity prefixes (`m`, `µ`, ...), and correct handling of negative and zero values.
@@ -81,6 +95,11 @@
 - *Raven-avatar*:
   - Settings editor: avatar panel now resizes with the window (especially noticeable when going fullscreen). Previously the rightmost column expanded uselessly; now the postprocessor column stays at its default width and extra space goes to the avatar panel.
   - Fix settings editor crash when loading filters with `!ignore` parameters (e.g. anything with a `name`). The canonize and generate paths now skip these, matching the GUI build path.
+  - Crop overlay no longer bleeds visually over modal dialogs (file dialogs, help card, messagebox). The front-layer drawlist used for the overlay draws above the modal's dim layer; it is now suppressed while any modal window is visible.
+  - Crop overlay no longer remains clipped to the pre-fullscreen panel size after a fullscreen toggle. The overlay now re-measures on viewport resize.
+  - Pose editor: FPS counter no longer shows near-zero on the first frame (warmup fix), and an idle throttle brings CPU use down when the editor is not being interacted with. The window now also fits on 1080p displays without overflow.
+
+- *Text file I/O* (Windows correctness): every text-mode `open()` in Raven now specifies `encoding="utf-8"` explicitly. On Linux/macOS the system default is UTF-8, so this was latent; on MS Windows Python's default is the ANSI code page (cp1252 in Western locales), silently corrupting non-ASCII content — emotion names with Unicode symbols, API keys with high-bit bytes, BibTeX entries with accented author names, audio timing reports with paths containing ä/ö. Affected `raven.common.readcsv`, the avatar pose / settings editors, `raven.server` (API key file, animator settings, emotion defaults), and `raven.papers.pdf2bib`. Also future-proofs for Python 3.15, which will start warning on a missing `encoding=` (PEP 597).
 
 
 ---
