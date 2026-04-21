@@ -123,7 +123,6 @@ def decode(source: Union[bytes, BinaryIO, pathlib.Path, str],
     result through `raven.common.image.utils.ensure_rgba`.
     """
     buf = _read_to_bytes(source)
-
     fmt = _sniff_format(buf)
 
     if fmt == "jpeg" and _HAS_TURBOJPEG:
