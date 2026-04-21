@@ -8,7 +8,7 @@ import torch
 from PIL import Image
 
 from raven.cherrypick.loader import ThumbnailPipeline
-from raven.common.image import utils as imageutils
+from raven.common.image import codec as imagecodec
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ def sample_dir(tmp_path):
 def image_paths(sample_dir):
     """Sorted list of image paths from sample_dir."""
     return sorted(f for f in sample_dir.iterdir()
-                  if f.suffix.lower() in imageutils.IMAGE_EXTENSIONS)
+                  if f.suffix.lower() in imagecodec.IMAGE_EXTENSIONS)
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ class TestThumbnailPipeline:
             img.save(sample_dir / f"cancel_test_{i:03d}.jpg")
 
         paths = sorted(f for f in sample_dir.iterdir()
-                       if f.suffix.lower() in imageutils.IMAGE_EXTENSIONS)
+                       if f.suffix.lower() in imagecodec.IMAGE_EXTENSIONS)
 
         pipeline = ThumbnailPipeline(device=device, dtype=torch.float32, tile_size=32)
         pipeline.start(paths)
