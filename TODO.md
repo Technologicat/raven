@@ -381,8 +381,6 @@ Items marked **[Verify]** should be checked against the current codebase in a CC
 
 - **[Low]** Update assets for all characters: add at least the eye-waver effect (and possibly other cel-blending cels). Aria is the default character with full feature support. Other characters are lower priority.
 
-- **[Low]** Move data eyes management to server side (currently client-side). Distributes concerns correctly; will simplify JS client slightly. Do this when JS client work starts.
-
 
 ---
 

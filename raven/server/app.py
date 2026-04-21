@@ -551,6 +551,50 @@ def api_avatar_modify_overrides():
     avatar.modify_overrides(instance_id, action, overrides)
     return "OK"
 
+@app.route("/api/avatar/start_data_eyes", methods=["POST"])
+def api_avatar_start_data_eyes():
+    """Activate the scifi "data eyes" cel effect (LLM tool access indicator).
+
+    The effect switches on instantly. To switch it off (with fadeout), POST to `/api/avatar/stop_data_eyes`.
+
+    Input is JSON::
+
+        {"instance_id": "some_important_string"}
+
+    No outputs.
+    """
+    if not avatar.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_start_data_eyes: "instance_id" is required')
+
+    avatar.start_data_eyes(data["instance_id"])
+    return "OK"
+
+@app.route("/api/avatar/stop_data_eyes", methods=["POST"])
+def api_avatar_stop_data_eyes():
+    """Begin fading out the scifi "data eyes" cel effect.
+
+    Fade duration is the animator setting `data_eyes_fadeout_duration`.
+
+    Input is JSON::
+
+        {"instance_id": "some_important_string"}
+
+    No outputs.
+    """
+    if not avatar.is_available():
+        abort(403, "Module 'avatar' not running")
+
+    data = request.get_json()
+    if "instance_id" not in data or not isinstance(data["instance_id"], str):
+        abort(400, 'api_avatar_stop_data_eyes: "instance_id" is required')
+
+    avatar.stop_data_eyes(data["instance_id"])
+    return "OK"
+
 @app.route("/api/avatar/result_feed")
 def api_avatar_result_feed():
     """Video output.

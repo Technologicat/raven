@@ -47,9 +47,7 @@ from unpythonic import gensym, slurp
 from unpythonic.env import env
 
 from ..common import bgtask
-from ..common import numutils
 
-from ..common.gui import animation as gui_animation
 from ..common.gui import utils as guiutils
 
 from . import api  # Raven-server support
@@ -90,35 +88,6 @@ def _natlang_analyze(text: str) -> List[List["spacy.tokens.token.Token"]]:  # no
     docs = api.natlang_analyze(text,
                                pipes=["tok2vec", "parser", "senter"])
     return docs
-
-# --------------------------------------------------------------------------------
-# Integration with avatar's "data eyes" effect (LLM tool access indicator)
-
-# We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the "data1" cel blend
-# (which controls the effect strength). Hence the TTS can still override the mouth morphs simultaneously.
-
-class DataEyesFadeOut(gui_animation.Animation):
-    def __init__(self, duration: float, avatar_instance_id: str):
-        """Animation to fade out the avatar data eyes effect.
-
-        `duration`: Fade duration, seconds.
-        """
-        super().__init__()
-        self.duration = duration
-        self.avatar_instance_id = avatar_instance_id
-
-    def render_frame(self, t):
-        dt = (t - self.t0) / 10**9  # seconds since t0
-        animation_pos = dt / self.duration
-        if animation_pos >= 1.0:
-            api.avatar_modify_overrides(self.avatar_instance_id, action="unset", overrides={"data1": 0.0})  # Values are ignored by the "unset" action, which removes the overrides.
-            return gui_animation.action_finish
-
-        r = numutils.clamp(animation_pos)
-        r = numutils.nonanalytic_smooth_transition(r)
-        api.avatar_modify_overrides(self.avatar_instance_id, action="set", overrides={"data1": 1.0 - r})
-
-        return gui_animation.action_continue
 
 # --------------------------------------------------------------------------------
 # API
@@ -255,8 +224,7 @@ class DPGAvatarController:
                                  voice_speed: Optional[float],
                                  emotion_blacklist: Tuple[str],
                                  emotion_autoreset_interval: Optional[float],
-                                 idle_timeout: Optional[float],
-                                 data_eyes_fadeout_duration: float) -> env:
+                                 idle_timeout: Optional[float]) -> env:
         """Register an avatar instance, for methods that take a `config` parameter.
 
         Returns `config: unpythonic.env.env`, the avatar-instance-specific configuration record.
@@ -298,12 +266,8 @@ class DPGAvatarController:
 
                         To temporarily override the timeout, see the `idle_override` context manager.
 
-        `data_eyes_fadeout_duration`: seconds; how long it takes for this avatar instance's "data eyes" effect
-                                      (LLM tool access indicator) to fade out when `dpg_avatar_controller.stop_data_eyes`
-                                      is called.
-
-                                      Calling `start_data_eyes` always sets the effect to full strength
-                                      instantly.
+        The fadeout duration of the "data eyes" effect (LLM tool access indicator) is the animator setting
+        `data_eyes_fadeout_duration`.
         """
         config = env()
 
@@ -314,11 +278,6 @@ class DPGAvatarController:
         config.emotion_blacklist = tuple(emotion_blacklist)  # Ensure it's hashable, for LRU cache
         config.emotion_autoreset_interval = emotion_autoreset_interval
         config.idle_timeout = idle_timeout
-        config.data_eyes_fadeout_duration = data_eyes_fadeout_duration
-
-        config._data_eyes_state = False
-        config._data_eyes_state_lock = threading.RLock()
-        config._data_eyes_fadeout_animation = None
 
         config._emotion_autoreset_t0 = time.monotonic_ns()
         config._idle_detector_lock = threading.RLock()
@@ -451,43 +410,30 @@ class DPGAvatarController:
     def start_data_eyes(self, config: env) -> None:
         """Start the scifi "data eyes" cel effect (LLM tool access indicator).
 
+        Semantics: the effect switches on instantly.
+
         `config`: Configuration for controlling a specific avatar instance and its GUI elements.
                   See `register_avatar_instance`.
 
-        This only has any effect, if the character currently loaded to the avatar instance that `config` points to, supports the data eyes effect (per-character cels).
-
-        NOTE: Mutates `config`; also the per-avatar-instance data eyes effect state is kept there.
+        This only has any effect, if the character currently loaded to the avatar instance that `config`
+        points to, supports the data eyes effect (per-character cels). All state is on the server.
         """
-        with config._data_eyes_state_lock:
-            if config._data_eyes_state:  # no-op if already active
-                return
-            if config._data_eyes_fadeout_animation is not None:  # cancel latest fadeout animation if any (no-op if it's no longer running)
-                gui_animation.animator.cancel(config._data_eyes_fadeout_animation)
-            api.avatar_modify_overrides(config.avatar_instance_id, action="set", overrides={"data1": 1.0})  # The "data1" cel blend controls the effect strength.
-            config._data_eyes_state = True
-            self.ping(config)
+        api.avatar_start_data_eyes(config.avatar_instance_id)
+        self.ping(config)
 
     def stop_data_eyes(self, config: env) -> None:
         """Stop the scifi "data eyes" cel effect (LLM tool access indicator).
 
+        Semantics: the effect fades out. Fade duration is the animator setting `data_eyes_fadeout_duration`.
+
         `config`: Configuration for controlling a specific avatar instance and its GUI elements.
                   See `register_avatar_instance`.
 
-        This only has any effect, if the character currently loaded to the avatar instance that `config` points to, supports the data eyes effect (per-character cels).
-
-        The effect fades out as configured with `register_avatar_instance`.
-
-        NOTE: Mutates `config`; also the per-avatar-instance data eyes effect state is kept there.
+        This only has any effect, if the character currently loaded to the avatar instance that `config`
+        points to, supports the data eyes effect (per-character cels). All state is on the server.
         """
-        with config._data_eyes_state_lock:
-            if not config._data_eyes_state:  # no-op (no fadeout animation!) if not active
-                return
-            if config._data_eyes_fadeout_animation is not None:  # cancel latest previous instance if any (no-op if it's no longer running)
-                gui_animation.animator.cancel(config._data_eyes_fadeout_animation)
-            config._data_eyes_fadeout_animation = gui_animation.animator.add(DataEyesFadeOut(duration=config.data_eyes_fadeout_duration,
-                                                                                             avatar_instance_id=config.avatar_instance_id))
-            config._data_eyes_state = False
-            self.ping(config)
+        api.avatar_stop_data_eyes(config.avatar_instance_id)
+        self.ping(config)
 
     def send_text_to_tts(self,
                          config: env,

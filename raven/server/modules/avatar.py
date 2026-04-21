@@ -18,6 +18,7 @@ __all__ = ["init_module", "is_available",
            "start_talking", "stop_talking",
            "set_emotion",
            "set_overrides", "modify_overrides",
+           "start_data_eyes", "stop_data_eyes",
            "result_feed"]
 
 import atexit
@@ -51,6 +52,7 @@ import torch
 from flask import Response
 
 from ...common.hfutil import maybe_install_models
+from ...common import numutils
 from ...common.running_average import RunningAverage
 from ...common import smoothvalue
 
@@ -457,6 +459,44 @@ def modify_overrides(instance_id: str, action: str, overrides: Dict[str, Any]) -
     animator = _avatar_instances[instance_id]["animator"]
     animator.modify_overrides(action, overrides)
 
+def start_data_eyes(instance_id: str) -> str:
+    """Activate the scifi "data eyes" cel effect (LLM tool access indicator).
+
+    The effect switches on instantly. To switch it off (with fadeout), use `stop_data_eyes`.
+    Fade duration comes from the animator setting `data_eyes_fadeout_duration`.
+
+    No-op if the character currently loaded has no data eyes cels.
+    """
+    if not module_initialized:
+        raise RuntimeError("start_data_eyes: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"start_data_eyes: no such avatar instance '{instance_id}'")
+        raise ValueError(f"start_data_eyes: no such avatar instance '{instance_id}'")
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.start_data_eyes()
+
+    logger.info(f"start_data_eyes: instance '{instance_id}': done")
+
+def stop_data_eyes(instance_id: str) -> str:
+    """Begin fading out the scifi "data eyes" cel effect.
+
+    The fade duration is `data_eyes_fadeout_duration` seconds (from animator settings).
+    No-op unless the effect is currently on.
+    """
+    if not module_initialized:
+        raise RuntimeError("stop_data_eyes: Module not initialized. Please call `init_module` before using the API.")
+
+    if instance_id not in _avatar_instances:
+        logger.error(f"stop_data_eyes: no such avatar instance '{instance_id}'")
+        raise ValueError(f"stop_data_eyes: no such avatar instance '{instance_id}'")
+
+    animator = _avatar_instances[instance_id]["animator"]
+    animator.stop_data_eyes()
+
+    logger.info(f"stop_data_eyes: instance '{instance_id}': fade started")
+
 # There are three tasks we must do each frame:
 #
 #   1) Render an animation frame
@@ -679,10 +719,13 @@ class Animator:
         self.last_talking_target_value = None
 
         t0 = time.monotonic_ns()
-        self.breathing_epoch = t0
-        self.waver_epoch = t0
-        self.data_eyes_epoch = t0
+        self.breathing_epoch = t0  # animation cycle start time
+        self.waver_epoch = t0  # cel cycle start time
+        # Scifi "data eyes" effect state. `start_data_eyes` / `stop_data_eyes` drive these.
+        self.data_eyes_epoch = t0  # cel cycle start time
         self.data_eyes_celnames = []
+        self.data_eyes_state = "off"  # "off", "on", "fading". The effect switches on instantly; only the switch-off fades.
+        self.data_eyes_fadeout_start_ts = t0  # timestamp at which the current fadeout began; unused when state != "fading"
 
         self.animefx_epochs = {}
 
@@ -1284,22 +1327,66 @@ class Animator:
         new_pose[idx] = math.sin(cycle_pos * math.pi)**2  # 0 ... 1 ... 0, smoothly, with slow start and end, fast middle
         return new_pose
 
-    def animate_data_eyes(self, strength: float, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
+    def start_data_eyes(self) -> None:
+        """Activate the scifi "data eyes" cel effect instantly (full opacity).
+
+        No-op-friendly: if the effect is already on, this just keeps it on.
+        If it was fading out, the pending fadeout is abandoned and the effect snaps back to full strength.
+        """
+        self.data_eyes_state = "on"
+
+    def stop_data_eyes(self) -> None:
+        """Begin fading out the scifi "data eyes" cel effect.
+
+        Fade duration is `data_eyes_fadeout_duration` (from animator settings).
+
+        No-op unless the effect is currently "on". In particular, calling this while already fading
+        does not restart the fadeout, and calling it while off does nothing.
+        """
+        if self.data_eyes_state != "on":
+            return
+        self.data_eyes_fadeout_start_ts = time.monotonic_ns()
+        self.data_eyes_state = "fading"
+
+    def animate_data_eyes(self, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
         """Scifi "data eyes" cel animation driver. This effect is used by Raven-librarian during LLM tool access.
 
-        `strength` is the cel opacity, range [0, 1].
+        The effect is controlled by `start_data_eyes` / `stop_data_eyes`. While active, this driver
+        cycles the `data[1234]` cels at `data_eyes_fps` frames per second; after `stop_data_eyes`,
+        cel cycling continues during the fadeout (`data_eyes_fadeout_duration` seconds) so the
+        ramp-down looks alive.
 
         Returns the modified celstack.
         """
+        new_celstack = copy.copy(celstack)
+
+        # Nothing to render if the current character has no data eyes cels.
+        if not self.data_eyes_celnames:
+            return new_celstack
+
+        # Compute the current effect strength from state.
+        if self.data_eyes_state == "off":
+            return new_celstack
+        elif self.data_eyes_state == "on":
+            strength = 1.0
+        else:  # "fading"
+            fadeout_duration = self._settings["data_eyes_fadeout_duration"]
+            elapsed = (time.monotonic_ns() - self.data_eyes_fadeout_start_ts) / 10**9
+            if elapsed >= fadeout_duration:
+                self.data_eyes_state = "off"
+                return new_celstack
+            r = numutils.clamp(elapsed / fadeout_duration)
+            r = numutils.nonanalytic_smooth_transition(r)
+            strength = 1.0 - r
+
         DATA_EYES_FPS = self._settings["data_eyes_fps"]  # frames per second, cel cycle speed
         if DATA_EYES_FPS == 0.0:  # effect disabled?
-            new_celstack = copy.copy(celstack)
             return new_celstack
         self.data_eyes_epoch, new_celstack = compositor.animate_cel_cycle(cycle_duration=(len(self.data_eyes_celnames) / DATA_EYES_FPS),  # len = number of cels, i.e. cycle length in frames
                                                                           epoch=self.data_eyes_epoch,
                                                                           strength=strength,
                                                                           cels=self.data_eyes_celnames,
-                                                                          celstack=celstack)
+                                                                          celstack=new_celstack)
         return new_celstack
 
     def animate_eye_waver(self, strength: float, celstack: List[Tuple[str, float]]) -> List[Tuple[str, float]]:
@@ -1511,11 +1598,8 @@ class Animator:
         current_cel_strengths = self.interpolate(current_cel_strengths, target_cel_strengths)
         self.current_celstack = [(k, v) for (k, _), v in zip(self.current_celstack, current_cel_strengths)]
 
-        # Apply scifi "data eyes" effect (LLM tool access indicator)
-        data1_idx = compositor.get_cel_index_in_stack("data1", target_celstack)  # "data1" cel blend controls the "data eyes" effect strength
-        if data1_idx != -1:  # found?
-            _, strength = target_celstack[data1_idx]
-            self.current_celstack = self.animate_data_eyes(strength, self.current_celstack)
+        # Apply scifi "data eyes" effect (LLM tool access indicator). The driver is state-driven; see `start_data_eyes` / `stop_data_eyes`.
+        self.current_celstack = self.animate_data_eyes(self.current_celstack)
 
         # Apply eye-waver effect (anime-style "intense emotion")
         waver1_idx = compositor.get_cel_index_in_stack("waver1", target_celstack)  # "waver1" in the emotion controls the eye-waver effect strength

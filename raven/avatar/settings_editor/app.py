@@ -1635,8 +1635,7 @@ avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=av
                                                            voice_speed=None,  # to be populated later
                                                            emotion_blacklist=(),  # only used for `avatar_controller.update_emotion_from_text`
                                                            emotion_autoreset_interval=None,
-                                                           idle_timeout=None,
-                                                           data_eyes_fadeout_duration=0.75)
+                                                           idle_timeout=None)
 
 def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""

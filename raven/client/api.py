@@ -39,6 +39,7 @@ __all__ = ["initialize",
            "avatar_start_talking", "avatar_stop_talking",  # generic animation for no-audio environments; see also `tts_speak_lipsynced`
            "avatar_set_emotion",
            "avatar_set_overrides", "avatar_modify_overrides",
+           "avatar_start_data_eyes", "avatar_stop_data_eyes",
            "avatar_result_feed",  # this reads the AI avatar video stream
            "avatar_get_available_filters",  # shared between "avatar" and "imagefx" modules
            "classify_labels", "classify",
@@ -334,6 +335,26 @@ def avatar_modify_overrides(instance_id: str, action: str, overrides: Dict[str, 
             "action": action,
             "overrides": overrides}
     response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/modify_overrides", json=data, headers=headers)
+    util.yell_on_error(response)
+
+def avatar_start_data_eyes(instance_id: str) -> None:
+    """Activate the scifi "data eyes" cel effect (LLM tool access indicator); switches on instantly."""
+    if not util.api_initialized:
+        raise RuntimeError("avatar_start_data_eyes: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/start_data_eyes", json=data, headers=headers)
+    util.yell_on_error(response)
+
+def avatar_stop_data_eyes(instance_id: str) -> None:
+    """Begin fading out the scifi "data eyes" cel effect; fade duration is the server's `data_eyes_fadeout_duration` animator setting."""
+    if not util.api_initialized:
+        raise RuntimeError("avatar_stop_data_eyes: The `raven.client.api` module must be initialized before using the API.")
+    headers = copy.copy(util.api_config.raven_default_headers)
+    headers["Content-Type"] = "application/json"
+    data = {"instance_id": instance_id}
+    response = requests.post(f"{util.api_config.raven_server_url}/api/avatar/stop_data_eyes", json=data, headers=headers)
     util.yell_on_error(response)
 
 def avatar_result_feed(instance_id: str, chunk_size: int = 4096, expected_mimetype: Optional[str] = None) -> Generator[Tuple[Optional[str], Dict[str, str], bytes], None, None]:

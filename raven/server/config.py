@@ -292,6 +292,7 @@ animator_defaults = {
 
     # Scifi "data eyes" (LLM tool access indicator) animation settings.
     "data_eyes_fps": 12.0,  # cel animation framerate. Special value 0.0 disables the animation.
+    "data_eyes_fadeout_duration": 0.75,  # seconds, fade duration after `stop_data_eyes`. The effect switches on instantly; only the switch-off fades.
 
     # "Intense emotion" eye-waver animation settings.
     "eye_waver_fps": 12.0,  # cel animation framerate. Special value 0.0 disables the animation.

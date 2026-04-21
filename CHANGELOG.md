@@ -59,6 +59,8 @@
 
 - *XDot viewer*: dense graphs no longer burn CPU while the cursor is outside the widget. The hover-refresh path was unconditionally marking the frame dirty every tick, which defeated the idle throttle; now the flag is only raised when hover state actually changes. Visible on graphs with many edges — idle FPS drops back to the background rate instead of pegging at the redraw rate.
 
+- *Raven-avatar*: the "data eyes" effect fadeout moved from the client to the server. The client now sends one `start_data_eyes` / `stop_data_eyes` command; the server's animator cycles the cels and drives the fadeout like the other animation drivers. New HTTP endpoints `/api/avatar/start_data_eyes` and `/api/avatar/stop_data_eyes`, and a new animator setting `data_eyes_fadeout_duration` (default 0.75 s) alongside the existing `data_eyes_fps`. The former `avatar_modify_overrides({"data1": ...})` fade stream (~45 HTTP calls per fadeout at 0.75 s) is gone.
+
 - *Common utilities*: minimum `unpythonic` dependency bumped to 2.1.0. `environ_override`, `maybe_open`, `UnionFilter`, and `si_prefix` graduated to `unpythonic` in that release — Raven's local copies have been removed; the names now come from `unpythonic`.
   - Visible side effect: SI-prefixed numbers in log messages (bitrate, byte-rate, pixel-rate strings in the avatar renderer and audio codec) now use correct SI casing — lowercase `k` for kilo (previously uppercase `K`, which is the symbol for kelvin). `si_prefix` also gained binary (base-1024) mode, sub-unity prefixes (`m`, `µ`, ...), and correct handling of negative and zero values.
 

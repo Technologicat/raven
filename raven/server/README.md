@@ -448,9 +448,10 @@ API:
       - `update_emotion_from_text`: Update the avatar's emotion from given text, using the `classify` module on Raven-server.
         - Calling this resets the emotion autoreset countdown for that avatar instance.
       - `start_data_eyes`: Enter the "data eyes" state.
-        - The animation will start instantly. While in data eyes state, further calls no-op.
+        - The animation switches on instantly. While in data eyes state, further calls no-op.
       - `stop_data_eyes`: Exit the "data eyes" state.
-        - The animation will fade out. If the fadeout animation is already playing, it will restart from the beginning.
+        - The animation fades out. The fade duration is the server-side animator setting `data_eyes_fadeout_duration`.
+        - If a fadeout is already in progress, this call is a no-op (does not restart the fade).
       - `send_text_to_tts`: Send text into the TTS queue.
     - Not specific to an avatar instance:
       - `stop_tts`: Clear the TTS queue and stop the TTS.
