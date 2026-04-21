@@ -511,13 +511,13 @@ class TTS(MaybeRemoteService):
         `TTSResult`, not just the encoded wire bytes — so repeat calls are free
         on both sides.
         """
-        if self.is_local():
+        if not self.is_local():
             if format is None:
-                return speech_tts.prepare_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata)
-            return speech_tts.prepare_encoded_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata, format=format)
+                return api.tts_prepare_decoded_cached(text=text, voice=voice, speed=speed, get_metadata=get_metadata)
+            return api.tts_prepare_cached(text=text, voice=voice, speed=speed, get_metadata=get_metadata, format=format)
         if format is None:
-            return api.tts_prepare_decoded_cached(text=text, voice=voice, speed=speed, get_metadata=get_metadata)
-        return api.tts_prepare_cached(text=text, voice=voice, speed=speed, get_metadata=get_metadata, format=format)
+            return speech_tts.prepare_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata)
+        return speech_tts.prepare_encoded_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata, format=format)
 
 
 class Postprocessor(MaybeRemoteService):
