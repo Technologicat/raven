@@ -51,6 +51,8 @@ from ..common import bgtask
 from ..common.gui import utils as guiutils
 
 from . import api  # Raven-server support
+from . import config as client_config
+from . import mayberemote
 from .avatar_renderer import DPGAvatarRenderer
 
 # --------------------------------------------------------------------------------
@@ -202,6 +204,15 @@ class DPGAvatarController:
         self.tts_input_queue = queue.Queue()  # for TTS input preprocessing and subtitle generation; see `send_text_to_tts`
         self.tts_output_queue = queue.Queue()  # for TTS and subtitle playback; see `preprocess_task`
         self.gui_updates_safe = True  # At app shutdown, they aren't. Used by the subtitle system.
+
+        # TTS dispatcher — settings come from `raven.client.config`. Device record
+        # validated by `deviceinfo.validate` during `api.initialize`. Apps that want
+        # standalone TTS flip `tts_allow_local` to True in `raven/client/config.py`
+        # (default False matches today's Librarian — the avatar requires the server anyway).
+        self.tts = mayberemote.TTS(allow_local=client_config.tts_allow_local,
+                                   model_name=client_config.tts_model_name,
+                                   device_string=client_config.devices["tts"]["device_string"],
+                                   lang_code=client_config.tts_lang_code)
 
         # Start background tasks
         self.input_queue_task_manager.submit(self.preprocess_task, env())
@@ -546,7 +557,7 @@ class DPGAvatarController:
         # We must still stop the TTS, to actually make the TTS playback task exit.
         # The current TTS task will end, and the old controller will then exit.
         logger.info("stop_tts: stopping TTS.")
-        api.tts_stop()
+        self.tts.stop()
         logger.info("stop_tts: all done.")
 
     # --------------------------------------------------------------------------------
@@ -644,10 +655,11 @@ class DPGAvatarController:
                     # Precompute TTS audio and phoneme data.
                     # We have plenty of wall time to precompute more, even when running the TTS on CPU, while the first sentence is being spoken.
                     logger.info(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): precomputing TTS audio and phoneme data")
-                    prep = api.tts_prepare_cached(text=sentence,
-                                                  voice=input_record["config"].voice,
-                                                  speed=input_record["config"].voice_speed,
-                                                  get_metadata=True)
+                    prep = self.tts.synthesize(text=sentence,
+                                               voice=input_record["config"].voice,
+                                               speed=input_record["config"].voice_speed,
+                                               get_metadata=True,
+                                               format="flac")
                     if not prep.audio_bytes:  # blank input or no-phoneme case — `tts_prepare` flags it via empty audio_bytes
                         logger.warning(f"preprocess_task.process_item: instance {task_env.task_name}: batch {batch_uuid}, line {lineno} out of {len(lines)}, sentence {sentenceno} out of {len(sentences)} ({sentence_uuid}): no audio produced during precomputing, skipping sentence")
                         continue
@@ -779,15 +791,15 @@ class DPGAvatarController:
                     task_env.tts_speaking = False
 
             logger.info(f"speak_task.process_item: instance {task_env.task_name}: sentence {sentence_uuid}: submitting TTS task.")
-            api.tts_speak_lipsynced(instance_id=config.avatar_instance_id,
-                                    voice="ignored_due_to_prep",
-                                    text="ignored_due_to_prep",
-                                    speed=1.0,  # ignored due to prep
-                                    video_offset=output_record["video_offset"],
-                                    on_audio_ready=None,
-                                    on_start=speak_task_on_start_speaking,
-                                    on_stop=speak_task_on_stop_speaking,
-                                    prep=output_record["prep"])
+            self.tts.speak_lipsynced(instance_id=config.avatar_instance_id,
+                                     voice="ignored_due_to_prep",
+                                     text="ignored_due_to_prep",
+                                     speed=1.0,  # ignored due to prep
+                                     video_offset=output_record["video_offset"],
+                                     on_audio_ready=None,
+                                     on_start=speak_task_on_start_speaking,
+                                     on_stop=speak_task_on_stop_speaking,
+                                     prep=output_record["prep"])
             logger.info(f"speak_task.process_item: instance {task_env.task_name}: sentence {sentence_uuid}: processing done")
 
         task_env.lock = threading.RLock()

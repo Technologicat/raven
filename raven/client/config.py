@@ -48,3 +48,39 @@ tts_playback_audio_device = "system-default"  # OS's default, i.e. the same one 
 #
 stt_capture_audio_device = None
 # stt_capture_audio_device = "Built-in Audio Analog Stereo"
+
+# --------------------------------------------------------------------------------
+# Device settings for local-mode fallback of `MaybeRemote.*` services.
+#
+# When the corresponding `tts` / `stt` / ... module on Raven-server is reachable,
+# `MaybeRemote` services go through it (no local model is loaded). The records here
+# parameterize the in-process fallback's compute device, used when `<svc>_allow_local`
+# is `True` AND the server isn't reachable.
+#
+# Same shape as `raven.server.config.enabled_modules` and as the `devices` dict in
+# `raven.{librarian,visualizer}.config`. Validated by `raven.common.deviceinfo.validate`
+# during `raven.client.api.initialize` (CUDA → CPU fallback, `device_name` injection).
+devices = {
+    "tts": {"device_string": "cpu"},  # Local TTS on CPU is workable for chat-paced speech, slower than server-mode GPU.
+}
+
+# TTS local-mode fallback settings.
+#
+# Most apps leave `tts_allow_local = False`: client apps are typically paired with a
+# server (the avatar especially requires it), so falling back to local Kokoro pays
+# costs the user wasn't expecting — extra RAM for the model, plus a multi-hundred-
+# megabyte download the first time if the server is on another machine (on localhost
+# the HuggingFace cache is shared, so download cost is zero, but RAM still doubles).
+# Same reason `raven.librarian` passes `local_model_loader_fallback=False` to its
+# `HybridIR` for the embedder + spaCy. Apps that want standalone capability
+# (e.g. a future no-avatar Librarian) flip this on.
+tts_allow_local = False
+
+# HuggingFace repo id for the local-mode Kokoro TTS model. Defaults to the same model
+# the server uses, so client-local and server-side synthesis match.
+tts_model_name = server_config.kokoro_models
+
+# Phonemizer language code for Kokoro. "a" is American English; "b" is British English.
+# Word-level metadata (needed for avatar lipsync) currently only supports English.
+# See `raven.common.audio.speech.tts.load_tts_pipeline` for the full list.
+tts_lang_code = "a"

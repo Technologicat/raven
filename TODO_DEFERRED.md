@@ -16,19 +16,20 @@ Worth a pass across the fleet to find these and convert them. Low-risk (any call
 
 Discovered during avatar-client-crop brief review (2026-04-20).
 
-## Migrate `DPGAvatarController` to `MaybeRemote.TTS`
+## Move the audio-player singleton out of `raven.client`
 
-`MaybeRemote.TTS.speak` / `.speak_lipsynced` landed (2026-04-22), and the preprocessor / playback plumbing is in place for local-mode TTS. But the Librarian's `DPGAvatarController` still wires synthesis through `raven.client.api.tts_prepare_cached` (explicit remote) and playback through `raven.client.api.tts_speak_lipsynced` (explicit remote). That means even with local-mode TTS available, a Librarian instance with no server can't do TTS.
+`util.api_config.audio_player` lives in `raven.client.util` because `api.initialize()` was historically the single startup hook every Raven client app called. Pragmatic at the time, semantically wrong: the audio player is a local resource (audio hardware is on the user's machine) and has nothing to do with "explicit remote mode". The coupling means a hypothetical client app that never talks to the server still has to go through `api.initialize()` just to get a `Player`.
 
-Scope:
-- `DPGAvatarController` takes a `MaybeRemote.TTS` as a constructor arg (or constructs one internally from config).
-- `preprocess_task` calls `self.tts.synthesize(format="flac", get_metadata=True)` instead of `api.tts_prepare_cached(...)`.
-- `speak_task` calls `self.tts.speak_lipsynced(...)` instead of `api.tts_speak_lipsynced(...)`.
-- `raven.librarian.chat_controller` instantiates the controller with the right `MaybeRemote.TTS` kwargs (or lets the controller build it).
+`raven.common.audio.player` already owns the `Player` class. The cleanup is to move the default-instance slot there too — e.g. `get_default_player()` / `set_default_player(...)` accessors — and have `api.initialize()` register into it rather than own it. Downstream updates:
 
-Once done, the Librarian can run with TTS entirely local. The avatar stays server-side (which currently forces the Librarian to have a server anyway), but that blocker is separately lifting once the chat-tree-view lands (Librarian will then support a no-avatar mode). At that point, local-mode TTS + no-avatar = standalone Librarian.
+- `raven.client.tts` (`tts_speak`, `tts_speak_lipsynced`, `tts_stop`, `tts_speaking`, `play_encoded_with_avatar_lipsync`): read the default from `raven.common.audio.player` instead of `util.api_config.audio_player`.
+- `raven.client.mayberemote.TTS.speak*` / `.stop()` / `.is_speaking()`: same.
+- `raven.common.audio.speech.playback.*` stays as-is (it already takes `player` as an explicit arg, not a singleton).
+- `tts_stop` / `tts_speaking` could also move into `raven.common.audio.player` as module-level `stop_default()` / `default_is_playing()` helpers, or stay in `raven.client.tts` as thin wrappers — the `MaybeRemote.TTS.stop()` / `.is_speaking()` methods already offer the preferred call surface.
 
-Discovered during the `MaybeRemote.TTS.speak*` landing (2026-04-22). Straightforward once the preceding infra is in place; kept separate to keep each PR focused.
+Scope roughly parallels the natlang wire-format and image-codec lifts we've done — touches the init path on every client app and changes a widely-imported singleton. Not urgent: current clients work fine. Resolve when the standalone-client story actually motivates it (Librarian without avatar, or a fully-local Raven app that doesn't touch the server at all).
+
+Discovered during `DPGAvatarController` migration to `MaybeRemote.TTS` + `allow_local` config work (2026-04-22).
 
 ## `/api/embeddings/info` endpoint
 

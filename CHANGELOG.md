@@ -78,6 +78,9 @@
       - Caching lives in the bottom layers (one source of truth per (location, shape)), so the mayberemote dispatcher has no cache state of its own.
     - `TTS.speak` / `TTS.speak_lipsynced`, mirroring `raven.client.api.tts_speak*`. Local-mode TTS; and local playback + remote avatar (for lipsynced).
       - `prep` accepts either `TTSResult` or `EncodedTTSResult` — encoded to FLAC internally as needed.
+    - `TTS.stop` / `TTS.is_speaking` for symmetry with `speak*`. Mode-independent (the audio player is always client-local); provided on `TTS` so callers have one object for the whole TTS surface.
+    - `DPGAvatarController` now routes synthesis + playback + stop through `MaybeRemote.TTS` (instead of the explicit-remote `api.tts_prepare_cached` / `api.tts_speak_lipsynced` / `api.tts_stop`). Reads `tts_allow_local` / `tts_model_name` / `tts_lang_code` from `raven.client.config` and the device from `client_config.devices["tts"]`; flipping `tts_allow_local = True` gives the app standalone TTS capability (Kokoro loaded in-process when the server is unreachable).
+  - New `raven.client.config.devices` — same shape and convention as `devices` in `raven.{librarian,visualizer}.config`. Validated by `raven.common.deviceinfo.validate` during `api.initialize` (CUDA → CPU fallback, `device_name` injection). Currently holds the `tts` record; more services join as their `<svc>_allow_local` paths gain real use.
   - `Classifier` (text sentiment), `Translator` (machine translation), `Postprocessor` and `Upscaler` (imagefx).
     - Each dispatches to the corresponding Raven-server module in remote mode and to a local in-process instance in local mode, with identical call surfaces.
     - `Translator` takes a `spacy_model_name` for local-mode sentence chunking.

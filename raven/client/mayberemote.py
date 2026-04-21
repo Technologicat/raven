@@ -616,13 +616,30 @@ class TTS(MaybeRemoteService):
                 logger.info(f"TTS.speak_lipsynced: instance {task_env.task_name}: no audio produced. Cancelled.")
                 return
             client_tts.play_encoded_with_avatar_lipsync(final.audio_bytes,
-                                                       timestamps=final.word_metadata,
-                                                       instance_id=instance_id,
-                                                       video_offset=video_offset,
-                                                       on_audio_ready=on_audio_ready,
-                                                       on_start=on_start,
-                                                       on_stop=on_stop)
+                                                        timestamps=final.word_metadata,
+                                                        instance_id=instance_id,
+                                                        video_offset=video_offset,
+                                                        on_audio_ready=on_audio_ready,
+                                                        on_start=on_start,
+                                                        on_stop=on_stop)
         client_util.api_config.task_manager.submit(_speak, _envcls())
+
+    def stop(self) -> None:
+        """Stop TTS playback immediately. No effect if nothing is currently playing.
+
+        Mode-independent: the client's audio player is always local (audio hardware
+        is on the user's machine regardless of synthesis mode). Provided as a method
+        on `TTS` for the symmetry with `.speak` / `.speak_lipsynced`.
+        """
+        client_util.api_config.audio_player.stop()
+
+    def is_speaking(self) -> bool:
+        """Return whether the TTS is currently producing audio.
+
+        Mode-independent for the same reason as `stop`: queries the client's audio
+        player, which is the one doing the playing in both local and remote modes.
+        """
+        return client_util.api_config.audio_player.is_playing()
 
 
 def _to_encoded(prep: Optional[Union[speech_datatypes.TTSResult, speech_datatypes.EncodedTTSResult]],

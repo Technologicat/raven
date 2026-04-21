@@ -30,6 +30,7 @@ from unpythonic.env import env as envcls
 from ..common.audio import player as audio_player
 from ..common.audio import recorder as audio_recorder
 from ..common import bgtask
+from ..common import deviceinfo
 
 api_initialized = False
 api_config = envcls(raven_default_headers={},
@@ -116,6 +117,13 @@ def initialize_api(raven_server_url: str,
                                                         silence_threshold=-40.0,  # dBFS
                                                         autostop_timeout=1.5,  # seconds
                                                         executor=executor)
+
+    # Validate local-mode fallback device settings (CUDA → CPU fallback, dtype adjustments,
+    # device_name injection). Deferred import of `raven.client.config` — importing it at
+    # module top-level would cycle via `raven.server.config`. Accessed in place: `validate`
+    # modifies the config dicts so downstream readers see the validated values.
+    from . import config as client_config  # noqa: PLC0415 -- intentional deferred import
+    deviceinfo.validate(client_config.devices)
 
     api_initialized = True
 
