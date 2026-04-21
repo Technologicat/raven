@@ -29,6 +29,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import base64
 import collections
 import copy
 import math
@@ -43,7 +44,7 @@ from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
 from sentence_transformers import SentenceTransformer
 
 import spacy
-from spacy.tokens import DocBin
+from spacy.tokens import Doc
 
 import flair
 import dehyphen
@@ -140,11 +141,10 @@ def spacy_analyze(nlp,
 
     Returns a `list` of spaCy documents (even if just one `text`).
 
-    NOTE: The return value is not JSONable; if you need to send the results to over the network,
-          see `serialize_spacy_docs` and `deserialize_spacy_docs`.
-
-          For those functions, the receiver must be running the same Python and spaCy versions as the sender,
-          so this is mostly useful internally in a single app constellation that has server and client parts.
+    NOTE: The return value is not JSONable; if you need to send the results over the network,
+          see `serialize_spacy_docs` and `deserialize_spacy_docs`, which use spaCy's `Doc.to_json()`
+          under the hood. The wire format is language-neutral JSON, so non-Python clients can consume
+          the endpoint too.
     """
     if isinstance(text, str):  # always wrap in a list container
         text = [text]
@@ -204,75 +204,86 @@ def deserialize_spacy_pipeline(config_str: str, data_bytes: bytes):
     nlp.from_bytes(data_bytes)
     return nlp
 
-def serialize_spacy_docs(docs: Union[List[spacy.tokens.token.Token],
-                                     List[List[spacy.tokens.token.Token]]]) -> bytes:
-    """Serialize one or more spaCy NLP pipeline outputs (spaCy "documents") so that they can be sent over the network.
+def serialize_spacy_docs(docs: Union[Doc, List[Doc]],
+                         *,
+                         with_vectors: bool = False) -> List[dict]:
+    """Serialize one or more spaCy documents to a JSON-friendly list of dicts for network transport.
 
-    `docs`: One or more documents.
-        If `docs` is a list of tokens, it is treated as one document.
-        Otherwise `docs` is treated as a list of documents (where each document is a list of tokens).
+    Each output item has shape::
 
-    Returns a `bytes` object containing the serialized data.
+        {"lang": "en",
+         "doc": <spacy.tokens.Doc.to_json() output>,
+         "vectors": {"dim": int, "b64": "..."}}  # optional
+
+    where `lang` is the document's language code (from `doc.lang_`), `doc` is the pristine
+    per-spaCy `Doc.to_json()` output, and `vectors` (present only when `with_vectors=True`
+    and the doc actually has a tensor) carries `doc.tensor` as base64-encoded float32
+    with shape `(n_tokens, dim)`.
+
+    `docs`: A single `Doc`, or a list of `Doc` instances (typically output of `spacy_analyze`).
+
+    `with_vectors`: If `True`, include `doc.tensor` per-doc in the output.
+                    `token.vector` on the reconstructed client-side doc then falls through
+                    to `doc.tensor[i]`, giving feature parity with in-process use.
+                    Default `False` to keep the wire small; most consumers don't need vectors.
 
     Example::
 
-        doc1 = nlp("The quick brown fox jumps over the lazy dog.")
-        data1 = serialize_spacy_docs(doc1)  # serialize one document
+        doc1 = nlp("The quick brown fox.")
+        data1 = serialize_spacy_docs(doc1)  # list with one item
 
-        doc2 = nlp("This is another document.")
-        data2 = serialize_spacy_docs([doc1, doc2])  # serialize multiple documents
+        doc2 = nlp("Second document.")
+        data2 = serialize_spacy_docs([doc1, doc2])
 
         # ...in another process, later...
-
-        docs1 = deserialize_spacy_docs(data1, lang="en")
-        assert len(docs1) == 1  # one document received
-        doc = docs1[0]  # -> a copy of the data of `doc1`
-
-        # Process the analysis results the same way as if you had called `doc = nlp(text)` in this process.
-        for token in doc:
+        docs1 = deserialize_spacy_docs(data1)
+        for token in docs1[0]:
             print(token.text, token.lemma_)
-
-        docs2 = deserialize_spacy_docs(data2, lang="en")
-        assert len(docs2) == 2  # two documents received
-        for doc in docs2:
-            for token in doc:
-                print(token.text, token.lemma_)
-
-    NOTE: As noted in spaCy documentation, if you have multiple documents that were processed with the same pipeline,
-    it is more efficient to send all at once, because then e.g. the vocabulary needs to be serialized only once
-    for the whole set of documents. This uses spaCy's `DocBin` to do that.
-
-    See:
-        https://spacy.io/usage/saving-loading
     """
-    doc_bin = DocBin()
-    if isinstance(docs[0], spacy.tokens.token.Token):  # list of tokens, i.e. single document
-        doc_bin.add(docs)
-    else:  # list of list of tokens, i.e. multiple documents
-        for doc in docs:
-            doc_bin.add(doc)
-    return doc_bin.to_bytes()
+    if isinstance(docs, Doc):  # single doc
+        docs = [docs]
+    items = []
+    for doc in docs:
+        item = {"lang": doc.lang_,
+                "doc": doc.to_json()}
+        if with_vectors and doc.tensor is not None and doc.tensor.size > 0:
+            tensor = doc.tensor
+            if hasattr(tensor, "get"):  # CuPy-backed (GPU-resident thinc arrays) — copy to host
+                tensor = tensor.get()
+            arr = np.ascontiguousarray(tensor, dtype=np.float32)
+            item["vectors"] = {"dim": int(arr.shape[1]),
+                               "b64": base64.b64encode(arr.tobytes()).decode("ascii")}
+        items.append(item)
+    return items
 
-def deserialize_spacy_docs(docs_bytes: bytes, lang: str) -> List[List[spacy.tokens.token.Token]]:
-    """Deserialize one or more spaCy NLP pipeline outputs (spaCy "documents") that were earlier serialized with `serialize_spacy_docs`.
+def deserialize_spacy_docs(doc_items: List[dict]) -> List[Doc]:
+    """Reconstruct spaCy documents from the JSON items produced by `serialize_spacy_docs`.
 
-    `docs_bytes`: return value of `serialize_spacy_docs`.
+    Each item is self-describing (carries its own `lang`), so no language parameter is needed;
+    this naturally supports multilingual responses (e.g. mixed English and Finnish in a single
+    batch). Vocabs are cached per unique language seen, so repeated calls with the same
+    language-code pay only one `spacy.blank()` construction.
 
-    `lang`: spaCy language code, e.g. "en" for English.
+    `doc_items`: List of items as produced by `serialize_spacy_docs`. Each item is a dict
+                 with keys `{"lang", "doc"}` and optionally `"vectors"`.
 
-            This should match the language of the spaCy NLP pipeline that analyzed the documents at the sending end.
-
-    Returns a `list` of spaCy documents (even if there is only one document stored in `docs_bytes`).
-
-    The documents are loaded into a blank pipeline of language `lang`.
-
-    You can then read the analysis output as usual (e.g. `[token.lemma_ for token in doc]`).
-
-    See example in docstring of `serialize_spacy_docs`.
+    Returns a list of `spacy.tokens.Doc` instances, in the same order as the input items.
+    When an item carries `"vectors"`, the decoded float32 array is assigned to `doc.tensor`
+    on the reconstructed Doc, so `token.vector` works as expected downstream.
     """
-    nlp = spacy.blank(lang)
-    doc_bin = DocBin().from_bytes(docs_bytes)
-    docs = list(doc_bin.get_docs(nlp.vocab))
+    vocab_cache = {}
+    docs = []
+    for item in doc_items:
+        lang = item["lang"]
+        if lang not in vocab_cache:
+            vocab_cache[lang] = spacy.blank(lang).vocab
+        vocab = vocab_cache[lang]
+        doc = Doc(vocab).from_json(item["doc"])
+        if (vec := item.get("vectors")) is not None:
+            arr_bytes = base64.b64decode(vec["b64"])
+            arr = np.frombuffer(arr_bytes, dtype=np.float32).reshape(-1, vec["dim"])
+            doc.tensor = arr.copy()  # copy: `frombuffer` returns a read-only view over the decoded bytes
+        docs.append(doc)
     return docs
 
 # --------------------------------------------------------------------------------

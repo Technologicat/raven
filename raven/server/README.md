@@ -1005,28 +1005,14 @@ Output is an image with mimetype `"image/<format>"`.
 
 ### POST "/api/natlang/analyze"
 
-Perform NLP analysis on the text posted in the request. Return the result.
+Perform NLP analysis on the text posted in the request. Return the result as JSON.
 
-:exclamation: *This endpoint returns Python spaCy data in binary format.* :exclamation:
+The NLP analysis is done via spaCy using the `spacy_model` set in the server config
+(see `raven.server.config`). Analysis currently includes part-of-speech tagging,
+lemmatization, and named entity recognition.
 
-:exclamation: *It can only be read by a Python client process running a Python version
-that is compatible with the Python running the server. Specifically,
-since spaCy transmits binary data in the pickle format, the client
-Python version must be such that it can unpickle data pickled by
-the server process.* :exclamation:
-
-:exclamation: *The point is that you can use the server's GPU to perform the NLP analysis,
-and then read the results in the client as if they came from a spaCy
-instance running locally on the client.* :exclamation:
-
-:exclamation: *The most convenient way to call this endpoint is `natlang_analyze`
-in `raven.client.api`.* :exclamation:
-
-The NLP analysis is done via spaCy using the `spacy_model` set in the server config,
-which by default lives in `raven.server.config`.
-
-The analysis currently includes part-of-speech tagging, lemmatization,
-and named entity recognition.
+:exclamation: *The most convenient way to call this endpoint from Python is `natlang_analyze`
+in `raven.client.api`, which reconstructs the response into spaCy `Doc` objects.* :exclamation:
 
 Input is JSON:
 
@@ -1040,30 +1026,32 @@ To send multiple texts at once, use a list:
 This is more efficient than sending one text at a time, as it allows the spaCy backend
 to batch the texts.
 
-The server runs the text(s) through the default set of pipes in the loaded spaCy model.
-There is an optional "pipes" field you can use to enable only the pipes you want.
-(Which ones exist depend on the spaCy model that is loaded.)
+Optional fields:
 
-This works for both one text, or multiple texts. Here is a one-text example:
+    {"text": "...",
+     "pipes": ["tok2vec", "parser", "senter"],
+     "with_vectors": false}
 
-    {"text": "Blah blah blah.",
-     "pipes": ["tok2vec", "parser", "senter"]}
+`"pipes"`: If provided, enable only the listed pipes. Which ones exist depend on the loaded
+spaCy model. Effectively applies `with nlp.select_pipes(enable=pipes): ...` on the server side.
+Useful to save processing time for partial analysis — e.g. the three pipes shown above split
+text into sentences for `en_core_web_sm` without running POS/lemma/NER.
 
-This effectively does `with nlp.select_pipes(enable=pipes): ...` on the server side.
+`"with_vectors"`: If `true`, each returned doc additionally carries its `doc.tensor` (base64-encoded
+float32). `token.vector` on the client-reconstructed docs then falls through to `doc.tensor[i]`,
+giving feature parity with in-process spaCy use. Default `false` to keep the wire small — most
+consumers don't read vectors.
 
-This can be useful to save processing time if you only need partial analysis,
-e.g. to split the text into sentences (for the model `"en_core_web_sm"`, the pipes
-in the example will do just that).
+Output is a JSON list. Each item describes one analyzed document:
 
-Output is binary data. It can be loaded on the client side by calling
-`raven.common.nlptools.deserialize_spacy_docs`, which see.
+    [{"lang": "en",
+      "doc": {...spaCy's `Doc.to_json()` output...},
+      "vectors": {"dim": 96, "b64": "..."}}]    // present only when with_vectors=true
 
-The response contains a **custom header**, `"x-langcode"`, which is the language code
-of the server's loaded spaCy model (e.g. `"en"` for English). The client needs the
-language code to be able to deserialize the data correctly.
-
-If you use `natlang_analyze` in `raven.client.api`, it already loads the data,
-and behaves as if you had called `nlp.pipe(...)` (locally, on the client) on the text.
+The `lang` field is authoritative per-item (makes the format naturally multilingual-ready for
+future server configurations that load multiple pipelines). The `doc` field is spaCy's own
+`Doc.to_json()` output unchanged, so non-Python clients can consume the endpoint directly —
+the schema is documented upstream at <https://spacy.io/api/doc#to_json>.
 
 
 ## Text cleanup

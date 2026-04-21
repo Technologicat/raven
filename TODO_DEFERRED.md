@@ -38,27 +38,42 @@ Not urgent — current server-mode playback works fine. Lift when an app wants t
 
 Parallel to the `/api/{stt,tts}/info` endpoints. Should expose at least model name and embedding dimension; add other engine metadata as use cases appear. Discovered during STT/TTS info-endpoint work (2026-04-21).
 
-## Language-neutral wire format for the `natlang` (spaCy) endpoint
+## Split `raven.common.nlptools` per backend (reduce import weight)
 
-`raven.server.modules.natlang` / `raven.common.nlptools.spacy_analyze` currently serialize results with `DocBin.to_bytes()` (see `raven/common/nlptools.py:254`) and reconstruct on the client side via `DocBin().from_bytes()` (line 274). `DocBin` is a spaCy-internal binary blob — efficient and lossless for Python clients, but invisible to any other language runtime. A future JavaScript client can't talk to this endpoint.
+`raven.common.nlptools` is a hub module: it imports `torch`, `transformers`, `sentence_transformers`, `flair`, `dehyphen`, and `spacy`. All five ML-engine loaders (spaCy, classifier, dehyphenator, embedder, translator) live in it, so importing the module drags the entire ML stack into any process that touches it.
 
-Background: this was the simplest thing that worked when the endpoint was first wired up under time pressure. Raven had a Python-only client, the serialization Just Worked, shipping won over compatibility.
+`raven.client.api` currently imports `nlptools` purely to reach `deserialize_spacy_docs` for the natlang response reconstruction. If a *lighter* client module ever wants to reconstruct spaCy Docs from wire data without pulling transformers/flair/dehyphen, a clean way to do it would be: extract each backend into its own module (e.g. `raven.common.spacy_wire` for the spaCy serialize/deserialize pair, parallel modules for each of classifier, dehyphenator, embedder, translator), and leave `nlptools` as a thin aggregator that re-exports them.
 
-Fix is mostly mechanical — spaCy has native `Doc.to_json()` / `Doc.from_json()`, verified against `en_core_web_sm` (Raven's default model):
+Why this is deferred: `api.py` already imports torch, qoi, spaCy, etc. for its other endpoints — so `nlptools` riding along costs `api.py` nothing extra *today*. The split pays off only when some caller wants a minimal "just reconstruct a Doc from JSON" importable, which no one currently needs. Also ties into the companion item "Lazy `api.initialize` in `llmclient`" — that one is about letting `llmclient` be imported in minimal-deps CI without triggering the full chain; slimming `nlptools` becomes relevant only once that parent effort is on the table.
 
-- `Doc.to_json()` emits per-token `{id, start, end, tag, pos, morph, lemma, dep, head}`, plus top-level `ents` (entity spans with `{start, end, label}`) and `sents` (sentence boundaries). Round-trip via `Doc(vocab).from_json(j)` reconstructs text / POS / lemma / dep / entities identically. **Not** included: word vectors (intentional — they'd be huge; any Raven code that currently reads `token.vector` after a remote call would need to load them locally instead).
-- Server side: replace the `DocBin.to_bytes()` serialization with `[doc.to_json() for doc in docs]` → JSON list.
-- Python client: consume via `Doc(vocab).from_json(j)` (needs a shared vocab, e.g. from `spacy.blank(lang)` since we don't ship the full pipeline on the Python client in remote mode). Alternative: a lighter in-process wrapper exposing only the fields Raven actually uses — audit `raven.client.mayberemote.NLP.analyze` call sites if the vocab-sharing feels like overhead.
-- JS client: consumes the JSON structure directly as-is.
+For symmetry, if we ever start splitting, we should do all five backends, not just spaCy.
 
-Sub-decisions at migration time:
+Discovered during natlang wire-format migration (2026-04-21). Original framing lived in the now-resolved "Language-neutral wire format for the natlang (spaCy) endpoint" item, superseded by this follow-up.
 
-- Whether `raven.common.nlptools.spacy_analyze` / the DocBin reconstruction helpers stay in the common layer for the Python-client reconstruction path, or move to a client-side `nlp_reconstruct` module. Depends on whether any other consumer needs the reconstruction.
-- Audit whether any Raven caller depends on `token.vector` from a *remote* analyze call. If yes, need either a separate embeddings roundtrip or a wire-format extension.
+## MaybeRemote test coverage for Dehyphenator, Embedder, STT, TTS
 
-Reference for the design constraint: JSON-serializable dicts on the wire, native types in-process, conversion at the boundary. Same principle the speech endpoints already follow. See also the speech `tts_prepare` generalization item below.
+`raven.client.mayberemote` has five service classes. `NLP` gained a dedicated test file during the natlang wire-format migration (`raven/client/tests/test_mayberemote.py`); the other four (`Dehyphenator`, `Embedder`, `STT`, `TTS`) still have zero direct tests.
 
-Discovered during step 5 review (2026-04-18).
+Each would benefit from a small remote-mode roundtrip test (live server required) mirroring the `TestMaybeRemoteNLP` shape — ~30 lines per class. Minimal assertions per service:
+
+- `Dehyphenator.dehyphenate("signifi-\ncant")` → `"significant"`.
+- `Embedder.embed_sentences(["hello"])` → non-zero vector of expected dim.
+- `STT.transcribe(<small bundled sample>)` → non-empty string (needs a few hundred ms of audio fixture).
+- `TTS.synthesize("Hello.", voice=...)` → non-empty result; one test per shape (float `TTSResult` vs. encoded `EncodedTTSResult`).
+
+Not urgent — the APIs have been stable for a while and the natlang session didn't change any of them. Natural companion to the deferred "Local-mode `tts_speak` / `tts_speak_lipsynced`" item: the local-mode `TTS.speak` lift will need these tests as scaffolding anyway.
+
+Discovered during natlang wire-format migration (2026-04-21).
+
+## Enable HTTP response compression on raven-server
+
+The natlang wire-format migration (JSON via `Doc.to_json()` instead of DocBin) lost DocBin's vocab-sharing optimization — categorical strings (POS tags, dep labels, lemmas) now appear once per token rather than once per batch. gzip/deflate recovers most of the loss because those are exactly the patterns dictionary-based compression eats for breakfast; natively we're probably 1.5×–2.5× bigger uncompressed, within 10–20% after gzip.
+
+Raven-server uses Flask/waitress without response compression currently. Adding `Flask-Compress` or a waitress pre-filter is ~one line. Other endpoints would benefit too (imagefx JSON metadata, the server's HTML index page).
+
+Not urgent — Raven's trusted-LAN-or-localhost deployment means bandwidth isn't the bottleneck for typical payloads (KB-range, not MB-range). Revisit if profiling shows wire time becoming a meaningful fraction of end-to-end latency, or when a JS client on a WAN-ish link enters the picture.
+
+Discovered during natlang wire-format migration (2026-04-21).
 
 ## Additional `MaybeRemoteService` candidates (classify, translate)
 

@@ -222,6 +222,21 @@ class TestNatlang:
         # The NER should find at least one entity.
         assert hasattr(doc, "ents")
 
+    def test_with_vectors_round_trip(self, initialized_api):
+        """When `with_vectors=True`, the reconstructed client-side docs expose `token.vector`.
+
+        Feature-parity with in-process spaCy use: if the caller opts in, vectors are there
+        on both local and remote `MaybeRemote.NLP` paths.
+        """
+        import numpy as np
+        docs = api.natlang_analyze("The quick brown fox.", with_vectors=True)
+        doc = docs[0]
+        assert doc.tensor is not None and doc.tensor.size > 0
+        # Vectors should be non-zero for content tokens in a model with Tok2Vec output.
+        assert np.any(doc.tensor != 0.0)
+        for token in doc:
+            assert np.array_equal(token.vector, doc.tensor[token.i])
+
 
 # ---------------------------------------------------------------------------
 # Sanitize (dehyphenate)

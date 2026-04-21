@@ -216,11 +216,18 @@ class NLP(MaybeRemoteService):
 
     def analyze(self,
                 text: Union[str, List[str]],
-                pipes: Optional[List[str]] = None) -> List[List["spacy.tokens.token.Token"]]:  # noqa: F821 -- type annotation only, avoid importing spaCy here
+                pipes: Optional[List[str]] = None,
+                with_vectors: bool = False) -> List["spacy.tokens.Doc"]:  # noqa: F821 -- type annotation only, avoid importing spaCy here
         """Perform NLP analysis on `text`.
 
         `pipes`: If provided, enable only the listed pipes. Which ones exist depend on the loaded spaCy model.
                  If not provided, use the model's default pipes.
+
+        `with_vectors`: If `True`, ensure `token.vector` is available on the returned docs — a wire-format
+                        concern only. In remote mode, requests `doc.tensor` from the server (bigger payload).
+                        In local mode, ignored: the in-process spaCy pipeline produces a fully-featured doc
+                        regardless, so vectors are always accessible. The flag gives callers identical
+                        feature-parity semantics across modes: "if I ask for vectors, I get vectors."
 
         Returns a `list` of spaCy documents (even if just one `text`).
 
@@ -228,7 +235,8 @@ class NLP(MaybeRemoteService):
         """
         if self._local_model is None:
             docs = api.natlang_analyze(text,
-                                       pipes)
+                                       pipes,
+                                       with_vectors=with_vectors)
         else:
             docs = nlptools.spacy_analyze(self._local_model,
                                           text,

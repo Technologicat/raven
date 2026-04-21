@@ -99,18 +99,90 @@ def test_spacy_analyze_with_pipes(spacy_pipe):
 
 def test_serialize_deserialize_spacy_docs_single(spacy_pipe):
     docs = nlptools.spacy_analyze(spacy_pipe, "Alice met Bob in Paris.")
-    data = nlptools.serialize_spacy_docs(docs[0])  # list-of-tokens path
-    recovered = nlptools.deserialize_spacy_docs(data, lang="en")
+    data = nlptools.serialize_spacy_docs(docs[0])  # single-Doc path
+    assert isinstance(data, list) and len(data) == 1
+    assert data[0]["lang"] == "en"
+    assert "doc" in data[0]  # pristine spaCy Doc.to_json output
+    assert "vectors" not in data[0]  # default: no vectors on the wire
+    recovered = nlptools.deserialize_spacy_docs(data)
     assert len(recovered) == 1
     assert [t.text for t in recovered[0]] == [t.text for t in docs[0]]
 
 def test_serialize_deserialize_spacy_docs_multiple(spacy_pipe):
     docs = nlptools.spacy_analyze(spacy_pipe, ["First text.", "Second text."])
     data = nlptools.serialize_spacy_docs(docs)
-    recovered = nlptools.deserialize_spacy_docs(data, lang="en")
+    assert len(data) == 2
+    recovered = nlptools.deserialize_spacy_docs(data)
     assert len(recovered) == 2
     for orig, rec in zip(docs, recovered):
         assert [t.text for t in orig] == [t.text for t in rec]
+        assert [t.lemma_ for t in orig] == [t.lemma_ for t in rec]
+        assert [t.pos_ for t in orig] == [t.pos_ for t in rec]
+
+def test_deserialize_spacy_docs_multilingual():
+    """Deserializer handles multiple languages in a single batch.
+
+    Forward-compat check: the wire format puts `lang` on each item so that a future
+    server configuration could load multiple pipelines (e.g. English + Finnish) and
+    route texts per language within a single request. No live model download needed
+    — `spacy.blank(lang)` works for any language code spaCy recognizes.
+
+    Also exercises the vocab cache path in `deserialize_spacy_docs` (same lang reused
+    across items should `spacy.blank()` only once).
+    """
+    import spacy
+    items = [
+        {"lang": "en",
+         "doc": spacy.blank("en")("Hello world.").to_json()},
+        {"lang": "fi",
+         "doc": spacy.blank("fi")("Hei maailma.").to_json()},
+        {"lang": "en",  # same lang again — should hit the vocab cache
+         "doc": spacy.blank("en")("Second English doc.").to_json()},
+    ]
+    recovered = nlptools.deserialize_spacy_docs(items)
+    assert len(recovered) == 3
+    assert recovered[0].lang_ == "en"
+    assert recovered[1].lang_ == "fi"
+    assert recovered[2].lang_ == "en"
+    assert [t.text for t in recovered[0]] == ["Hello", "world", "."]
+    assert [t.text for t in recovered[1]] == ["Hei", "maailma", "."]
+    assert [t.text for t in recovered[2]] == ["Second", "English", "doc", "."]
+
+def test_serialize_spacy_docs_doc_json_schema(spacy_pipe):
+    """Contract: `item["doc"]` is pristine `Doc.to_json()` output.
+
+    Locks in the documented wire-format promise so that non-Python clients (e.g. a
+    future JS avatar frontend) can rely on the standard spaCy JSON schema.
+    """
+    docs = nlptools.spacy_analyze(spacy_pipe, "Alice met Bob in Paris.")
+    data = nlptools.serialize_spacy_docs(docs)
+    doc_json = data[0]["doc"]
+    # Top-level keys match spaCy's Doc.to_json schema.
+    assert "text" in doc_json
+    assert "tokens" in doc_json
+    assert "ents" in doc_json
+    assert "sents" in doc_json
+    # Per-token dict keys match spaCy's schema (no extra or renamed fields).
+    for token in doc_json["tokens"]:
+        assert set(token.keys()) >= {"id", "start", "end", "tag", "pos", "morph", "lemma", "dep", "head"}
+
+def test_serialize_deserialize_spacy_docs_with_vectors(spacy_pipe):
+    """Round-trip `doc.tensor` / `token.vector` when `with_vectors=True`.
+
+    `en_core_web_sm` has no vocab vectors (dim 0), but `tok2vec` populates `doc.tensor`;
+    `token.vector` falls through to `doc.tensor[i]` when vocab has none.
+    """
+    import numpy as np
+    docs = nlptools.spacy_analyze(spacy_pipe, "Alice met Bob in Paris.")
+    data = nlptools.serialize_spacy_docs(docs, with_vectors=True)
+    assert "vectors" in data[0]
+    assert data[0]["vectors"]["dim"] == docs[0].tensor.shape[1]
+    recovered = nlptools.deserialize_spacy_docs(data)
+    # Tensor round-trips bit-for-bit (float32 → base64 → float32 is lossless).
+    assert np.array_equal(recovered[0].tensor, docs[0].tensor)
+    # `token.vector` falls through to `doc.tensor[i]` on the blank-vocab reconstructed Doc.
+    for orig_tok, rec_tok in zip(docs[0], recovered[0]):
+        assert np.array_equal(orig_tok.vector, rec_tok.vector)
 
 def test_serialize_deserialize_spacy_pipeline(spacy_pipe):
     config_str, data_bytes = nlptools.serialize_spacy_pipeline(spacy_pipe)

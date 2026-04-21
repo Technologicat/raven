@@ -650,13 +650,19 @@ def imagefx_upscale_array(image_data: np.array,
 # --------------------------------------------------------------------------------
 # Natlang
 
-def natlang_analyze(text: Union[str, List[str]], pipes: Optional[List[str]] = None) -> List[List[spacy.tokens.token.Token]]:
+def natlang_analyze(text: Union[str, List[str]],
+                    pipes: Optional[List[str]] = None,
+                    with_vectors: bool = False) -> List[spacy.tokens.Doc]:
     """Perform NLP analysis on input text.
 
     `pipes`: If provided, enable only the listed pipes. Which ones exist depend on the server's loaded spaCy model.
              If not provided (default), use the model's default pipes.
 
-    Returns a `list` of spaCy documents (even if just one `text`).
+    `with_vectors`: If `True`, request per-doc `doc.tensor` from the server so `token.vector` works
+                    on the returned docs. Default `False` to keep the wire small.
+
+    Returns a `list` of spaCy documents (even if just one `text`). The documents are reconstructed
+    from the server's JSON response; see `raven.common.nlptools.deserialize_spacy_docs`.
     """
     if not util.api_initialized:
         raise RuntimeError("natlang_analyze: The `raven.client.api` module must be initialized before using the API.")
@@ -665,14 +671,13 @@ def natlang_analyze(text: Union[str, List[str]], pipes: Optional[List[str]] = No
     input_data = {"text": text}
     if pipes is not None:
         input_data["pipes"] = pipes
+    if with_vectors:
+        input_data["with_vectors"] = True
     response = requests.post(f"{util.api_config.raven_server_url}/api/natlang/analyze", json=input_data, headers=headers)
     util.yell_on_error(response)
 
-    docs_bytes = response.content  # binary data containing one or more serialized spaCy documents
-    lang = response.headers["x-langcode"]
-
-    docs = nlptools.deserialize_spacy_docs(docs_bytes, lang=lang)
-    return docs
+    doc_items = response.json()  # list of {lang, doc, vectors?} dicts
+    return nlptools.deserialize_spacy_docs(doc_items)
 
 # --------------------------------------------------------------------------------
 # Sanitize
