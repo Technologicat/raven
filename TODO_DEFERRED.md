@@ -60,25 +60,14 @@ Not urgent — Raven's trusted-LAN-or-localhost deployment means bandwidth isn't
 
 Discovered during natlang wire-format migration (2026-04-21).
 
-## Additional `MaybeRemoteService` candidates (classify, translate)
+## Remaining server modules without a MaybeRemote
 
-`raven.client.mayberemote` currently wraps `Dehyphenator` (→ sanitize), `Embedder` (→ embeddings), `NLP` (→ natlang). Once the in-progress speech-extract-to-common work lands `TTS` / `STT`, the ML-engine server modules that *still* have no local fallback are:
-
-- `classify` — sentiment/emotion classification. Already wraps `raven.common.nlptools`; lifting it to MaybeRemote is mechanical.
-- `translate` — neural machine translation. Also wraps `nlptools` (via the `_Translator` callable and `translate`/`_translate_chunked` functions).
-
-Both have all the pieces in place — the common-layer code exists, model loading is already memoized via `nlptools._translators` / spaCy pipelines. The missing piece is just the `MaybeRemoteService` subclass, a local-mode `__init__` path, and wiring in any client apps that currently assume the server is reachable.
-
-The remaining server modules don't fit the MaybeRemote pattern for different reasons:
+With `Classifier`, `Translator`, `Postprocessor`, `Upscaler` landed (2026-04-22), the following server modules still don't participate in the MaybeRemote pattern:
 
 - `avatar`, `avatarutil` — licensing-constrained (see "Client-local avatar animator" below). Also the rendering pipeline is tied to real-time animation driver state that's server-local; a client-local path would be effectively a parallel rewrite, not a wrapper.
-- `imagefx` — 100 % user-authored, no licensing constraint. Doesn't fit MaybeRemote because its job is to apply the server-side postprocessor / upscaler to the avatar video stream; in a client-local avatar scenario the client would run the same `raven.common.video.{postprocessor,upscaler}` directly, without the `imagefx` layer in the middle. (i.e. `imagefx` *is* the server-side thin wrapper — there's no separate engine to lift out.)
 - `websearch` — AGPL-constrained (~90 % from SillyTavern-extras, rest ported from SillyTavern-selenium's JS version — see the licensing item below). Also heavy to run locally: Selenium + headless browser.
-- `tts`, `stt` — will have MaybeRemote once the speech extraction is done.
 
-Goal: any Raven app running in isolation should be able to do all its ML work locally, with the server only needed for synergy when multiple Raven apps run concurrently (shared model weights in VRAM). Visualizer importer already has this; cherrypick and librarian partially have it; bringing `classify` and `translate` into the MaybeRemote family closes most of the remaining gap.
-
-Discovered during speech-extract-to-common discussion (2026-04-17).
+These are both intentional omissions, not TODO gaps. Kept as a navigational note so future readers can see the coverage at a glance.
 
 ## Client-local avatar animator (licensing-bounded)
 

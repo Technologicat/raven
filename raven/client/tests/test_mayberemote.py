@@ -35,6 +35,32 @@ def remote_nlp(initialized_api):
 
 
 @pytest.fixture(scope="module")
+def remote_classifier(initialized_api):
+    """`MaybeRemote.Classifier` instance dispatching to the server."""
+    return mayberemote.Classifier(allow_local=False)
+
+
+@pytest.fixture(scope="module")
+def remote_translator(initialized_api):
+    """`MaybeRemote.Translator` instance (en → fi) dispatching to the server."""
+    return mayberemote.Translator(allow_local=False,
+                                  source_lang="en",
+                                  target_lang="fi")
+
+
+@pytest.fixture(scope="module")
+def remote_postprocessor(initialized_api):
+    """`MaybeRemote.Postprocessor` instance dispatching to the server."""
+    return mayberemote.Postprocessor(allow_local=False)
+
+
+@pytest.fixture(scope="module")
+def remote_upscaler(initialized_api):
+    """`MaybeRemote.Upscaler` instance dispatching to the server."""
+    return mayberemote.Upscaler(allow_local=False)
+
+
+@pytest.fixture(scope="module")
 def remote_dehyphenator(initialized_api):
     """`MaybeRemote.Dehyphenator` instance dispatching to the server."""
     return mayberemote.Dehyphenator(allow_local=False,
@@ -248,3 +274,115 @@ class TestMaybeRemoteSTT:
 
     def test_is_local_is_false_in_remote_mode(self, remote_stt):
         assert remote_stt.is_local() is False
+
+
+# ---------------------------------------------------------------------------
+# Classifier — remote mode
+# ---------------------------------------------------------------------------
+
+class TestMaybeRemoteClassifier:
+    def test_classify_returns_sorted_dict(self, remote_classifier, sample_text):
+        result = remote_classifier.classify(sample_text)
+        assert isinstance(result, dict)
+        assert len(result) > 0
+        scores = list(result.values())
+        # Dict iteration order preserves insertion order; classify returns
+        # scores sorted descending, so adjacent scores should be non-increasing.
+        for earlier, later in zip(scores, scores[1:]):
+            assert earlier >= later
+
+    def test_labels_returns_nonempty_list(self, remote_classifier):
+        labels = remote_classifier.labels()
+        assert isinstance(labels, list)
+        assert len(labels) > 0
+        assert all(isinstance(label, str) for label in labels)
+
+    def test_classify_labels_subset_of_labels(self, remote_classifier, sample_text):
+        """Every label in a classify result should come from the declared label set."""
+        all_labels = set(remote_classifier.labels())
+        result = remote_classifier.classify(sample_text)
+        assert set(result.keys()).issubset(all_labels)
+
+    def test_is_local_is_false_in_remote_mode(self, remote_classifier):
+        assert remote_classifier.is_local() is False
+
+
+# ---------------------------------------------------------------------------
+# Translator — remote mode
+# ---------------------------------------------------------------------------
+
+class TestMaybeRemoteTranslator:
+    def test_translate_single_string(self, remote_translator):
+        """Single-string input → single-string output."""
+        result = remote_translator.translate("The quick brown fox jumps over the lazy dog.")
+        assert isinstance(result, str)
+        assert len(result) > 0
+        # Sanity check: output should differ from input (translation actually happened).
+        assert result != "The quick brown fox jumps over the lazy dog."
+
+    def test_translate_list(self, remote_translator):
+        """List-of-strings input → list-of-strings output."""
+        result = remote_translator.translate(["Hello.", "Goodbye."])
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert all(isinstance(r, str) and len(r) > 0 for r in result)
+
+    def test_is_local_is_false_in_remote_mode(self, remote_translator):
+        assert remote_translator.is_local() is False
+
+
+# ---------------------------------------------------------------------------
+# Postprocessor — remote mode
+# ---------------------------------------------------------------------------
+
+class TestMaybeRemotePostprocessor:
+    def test_process_preserves_shape_and_range(self, remote_postprocessor):
+        """Postprocessor output is float32 [0, 1] with the same resolution as input."""
+        # 64×64 RGBA mid-gray with a visible diagonal stripe.
+        image = np.full((64, 64, 4), 0.5, dtype=np.float32)
+        for i in range(64):
+            image[i, i] = [1.0, 0.0, 0.0, 1.0]
+        # No-op chain: empty filters list.
+        result = remote_postprocessor.process(image, filters=[])
+        assert result.dtype == np.float32
+        assert result.shape == (64, 64, 4)
+        assert result.min() >= 0.0 and result.max() <= 1.0
+
+    def test_process_actually_filters(self, remote_postprocessor):
+        """A simple filter chain should change the image (bloom noticeably brightens)."""
+        # Start from a darkish image so bloom has something to do.
+        image = np.full((64, 64, 4), 0.25, dtype=np.float32)
+        image[..., 3] = 1.0  # opaque
+        image[16:48, 16:48] = [1.0, 1.0, 1.0, 1.0]  # bright square
+        filters = [("bloom", {"threshold": 0.5, "exposure": 1.0, "sigma": 7.0})]
+        result = remote_postprocessor.process(image, filters=filters)
+        # Result should differ from input (filter had an effect).
+        assert not np.allclose(result, image, atol=1e-4)
+
+    def test_is_local_is_false_in_remote_mode(self, remote_postprocessor):
+        assert remote_postprocessor.is_local() is False
+
+
+# ---------------------------------------------------------------------------
+# Upscaler — remote mode
+# ---------------------------------------------------------------------------
+
+class TestMaybeRemoteUpscaler:
+    def test_upscale_changes_resolution(self, remote_upscaler):
+        """Upscaler output resolution matches the requested target."""
+        # 64×64 source → 128×128 target. `bicubic` quality avoids the Anime4K
+        # model-load cost; enough to exercise the dispatch path.
+        image = np.zeros((64, 64, 4), dtype=np.float32)
+        image[..., 3] = 1.0
+        image[::2, ::2, 0] = 1.0  # red checkerboard
+        result = remote_upscaler.upscale(image,
+                                         upscaled_width=128,
+                                         upscaled_height=128,
+                                         preset="C",
+                                         quality="bicubic")
+        assert result.dtype == np.float32
+        assert result.shape == (128, 128, 4)
+        assert result.min() >= 0.0 and result.max() <= 1.0
+
+    def test_is_local_is_false_in_remote_mode(self, remote_upscaler):
+        assert remote_upscaler.is_local() is False

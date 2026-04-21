@@ -1,22 +1,25 @@
-"""Transparent Raven-server support for some NLP components, with local (client-side) fallback.
+"""Transparent Raven-server support for some NLP and imagefx components, with local (client-side) fallback.
 
 NOTE: Before using this module, you must `raven.client.api.initialize` first.
 """
 
-# TODO: This could be extended to cover all applicable server modules.
-
 __all__ = ["MaybeRemoteService",
+           "Classifier",
            "Dehyphenator",
            "Embedder",
            "NLP",
+           "Postprocessor",
            "STT",
-           "TTS"]
+           "Translator",
+           "TTS",
+           "Upscaler"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from typing import List, Optional, Union
+import threading
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 
@@ -29,6 +32,8 @@ from ..common import nlptools
 from ..common.audio.speech import datatypes as speech_datatypes
 from ..common.audio.speech import stt as speech_stt
 from ..common.audio.speech import tts as speech_tts
+from ..common.video.postprocessor import Postprocessor as _LocalPostprocessor
+from ..common.video.upscaler import Upscaler as _LocalUpscaler
 
 
 class MaybeRemoteService:
@@ -97,6 +102,63 @@ class MaybeRemoteService:
     def is_local(self) -> bool:
         """Return whether this service is in local mode."""
         return self._local_model is not None  # In local mode, each derived class loads the relevant local model.
+
+
+class Classifier(MaybeRemoteService):
+    def __init__(self,
+                 allow_local: bool,
+                 model_name: Optional[str] = None,
+                 device_string: Optional[str] = None,
+                 dtype: Optional[Union[str, torch.dtype]] = None):
+        """Text sentiment classification (distilBERT-family, 28-emotion by default).
+
+        `allow_local`: See `MaybeRemoteService`.
+
+        `model_name`: Required if `allow_local=True`. HuggingFace model name, e.g.
+                      `"joeddav/distilbert-base-uncased-go-emotions-student"`. In remote
+                      mode the server decides which model is loaded; the argument is
+                      ignored.
+
+        `device_string`: Required if `allow_local=True`. E.g. `"cpu"`, `"cuda:0"`.
+
+        `dtype`: Required if `allow_local=True`. E.g. `torch.float32`, or a string `"float32"`.
+        """
+        super().__init__(allow_local)
+        self.model_name = model_name
+        self.device_string = device_string
+        self.dtype = dtype
+
+        if "classify" in self.server_modules:
+            logger.info(f"Classifier.__init__: Using `classify` module on Raven-server at '{client_config.raven_server_url}'.")
+        else:
+            if self.server_available:
+                logger.info(f"Classifier.__init__: No `classify` module loaded on Raven-server at '{client_config.raven_server_url}', loading classifier model locally.")
+            self._local_model = nlptools.load_classifier(model_name,
+                                                         device_string,
+                                                         dtype)
+
+    def classify(self, text: str) -> Dict[str, float]:
+        """Classify the sentiment of `text`.
+
+        Returns `{label: score, ...}`, sorted by score descending (the iteration order
+        of regular `dict` preserves insertion order). Same shape in both local and
+        remote modes — the local path normalizes nlptools' list-of-dicts form to match
+        the wire format.
+        """
+        if self._local_model is None:
+            return api.classify(text)
+        sorted_records = nlptools.classify(self._local_model, text)  # [{"label": ..., "score": ...}, ...]
+        return {record["label"]: record["score"] for record in sorted_records}
+
+    def labels(self) -> List[str]:
+        """List the emotion labels the classifier can assign.
+
+        The set is fixed by the underlying model (e.g. 28 emotions for the default
+        go-emotions model). Sorted alphabetically.
+        """
+        if self._local_model is None:
+            return api.classify_labels()
+        return sorted(self._local_model.model.config.id2label.values())
 
 
 class Dehyphenator(MaybeRemoteService):
@@ -242,6 +304,70 @@ class NLP(MaybeRemoteService):
                                           text,
                                           pipes)
         return docs
+
+
+class Translator(MaybeRemoteService):
+    def __init__(self,
+                 allow_local: bool,
+                 source_lang: str,
+                 target_lang: str,
+                 model_name: Optional[str] = None,
+                 device_string: Optional[str] = None,
+                 dtype: Optional[Union[str, torch.dtype]] = None,
+                 spacy_model_name: Optional[str] = None):
+        """Machine translation between natural languages (Helsinki-NLP / OPUS-MT family).
+
+        `allow_local`: See `MaybeRemoteService`.
+
+        `source_lang`, `target_lang`: Language codes, e.g. `"en"` → `"fi"`. In remote
+                                      mode the server must have a translator loaded for
+                                      this pair (see `raven.server.config.translation_models`);
+                                      in local mode, the pair just identifies the model.
+
+        `model_name`: Required if `allow_local=True`. HuggingFace model name, e.g.
+                      `"Helsinki-NLP/opus-mt-tc-big-en-fi"`.
+
+        `device_string`: Required if `allow_local=True`. E.g. `"cpu"`, `"cuda:0"`.
+
+        `dtype`: Required if `allow_local=True`. E.g. `torch.float32`.
+
+        `spacy_model_name`: Required if `allow_local=True`. spaCy pipeline for
+                            sentence-boundary detection during chunked translation
+                            (long inputs). Usually `"en_core_web_sm"`. Cached via
+                            `nlptools.load_spacy_pipeline`, so sharing the same model
+                            with a `MaybeRemote.NLP` instance costs nothing extra.
+        """
+        super().__init__(allow_local)
+        self.source_lang = source_lang
+        self.target_lang = target_lang
+        self.model_name = model_name
+        self.device_string = device_string
+        self.dtype = dtype
+        self.spacy_model_name = spacy_model_name
+
+        if "translate" in self.server_modules:
+            logger.info(f"Translator.__init__: Using `translate` module on Raven-server at '{client_config.raven_server_url}'.")
+        else:
+            if self.server_available:
+                logger.info(f"Translator.__init__: No `translate` module loaded on Raven-server at '{client_config.raven_server_url}', loading translation model locally.")
+            self._local_model = nlptools.load_translator(model_name,
+                                                         device_string,
+                                                         dtype,
+                                                         source_lang=source_lang,
+                                                         target_lang=target_lang)
+            # Sentence splitter for chunked translation. Reuses any cached spaCy pipeline.
+            self._local_nlp = nlptools.load_spacy_pipeline(spacy_model_name, device_string)
+
+    def translate(self, text: Union[str, List[str]]) -> Union[str, List[str]]:
+        """Translate `text` from `source_lang` to `target_lang`.
+
+        Returns `str` for a single input, `list[str]` for a list of inputs.
+        """
+        if self._local_model is None:
+            return api.translate_translate(text,
+                                           source_lang=self.source_lang,
+                                           target_lang=self.target_lang)
+        return nlptools.translate(self._local_model, self._local_nlp, text)
 
 
 class STT(MaybeRemoteService):
@@ -392,3 +518,146 @@ class TTS(MaybeRemoteService):
         if format is None:
             return api.tts_prepare_decoded_cached(text=text, voice=voice, speed=speed, get_metadata=get_metadata)
         return api.tts_prepare_cached(text=text, voice=voice, speed=speed, get_metadata=get_metadata, format=format)
+
+
+class Postprocessor(MaybeRemoteService):
+    def __init__(self,
+                 allow_local: bool,
+                 device_string: Optional[str] = None,
+                 dtype: Optional[Union[str, torch.dtype]] = None):
+        """Image postprocessor — applies a filter chain (see `raven.common.video.postprocessor`).
+
+        Unlike the other `MaybeRemote` services, this one wraps a server module (`imagefx`)
+        that is effectively stateless across requests: the filter chain travels with each call.
+        The local side is stateful (a `Postprocessor` instance holds torch tensors on a device),
+        so in local mode we reuse one `_LocalPostprocessor`, swapping its `.chain` per call
+        under a lock (same pattern as the server module uses internally).
+
+        `allow_local`: See `MaybeRemoteService`. The postprocessor is pure torch — no heavy ML
+                       models are downloaded — so `allow_local=True` is usually safe.
+
+        `device_string`: Required if `allow_local=True`. E.g. `"cpu"`, `"cuda:0"`.
+
+        `dtype`: Required if `allow_local=True`. E.g. `torch.float32`, `torch.float16`.
+        """
+        super().__init__(allow_local)
+        self.device_string = device_string
+        self.dtype = dtype
+
+        if "imagefx" in self.server_modules:
+            logger.info(f"Postprocessor.__init__: Using `imagefx` module on Raven-server at '{client_config.raven_server_url}'.")
+        else:
+            if self.server_available:
+                logger.info(f"Postprocessor.__init__: No `imagefx` module loaded on Raven-server at '{client_config.raven_server_url}', instantiating local postprocessor.")
+            # Start with an empty chain; callers supply the real chain per `process` call.
+            self._local_model = _LocalPostprocessor(device_string, dtype, chain=[])
+            # Guards the `.chain` swap + `render_into` pair across concurrent callers.
+            self._local_lock = threading.Lock()
+
+    def process(self,
+                image: np.ndarray,
+                filters: List[Dict[str, Any]]) -> np.ndarray:
+        """Apply the postprocessor `filters` chain to `image`.
+
+        `image`: float32 `np.ndarray` in [0, 1], shape `(h, w, c)` with 3 or 4 channels.
+                 Three-channel input is normalized to RGBA internally.
+
+        `filters`: Filter chain, formatted as in `raven.server.config.postprocessor_defaults`.
+
+        Returns the processed image as float32 `np.ndarray` in [0, 1], shape `(h, w, 4)`.
+        """
+        if self._local_model is None:
+            return api.imagefx_process_array(image, filters=filters)
+
+        # Local path: HWC float → CHW tensor → postprocess in-place → HWC float.
+        from ..common.image import utils as imageutils  # deferred: heavy to import when not needed
+        image = imageutils.ensure_rgba(image)
+        tensor = torch.from_numpy(image).permute(2, 0, 1).to(dtype=self._local_model.dtype,
+                                                              device=self._local_model.device)
+        with self._local_lock:
+            self._local_model.chain = filters
+            self._local_model.render_into(tensor)
+        return tensor.clamp(0.0, 1.0).permute(1, 2, 0).cpu().numpy().astype(np.float32)
+
+
+class Upscaler(MaybeRemoteService):
+    def __init__(self,
+                 allow_local: bool,
+                 device_string: Optional[str] = None,
+                 dtype: Optional[Union[str, torch.dtype]] = None):
+        """Image upscaler (Anime4K-PyTorch, plus bilinear / bicubic fast paths).
+
+        Mirrors the `imagefx` upscale endpoint: target resolution, preset, and quality
+        travel with each call. In local mode, `_LocalUpscaler` instances are cached by
+        `(width, height, preset, quality)` since model choice depends on preset/quality;
+        repeat calls with the same config reuse the cached pipeline.
+
+        `allow_local`: See `MaybeRemoteService`. Anime4K is small and loads fast; the
+                       `bilinear` / `bicubic` quality settings skip Anime4K entirely.
+
+        `device_string`, `dtype`: Required if `allow_local=True`. Same semantics as `Postprocessor`.
+        """
+        super().__init__(allow_local)
+        self.device_string = device_string
+        self.dtype = dtype
+
+        if "imagefx" in self.server_modules:
+            logger.info(f"Upscaler.__init__: Using `imagefx` module on Raven-server at '{client_config.raven_server_url}'.")
+        else:
+            if self.server_available:
+                logger.info(f"Upscaler.__init__: No `imagefx` module loaded on Raven-server at '{client_config.raven_server_url}', local upscaler instances will be created on demand.")
+            # `_local_model` holds the cache of `_LocalUpscaler` instances, keyed by
+            # config tuple `(width, height, preset, quality)`. Being a (non-None) dict
+            # also makes `is_local()` return True per the base class's convention.
+            # Instances are constructed lazily on the first `.upscale` call with a
+            # given config; different configs trigger new constructions (each of which
+            # loads the underlying Anime4K models, hence the cache).
+            self._local_model: Dict[tuple, _LocalUpscaler] = {}
+            self._local_lock = threading.Lock()
+
+    def upscale(self,
+                image: np.ndarray,
+                upscaled_width: int = 1920,
+                upscaled_height: int = 1080,
+                preset: str = "C",
+                quality: str = "high") -> np.ndarray:
+        """Upscale `image` to `(upscaled_width, upscaled_height)`.
+
+        `image`: float32 `np.ndarray` in [0, 1], shape `(h, w, c)` with 3 or 4 channels.
+                 Three-channel input is normalized to RGBA internally.
+
+        `preset`: one of `"A"`, `"B"`, `"C"` (Anime4K-style pipeline selection).
+
+        `quality`: one of `"low"`, `"high"` (Anime4K model sizes), or `"bilinear"` /
+                   `"bicubic"` (fast bypass — no Anime4K).
+
+        Returns the upscaled image as float32 `np.ndarray` in [0, 1], shape `(upscaled_height, upscaled_width, 4)`.
+        """
+        if not self.is_local():
+            return api.imagefx_upscale_array(image,
+                                             upscaled_width=upscaled_width,
+                                             upscaled_height=upscaled_height,
+                                             preset=preset,
+                                             quality=quality)
+
+        # Local path: ensure RGBA, HWC float → CHW tensor → upscale → HWC float.
+        from ..common.image import utils as imageutils  # deferred: heavy to import when not needed
+        image = imageutils.ensure_rgba(image)
+        tensor = torch.from_numpy(image).permute(2, 0, 1).to(dtype=self.dtype,
+                                                              device=self.device_string)
+        # Fetch-or-construct the appropriate `_LocalUpscaler` for this config.
+        # Serialized so concurrent callers with the same novel config don't race
+        # to construct parallel copies.
+        key = (upscaled_width, upscaled_height, preset, quality)
+        with self._local_lock:
+            if key not in self._local_model:
+                logger.info(f"Upscaler.upscale: constructing new _LocalUpscaler for {key}")
+                self._local_model[key] = _LocalUpscaler(device=self.device_string,
+                                                         dtype=self.dtype,
+                                                         upscaled_width=upscaled_width,
+                                                         upscaled_height=upscaled_height,
+                                                         preset=preset,
+                                                         quality=quality)
+            upscaler = self._local_model[key]
+        upscaled = upscaler.upscale(tensor)
+        return upscaled.clamp(0.0, 1.0).permute(1, 2, 0).cpu().numpy().astype(np.float32)
