@@ -25,6 +25,7 @@ import torch
 from unpythonic.env import env
 
 from ..common import bgtask
+from ..common.image import codec as imagecodec
 from ..common.image import lanczos
 from ..common.image import utils as imageutils
 
@@ -157,7 +158,7 @@ class ThumbnailPipeline:
             if e.cancelled:
                 break
             try:
-                arr = imageutils.decode_image(path, max_size=e.max_size)
+                arr = imageutils.ensure_rgba(imagecodec.decode(path, max_size=e.max_size))
             except Exception as exc:
                 logger.warning(f"ThumbnailPipeline._decode_loop: instance {e.task_name}: "
                                f"failed to decode {path.name}: {exc}")

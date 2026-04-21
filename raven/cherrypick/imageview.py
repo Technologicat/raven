@@ -33,6 +33,7 @@ from unpythonic.env import env
 
 from ..common.bgtask import TaskManager
 from ..common.gui import utils as guiutils
+from ..common.image import codec as imagecodec
 from ..common.image import lanczos
 from ..common.image import utils as imageutils
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
@@ -575,7 +576,7 @@ class ImageView:
         """
         t0 = time.perf_counter_ns()
         try:
-            e.rgba = imageutils.decode_image(e.path)
+            e.rgba = imageutils.ensure_rgba(imagecodec.decode(e.path))
         except Exception as exc:
             logger.warning(f"ImageView._bg_file_mip_task: instance {e.task_name}: decode failed for {e.path}: {type(exc)}: {exc}")
             self._set_mip_loading(False)
@@ -667,7 +668,7 @@ class ImageView:
         t0 = time.perf_counter_ns()
         try:
             try:
-                rgba = imageutils.decode_image(e.path)
+                rgba = imageutils.ensure_rgba(imagecodec.decode(e.path))
             except Exception as exc:
                 logger.warning(f"ImageView._bg_augment_task: instance {e.task_name}: decode failed for {e.path}: {type(exc)}: {exc}")
                 return

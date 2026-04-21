@@ -1,18 +1,19 @@
 """Image I/O and tensor conversion utilities.
 
 Canonical conversions between numpy (HWC uint8), PyTorch (BCHW float32),
-and DPG dynamic texture (flat float32 RGBA) formats.  Also provides
-format-agnostic image decoding (PNG, JPEG, QOI, etc.) with optional
-turbojpeg fast path for JPEG.
+and DPG dynamic texture (flat float32 RGBA) formats. Also provides a small
+RGBA-normalization helper for pipelines that need a guaranteed 4-channel
+output (e.g. DPG dynamic textures, the server-side avatar postprocessor).
+
+For image decoding / encoding, see `raven.common.image.codec`.
 """
 
-__all__ = ["decode_image",
+__all__ = ["ensure_rgba",
            "np_to_tensor", "tensor_to_np", "tensor_to_dpg_flat",
            "letterbox"]
 
 import logging
-import pathlib
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 import torch
@@ -21,104 +22,38 @@ from . import lanczos
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Supported image extensions
-# ---------------------------------------------------------------------------
-
-IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".qoi",
-                              ".bmp", ".tiff", ".tif", ".webp"})
 
 # ---------------------------------------------------------------------------
-# Optional fast JPEG decoder
+# Channel normalization
 # ---------------------------------------------------------------------------
 
-_HAS_TURBOJPEG = False
-_turbojpeg_instance = None
+def ensure_rgba(image: np.ndarray) -> np.ndarray:
+    """Return `image` with a guaranteed 4-channel RGBA layout.
 
-try:
-    from turbojpeg import TurboJPEG, TJPF_RGBX  # noqa: F401
-    _turbojpeg_instance = TurboJPEG()
-    _HAS_TURBOJPEG = True
-    logger.info("imageutil: turbojpeg available — fast JPEG decode enabled")
-except ImportError:
-    logger.info("imageutil: turbojpeg not available — using PIL for JPEG decode")
+    If `image` already has 4 channels, returned as-is (no copy). If it has
+    3 channels (RGB), an opaque alpha channel (value 255 for uint8, 1.0 for
+    floats) is appended.
 
+    Useful at the boundary between `raven.common.image.codec.decode` — which
+    returns the natural channel count produced by the underlying decoder
+    (e.g. 3 for JPEG) — and pipelines that require RGBA (DPG dynamic
+    textures, the server-side avatar postprocessor, the cherrypick mip
+    pipeline).
 
-# ---------------------------------------------------------------------------
-# Image decoding
-# ---------------------------------------------------------------------------
-
-def _turbojpeg_scaled_decode(path: pathlib.Path,
-                             max_size: Optional[int]) -> Optional[np.ndarray]:
-    """Attempt JPEG decode via turbojpeg with optional downscaling.
-
-    *max_size*, if given, triggers scaled decode: the image is decoded at the
-    smallest JPEG scale factor (1/1, 1/2, 1/4, 1/8) whose output is still
-    ≥ *max_size* on both dimensions.  This is much faster than full decode +
-    external resize for large JPEGs.
-
-    Returns an RGBA uint8 numpy array, or ``None`` if turbojpeg is unavailable
-    or the file isn't JPEG.
+    Raises `ValueError` if `image` doesn't look like an image (wrong rank
+    or channel count).
     """
-    if not _HAS_TURBOJPEG or _turbojpeg_instance is None:
-        return None
-    if path.suffix.lower() not in (".jpg", ".jpeg"):
-        return None
-
-    jpeg_data = path.read_bytes()
-
-    if max_size is not None:
-        # Query dimensions without decoding.
-        width, height, _, _ = _turbojpeg_instance.decode_header(jpeg_data)
-
-        # Pick the largest scale that still yields >= max_size on both edges.
-        best_factor = (1, 1)
-        for num, den in [(1, 1), (1, 2), (1, 4), (1, 8)]:
-            scaled_w = (width * num + den - 1) // den
-            scaled_h = (height * num + den - 1) // den
-            if scaled_w >= max_size and scaled_h >= max_size:
-                best_factor = (num, den)
-
-        rgb = _turbojpeg_instance.decode(jpeg_data,
-                                         pixel_format=TJPF_RGBX,
-                                         scaling_factor=best_factor)
-    else:
-        rgb = _turbojpeg_instance.decode(jpeg_data, pixel_format=TJPF_RGBX)
-
-    # TJPF_RGBX gives (H, W, 4) with X = padding byte (not alpha).
-    # Set alpha to 255.
-    rgb[:, :, 3] = 255
-    return rgb
-
-
-def decode_image(path: Union[pathlib.Path, str],
-                 max_size: Optional[int] = None) -> np.ndarray:
-    """Decode an image file to an RGBA uint8 numpy array.
-
-    *max_size*: if given, hint that the result will be downscaled to at most
-    this many pixels on each edge.  For JPEG with turbojpeg available, this
-    triggers hardware-accelerated scaled decode (much faster for large images).
-    For other formats, the hint is ignored and the full image is returned.
-
-    Supported formats: PNG, JPEG, QOI, and anything else PIL handles.
-    """
-    from PIL import Image  # deferred to avoid import cost when not needed
-
-    path = pathlib.Path(path)
-    suffix = path.suffix.lower()
-
-    # Try turbojpeg first (fast path for JPEG).
-    result = _turbojpeg_scaled_decode(path, max_size)
-    if result is not None:
-        return result
-
-    # QOI — fast C decoder.
-    if suffix == ".qoi":
-        import qoi as _qoi
-        return _qoi.decode(path.read_bytes())
-
-    # PIL fallback — handles everything else.
-    return np.array(Image.open(path).convert("RGBA"))
+    if image.ndim != 3 or image.shape[2] not in (3, 4):
+        raise ValueError(f"ensure_rgba: expected shape (h, w, 3|4), got {image.shape}")
+    if image.shape[2] == 4:
+        return image
+    # Append an opaque alpha channel in the input's own dtype range.
+    if np.issubdtype(image.dtype, np.integer):
+        alpha_value = np.iinfo(image.dtype).max
+    else:  # floating
+        alpha_value = 1.0
+    alpha = np.full(image.shape[:2] + (1,), alpha_value, dtype=image.dtype)
+    return np.concatenate([image, alpha], axis=2)
 
 
 # ---------------------------------------------------------------------------

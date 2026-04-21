@@ -1,12 +1,14 @@
-"""Tests for raven.common.image.utils — image decoding and tensor conversions."""
+"""Tests for `raven.common.image.utils` — tensor conversions and RGBA normalization.
+
+Image decoding / encoding is tested separately; see `test_codec.py`.
+"""
 
 import numpy as np
 import pytest
 import torch
-from PIL import Image
 
 from raven.common.image.utils import (
-    decode_image, np_to_tensor, tensor_to_dpg_flat, letterbox,
+    ensure_rgba, np_to_tensor, tensor_to_dpg_flat, letterbox,
 )
 from raven.common.image.lanczos import DEFAULT_ORDER
 
@@ -14,32 +16,6 @@ from raven.common.image.lanczos import DEFAULT_ORDER
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-@pytest.fixture
-def sample_dir(tmp_path):
-    """Create a temp directory with a few synthetic test images."""
-    # PNG — 200×100 red gradient.
-    img = Image.new("RGBA", (200, 100), (0, 0, 0, 255))
-    pixels = img.load()
-    for x in range(200):
-        for y in range(100):
-            pixels[x, y] = (int(x / 200 * 255), 0, 0, 255)
-    img.save(tmp_path / "red_gradient.png")
-
-    # JPEG — 150×150 green.
-    img = Image.new("RGB", (150, 150), (0, 200, 0))
-    img.save(tmp_path / "green.jpg", quality=90)
-
-    # JPEG — 300×200 blue.
-    img = Image.new("RGB", (300, 200), (0, 0, 200))
-    img.save(tmp_path / "blue.jpg", quality=90)
-
-    # Small — 16×16 white.
-    img = Image.new("RGBA", (16, 16), (255, 255, 255, 255))
-    img.save(tmp_path / "tiny.png")
-
-    return tmp_path
-
 
 @pytest.fixture
 def device():
@@ -52,42 +28,38 @@ def device():
 
 
 # ---------------------------------------------------------------------------
-# decode_image
+# ensure_rgba
 # ---------------------------------------------------------------------------
 
-class TestDecodeImage:
-    def test_decode_png(self, sample_dir):
-        arr = decode_image(sample_dir / "red_gradient.png")
-        assert arr.dtype == np.uint8
-        assert arr.shape == (100, 200, 4)  # H, W, RGBA
+class TestEnsureRgba:
+    def test_passthrough_when_already_rgba(self):
+        arr = np.zeros((4, 5, 4), dtype=np.uint8)
+        arr[..., 3] = 128  # non-default alpha; verify it isn't clobbered
+        result = ensure_rgba(arr)
+        assert result is arr  # no copy when already 4-channel
+        assert (result[..., 3] == 128).all()
 
-    def test_decode_jpeg(self, sample_dir):
-        arr = decode_image(sample_dir / "green.jpg")
-        assert arr.dtype == np.uint8
-        assert arr.shape == (150, 150, 4)  # JPEG converted to RGBA
+    def test_appends_alpha_for_rgb_uint8(self):
+        arr = np.zeros((4, 5, 3), dtype=np.uint8)
+        result = ensure_rgba(arr)
+        assert result.shape == (4, 5, 4)
+        assert result.dtype == np.uint8
+        assert (result[..., 3] == 255).all()  # fully opaque
 
-    def test_decode_returns_rgba(self, sample_dir):
-        """All formats should return 4-channel RGBA."""
-        for name in ["red_gradient.png", "green.jpg", "tiny.png"]:
-            arr = decode_image(sample_dir / name)
-            assert arr.shape[2] == 4, f"{name}: expected 4 channels, got {arr.shape[2]}"
+    def test_appends_alpha_for_rgb_float(self):
+        arr = np.zeros((4, 5, 3), dtype=np.float32)
+        result = ensure_rgba(arr)
+        assert result.shape == (4, 5, 4)
+        assert result.dtype == np.float32
+        assert (result[..., 3] == 1.0).all()
 
-    def test_decode_with_max_size_hint(self, sample_dir):
-        """max_size hint should not crash (actual scaling depends on turbojpeg availability)."""
-        arr = decode_image(sample_dir / "blue.jpg", max_size=64)
-        assert arr.dtype == np.uint8
-        assert arr.shape[2] == 4
-        # With turbojpeg: dimensions would be scaled down.
-        # Without: full 300×200 returned.  Either is fine.
-        assert arr.shape[0] >= 64 or arr.shape[1] >= 64
+    def test_raises_on_wrong_rank(self):
+        with pytest.raises(ValueError):
+            ensure_rgba(np.zeros((4, 5), dtype=np.uint8))
 
-    def test_decode_accepts_str_path(self, sample_dir):
-        arr = decode_image(str(sample_dir / "tiny.png"))
-        assert arr.shape == (16, 16, 4)
-
-    def test_decode_nonexistent_raises(self, tmp_path):
-        with pytest.raises(Exception):
-            decode_image(tmp_path / "nonexistent.png")
+    def test_raises_on_wrong_channel_count(self):
+        with pytest.raises(ValueError):
+            ensure_rgba(np.zeros((4, 5, 2), dtype=np.uint8))
 
 
 # ---------------------------------------------------------------------------

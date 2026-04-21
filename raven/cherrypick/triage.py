@@ -13,7 +13,7 @@ import shutil
 from enum import Enum
 from typing import Optional, Union
 
-from ..common.image import utils as imageutils
+from ..common.image import codec as imagecodec
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class ImageEntry:
 def _is_image(path: Union[pathlib.Path, str]) -> bool:
     """Return True if *path* looks like a supported image file."""
     path = pathlib.Path(path)
-    return path.is_file() and path.suffix.lower() in imageutils.IMAGE_EXTENSIONS
+    return path.is_file() and path.suffix.lower() in imagecodec.IMAGE_EXTENSIONS
 
 
 def _subdir(base: Union[pathlib.Path, str], name: str) -> pathlib.Path:

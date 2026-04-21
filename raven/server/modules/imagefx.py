@@ -12,20 +12,15 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import io
 import threading
 import traceback
 from typing import Any, BinaryIO, Dict, List, Union
 
 from colorama import Fore, Style
 
-import PIL.Image
-import qoi
-
-import numpy as np
-
 import torch
 
+from ...common.image import codec as imagecodec
 from ...common.image import utils as imageutils
 from ...common.video.postprocessor import Postprocessor
 from ...common.video.upscaler import Upscaler
@@ -54,74 +49,6 @@ def is_available() -> bool:
 
 # --------------------------------------------------------------------------------
 
-def decode_image(stream: BinaryIO) -> np.array:
-    """Read an image from a Flask stream or anything duck-compatible with it.
-
-    Supported input formats are QOI (Quite Ok Image; fast lossless),
-    and anything supported by Pillow for uint8 RGB/RGBA (e.g. PNG).
-
-    The whole stream will be read into a temporary buffer to guarantee seekability,
-    needed for format detection.
-
-    Returns the image data as an `np.array` of size [h, w, c], type uint8.
-    """
-    logger.info("decode_image: detecting input format")
-
-    # Detect if the input is QOI and use the separate fast decoder if so, otherwise delegate to Pillow.
-    img_data = io.BytesIO()
-    img_data.write(stream.read())  # copy input into our own in-memory buffer, just in case the actual `input_stream` isn't rewindable
-    img_data.seek(0)
-
-    magic = img_data.read(4)  # file magic
-    img_data.seek(0)
-
-    if magic == b"qoif":
-        logger.info("decode_image: decoding from QOI format")
-        image_rgba = qoi.decode(img_data.getvalue())  # -> uint8 array of shape (h, w, c)
-    else:
-        logger.info("decode_image: decoding via Pillow")
-        input_pil_image = PIL.Image.open(img_data)
-        image_rgba = np.asarray(input_pil_image)  # maybe we don't need to convert regardless of whether `input_pil_image.mode` is "RGB" or "RGBA"?
-    logger.info("decode_image: done")
-
-    return image_rgba
-
-def encode_image(image_rgba: np.array, output_format: str) -> bytes:
-    """Encode an image into `output_format`.
-
-    Supported output formats are "qoi" (Quite Ok Image; fast lossless),
-    and anything supported by Pillow for uint8 RGB/RGBA (e.g. "png").
-
-    The input is an `np.array` of size [h, w, c], type uint8.
-
-    Returns the encoded image as a `bytes` object.
-    """
-    if output_format.upper() == "QOI":
-        logger.info("encode_image: encoding to QOI format")
-        encoded_image_bytes = qoi.encode(image_rgba.copy(order="C"))
-    else:
-        logger.info(f"encode_image: encoding to {output_format.upper()} via Pillow")
-        output_pil_image = PIL.Image.fromarray(np.uint8(image_rgba[:, :, :3]))
-        if image_rgba.shape[2] == 4:
-            alpha_channel = image_rgba[:, :, 3]
-            output_pil_image.putalpha(PIL.Image.fromarray(np.uint8(alpha_channel)))
-
-        buffer = io.BytesIO()
-        if output_format.upper() == "PNG":
-            kwargs = {"compress_level": 1}
-        elif output_format.upper() == "TGA":
-            kwargs = {"compression": "tga_rle"}
-        else:
-            kwargs = {}
-        output_pil_image.save(buffer,
-                              format=output_format.upper(),
-                              **kwargs)
-        encoded_image_bytes = buffer.getvalue()
-    logger.info("encode_image: done")
-    return encoded_image_bytes
-
-# --------------------------------------------------------------------------------
-
 def process(input_stream: BinaryIO,
             output_format: str,
             postprocessor_chain: List[Dict[str, Any]]) -> bytes:
@@ -134,7 +61,7 @@ def process(input_stream: BinaryIO,
     Returns a `bytes` object containing the processed image, encoded in `output_format`.
     """
     try:
-        image_rgba = decode_image(input_stream)
+        image_rgba = imageutils.ensure_rgba(imagecodec.decode(input_stream))
 
         logger.info("process: processing image")
         with torch.inference_mode():
@@ -147,7 +74,7 @@ def process(input_stream: BinaryIO,
 
             image_rgba = imageutils.tensor_to_np(image_rgba)
 
-        encoded_image_bytes = encode_image(image_rgba, output_format)
+        encoded_image_bytes = imagecodec.encode(image_rgba, output_format)
 
         logger.info("process: all done")
     except Exception as exc:
@@ -177,7 +104,7 @@ def upscale(input_stream: BinaryIO,
     global upscaler
 
     try:
-        image_rgba = decode_image(input_stream)
+        image_rgba = imageutils.ensure_rgba(imagecodec.decode(input_stream))
 
         with torch.inference_mode():
             image_rgba = imageutils.np_to_tensor(image_rgba, device=postprocessor.device,
@@ -208,7 +135,7 @@ def upscale(input_stream: BinaryIO,
 
             image_rgba = imageutils.tensor_to_np(image_rgba)
 
-        encoded_image_bytes = encode_image(image_rgba, output_format)
+        encoded_image_bytes = imagecodec.encode(image_rgba, output_format)
 
         logger.info("upscale: all done")
     except Exception as exc:

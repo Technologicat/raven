@@ -23,6 +23,7 @@ import torch
 from unpythonic.env import env
 
 from ..common.bgtask import TaskManager
+from ..common.image import codec as imagecodec
 from ..common.image import lanczos
 from ..common.image import utils as imageutils
 from . import config
@@ -390,7 +391,7 @@ def _preload_one(e: env) -> None:
     t0 = time.perf_counter_ns()
 
     try:
-        rgba = imageutils.decode_image(e.path)
+        rgba = imageutils.ensure_rgba(imagecodec.decode(e.path))
     except Exception as exc:
         logger.warning(f"PreloadCache._preload_one: instance {e.task_name}: failed to decode "
                        f"{e.path}: {exc}")

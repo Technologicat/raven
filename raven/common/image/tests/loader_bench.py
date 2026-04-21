@@ -33,7 +33,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from raven.common.image.utils import IMAGE_EXTENSIONS
+from raven.common.image.codec import IMAGE_EXTENSIONS
 from raven.common.image import lanczos
 
 
