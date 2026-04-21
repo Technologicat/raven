@@ -9,6 +9,7 @@ __all__ = ["tts_info",
            "tts_prepare",
            "tts_prepare_cached",
            "tts_prepare_decoded_cached",
+           "play_encoded_with_avatar_lipsync",
            "tts_speak",
            "tts_speak_lipsynced",
            "tts_stop",
@@ -23,8 +24,6 @@ import functools
 import io
 import json
 import requests
-import time
-import traceback
 from typing import Any, Callable, Dict, List, Optional
 import urllib.parse
 
@@ -36,6 +35,7 @@ from . import util
 
 from ..common.audio.speech import datatypes as speech_datatypes
 from ..common.audio.speech import lipsync as speech_lipsync
+from ..common.audio.speech import playback as speech_playback
 from ..common.audio.speech import tts as speech_tts
 
 # --------------------------------------------------------------------------------
@@ -177,10 +177,10 @@ def _empty_encoded_result(get_metadata: bool, format: str = "flac") -> speech_da
     need special-case handling.
     """
     return speech_datatypes.EncodedTTSResult(audio_bytes=b"",
-                                       audio_format=format,
-                                       sample_rate=speech_tts.SAMPLE_RATE,
-                                       duration=0.0,
-                                       word_metadata=[] if get_metadata else None)
+                                             audio_format=format,
+                                             sample_rate=speech_tts.SAMPLE_RATE,
+                                             duration=0.0,
+                                             word_metadata=[] if get_metadata else None)
 
 def tts_prepare(text: str,
                 voice: str,
@@ -243,9 +243,9 @@ def tts_prepare(text: str,
         if get_metadata:
             raw_timestamps = json.loads(stream_response.headers["x-word-timestamps"])
             timings = [speech_datatypes.WordTiming(word=urllib.parse.unquote(ts["word"]),
-                                             phonemes=urllib.parse.unquote(ts["phonemes"]),
-                                             start_time=ts.get("start_time"),
-                                             end_time=ts.get("end_time"))
+                                                   phonemes=urllib.parse.unquote(ts["phonemes"]),
+                                                   start_time=ts.get("start_time"),
+                                                   end_time=ts.get("end_time"))
                        for ts in raw_timestamps]
 
         # Stream the audio from the response body.
@@ -282,10 +282,10 @@ def tts_prepare(text: str,
         logger.info(f"tts_prepare: postprocessed per-word phoneme data in {tim.dt:0.6g}s.")
 
     return speech_datatypes.EncodedTTSResult(audio_bytes=audio_bytes,
-                                       audio_format=format,
-                                       sample_rate=speech_tts.SAMPLE_RATE,
-                                       duration=total_audio_duration,
-                                       word_metadata=timings)
+                                             audio_format=format,
+                                             sample_rate=speech_tts.SAMPLE_RATE,
+                                             duration=total_audio_duration,
+                                             word_metadata=timings)
 
 
 @functools.lru_cache(maxsize=128)
@@ -358,8 +358,6 @@ def tts_speak(text: str,
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak: The `raven.client.api` module must be initialized before using the API.")
-    headers = copy.copy(util.api_config.raven_default_headers)
-    headers["Content-Type"] = "application/json"
 
     # We run this in the background
     def speak(task_env) -> None:
@@ -372,48 +370,11 @@ def tts_speak(text: str,
         if not final_prep.audio_bytes:  # blank input or no-phoneme case — `tts_prepare` flags it via empty audio_bytes
             logger.info(f"tts_speak.speak: instance {task_env.task_name}: no audio produced. Cancelled.")
             return
-        audio_bytes = final_prep.audio_bytes
-
-        # Send TTS speech audio data (encoded per `final_prep.audio_format`, default FLAC) to caller if they want it
-        if on_audio_ready is not None:
-            on_audio_ready(audio_bytes)
-
-        # play audio
-        logger.info(f"tts_speak.speak: instance {task_env.task_name}: loading audio into mixer")
-        audio_buffer = io.BytesIO()
-        audio_buffer.write(audio_bytes)
-        audio_buffer.seek(0)
-        if util.api_config.audio_player.is_playing():
-            util.api_config.audio_player.stop()
-        try:
-            util.api_config.audio_player.load(audio_buffer)
-        except RuntimeError as exc:
-            logger.error(f"tts_speak.speak: instance {task_env.task_name}: failed to load audio into mixer, reason {type(exc)}: {exc}")
-            return
-
-        logger.info(f"tts_speak.speak: instance {task_env.task_name}: starting playback")
-        if on_start is not None:
-            try:
-                on_start()
-            except Exception as exc:
-                logger.error(f"tts_speak.speak: instance {task_env.task_name}: in start callback: {type(exc)}: {exc}")
-                traceback.print_exc()
-        util.api_config.audio_player.start()
-
-        if on_stop is not None:
-            while util.api_config.audio_player.is_playing():
-                time.sleep(0.01)
-                # NOTE: At this point, we don't take cancellations from `task_env.cancelled`; but the client can explicitly call `tts_stop`,
-                # which stops the audio, thus exiting the loop. We are likely running on a different thread pool than the main app, anyway,
-                # unless the main thread pool was passed to `raven.client.api.initialize` (implemented in `raven.client.util.initialize_api`).
-            logger.info(f"tts_speak.speak: instance {task_env.task_name}: playback finished")
-            try:
-                on_stop()
-            except Exception as exc:
-                logger.error(f"tts_speak.speak: instance {task_env.task_name}: in stop callback: {type(exc)}: {exc}")
-                traceback.print_exc()
-        else:
-            logger.info(f"tts_speak.speak: instance {task_env.task_name}: no stop callback, all done.")
+        speech_playback.play_encoded(final_prep.audio_bytes,
+                                     player=util.api_config.audio_player,
+                                     on_audio_ready=on_audio_ready,
+                                     on_start=on_start,
+                                     on_stop=on_stop)
     util.api_config.task_manager.submit(speak, envcls())
 
 def tts_speak_lipsynced(instance_id: str,
@@ -471,125 +432,138 @@ def tts_speak_lipsynced(instance_id: str,
         if not final_prep.audio_bytes:  # blank input or no-phoneme case — `tts_prepare` flags it via empty audio_bytes
             logger.info("tts_speak_lipsynced.speak: no audio produced. Cancelled.")
             return
-        audio_bytes = final_prep.audio_bytes
-        timestamps = final_prep.word_metadata
-
-        # Send TTS speech audio data (encoded per `final_prep.audio_format`, default FLAC) to caller if they want it
-        if on_audio_ready is not None:
-            on_audio_ready(audio_bytes)
-
-        # Transform word-level timestamps into a phoneme stream with interpolated
-        # per-phoneme timings. Example input/output::
-        #
-        #   [WordTiming(word="Sharon", phonemes="ʃˈɛɹən", start_time=0.275, end_time=0.575),
-        #    WordTiming(word="Apple",  phonemes="ˈæpᵊl",  start_time=0.575, end_time=0.875),
-        #    ...]
-        #
-        #   → [PhonemeEvent(phoneme='ʃ', morph='mouth_ooo_index', start_time=0.275, end_time=0.325),
-        #      PhonemeEvent(phoneme='ˈ', morph='!keep',           start_time=0.325, end_time=0.375),
-        #      PhonemeEvent(phoneme='ɛ', morph='mouth_eee_index', start_time=0.375, end_time=0.425),
-        #      PhonemeEvent(phoneme='ɹ', morph='mouth_aaa_index', start_time=0.425, end_time=0.475),
-        #      PhonemeEvent(phoneme='ə', morph='mouth_delta',     start_time=0.475, end_time=0.525),
-        #      PhonemeEvent(phoneme='n', morph='mouth_eee_index', start_time=0.525, end_time=0.575),
-        #      PhonemeEvent(phoneme='ˈ', morph='!keep',           start_time=0.575, end_time=0.635),  # stress mark at a word boundary → "!keep"
-        #      PhonemeEvent(phoneme='æ', morph='mouth_delta',     start_time=0.635, end_time=0.695),
-        #      PhonemeEvent(phoneme='p', morph='!close_mouth',    start_time=0.695, end_time=0.755),  # plosive → "!close_mouth"
-        #      PhonemeEvent(phoneme='ᵊ', morph='mouth_delta',     start_time=0.755, end_time=0.815),
-        #      PhonemeEvent(phoneme='l', morph='mouth_eee_index', start_time=0.815, end_time=0.875),
-        #      ...]
-        phoneme_stream = speech_lipsync.label_phoneme_stream(speech_lipsync.build_phoneme_stream(timestamps),
-                                                             phoneme_to_morph)
-
-        try:
-            # play audio
-            logger.info("tts_speak_lipsynced.speak: loading audio into mixer")
-            audio_buffer = io.BytesIO()
-            audio_buffer.write(audio_bytes)
-            audio_buffer.seek(0)
-            if util.api_config.audio_player.is_playing():
-                util.api_config.audio_player.stop()
-            try:
-                util.api_config.audio_player.load(audio_buffer)
-            except RuntimeError as exc:
-                logger.error(f"tts_speak_lipsynced.speak: failed to load audio into mixer, reason {type(exc)}: {exc}")
-                return
-
-            # All mouth morphs. These are what we will override while lipsyncing.
-            # We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the mouth morphs, so that other parts of the client can override other morphs or cel blends simultaneously if needed.
-            mouth_morph_overrides = {
-                "mouth_aaa_index": 0.0,
-                "mouth_eee_index": 0.0,
-                "mouth_iii_index": 0.0,
-                "mouth_ooo_index": 0.0,
-                "mouth_uuu_index": 0.0,
-                "mouth_delta": 0.0,
-            }
-
-            def on_tick(t: float) -> sym:
-                if not util.api_config.audio_player.is_playing():
-                    return speech_lipsync.action_finish
-
-                event = speech_lipsync.phoneme_at(phoneme_stream, t)
-
-                # Pre-stream (before first phoneme): do nothing, let the avatar keep its current pose.
-                # Post-stream (after last phoneme, audio still playing out trailing silence): close the mouth.
-                if event is None:
-                    if phoneme_stream and t > phoneme_stream[-1].end_time:
-                        api.avatar_modify_overrides(instance_id, action="set", overrides=copy.copy(mouth_morph_overrides))
-                    return speech_lipsync.action_continue
-
-                overrides = copy.copy(mouth_morph_overrides)
-                morph = event.morph
-
-                if morph == "!close_mouth":
-                    api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)  # set all mouth morphs to zero -> close mouth
-                elif morph == "!keep":
-                    pass  # keep previous mouth position
-                elif morph == "!maybe_close_mouth":  # close mouth only if the pause is at least half a second, else act like "!keep".
-                    phoneme_length = event.end_time - event.start_time
-                    if phoneme_length >= 0.5:
-                        api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
-                else:  # activate one mouth morph, set others to zero
-                    overrides[morph] = 1.0
-                    api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
-
-                return speech_lipsync.action_continue
-
-            logger.info("tts_speak_lipsynced.speak: starting playback")
-            if on_start is not None:
-                try:
-                    on_start()
-                except Exception as exc:
-                    logger.error(f"tts_speak_lipsynced.speak: in start callback: {type(exc)}: {exc}")
-                    traceback.print_exc()
-
-            util.api_config.audio_player.start()
-            # NOTE: `drive` doesn't take cancellations from `task_env.cancelled`; but the client can explicitly call `tts_stop`,
-            # which stops the audio, making `is_playing()` return False — the `on_tick` closure then returns `action_finish`
-            # and the loop exits. We are likely running on a different thread pool than the main app, anyway, unless the main
-            # thread pool was passed to `raven.client.api.initialize` (implemented in `raven.client.util.initialize_api`).
-            speech_lipsync.drive(on_tick=on_tick,
-                                 clock=lambda: util.api_config.audio_player.get_position() - video_offset)
-        finally:
-            logger.info("tts_speak_lipsynced.speak: playback finished")
-            if on_stop is not None:
-                try:
-                    on_stop()
-                except Exception as exc:
-                    logger.error(f"tts_speak_lipsynced.speak: in stop callback: {type(exc)}: {exc}")
-                    traceback.print_exc()
-
-            # TTS is exiting, so stop lipsyncing.
-            #
-            # NOTE: During app shutdown, we also get here if the avatar instance was deleted
-            # (so an `api.avatar_modify_overrides` call raised, because the avatar instance was not found).
-            # So at this point, we shouldn't trust that it's still there.
-            try:
-                api.avatar_modify_overrides(instance_id, action="unset", overrides=mouth_morph_overrides)  # Values are ignored by the "unset" action, which removes the overrides.
-            except Exception:
-                pass
+        play_encoded_with_avatar_lipsync(final_prep.audio_bytes,
+                                         timestamps=final_prep.word_metadata,
+                                         instance_id=instance_id,
+                                         video_offset=video_offset,
+                                         on_audio_ready=on_audio_ready,
+                                         on_start=on_start,
+                                         on_stop=on_stop)
 
     util.api_config.task_manager.submit(speak, envcls())
+
+
+def play_encoded_with_avatar_lipsync(audio_bytes: bytes,
+                                     timestamps: List[speech_datatypes.WordTiming],
+                                     instance_id: str,
+                                     video_offset: float = 0.0,
+                                     on_audio_ready: Optional[Callable] = None,
+                                     on_start: Optional[Callable] = None,
+                                     on_stop: Optional[Callable] = None) -> None:
+    """Synchronously play encoded speech audio with avatar-side lipsync.
+
+    Builds a per-phoneme stream from word timings, drives the client's audio player,
+    and calls `raven.client.api.avatar_modify_overrides` per tick to animate the
+    server-side avatar's mouth morphs in sync with the audio. On exit (normal or
+    exceptional), `on_stop` fires and the avatar's mouth-morph overrides are unset
+    so the face returns to its neutral pose.
+
+    Synchronous; caller wraps in a task manager for fire-and-forget. See
+    `raven.common.audio.speech.playback.play_encoded_with_lipsync` for the underlying
+    generic playback + tick-loop helper — this function adds the avatar-specific
+    mouth-morph side-effects.
+
+    Until the client-local avatar animator lands (see `TODO_DEFERRED.md`), this path
+    targets a server-side avatar regardless of where the TTS synthesis happened —
+    that's expected, not a limitation of this function.
+
+    `audio_bytes`: encoded audio (e.g. FLAC, MP3) ready for the client's audio player.
+
+    `timestamps`: word-level timings from the TTS (the `word_metadata` of a `TTSResult`
+                  or `EncodedTTSResult`). Each word carries phoneme string + start/end.
+
+    `instance_id`: avatar instance to lipsync, as returned by `api.avatar_load`.
+
+    `video_offset`: seconds of video-vs-audio offset; positive values shift the video
+                    later w.r.t. the audio. Use to compensate for video rendering latency.
+
+    `on_audio_ready`, `on_start`, `on_stop`: as in
+    `raven.common.audio.speech.playback.play_encoded_with_lipsync`.
+    """
+    # Transform word-level timestamps into a phoneme stream with interpolated
+    # per-phoneme timings. Example input/output::
+    #
+    #   [WordTiming(word="Sharon", phonemes="ʃˈɛɹən", start_time=0.275, end_time=0.575),
+    #    WordTiming(word="Apple",  phonemes="ˈæpᵊl",  start_time=0.575, end_time=0.875),
+    #    ...]
+    #
+    #   → [PhonemeEvent(phoneme='ʃ', morph='mouth_ooo_index', start_time=0.275, end_time=0.325),
+    #      PhonemeEvent(phoneme='ˈ', morph='!keep',           start_time=0.325, end_time=0.375),
+    #      PhonemeEvent(phoneme='ɛ', morph='mouth_eee_index', start_time=0.375, end_time=0.425),
+    #      PhonemeEvent(phoneme='ɹ', morph='mouth_aaa_index', start_time=0.425, end_time=0.475),
+    #      PhonemeEvent(phoneme='ə', morph='mouth_delta',     start_time=0.475, end_time=0.525),
+    #      PhonemeEvent(phoneme='n', morph='mouth_eee_index', start_time=0.525, end_time=0.575),
+    #      PhonemeEvent(phoneme='ˈ', morph='!keep',           start_time=0.575, end_time=0.635),  # stress mark at a word boundary → "!keep"
+    #      PhonemeEvent(phoneme='æ', morph='mouth_delta',     start_time=0.635, end_time=0.695),
+    #      PhonemeEvent(phoneme='p', morph='!close_mouth',    start_time=0.695, end_time=0.755),  # plosive → "!close_mouth"
+    #      PhonemeEvent(phoneme='ᵊ', morph='mouth_delta',     start_time=0.755, end_time=0.815),
+    #      PhonemeEvent(phoneme='l', morph='mouth_eee_index', start_time=0.815, end_time=0.875),
+    #      ...]
+    phoneme_stream = speech_lipsync.label_phoneme_stream(speech_lipsync.build_phoneme_stream(timestamps),
+                                                         phoneme_to_morph)
+
+    # All mouth morphs. These are what we will override while lipsyncing.
+    # We use `avatar_modify_overrides` instead of `avatar_set_overrides` to control just the mouth morphs, so that other parts of the client can override other morphs or cel blends simultaneously if needed.
+    mouth_morph_overrides = {
+        "mouth_aaa_index": 0.0,
+        "mouth_eee_index": 0.0,
+        "mouth_iii_index": 0.0,
+        "mouth_ooo_index": 0.0,
+        "mouth_uuu_index": 0.0,
+        "mouth_delta": 0.0,
+    }
+
+    def on_tick(t: float) -> sym:
+        if not util.api_config.audio_player.is_playing():
+            return speech_lipsync.action_finish
+
+        event = speech_lipsync.phoneme_at(phoneme_stream, t)
+
+        # Pre-stream (before first phoneme): do nothing, let the avatar keep its current pose.
+        # Post-stream (after last phoneme, audio still playing out trailing silence): close the mouth.
+        if event is None:
+            if phoneme_stream and t > phoneme_stream[-1].end_time:
+                api.avatar_modify_overrides(instance_id, action="set", overrides=copy.copy(mouth_morph_overrides))
+            return speech_lipsync.action_continue
+
+        overrides = copy.copy(mouth_morph_overrides)
+        morph = event.morph
+
+        if morph == "!close_mouth":
+            api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)  # set all mouth morphs to zero -> close mouth
+        elif morph == "!keep":
+            pass  # keep previous mouth position
+        elif morph == "!maybe_close_mouth":  # close mouth only if the pause is at least half a second, else act like "!keep".
+            phoneme_length = event.end_time - event.start_time
+            if phoneme_length >= 0.5:
+                api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
+        else:  # activate one mouth morph, set others to zero
+            overrides[morph] = 1.0
+            api.avatar_modify_overrides(instance_id, action="set", overrides=overrides)
+
+        return speech_lipsync.action_continue
+
+    # `play_encoded_with_lipsync` itself fires `on_stop` via `finally`. Our own
+    # `finally` here is just for the Raven-avatar-specific cleanup: unset the
+    # mouth-morph overrides so the avatar's face returns to its neutral pose.
+    try:
+        speech_playback.play_encoded_with_lipsync(audio_bytes,
+                                                  player=util.api_config.audio_player,
+                                                  on_tick=on_tick,
+                                                  clock=lambda: util.api_config.audio_player.get_position() - video_offset,
+                                                  on_audio_ready=on_audio_ready,
+                                                  on_start=on_start,
+                                                  on_stop=on_stop)
+    finally:
+        # TTS is exiting, so stop lipsyncing.
+        #
+        # NOTE: During app shutdown, we also get here if the avatar instance was deleted
+        # (so an `api.avatar_modify_overrides` call raised, because the avatar instance was not found).
+        # So at this point, we shouldn't trust that it's still there.
+        try:
+            api.avatar_modify_overrides(instance_id, action="unset", overrides=mouth_morph_overrides)  # Values are ignored by the "unset" action, which removes the overrides.
+        except Exception:
+            pass
 
 def tts_stop() -> None:
     """Stop the speech synthesizer."""

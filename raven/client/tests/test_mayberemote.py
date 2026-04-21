@@ -386,3 +386,105 @@ class TestMaybeRemoteUpscaler:
 
     def test_is_local_is_false_in_remote_mode(self, remote_upscaler):
         assert remote_upscaler.is_local() is False
+
+
+# ---------------------------------------------------------------------------
+# TTS.speak / TTS.speak_lipsynced — remote-mode delegation
+# ---------------------------------------------------------------------------
+#
+# `MaybeRemote.TTS.speak` and `.speak_lipsynced` in remote mode are thin
+# delegators to `raven.client.api.tts_speak` / `tts_speak_lipsynced`. The
+# tests below verify the delegation itself (correct args forwarded, `prep`
+# union normalized) by monkeypatching the api-layer functions — this keeps
+# the tests fast and isolated from audio hardware. Real end-to-end TTS
+# playback is exercised by the visual smoke-test workflow, not by unit tests.
+
+class TestMaybeRemoteTTSSpeak:
+    def test_speak_delegates_to_api_in_remote_mode(self, remote_tts, monkeypatch):
+        calls = []
+        def fake_tts_speak(**kwargs):
+            calls.append(kwargs)
+        monkeypatch.setattr("raven.client.api.tts_speak", fake_tts_speak)
+        remote_tts.speak(voice="af_nova", text="Hello world.", speed=1.0)
+        assert len(calls) == 1
+        kwargs = calls[0]
+        assert kwargs["text"] == "Hello world."
+        assert kwargs["voice"] == "af_nova"
+        assert kwargs["speed"] == 1.0
+        assert kwargs["prep"] is None  # no prep supplied
+
+    def test_speak_encodes_ttsresult_prep_before_delegating(self, remote_tts, monkeypatch):
+        """When `prep` is a `TTSResult`, it should be encoded to `EncodedTTSResult` before delegation."""
+        from raven.common.audio.speech import datatypes as speech_datatypes
+        calls = []
+        def fake_tts_speak(**kwargs):
+            calls.append(kwargs)
+        monkeypatch.setattr("raven.client.api.tts_speak", fake_tts_speak)
+
+        ttsresult = speech_datatypes.TTSResult(audio=np.zeros(240, dtype=np.float32),  # 10 ms at 24 kHz
+                                               sample_rate=24000,
+                                               duration=0.01,
+                                               word_metadata=None)
+        remote_tts.speak(voice="af_nova", text="Hello.", prep=ttsresult)
+
+        assert len(calls) == 1
+        prep_out = calls[0]["prep"]
+        assert isinstance(prep_out, speech_datatypes.EncodedTTSResult)
+        assert prep_out.audio_format == "flac"
+
+    def test_speak_passes_encoded_prep_through(self, remote_tts, monkeypatch):
+        """When `prep` is already `EncodedTTSResult`, it should pass through unchanged (identity)."""
+        from raven.common.audio.speech import datatypes as speech_datatypes
+        calls = []
+        def fake_tts_speak(**kwargs):
+            calls.append(kwargs)
+        monkeypatch.setattr("raven.client.api.tts_speak", fake_tts_speak)
+
+        encoded = speech_datatypes.EncodedTTSResult(audio_bytes=b"dummy flac bytes",
+                                                    audio_format="flac",
+                                                    sample_rate=24000,
+                                                    duration=0.1,
+                                                    word_metadata=None)
+        remote_tts.speak(voice="af_nova", text="Hello.", prep=encoded)
+
+        assert len(calls) == 1
+        assert calls[0]["prep"] is encoded  # passed through, not re-encoded
+
+    def test_speak_lipsynced_delegates_to_api_in_remote_mode(self, remote_tts, monkeypatch):
+        calls = []
+        def fake_tts_speak_lipsynced(**kwargs):
+            calls.append(kwargs)
+        monkeypatch.setattr("raven.client.api.tts_speak_lipsynced", fake_tts_speak_lipsynced)
+
+        remote_tts.speak_lipsynced(instance_id="avatar-uuid-123",
+                                   voice="af_nova",
+                                   text="Hello world.",
+                                   video_offset=-0.5)
+        assert len(calls) == 1
+        kwargs = calls[0]
+        assert kwargs["instance_id"] == "avatar-uuid-123"
+        assert kwargs["text"] == "Hello world."
+        assert kwargs["voice"] == "af_nova"
+        assert kwargs["video_offset"] == -0.5
+        assert kwargs["prep"] is None
+
+    def test_speak_lipsynced_encodes_ttsresult_prep(self, remote_tts, monkeypatch):
+        """Same `prep` union normalization as `.speak`, for the lipsynced path."""
+        from raven.common.audio.speech import datatypes as speech_datatypes
+        calls = []
+        def fake_tts_speak_lipsynced(**kwargs):
+            calls.append(kwargs)
+        monkeypatch.setattr("raven.client.api.tts_speak_lipsynced", fake_tts_speak_lipsynced)
+
+        ttsresult = speech_datatypes.TTSResult(audio=np.zeros(240, dtype=np.float32),
+                                               sample_rate=24000,
+                                               duration=0.01,
+                                               word_metadata=[])
+        remote_tts.speak_lipsynced(instance_id="avatar-uuid-123",
+                                   voice="af_nova",
+                                   text="Hello.",
+                                   prep=ttsresult)
+
+        prep_out = calls[0]["prep"]
+        assert isinstance(prep_out, speech_datatypes.EncodedTTSResult)
+        assert prep_out.audio_format == "flac"

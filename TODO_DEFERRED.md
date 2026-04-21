@@ -16,23 +16,19 @@ Worth a pass across the fleet to find these and convert them. Low-risk (any call
 
 Discovered during avatar-client-crop brief review (2026-04-20).
 
-## Local-mode `tts_speak` / `tts_speak_lipsynced`
+## Migrate `DPGAvatarController` to `MaybeRemote.TTS`
 
-`raven.client.tts.tts_speak` and `tts_speak_lipsynced` are hardcoded to the remote path — they call `tts_prepare` (HTTP) for synthesis and then feed `util.api_config.audio_player` for playback. The audio player itself is correctly client-side (playback must happen where the user is, regardless of where synthesis runs), but there is currently no in-process synthesis fallback.
+`MaybeRemote.TTS.speak` / `.speak_lipsynced` landed (2026-04-22), and the preprocessor / playback plumbing is in place for local-mode TTS. But the Librarian's `DPGAvatarController` still wires synthesis through `raven.client.api.tts_prepare_cached` (explicit remote) and playback through `raven.client.api.tts_speak_lipsynced` (explicit remote). That means even with local-mode TTS available, a Librarian instance with no server can't do TTS.
 
-The Raven Way for this is methods on `raven.client.mayberemote.TTS` — `speak` / `speak_lipsynced` — that dispatch to local / remote synthesis internally and then always play locally. Callers stop caring where Kokoro runs.
+Scope:
+- `DPGAvatarController` takes a `MaybeRemote.TTS` as a constructor arg (or constructs one internally from config).
+- `preprocess_task` calls `self.tts.synthesize(format="flac", get_metadata=True)` instead of `api.tts_prepare_cached(...)`.
+- `speak_task` calls `self.tts.speak_lipsynced(...)` instead of `api.tts_speak_lipsynced(...)`.
+- `raven.librarian.chat_controller` instantiates the controller with the right `MaybeRemote.TTS` kwargs (or lets the controller build it).
 
-Infrastructure that's already in place:
-- `speech_tts.prepare_cached` (local-mode cached float synthesis).
-- `speech_tts.encode` / `speech_tts.decode` (conversion between `TTSResult` and `EncodedTTSResult`, orthogonal to where synthesis happened).
-- `mayberemote.TTS.synthesize(format=...)` — returns whichever shape the caller needs, transparent across local / remote.
-- `raven.common.audio.speech.lipsync` — engine-agnostic lipsync helpers (`build_phoneme_stream`, `phoneme_at`, `word_at`, `drive`). The avatar-specific mouth-morph logic stays in `tts_speak_lipsynced`'s callback closure.
+Once done, the Librarian can run with TTS entirely local. The avatar stays server-side (which currently forces the Librarian to have a server anyway), but that blocker is separately lifting once the chat-tree-view lands (Librarian will then support a no-avatar mode). At that point, local-mode TTS + no-avatar = standalone Librarian.
 
-Remaining work:
-- Lift `tts_speak` into `MaybeRemote.TTS.speak(voice, text, speed, callbacks..., prep=None)`. Signature mirrors the existing function; precomputed `prep` is now a `Union[TTSResult, EncodedTTSResult]` — accept either, encode if needed before handing to the audio player. Local path: `self.synthesize(format="mp3")` (or whatever format the audio player prefers); remote path: `self.synthesize(format="mp3")` — same call, both modes.
-- Lift `tts_speak_lipsynced` similarly, but the lipsync driver itself is currently hardcoded to call `api.avatar_modify_overrides` — that stays remote-only until the separate "Client-local avatar animator" item lands. Until then, the lipsynced variant drives a remote avatar from either a local or remote TTS.
-
-Not urgent — current server-mode playback works fine. Lift when an app wants to do TTS without the server running (e.g. a standalone librarian). Discovered during TTS return-format review (2026-04-20; replaces the earlier "`TTSResult` or `EncodedTTSResult`?" framing which has been resolved).
+Discovered during the `MaybeRemote.TTS.speak*` landing (2026-04-22). Straightforward once the preceding infra is in place; kept separate to keep each PR focused.
 
 ## `/api/embeddings/info` endpoint
 

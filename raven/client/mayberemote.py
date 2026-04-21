@@ -19,17 +19,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import threading
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 
 import torch
 
+from unpythonic.env import env as _envcls
+
 from ..client import api
 from ..client import config as client_config
+from ..client import tts as client_tts  # for `play_encoded_with_avatar_lipsync` (used by `TTS.speak_lipsynced` local mode)
+from ..client import util as client_util  # for the singleton audio_player / task_manager
 
 from ..common import nlptools
 from ..common.audio.speech import datatypes as speech_datatypes
+from ..common.audio.speech import playback as speech_playback
 from ..common.audio.speech import stt as speech_stt
 from ..common.audio.speech import tts as speech_tts
 from ..common.video.postprocessor import Postprocessor as _LocalPostprocessor
@@ -518,6 +523,121 @@ class TTS(MaybeRemoteService):
         if format is None:
             return speech_tts.prepare_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata)
         return speech_tts.prepare_encoded_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=get_metadata, format=format)
+
+    def speak(self,
+              voice: str,
+              text: str,
+              speed: float = 1.0,
+              on_audio_ready: Optional[Callable] = None,
+              on_start: Optional[Callable] = None,
+              on_stop: Optional[Callable] = None,
+              prep: Optional[Union[speech_datatypes.TTSResult, speech_datatypes.EncodedTTSResult]] = None) -> None:
+        """Synthesize and speak `text`, fire-and-forget. Non-lipsynced.
+
+        Signature mirrors `raven.client.api.tts_speak`, with one generalization:
+        `prep` accepts either `TTSResult` (local-mode native shape) or `EncodedTTSResult`
+        (remote-mode native shape, or an already-encoded local result). The wrapper
+        encodes to FLAC internally when needed, before handing bytes to the audio player.
+
+        In remote mode, delegates to `raven.client.api.tts_speak` (which handles its
+        own task_manager submission and playback). In local mode, synthesizes via
+        `self.synthesize(format="flac")` and submits
+        `raven.common.audio.speech.playback.play_encoded` to the client task_manager
+        for fire-and-forget playback.
+
+        See `raven.client.api.tts_speak` for callback semantics.
+        """
+        if not self.is_local():
+            encoded = _to_encoded(prep)
+            return api.tts_speak(text=text, voice=voice, speed=speed,
+                                 on_audio_ready=on_audio_ready, on_start=on_start, on_stop=on_stop,
+                                 prep=encoded)
+        # Local mode: synthesize (if needed), then submit playback to the task manager.
+        def _speak(task_env):
+            if prep is None:
+                final = speech_tts.prepare_encoded_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=False, format="flac")
+            else:
+                final = _to_encoded(prep)
+            if not final.audio_bytes:
+                logger.info(f"TTS.speak: instance {task_env.task_name}: no audio produced. Cancelled.")
+                return
+            speech_playback.play_encoded(final.audio_bytes,
+                                         player=client_util.api_config.audio_player,
+                                         on_audio_ready=on_audio_ready,
+                                         on_start=on_start,
+                                         on_stop=on_stop)
+        client_util.api_config.task_manager.submit(_speak, _envcls())
+
+    def speak_lipsynced(self,
+                        instance_id: str,
+                        voice: str,
+                        text: str,
+                        speed: float = 1.0,
+                        video_offset: float = 0.0,
+                        on_audio_ready: Optional[Callable] = None,
+                        on_start: Optional[Callable] = None,
+                        on_stop: Optional[Callable] = None,
+                        prep: Optional[Union[speech_datatypes.TTSResult, speech_datatypes.EncodedTTSResult]] = None) -> None:
+        """Synthesize and speak `text` with avatar lipsync, fire-and-forget.
+
+        Signature mirrors `raven.client.api.tts_speak_lipsynced`. As with `speak`,
+        `prep` accepts either TTS result shape; encoding to FLAC happens internally
+        as needed.
+
+        In remote mode, delegates to `raven.client.api.tts_speak_lipsynced`. In local
+        mode, synthesizes via `self.synthesize(format="flac", get_metadata=True)` and
+        submits `raven.client.tts.play_encoded_with_avatar_lipsync` to the client
+        task_manager — same Raven-avatar driver as the remote path, just with the
+        synthesis step running in-process.
+
+        Note on the hybrid local-TTS + remote-avatar path: the lipsync driver calls
+        `api.avatar_modify_overrides` per phoneme tick, which is a round-trip to the
+        server. Until the client-local avatar animator lands (see `TODO_DEFERRED.md`),
+        the avatar remains server-side regardless of where TTS runs. LAN latency is
+        usually fine for this; if it isn't, fall back to remote mode.
+
+        See `raven.client.api.tts_speak_lipsynced` for callback semantics.
+        """
+        if not self.is_local():
+            encoded = _to_encoded(prep)
+            return api.tts_speak_lipsynced(instance_id=instance_id,
+                                           text=text, voice=voice, speed=speed, video_offset=video_offset,
+                                           on_audio_ready=on_audio_ready, on_start=on_start, on_stop=on_stop,
+                                           prep=encoded)
+        # Local mode: synthesize with metadata, then submit lipsynced playback.
+        def _speak(task_env):
+            if prep is None:
+                final = speech_tts.prepare_encoded_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=True, format="flac")
+            elif isinstance(prep, speech_datatypes.TTSResult):
+                final = speech_tts.encode(prep, format="flac")
+            else:
+                final = prep
+            if not final.audio_bytes:
+                logger.info(f"TTS.speak_lipsynced: instance {task_env.task_name}: no audio produced. Cancelled.")
+                return
+            client_tts.play_encoded_with_avatar_lipsync(final.audio_bytes,
+                                                       timestamps=final.word_metadata,
+                                                       instance_id=instance_id,
+                                                       video_offset=video_offset,
+                                                       on_audio_ready=on_audio_ready,
+                                                       on_start=on_start,
+                                                       on_stop=on_stop)
+        client_util.api_config.task_manager.submit(_speak, _envcls())
+
+
+def _to_encoded(prep: Optional[Union[speech_datatypes.TTSResult, speech_datatypes.EncodedTTSResult]],
+                format: str = "flac") -> Optional[speech_datatypes.EncodedTTSResult]:
+    """Normalize a `prep` argument to `EncodedTTSResult` (or pass `None` through).
+
+    Accepts either `TTSResult` (encoded on the fly) or `EncodedTTSResult` (returned as-is).
+    Used by `TTS.speak` / `TTS.speak_lipsynced` — callers from either mode may have
+    whichever shape on hand; we accept both and encode where needed.
+    """
+    if prep is None:
+        return None
+    if isinstance(prep, speech_datatypes.EncodedTTSResult):
+        return prep
+    return speech_tts.encode(prep, format=format)
 
 
 class Postprocessor(MaybeRemoteService):

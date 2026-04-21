@@ -66,12 +66,18 @@
     - Pure time-slicing for phoneme and word tracks, plus a callback-driven tick loop (`drive(on_tick, clock, tick_seconds)`).
     - Consumers compose tracks inside their own `on_tick` closure, calling `phoneme_at(stream, t)` / `word_at(timings, t)` as needed — lets the same loop drive avatar morphs, per-phoneme subtitles, word-level captions, or any combination.
     - No dependency on Kokoro or any other TTS engine.
+  - New module `raven.common.audio.speech.playback` — synchronous audio playback + optional lipsync drive.
+    - `play_encoded` and `play_encoded_with_lipsync` factored out of `raven.client.tts`; callers wrap in their own task manager for fire-and-forget.
+    - Pure: takes the `player` as an explicit argument; the avatar-driving closure is caller-supplied.
+  - `raven.client.tts` gains `play_encoded_with_avatar_lipsync` — the avatar-specific Raven wrapper that builds the mouth-morph closure and handles the server-side `avatar_modify_overrides` cleanup. Used by both `api.tts_speak_lipsynced` and `MaybeRemote.TTS.speak_lipsynced` local mode.
 
 - `raven.client.mayberemote` new services, mirroring the existing `Dehyphenator` / `Embedder` / `NLP` pattern.
   - `TTS` and `STT`. Apps can now use speech locally when the server is down (or skip the round-trip entirely for latency), with a uniform API across modes.
     - `STT.transcribe` auto-resamples mismatched input.
     - `TTS.synthesize(format=...)` is shape-agnostic: no argument returns float32 `TTSResult` in both modes; `format="flac"`/`"mp3"`/… returns `EncodedTTSResult` ready for playback or storage.
       - Caching lives in the bottom layers (one source of truth per (location, shape)), so the mayberemote dispatcher has no cache state of its own.
+    - `TTS.speak` / `TTS.speak_lipsynced`, mirroring `raven.client.api.tts_speak*`. Local-mode TTS; and local playback + remote avatar (for lipsynced).
+      - `prep` accepts either `TTSResult` or `EncodedTTSResult` — encoded to FLAC internally as needed.
   - `Classifier` (text sentiment), `Translator` (machine translation), `Postprocessor` and `Upscaler` (imagefx).
     - Each dispatches to the corresponding Raven-server module in remote mode and to a local in-process instance in local mode, with identical call surfaces.
     - `Translator` takes a `spacy_model_name` for local-mode sentence chunking.
