@@ -899,7 +899,7 @@ avatar_record = avatar_controller.register_avatar_instance(avatar_instance_id=av
                                                            emotion_blacklist=librarian_config.avatar_config.emotion_blacklist,
                                                            emotion_autoreset_interval=librarian_config.avatar_config.emotion_autoreset_interval,
                                                            idle_timeout=librarian_config.avatar_config.idle_off_timeout)
-api.tts_warmup(voice=librarian_config.avatar_config.voice)
+avatar_controller.tts.warmup(voice=librarian_config.avatar_config.voice)
 
 chat_controller = DPGChatController(llm_settings=llm_settings,
                                     datastore=datastore,

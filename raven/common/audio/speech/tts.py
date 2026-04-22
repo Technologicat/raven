@@ -32,7 +32,8 @@ __all__ = ["SAMPLE_RATE",
            "prepare_cached",
            "prepare_encoded_cached",
            "encode",
-           "decode"]
+           "decode",
+           "warmup"]
 
 import functools
 import logging
@@ -497,3 +498,17 @@ def decode(encoded: EncodedTTSResult) -> TTSResult:
                      sample_rate=encoded.sample_rate,
                      duration=encoded.duration,
                      word_metadata=encoded.word_metadata)
+
+
+def warmup(pipeline: TTSPipeline, voice: str) -> None:
+    """Warm up the TTS pipeline for `voice`, loading the voice's weights up front.
+
+    The first invocation of the TTS for a given voice may take some extra time as
+    the voice is loaded; this call does that explicitly with a throwaway synthesis.
+
+    Bypasses `prepare_cached` on purpose — caching the warmup call would defeat its
+    point. The pangram used covers enough phonemes to exercise the phonemizer too.
+    """
+    logger.info(f"warmup: Warming up TTS for voice '{voice}'.")
+    prepare(pipeline, voice=voice, text="The quick brown fox jumps over the lazy dog.", speed=1.0, get_metadata=True)
+    logger.info(f"warmup: Warmup for voice '{voice}' done.")

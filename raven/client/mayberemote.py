@@ -489,6 +489,16 @@ class TTS(MaybeRemoteService):
             return api.tts_list_voices()
         return speech_tts.get_voices(self._local_model)
 
+    def warmup(self, voice: str) -> None:
+        """Warm up the TTS for `voice`, before the first real request, to amortize the voice-load cost up front.
+
+        Remote mode triggers warmup on the server (a throwaway `tts_prepare`).
+        Local mode runs the same throwaway through the in-process pipeline.
+        """
+        if not self.is_local():
+            return api.tts_warmup(voice=voice)
+        speech_tts.warmup(self._local_model, voice=voice)
+
     def synthesize(self,
                    voice: str,
                    text: str,

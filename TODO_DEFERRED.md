@@ -24,18 +24,6 @@ Call sites are in `raven.client.tts` (`tts_speak`, `tts_speak_lipsynced`, etc.) 
 
 Discovered during the audio-singleton lift (2026-04-22).
 
-## `tts_warmup` shape: move most of it to common, keep remote as thin wrapper
-
-`raven.client.tts.tts_warmup` currently lives in the client layer and calls `tts_prepare` (HTTP round-trip). For parity with how `speak` / `synthesize` are organised:
-
-- `raven.common.audio.speech.tts.warmup(pipeline, voice)` — local, calls `speech_tts.prepare(...)` directly against an in-process pipeline.
-- `raven.client.tts.tts_warmup(voice)` — stays in the client layer, remote path (HTTP). Thin.
-- `MaybeRemote.TTS.warmup(voice)` — dispatches on `(local, remote)` like `synthesize` / `speak` already do.
-
-Low-priority cleanup — nothing is broken, and the current client-only shape works. Resolve when the local-path warmup becomes useful (standalone Librarian, no-server Raven apps).
-
-Discovered during the audio-singleton lift (2026-04-22).
-
 ## `/api/embeddings/info` endpoint
 
 Parallel to the `/api/{stt,tts}/info` endpoints. Should expose at least model name and embedding dimension; add other engine metadata as use cases appear. Discovered during STT/TTS info-endpoint work (2026-04-21).
