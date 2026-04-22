@@ -214,8 +214,11 @@ class DPGAvatarRenderer:
         # (separate from the crop overlay's viewport drawlist, created AFTER it) so FPS renders on top
         # of the crop overlay's semi-transparent mask. A plain `add_text` widget wouldn't work: viewport
         # drawlists render above all in-window content regardless of widget-vs-drawlist layering.
-        self.fps_text_viewport_drawlist = dpg.add_viewport_drawlist(tag="avatar_fps_viewport_drawlist", front=True, show=False)
-        self.fps_text_draw_item = dpg.draw_text((0, 0), "Loading...", color=(0, 255, 0), size=20, parent=self.fps_text_viewport_drawlist)
+        #
+        # The viewport drawlist itself stays permanently shown — DPG does not cascade `show=False` from
+        # a viewport drawlist to its draw children, so visibility lives on the draw_text item instead.
+        self.fps_text_viewport_drawlist = dpg.add_viewport_drawlist(tag="avatar_fps_viewport_drawlist", front=True, show=True)
+        self.fps_text_draw_item = dpg.draw_text((0, 0), "Loading...", color=(0, 255, 0), size=20, show=False, parent=self.fps_text_viewport_drawlist)
         # Text to show while paused. This will be positioned when shown.
         paused_str = paused_text if paused_text is not None else ""
         self.paused_text_gui_widget = dpg.add_text(paused_str,
@@ -231,12 +234,12 @@ class DPGAvatarRenderer:
         try:
             with guiutils.nonexistent_ok():
                 if show is None:
-                    show = not dpg.is_item_visible(self.fps_text_viewport_drawlist)
+                    show = not dpg.get_item_configuration(self.fps_text_draw_item)["show"]
 
                 if show:
-                    dpg.show_item(self.fps_text_viewport_drawlist)
+                    dpg.show_item(self.fps_text_draw_item)
                 else:
-                    dpg.hide_item(self.fps_text_viewport_drawlist)
+                    dpg.hide_item(self.fps_text_draw_item)
         except AttributeError:  # GUI instance went bye-bye (can happen at app shutdown)
             pass
 

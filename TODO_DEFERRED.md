@@ -1,9 +1,5 @@
 # Deferred TODOs
 
-## Librarian: FPS overlay starts enabled (regression)
-
-The FPS overlay should default to off at app launch, but currently boots enabled. Noticed during smoke-testing the audio-singleton lift (2026-04-22); unrelated to that changeset.
-
 ## `dpg_markdown` bullet-list rendering: bullet untethered from item
 
 `raven/vendor/DearPyGui_Markdown/` (already locally robustified) renders unordered lists with the bullet glyph drawn at the parent `<ul>`'s y-position rather than each `<li>`'s, so a list at the top of a tooltip shows ONE stray bullet at the top-left and the items appear as plain text below. Reproduces with any 2+ item bulleted list rendered into a tooltip; saw it on a chromatic-aberration tooltip during postprocessor docstring work (2026-04-21).
