@@ -1,13 +1,8 @@
 """Utilities for the Python bindings of Raven's web API."""
 
-# Technically, the `api_initialized` flag is part of this public API of this module,
-# but since it's a bare boolean (not boxed), from-importing it doesn't make sense,
-# so we don't include it in `__all__`.
-#
-# The correct way is to look it up on this module (`raven.client.util.api_initialized`)
-# when its current value is needed.
 __all__ = ["api_config",  # configuration namespace
            "initialize_api",
+           "require",
            "yell_on_error"]
 
 import logging
@@ -91,6 +86,16 @@ def initialize_api(raven_server_url: str,
     deviceinfo.validate(client_config.devices)
 
     api_initialized = True
+
+def require() -> None:
+    """Raise `RuntimeError` if `raven.client.api` has not been initialized yet.
+
+    Intended as a one-liner guard at the top of every API function. Pair with
+    `raven.common.audio.player.require` / `raven.common.audio.recorder.require`
+    for a consistent fail-fast shape across Raven's client layer.
+    """
+    if not api_initialized:
+        raise RuntimeError("raven.client.util.require: `raven.client.api` has not been initialized. Call `raven.client.api.initialize(...)` first.")
 
 def _strip_html(html: str) -> str:
     try:

@@ -132,8 +132,7 @@ def tts_info() -> Dict[str, Any]:
     Clients use this to avoid hardcoding canonical values that might drift if the
     server config changes.
     """
-    if not util.api_initialized:
-        raise RuntimeError("tts_info: The `raven.client.api` module must be initialized before using the API.")
+    util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     response = requests.get(f"{util.api_config.raven_server_url}/api/tts/info", headers=headers)
     util.yell_on_error(response)
@@ -146,8 +145,7 @@ def tts_list_voices() -> List[str]:
 
         [voice0, ...]
     """
-    if not util.api_initialized:
-        raise RuntimeError("tts_list_voices: The `raven.client.api` module must be initialized before using the API.")
+    util.require()
     headers = copy.copy(util.api_config.raven_default_headers)
     response = requests.get(f"{util.api_config.raven_server_url}/api/tts/list_voices", headers=headers)
     util.yell_on_error(response)
@@ -215,8 +213,7 @@ def tts_prepare(text: str,
     (`audio_bytes == b""`, `duration == 0.0`) — callers detect this with
     `not prep.audio_bytes`.
     """
-    if not util.api_initialized:
-        raise RuntimeError("tts_prepare: The `raven.client.api` module must be initialized before using the API.")
+    util.require()
     if not text.strip():
         logger.info("tts_prepare: Ignoring blank `text`. Cancelled.")
         return _empty_encoded_result(get_metadata, format=format)
@@ -355,8 +352,7 @@ def tts_speak(text: str,
     The `on_audio_ready` event is called also in advanced mode, with precomputed audio.
     When we obtain the precomputed audio from `prep`, then `on_audio_ready` triggers.
     """
-    if not util.api_initialized:
-        raise RuntimeError("tts_speak: The `raven.client.api` module must be initialized before using the API.")
+    util.require()
     player = audio_player.require()  # fail-fast before submitting the background task
 
     # We run this in the background
@@ -419,8 +415,7 @@ def tts_speak_lipsynced(instance_id: str,
     The `on_audio_ready` event is called also in advanced mode, with precomputed audio.
     When we obtain the precomputed audio from `prep`, then `on_audio_ready` triggers.
     """
-    if not util.api_initialized:
-        raise RuntimeError("tts_speak_lipsynced: The `raven.client.api` module must be initialized before using the API.")
+    util.require()
     audio_player.require()  # fail-fast before submitting the background task
 
     def speak(task_env: envcls) -> None:

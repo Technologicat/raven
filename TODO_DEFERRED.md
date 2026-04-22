@@ -16,14 +16,6 @@ Worth a pass across the fleet to find these and convert them. Low-risk (any call
 
 Discovered during avatar-client-crop brief review (2026-04-20).
 
-## `api_initialized` guard → `raven.client.util.require()` / `raven.client.api.require()`
-
-Mirror the `audio.player.require()` / `audio.recorder.require()` shape for the client-side init check. Currently many functions open with `if not util.api_initialized: raise RuntimeError("...: The \`raven.client.api\` module must be initialized before using the API.")`. A one-liner `api.require()` (or `util.require()`) would collapse the guard to `api.require()` at the function head, matching the audio side and reading more cleanly.
-
-Call sites are in `raven.client.tts` (`tts_speak`, `tts_speak_lipsynced`, etc.) and elsewhere in `raven.client.api`. Mechanical rewrite once the helper is defined.
-
-Discovered during the audio-singleton lift (2026-04-22).
-
 ## `/api/embeddings/info` endpoint
 
 Parallel to the `/api/{stt,tts}/info` endpoints. Should expose at least model name and embedding dimension; add other engine metadata as use cases appear. Discovered during STT/TTS info-endpoint work (2026-04-21).
