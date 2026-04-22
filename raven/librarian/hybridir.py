@@ -62,9 +62,7 @@ from . import config as librarian_config
 deviceinfo.validate(librarian_config.devices)  # modifies in-place if CPU fallback needed
 
 api.initialize(raven_server_url=client_config.raven_server_url,
-               raven_api_key_file=client_config.raven_api_key_file,
-               tts_playback_audio_device=client_config.tts_playback_audio_device,
-               stt_capture_audio_device=client_config.stt_capture_audio_device)  # let it create a default executor
+               raven_api_key_file=client_config.raven_api_key_file)  # let it create a default executor
 
 # --------------------------------------------------------------------------------
 

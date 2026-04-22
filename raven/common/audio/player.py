@@ -5,7 +5,14 @@ This is effectively a wrapper over `pygame`, so that we can easily switch audio 
 
 __all__ = ["get_available_devices",
            "validate_playback_device",
-           "Player"]
+           "Player",
+
+           "DEFAULT_FREQUENCY",
+           "DEFAULT_CHANNELS",
+           "DEFAULT_BUFFER_SIZE",
+           "instance",
+           "initialize",
+           "require"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -125,10 +132,19 @@ class Player(Singleton):
 
         self.latency = self.buffer_size / self.frequency  # seconds
 
+        # Capture the teardown callable now, while the module is fully live.
+        # At interpreter shutdown Python clears module globals (so `pygame` becomes `None`)
+        # before finalizers run, and reaching `pygame.mixer.quit` through the module
+        # would raise `AttributeError: 'NoneType' object has no attribute 'mixer'`.
+        self._mixer_quit = pygame.mixer.quit
+
         logger.info("Player.__init__: Initialization complete.")
 
     def __del__(self):
-        pygame.mixer.quit()
+        try:
+            self._mixer_quit()
+        except Exception:  # pygame internals may also be partially torn down
+            pass
 
     def load(self, stream: BinaryIO) -> None:
         """Load an audio file for playback.
@@ -164,3 +180,64 @@ class Player(Singleton):
         This auto-compensates for `buffer_size`, but not for unknown delays elsewhere in the system.
         """
         return (pygame.mixer.music.get_pos() / 1000) - self.latency
+
+
+# Default audio playback settings. `DEFAULT_BUFFER_SIZE` is slightly larger than pygame's
+# default 512 to prevent xruns while the AI translator/subtitler is running simultaneously.
+DEFAULT_FREQUENCY = 44100
+DEFAULT_CHANNELS = 2
+DEFAULT_BUFFER_SIZE = 2048
+
+# The default (singleton) `Player` instance. `None` until `initialize` is called.
+#
+# Pre-populated to `None` so that apps can read the attribute and decide whether to
+# initialize (or re-use) the player. Apps that don't need audio playback don't need
+# to call `initialize`; they just leave this as `None`.
+#
+# Access via `raven.common.audio.player.instance` (read-only by convention).
+instance: Optional["Player"] = None
+
+def initialize(frequency: int = DEFAULT_FREQUENCY,
+               channels: int = DEFAULT_CHANNELS,
+               buffer_size: int = DEFAULT_BUFFER_SIZE,
+               device_name: Optional[str] = None) -> "Player":
+    """Initialize the default audio player singleton.
+
+    Constructs a `Player` with the given parameters and assigns it to the module-level
+    `instance`. Idempotent: subsequent calls return the existing instance without
+    rebuilding it (since `Player` is a singleton anyway).
+
+    `device_name`: One of the Playback device names listed by `raven-check-audio-devices`,
+                   `"system-default"` to let the backend pick, or `None` for the first
+                   available device.
+
+    Returns the `Player` instance.
+    """
+    global instance
+    if instance is not None:
+        logger.info("initialize: audio player already initialized. Using existing instance.")
+        return instance
+
+    if device_name == "system-default":
+        logger.info("initialize: Using system's current default audio playback device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+    elif device_name is not None:
+        logger.info(f"initialize: Validating audio playback device '{device_name}'.")
+    else:
+        logger.info("initialize: Using first available audio playback device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+
+    instance = Player(frequency=frequency,
+                      channels=channels,
+                      buffer_size=buffer_size,
+                      device_name=device_name)
+    return instance
+
+def require() -> "Player":
+    """Return the player, raising `RuntimeError` if not initialized.
+
+    Use this at the entry point of any code that needs audio playback: it fails fast
+    with a clear message, instead of letting an `AttributeError: 'NoneType'` surface
+    deep inside a playback call.
+    """
+    if instance is None:
+        raise RuntimeError("raven.common.audio.player.require: no player initialized. Call `raven.common.audio.initialize(...)` or `raven.common.audio.player.initialize(...)` first.")
+    return instance

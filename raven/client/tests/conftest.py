@@ -34,9 +34,7 @@ def initialized_api():
     skipped entirely — start `raven-server` before running the client tests.
     """
     api.initialize(raven_server_url=client_config.raven_server_url,
-                   raven_api_key_file=client_config.raven_api_key_file,
-                   tts_playback_audio_device=client_config.tts_playback_audio_device,
-                   stt_capture_audio_device=client_config.stt_capture_audio_device)
+                   raven_api_key_file=client_config.raven_api_key_file)
     if not api.test_connection():
         pytest.skip("raven-server is not running")
 

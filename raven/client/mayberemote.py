@@ -30,9 +30,10 @@ from unpythonic.env import env as _envcls
 from ..client import api
 from ..client import config as client_config
 from ..client import tts as client_tts  # for `play_encoded_with_avatar_lipsync` (used by `TTS.speak_lipsynced` local mode)
-from ..client import util as client_util  # for the singleton audio_player / task_manager
+from ..client import util as client_util  # for the client-side task_manager
 
 from ..common import nlptools
+from ..common.audio import player as audio_player
 from ..common.audio.speech import datatypes as speech_datatypes
 from ..common.audio.speech import playback as speech_playback
 from ..common.audio.speech import stt as speech_stt
@@ -44,7 +45,7 @@ from ..common.video.upscaler import Upscaler as _LocalUpscaler
 class MaybeRemoteService:
     def __init__(self,
                  allow_local: bool):
-        """Transparent Raven-server support for some NLP models.
+        """(1/√2) |remote⟩ + (1/√2) |local⟩
 
         Base class. Specific services derive from this.
 
@@ -553,6 +554,7 @@ class TTS(MaybeRemoteService):
                                  on_audio_ready=on_audio_ready, on_start=on_start, on_stop=on_stop,
                                  prep=encoded)
         # Local mode: synthesize (if needed), then submit playback to the task manager.
+        player = audio_player.require()  # fail-fast before submitting the background task
         def _speak(task_env):
             if prep is None:
                 final = speech_tts.prepare_encoded_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=False, format="flac")
@@ -562,7 +564,7 @@ class TTS(MaybeRemoteService):
                 logger.info(f"TTS.speak: instance {task_env.task_name}: no audio produced. Cancelled.")
                 return
             speech_playback.play_encoded(final.audio_bytes,
-                                         player=client_util.api_config.audio_player,
+                                         player=player,
                                          on_audio_ready=on_audio_ready,
                                          on_start=on_start,
                                          on_stop=on_stop)
@@ -605,6 +607,7 @@ class TTS(MaybeRemoteService):
                                            on_audio_ready=on_audio_ready, on_start=on_start, on_stop=on_stop,
                                            prep=encoded)
         # Local mode: synthesize with metadata, then submit lipsynced playback.
+        audio_player.require()  # fail-fast before submitting the background task
         def _speak(task_env):
             if prep is None:
                 final = speech_tts.prepare_encoded_cached(self._local_model, voice=voice, text=text, speed=speed, get_metadata=True, format="flac")
@@ -624,22 +627,11 @@ class TTS(MaybeRemoteService):
                                                         on_stop=on_stop)
         client_util.api_config.task_manager.submit(_speak, _envcls())
 
-    def stop(self) -> None:
-        """Stop TTS playback immediately. No effect if nothing is currently playing.
-
-        Mode-independent: the client's audio player is always local (audio hardware
-        is on the user's machine regardless of synthesis mode). Provided as a method
-        on `TTS` for the symmetry with `.speak` / `.speak_lipsynced`.
-        """
-        client_util.api_config.audio_player.stop()
-
-    def is_speaking(self) -> bool:
-        """Return whether the TTS is currently producing audio.
-
-        Mode-independent for the same reason as `stop`: queries the client's audio
-        player, which is the one doing the playing in both local and remote modes.
-        """
-        return client_util.api_config.audio_player.is_playing()
+    # Playback stop / query lives on the player, not here — the audio hardware is
+    # local in all three API paths (explicit-local, explicit-remote, maybe-remote),
+    # so one call surface works for all of them:
+    #     raven.common.audio.player.instance.stop()
+    #     raven.common.audio.player.instance.is_playing()
 
 
 def _to_encoded(prep: Optional[Union[speech_datatypes.TTSResult, speech_datatypes.EncodedTTSResult]],

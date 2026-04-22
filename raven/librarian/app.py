@@ -44,6 +44,9 @@ with timer() as tim:
     from ..client.avatar_renderer import DPGAvatarRenderer
     from ..client import config as client_config
 
+    from ..common import audio
+    from ..common.audio import player as audio_player
+    from ..common.audio import recorder as audio_recorder
     from ..common import bgtask
 
     from ..common.gui import animation as gui_animation
@@ -70,9 +73,10 @@ gui_resize_task_manager = bgtask.TaskManager(name="librarian_gui_resize",  # de-
                                              executor=bg)
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
-               tts_playback_audio_device=client_config.tts_playback_audio_device,
-               stt_capture_audio_device=client_config.stt_capture_audio_device,
-               executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool  # TODO: there's currently a bug, because `llmclient` inits API first, with a default executor.
+               executor=bg)  # reuse our executor for client background tasks  # TODO: there's currently a bug, because `llmclient` inits API first, with a default executor.
+audio.initialize(player={"device_name": client_config.tts_playback_audio_device},
+                 recorder={"device_name": client_config.stt_capture_audio_device,
+                           "executor": bg})
 
 llm_backend_url = librarian_config.llm_backend_url
 
@@ -242,7 +246,7 @@ with timer() as tim:
                             chat_controller.chat_round(user_message_text)
 
                         def record_audio_message_callback() -> None:
-                            if not api.api_config.audio_recorder.is_recording():
+                            if not audio_recorder.require().is_recording():
                                 start_recording_audio_message()
                             else:
                                 stop_recording_audio_message()
@@ -253,17 +257,18 @@ with timer() as tim:
                             dpg.set_value(record_audio_message_tooltip_text, "Stop speaking and send to AI [Ctrl+Shift+Enter]")
 
                             # Actually start capturing audio
-                            api.api_config.audio_recorder.start(on_autostop=stop_recording_audio_message)
+                            audio_recorder.require().start(on_autostop=stop_recording_audio_message)
                         def stop_recording_audio_message() -> None:
                             # Acknowledge in GUI
                             dpg.bind_item_theme(record_audio_message_button, "disablable_widget_theme")  # tag
                             dpg.set_value(record_audio_message_tooltip_text, "Speak to AI [Ctrl+Shift+Enter]")  # TODO: DRY the tooltip labels
 
                             # Stop recording (if still recording; we may have been triggered by autostop)
+                            rec = audio_recorder.require()
                             logger.info("stop_recording_audio_message: Stopping audio recorder.")
-                            api.api_config.audio_recorder.stop()
+                            rec.stop()
                             for _ in range(20):  # Wait until recording actually stops
-                                if not api.api_config.audio_recorder.is_recording():
+                                if not rec.is_recording():
                                     break
                                 time.sleep(0.05)
                             else:
@@ -272,16 +277,16 @@ with timer() as tim:
 
                             # Get the captured audio
                             logger.info("stop_recording_audio_message: Getting recorded audio.")
-                            audio = api.api_config.audio_recorder.get_recorded_audio()
-                            if audio is None:
+                            audio_data = rec.get_recorded_audio()
+                            if audio_data is None:
                                 logger.warning("stop_recording_audio_message: Got no audio. Cancelling.")
                                 return
-                            assert audio is not None
+                            assert audio_data is not None
 
                             # Transcribe the audio
                             logger.info("stop_recording_audio_message: Transcribing recorded audio.")
-                            user_message_text = api.stt_transcribe_array(audio_data=audio,
-                                                                         sample_rate=api.api_config.audio_recorder.sample_rate,  # available after at least one recording has started
+                            user_message_text = api.stt_transcribe_array(audio_data=audio_data,
+                                                                         sample_rate=rec.sample_rate,  # available after at least one recording has started
                                                                          prompt="This is a conversation between an AI and a user.")  # TODO: prompt-engineer the STT transcription prompt (e.g. detect proper names from chat log)
                             logger.info(f"Transcribed: '{user_message_text}'")  # TODO: privacy-sensitive log message? (The server has some, too.)
 
@@ -320,7 +325,7 @@ with timer() as tim:
                                                   red_start=-6.0,
                                                   threshold_value=-40.0,  # TODO: configurable autostop threshold
                                                   tooltip_text="Mic input level (dBFS)\nYellow = -24; red = -6; gray line = -40 (autostop threshold).")
-                        api.api_config.audio_recorder.connect_vu_readout(mic_vu_meter.update)
+                        audio_recorder.require().connect_vu_readout(mic_vu_meter.update)
 
             with dpg.group():  # right column: AI avatar
                 avatar_panel_w, avatar_panel_h = _get_avatar_panel_base_size()
@@ -589,7 +594,7 @@ def update_animations():
 hotkey_info = (env(key_indent=0, key="Ctrl+Space", action_indent=0, action="Focus text entry field", notes=""),
                env(key_indent=1, key="Enter", action_indent=0, action="Send message to AI", notes="When text entry field focused"),
                env(key_indent=1, key="Esc", action_indent=0, action="Clear text and cancel", notes="When text entry field focused"),
-               env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {api.api_config.audio_recorder.device_name}"),
+               env(key_indent=0, key="Ctrl+Shift+Enter", action_indent=0, action="Speak to AI using your mic", notes=f"Device: {audio_recorder.require().device_name}"),
                helpcard.hotkey_blank_entry,
                env(key_indent=0, key="Ctrl+G", action_indent=0, action="Stop AI text generation", notes="While the AI is writing"),
                env(key_indent=0, key="Ctrl+U", action_indent=0, action="Continue last AI message", notes="Creates new revision of same node"),
@@ -822,7 +827,7 @@ def librarian_hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_N:
             start_new_chat_callback()
         elif key == dpg.mvKey_S:
-            if api.tts_speaking():
+            if audio_player.require().is_playing():
                 stop_speech_callback()
             else:
                 fire_event_if_exists("speak")

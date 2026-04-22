@@ -47,6 +47,7 @@ from unpythonic import gensym, slurp
 from unpythonic.env import env
 
 from ..common import bgtask
+from ..common.audio import player as audio_player
 
 from ..common.gui import utils as guiutils
 
@@ -557,7 +558,7 @@ class DPGAvatarController:
         # We must still stop the TTS, to actually make the TTS playback task exit.
         # The current TTS task will end, and the old controller will then exit.
         logger.info("stop_tts: stopping TTS.")
-        self.tts.stop()
+        audio_player.require().stop()
         logger.info("stop_tts: all done.")
 
     # --------------------------------------------------------------------------------

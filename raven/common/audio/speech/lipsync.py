@@ -201,7 +201,7 @@ def drive(on_tick: Callable[[float], sym],
         lipsync.drive(on_tick, clock)
 
     `clock`: returns the current media time (seconds from start of the audio).
-             Typical: `util.api_config.audio_player.get_position`.
+             Typical: `raven.common.audio.player.instance.get_position`.
 
     `on_tick` must return either `action_continue` (run another tick) or
     `action_finish` (exit the loop cleanly). Any other return value raises

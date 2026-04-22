@@ -65,6 +65,8 @@ with timer() as tim:
     from ...client.avatar_controller import DPGAvatarController
     from ...client.avatar_renderer import DPGAvatarRenderer
 
+    from ...common import audio
+
     from ...server import config as server_config  # NOTE: default config (can be overridden on the command line when starting the server)
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
@@ -74,9 +76,10 @@ logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 bg = concurrent.futures.ThreadPoolExecutor()
 api.initialize(raven_server_url=client_config.raven_server_url,
                raven_api_key_file=client_config.raven_api_key_file,
-               tts_playback_audio_device=client_config.tts_playback_audio_device,
-               stt_capture_audio_device=client_config.stt_capture_audio_device,
-               executor=bg)  # reuse our executor so the TTS audio player goes in the same thread pool
+               executor=bg)  # reuse our executor for client background tasks
+audio.initialize(player={"device_name": client_config.tts_playback_audio_device},
+                 recorder={"device_name": client_config.stt_capture_audio_device,
+                           "executor": bg})
 
 # These are initialized later, when the app starts
 gui_instance = None

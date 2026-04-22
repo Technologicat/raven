@@ -1,5 +1,9 @@
 # Deferred TODOs
 
+## Librarian: FPS overlay starts enabled (regression)
+
+The FPS overlay should default to off at app launch, but currently boots enabled. Noticed during smoke-testing the audio-singleton lift (2026-04-22); unrelated to that changeset.
+
 ## `dpg_markdown` bullet-list rendering: bullet untethered from item
 
 `raven/vendor/DearPyGui_Markdown/` (already locally robustified) renders unordered lists with the bullet glyph drawn at the parent `<ul>`'s y-position rather than each `<li>`'s, so a list at the top of a tooltip shows ONE stray bullet at the top-left and the items appear as plain text below. Reproduces with any 2+ item bulleted list rendered into a tooltip; saw it on a chromatic-aberration tooltip during postprocessor docstring work (2026-04-21).
@@ -16,20 +20,25 @@ Worth a pass across the fleet to find these and convert them. Low-risk (any call
 
 Discovered during avatar-client-crop brief review (2026-04-20).
 
-## Move the audio-player singleton out of `raven.client`
+## `api_initialized` guard → `raven.client.util.require()` / `raven.client.api.require()`
 
-`util.api_config.audio_player` lives in `raven.client.util` because `api.initialize()` was historically the single startup hook every Raven client app called. Pragmatic at the time, semantically wrong: the audio player is a local resource (audio hardware is on the user's machine) and has nothing to do with "explicit remote mode". The coupling means a hypothetical client app that never talks to the server still has to go through `api.initialize()` just to get a `Player`.
+Mirror the `audio.player.require()` / `audio.recorder.require()` shape for the client-side init check. Currently many functions open with `if not util.api_initialized: raise RuntimeError("...: The \`raven.client.api\` module must be initialized before using the API.")`. A one-liner `api.require()` (or `util.require()`) would collapse the guard to `api.require()` at the function head, matching the audio side and reading more cleanly.
 
-`raven.common.audio.player` already owns the `Player` class. The cleanup is to move the default-instance slot there too — e.g. `get_default_player()` / `set_default_player(...)` accessors — and have `api.initialize()` register into it rather than own it. Downstream updates:
+Call sites are in `raven.client.tts` (`tts_speak`, `tts_speak_lipsynced`, etc.) and elsewhere in `raven.client.api`. Mechanical rewrite once the helper is defined.
 
-- `raven.client.tts` (`tts_speak`, `tts_speak_lipsynced`, `tts_stop`, `tts_speaking`, `play_encoded_with_avatar_lipsync`): read the default from `raven.common.audio.player` instead of `util.api_config.audio_player`.
-- `raven.client.mayberemote.TTS.speak*` / `.stop()` / `.is_speaking()`: same.
-- `raven.common.audio.speech.playback.*` stays as-is (it already takes `player` as an explicit arg, not a singleton).
-- `tts_stop` / `tts_speaking` could also move into `raven.common.audio.player` as module-level `stop_default()` / `default_is_playing()` helpers, or stay in `raven.client.tts` as thin wrappers — the `MaybeRemote.TTS.stop()` / `.is_speaking()` methods already offer the preferred call surface.
+Discovered during the audio-singleton lift (2026-04-22).
 
-Scope roughly parallels the natlang wire-format and image-codec lifts we've done — touches the init path on every client app and changes a widely-imported singleton. Not urgent: current clients work fine. Resolve when the standalone-client story actually motivates it (Librarian without avatar, or a fully-local Raven app that doesn't touch the server at all).
+## `tts_warmup` shape: move most of it to common, keep remote as thin wrapper
 
-Discovered during `DPGAvatarController` migration to `MaybeRemote.TTS` + `allow_local` config work (2026-04-22).
+`raven.client.tts.tts_warmup` currently lives in the client layer and calls `tts_prepare` (HTTP round-trip). For parity with how `speak` / `synthesize` are organised:
+
+- `raven.common.audio.speech.tts.warmup(pipeline, voice)` — local, calls `speech_tts.prepare(...)` directly against an in-process pipeline.
+- `raven.client.tts.tts_warmup(voice)` — stays in the client layer, remote path (HTTP). Thin.
+- `MaybeRemote.TTS.warmup(voice)` — dispatches on `(local, remote)` like `synthesize` / `speak` already do.
+
+Low-priority cleanup — nothing is broken, and the current client-only shape works. Resolve when the local-path warmup becomes useful (standalone Librarian, no-server Raven apps).
+
+Discovered during the audio-singleton lift (2026-04-22).
 
 ## `/api/embeddings/info` endpoint
 

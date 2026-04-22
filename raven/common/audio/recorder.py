@@ -2,7 +2,15 @@
 
 __all__ = ["get_available_devices",
            "validate_capture_device",
-           "Recorder"]
+           "Recorder",
+
+           "DEFAULT_FRAME_LENGTH",
+           "DEFAULT_VU_PEAK_HOLD",
+           "DEFAULT_SILENCE_THRESHOLD",
+           "DEFAULT_AUTOSTOP_TIMEOUT",
+           "instance",
+           "initialize",
+           "require"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -166,7 +174,12 @@ class Recorder:
         logger.info("Recorder.__init__: Initialization complete.")
 
     def __del__(self) -> None:
-        self.recorder.delete()
+        # Finalizers run at unpredictable times, including during interpreter
+        # shutdown when dependent C state may already be gone. Wrap defensively.
+        try:
+            self.recorder.delete()
+        except Exception:
+            pass
         self.recorder = None
 
     def start(self,
@@ -363,3 +376,66 @@ class Recorder:
     def _get_vu(self) -> Tuple[float, float]:
         return self._vu_instant, self._vu_peak
     vu = property(fget=_get_vu, doc="VU (voltage units) meter, in dbFS. Tuple `[instant, peak]`. The `instant` value is for the current audio frame, `peak` is for the last `vu_peak_hold` seconds. Read-only.")
+
+
+# Default audio recorder settings.
+DEFAULT_FRAME_LENGTH = 512  # samples at device default sample rate
+DEFAULT_VU_PEAK_HOLD = 1.0  # seconds
+DEFAULT_SILENCE_THRESHOLD = -40.0  # dBFS
+DEFAULT_AUTOSTOP_TIMEOUT = 1.5  # seconds
+
+# The default (singleton) `Recorder` instance. `None` until `initialize` is called.
+#
+# Pre-populated to `None` so that apps can read the attribute and decide whether to
+# initialize (or re-use) the recorder. Apps that don't need audio capture don't need
+# to call `initialize`; they just leave this as `None`.
+#
+# Access via `raven.common.audio.recorder.instance` (read-only by convention).
+instance: Optional["Recorder"] = None
+
+def initialize(frame_length: int = DEFAULT_FRAME_LENGTH,
+               device_name: Optional[str] = None,
+               vu_peak_hold: float = DEFAULT_VU_PEAK_HOLD,
+               silence_threshold: Optional[float] = DEFAULT_SILENCE_THRESHOLD,
+               autostop_timeout: Optional[float] = DEFAULT_AUTOSTOP_TIMEOUT,
+               executor: Optional[concurrent.futures.Executor] = None) -> "Recorder":
+    """Initialize the default audio recorder singleton.
+
+    Constructs a `Recorder` with the given parameters and assigns it to the module-level
+    `instance`. Idempotent: subsequent calls return the existing instance.
+
+    `device_name`: One of the Capture device names listed by `raven-check-audio-devices`,
+                   or `None` for the first available non-monitoring capture device.
+
+    `executor`: Used for the recording background task. If `None`, `Recorder` creates its own.
+
+    Returns the `Recorder` instance.
+    """
+    global instance
+    if instance is not None:
+        logger.info("initialize: audio recorder already initialized. Using existing instance.")
+        return instance
+
+    if device_name is not None:
+        logger.info(f"initialize: Validating audio capture device '{device_name}'.")
+    else:
+        logger.info("initialize: Using first available audio capture device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+
+    instance = Recorder(frame_length=frame_length,
+                        device_name=device_name,
+                        vu_peak_hold=vu_peak_hold,
+                        silence_threshold=silence_threshold,
+                        autostop_timeout=autostop_timeout,
+                        executor=executor)
+    return instance
+
+def require() -> "Recorder":
+    """Return the recorder, raising `RuntimeError` if not initialized.
+
+    Use this at the entry point of any code that needs audio capture: it fails fast
+    with a clear message, instead of letting an `AttributeError: 'NoneType'` surface
+    deep inside a recording call.
+    """
+    if instance is None:
+        raise RuntimeError("raven.common.audio.recorder.require: no recorder initialized. Call `raven.common.audio.initialize(...)` or `raven.common.audio.recorder.initialize(...)` first.")
+    return instance

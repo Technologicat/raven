@@ -11,9 +11,7 @@ __all__ = ["tts_info",
            "tts_prepare_decoded_cached",
            "play_encoded_with_avatar_lipsync",
            "tts_speak",
-           "tts_speak_lipsynced",
-           "tts_stop",
-           "tts_speaking"]
+           "tts_speak_lipsynced"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +31,7 @@ from unpythonic.env import env as envcls
 from . import api  # for calling the avatar_* functions during lipsync
 from . import util
 
+from ..common.audio import player as audio_player
 from ..common.audio.speech import datatypes as speech_datatypes
 from ..common.audio.speech import lipsync as speech_lipsync
 from ..common.audio.speech import playback as speech_playback
@@ -358,6 +357,7 @@ def tts_speak(text: str,
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak: The `raven.client.api` module must be initialized before using the API.")
+    player = audio_player.require()  # fail-fast before submitting the background task
 
     # We run this in the background
     def speak(task_env) -> None:
@@ -371,7 +371,7 @@ def tts_speak(text: str,
             logger.info(f"tts_speak.speak: instance {task_env.task_name}: no audio produced. Cancelled.")
             return
         speech_playback.play_encoded(final_prep.audio_bytes,
-                                     player=util.api_config.audio_player,
+                                     player=player,
                                      on_audio_ready=on_audio_ready,
                                      on_start=on_start,
                                      on_stop=on_stop)
@@ -421,6 +421,7 @@ def tts_speak_lipsynced(instance_id: str,
     """
     if not util.api_initialized:
         raise RuntimeError("tts_speak_lipsynced: The `raven.client.api` module must be initialized before using the API.")
+    audio_player.require()  # fail-fast before submitting the background task
 
     def speak(task_env: envcls) -> None:
         if prep is None:
@@ -513,8 +514,10 @@ def play_encoded_with_avatar_lipsync(audio_bytes: bytes,
         "mouth_delta": 0.0,
     }
 
+    player = audio_player.require()
+
     def on_tick(t: float) -> sym:
-        if not util.api_config.audio_player.is_playing():
+        if not player.is_playing():
             return speech_lipsync.action_finish
 
         event = speech_lipsync.phoneme_at(phoneme_stream, t)
@@ -548,9 +551,9 @@ def play_encoded_with_avatar_lipsync(audio_bytes: bytes,
     # mouth-morph overrides so the avatar's face returns to its neutral pose.
     try:
         speech_playback.play_encoded_with_lipsync(audio_bytes,
-                                                  player=util.api_config.audio_player,
+                                                  player=player,
                                                   on_tick=on_tick,
-                                                  clock=lambda: util.api_config.audio_player.get_position() - video_offset,
+                                                  clock=lambda: player.get_position() - video_offset,
                                                   on_audio_ready=on_audio_ready,
                                                   on_start=on_start,
                                                   on_stop=on_stop)
@@ -565,17 +568,3 @@ def play_encoded_with_avatar_lipsync(audio_bytes: bytes,
         except Exception:
             pass
 
-def tts_stop() -> None:
-    """Stop the speech synthesizer."""
-    if not util.api_initialized:
-        raise RuntimeError("tts_stop: The `raven.client.api` module must be initialized before using the API.")
-    logger.info("tts_stop: stopping audio")
-    util.api_config.audio_player.stop()
-
-def tts_speaking() -> bool:
-    """Query whether the speech synthesizer is speaking."""
-    if not util.api_initialized:
-        raise RuntimeError("tts_stop: The `raven.client.api` module must be initialized before using the API.")
-    is_speaking = util.api_config.audio_player.is_playing()
-    logger.info(f"tts_speaking: is audio playing: {is_speaking}")
-    return is_speaking
