@@ -567,4 +567,3 @@ def play_encoded_with_avatar_lipsync(audio_bytes: bytes,
             api.avatar_modify_overrides(instance_id, action="unset", overrides=mouth_morph_overrides)  # Values are ignored by the "unset" action, which removes the overrides.
         except Exception:
             pass
-
