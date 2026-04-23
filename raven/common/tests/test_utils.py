@@ -245,6 +245,75 @@ class TestUnicodizeBasicMarkup:
         result = utils.unicodize_basic_markup("H<sub>2</sub>O at 100&le;T")
         assert result == "H₂O at 100≤T"
 
+    # BibTeX case-preservation grouping braces: `bibtexparser` hands us the raw
+    # field value, and `{Word}` / `{ACRONYM}` grouping braces must be stripped
+    # before the text is shown to the user.
+
+    def test_bibtex_case_group_single_word(self):
+        assert utils.unicodize_basic_markup("{AutoPBL}") == "AutoPBL"
+
+    def test_bibtex_case_groups_multiple(self):
+        assert utils.unicodize_basic_markup("{An} {LLM}-powered") == "An LLM-powered"
+
+    def test_bibtex_case_group_nested(self):
+        # Doubly-wrapped forms like `{{AutoPBL}}` do occur (e.g. from Zotero export).
+        assert utils.unicodize_basic_markup("{{AutoPBL}}") == "AutoPBL"
+
+    def test_bibtex_case_group_realistic_title(self):
+        src = "{AutoPBL}: {An} {LLM}-powered {Platform}"
+        assert utils.unicodize_basic_markup(src) == "AutoPBL: An LLM-powered Platform"
+
+    # `\{` / `\}` (literal escaped braces, produced by `raven.papers.utils.bibtex_escape`)
+    # must survive the grouping-brace stripping pass. Regression guard for commit ea7a095.
+
+    def test_latex_literal_braces_preserved(self):
+        assert utils.unicodize_basic_markup(r"\{literal\}") == "{literal}"
+
+    def test_latex_literal_braces_mixed_with_grouping(self):
+        assert utils.unicodize_basic_markup(r"{Word} and \{literal\}") == "Word and {literal}"
+
+    # LaTeX diacritics: both braced (`\X{c}`) and unbraced (`\Xc`) forms of accent
+    # commands, plus single-token ligatures. Coverage spans the common European
+    # cases that show up in author names and paper titles in bibliographies.
+
+    def test_latex_diacritic_umlaut_unbraced(self):
+        assert utils.unicodize_basic_markup(r'Jer\"onen') == "Jerönen"
+
+    def test_latex_diacritic_acute_unbraced(self):
+        assert utils.unicodize_basic_markup(r"caf\'e") == "café"
+
+    def test_latex_diacritic_umlaut_braced(self):
+        assert utils.unicodize_basic_markup(r'{\"u}ber') == "über"
+
+    def test_latex_diacritic_umlaut_braced_capital(self):
+        assert utils.unicodize_basic_markup(r'The \"{O}stberg effect') == "The Östberg effect"
+
+    def test_latex_diacritic_cedilla_braced(self):
+        assert utils.unicodize_basic_markup(r"\c{c}edilla") == "çedilla"
+
+    def test_latex_diacritic_caron_braced(self):
+        assert utils.unicodize_basic_markup(r"\v{s}afe") == "šafe"
+
+    def test_latex_diacritic_dotless_i_under_umlaut(self):
+        # `\"{\i}` uses dotless-i as a typesetting trick; intended letter is i.
+        assert utils.unicodize_basic_markup(r'na\"{\i}ve') == "naïve"
+
+    def test_latex_ligature_ae(self):
+        assert utils.unicodize_basic_markup(r"\ae on") == "æ on"
+
+    def test_latex_ligature_oslash_braced(self):
+        # The idiomatic `{\o}` form — braces are the command terminator,
+        # not case-preservation.
+        assert utils.unicodize_basic_markup(r"{\o}nly") == "ønly"
+
+    def test_latex_ligature_ss(self):
+        assert utils.unicodize_basic_markup(r"\ss tr") == "ß tr"
+
+    def test_latex_ligature_does_not_match_inside_identifier(self):
+        # `\oethr` isn't a real LaTeX command; lookahead must prevent `\oe` from
+        # being stripped out of longer backslash-sequences.
+        assert utils.unicodize_basic_markup(r"\oethr") == r"\oethr"
+
 
 # ---------------------------------------------------------------------------
 # Search utilities

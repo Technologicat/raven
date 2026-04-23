@@ -173,6 +173,46 @@ def normalize_unicode(s: str) -> str:  # SillyTavern-extras/server.py
     # https://stackoverflow.com/questions/16467479/normalizing-unicode
     return unicodedata.normalize("NFKC", s)
 
+# LaTeX accent commands → Unicode combining diacritic.
+# Applied to the following base letter; NFC at the end composes the result into
+# the precomposed form where one exists (e.g. "ä" → "ä").
+# Forms: `\X{c}` (required for letter-based accents `c v u H k r`)
+#    and `\Xc` (for the non-letter accents `" ' ` ^ ~ = .`).
+_latex_accent_to_combining = {
+    '"': "̈",  # diaeresis / umlaut:      \"a  → ä
+    "'": "́",  # acute:                   \'e  → é
+    "`": "̀",  # grave:                   \`a  → à
+    "^": "̂",  # circumflex:              \^o  → ô
+    "~": "̃",  # tilde:                   \~n  → ñ
+    "=": "̄",  # macron:                  \=a  → ā
+    ".": "̇",  # dot above:               \.z  → ż
+    "c": "̧",  # cedilla:                 \c{c} → ç
+    "v": "̌",  # caron (háček):           \v{s} → š
+    "u": "̆",  # breve:                   \u{a} → ă
+    "H": "̋",  # double acute:            \H{o} → ő
+    "k": "̨",  # ogonek:                  \k{a} → ą
+    "r": "̊",  # ring above:              \r{a} → å
+}
+
+# LaTeX single-token ligatures / special letters → Unicode.
+_latex_ligatures = {
+    r"\aa": "å", r"\AA": "Å",
+    r"\ae": "æ", r"\AE": "Æ",
+    r"\oe": "œ", r"\OE": "Œ",
+    r"\o":  "ø", r"\O":  "Ø",
+    r"\l":  "ł", r"\L":  "Ł",
+    r"\ss": "ß",
+    r"\i":  "ı", r"\j":  "ȷ",
+}
+
+def _apply_latex_accent(match_obj):
+    """Replace a `\\X{c}` or `\\Xc` LaTeX accent match with `c + combining-mark`."""
+    accent, letter = match_obj.group(1), match_obj.group(2)
+    combining = _latex_accent_to_combining.get(accent)
+    if combining is None:  # unknown accent; leave as-is (defensive — regex only matches known accents)
+        return match_obj.group(0)
+    return letter + combining
+
 def _substitute_chars(mapping, html_tag_name, match_obj):
     """Substitute characters in a regex match. Low-level function, used by `unicodize_basic_markup`.
 
@@ -211,13 +251,46 @@ def unicodize_basic_markup(s):
     """
     s = normalize_unicode(s)
 
-    # Remove LaTeX escapes (including those produced by `raven.papers.utils.bibtex_escape`)
+    # LaTeX single-token ligatures (`\ae`, `\oe`, `\o`, `\l`, `\ss`, `\aa`, `\i`, `\j`, …).
+    # Must run before brace stripping. The idiomatic way to write e.g. "ønly" in
+    # BibTeX is `{\o}nly` — the braces terminate the `\o` command. Once we strip the
+    # braces, `{\o}nly` becomes `\only`, and `\o` followed by a letter no longer matches.
+    # The right-side letter-lookahead prevents false matches inside longer identifiers.
+    for cmd, repl in _latex_ligatures.items():
+        s = re.sub(re.escape(cmd) + r"(?![a-zA-Z])", repl, s)
+
+    # LaTeX accent commands of the form `\X{c}` (braced argument). Must run before
+    # brace stripping — otherwise the braces disappear and `\c{c}` collapses to the
+    # ambiguous `\cc`. The non-letter accents (`\"a`, `\'e`, …) can also appear
+    # without braces, and are handled in a second pass below after brace stripping.
+    # `\w` (not `[a-zA-Z]`) so we match e.g. `\"{ı}` — which arises from `\"{\i}`
+    # after the ligature pass above has turned `\i` into dotless-i (U+0131).
+    s = re.sub(r"""\\(["'`^~=.cvuHkr])\{(\w)\}""", _apply_latex_accent, s)
+
+    # Strip BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, and nested
+    # forms like `{{AutoPBL}}`). `bibtexparser` is a pure parser: it hands us the raw
+    # field value with the grouping braces still in. biblatex/bibtex would strip these
+    # at format time; we never format, so we strip them here.
+    #
+    # Literal escaped braces (`\{`, `\}` — produced by `raven.papers.utils.bibtex_escape`
+    # for actual `{`/`}` characters in source text) must survive this pass. We park
+    # them on private-use-area sentinels, strip the grouping braces, then restore.
+    # Private-use characters are normalization-stable and appear nowhere in real text.
+    s = s.replace(r"\{", "").replace(r"\}", "")
+    s = s.replace("{", "").replace("}", "")
+    s = s.replace("", "{").replace("", "}")
+
+    # LaTeX accent commands of the form `\Xc` (no braces). Only the non-letter accents:
+    # the letter-based accents (`\c`, `\v`, `\u`, `\H`, `\k`, `\r`) require a brace
+    # argument in LaTeX, and were already handled above.
+    s = re.sub(r"""\\(["'`^~=.])(\w)""", _apply_latex_accent, s)
+
+    # Remove LaTeX escapes (including those produced by `raven.papers.utils.bibtex_escape`).
+    # `\{` and `\}` are not listed here — they were handled by the brace-stripping pass above.
     s = s.replace(r"\%", "%")
     s = s.replace(r"\$", "$")
     s = s.replace(r"\#", "#")
     s = s.replace(r"\&", "&")
-    s = s.replace(r"\{", "{")
-    s = s.replace(r"\}", "}")
 
     # Replace some HTML entities
     s = s.replace(r"&le;", "≤")
@@ -245,6 +318,22 @@ def unicodize_basic_markup(s):
     # Replace < and > entities last (so that HTML tags process correctly)
     s = s.replace(r"&lt;", "<")
     s = s.replace(r"&gt;", ">")
+
+    # The LaTeX sequence `\"{\i}` (→ "naïve") uses dotless-i purely as a typesetting
+    # trick — the intended letter is i, written dotless so the diaeresis dots don't
+    # collide with the letter's own dot. Unicode encodes the common combinations as
+    # precomposed "i with accent" characters (ï, í, ì, î, …) but has no precomposed
+    # "dotless-i with accent" — so if we leave the dotless form in place, the NFC
+    # pass below can't compose the sequence. Swap dotless → dotted whenever a
+    # combining diacritic follows, so NFC can do its job. Same story for \j → ȷ.
+    s = re.sub("ı([̀-ͯ])", r"i\1", s)
+    s = re.sub("ȷ([̀-ͯ])", r"j\1", s)
+
+    # Final NFC pass composes the `base + combining-mark` sequences produced by
+    # the LaTeX accent passes (e.g. "ä" → "ä") into their precomposed forms
+    # where Unicode has one. The initial NFKC pass only applied to the input;
+    # combining marks introduced afterwards need a second round.
+    s = unicodedata.normalize("NFC", s)
 
     return s
 

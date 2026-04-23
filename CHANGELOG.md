@@ -2,7 +2,9 @@
 
 **0.2.8** (in progress):
 
-*No user-visible changes yet.*
+**Fixed**:
+
+- *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.
 
 ---
 
