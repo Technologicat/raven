@@ -2,6 +2,10 @@
 
 **0.2.8** (in progress):
 
+**Added**:
+
+- *Raven-avatar* settings editor: `Clear` and `Default` buttons on the postprocessor section header. `Clear` disables every filter for a blank-slate starting point; `Default` reloads the postprocessor chain from `animator.json`. Per-filter `Reset` buttons now have tooltips.
+
 **Fixed**:
 
 - *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.

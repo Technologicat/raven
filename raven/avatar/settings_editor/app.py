@@ -781,6 +781,8 @@ class PostprocessorSettingsEditorGUI:
                     for filter_name, param_info in self.all_postprocessor_filters.items():
                         with dpg.group(horizontal=True):
                             dpg.add_button(label="Reset", tag=f"{filter_name}_reset_button", callback=make_reset_filter_callback(filter_name))
+                            dpg.add_tooltip(f"{filter_name}_reset_button", tag=f"{filter_name}_reset_tooltip")  # tag
+                            dpg.add_text("Reset this filter's parameters to their default values", parent=f"{filter_name}_reset_tooltip")  # tag
                             add_filter_info_button(filter_name)
                             dpg.add_checkbox(label=prettify(filter_name), default_value=False,
                                              tag=f"{filter_name}_checkbox", callback=self.on_gui_settings_change)
@@ -926,7 +928,16 @@ class PostprocessorSettingsEditorGUI:
 
                 with dpg.child_window(width=self.postprocessor_width, autosize_y=True):
                     build_crop_gui()
-                    dpg.add_checkbox(label="Postprocessor [Ctrl+click to set a numeric value]", default_value=True, callback=self.on_toggle_postprocessor)
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="Clear", callback=self.on_clear_postprocessor, tag="postprocessor_clear_button")
+                        dpg.add_tooltip("postprocessor_clear_button", tag="postprocessor_clear_tooltip")  # tag
+                        dpg.add_text("Toggle all postprocessor effects off", parent="postprocessor_clear_tooltip")  # tag
+
+                        dpg.add_button(label="Default", callback=self.on_load_postprocessor_defaults, tag="postprocessor_default_button")
+                        dpg.add_tooltip("postprocessor_default_button", tag="postprocessor_default_tooltip")  # tag
+                        dpg.add_text("Load the postprocessor chain defaults from animator.json", parent="postprocessor_default_tooltip")  # tag
+
+                        dpg.add_checkbox(label="Postprocessor [Ctrl+click to set a numeric value]", default_value=True, callback=self.on_toggle_postprocessor)
                     # dpg.add_text("[For advanced setup, edit animator.json.]", color=(140, 140, 140))
                     build_postprocessor_gui()
 
@@ -1097,6 +1108,42 @@ class PostprocessorSettingsEditorGUI:
 
     def on_toggle_postprocessor(self, sender, app_data):
         self.postprocessor_enabled = not self.postprocessor_enabled
+        self.on_gui_settings_change(sender, app_data)
+
+    def on_clear_postprocessor(self, sender, app_data):
+        """Toggle every postprocessor filter's enable checkbox off — blank-slate starting point."""
+        logger.info("PostprocessorSettingsEditorGUI.on_clear_postprocessor: disabling all postprocessor filters.")
+        for filter_name in self.all_postprocessor_filters:
+            dpg.set_value(f"{filter_name}_checkbox", False)
+        self.on_gui_settings_change(sender, app_data)
+
+    def on_load_postprocessor_defaults(self, sender, app_data):
+        """Reload the postprocessor chain from the on-disk `animator.json` — the same file the app reads at startup.
+
+        Only the `postprocessor_chain` key is applied; target FPS, upscaler, crop, backdrop, etc. are left alone.
+        Reading fresh from disk (rather than snapshotting at startup) lets users who hand-edit `animator.json` see
+        those edits reflected via this button.
+        """
+        animator_json_path = pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "assets", "settings", "animator.json")).expanduser().resolve()
+        logger.info(f"PostprocessorSettingsEditorGUI.on_load_postprocessor_defaults: reloading postprocessor chain from '{str(animator_json_path)}'.")
+        try:
+            with open(animator_json_path, "r", encoding="utf-8") as json_file:
+                animator_settings = json.load(json_file)
+        except Exception as exc:
+            logger.error(f"PostprocessorSettingsEditorGUI.on_load_postprocessor_defaults: {type(exc)}: {exc}")
+            traceback.print_exc()
+            messagebox.modal_dialog(window_title="Error",
+                                    message=f"Could not read defaults from '{str(animator_json_path)}', reason {type(exc)}: {exc}",
+                                    buttons=["Close"],
+                                    ok_button="Close",
+                                    cancel_button="Close",
+                                    centering_reference_window=self.window)
+            return
+
+        ppc = animator_settings.get("postprocessor_chain", [])
+        ppc = self.strip_postprocessor_chain_for_gui(ppc)
+        ppc = self.canonize_postprocessor_parameters_for_gui(ppc)
+        self.populate_gui_from_canonized_postprocessor_chain(ppc)
         self.on_gui_settings_change(sender, app_data)
 
     def on_upscaler_settings_change(self, sender, app_data):
