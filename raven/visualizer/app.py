@@ -268,15 +268,15 @@ def initialize_filedialogs(default_path):  # called at app startup, once we pars
                                  allow_drag=False,
                                  default_path=default_path)
     app_state.filedialog_save = FileDialog(title="Save word cloud as PNG",
-                                 tag="save_word_cloud_dialog",
-                                 callback=word_cloud.save_callback,
-                                 modal=True,
-                                 filter_list=[".png"],
-                                 file_filter=".png",
-                                 save_mode=True,
-                                 default_file_extension=".png",  # used if the user does not provide a file extension when naming the save-as
-                                 allow_drag=False,
-                                 default_path=default_path)
+                                           tag="save_word_cloud_dialog",
+                                           callback=word_cloud.save_callback,
+                                           modal=True,
+                                           filter_list=[".png"],
+                                           file_filter=".png",
+                                           save_mode=True,
+                                           default_file_extension=".png",  # used if the user does not provide a file extension when naming the save-as
+                                           allow_drag=False,
+                                           default_path=default_path)
     filedialog_open_import = FileDialog(title="Choose BibTeX file(s) to import [Ctrl+click to multi-select]",
                                         tag="open_import_dialog",
                                         callback=_open_import_callback,
