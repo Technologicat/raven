@@ -65,6 +65,7 @@ with timer() as tim:
     from ..common.gui import widgetfinder
 
     from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
+    from . import annotation
     from . import config as visualizer_config
     from . import importer  # BibTeX importer
     from . import plotter
@@ -136,6 +137,9 @@ def is_any_modal_window_visible():
             is_open_import_dialog_visible() or is_save_import_dialog_visible() or
             help_window.is_visible())
 
+# Register on `app_state` so extracted submodules (e.g. `annotation`) can call it.
+app_state.is_any_modal_window_visible = is_any_modal_window_visible
+
 # --------------------------------------------------------------------------------
 # Set up DPG - basic startup, load fonts, set up global theme
 
@@ -189,7 +193,7 @@ app_state.dataset = None  # currently loaded dataset (as an `unpythonic.env.env`
 def clear_background_tasks(wait: bool):
     """Stop (cancel) and delete all background tasks."""
     info_panel_task_manager.clear(wait=wait)
-    annotation_task_manager.clear(wait=wait)
+    annotation.clear_tasks(wait=wait)
     word_cloud.clear_tasks(wait=wait)
 
 def reset_app_state(_update_gui=True):
@@ -511,6 +515,10 @@ info_panel_scroll_end_flasher = gui_animation.ScrollEndFlasher(target="item_info
 
 search_string_box = box("")
 search_result_data_idxs_box = box(common_utils.make_blank_index_array())
+
+# Publish on `app_state` so the annotation tooltip (and later the info panel / search module) can read them.
+app_state.search_string_box = search_string_box
+app_state.search_result_data_idxs_box = search_result_data_idxs_box
 
 def update_search(wait=True):
     """Perform search and update the search results.
@@ -1409,7 +1417,7 @@ def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
     `sort_field`: `str`, the field to sort by within each cluster. The name of one of the attributes of an entry in `sorted_entries`.
     `max_n`: `int`, how many entries can be displayed reasonably. Default `None` means no limit.
 
-    Return value is... complicated, see `_update_annotation` and `_update_info_panel` for usage examples.
+    Return value is... complicated, see `annotation._render_worker` and `_update_info_panel` for usage examples.
     """
 
     # Gather the relevant entries from the vis data.
@@ -1462,333 +1470,13 @@ def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
 
     return entries_by_cluster, format_cluster_annotation
 
+# Publish on `app_state` so the annotation tooltip (and later the info panel) can call it.
+app_state.get_entries_for_selection = get_entries_for_selection
+
 # --------------------------------------------------------------------------------
-# Annotation tooltip for mouse hover on the plotter
-
-annotation_content_lock = threading.RLock()  # Content double buffering (swap). Allowing the same thread to enter multiple nested critical sections makes some checks simpler here.
-
-annotation_build_number = 0  # Sequence number of last completed annotation tooltip build.
-
-annotation_data_idxs = []  # Which datapoints are currently listed in the annotation tooltip, while the tooltip is open; item indices into `sorted_xxx`.
-
-# A tooltip is really just a window with no title bar.
-#   - `autosize` is important to have this window update its height when the tooltip content is rebuilt.
-#   - A DPG window (as of 1.x) doesn't have an option to autosize height only, but we can set the width by using a drawlist or spacer, and wrapping text to less than that width.
-with dpg.window(show=False, modal=False, no_title_bar=True, tag="annotation_tooltip_window",
-                no_collapse=True,
-                no_scrollbar=True,
-                no_focus_on_appearing=True,
-                autosize=True) as annotation_window:
-    with dpg.group() as annotation_group:
-        dpg.add_text("[no data]", wrap=0, color=(180, 180, 180))
-    dpg.set_item_alias(annotation_group, "annotation_group")  # tag  # Set the alias separately for unified handling with the instances created later (so they show similarly in the debug registry)
-
-# Task submitter, and plot highlighter.
-@dlet(m_prev=None)
-def update_mouse_hover(*, force=False, wait=True, wait_duration=0.05, env=None):
-    """Update the plotter tooltip annotation and the datapoint highlight under the mouse cursor. Public API.
-
-    `force`: By default, we only update the annotation if the mouse has moved since the annotation was last rendered.
-             To force an update (e.g. when the mouse wheel has been rotated), use `force=True`.
-    `wait`: bool, whether to wait for a short cancellation period before actually starting the annotation update.
-            This can be useful if the GUI feature you are triggering this from expects more input in a typical case
-            (e.g. more mouse movement).
-    `wait_duration`: float, seconds.
-
-    `env`: Internal, handled by `@dlet`. Stores local state (last seen mouse position) between calls.
-
-    For more notes, see `update_info_panel`, which works the same way.
-    """
-    # For a more responsive GUI, always update the plotter highlight right now.
-    m = dpg.get_mouse_pos(local=False)
-    if force or m != env.m_prev:
-        # Highlight the mouse hover items (by plotting them as another series on top).
-        data_idxs = plotter.get_data_idxs_at_mouse()  # item indices into `sorted_xxx`.
-        if len(data_idxs):
-            dpg.set_value("my_mouse_hover_scatter_series", [list(app_state.dataset.sorted_lowdim_data[data_idxs, 0]),  # tag
-                                                            list(app_state.dataset.sorted_lowdim_data[data_idxs, 1])])
-        else:
-            dpg.set_value("my_mouse_hover_scatter_series", [[], []])  # tag
-    if m != env.m_prev:  # Hide the annotation tooltip as soon as the mouse moves. This allows the user to move the mouse where the tooltip was, and get correct plot coordinates.
-        dpg.hide_item(annotation_window)
-    env.m_prev = m
-
-    annotation_render_task = bgtask.ManagedTask(category="raven_visualizer_annotation_render",
-                                                entrypoint=_update_annotation,
-                                                running_poll_interval=0.01,
-                                                pending_wait_duration=wait_duration)
-    annotation_task_manager.submit(annotation_render_task, envcls(wait=wait))
-
-# Register on `app_state` so extracted submodules (e.g. `selection`) can call it.
-app_state.update_mouse_hover = update_mouse_hover
-
-# Worker.
-@dlet(internal_build_number=0)  # For making unique DPG tags. Incremented each time, regardless of whether completed or cancelled.
-def _update_annotation(*, task_env, env=None):
-    """Update the plotter annotation tooltip for the items under the mouse cursor.
-
-    `task_env`: Handled by `update_mouse_hover`. Importantly, contains the `cancelled` flag for the task.
-    """
-    # TODO: This function is too spammy even for debug logging, needs a "detailed debug" log level.
-    # logger.debug(f"_update_annotation: {task_env.task_name}: Annotation update task running.")
-
-    # For "double-buffering"
-    global annotation_group
-    global annotation_build_number
-    annotation_target_group = None  # DPG widget for building new content, will be initialized later
-    new_content_swapped_in = False
-
-    # Under some conditions no annotation should be shown
-    #  - Modal window open (so the rest of the GUI should be inactive)
-    #  - The mouse moved outside the plot area while the update was waiting in the queue
-    if is_any_modal_window_visible() or not mouse_inside_plot_widget():
-        dpg.hide_item(annotation_window)
-        # logger.debug(f"_update_annotation: {task_env.task_name}: Annotation update task completed. No items under mouse, so nothing to do.")
-        return
-
-    mouse_pos = dpg.get_mouse_pos(local=False)
-    data_idxs = plotter.get_data_idxs_at_mouse()  # item indices into `sorted_xxx`.
-
-    with annotation_content_lock:
-        old_mouse_hover_data_idxs_set = set(annotation_data_idxs)  # For checking if we need to resize/reposition (reduces flickering). Ordering doesn't matter, because the tooltip is always populated in the same order.
-        annotation_data_idxs.clear()
-        if not len(data_idxs):  # No data point(s) under mouse cursor -> hide the annotation if any, and we're done.
-            dpg.hide_item(annotation_window)
-            return
-
-        # logger.debug(f"_update_annotation: {task_env.task_name}: Annotation build {env.internal_build_number} starting.")
-        # annotation_t0 = time.monotonic()
-
-        # Start rebuilding the tooltip content.
-        # `with dpg.group(...):` would look clearer, but it's better to not touch the DPG container stack from a background thread.
-        gc.collect()
-        dpg.split_frame()
-        annotation_target_group = dpg.add_group(show=False, parent="annotation_tooltip_window")  # tag
-
-        # After this point (content target group GUI widget created), if something goes wrong, we must clean up the partially built content.
-        try:
-            # for highlighting
-            search_string = unbox(search_string_box)
-            search_result_data_idxs = unbox(search_result_data_idxs_box)
-            selection_data_idxs = unbox(app_state.selection_data_idxs_box)
-
-            # Actual content
-            entries_by_cluster, formatter = get_entries_for_selection(data_idxs, max_n=gui_config.max_titles_in_tooltip)
-            clusters_at_mouse = list(sorted(set(entries_by_cluster.keys())))
-            if clusters_at_mouse and clusters_at_mouse[0] == -1:  # move the misc group (if it's there) to the end
-                clusters_at_mouse = clusters_at_mouse[1:] + [-1]
-
-            have_jumpable_item = False  # for whether we should show the help for that
-            item_ininfo = sym("ininfo")
-            item_selected = sym("selected")
-            item_notselected = sym("notselected")
-            item_match = sym("match")
-            item_nomatch = sym("nomatch")
-            item_searchoff = sym("searchoff")
-
-            with info_panel_content_lock:
-                for cluster_id in clusters_at_mouse:
-                    if task_env is not None and task_env.cancelled:
-                        break
-
-                    cluster_title, cluster_keywords, cluster_content, more = formatter(cluster_id)
-                    cluster_title_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_annotation_title_group_build{env.internal_build_number}", parent=annotation_target_group)
-                    dpg.add_text(cluster_title, color=(180, 180, 180), tag=f"cluster_{cluster_id}_annotation_title_text_build{env.internal_build_number}", parent=cluster_title_group)  # "#42"
-                    dpg.add_text(cluster_keywords, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_annotation_keywords_text_build{env.internal_build_number}", parent=cluster_title_group)  # "[keyword0, ...]"
-                    for data_idx, entry in cluster_content:  # `data_idx`: item index into `sorted_xxx`
-                        if task_env is not None and task_env.cancelled:
-                            break
-
-                        # Highlight search results, but only when a search is active.
-                        # When no search active, show all items at full brightness.
-                        if not search_string or data_idx in search_result_data_idxs:
-                            title_color = (255, 255, 255, 255)
-                        else:  # Search active, non-matching item -> dim it.
-                            title_color = (140, 140, 140, 255)
-
-                        if data_idx in info_panel_entry_title_widgets:  # shown in the info panel
-                            item_selection_status = item_ininfo
-                            selection_mark_text = fa.ICON_CLIPBOARD_CHECK
-                            selection_mark_font = app_state.themes_and_fonts.icon_font_solid
-                            if data_idx in selection_data_idxs:  # Usually, all items in the info panel are in the selection...
-                                selection_mark_color = (120, 180, 255)  # blue
-                            else:  # ...but while the info panel is updating, the old content (shown until the update completes) may have some items that are no longer included in the new selection.
-                                item_selection_status = item_ininfo
-                                selection_mark_color = (80, 80, 80)  # very dark gray  # (255, 180, 120)  # orange
-                        else:  # not shown in the info panel
-                            selection_mark_text = fa.ICON_CLIPBOARD
-                            selection_mark_font = app_state.themes_and_fonts.icon_font_regular
-                            if data_idx in selection_data_idxs:  # selected
-                                item_selection_status = item_selected
-                                selection_mark_color = (120, 180, 255)  # blue
-                            else:  # not selected
-                                item_selection_status = item_notselected
-                                selection_mark_color = (80, 80, 80)  # very dark gray  # (255, 180, 120)  # orange
-
-                        item_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_group_build{env.internal_build_number}", parent=annotation_target_group)
-                        mark_widget = dpg.add_text(selection_mark_text, color=selection_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_selection_mark_build{env.internal_build_number}", parent=item_group)
-                        dpg.bind_item_font(mark_widget, selection_mark_font)
-
-                        if search_string:
-                            if data_idx in search_result_data_idxs:
-                                item_search_status = item_match
-                                search_mark_color = (180, 255, 180)  # "search green"
-                            else:  # not in results
-                                item_search_status = item_nomatch
-                                search_mark_color = (80, 80, 80)  # very dark gray
-                            mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=search_mark_color, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_search_mark_build{env.internal_build_number}", parent=item_group)
-                            dpg.bind_item_font(mark_widget, app_state.themes_and_fonts.icon_font_solid)
-                        else:  # no search active
-                            item_search_status = item_searchoff
-
-                        dpg.add_text(entry.title, color=title_color, wrap=0, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", parent=item_group)  # "A study of stuff..."
-
-                        if item_selection_status is item_ininfo and (not search_string or item_search_status is item_match):
-                            have_jumpable_item = True
-
-                        annotation_data_idxs.append(data_idx)
-
-                    if task_env is None or not task_env.cancelled:
-                        if more:
-                            dpg.add_text(more, wrap=0, color=(100, 100, 100), tag=f"cluster_{cluster_id}_annotation_more_build{env.internal_build_number}", parent=annotation_target_group)  # "[...N more entries...]"
-
-            # Finalize (if not cancelled)
-            if task_env is None or not task_env.cancelled:
-                # ----------------------------------------
-                # Help
-                # TODO: performance: we could render the help statically just once (with elements that can be optionally shown/hidden)
-                hint_color = (140, 140, 140)
-
-                help_separator = dpg.add_drawlist(width=gui_config.annotation_tooltip_w, height=1, tag=f"annotation_help_separator_build{env.internal_build_number}", parent=annotation_target_group)
-                dpg.draw_line((0, 0), (gui_config.annotation_tooltip_w - 1, 0), color=(140, 140, 140, 255), thickness=1, parent=help_separator)
-
-                annotation_help_selection_legend_group = dpg.add_group(horizontal=True, tag=f"annotation_help_selection_legend_group_build{env.internal_build_number}", parent=annotation_target_group)
-
-                selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD_CHECK, color=(120, 180, 255), tag=f"annotation_help_legend_ininfo_icon_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)  # blue
-                dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_solid)
-                dpg.add_text(": selected, in info panel;", color=hint_color, tag=f"annotation_help_legend_ininfo_explanation_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)
-
-                selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD, color=(120, 180, 255), tag=f"annotation_help_legend_selected_icon_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)  # blue
-                dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_regular)
-                dpg.add_text(": selected, not in info panel;", color=hint_color, tag=f"annotation_help_legend_selected_explanation_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)
-
-                selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD, color=(80, 80, 80), tag=f"annotation_help_legend_notselected_icon_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)  # very dark gray
-                dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_regular)
-                dpg.add_text(": not selected", color=hint_color, tag=f"annotation_help_legend_notselected_explanation_build{env.internal_build_number}", parent=annotation_help_selection_legend_group)
-
-                if search_string:
-                    annotation_help_search_legend_group = dpg.add_group(horizontal=True, tag=f"annotation_help_search_legend_group_build{env.internal_build_number}", parent=annotation_target_group)
-
-                    search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(180, 255, 180), tag=f"annotation_help_legend_match_icon_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
-                    dpg.bind_item_font(search_mark_widget, app_state.themes_and_fonts.icon_font_solid)
-                    dpg.add_text(": match;", color=hint_color, tag=f"annotation_help_legend_match_explanation_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
-
-                    search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(80, 80, 80), tag=f"annotation_help_legend_nomatch_icon_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
-                    dpg.bind_item_font(search_mark_widget, app_state.themes_and_fonts.icon_font_solid)
-                    dpg.add_text(": no match", color=hint_color, tag=f"annotation_help_legend_nomatch_explanation_build{env.internal_build_number}", parent=annotation_help_search_legend_group)
-
-                if have_jumpable_item:
-                    annotation_help_jumpable_group = dpg.add_group(horizontal=True, tag=f"annotation_help_jumpable_group_build{env.internal_build_number}", parent=annotation_target_group)
-
-                    dpg.add_text("[Right-click to scroll info panel to topmost", color=hint_color, tag=f"annotation_help_jumpable_explanation_left_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
-                    selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD_CHECK, color=(120, 180, 255), tag=f"annotation_help_jumpable_selection_icon_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
-                    dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_solid)
-                    if search_string:
-                        search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(180, 255, 180), tag=f"annotation_help_jumpable_search_icon_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
-                        dpg.bind_item_font(search_mark_widget, app_state.themes_and_fonts.icon_font_solid)
-                    dpg.add_text("item]", color=hint_color, tag=f"annotation_help_jumpable_explanation_right_build{env.internal_build_number}", parent=annotation_help_jumpable_group)
-                else:
-                    annotation_help_notjumpable_group = dpg.add_group(horizontal=True, tag=f"annotation_help_notjumpable_group_build{env.internal_build_number}", parent=annotation_target_group)
-
-                    dpg.add_text("[Right-click disabled, no", color=hint_color, tag=f"annotation_help_notjumpable_explanation_left_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
-                    selection_mark_widget = dpg.add_text(fa.ICON_CLIPBOARD_CHECK, color=(120, 180, 255), tag=f"annotation_help_notjumpable_selection_icon_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
-                    dpg.bind_item_font(selection_mark_widget, app_state.themes_and_fonts.icon_font_solid)
-                    if search_string:
-                        search_mark_widget = dpg.add_text(fa.ICON_MAGNIFYING_GLASS, color=(180, 255, 180), tag=f"annotation_help_notjumpable_search_icon_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
-                        dpg.bind_item_font(search_mark_widget, app_state.themes_and_fonts.icon_font_solid)
-                    dpg.add_text("item listed]", color=hint_color, tag=f"annotation_help_notjumpable_explanation_right_build{env.internal_build_number}", parent=annotation_help_notjumpable_group)
-
-                # Swap the new content in ("double-buffering")
-                # logger.debug(f"_update_annotation: {task_env.task_name}: Swapping in new content (old GUI widget ID {annotation_group}; new GUI widget ID {annotation_target_group}).")
-                mouse_hover_set_changed = (set(annotation_data_idxs) != old_mouse_hover_data_idxs_set)
-                if mouse_hover_set_changed:  # temporarily hide the window when the content changes (so that it doesn't flicker while being content-swapped and repositioned)
-                    dpg.hide_item(annotation_window)
-                dpg.hide_item(annotation_group)
-                dpg.show_item(annotation_target_group)
-                dpg.split_frame()  # wait for render
-                dpg.delete_item(annotation_group)
-                annotation_group = None
-                dpg.set_item_alias(annotation_target_group, "annotation_group")  # tag
-                annotation_group = annotation_target_group
-                new_content_swapped_in = True
-
-                # Resize/reposition the tooltip only when the set of shown items has actually changed.
-                # This reduces flickering e.g. when clicking on a datapoint, only changing its selection status.
-                if mouse_hover_set_changed:
-                    w, h = dpg.get_item_rect_size(main_window)
-                    dpg.set_item_pos(annotation_window, [w, h])  # offscreen, but not hidden -> will be rendered -> triggers the DPG autosize mechanism
-                    dpg.show_item(annotation_window)
-
-                    # Tooltip window dimensions after autosizing not available yet, so we need to wait until we can compute the final position the tooltip.
-                    guiutils.wait_for_resize(annotation_window)
-                    tooltip_size = dpg.get_item_rect_size(annotation_window)
-
-                    # Position the tooltip elegantly, trying to keep the whole tooltip within the viewport area.
-                    #
-                    # IMPORTANT: This automatically positions the tooltip a bit off from the mouse cursor position so that the cursor won't hover over it.
-                    # This keeps `get_plot_mouse_pos` working, as well as improves tooltip readability since the mouse cursor doesn't cover part of it.
-                    xpos = guiutils.compute_tooltip_position_scalar(algorithm="snap",
-                                                                    cursor_pos=mouse_pos[0],
-                                                                    tooltip_size=tooltip_size[0],
-                                                                    viewport_size=w)
-                    ypos = guiutils.compute_tooltip_position_scalar(algorithm="smooth",
-                                                                    cursor_pos=mouse_pos[1],
-                                                                    tooltip_size=tooltip_size[1],
-                                                                    viewport_size=h)
-
-                    dpg.set_item_pos(annotation_window, [xpos, ypos])
-                dpg.show_item(annotation_window)  # just in case it's hidden
-
-                # # Try to bring the tooltip to the front so it isn't covered by the dimmer.
-                # # This steals keyboard focus from the search field, because DPG thinks the focused item is actually "main_container" (the top-level layout). Doesn't help to record the focused item earlier, same result.
-                # originally_focused_item = dpg.get_focused_item()
-                # logger.debug(f"Originally focused: item {originally_focused_item} (tag '{dpg.get_item_alias(originally_focused_item)}', type {dpg.get_item_type(originally_focused_item)})")
-                # dpg.focus_item(annotation_window)
-                # dpg.split_frame()
-                # dpg.focus_item(originally_focused_item)
-
-        except Exception:
-            logger.debug(f"_update_annotation: {task_env.task_name}: Annotation update task raised an exception; cancelling task.")
-            task_env.cancelled = True
-            if not new_content_swapped_in:  # clean up: swap back the old content (if it still exists) in case the exception occurred during finalizing
-                if annotation_target_group is not None:
-                    dpg.hide_item(annotation_target_group)
-                if annotation_group is not None:
-                    dpg.show_item(annotation_group)
-            raise
-
-        finally:
-            if task_env is not None and task_env.cancelled:
-                # logger.debug(f"_update_annotation: {task_env.task_name}: Annotation update task cancelled.")
-
-                # If the new content was built (partially or completely) but not swapped in, it's unused, so delete it.
-                if (annotation_target_group is not None) and (not new_content_swapped_in):
-                    # logger.debug(f"_update_annotation: {task_env.task_name}: Deleting partially built content.")
-                    dpg.delete_item(annotation_target_group)
-            else:
-                # logger.debug(f"_update_annotation: {task_env.task_name}: Annotation update task completed.")
-
-                # Publish the build ID we used while building
-                annotation_build_number = env.internal_build_number
-
-            # dt = time.monotonic() - annotation_t0
-            # logger.debug(f"_update_annotation: {task_env.task_name}: Annotation build {env.internal_build_number} exiting. Rendered in {dt:0.2f}s.")
-            env.internal_build_number += 1  # always increase internal build, even when cancelled, for unique IDs.
-
-def clear_mouse_hover():
-    """Hide the annotation tooltip, and clear the mouse highlight in the plotter."""
-    dpg.hide_item(annotation_window)
-    dpg.set_value("my_mouse_hover_scatter_series", [[], []])  # tag
+# Annotation tooltip — extracted to `raven.visualizer.annotation` (2026-04-23).
+annotation.build_window()
+app_state.update_mouse_hover = annotation.update  # Published here (not inside the module) so cross-module callers can reach it via `app_state`.
 
 
 # --------------------------------------------------------------------------------
@@ -1803,6 +1491,10 @@ info_panel_build_number = 0  # Sequence number of last completed info panel buil
 info_panel_entry_title_widgets = {}  # `data_idx` (index in `sorted_xxx`) -> DPG ID of GUI widget for the title container group of that entry in the info panel
 info_panel_widget_to_data_idx = {}  # reverse lookup: DPG ID of entry title GUI widget -> `data_idx` (index in `sorted_xxx`)
 info_panel_widget_to_display_idx = {}  # reverse lookup: DPG ID of entry title GUI widget -> insertion order in `info_panel_entry_title_widgets` (how-manyth item in the info panel a given item is). Used in scroll anchoring.
+
+# Publish on `app_state` so the annotation tooltip can read them (until the info panel is extracted too).
+app_state.info_panel_content_lock = info_panel_content_lock
+app_state.info_panel_entry_title_widgets = info_panel_entry_title_widgets
 
 info_panel_search_result_widgets = []  # DPG IDs of entry title container group widgets that match the current search, for the "scroll to next/previous match" buttons.
 info_panel_search_result_widget_to_display_idx = {}  # reverse lookup: DPG ID -> index in `info_panel_search_result_widgets` (to look up how-manyth search result a given item is)
@@ -3438,6 +3130,8 @@ def draw_select_radius_indicator():
 def mouse_inside_plot_widget():
     """Return whether the mouse cursor is inside the plot widget."""
     return guiutils.is_mouse_inside_widget("plot")  # tag
+app_state.mouse_inside_plot_widget = mouse_inside_plot_widget  # so extracted submodules (e.g. `annotation`) can reach it
+
 def mouse_inside_info_panel():
     """Return whether the mouse cursor is inside the info panel."""
     return guiutils.is_mouse_inside_widget("item_information_panel")  # tag
@@ -3487,10 +3181,10 @@ def mouse_click_callback(sender, app_data):
             return
 
         # Find items under the mouse cursor that is included in the info panel.
-        #   - Consider only items listed in the mouse-hover annotation tooltip. These are stored in `annotation_data_idxs`.
+        #   - Consider only items listed in the mouse-hover annotation tooltip. These are stored in `annotation.data_idxs`.
         #   - If a search is active, the item should also match the current search.
-        with annotation_content_lock:
-            annotation_data_idxs_set = set(annotation_data_idxs)  # performance - better to amortize this here, or O(n) lookup for each `in` test?
+        with annotation.content_lock:
+            annotation_data_idxs_set = set(annotation.data_idxs)  # performance - better to amortize this here, or O(n) lookup for each `in` test?
             search_string = unbox(search_string_box)
             with info_panel_content_lock:  # we need to access `info_panel_entry_title_widgets`
                 if not search_string:  # no search active
@@ -3504,9 +3198,9 @@ def mouse_click_callback(sender, app_data):
                     return
 
                 # Then find the item that is listed first in the annotation tooltip, to keep the behavior easily predictable for the user.
-                # We can use `annotation_data_idxs`, which has them in that order.
+                # We can use `annotation.data_idxs`, which has them in that order.
                 jump_target_data_idx = next(filter(lambda data_idx: data_idx in jumpable_data_idxs,
-                                                   annotation_data_idxs),
+                                                   annotation.data_idxs),
                                             None)
                 if jump_target_data_idx is None:
                     return
@@ -3543,7 +3237,7 @@ def mouse_move_callback():
     clear_select_radius_indicator()
 
     if not mouse_inside_plot_widget():
-        clear_mouse_hover()
+        annotation.clear_mouse_hover()
         return
     # We are inside the plot widget.
 
@@ -3746,13 +3440,10 @@ parser.add_argument(dest='filename', nargs='?', default=None, type=str, metavar=
 opts = parser.parse_args()
 
 app_state.bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
-annotation_task_manager = bgtask.TaskManager(name="annotation_update",
-                                             mode="sequential",
-                                             executor=app_state.bg)
 info_panel_task_manager = bgtask.TaskManager(name="info_panel_update",
                                              mode="sequential",
                                              executor=app_state.bg)  # can re-use the same executor to place tasks in the same thread pool.
-# Word cloud's task manager is created lazily inside `raven.visualizer.word_cloud` on first use.
+# The annotation tooltip's and the word cloud's task managers are created lazily inside their own modules on first use.
 importer.init(executor=app_state.bg)  # BibTeX importer
 
 # import sys
