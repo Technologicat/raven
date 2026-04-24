@@ -46,6 +46,9 @@ with timer() as tim:
     from ..vendor import DearPyGui_Markdown as dpg_markdown  # https://github.com/IvanNazaruk/DearPyGui-Markdown
     from ..vendor.file_dialog.fdialog import FileDialog  # https://github.com/totallynotdrait/file_dialog, but with custom modifications
 
+    from ..client import api
+    from ..client import config as client_config
+
     from ..common import bgtask
     from ..common import numutils
     from ..common import utils as common_utils
@@ -1896,6 +1899,12 @@ parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + 
 parser.add_argument(dest='filename', nargs='?', default=None, type=str, metavar='file',
                     help='dataset to open at startup (optional)')
 opts = parser.parse_args()
+
+# `raven.client.api` must be initialized before any mayberemote call. The BibTeX importer uses
+# mayberemote for NLP during the import pipeline, so it needs this. No server connection is
+# made here — that happens lazily on the first HTTP call.
+api.initialize(raven_server_url=client_config.raven_server_url,
+               raven_api_key_file=client_config.raven_api_key_file)
 
 app_state.bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
 # Subsystem task managers (annotation, info panel, word cloud) are created lazily inside their own modules on first use.

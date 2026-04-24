@@ -90,6 +90,8 @@ So the AGPL tax on the server side is concentrated in three places: the Flask ap
 
 The server animator is not going away — it remains indefinitely useful, especially once a JavaScript avatar client exists. A BSD client-local animator is purely additive.
 
+When a client-local animator lands, `raven-avatar-pose-editor` should gain a mayberemote mode as well: it currently loads THA3 in-process, which collides with other local GPU consumers (observed 2026-04-24 — CUDA OOM on a 3070 Ti with Qwen + one THA3 instance already resident). Remote mode would let the pose editor run against a separate server process, or share a single THA3 instance with the live animator on the same box.
+
 No action until the user decides whether to pursue the clean-room path. Discovered during speech-extract-to-common discussion (2026-04-17).
 
 ## Untested but test-worthy modules in `raven.common`
@@ -125,19 +127,23 @@ Follow-up options to consider:
 
 No code change; this is a documentation / install-experience issue. Discovered during speech-extract-to-common step 2 (2026-04-17).
 
-## Lazy `api.initialize` in `llmclient` (would unblock `test_scaffold` in minimal CI)
+## Lazy `api.initialize` in `llmclient` and `hybridir` (would unblock `test_scaffold` in minimal CI)
 
 `raven/librarian/llmclient.py` calls `api.initialize(...)` at module top (lines 55–58). This means `from raven.librarian import llmclient` both (a) requires the full `raven.client.api` import chain to succeed (qoi, spaCy, Kokoro TTS, …), and (b) runs the initialization side effect. As a result, `scaffold` — which imports `llmclient` at module level — is not importable in environments without the full dep stack.
+
+The same anti-pattern also lives in `raven/librarian/hybridir.py` (same line-range).
 
 Concrete cost observed 2026-04-17: `test_scaffold.py` has to `pytest.importorskip("raven.librarian.scaffold")` at the top, so the scaffold tests skip entirely in the CI minimal-deps job (matching the existing pattern for `test_api.py` and `test_hybridir.py`). Scaffold coverage is visible only in dev environments — not a regression, just a cap on what CI can report.
 
 Refactor sketch:
 
-- Move `api.initialize(...)` out of the module body into a lazy setup function. The natural home is probably `llmclient.setup`, which app startup already calls.
-- Audit `llmclient`'s module-top imports for other side effects; move to lazy/TYPE_CHECKING where possible. `scaffold.py` now uses `TYPE_CHECKING` for its `hybridir` import, which is a good model.
-- Verify no other module relies on `api.initialize` being called as a side effect of importing `llmclient`.
+- Move `api.initialize(...)` out of the module body into a lazy setup function. The natural home in `llmclient` is probably `llmclient.setup`, which app startup already calls; `hybridir` has an analogous setup path.
+- Audit `llmclient`'s / `hybridir`'s module-top imports for other side effects; move to lazy/TYPE_CHECKING where possible. `scaffold.py` now uses `TYPE_CHECKING` for its `hybridir` import, which is a good model.
+- Verify no other module relies on `api.initialize` being called as a side effect of importing `llmclient` / `hybridir`.
 
 Once done, remove the `pytest.importorskip` from `test_scaffold.py`; the scaffold tests then contribute to CI coverage too (~90% of scaffold.py's 119 statements).
+
+Fleet status as of 2026-04-24: `raven/visualizer/importer.py` used to have the same pattern but was cleaned up — `api.initialize(...)` now lives in that module's `main()` (for the `raven-importer` CLI) and in `raven/visualizer/app.py` (for the GUI). Same shape as `librarian/app.py` already uses. Use as a reference when tackling `llmclient` / `hybridir`.
 
 Discovered during scaffold/appstate test work (2026-04-17).
 

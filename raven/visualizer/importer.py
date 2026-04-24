@@ -82,18 +82,19 @@ deviceinfo.validate(visualizer_config.devices)  # modifies in-place if CPU fallb
 extended_stopwords = copy.copy(nlptools.default_stopwords)
 extended_stopwords.update(x.lower() for x in visualizer_config.custom_stopwords)
 
-# For us (Raven-visualizer importer), running Raven-server is optional.
+# Running Raven-server is optional for us (Raven-visualizer importer): when reachable,
+# we call into its NLP modules to avoid loading an extra copy of potentially large
+# models in VRAM (relevant when Raven-librarian is also running); when not, we fall
+# back to in-process models via `mayberemote`. Either way, `raven.client.api` must be
+# initialized before any `mayberemote` call. That initialization is the responsibility
+# of whoever uses this module:
 #
-# Using the server avoids loading an extra copy of (possibly large) NLP models in VRAM,
-# especially if also Raven-librarian is running simultaneously.
+#   - GUI (`raven-visualizer`): initialized by `raven.visualizer.app` at startup.
+#   - CLI (`raven-importer`):    initialized by `main()` below.
 #
-# If the server is running, we'll call into its NLP modules.
-# If not, no big deal - we'll run in standalone mode, loading the NLP models locally. See `mayberemote`.
-#
-# It doesn't hurt to always initialize the API. This doesn't yet connect to the server.
-# TODO: Maybe Raven-visualizer should init the API in its main module, for consistency with the other apps. OTOH, this is a main module too, for the command-line importer.
-api.initialize(raven_server_url=client_config.raven_server_url,
-               raven_api_key_file=client_config.raven_api_key_file)
+# Keeping it out of module-top imports means importing this module (e.g. from the
+# Visualizer GUI for its `start_task` / `cancel_task` API) has no side effects on
+# the client API's device-validation state.
 
 # --------------------------------------------------------------------------------
 # Common helpers
@@ -1251,6 +1252,9 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
 # Main program (when run as a standalone command-line tool)
 
 def main() -> None:
+    api.initialize(raven_server_url=client_config.raven_server_url,
+                   raven_api_key_file=client_config.raven_api_key_file)
+
     logger.info("Settings (for LOCAL models):")
     logger.info(f"    Embedding model: {visualizer_config.embedding_model}")
     logger.info(f"        Dimension reduction method: {visualizer_config.vis_method}")
