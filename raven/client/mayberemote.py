@@ -49,6 +49,11 @@ class MaybeRemoteService:
 
         Base class. Specific services derive from this.
 
+        Prerequisite: `raven.client.api.initialize(...)` must have been called
+        before instantiating any `MaybeRemoteService`, because the constructor
+        calls through `api.*` (which enforces this via `api.require()`). Apps
+        typically initialize the API once at startup.
+
         When a `MaybeRemoteService` is instantiated, it checks whether Raven-server
         can be reached at the URL set in `raven.client.config`.
 
