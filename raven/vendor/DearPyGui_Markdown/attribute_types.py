@@ -97,8 +97,9 @@ class HoverAttribute(Attribute):
 
     def __new__(cls, *args, **kwargs):
         if cls._mouse_move_handler is None:
-            with dpg.handler_registry() as cls._mouse_move_handler:
-                dpg.add_mouse_move_handler(callback=lambda: cls._check_hovered_items())
+            cls._mouse_move_handler = dpg.add_handler_registry()
+            dpg.add_mouse_move_handler(parent=cls._mouse_move_handler,
+                                       callback=lambda: cls._check_hovered_items())
         return super().__new__(cls)
 
     def __init__(self, attribute_connector: AttributeConnector | None):
@@ -127,9 +128,11 @@ class HoverAttribute(Attribute):
                 self._handler = self.attribute_connector.handler
                 return
 
-        with dpg.item_handler_registry() as handler:
-            dpg.add_item_clicked_handler(callback=lambda s, info, u: self.click(info[0]))
-            dpg.add_item_hover_handler(callback=lambda s, item, u: self._hover(item))
+        handler = dpg.add_item_handler_registry()
+        dpg.add_item_clicked_handler(parent=handler,
+                                     callback=lambda s, info, u: self.click(info[0]))
+        dpg.add_item_hover_handler(parent=handler,
+                                   callback=lambda s, item, u: self._hover(item))
         self._handler = handler
 
         if self.attribute_connector is not None:

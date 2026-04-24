@@ -19,9 +19,10 @@ class AttributeController(list[Attribute]):
 
     def __new__(cls, *args, **kwargs):
         if cls.dpg_group_theme is None:
-            with dpg.theme() as cls.dpg_group_theme:
-                with dpg.theme_component(dpg.mvAll):
-                    dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 0, 0, category=dpg.mvThemeCat_Core)
+            cls.dpg_group_theme = dpg.add_theme()
+            theme_component = dpg.add_theme_component(dpg.mvAll, parent=cls.dpg_group_theme)
+            dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 0, 0,
+                                category=dpg.mvThemeCat_Core, parent=theme_component)
         return list.__new__(cls)
 
     def __init__(self, attributes: list[Attribute]):
@@ -425,4 +426,4 @@ class LineEntity(TextEntity):
             self.post_render_queue.append(attribute)
 
         if Separator in attributes:
-            Separator.render(parent=parent, attributes_group=attributes_group)
+            Separator.render(before=parent, attributes_group=attributes_group)

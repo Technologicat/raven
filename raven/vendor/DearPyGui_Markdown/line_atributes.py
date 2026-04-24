@@ -62,12 +62,16 @@ def _run_when_laid_out(item: int, thunk: Callable[[], None]) -> None:
 
 class Separator(LineAttribute):
     @staticmethod
-    def render(parent=0, attributes_group=0):  # noqa
+    def render(before: int, attributes_group=0):  # noqa
+        # `before` is the row group this separator sits above; the separator
+        # places itself as a sibling immediately preceding it, so the DPG
+        # parent we add into is the row group's own parent.
+        parent = dpg.get_item_parent(before)
         height = get_text_size('|', font=Default.get_font())[1]
-        with dpg.group(before=parent) as group:
-            dpg.add_spacer(parent=group, height=int(height * 0.5))
-            dpg.add_separator(parent=group)
-            dpg.add_spacer(parent=group, height=int(height * 0.5))
+        group = dpg.add_group(parent=parent, before=before)
+        dpg.add_spacer(parent=group, height=int(height * 0.5))
+        dpg.add_separator(parent=group)
+        dpg.add_spacer(parent=group, height=int(height * 0.5))
 
 
 class Blockquote(LineAttribute):
