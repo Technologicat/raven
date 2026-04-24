@@ -1,3 +1,5 @@
+from typing import Callable
+
 import dearpygui.dearpygui as dpg
 
 from . import get_text_size
@@ -6,6 +8,56 @@ from .attribute_types import LineAttribute, AttributeConnector
 from .font_attributes import Default
 
 from ...common.gui import utils as guiutils
+
+
+def _run_when_laid_out(item: int, thunk: Callable[[], None]) -> None:
+    """Run `thunk` once DPG has laid out `item` (i.e. its geometry is real).
+
+    Inside a hidden container (most commonly a tooltip), DPG reports
+    `get_item_pos() == (0, 0)` and `get_item_rect_size() == (0, 0)` for
+    children, because layout only runs once the container is actually shown.
+    Bullet glyphs and blockquote bars are positioned absolutely from those
+    reads, so if we compute them while the tooltip is still hidden, every
+    line-attribute of a list/blockquote ends up stacked at the top-left of
+    `attributes_group`.
+
+    This helper defers `thunk` until `item` is visible AND has non-zero size.
+    It attaches an `item_visible_handler` that fires each frame the item is
+    visible; the callback is a no-op until the layout has settled (size
+    becomes non-zero), at which point it runs `thunk` and tears itself down.
+    If `item` is already laid out at call time, `thunk` runs immediately.
+    """
+    with guiutils.nonexistent_ok():
+        if not dpg.does_item_exist(item):
+            return
+        if dpg.is_item_visible(item) and dpg.get_item_rect_size(item) != [0, 0]:
+            thunk()
+            return
+
+        # No lock on `state`: DPG dispatches item handler callbacks serially on its
+        # single callback-dispatch thread, so `_on_visible` cannot overlap itself.
+        reg = dpg.add_item_handler_registry()
+        state = {"done": False}
+
+        def _on_visible():
+            if state["done"]:
+                return
+            with guiutils.nonexistent_ok():
+                # The handler may fire on the same frame the container became
+                # visible, with layout still pending; rect_size is then [0, 0].
+                # Returning without touching `state["done"]` leaves the handler
+                # active, so the next frame retries.
+                if dpg.get_item_rect_size(item) == [0, 0]:
+                    return
+                state["done"] = True
+                try:
+                    thunk()
+                finally:
+                    dpg.bind_item_handler_registry(item, 0)
+                    dpg.delete_item(reg)
+
+        dpg.add_item_visible_handler(parent=reg, callback=_on_visible)
+        dpg.bind_item_handler_registry(item, reg)
 
 
 class Separator(LineAttribute):
@@ -45,29 +97,32 @@ class Blockquote(LineAttribute):
 
     @CallInNextFrame
     def self_post_render(self, text_height: int | float, spacer_group: int, parent=0, attributes_group=0):
-        with guiutils.nonexistent_ok():
-            group_width, group_height = dpg.get_item_rect_size(parent)
-            pos = dpg.get_item_pos(spacer_group)
-            x, y = pos
-            y += (group_height - text_height) / 2
-            if len(self.attribute_connector) != 0:
-                last_attribute = self.attribute_connector[-1]
-                last_drawlist_y = dpg.get_item_pos(last_attribute.drawlist_group)[1]
-                last_drawlist_y += dpg.get_item_rect_size(last_attribute.drawlist_group)[1]
-                extra_height = y - last_drawlist_y
-                y -= extra_height
-                text_height += extra_height
+        def _draw():
+            with guiutils.nonexistent_ok():
+                group_width, group_height = dpg.get_item_rect_size(parent)
+                pos = dpg.get_item_pos(spacer_group)
+                x, y = pos
+                local_text_height = text_height
+                y += (group_height - local_text_height) / 2
+                if len(self.attribute_connector) != 0:
+                    last_attribute = self.attribute_connector[-1]
+                    last_drawlist_y = dpg.get_item_pos(last_attribute.drawlist_group)[1]
+                    last_drawlist_y += dpg.get_item_rect_size(last_attribute.drawlist_group)[1]
+                    extra_height = y - last_drawlist_y
+                    y -= extra_height
+                    local_text_height += extra_height
 
-            self.drawlist_group = dpg.add_group(pos=[x, y], parent=attributes_group)
-            drawlist = dpg.add_drawlist(parent=self.drawlist_group, width=self.get_width(), height=text_height)
-            thickness = self.line_width
-            x_line = (self.get_width() / 2) - 1
-            y_line = text_height
-            dpg.draw_line([x_line, 0],
-                          [x_line, y_line],
-                          parent=drawlist, color=self.color, thickness=thickness)
+                self.drawlist_group = dpg.add_group(pos=[x, y], parent=attributes_group)
+                drawlist = dpg.add_drawlist(parent=self.drawlist_group, width=self.get_width(), height=local_text_height)
+                thickness = self.line_width
+                x_line = (self.get_width() / 2) - 1
+                y_line = local_text_height
+                dpg.draw_line([x_line, 0],
+                              [x_line, y_line],
+                              parent=drawlist, color=self.color, thickness=thickness)
 
-            self.attribute_connector.append(self)
+                self.attribute_connector.append(self)
+        _run_when_laid_out(spacer_group, _draw)
 
 
 class List(LineAttribute):
@@ -158,59 +213,59 @@ class List(LineAttribute):
             dpg.add_spacer(width=get_text_size(' ' * 2, font=Default.get_font())[0], parent=self.spacer_group)
 
     def ordered_render(self, attributes_group=0):
-        with guiutils.nonexistent_ok():
-            text = f'{str(self.index)[-4::]}.  '
-            render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
-            x, y = dpg.get_item_pos(self.spacer_group)
+        def _draw():
+            with guiutils.nonexistent_ok():
+                text = f'{str(self.index)[-4::]}.  '
+                render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
+                x, y = dpg.get_item_pos(self.spacer_group)
 
-            y += (self.text_height - render_text_height) / 2
-            x += (self.get_width() - self.get_task_width()) - render_text_width
+                y += (self.text_height - render_text_height) / 2
+                x += (self.get_width() - self.get_task_width()) - render_text_width
 
-            dpg_text = dpg.add_text(text, pos=(x, y), parent=attributes_group)
-            dpg.bind_item_font(dpg_text, font=Default.get_font())
+                dpg_text = dpg.add_text(text, pos=(x, y), parent=attributes_group)
+                dpg.bind_item_font(dpg_text, font=Default.get_font())
+        _run_when_laid_out(self.spacer_group, _draw)
 
     def unordered_render(self, attributes_group=0):
-        with guiutils.nonexistent_ok():
-            text = '0.  '
-            render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
-            x, y = dpg.get_item_pos(self.spacer_group)
+        def _draw():
+            with guiutils.nonexistent_ok():
+                text = '0.  '
+                render_text_width, render_text_height = get_text_size(text, font=Default.get_font())
+                x, y = dpg.get_item_pos(self.spacer_group)
 
-            y += (self.text_height - render_text_height) / 2
-            x += (self.get_width() - self.get_task_width()) - render_text_width
-            height = render_text_height / 2.5
-            width = height
-            y += (render_text_height - height) * 0.77
-            thickness = height / 7
-            drawlist_group = dpg.add_group(pos=(x, y), parent=attributes_group)
-            drawlist = dpg.add_drawlist(width=width, height=height, parent=drawlist_group)
-            # dpg.draw_quad([0, 0], [width, 0],
-            #               [width, height], [0, height],
-            #               color=(255, 0, 0, 255), fill=(255, 0, 0, 255),
-            #               parent=drawlist)
+                y += (self.text_height - render_text_height) / 2
+                x += (self.get_width() - self.get_task_width()) - render_text_width
+                height = render_text_height / 2.5
+                width = height
+                y += (render_text_height - height) * 0.77
+                thickness = height / 7
+                drawlist_group = dpg.add_group(pos=(x, y), parent=attributes_group)
+                drawlist = dpg.add_drawlist(width=width, height=height, parent=drawlist_group)
 
-            depth = self.depth - self.depth // 4 * 4
-            match depth:
-                case 1:
-                    dpg.draw_circle([height / 2, width / 2],
-                                    width / 2 - thickness / 2,
-                                    parent=drawlist,
-                                    thickness=thickness,
-                                    fill=(255, 255, 255, 255))
-                case 2:
-                    dpg.draw_circle([height / 2, width / 2],
-                                    width / 2 - thickness / 2,
-                                    parent=drawlist,
-                                    thickness=thickness,
-                                    fill=(0, 0, 0, 0))
-                case 3:
-                    dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
-                                  [width - thickness, height - thickness], [thickness, height - thickness],
-                                  parent=drawlist,
-                                  thickness=thickness,
-                                  fill=(255, 255, 255, 255))
-                case _:
-                    dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
-                                  [width - thickness, height - thickness], [thickness, height - thickness],
-                                  parent=drawlist,
-                                  thickness=thickness,
-                                  fill=(0, 0, 0, 0))
+                depth = self.depth - self.depth // 4 * 4
+                match depth:
+                    case 1:
+                        dpg.draw_circle([height / 2, width / 2],
+                                        width / 2 - thickness / 2,
+                                        parent=drawlist,
+                                        thickness=thickness,
+                                        fill=(255, 255, 255, 255))
+                    case 2:
+                        dpg.draw_circle([height / 2, width / 2],
+                                        width / 2 - thickness / 2,
+                                        parent=drawlist,
+                                        thickness=thickness,
+                                        fill=(0, 0, 0, 0))
+                    case 3:
+                        dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
+                                      [width - thickness, height - thickness], [thickness, height - thickness],
+                                      parent=drawlist,
+                                      thickness=thickness,
+                                      fill=(255, 255, 255, 255))
+                    case _:
+                        dpg.draw_quad([thickness, thickness], [width - thickness, thickness],
+                                      [width - thickness, height - thickness], [thickness, height - thickness],
+                                      parent=drawlist,
+                                      thickness=thickness,
+                                      fill=(0, 0, 0, 0))
+        _run_when_laid_out(self.spacer_group, _draw)

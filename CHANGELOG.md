@@ -9,6 +9,7 @@
 **Fixed**:
 
 - *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.
+- `dpg_markdown` bullet lists and blockquotes now render correctly inside tooltips (and any other initially-hidden container). Previously every bullet glyph in a tooltip stacked at the top-left, because DPG reports `get_item_pos() == (0, 0)` for children of a hidden container; the bullet drawlists are now deferred until their row has been laid out.
 
 ---
 
