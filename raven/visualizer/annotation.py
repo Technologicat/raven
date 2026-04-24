@@ -20,10 +20,9 @@ indices currently shown in the tooltip — read by the right-click handler in
 Cross-module state this module reads via `app_state`:
 `{dataset, selection_data_idxs_box, themes_and_fonts, bg}` from the
 shared-namespace fields; `{is_any_modal_window_visible, mouse_inside_plot_widget,
-search_string_box, search_result_data_idxs_box, info_panel_content_lock,
-info_panel_entry_title_widgets, get_entries_for_selection}` registered by
-`app.py` during startup. The info-panel-owned fields will move into
-`info_panel.py` when that extraction lands.
+search_string_box, search_result_data_idxs_box, get_entries_for_selection}`
+registered by `app.py` during startup. The info panel's content lock and
+entry-title widget map are accessed directly via `from . import info_panel`.
 """
 
 __all__ = ["content_lock",
@@ -49,6 +48,7 @@ from ..common.gui import utils as guiutils
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 
 from . import config as visualizer_config
+from . import info_panel
 from . import plotter
 from .app_state import app_state
 
@@ -208,7 +208,7 @@ def _render_worker(*, task_env, env=None):
             item_nomatch = sym("nomatch")
             item_searchoff = sym("searchoff")
 
-            with app_state.info_panel_content_lock:
+            with info_panel.content_lock:
                 for cluster_id in clusters_at_mouse:
                     if task_env is not None and task_env.cancelled:
                         break
@@ -228,7 +228,7 @@ def _render_worker(*, task_env, env=None):
                         else:  # Search active, non-matching item -> dim it.
                             title_color = (140, 140, 140, 255)
 
-                        if data_idx in app_state.info_panel_entry_title_widgets:  # shown in the info panel
+                        if data_idx in info_panel.entry_title_widgets:  # shown in the info panel
                             item_selection_status = item_ininfo
                             selection_mark_text = fa.ICON_CLIPBOARD_CHECK
                             selection_mark_font = app_state.themes_and_fonts.icon_font_solid

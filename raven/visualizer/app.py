@@ -26,27 +26,18 @@ with timer() as tim:
     import collections
     import concurrent.futures
     from copy import deepcopy
-    import functools
-    import gc
-    from io import StringIO
     import math
     import os
     import pathlib
     import platform
-    import re
     import threading
-    import time
     from typing import Union
 
     import numpy as np
 
-    from spacy.lang.en import English
-    nlp_en = English()
-    stopwords = nlp_en.Defaults.stop_words
-
     from unpythonic.env import env
     envcls = env  # for functions that need an `env` parameter due to `@dlet`, so that they can also instantiate env objects (oops)
-    from unpythonic import dlet, call, box, unbox, sym, islice
+    from unpythonic import call, box, unbox, sym
 
     import dearpygui.dearpygui as dpg
 
@@ -62,12 +53,12 @@ with timer() as tim:
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
     from ..common.gui import utils as guiutils
-    from ..common.gui import widgetfinder
 
     from .app_state import app_state  # Visualizer-wide shared state namespace (see `app_state.py`)
     from . import annotation
     from . import config as visualizer_config
     from . import importer  # BibTeX importer
+    from . import info_panel
     from . import plotter
     from . import selection
     from . import word_cloud
@@ -111,7 +102,7 @@ def enter_modal_mode():
     logger.debug("enter_modal_mode: App entering modal mode.")
     dpg.split_frame()
     app_state.update_mouse_hover(force=True, wait=False)  # hide annotation (just in case it's there)
-    _info_panel_scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` disables its highlight
+    info_panel.scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` disables its highlight
 
 def exit_modal_mode():
     """Restore the GUI to main window mode (when a modal is closed): show annotation if relevant, enable current item button glow, ...
@@ -121,7 +112,7 @@ def exit_modal_mode():
     """
     logger.debug("exit_modal_mode: App returning to main window mode.")
     dpg.split_frame()
-    _info_panel_scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` enables its highlight
+    info_panel.scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` enables its highlight
     app_state.update_mouse_hover(force=True, wait=False)  # show annotation if relevant
 
 # Register the modal-mode helpers on `app_state` so extracted submodules can reach them.
@@ -192,7 +183,7 @@ app_state.dataset = None  # currently loaded dataset (as an `unpythonic.env.env`
 
 def clear_background_tasks(wait: bool):
     """Stop (cancel) and delete all background tasks."""
-    info_panel_task_manager.clear(wait=wait)
+    info_panel.clear_tasks(wait=wait)
     annotation.clear_tasks(wait=wait)
     word_cloud.clear_tasks(wait=wait)
 
@@ -505,14 +496,6 @@ def start_or_stop_importer():
 # --------------------------------------------------------------------------------
 # Animations, live updates
 
-info_panel_scroll_end_flasher = gui_animation.ScrollEndFlasher(target="item_information_panel",
-                                                               tag="scroll_end_flasher",
-                                                               duration=gui_config.scroll_ends_here_duration,
-                                                               custom_finish_pred=lambda self: is_any_modal_window_visible(),  # end animation (and hide the flasher) immediately if any modal window becomes visible
-                                                               font=app_state.themes_and_fonts.icon_font_solid,
-                                                               text_top=fa.ICON_ARROWS_UP_TO_LINE,
-                                                               text_bottom=fa.ICON_ARROWS_DOWN_TO_LINE)
-
 search_string_box = box("")
 search_result_data_idxs_box = box(common_utils.make_blank_index_array())
 
@@ -572,6 +555,9 @@ def update_search(wait=True):
     #       If the plot mouse position is one frame out of date (update order?), that would explain it.
     app_state.update_info_panel(wait=wait)
     app_state.update_mouse_hover(force=True, wait=wait)
+
+# Register on `app_state` so extracted submodules (e.g. `info_panel`) can call it.
+app_state.update_search = update_search
 
 
 class PlotterPulsatingGlow(gui_animation.Animation):  # this animation is set up by `reset_app_state`
@@ -656,21 +642,21 @@ class CurrentItemControlsGlow(gui_animation.Animation):  # this animation is set
 
         This runs every frame, so the implementation is as minimal as possible, and exits as early as possible.
 
-        This animation is controlled by `current_item`; see `update_current_item_info`.
+        This animation is controlled by `info_panel.current_item_info`; see `info_panel.update_current_item_info`.
         """
-        if not current_item_info_lock.acquire(blocking=False):
-            # If we didn't get the lock, it means `current_item` is being updated. Never mind, we can try again next frame.
+        if not info_panel.current_item_info_lock.acquire(blocking=False):
+            # If we didn't get the lock, it means `current_item_info` is being updated. Never mind, we can try again next frame.
             return gui_animation.action_continue
         try:  # ok, got the lock
             have_current_item = False
-            if current_item_info.item is not None:
+            if info_panel.current_item_info.item is not None:
                 have_current_item = True
-                x0 = current_item_info.x0
-                y0 = current_item_info.y0
-                # w = current_item_info.w
-                # h = current_item_info.h
+                x0 = info_panel.current_item_info.x0
+                y0 = info_panel.current_item_info.y0
+                # w = info_panel.current_item_info.w
+                # h = info_panel.current_item_info.h
         finally:
-            current_item_info_lock.release()
+            info_panel.current_item_info_lock.release()
 
         if have_current_item:
             dt = (t - self.t0) / 10**9  # seconds since t0
@@ -707,34 +693,6 @@ class CurrentItemControlsGlow(gui_animation.Animation):  # this animation is set
         return gui_animation.action_continue
 
 
-info_panel_dimmer_overlay = None
-def create_info_panel_dimmer_overlay():
-    """Create a dimmer for the info panel. Used for indicating that the info panel is updating."""
-    global info_panel_dimmer_overlay
-    if info_panel_dimmer_overlay is None:
-        info_panel_dimmer_overlay = gui_animation.Dimmer(target="item_information_panel",
-                                                         tag="dimmer_overlay_window",
-                                                         color=(37, 37, 38, 255))   # TODO: This is the info panel content area background color in the default theme. Figure out how to get colors from a theme.
-        info_panel_dimmer_overlay.build()
-def show_info_panel_dimmer_overlay():
-    """Dim the info panel."""
-    create_info_panel_dimmer_overlay()
-    info_panel_dimmer_overlay.show()
-def hide_info_panel_dimmer_overlay():
-    """Un-dim the info panel."""
-    create_info_panel_dimmer_overlay()
-    info_panel_dimmer_overlay.hide()
-
-
-scroll_animation = None  # keep a reference to the current scroll animation (if any), so that we can stop the scroll animation, and only that animation.
-scroll_animation_lock = threading.RLock()
-def clear_global_scroll_animation_reference():
-    """Clear the global reference to the current scroll animation; used as finish callback for `SmoothScrolling`."""
-    global scroll_animation
-    with scroll_animation_lock:
-        scroll_animation = None
-
-
 def update_animations():
     # # Resize the search field dynamically. We don't need this with the current layout; keeping for documentation only.
     # # Note that in DPG, text widgets have no `width` (always zero), but they have a rect_size.
@@ -748,7 +706,7 @@ def update_animations():
     # At app startup, the main window thinks it has height=100, which is wrong.
     # The scroll end flasher needs the correct height for "item_information_panel"  # tag
     # to know the viewport coordinates for its bottom overlay.
-    _update_info_panel_height()
+    info_panel.update_height()
 
     # ----------------------------------------
     # Show loading spinner when info panel is refreshing
@@ -778,12 +736,12 @@ def update_animations():
         else:
             dpg.set_value(search_field_text_color, (255, 128, 128))  # not found, red
 
-    update_current_search_result_status()  # The "[x/x]" topmost currently visible search result indicator (also updates `current_item` for `CurrentItemControlsGlow`)
+    info_panel.update_current_search_result_status()  # The "[x/x]" topmost currently visible search result indicator (also updates `current_item_info` for `CurrentItemControlsGlow`)
 
     # ----------------------------------------
     # Update various other things that need per-frame updates
 
-    update_info_panel_navigation_controls()  # Info panel top/bottom/pageup/pagedown buttons
+    info_panel.update_navigation_controls()  # Info panel top/bottom/pageup/pagedown buttons
 
     if importer.has_task():
         update_importer_status()
@@ -793,51 +751,6 @@ def update_animations():
 
     gui_animation.animator.render_frame()
 
-
-current_item_info = env(item=None, x0=None, y0=None, w=None, h=None)  # `item`: GUI widget DPG tag or ID; `x0`, `y0`: screen space coordinates, in pixels; `w`, `h`: in pixels
-current_item_info_lock = threading.Lock()
-
-def update_current_item_info():  # Called per-frame by `update_current_search_result_status` (which already holds `info_panel_content_lock`, so as to avoid unnecessary release/re-lock).
-    """Update the data used to track the on-screen position of the current item.
-
-    `CurrentItemControlsGlow` uses this data to highlight the current item's per-item GUI controls
-    (to show which item any hotkeys affecting a single item apply to).
-
-    When any modal window is visible, the current item info is cleared, thus turning the highlight off
-    while a modal window is open.
-    """
-    with info_panel_content_lock:
-        if is_any_modal_window_visible():
-            current_item = None
-        else:
-            current_item = _get_current_info_panel_item()
-            # if current_item is not None:  # find the title text widget (old variant of highlighting)
-            #     current_item = find_item_depth_first(current_item, accept=is_entry_title_text_item)
-        if current_item is not None:
-            current_item_x0, current_item_y0 = dpg.get_item_rect_min(current_item)
-            current_item_w, current_item_h = dpg.get_item_rect_size(current_item)
-        else:
-            current_item_x0, current_item_y0 = None, None
-            current_item_w, current_item_h = None, None
-    with current_item_info_lock:
-        current_item_info.item = current_item
-        current_item_info.x0 = current_item_x0
-        current_item_info.y0 = current_item_y0
-        current_item_info.w = current_item_w
-        current_item_info.h = current_item_h
-
-def clear_current_item_info():
-    """Clear the data used to track the on-screen position of the current item.
-
-    `CurrentItemControlsGlow` uses this data to highlight the current item's per-item GUI controls
-    (to show which item any hotkeys affecting a single item apply to). Clearing it turns the highlight off.
-    """
-    with current_item_info_lock:
-        current_item_info.item = None
-        current_item_info.x0 = None
-        current_item_info.y0 = None
-        current_item_info.w = None
-        current_item_info.h = None
 
 # --------------------------------------------------------------------------------
 # Set up the main window
@@ -859,14 +772,14 @@ with timer() as tim:
                                         no_scroll_with_mouse=True):
                     with dpg.group(horizontal=True, tag="item_information_header_group"):
                         # Copy report to clipboard button
-                        # The callback function is defined (and bound) later when we define the info panel.
-                        copy_report_button = dpg.add_button(tag="copy_report_to_clipboard_button",
-                                                            label=fa.ICON_COPY,
-                                                            enabled=False)
+                        # The callback function is bound in `info_panel.build_window()`.
+                        dpg.add_button(tag="copy_report_to_clipboard_button",
+                                       label=fa.ICON_COPY,
+                                       enabled=False)
                         dpg.bind_item_font("copy_report_to_clipboard_button", app_state.themes_and_fonts.icon_font_solid)  # tag
                         dpg.bind_item_theme("copy_report_to_clipboard_button", "disablable_widget_theme")  # tag
-                        with dpg.tooltip("copy_report_to_clipboard_button") as copy_report_tooltip:  # tag
-                            copy_report_tooltip_text = dpg.add_text("Copy report to clipboard [F8]\n    no modifier: as plain text\n    with Shift: as Markdown")  # TODO: DRY duplicate definitions for labels
+                        with dpg.tooltip("copy_report_to_clipboard_button", tag="copy_report_tooltip"):  # tag
+                            dpg.add_text("Copy report to clipboard [F8]\n    no modifier: as plain text\n    with Shift: as Markdown", tag="copy_report_tooltip_text")  # TODO: DRY duplicate definitions for labels
 
                         # Static header text
                         dpg.add_text("Item information", color=(255, 255, 255, 255), tag="item_information_title")
@@ -975,16 +888,13 @@ with timer() as tim:
                         dpg.add_text("[no search active]", color=(140, 140, 140, 255), tag="item_information_search_controls_item_count")  # TODO: DRY duplicate definitions for labels
                         dpg.add_text("[x/x]", color=(140, 140, 140, 255), tag="item_information_search_controls_current_item", show=False)
 
-                # Item information content
+                # Item information content.
+                # The content group itself (alias "info_panel_content_group") is created by `info_panel.build_window()`;
+                # it must be the *first* child, before the end spacer — the info panel worker inserts new builds using
+                # `before="info_panel_content_end_spacer"`.
                 with dpg.child_window(tag="item_information_panel",
                                       width=gui_config.info_panel_w,
                                       height=gui_config.main_window_h - gui_config.info_panel_reserved_h):
-                    # with dpg.drawlist(width=gui_config.info_panel_w - 20, height=1):
-                    #     dpg.draw_line((0, 0), (gui_config.info_panel_w - 21, 0), color=(140, 140, 140, 255), thickness=1)
-                    # dpg.add_text("")
-                    with dpg.group(horizontal=False) as info_panel_content_group:  # info container, will be refilled by `update_info_panel`
-                        dpg.add_text("[Select item(s) to view information]", color=(140, 140, 140, 255))  # TODO: DRY duplicate definitions for labels
-                    dpg.set_item_alias(info_panel_content_group, "info_panel_content_group")  # tag  # Set the alias separately for unified handling with the instances created later (so they show similarly in the debug registry)
                     dpg.add_spacer(width=gui_config.info_panel_w - 20, height=0, tag="info_panel_content_end_spacer")
 
                 # Plotter help
@@ -1478,1457 +1388,11 @@ app_state.get_entries_for_selection = get_entries_for_selection
 annotation.build_window()
 app_state.update_mouse_hover = annotation.update  # Published here (not inside the module) so cross-module callers can reach it via `app_state`.
 
-
 # --------------------------------------------------------------------------------
-# Item information panel
-#
-# NOTE: Fasten your seatbelt, everything related to the info panel makes up ~half of the entire program.
+# Item information panel — extracted to `raven.visualizer.info_panel` (2026-04-24).
+info_panel.build_window()
+app_state.update_info_panel = info_panel.update  # Published here so cross-module callers (selection, update_search) can reach it via `app_state`.
 
-info_panel_content_lock = threading.RLock()  # Content double buffering (swap). Allowing the same thread to enter multiple nested critical sections makes some checks simpler here.
-
-info_panel_build_number = 0  # Sequence number of last completed info panel build, so that callbacks can refer to the GUI widgets of the entries currently in the info panel by their DPG tags.
-
-info_panel_entry_title_widgets = {}  # `data_idx` (index in `sorted_xxx`) -> DPG ID of GUI widget for the title container group of that entry in the info panel
-info_panel_widget_to_data_idx = {}  # reverse lookup: DPG ID of entry title GUI widget -> `data_idx` (index in `sorted_xxx`)
-info_panel_widget_to_display_idx = {}  # reverse lookup: DPG ID of entry title GUI widget -> insertion order in `info_panel_entry_title_widgets` (how-manyth item in the info panel a given item is). Used in scroll anchoring.
-
-# Publish on `app_state` so the annotation tooltip can read them (until the info panel is extracted too).
-app_state.info_panel_content_lock = info_panel_content_lock
-app_state.info_panel_entry_title_widgets = info_panel_entry_title_widgets
-
-info_panel_search_result_widgets = []  # DPG IDs of entry title container group widgets that match the current search, for the "scroll to next/previous match" buttons.
-info_panel_search_result_widget_to_display_idx = {}  # reverse lookup: DPG ID -> index in `info_panel_search_result_widgets` (to look up how-manyth search result a given item is)
-
-cluster_ids_in_selection = []  # cluster IDs (as in the dataset) of the clusters currently shown in the info panel. Note we always show at least one item from each cluster, so these are the same as in the whole selection.
-cluster_id_to_display_idx = {}  # reverse lookup: cluster ID -> index in `cluster_ids_in_selection` (for the cluster scroll hotkeys to look up next/previous cluster shown in the info panel)
-
-report_plaintext = box("")  # Text report of full content of info panel, in plain text (.txt) format
-report_markdown = box("")  # Text report of full content of info panel, in Markdown (.md) format
-
-# ----------------------------------------
-# Content area helpers
-
-def get_info_panel_content_area_start_pos():
-    """Return `(x0, y0)`, the upper left corner of the content area of the info panel, in viewport coordinates."""
-    # Item info panel starts at, in viewport coordinates:
-    x0, y0 = guiutils.get_widget_pos("item_information_panel")  # tag
-    # Its content area starts at, in viewport coordinates:
-    x0_content = x0 + 8 + 3  # 8px outer padding + 3px inner padding
-    y0_content = y0 + 8 + 3  # 8px outer padding + 3px inner padding
-    return x0_content, y0_content
-
-def get_info_panel_content_area_size():
-    """Return `(width, height), the size of the content area of the info panel, in pixels.`"""
-    _update_info_panel_height()  # HACK: at app startup, the main window thinks it has height=100, which is wrong.
-    return guiutils.get_widget_size("item_information_panel")  # tag
-
-# ----------------------------------------
-# Info panel updater: task submitter.
-
-def update_info_panel(*, wait=True, wait_duration=0.25):
-    """Update the data displayed in the info panel. Public API.
-
-    Markdown rendering may take a while, so we try to avoid triggering extra updates.
-
-    `wait`: bool, whether to wait for a short cancellation period before actually starting the update.
-            This can be useful if the GUI feature you are triggering this from expects more input in a typical case.
-    `wait_duration`: float, seconds.
-
-    **Implementation notes**:
-
-    A call to `update_info_panel` is posted by the GUI event queue whenever the search field or the selection changes.
-    To keep the GUI responsive, we want to return quickly, and run the update asynchronously.
-
-    The convenient way to do this is to use a separate background thread. Conveniently, DPG supports GUI updates
-    from arbitrary threads (as long as you are careful, as usual in concurrent programming: don't break any state
-    that another thread was accessing).
-
-    (Example: don't clear a panel that another thread is populating. If you do so, the other thread may find that
-     one of its GUI items has gone missing when it tries to bind a theme to it, thus crashing the app.)
-
-    We manage asynchronous update tasks so that:
-
-      - Only one task can be running at a time, so that at most one thread modifies the GUI panel contents at any given time.
-      - Optionally, each task waits for a short cancellation period (in a "pending" state) before actually starting.
-      - Any previous tasks still within their cancellation period are cancelled when a new one is queued.
-
-    The last two features allow the user to type more keyboard input into the search field,
-    without each individual typed letter triggering the (possibly lengthy) update separately.
-
-    Note that *running* tasks are never cancelled, so if a previous update was already in progress, it will still
-    complete, and then a new update will be triggered by the latest search input.
-    """
-    info_panel_render_task = bgtask.ManagedTask(category="raven_visualizer_info_panel_render",
-                                                entrypoint=_update_info_panel,
-                                                running_poll_interval=0.1,
-                                                pending_wait_duration=wait_duration)
-    info_panel_task_manager.submit(info_panel_render_task, envcls(wait=wait))
-
-# Register on `app_state` so extracted submodules (e.g. `selection`) can call it.
-app_state.update_info_panel = update_info_panel
-
-# ----------------------------------------
-# Item detectors for GUI widget search utilities
-
-# In this section, `item` is a GUI widget's DPG tag or ID.
-#
-# NOTE: Zero is a valid DPG ID. Hence in our filter functions, we use `None` to mean "no match", and otherwise return the item (DPG tag or ID) as-is.
-
-def get_user_data(item):
-    """Return a DPG widget's user data. Return `None` if not present."""
-    if item is None:
-        return None
-    item_config = dpg.get_item_configuration(item)  # no `try`, because we want this to fail-fast (and loud) in case of bugs in our code.
-    try:
-        return item_config["user_data"]
-    except KeyError:
-        pass
-    return None
-
-def is_user_data_kind(value, item):
-    """Check a DPG widget's user data, and return the item if the user data `kind == value`. Else return `None`.
-
-    Raven stores user data as `(kind, data)`, where `kind` is str, and `data` is arbitrary (depending on `kind`).
-    """
-    if item is None:
-        return None
-    user_data = get_user_data(item)
-    if user_data is not None:
-        kind, data = user_data
-        if kind == value:
-            return item
-    return None
-
-def is_entry_title_container_group(item):  # The container has also the buttons in addition to the actual title text.
-    return is_user_data_kind("entry_title_container", item)
-def is_entry_title_text_item(item):  # The actual title text. Note this is actually a group widget containing text snippets, spacers, and such.
-    return is_user_data_kind("entry_title_text", item)
-def is_cluster_title(item):  # e.g. "#42"
-    return is_user_data_kind("cluster_title", item)
-def is_copy_entry_to_clipboard_button(item):
-    return is_user_data_kind("copy_entry_to_clipboard_button", item)
-
-# # How to create an inverted predicate:
-# def is_not_entry_title_container_group(item):
-#     if is_entry_title_container_group(item) is None:
-#         return item
-#     return None
-
-def is_non_blank_text_item(item):
-    if item is None:
-        return None
-    if dpg.get_item_type(item) == "mvAppItemType::mvText":
-        value = dpg.get_value(item)
-        if value is not None and value != "":
-            return item
-    return None
-
-# def is_text_item_with_given_text(item, *, text):
-#     if item is None:
-#         return None
-#     if dpg.get_item_type(item) == "mvAppItemType::mvText" and dpg.get_value(item) == text:
-#         return item
-#     return None
-
-# ----------------------------------------
-# Programmatic control of scroll position
-
-def info_panel_find_next_or_prev_item(widgets, *, _next=True, kluge=True, extra_y_offset=0):
-    """Find the next/previous GUI widget in `widgets`, in relation to the current position of the top of the info panel content area.
-
-    Note `widgets` must contain only valid items, no confounders. This allows us to use a faster classical binary search.
-
-    `widgets` is parameterized so that this can be used both for the full set of items shown in the info panel
-    (`widgets=list(info_panel_entry_title_widgets.values())`) as well as for search results only (`widgets=info_panel_search_result_widgets`).
-
-    `_next`: bool, If `True`, find the next item, else find the previous item.
-    `kluge`: bool. If `True`, reject any item too near the top of the content area, to look for the really next/previous one,
-             not the one currently at the top. "Too near" is the height of one line of text.
-    `extra_y_offset`: int. This is useful e.g. for checking for first item *out of view* below the bottom of the content area
-                      (by setting this offset to the content area height).
-
-    Returns the DPG ID or tag for the widget containing the next/previous item, or `None` if no such item exists.
-    """
-    if not len(widgets):
-        return None
-
-    _, y0_content = get_info_panel_content_area_start_pos()  # The "current match" is positioned at the top of the content area.
-    if kluge:  # In the position check, optionally reject the item too near the top of the content area (to look for the next/previous one, not the one currently at the top).
-        kluge = (+1 if _next else -1) * app_state.themes_and_fonts.font_size  # Pixels. We arbitrarily use one line of text as a guideline.
-    else:
-        kluge = 0
-    def is_completely_below_top_of_content_area(widget):
-        if widgetfinder.is_completely_below_target_y(widget, target_y=y0_content + kluge + extra_y_offset) is not None:
-            return widget
-        return None
-    # logger.debug(f"info_panel_find_next_or_prev_item: frame {dpg.get_frame_count()}: searching (_next = {_next}, kluge = {kluge}, extra_y_offset = {extra_y_offset}).")
-    return widgetfinder.binary_search_widget(widgets=widgets,
-                                             accept=is_completely_below_top_of_content_area,
-                                             consider=None,
-                                             skip=None,
-                                             direction=("right" if _next else "left"))
-
-def scroll_info_panel_to_position(target_y_scroll):
-    """Scroll the info panel to given position.
-
-    Animated if `gui_config.smooth_scrolling` is `True`. This starts a new info panel scroll animation,
-    replacing the existing animation, if any.
-
-    `target_y_scroll`: int; pixels; final position of the scroll animation, in coordinates of *the item info panel*
-                       (not viewport coordinates).
-
-                       The first possible position is 0. To scroll to the end, use the special value `None`.
-
-                       The value is clamped to the valid range, which is determined automatically.
-
-                       If you have the handle to an item near the end, see the source code of `scroll_info_panel_to_item`
-                       for how to convert viewport coordinates into coordinates the scrollbar understands.
-
-    It does not matter if a scroll animation is already running; the animation engine for the scroll animation
-    adapts to target position changes on the fly.
-
-    Returns the final target scroll position after conversion of possible `None` to an actual value, and then clamping.
-    """
-    # Convert `None` and clamp.
-    min_y_scroll = 0
-    max_y_scroll = dpg.get_y_scroll_max("item_information_panel")  # tag
-    if target_y_scroll is None:
-        target_y_scroll = max_y_scroll
-    target_y_scroll = numutils.clamp(target_y_scroll, min_y_scroll, max_y_scroll)
-
-    # Dispatch the animation.
-    #
-    # Note the scroll animation is rate-based and depends only on the *current* and final positions.
-    #
-    # This internally handles conflicts: if a scroll animation is already running on the same GUI element,
-    # it is just updated instead of creating a new one.
-    global scroll_animation
-    with scroll_animation_lock:
-        with gui_animation.SmoothScrolling.class_lock:
-            gui_animation.animator.add(gui_animation.SmoothScrolling(target_child_window="item_information_panel",
-                                                                     target_y_scroll=target_y_scroll,
-                                                                     smooth=gui_config.smooth_scrolling,
-                                                                     smooth_step=gui_config.smooth_scrolling_step_parameter,
-                                                                     flasher=info_panel_scroll_end_flasher,
-                                                                     finish_callback=clear_global_scroll_animation_reference))
-            scroll_animation = gui_animation.SmoothScrolling.instances["item_information_panel"]  # get the reified instance
-
-    return target_y_scroll
-
-def scroll_info_panel_to_item(item):
-    """Dispatch an info panel scroll animation such that, at the new final position, `item` is at the start of the visible content area.
-
-    `item`: DPG ID or tag of the target GUI widget.
-
-    Returns the target scroll position (new final position, which will be reached later, when the scrolling completes).
-    """
-    # Old scroll position. The scroll position is in coordinates of *the item info panel* (not viewport coordinates).
-    y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-    # Start position of content area, in viewport coordinates:
-    _, y0_content = get_info_panel_content_area_start_pos()
-    # Position of desired item, in viewport coordinates, with the scrollbar at its current position.
-    # Can be out of range or even negative, if the item is out of view!
-    x1, y1 = dpg.get_item_rect_min(item)  # TODO: Handle the error case where `item` does not exist
-    # The scroll position that brings y1 to the start of the content area, in item info panel coordinates, is:
-    new_y_scroll = max(0, y_scroll + (y1 - y0_content))
-    return scroll_info_panel_to_position(new_y_scroll)
-
-# ----------------------------------------
-# Info panel navigation controls (home/end/pageup/pagedown)
-
-def update_info_panel_navigation_controls():
-    """Enable/disable the info panel's top/bottom/pageup/pagedown buttons."""
-    current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-    max_y_scroll = dpg.get_y_scroll_max("item_information_panel")  # tag
-    if max_y_scroll == 0:  # less than one screenful of data?
-        dpg.disable_item(go_to_top_button)
-        dpg.disable_item(page_up_button)
-        dpg.disable_item(go_to_bottom_button)
-        dpg.disable_item(page_down_button)
-    else:
-        if current_y_scroll == 0:
-            dpg.disable_item(go_to_top_button)
-            dpg.disable_item(page_up_button)
-        else:
-            dpg.enable_item(go_to_top_button)
-            dpg.enable_item(page_up_button)
-        if current_y_scroll == max_y_scroll:
-            dpg.disable_item(go_to_bottom_button)
-            dpg.disable_item(page_down_button)
-        else:
-            dpg.enable_item(go_to_bottom_button)
-            dpg.enable_item(page_down_button)
-
-def go_to_top():
-    """Scroll the info panel to the top."""
-    scroll_info_panel_to_position(0)
-
-def go_to_bottom():
-    """Scroll the info panel to the bottom."""
-    scroll_info_panel_to_position(None)  # scroll to end
-
-def go_page_up():
-    """Scroll the info panel up by one page."""
-    current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-    w_info, h_info = dpg.get_item_rect_size("item_information_panel")  # tag
-    new_y_scroll = current_y_scroll - 0.7 * h_info
-    scroll_info_panel_to_position(new_y_scroll)
-
-def go_page_down():
-    """Scroll the info panel down by one page."""
-    current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-    w_info, h_info = dpg.get_item_rect_size("item_information_panel")  # tag
-    new_y_scroll = current_y_scroll + 0.7 * h_info
-    scroll_info_panel_to_position(new_y_scroll)
-
-dpg.set_item_callback(go_to_top_button, go_to_top)
-dpg.set_item_callback(go_to_bottom_button, go_to_bottom)
-dpg.set_item_callback(page_up_button, go_page_up)
-dpg.set_item_callback(page_down_button, go_page_down)
-
-# ----------------------------------------
-# Other global info panel GUI controls
-
-def copy_report_to_clipboard():
-    """Copy all current content of info panel to OS clipboard. Public API.
-
-    By default, copy in plain text format.
-
-    If the Shift key is held down when this is called, copy as Markdown instead.
-    """
-    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-    _copy_report_to_clipboard(report_format=("md" if shift_pressed else "txt"))
-
-dpg.set_item_callback(copy_report_button, copy_report_to_clipboard)
-
-def _copy_report_to_clipboard(*, report_format):
-    """Copy all current content of info panel to OS clipboard. Implementation.
-
-    `report_format`: str, one of "txt", "md".
-    """
-    if report_format not in ("txt", "md"):
-        raise ValueError(f"Unknown report format '{report_format}'; expected one of 'txt', 'md'.")
-
-    if report_format == "txt":
-        report_text = unbox(report_plaintext)
-    else:
-        report_text = unbox(report_markdown)
-
-    dpg.set_clipboard_text(report_text)
-
-    # Acknowledge the action in the GUI.
-    gui_animation.animator.add(gui_animation.ButtonFlash(message=f"Copied to clipboard! ({'plain text' if report_format == 'txt' else 'Markdown'})",
-                                                         target_button=copy_report_button,
-                                                         target_tooltip=copy_report_tooltip,
-                                                         target_text=copy_report_tooltip_text,
-                                                         original_theme=dpg.get_item_theme(copy_report_tooltip),
-                                                         duration=gui_config.acknowledgment_duration))
-
-def copy_current_entry_to_clipboard():
-    """Copy the authors, year and title of the current item to the clipboard.
-
-    The current item is the topmost item visible in the info panel.
-
-    Hotkey handler.
-    """
-    with info_panel_content_lock:  # lock here so we are guaranteed to process the same item throughout
-        item = _get_current_info_panel_item()
-        if item is None:
-            logger.debug("copy_current_entry_to_clipboard: No current item (info panel empty?)")
-            return
-        _copy_entry_to_clipboard(item)
-
-def _copy_entry_to_clipboard(item):
-    """Copy the authors, year and title of the given item to the clipboard.
-
-    `item`: DPG ID or tag of the entry title container group.
-
-            We take this instead of a raw `entry` because this needs access
-            to the GUI widgets to show the acknowledgment animation.
-
-    Implementation.
-    """
-    with info_panel_content_lock:
-        data_idx = info_panel_widget_to_data_idx[item]
-        entry = app_state.dataset.sorted_entries[data_idx]
-
-        button = widgetfinder.find_widget_depth_first(item, accept=is_copy_entry_to_clipboard_button)
-        user_data = get_user_data(button)
-        kind_, data = user_data
-        tooltip, tooltip_text = data
-
-    dpg.set_clipboard_text(f"{entry.author} ({entry.year}): {entry.title}")
-
-    # Acknowledge the action in the GUI.
-    gui_animation.animator.add(gui_animation.ButtonFlash(message="Copied to clipboard!",
-                                                         target_button=button,
-                                                         target_tooltip=tooltip,
-                                                         target_text=tooltip_text,
-                                                         original_theme=dpg.get_item_theme(tooltip),
-                                                         duration=gui_config.acknowledgment_duration))
-
-def search_or_select_current_entry():
-    """Search for the current item in the plotter, or change the selection.
-
-    The current item is the topmost item visible in the info panel.
-
-    Hotkey handler.
-    """
-    with info_panel_content_lock:  # probably faster to acquire just once, instead of separate here and inside `_get_current_info_panel_item`
-        item = _get_current_info_panel_item()
-        if item is None:
-            logger.debug("search_or_select_current_entry: No current item (info panel empty?)")
-            return
-        data_idx = info_panel_widget_to_data_idx[item]
-    entry = app_state.dataset.sorted_entries[data_idx]
-    _search_or_select_entry(entry)
-
-def _search_or_select_entry(entry):
-    """Search for the given item in the plotter, or change the selection.
-
-    Implementation.
-
-    `entry`: One of the entries in `dataset.sorted_entries`.
-
-    Alternative modes, instead of searching:
-        no modifier key: search for `entry` in the plotter (or clear the search if already searching for `entry`)
-        with Shift: set selection to `entry` only
-        with Ctrl: remove `entry` from selection (to allow the user to easily clean up stray data points from the info panel)
-
-    The alternative modes trigger an info panel update if the selection changes.
-    """
-    shift_pressed = dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)
-    ctrl_pressed = dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl)
-
-    if shift_pressed:
-        selection.update([entry.data_idx],  # index to `sorted_xxx`
-                         mode="replace",
-                         wait=False)
-    elif ctrl_pressed:
-        selection.update([entry.data_idx],  # index to `sorted_xxx`
-                         mode="subtract",
-                         wait=False)
-    else:
-        # Exclude stopwords from search ("a", "an", "the", "for", ...).
-        #
-        # This makes the job of the Markdown renderer easier since it doesn't have to highlight many one to three letter sequences.
-        # This also matches "Methanol" instead of the "an" inside it (note we match case-insensitive fragments first).
-        # As a bonus, this is pretty much what a human would type into the search field when looking for a specific title.
-        filtered_title = " ".join(word for word in entry.title.strip().split() if word.lower() not in stopwords)
-        # Toggle: if already searching for this item, clear the search.
-        if dpg.get_value("search_field") != filtered_title:  # tag
-            dpg.set_value("search_field", filtered_title)  # tag
-        else:
-            dpg.set_value("search_field", "")  # tag
-        update_search(wait=False)
-
-# ----------------------------------------
-# Fragment search integration
-
-@dlet(prev_y_scrolls={})
-def _info_panel_scroll_position_changed(*, site_tag=None, reset=False, env):
-    """Return whether the info panel scrollbar position has changed since the last time this function was called.
-
-    `site_tag`: Optional, any hashable; each unique tag stores state changes separately (i.e. whether state has changed since last queried for that `site_tag`).
-
-    `reset`: Optional; if `True`, reset the status and store the current position. Useful e.g. when the info panel content changes.
-
-    We need this polling HACK because there is no way to wire a callback to a child window scroll position change.
-    We use this information to determine whether the current search result indicator ("[x/x]") needs to be updated
-    (it takes some computation, so we skip the update whenever not needed; see `update_current_search_result_status`).
-    """
-    if reset or site_tag not in env.prev_y_scrolls:
-        env.prev_y_scrolls[site_tag] = None
-    if reset:
-        return False  # not changed since reset (that happened just now)
-    y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-    result = (env.prev_y_scrolls[site_tag] is None or y_scroll != env.prev_y_scrolls[site_tag])
-    env.prev_y_scrolls[site_tag] = y_scroll
-    return result
-
-def update_current_search_result_status():
-    """Update the [x/x] indicator in the info panel, for how-manyth search result we are looking at.
-
-    Also highlight the current item, to show which item any global hotkeys affecting a single item apply to.
-
-    This runs every frame, so the implementation is as minimal as possible, and exits as early as possible.
-    """
-    if not _info_panel_scroll_position_changed():
-        return
-
-    # Avoid race condition: The info panel renderer might swap the info panel content at any moment (if an ongoing render happens to complete).
-    # Use the non-blocking mode (just try to acquire the lock once, don't wait), because this function runs once per frame.
-    # It doesn't matter if this update misses a few frames while the content is being swapped, as long as it doesn't block the GUI thread while that happens.
-    if not info_panel_content_lock.acquire(blocking=False):
-        # Technically, we should reset the scroll position tracking here, so our next update won't be rejected.
-        # But the info panel already does that after it has swapped in the new content.
-        return
-    try:  # ok, got the lock
-        # ----------------------------------------
-        # Update current item, for highlighting.
-
-        # This needs `info_panel_content_lock` for the item search, and should update only when the scroll position has changed (like we do), so we do it here, although it has nothing to do with search results.  (TODO: refactor?)
-        # TODO: FIX BUG: Sometimes the highlight doesn't take right after the info panel updates (click on data to select). Current item not updated immediately. Figure out the race condition.
-        update_current_item_info()
-
-        # ----------------------------------------
-        # Update the search result indicator
-
-        if not len(info_panel_search_result_widgets):
-            dpg.hide_item("item_information_search_controls_current_item")  # tag
-            return
-
-        # logger.debug(f"update_current_search_result_status: frame {dpg.get_frame_count()}: updating")
-
-        # Find the topmost search result below the top of the content area.
-        search_result_item = info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets, kluge=False)
-        if search_result_item is None:  # all search results are above the visible area (scroll position is past the last result)
-            dpg.hide_item("item_information_search_controls_current_item")  # tag
-            dpg.enable_item("prev_search_match_button")  # tag
-            return
-        search_result_display_idx = info_panel_search_result_widget_to_display_idx[search_result_item]  # how-manyth search result it is (in 0-based indexing)
-
-        # Update the buttons too while at it, so that they enable/disable appropriately also when the info panel is scrolled (no matter how)
-        if search_result_display_idx == 0:  # first result
-            dpg.disable_item("prev_search_match_button")  # tag
-        else:
-            dpg.enable_item("prev_search_match_button")  # tag
-
-        if search_result_display_idx == len(info_panel_search_result_widgets) - 1:  # last result
-            dpg.disable_item("next_search_match_button")  # tag
-        else:
-            dpg.enable_item("next_search_match_button")  # tag
-
-        # Is the search result on screen?
-        x0_search_result_item, y0_search_result_item = dpg.get_item_rect_min(search_result_item)
-        _, y0_content = get_info_panel_content_area_start_pos()
-        _, h_content = get_info_panel_content_area_size()
-        # 8px outer padding + 3px inner padding
-        if y0_search_result_item >= y0_content + h_content - 8 - 3:  # No, it is below the visible area (either scroll position is before the first result, or there is at least a screenful of non-matching items in between).
-            dpg.hide_item("item_information_search_controls_current_item")  # tag
-            dpg.enable_item("next_search_match_button")  # tag  # just in case the above button checks disabled it (there might be just one result)
-            return
-        # Yes, it is on screen.
-        dpg.set_value("item_information_search_controls_current_item", f"[{1 + search_result_display_idx}/{len(info_panel_search_result_widgets)}]")  # tag  # Show human-readable 1-based index.
-        dpg.show_item("item_information_search_controls_current_item")  # tag
-    finally:
-        info_panel_content_lock.release()
-
-# `update_current_search_result_status` also does this when the scroll position changes, but slightly differently. It also needs the next/prev match info anyway.
-def update_next_prev_search_result_buttons():
-    """Enable/disable the next/previous search result buttons in the info panel.
-
-    Called at the end of an info panel update.
-    """
-    with info_panel_content_lock:  # public API, could be called from anywhere, so let's be careful.
-        if not len(info_panel_search_result_widgets):  # no items matching the search shown in the info panel?
-            dpg.disable_item("next_search_match_button")  # tag
-            dpg.disable_item("prev_search_match_button")  # tag
-            return
-        # we have at least one search result shown in the info panel
-        next_match = info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets)
-        prev_match = info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets, _next=False)
-        if next_match is not None:
-            dpg.enable_item("next_search_match_button")  # tag
-        else:
-            dpg.disable_item("next_search_match_button")  # tag
-        if prev_match is not None:
-            dpg.enable_item("prev_search_match_button")  # tag
-        else:
-            dpg.disable_item("prev_search_match_button")  # tag
-
-def scroll_info_panel_to_next_search_match():
-    """Scroll the info panel to the next item matching the current search."""
-    # TODO: Fix the race condition. If this button is hammered, the next update may start before the previous one finishes rendering, causing the item search to error out with a `RuntimeError`.
-    # The problem is, we have no way of knowing when DPG has finished updating all the item coordinates (they are in viewport coordinates,
-    # so they change when the scrollbar position changes). Waiting for one frame (`dpg.split_frame()`) doesn't always help.
-    #
-    # To trigger the error:
-    #   - Select all (~10k datapoints is fine).
-    #   - Type something very common into the search field, to have lots of search matches.
-    #   - Hammer the "next search result" button relentlessly until the error pops in the console.
-    #
-    # For now we just silence the error, because all it does is to miss that one button click from the relentless hammering.
-    #
-    # Note `update_current_search_result_status`, at the next frame rendered, will take care of updating the search navigation buttons,
-    # so we don't need to do that here. It would have the same race condition issue - also the button updater calls the item search.
-    try:
-        with info_panel_content_lock:
-            if (next_match := info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets)) is not None:
-                scroll_info_panel_to_item(next_match)
-    except RuntimeError:
-        pass
-
-def scroll_info_panel_to_prev_search_match():
-    """Scroll the info panel to the previous item matching the current search."""
-    try:
-        with info_panel_content_lock:
-            if (prev_match := info_panel_find_next_or_prev_item(widgets=info_panel_search_result_widgets, _next=False)) is not None:
-                scroll_info_panel_to_item(prev_match)
-    except RuntimeError:
-        pass
-
-dpg.set_item_callback(next_search_match_button, scroll_info_panel_to_next_search_match)
-dpg.set_item_callback(prev_search_match_button, scroll_info_panel_to_prev_search_match)
-
-# ----------------------------------------
-# Cluster-related controls
-
-def _get_current_info_panel_item():
-    """Return the DPG ID/tag of the current item.
-
-    The current item is defined as the topmost item fully visible in the info panel.
-    """
-    with info_panel_content_lock:
-        # TODO: Performance: `update_current_search_result_status` may need to call us per-frame while scrolling. Maybe store the list too (in `_update_info_panel`) so we don't need to reconstruct it every time.
-        return info_panel_find_next_or_prev_item(widgets=list(info_panel_entry_title_widgets.values()), kluge=False)
-
-def _get_cluster_of_current_info_panel_item():
-    """Return the cluster ID of the current item.
-
-    The current item is defined as the topmost item fully visible in the info panel.
-    """
-    with info_panel_content_lock:
-        current_item = _get_current_info_panel_item()
-        if current_item is not None:
-            data_idx = info_panel_widget_to_data_idx[current_item]  # item index to `sorted_xxx`
-            entry = app_state.dataset.sorted_entries[data_idx]
-            cluster_id = entry.cluster_id
-            return cluster_id
-        logger.debug("_get_cluster_of_current_info_panel_item: No current item (info panel empty?)")
-        return None
-
-def _scroll_info_panel_to_cluster_by_id(cluster_id):
-    """Scroll info panel to given cluster, by cluster ID (as in the dataset).
-
-    The cluster must be one of those currently shown in the info panel (see `cluster_ids_in_selection`).
-    """
-    if cluster_id is None:
-        return
-    scroll_info_panel_to_item(f"cluster_{cluster_id}_title_build{info_panel_build_number}")  # tag  # see `_update_info_panel`
-
-def _get_cluster_display_idx_of_current_info_panel_item():
-    """Return the index in `cluster_ids_in_selection` of the cluster the current item belongs to.
-
-    The current item is defined as the topmost item fully visible in the info panel.
-
-    The index (0-based) tells how-manyth cluster visible in the info panel it is.
-    This is useful for getting the next/previous displayed cluster.
-
-    Returns the index (int), or `None` on failure.
-    """
-    with info_panel_content_lock:
-        cluster_id = _get_cluster_of_current_info_panel_item()
-        try:
-            display_idx = cluster_id_to_display_idx[cluster_id]  # index in `cluster_ids_in_selection`
-        except KeyError:
-            logger.debug(f"_get_cluster_display_idx_of_current_info_panel_item: Cluster #{cluster_id} not found in `cluster_id_to_display_idx` (maybe this cluster is currently not shown in info panel?)")
-            return None
-    return display_idx
-
-def _scroll_info_panel_to_cluster_by_display_idx(display_idx):
-    """Scroll the info panel to given cluster, by sequential numbering in info panel.
-
-    NOTE: sequential numbering in info panel, not cluster ID. For the corresponding cluster IDs,
-    see `cluster_ids_in_selection`.
-
-    Implementation.
-    """
-    with info_panel_content_lock:
-        if (display_idx is not None) and (display_idx >= 0) and (display_idx <= len(cluster_ids_in_selection) - 1):
-            cluster_id = cluster_ids_in_selection[display_idx]
-            _scroll_info_panel_to_cluster_by_id(cluster_id)
-
-def scroll_info_panel_to_next_cluster():
-    """Scroll the info panel to the next cluster, starting from the cluster of the current item.
-
-    The current item is defined as the topmost item fully visible in the info panel.
-
-    Hotkey handler.
-    """
-    with info_panel_content_lock:
-        display_idx = _get_cluster_display_idx_of_current_info_panel_item()
-        if display_idx is not None:
-            _scroll_info_panel_to_cluster_by_display_idx(display_idx + 1)
-
-def scroll_info_panel_to_prev_cluster():
-    """Scroll the info panel to the previous cluster, starting from the cluster of the current item.
-
-    The current item is defined as the topmost item fully visible in the info panel.
-
-    Hotkey handler.
-    """
-    with info_panel_content_lock:
-        display_idx = _get_cluster_display_idx_of_current_info_panel_item()
-        if display_idx is not None:
-            _scroll_info_panel_to_cluster_by_display_idx(display_idx - 1)
-
-def scroll_info_panel_to_top_of_current_cluster():
-    """Scroll the info panel to the top of the cluster of the current item.
-
-    The current item is defined as the topmost item fully visible in the info panel.
-
-    Hotkey handler.
-    """
-    with info_panel_content_lock:
-        cluster_id = _get_cluster_of_current_info_panel_item()
-        _scroll_info_panel_to_cluster_by_id(cluster_id)
-
-def select_cluster_by_id(cluster_id):
-    """Select all data in cluster `cluster_id`.
-
-    Shift (add), Ctrl (subtract), Ctrl+Shift (intersect) modes available.
-
-    Triggers an info panel update if the selection changes.
-    """
-    data_idxs = [data_idx for data_idx, entry in enumerate(app_state.dataset.sorted_entries) if entry.cluster_id == cluster_id]  # indices to `sorted_xxx`
-    selection.update(data_idxs,
-                     selection.keyboard_state_to_mode(),
-                     wait=False)
-
-def select_current_cluster():
-    """Select all data in the same cluster as the current item.
-
-    The current item is defined as the topmost item fully visible in the info panel.
-
-    Shift (add), Ctrl (subtract), Ctrl+Shift (intersect) modes available.
-
-    Triggers an info panel update if the selection changes.
-
-    Hotkey handler.
-    """
-    with info_panel_content_lock:  # probably faster to acquire just once, instead of separate here and inside `_get_current_info_panel_item`
-        item = _get_current_info_panel_item()
-        if item is None:
-            logger.debug("search_current_cluster: No current item (info panel empty?)")
-            return
-        data_idx = info_panel_widget_to_data_idx[item]
-    entry = app_state.dataset.sorted_entries[data_idx]
-    select_cluster_by_id(entry.cluster_id)
-
-# ----------------------------------------
-# Info panel updater: worker.
-
-@dlet(scroll_anchor_data={},  # stripped tag -> y_diff, where stripped tag is without the "_buildX" suffix.
-      internal_build_number=0)  # For making unique DPG tags. Incremented each time, regardless of whether completed or cancelled.
-def _update_info_panel(*, task_env=None, env=None):
-    """Update the data displayed in the info panel. Internal worker.
-
-    Performs the actual update.
-
-    `task_env`: Handled by `update_info_panel`. Importantly, contains the `cancelled` flag for the task.
-    `env`: Internal, handled by `@dlet`. Stores local state between calls (for scroll position management).
-    """
-    # NOTE: In this function ONLY, we don't need to acquire `info_panel_content_lock` to guard against sudden content swaps,
-    # because this function is the only one that does those swaps, and this is only ever entered with the info panel render lock held (managed in the `ManagedTask`).
-
-    # For stopping the scroll animation, if running when we perform the content swap.
-    global scroll_animation
-
-    # For scroll anchoring.
-
-    # For "double-buffering"
-    global info_panel_content_group
-    global info_panel_build_number
-    info_panel_content_target = None  # DPG widget for building new content, will be initialized later
-    new_content_swapped_in = False
-
-    logger.debug(f"_update_info_panel: {task_env.task_name}: Info panel update task running.")
-    logger.debug(f"_update_info_panel: {task_env.task_name}: Info panel build {env.internal_build_number} starting.")
-    info_panel_t0 = time.monotonic()
-
-    # --------------------------------------------------------------------------------
-    # Prepare search result highlighting.
-
-    selection_data_idxs = unbox(app_state.selection_data_idxs_box)  # item indices into `sorted_xxx`
-    search_result_data_idxs = unbox(search_result_data_idxs_box)  # for deciding item colors (when a search active, dim non-matching items)
-    search_string = unbox(search_string_box)
-    if search_string:
-        # Use the same approach as SillyTavern-Timelines. See `highlightTextSearchMatches`
-        # in https://github.com/SillyTavern/SillyTavern-Timelines/blob/master/index.js
-        #
-        # We sort, i.e. we match the fragments from longest to shortest. This prefers the longest match
-        # when the fragments have common substrings. For example, "laser las".
-        case_sensitive_fragments, case_insensitive_fragments = common_utils.search_string_to_fragments(search_string, sort=True)
-
-        # Convert the raw fragments into a format suitable for use in regexes (escaping special characters; matching superscript/subscript digits).
-        case_sensitive_fragments = [common_utils.search_fragment_to_highlight_regex_fragment(x) for x in case_sensitive_fragments]
-        case_insensitive_fragments = [common_utils.search_fragment_to_highlight_regex_fragment(x) for x in case_insensitive_fragments]
-
-        # When highlighting, we must match all fragments simultaneously, to avoid e.g. "col" matching
-        # the "<font color=...>" inserted by this highlighter when it first highlights "col".
-        if case_sensitive_fragments:
-            regex_case_sensitive = re.compile(f"({'|'.join(case_sensitive_fragments)})")
-        if case_insensitive_fragments:
-            regex_case_insensitive = re.compile(f"({'|'.join(case_insensitive_fragments)})", re.IGNORECASE)
-
-    # --------------------------------------------------------------------------------
-    # Preserve scroll position when the search terms change or the selection changes,
-    # but at least one of the items on-screen before the update remains in the info panel
-    # after the update.
-    #
-    # There is a ship-of-Theseus problem here: the info panel is completely repopulated every time it is updated,
-    # because this is the easiest way to update it in a bug-free manner. So "the same" scroll position does not even exist.
-    #
-    # To anchor the scroll position, we look for the first entry title container group at least partially in view.
-    # We then look for the same entry in the reconstructed panel content, and compute the new scroll position from it,
-    # so that its y coordinate on screen remains the same (if possible) across the update.
-
-    def get_scroll_anchor_item_data(item):  # DEBUG only
-        try:
-            item_config = dpg.get_item_configuration(item)
-            user_data = item_config["user_data"]
-            if user_data is not None:
-                kind_, data_idx = user_data  # `data_idx`: index to `sorted_xxx`
-                entry = app_state.dataset.sorted_entries[data_idx]
-                return f"{entry.author} ({entry.year}): {entry.title}"
-        except Exception:
-            pass
-        return None
-
-    def strip_build_number_from_tag(tag):
-        m = tag.rfind("_build")
-        if m == -1:
-            return tag
-        return tag[:m]
-
-    def compute_scroll_anchors():
-        """Compute scroll anchors from the old, before-update data."""
-        # If the selection is the same as before, or there is at least one item common across old and new selection, we can try to anchor the scroll position.
-        #
-        # NOTE: It can happen that we find a scroll anchor item, but it is no longer shown *after* the update, in which case this step goes fine,
-        # but the scroll anchor search (later, after the update completes) finds nothing.
-        #
-        # logger.debug(f"_update_info_panel: {task_env.task_name}: Old data: selection_anchor_data_idxs_set is {selection_anchor_data_idxs_set}")
-        if (not app_state.selection_changed) or len(app_state.selection_anchor_data_idxs_set):
-            logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data: Start finding scroll anchor item...")
-
-            # Before we do anything else, store the current scrollbar position. We need this to compute the offset (in pixels) between the scrollbar value and viewport y coordinate.
-            current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-
-            # Important for performance: consider possible anchor items only (those common between old and new selection).
-            #
-            # Fortunately, we have listed them already, during the previous info panel build - they are the entry container groups.
-            # This allows us to use a classical binary search, because we have a list with no confounders. This is O(log(n)), so pretty much instant.
-            #
-            # This avoids scanning the list of info panel children linearly to look for a starting point for the binary search.
-            # In the case when there is no valid anchor, it would scan the whole list (over 10 seconds for a full info panel of ~400 entries).
-            #
-            # NOTE: We scan the *old entries*, because we want to get the anchor from the old content before the new update is applied.
-            env.scroll_anchor_data.clear()
-            if app_state.selection_changed:
-                # logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: selected data_idxs in info panel: {list(sorted(info_panel_entry_title_widgets.keys()))}")
-                # logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: selected data_idxs common between old and new selection: {list(sorted(selection_anchor_data_idxs_set))}")
-                possible_anchors_only = [item for data_idx, item in info_panel_entry_title_widgets.items() if data_idx in app_state.selection_anchor_data_idxs_set]  # `data_idx`: index to `sorted_xxx`
-                logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Selection changed; old info panel selection_data_idxs common with new selection: {list(sorted(info_panel_widget_to_data_idx[x] for x in possible_anchors_only))}")
-            else:
-                logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Selection not changed; can anchor on any info panel item.")
-                possible_anchors_only = list(info_panel_entry_title_widgets.values())
-            is_partially_below_top_of_viewport = functools.partial(widgetfinder.is_partially_below_target_y, target_y=0)
-            item = widgetfinder.binary_search_widget(widgets=possible_anchors_only,
-                                                     accept=is_partially_below_top_of_viewport,
-                                                     consider=None,
-                                                     skip=None,
-                                                     direction="right")
-
-            # Multi-anchor: anchor using any item visible in viewport.
-            #
-            # This may sometimes help, if the topmost item is not shown after the rebuild, but at least one of the others happens to be.
-            # Of course, this not a complete solution, as it may still happen that none of the anchors are shown after the rebuild.
-            if item is not None:
-                # Find all visible items, starting from the first one we found via the binary search.
-                # There are only a few due to screen estate being limited (even at 4k resolution), so we can linearly scan them.
-                start_display_idx = info_panel_widget_to_display_idx[item]  # how-manyth item in the info panel
-                _, info_panel_h = get_info_panel_content_area_size()
-                is_partially_above_bottom_of_viewport = functools.partial(widgetfinder.is_partially_above_target_y, target_y=info_panel_h)
-                visible_items = []
-                for item_ in islice(info_panel_entry_title_widgets.values())[start_display_idx:]:
-                    if not is_partially_above_bottom_of_viewport(item_):
-                        break
-                    visible_items.append(item_)
-                scroll_anchors_debug_str = "\n    ".join(f"{item_}, tag '{dpg.get_item_alias(item_)}', type {dpg.get_item_type(item_)}, data_idx {info_panel_widget_to_data_idx[item_]}" for item_ in visible_items)
-                plural_s = "s" if len(visible_items) != 1 else ""
-                scroll_anchors_final_debug_str = f", list follows.\n    {scroll_anchors_debug_str}" if len(visible_items) else "."
-                logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data: Found {len(visible_items)} at least partially visible scroll-anchorable item{plural_s}{scroll_anchors_final_debug_str}")
-
-                # Record `y_diff` for each visible item (possible anchor).
-                content_start_x0, content_start_y0 = dpg.get_item_rect_min(info_panel_content_group)  # start of content, in viewport coordinates (may be out of view!)
-                for item in visible_items:
-                    raw = str(item)
-                    alias = dpg.get_item_alias(item)
-                    item_str = f"{item}, tag '{dpg.get_item_alias(item)}'" if raw != alias else f"'{alias}'"
-                    logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data: Recording scroll anchor {item_str}, data_idx {info_panel_widget_to_data_idx[item]}.")
-                    try:
-                        logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data:     Item type is {dpg.get_item_type(item)}")
-                        if (anchor_item_data := get_scroll_anchor_item_data(item)) is not None:
-                            logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data:     Item data is '{anchor_item_data}'")
-                    except Exception:  # not found (race condition?)
-                        pass
-
-                    # NOTE: A DPG group needs to be rendered at least once to get a meaningful size.
-                    x0, y0 = dpg.get_item_rect_min(item)
-                    w, h = dpg.get_item_rect_size(item)
-                    logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data:     Item old position is y0 = {y0}, y_last = {y0 + h - 1}")
-
-                    item_y_offset_from_content_start = y0 - content_start_y0  # start of original anchor item, in info panel coordinates
-
-                    # Additive conversion term: difference between the scrollbar position and the info-panel y coordinate of the start of the anchor item.
-                    y_diff = current_y_scroll - item_y_offset_from_content_start
-
-                    stripped_tag = strip_build_number_from_tag(dpg.get_item_alias(item))
-                    env.scroll_anchor_data[stripped_tag] = y_diff
-
-                    logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data:     Content area start y = {content_start_y0}, item y = {y0}, Δy = {item_y_offset_from_content_start}, scroll position = {current_y_scroll}, diff = {-y_diff}")
-                plural_s = "s" if len(env.scroll_anchor_data) != 1 else ""
-                logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data: Scroll anchors updated. Found {len(env.scroll_anchor_data)} possible anchor{plural_s}.")
-            else:
-                # No anchorable item exists. This happens when there are items common across old and new selection, but before the update,
-                # none of them are on-screen (or even included) in the info panel.
-                logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data: Selection has changed with no anchorable item in info panel. Resetting scroll anchors.")
-                env.scroll_anchor_data.clear()
-        else:
-            # When there are no common items between old and new selection, the info panel content changes completely, so "the same" scroll position does not exist.
-            logger.debug(f"_update_info_panel.compute_scroll_anchors: {task_env.task_name}: Old data: Selection has changed with no items common with previous selection. Resetting scroll anchors.")
-            env.scroll_anchor_data.clear()
-
-    new_y_scroll = None  # For setting the scroll position when the render completes; this is computed from a scroll anchor.
-    def compute_new_scroll_target_position(anchor_tag):
-        """Compute new scroll position based on DPG GUI widget `anchor` (in new data).
-
-        This uses the anchor's recorded diff (scroll position, vs. anchor position in viewport coordinates)
-        from the old data to apply the same diff to the new scroll position.
-
-        The new scroll position is stored in `new_y_scroll`.
-        """
-        nonlocal new_y_scroll
-
-        data_idx = info_panel_widget_to_data_idx_new.get(anchor_tag, "unknown")  # DEBUG logging
-
-        if new_y_scroll is not None:
-            logger.debug(f"_update_info_panel.compute_new_scroll_target_position: {task_env.task_name}: New data: Detected scroll anchor '{anchor_tag}', data_idx {data_idx}, but new scroll position already recorded. Skipping.")
-            return
-
-        stripped_tag = strip_build_number_from_tag(anchor_tag)
-        if stripped_tag not in env.scroll_anchor_data:
-            raise ValueError(f"_update_info_panel.compute_new_scroll_target_position: {task_env.task_name}: New data: ERROR: '{anchor_tag}', data_idx {data_idx} not in recorded scroll anchors.")
-
-        logger.debug(f"_update_info_panel.compute_new_scroll_target_position: {task_env.task_name}: New data: Detected scroll anchor '{anchor_tag}', data_idx {data_idx}.")
-
-        try:
-            logger.debug(f"_update_info_panel.compute_new_scroll_target_position: {task_env.task_name}: New data:     Item type is {dpg.get_item_type(anchor_tag)}")
-            if (anchor_item_data := get_scroll_anchor_item_data(anchor_tag)) is not None:
-                logger.debug(f"_update_info_panel.compute_new_scroll_target_position: {task_env.task_name}: New data:     Item data is '{anchor_item_data}'")
-        except Exception:  # not found (race condition?)
-            pass
-
-        # NOTE: A DPG group needs to be rendered at least once to get a meaningful size.
-        new_x0, new_y0 = dpg.get_item_rect_min(anchor_tag)
-        new_w, new_h = dpg.get_item_rect_size(anchor_tag)
-        logger.debug(f"_update_info_panel.compute_new_scroll_target_position: {task_env.task_name}: New data:     Item new position is y0 = {new_y0}, y_last = {new_y0 + new_h - 1}")
-
-        new_content_start_x0, new_content_start_y0 = dpg.get_item_rect_min(info_panel_content_target)  # start of new content, in viewport coordinates
-        new_item_y_offset_from_content_start = new_y0 - new_content_start_y0  # start of new anchor item, in info panel coordinates
-
-        logger.debug(f"_update_info_panel.compute_new_scroll_target_position: {task_env.task_name}: New data:     Content area start y = {new_content_start_y0}, item y = {new_y0}, Δy = {new_item_y_offset_from_content_start}")
-
-        new_y_scroll = max(0, new_item_y_offset_from_content_start + env.scroll_anchor_data[stripped_tag])  # use the diff as measured from the old item, before update
-
-        logger.debug(f"_update_info_panel.compute_new_scroll_target_position: {task_env.task_name}: New data: New scroll position recorded: {new_y_scroll}.")
-
-    # --------------------------------------------------------------------------------
-    # Start rebuilding the info panel content.
-
-    # Update GUI indicators.
-    dpg.set_value("item_information_total_count", "[updating]")  # we'll know the value once the update completes.
-    dpg.show_item("item_information_total_count")
-    if search_string:  # search active?
-        dpg.set_value("item_information_search_controls_item_count", "[updating]")  # we'll know the value once the update completes.
-    else:
-        dpg.set_value("item_information_search_controls_item_count", "[no search active]")  # this we can set immediately  # TODO: DRY duplicate definitions for labels
-
-    # Before starting the rebuild, make sure any partially built old content is really gone (including tags, because those must be unique).
-    # When the left mouse button is hammered over the plotter, lots of selection changes occur, triggering many info panel cancellations.
-    gc.collect()  # make sure the Python objects are gone
-    dpg.split_frame()  # wait for DPG to update its registries
-
-    # `with dpg.group(...):` would look clearer, but it's better to not touch the DPG container stack from a background thread.
-    info_panel_content_target = dpg.add_group(horizontal=False, show=False, parent="item_information_panel", before="info_panel_content_end_spacer")  # tag
-
-    # After this point (content target group GUI widget created), if something goes wrong, we must clean up the partially built content.
-    try:
-        info_panel_entry_title_widgets_new = {}
-        info_panel_widget_to_data_idx_new = {}
-        info_panel_widget_to_display_idx_new = {}
-        info_panel_search_result_widgets_new = []
-        info_panel_search_result_widget_to_display_idx_new = {}
-        cluster_ids_in_selection_new = []
-        cluster_id_to_display_idx_new = {}
-
-        # Get item data grouped by cluster.
-        entries_by_cluster, formatter = get_entries_for_selection(selection_data_idxs, max_n=gui_config.max_items_in_info_panel)
-
-        # Build the list of clusters shown in the info panel. Also build the inverse mapping, to look up which cluster is the next/previous one shown in the info panel.
-        cluster_ids_in_selection_new.clear()
-        cluster_id_to_display_idx_new.clear()
-        cluster_ids = list(sorted(set(entries_by_cluster.keys())))
-        if cluster_ids and cluster_ids[0] == -1:  # move the misc group (if it's there) to the end
-            cluster_ids = cluster_ids[1:] + [-1]
-        cluster_ids_in_selection_new.extend(cluster_ids)
-        cluster_id_to_display_idx_new.update({cluster_id: display_idx for display_idx, cluster_id in enumerate(cluster_ids_in_selection_new)})
-
-        # Update the info panel title.
-        # NOTE: This title talks about the *whole selection*, not about the subset that fits in the info panel.
-        #   - `selection_data_idxs` contains the indices to `sorted_xxx` for the whole selection.
-        #   - Although `get_entries_for_selection` returns info panel entries only, the info panel always shows
-        #     at least one entry for each cluster, so the clusters are the same as in the whole selection.
-        # The total count of items shown in the info panel gets its final update later, when the info panel update
-        # itself completes.
-        if len(selection_data_idxs):
-            item_plural_s = "s" if len(selection_data_idxs) != 1 else ""
-            cluster_plural_s = "s" if len(cluster_ids_in_selection_new) != 1 else ""
-            top_heading_text = f"[{len(selection_data_idxs)} item{item_plural_s} total in {len(cluster_ids_in_selection_new)} cluster{cluster_plural_s}]"  # "[x items total in m clusters]"
-        else:
-            top_heading_text = "[nothing selected]"  # TODO: DRY duplicate definitions for labels
-            dpg.add_text("[Select item(s) to view information]", color=(140, 140, 140, 255), parent=info_panel_content_target)  # TODO: DRY duplicate definitions for labels
-        dpg.set_value(item_information_text, top_heading_text)
-
-        # Start writing the report, for exporting to clipboard.
-        #
-        # Plain text (.txt)
-        report_text = StringIO()
-        report_text.write(top_heading_text + "\n")
-        report_text.write("=" * len(top_heading_text) + "\n\n")
-        # Markdown (.md)
-        report_md = StringIO()
-        report_md.write(f"# {top_heading_text}\n\n")
-
-        # Per-entry button callback factories
-        def make_scroll_info_panel_to_cluster(display_idx):
-            """Make a callback to scroll the info panel to given cluster, by sequential numbering in info panel.
-
-            NOTE: sequential numbering in info panel, not cluster ID.
-            """
-            def scroll_info_panel_to_the_cluster():  # freeze `display_idx` by closure
-                _scroll_info_panel_to_cluster_by_display_idx(display_idx)
-            return scroll_info_panel_to_the_cluster
-
-        def make_copy_entry_to_clipboard(title_container_group):  # freeze input by closure
-            """Make a callback to copy the authors/year/title of the given entry to the OS clipboard.
-
-            These callbacks are bound to the per-item buttons.
-            """
-            def copy_this_entry_to_clipboard():
-                _copy_entry_to_clipboard(title_container_group)  # This operation needs access to the GUI widgets to show the acknowledgment animation.
-            return copy_this_entry_to_clipboard
-
-        def make_search_or_select_entry(entry):  # freeze input by closure
-            """Make a callback to search for the given item in the plotter, or change the selection (see `_search_or_select_entry`).
-
-            These callbacks are bound to the per-item buttons.
-            """
-            def search_or_select_this_entry():
-                _search_or_select_entry(entry)
-            return search_or_select_this_entry
-
-        def make_select_cluster(cluster_id):  # freeze input by closure
-            """Make a callback to select all data in cluster `cluster_id`.
-
-            Shift, Ctrl, Ctrl+Shift modes available.
-
-            Triggers an info panel update if the selection changes.
-            """
-            def select_this_cluster():
-                select_cluster_by_id(cluster_id)
-            return select_this_cluster
-
-        # Build info panel content and write report
-        total_entries_shown_in_info_panel = 0
-        for display_idx, cluster_id in enumerate(cluster_ids_in_selection_new):
-            dpg.set_value("item_information_total_count", f"[updating {display_idx + 1}/{len(cluster_ids_in_selection_new)}]")  # tag
-
-            first_cluster = (display_idx == 0)
-            last_cluster = (display_idx == len(cluster_ids_in_selection_new) - 1)
-
-            # Allow canceling an update in progress (if the search or selection GUI state changes and the report being generated is no longer relevant)
-            if task_env is not None and task_env.cancelled:
-                break
-
-            cluster_title, cluster_keywords, cluster_content, more = formatter(cluster_id)
-            total_entries_shown_in_info_panel += len(cluster_content)  # how many entries in this cluster
-
-            cluster_header_group = dpg.add_group(horizontal=True, parent=info_panel_content_target, tag=f"cluster_{cluster_id}_header_group_build{env.internal_build_number}")
-
-            # Next/previous cluster buttons
-            up_enabled = (not first_cluster)
-            up_button = dpg.add_button(tag=f"cluster_{cluster_id}_up_button_build{env.internal_build_number}",
-                                       # label=fa.ICON_CARET_UP,
-                                       arrow=True,
-                                       direction=dpg.mvDir_Up,
-                                       enabled=up_enabled,
-                                       callback=(make_scroll_info_panel_to_cluster(display_idx - 1) if up_enabled else lambda: None),
-                                       parent=cluster_header_group)
-            # dpg.bind_item_font(f"cluster_{cluster_id}_up_button", themes_and_fonts.icon_font_solid)
-            up_tooltip = dpg.add_tooltip(up_button)
-            dpg.add_text("Previous cluster [Ctrl+P]", parent=up_tooltip)
-            dpg.bind_item_theme(f"cluster_{cluster_id}_up_button_build{env.internal_build_number}", "disablable_widget_theme")  # tag
-            # dpg.configure_item(f"cluster_{cluster_id}_up_button_build{env.internal_build_number}", enabled=up_enabled)  # tag
-
-            down_enabled = (not last_cluster)
-            down_button = dpg.add_button(tag=f"cluster_{cluster_id}_down_button_build{env.internal_build_number}",
-                                         # label=fa.ICON_CARET_DOWN,
-                                         arrow=True,
-                                         direction=dpg.mvDir_Down,
-                                         enabled=down_enabled,
-                                         callback=(make_scroll_info_panel_to_cluster(display_idx + 1) if down_enabled else lambda: None),
-                                         parent=cluster_header_group)
-            # dpg.bind_item_font(f"cluster_{cluster_id}_down_button", themes_and_fonts.icon_font_solid)
-            down_tooltip = dpg.add_tooltip(down_button)
-            dpg.add_text("Next cluster [Ctrl+N]", parent=down_tooltip)
-            dpg.bind_item_theme(f"cluster_{cluster_id}_down_button_build{env.internal_build_number}", "disablable_widget_theme")  # tag
-            # dpg.configure_item(f"cluster_{cluster_id}_down_button_build{env.internal_build_number}", enabled=down_enabled)  # tag
-
-            # Cluster title and keywords
-            cluster_title_widget = dpg.add_text(cluster_title, tag=f"cluster_{cluster_id}_title_build{env.internal_build_number}", color=(180, 180, 180), parent=cluster_header_group)  # "#42"
-            dpg.set_item_user_data(cluster_title_widget, ("cluster_title", cluster_id))  # for `is_cluster_title`
-            plural_s = "s" if len(entries_by_cluster[cluster_id]) != 1 else ""
-            entries_text = f"[{len(entries_by_cluster[cluster_id])} item{plural_s}]"
-            dpg.add_text(entries_text, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_item_count_build{env.internal_build_number}", parent=cluster_header_group)  # tag  # "[x items]"
-            dpg.add_text(cluster_keywords, wrap=0, color=(140, 140, 140), tag=f"cluster_{cluster_id}_keywords_build{env.internal_build_number}", parent=cluster_header_group)  # tag  # "[keyword0, ...]"
-
-            # Report: cluster heading
-            report_cluster_heading_text = f"{cluster_title} {entries_text} {cluster_keywords}".strip()
-            report_text.write(report_cluster_heading_text + "\n")
-            report_text.write("-" * len(report_cluster_heading_text) + "\n\n")
-
-            report_md.write(f"## {report_cluster_heading_text}\n\n")
-
-            # Cluster title separator
-            cluster_title_separator = dpg.add_drawlist(width=gui_config.info_panel_w - 20, height=1, parent=info_panel_content_target, tag=f"cluster_{cluster_id}_title_separator_build{env.internal_build_number}")
-            dpg.draw_line((0, 0), (gui_config.info_panel_w - 21, 0), color=(140, 140, 140, 255), thickness=1, parent=cluster_title_separator)
-
-            # Items in cluster
-            for data_idx, entry in cluster_content:  # `data_idx`: item index into `sorted_xxx`
-                if task_env is not None and task_env.cancelled:
-                    break
-
-                # Highlight search results, but only when a search is active.
-                # When no search active, show all items at full brightness.
-                if not search_string or data_idx in search_result_data_idxs:
-                    use_bright_text = True  # search match, or search not active
-                    title_color = (255, 255, 255, 255)
-                    abstract_color = (180, 180, 180, 255)
-                else:  # Search active, non-matching item -> dim it.
-                    use_bright_text = False
-                    title_color = (140, 140, 140, 255)
-                    abstract_color = (110, 110, 110, 255)
-                is_search_match = (search_string and use_bright_text)
-
-                # ----------------------------------------
-                # Containers
-                entry_container_group = dpg.add_group(parent=info_panel_content_target, tag=f"cluster_{cluster_id}_entry_{data_idx}_build{env.internal_build_number}")  # entry container: title + optional abstract
-
-                entry_title_container_group = dpg.add_group(horizontal=True, tag=f"cluster_{cluster_id}_entry_{data_idx}_header_group_build{env.internal_build_number}", parent=entry_container_group)  # title container: buttons + the actual title text
-
-                # ----------------------------------------
-                # Per-item buttons, column 1
-                entry_buttons_column_1_group = dpg.add_group(horizontal=False, tag=f"cluster_{cluster_id}_entry_{data_idx}_header_button_column_1_group_build{env.internal_build_number}", parent=entry_title_container_group)
-
-                # Back to top of this cluster button
-                b = dpg.add_button(tag=f"cluster_{cluster_id}_entry_{data_idx}_back_to_cluster_top_button_build{env.internal_build_number}",
-                                   # label=fa.ICON_CHEVRON_UP,
-                                   # width=gui_config.info_panel_button_w,  # width is not applicable when using `arrow=True`
-                                   arrow=True,
-                                   direction=dpg.mvDir_Up,
-                                   callback=make_scroll_info_panel_to_cluster(display_idx),
-                                   parent=entry_buttons_column_1_group)
-                dpg.bind_item_font(b, app_state.themes_and_fonts.icon_font_solid)
-                b_tooltip = dpg.add_tooltip(b)
-                b_tooltip_text = dpg.add_text(f"Back to top of cluster #{cluster_id} [Ctrl+U]" if cluster_id != -1 else "Back to top of Misc [Ctrl+U]",
-                                              parent=b_tooltip)
-
-                # Copy this item to clipboard button
-                b = dpg.add_button(label=fa.ICON_COPY,
-                                   tag=f"cluster_{cluster_id}_entry_{data_idx}_copy_to_clipboard_button_build{env.internal_build_number}",
-                                   width=gui_config.info_panel_button_w,
-                                   parent=entry_buttons_column_1_group)
-                dpg.bind_item_font(b, app_state.themes_and_fonts.icon_font_solid)
-                b_tooltip = dpg.add_tooltip(b)
-                b_tooltip_text = dpg.add_text("Copy item authors, year and title to clipboard [Ctrl+Shift+C]",  # TODO: DRY duplicate definitions for labels
-                                              parent=b_tooltip)
-                dpg.set_item_callback(b, make_copy_entry_to_clipboard(entry_title_container_group))
-                dpg.set_item_user_data(b, ("copy_entry_to_clipboard_button", (b_tooltip, b_tooltip_text)))  # for the `copy_current_entry_to_clipboard` hotkey
-
-                # ----------------------------------------
-                # Per-item buttons, column 2
-
-                entry_buttons_column_2_group = dpg.add_group(horizontal=False, tag=f"cluster_{cluster_id}_entry_{data_idx}_header_button_column_2_group_build{env.internal_build_number}", parent=entry_title_container_group)
-
-                # Search this item in plotter button
-                b = dpg.add_button(label=fa.ICON_ARROW_RIGHT,
-                                   tag=f"cluster_{cluster_id}_entry_{data_idx}_search_in_plotter_button_build{env.internal_build_number}",
-                                   width=gui_config.info_panel_button_w,
-                                   parent=entry_buttons_column_2_group)
-                dpg.bind_item_font(b, app_state.themes_and_fonts.icon_font_solid)
-                b_tooltip = dpg.add_tooltip(b)
-                dpg.add_text("Search for this item in the plotter [F6]\n(clear search if already searching for this item)\n    with Shift: set selection to this item only\n    with Ctrl: remove this item from selection",
-                             parent=b_tooltip)
-                dpg.set_item_callback(b, make_search_or_select_entry(entry))
-
-                b = dpg.add_button(label=fa.ICON_WAND_MAGIC_SPARKLES,  # wand, by analogy with smart select in graphics programs
-                                   tag=f"cluster_{cluster_id}_entry_{data_idx}_select_this_cluster_button_build{env.internal_build_number}",
-                                   width=gui_config.info_panel_button_w,
-                                   parent=entry_buttons_column_2_group)
-                dpg.bind_item_font(b, app_state.themes_and_fonts.icon_font_solid)
-                b_tooltip = dpg.add_tooltip(b)
-                cluster_name_str = f"#{cluster_id}" if cluster_id != -1 else "Misc"
-                dpg.add_text(f"Select all items in the same cluster ({cluster_name_str}) as this item [F7]\n    with Shift: add\n    with Ctrl: subtract\n    with Ctrl+Shift: intersect",
-                             parent=b_tooltip)
-                dpg.set_item_callback(b, make_select_cluster(cluster_id))
-
-                # ----------------------------------------
-                # Item authors, year, title (with search result highlight, if any)
-
-                entry_title_text = entry.title
-                if search_string:  # search active?
-                    if case_insensitive_fragments:  # case-insensitive first so that e.g. a fragment "col" won't match the "<font color=...>"
-                        # The font tags don't stack in the MD renderer, so we must close the surrounding tag (for title color)
-                        # when the highlight starts, and then re-open it after the highlight ends.
-                        entry_title_text = re.sub(regex_case_insensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
-                    if case_sensitive_fragments:  # case-sensitive fragments contain at least one uppercase letter, so they're still safe (no match in any font tags added by the case-insensitive replace)
-                        entry_title_text = re.sub(regex_case_sensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
-                if search_string and entry_title_text != entry.title:  # any changes made by the substitutions? -> render as Markdown to enable highlighting
-                    header = f"<font color='{title_color}'>{entry.author} ({entry.year}): {entry_title_text}</font>"
-                    entry_title_group = dpg_markdown.add_text(header, wrap=gui_config.title_wrap_w, parent=entry_title_container_group)  # The MD renderer internally renders the text items into a new group.
-                    dpg.set_item_alias(entry_title_group, f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}")  # tag  # the MD renderer doesn't have a `tag` parameter, so we set the tag afterward.
-                    if is_search_match:
-                        info_panel_search_result_widgets_new.append(entry_title_container_group)
-                        info_panel_search_result_widget_to_display_idx_new[entry_title_container_group] = len(info_panel_search_result_widgets_new) - 1  # reverse lookup to see in O(1) time how-manyth search result a given item is
-                else:  # search not active, or no changes made (i.e. no match in this title). -> render as plain text (much faster)
-                    header = f"{entry.author} ({entry.year}): {entry_title_text}"
-                    # The Markdown renderer's line spacing differs from that of the plain text renderer. We fix this manually for consistency.
-                    #
-                    # Before scroll anchoring was introduced, the difference in line heights caused the scroll position to jump (near the end of a large dataset, a lot)
-                    # when changing between matched/nonmatched state, because the plain/highlighted titles may take up a different amount of vertical space.
-                    #
-                    # For visual consistency, we make the output have as similar a line spacing as possible in both cases.
-                    # The plain and highlighted titles may still use a different number of lines:
-                    #   - Bold (which we currently use) is slightly wider.
-                    #   - Italic is slightly narrower.
-                    #   - Just changing the color is ever so subtly (one pixel?) wider (?!).
-                    # If we wanted to preserve the original division of lines when possible, any static wrap width doesn't help. What we would need is a layout algorithm
-                    # that gives a few pixels of slack, but only when needed, similarly to what we do in the entry count limiter in the annotation tooltip.
-                    #
-                    # What we currently do, instead, is anchor the scroll position - we use a text item whose content doesn't change in the update to compute
-                    # the new value for "the same" scroll position, although the info panel content has been completely rebuilt ship-of-Theseus style.
-                    #
-                    # 1) Wrap the text with the MD renderer (DPG itself doesn't seem to have a utility for this).
-                    #    This is a bit slow since it's a low-level utility implemented in Python, but meh.
-                    entity = dpg_markdown.text_entities.StrEntity(header)
-                    entity = dpg_markdown.wrap_text_entity(entity, width=gui_config.title_wrap_w)  # -> iterable of lines
-                    # 2) Render the text line by line, controlling the vertical spacing explicitly with a spacer.
-                    entry_title_group = dpg.add_group(horizontal=False, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}", parent=entry_title_container_group)
-                    for lineno, line_content in enumerate(entity):
-                        last_line = (lineno == len(entity) - 1)
-                        dpg.add_text(line_content, color=title_color, parent=entry_title_group)
-                        if not last_line:
-                            # Align with the MD renderer line height. The width of the spacer doesn't matter here.
-                            # TODO: I have no idea where the two pixels of extra height comes from in the MD renderer.
-                            dpg.add_spacer(width=10, height=2, parent=entry_title_group)
-                    dpg.bind_item_theme(entry_title_group, "my_no_spacing_theme")  # tag  # Default spacing off, like in the MD renderer.
-
-                info_panel_entry_title_widgets_new[data_idx] = entry_title_container_group
-                info_panel_widget_to_data_idx_new[entry_title_container_group] = data_idx  # reverse lookup item -> index in `sorted_xxx`
-                info_panel_widget_to_display_idx_new[entry_title_container_group] = len(info_panel_entry_title_widgets_new) - 1  # reverse lookup item -> how manyth in info panel (index in `info_panel_entry_title_widgets_new`)
-                dpg.set_item_user_data(entry_title_container_group, ("entry_title_container", data_idx))  # for `is_entry_title_container_group`  # `data_idx`: index to `sorted_xxx`
-                dpg.set_item_user_data(entry_title_group, ("entry_title_text", data_idx))  # for `is_entry_title_text_item`  # `data_idx`: index to `sorted_xxx`
-
-                # ----------------------------------------
-                # Item abstract (optional)
-
-                if entry.abstract:
-                    dpg.add_text(entry.abstract, color=abstract_color, wrap=gui_config.main_text_wrap_w, tag=f"cluster_{cluster_id}_entry_{data_idx}_abstract_build{env.internal_build_number}", parent=entry_container_group)
-                dpg.add_text("", tag=f"cluster_{cluster_id}_entry_{data_idx}_end_blank_text_build{env.internal_build_number}", parent=entry_container_group)
-
-                # Report: write item
-                if entry.abstract:
-                    report_text.write(f"{entry.author} ({entry.year}): {entry.title}\n\n{entry.abstract.strip()}\n\n")
-                    report_md.write(f"### {entry.author} ({entry.year}): {entry.title}\n\n{entry.abstract.strip()}\n\n")
-                else:
-                    report_text.write(f"{entry.author} ({entry.year}): {entry.title}\n\n")  # TODO: tag as "[no abstract]" or some such?
-                    report_md.write(f"### {entry.author} ({entry.year}): {entry.title}\n\n")  # TODO: tag as "[no abstract]" or some such?
-
-            if task_env is None or not task_env.cancelled:
-                if more:
-                    dpg.add_text(more, wrap=0, color=(100, 100, 100), tag=f"cluster_{cluster_id}_more_build{env.internal_build_number}", parent=info_panel_content_target)  # "[...N more entries...]"
-                    report_text.write(f"{more}\n\n")
-                    report_md.write(f"{more}\n\n")
-
-                # Cluster separator
-                if not last_cluster:
-                    cluster_end_separator_1 = dpg.add_drawlist(width=gui_config.info_panel_w - 20, height=1, parent=info_panel_content_target, tag=f"cluster_{cluster_id}_end_separator_1_build{env.internal_build_number}")
-                    dpg.draw_line((0, 0), (gui_config.info_panel_w - 21, 0), color=(140, 140, 140, 255), thickness=1, parent=cluster_end_separator_1)
-                    cluster_end_separator_2 = dpg.add_drawlist(width=gui_config.info_panel_w - 20, height=1, parent=info_panel_content_target, tag=f"cluster_{cluster_id}_end_separator_2_build{env.internal_build_number}")
-                    dpg.draw_line((0, 0), (gui_config.info_panel_w - 21, 0), color=(140, 140, 140, 255), thickness=1, parent=cluster_end_separator_2)
-                    dpg.add_text("", tag=f"cluster_{cluster_id}_end_blank_text_build{env.internal_build_number}", parent=info_panel_content_target)
-
-                    # Report: cluster separator
-                    report_text.write("-" * 80 + "\n")
-                    report_text.write("-" * 80 + "\n\n\n")
-
-                    report_md.write("-----\n\n")
-
-        # Finalize (if not cancelled)
-        if task_env is None or not task_env.cancelled:  # if the task was cancelled, the report is incomplete
-            # We are about to swap the whole content of the info panel, so stop the scroll animation if it is running.
-            with scroll_animation_lock:
-                if scroll_animation is not None:
-                    scroll_animation.finish()
-                    scroll_animation = None
-
-            # Anchor the scroll position from the old data just before we swap in the new content, so that
-            # it takes the latest position, in case the user scrolled while the info panel was building.
-            compute_scroll_anchors()
-
-            # Now that we have the full new content, render it so that the items actually get positions.
-            #
-            # It is tempting to use `set_item_pos`/`reset_pos` to render offscreen, but that doesn't produce
-            # reliable positions for some reason. The y position we get then depends on the *x* coordinate
-            # (maybe interaction between info panel child window size and text wrap?).
-            #
-            # But even if we set the position to the `rect_min` of the old content group (so exactly on top),
-            # it still sometimes gets it wrong (at least near the end of long content, when switching search on/off).
-            #
-            # So it's better to just hide the old group, show the new one, and let DPG handle the layout.
-            # When exactly one of the containers is shown, we have arranged for the new one to appear exactly
-            # where the old one was. Then we can measure positions in the new data and everything works.
-            #
-            clear_current_item_info()  # Turn the current item controls highlight off (after the new content has been swapped in, `update_animations` will auto-update it at the next frame)
-            dpg.hide_item(info_panel_content_group)
-            dpg.show_item(info_panel_content_target)
-            show_info_panel_dimmer_overlay()
-            dpg.split_frame()  # wait for render, to have valid positions for the widgets in the new data
-
-            # Find the new items (if any) corresponding to the recorded scroll anchors. Try each anchor, just in case.
-            # There are only a few, and it's a no-op (with a log message) after the scroll position has been set successfully.
-            scroll_anchor_stripped_tags = list(env.scroll_anchor_data.keys())
-            scroll_anchor_new_tags = [tag for tag in info_panel_entry_title_widgets_new.values()
-                                      if strip_build_number_from_tag(tag) in scroll_anchor_stripped_tags]
-            for tag in scroll_anchor_new_tags:
-                compute_new_scroll_target_position(tag)
-
-            with info_panel_content_lock:
-                # Swap the new content in ("double-buffering")
-                logger.debug(f"_update_info_panel: {task_env.task_name}: Swapping in new content (old GUI widget ID {info_panel_content_group}; new GUI widget ID {info_panel_content_target}).")
-                dpg.delete_item(info_panel_content_group)
-                # # Old DPG versions had a bug where the aliases needed to be deleted manually.
-                # # https://github.com/hoffstadt/DearPyGui/issues/1350
-                # def delete_aliases(root, *, children_only=False):
-                #     if not children_only:
-                #         tag = dpg.get_item_alias(root)
-                #         if dpg.does_alias_exist(tag):
-                #             dpg.remove_alias(tag)
-                #     for slot in range(4):
-                #         for item in dpg.get_item_children(root, slot=slot):
-                #             delete_aliases(item, children_only=False)  # always False, since only the root item should be handled differently.
-                # delete_aliases(info_panel_content_group, children_only=True)
-                info_panel_content_group = None  # just in case the next line raises an exception
-                # dpg.reset_pos(info_panel_content_target)  # move it into place
-                dpg.set_item_alias(info_panel_content_target, "info_panel_content_group")  # tag
-                info_panel_content_group = info_panel_content_target
-                new_content_swapped_in = True
-
-                logger.debug(f"_update_info_panel: {task_env.task_name}: Swapping in new navigation metadata.")
-                cluster_ids_in_selection.clear()
-                cluster_ids_in_selection.extend(cluster_ids_in_selection_new)
-                cluster_id_to_display_idx.clear()
-                cluster_id_to_display_idx.update(cluster_id_to_display_idx_new)
-                info_panel_entry_title_widgets.clear()
-                info_panel_entry_title_widgets.update(info_panel_entry_title_widgets_new)
-                info_panel_widget_to_data_idx.clear()
-                info_panel_widget_to_data_idx.update(info_panel_widget_to_data_idx_new)
-                info_panel_widget_to_display_idx.clear()
-                info_panel_widget_to_display_idx.update(info_panel_widget_to_display_idx_new)
-                info_panel_search_result_widgets.clear()
-                info_panel_search_result_widgets.extend(info_panel_search_result_widgets_new)
-                info_panel_search_result_widget_to_display_idx.clear()
-                info_panel_search_result_widget_to_display_idx.update(info_panel_search_result_widget_to_display_idx_new)
-
-                logger.debug(f"_update_info_panel: {task_env.task_name}: Content swapping complete.")
-
-            # Finish the report
-            report_plaintext << report_text.getvalue()
-            report_markdown << report_md.getvalue()
-            dpg.enable_item(copy_report_button)
-
-            # Update the final item count in the GUI
-            if total_entries_shown_in_info_panel > 0:
-                dpg.set_value("item_information_total_count", f"[{total_entries_shown_in_info_panel} item{'s' if total_entries_shown_in_info_panel != 1 else ''} shown]")  # tag
-                dpg.show_item("item_information_total_count")  # tag
-            else:  # info panel build finished, and no items are shown, so hide the total count field.
-                dpg.hide_item("item_information_total_count")  # tag
-
-            # Restore/reset scroll position
-            dpg.split_frame()  # let the content swap take before proceeding
-            if not len(env.scroll_anchor_data):  # no anchorable items in the old data
-                logger.debug(f"_update_info_panel: {task_env.task_name}: New data: no anchorable items in old data, resetting scroll position.")
-                dpg.set_y_scroll("item_information_panel", 0)  # tag
-            # at least one anchor recorded
-            elif new_y_scroll is not None:  # new scroll position was recorded
-                logger.debug(f"_update_info_panel: {task_env.task_name}: New data: scrolling to anchor, new_y_scroll = {new_y_scroll}")
-                dpg.set_y_scroll("item_information_panel", new_y_scroll)  # tag
-            else:  # new scroll position not recorded -> anchorable items exist in old data, but none of them were included in the info panel in the new data
-                logger.debug(f"_update_info_panel: {task_env.task_name}: New data: at least one anchor exists, but none are shown after update. Resetting scroll position.")
-                dpg.set_y_scroll("item_information_panel", 0)  # tag
-            _info_panel_scroll_position_changed(reset=True)  # for `update_current_search_result_status` (do this *after* swapping in the new content!)
-            app_state.selection_changed = False
-
-            # Which items are shown in info panel may have changed. Re-render the annotation tooltip in case it is active, to update the items' "shown in info panel" status there.
-            app_state.update_mouse_hover(force=True, wait=False)
-
-            # Update search controls. Do this last.
-            if search_string:  # is a search active?
-                num = len(info_panel_search_result_widgets)  # how many search results are actually shown in the info panel
-                search_results_info_panel_str = f"[{num if num else 'no'} search result{'s' if num != 1 else ''} shown]"
-            else:
-                search_results_info_panel_str = "[no search active]"  # TODO: DRY duplicate definitions for labels
-            dpg.set_value("item_information_search_controls_item_count", search_results_info_panel_str)  # tag
-            dpg.split_frame()  # let the scrollbar position update before proceeding
-            hide_info_panel_dimmer_overlay()
-            update_next_prev_search_result_buttons()
-
-    except Exception:
-        logger.debug(f"_update_info_panel: {task_env.task_name}: Info panel update task raised an exception; cancelling task.")
-        task_env.cancelled = True
-        if not new_content_swapped_in:  # clean up: re-show the old content (if it still exists) in case the exception occurred during finalizing
-            if info_panel_content_target is not None:
-                dpg.hide_item(info_panel_content_target)
-            if info_panel_content_group is not None:
-                dpg.show_item(info_panel_content_group)
-        raise
-
-    finally:
-        if task_env is not None and task_env.cancelled:
-            logger.debug(f"_update_info_panel: {task_env.task_name}: Info panel update task cancelled.")
-
-            # If the new content was built (partially or completely) but not swapped in, it's unused, so delete it.
-            if (info_panel_content_target is not None) and (not new_content_swapped_in):
-                logger.debug(f"_update_info_panel: {task_env.task_name}: Deleting partially built content.")
-                dpg.delete_item(info_panel_content_target)
-
-            # These will be soon refreshed again when the next update starts (since we only cancel a running update task when it is superseded by a new one),
-            # but in the meantime we should show up-to-date status - which is, the update that was running has been cancelled.
-            dpg.set_value("item_information_total_count", "[update cancelled]")  # tag
-            dpg.set_value("item_information_search_controls_item_count", "[update cancelled]")  # tag
-        else:
-            logger.debug(f"_update_info_panel: {task_env.task_name}: Info panel update task completed.")
-
-            # Publish the build ID we used while building, so that callbacks can find the content.
-            info_panel_build_number = env.internal_build_number
-
-        dt = time.monotonic() - info_panel_t0
-        plural_s = "ies" if total_entries_shown_in_info_panel != 1 else "y"
-        logger.debug(f"_update_info_panel: {task_env.task_name}: Info panel build {env.internal_build_number} exiting. Rendered {total_entries_shown_in_info_panel} entr{plural_s} in {dt:0.2f}s.")
-        env.internal_build_number += 1  # always increase internal build, even when cancelled, for unique IDs.
 
 # --------------------------------------------------------------------------------
 # Built-in help window
@@ -3037,25 +1501,19 @@ def resize_gui():
         _resize_gui()
     logger.debug("resize_gui: Done.")
 
-def _update_info_panel_height():
-    """Resize the info panel content area RIGHT NOW, based on main window height."""
-    w, h = guiutils.get_widget_size(main_window)
-    dpg.set_item_height("item_information_panel", h - gui_config.info_panel_reserved_h)  # tag
-
 def _resize_gui():
     """Resize dynamically sized GUI elements, RIGHT NOW."""
     logger.debug("_resize_gui: Entered.")
     logger.debug("_resize_gui: Updating info panel height.")
-    _update_info_panel_height()
+    info_panel.update_height()
     logger.debug("_resize_gui: Updating info panel current item on-screen coordinates.")
-    update_current_item_info()
+    info_panel.update_current_item_info()
     logger.debug("_resize_gui: Recentering help window.")
     help_window.reposition()
     logger.debug("_resize_gui: Updating annotation tooltip.")
     app_state.update_mouse_hover(force=True, wait=False)
     logger.debug("_resize_gui: Rebuilding dimmer overlay.")
-    if info_panel_dimmer_overlay is not None:
-        info_panel_dimmer_overlay.build(rebuild=True)
+    info_panel.rebuild_dimmer_overlay()
     logger.debug("_resize_gui: Done.")
 
 
@@ -3145,7 +1603,7 @@ def mouse_wheel_callback(sender, app_data):
     if mouse_inside_info_panel():
         # direction = app_data  # -1 = down, +1 = up  # for documentation only
         current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
-        info_panel_scroll_end_flasher.show_by_position(current_y_scroll)
+        info_panel.flash_scroll_end_by_position(current_y_scroll)
 
     # Zooming in the plotter may change which data points are under the cursor within the tooltip-trigger pixel distance.
     if mouse_inside_plot_widget():
@@ -3186,14 +1644,14 @@ def mouse_click_callback(sender, app_data):
         with annotation.content_lock:
             annotation_data_idxs_set = set(annotation.data_idxs)  # performance - better to amortize this here, or O(n) lookup for each `in` test?
             search_string = unbox(search_string_box)
-            with info_panel_content_lock:  # we need to access `info_panel_entry_title_widgets`
+            with info_panel.content_lock:  # we need to access `info_panel.entry_title_widgets`
                 if not search_string:  # no search active
                     jumpable_data_idxs = {data_idx for data_idx in data_idxs_at_mouse
-                                          if (data_idx in annotation_data_idxs_set) and (data_idx in info_panel_entry_title_widgets)}
+                                          if (data_idx in annotation_data_idxs_set) and (data_idx in info_panel.entry_title_widgets)}
                 else:
                     search_result_data_idxs_set = set(unbox(search_result_data_idxs_box))
                     jumpable_data_idxs = {data_idx for data_idx in data_idxs_at_mouse
-                                          if (data_idx in annotation_data_idxs_set) and (data_idx in search_result_data_idxs_set) and (data_idx in info_panel_entry_title_widgets)}
+                                          if (data_idx in annotation_data_idxs_set) and (data_idx in search_result_data_idxs_set) and (data_idx in info_panel.entry_title_widgets)}
                 if not jumpable_data_idxs:
                     return
 
@@ -3205,7 +1663,7 @@ def mouse_click_callback(sender, app_data):
                 if jump_target_data_idx is None:
                     return
 
-                scroll_info_panel_to_item(info_panel_entry_title_widgets[jump_target_data_idx])
+                info_panel.scroll_to_item(info_panel.entry_title_widgets[jump_target_data_idx])
 
 def keydown_callback(sender, app_data):
     """Enable selection brush indicator when the mouse is in the plot area and Shift/Ctrl is held down.
@@ -3322,16 +1780,16 @@ def hotkeys_callback(sender, app_data):
     elif key == dpg.mvKey_F3:  # some old MS-DOS software in the 1990s used F3 for next/prev search match, I think?
         if (dpg.is_key_down(dpg.mvKey_LShift) or dpg.is_key_down(dpg.mvKey_RShift)):
             if dpg.is_item_enabled("prev_search_match_button"):  # tag
-                scroll_info_panel_to_prev_search_match()
+                info_panel.scroll_to_prev_search_match()
         else:
             if dpg.is_item_enabled("next_search_match_button"):  # tag
-                scroll_info_panel_to_next_search_match()
+                info_panel.scroll_to_next_search_match()
     elif key == dpg.mvKey_F6:  # Use an F-key, because this too has Shift/Ctrl modes.
-        search_or_select_current_entry()
+        info_panel.search_or_select_current_entry()
     elif key == dpg.mvKey_F7:  # Use an F-key, because this too needs selection mode modifiers.
-        select_current_cluster()
+        info_panel.select_current_cluster()
     elif key == dpg.mvKey_F8 and dpg.is_item_enabled("copy_report_to_clipboard_button"):  # tag  # NOTE: Shift is a modifier here too
-        copy_report_to_clipboard()
+        info_panel.copy_report_to_clipboard()
     elif key == dpg.mvKey_F9:  # Use an F-key, because this too needs selection mode modifiers.
         select_visible_all()
     elif key == dpg.mvKey_F10:
@@ -3343,7 +1801,7 @@ def hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_Y and dpg.is_item_enabled("selection_redo_button"):  # tag
             selection.redo()
         elif key == dpg.mvKey_C:
-            copy_current_entry_to_clipboard()
+            info_panel.copy_current_entry_to_clipboard()
         # Some hidden debug features. Mnemonic: "Mr. T Lite" (Ctrl + Shift + M, R, T, L)
         elif key == dpg.mvKey_M:
             dpg.show_metrics()
@@ -3364,37 +1822,37 @@ def hotkeys_callback(sender, app_data):
         elif key == dpg.mvKey_Home:
             plotter.reset_zoom()
         elif key == dpg.mvKey_N:
-            scroll_info_panel_to_next_cluster()
+            info_panel.scroll_to_next_cluster()
         elif key == dpg.mvKey_P:
-            scroll_info_panel_to_prev_cluster()
+            info_panel.scroll_to_prev_cluster()
         elif key == dpg.mvKey_U:
-            scroll_info_panel_to_top_of_current_cluster()
+            info_panel.scroll_to_top_of_current_cluster()
     # Bare key
     #
     # NOTE: These are global across the whole app (when no modal window is open) - be very careful here!
     elif not dpg.is_item_focused("search_field"):  # tag
         if key == dpg.mvKey_Home:
-            go_to_top()
+            info_panel.go_to_top()
         elif key == dpg.mvKey_End:
-            go_to_bottom()
+            info_panel.go_to_bottom()
         elif key == dpg.mvKey_Next or key == 518:  # page down  # TODO: fix: in DPG 2.0.0, Page Down is no longer "Next" but a mysterious 518 - what is the new name?
-            go_page_down()
+            info_panel.page_down()
         elif key == dpg.mvKey_Prior or key == 517:  # page up  # TODO: fix: in DPG 2.0.0, Page Up is no longer "Prior" but a mysterious 517 - what is the new name?
-            go_page_up()
+            info_panel.page_up()
         elif key == dpg.mvKey_Down:  # arrow down
             @call
             def _():
                 current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
                 w_info, h_info = dpg.get_item_rect_size("item_information_panel")  # tag
                 new_y_scroll = current_y_scroll + 0.1 * h_info
-                scroll_info_panel_to_position(new_y_scroll)
+                info_panel.scroll_to_position(new_y_scroll)
         elif key == dpg.mvKey_Up:  # arrow up
             @call
             def _():
                 current_y_scroll = dpg.get_y_scroll("item_information_panel")  # tag
                 w_info, h_info = dpg.get_item_rect_size("item_information_panel")  # tag
                 new_y_scroll = current_y_scroll - 0.1 * h_info
-                scroll_info_panel_to_position(new_y_scroll)
+                info_panel.scroll_to_position(new_y_scroll)
 
 # Set up global mouse and keyboard handlers
 with dpg.handler_registry(tag="global_handler_registry"):  # global (whole viewport)
@@ -3440,10 +1898,7 @@ parser.add_argument(dest='filename', nargs='?', default=None, type=str, metavar=
 opts = parser.parse_args()
 
 app_state.bg = concurrent.futures.ThreadPoolExecutor()  # for info panel and tooltip annotation updates
-info_panel_task_manager = bgtask.TaskManager(name="info_panel_update",
-                                             mode="sequential",
-                                             executor=app_state.bg)  # can re-use the same executor to place tasks in the same thread pool.
-# The annotation tooltip's and the word cloud's task managers are created lazily inside their own modules on first use.
+# Subsystem task managers (annotation, info panel, word cloud) are created lazily inside their own modules on first use.
 importer.init(executor=app_state.bg)  # BibTeX importer
 
 # import sys
@@ -3464,7 +1919,7 @@ initialize_filedialogs(_default_path)
 
 # HACK: Create the dimmer as soon as possible (some time after the first frame so that other GUI elements initialize their sizes).
 # The window for the "scroll ends here" animation is also created at frame 10, but via another mechanism (trying to create it each frame, but the implementation blocks it until frame 10).
-dpg.set_frame_callback(10, create_info_panel_dimmer_overlay)
+dpg.set_frame_callback(10, info_panel.create_dimmer_overlay)
 
 logger.info("App render loop starting.")
 
