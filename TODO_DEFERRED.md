@@ -391,13 +391,21 @@ The DOCS indicator pulses red while indexing, but offers no detail. The log alre
 
 Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
 
-## Hybridir: cooperative-cancel commit on app shutdown
+## Hybridir: BM25 backend migration for larger corpora
 
-If the user closes Librarian while indexing is running, the app refuses to close until `commit()` finishes — currently `task_managers["commit"].clear(wait=True)` is called at shutdown, blocking on the long-running embedding/index work. Better behavior: drop the remaining pending edits and exit, but persist whatever partial work has already been applied so the next app start has a smaller backlog.
+`bm25s` rebuilds the entire keyword index on every commit (full corpus → full reindex; IDF changes mean it can't be incremental in this design). Sub-second on ~1k small documents, so a non-issue today. Will start to pinch around the 10k–100k mark.
 
-`commit()`'s outer loop iterates over `pending_edits`; a cancellation flag check at the top of each iteration is straightforward. The slow `_prepare_document_for_indexing` (chunkify + tokenize + embed) is per-document and not interruptible mid-document, but a per-iteration check is granular enough — worst case the user waits one document. After cancellation, run `_save_datastore()` + `_rebuild_keyword_search_index()` on whatever was applied so far, and let any not-yet-processed pending edits go on the floor (they'll re-trigger from the watchdog rescan on next startup).
+The standard fix is the **segmented index** model: each batch of writes lands in a small immutable segment with deletes-as-tombstones, IDF is computed across segments at query time (or partial-pre-aggregated), and a background merge thread occasionally consolidates segments to keep the count bounded. Writes become O(batch); reindex cost is amortized through merges. This is what Lucene / Elasticsearch / Solr / Tantivy all do.
 
-Touches the bgtask cancellation contract — `bgtask.ManagedTask` already has a `cancelled` flag mechanism; just needs `commit()` to read it. The `init()`-installed atexit handler that calls `task_managers["commit"].clear(wait=False)` should switch to `wait=True` *after* setting the cancel flag, so partial-save work has time to land.
+For Raven, the natural migration target is **Tantivy** via the `tantivy-py` Python bindings — a Rust port of the Lucene model, MIT-licensed, no JVM, decent Python ergonomics. Would replace `bm25s` end-to-end. The semantic side (ChromaDB) and the hybrid-fusion logic above stay the same.
 
-Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
+Plan when this becomes necessary:
+
+- Audit `_rebuild_keyword_search_index` and `_keyword_retriever` callsites to extract the BM25-specific surface from `HybridIR`.
+- Introduce a thin keyword-index abstraction (add / delete / search) so the backend swap touches one module.
+- Migrate index storage on first run; existing `bm25s` indices on disk get rebuilt into Tantivy form.
+
+Approximate alternatives if we want to stay on `bm25s`: rebuild on a schedule (every Nth commit, or every M seconds of accumulated edits) rather than on every commit — relevance drifts a tiny bit between rebuilds in exchange for cheaper writes. Cheaper than a full backend swap; doesn't help asymptotically.
+
+Discovered during cancellable-commit work (2026-04-27).
 

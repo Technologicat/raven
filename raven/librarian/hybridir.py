@@ -446,21 +446,30 @@ class HybridIR:
     # TODO: Index rebuilding is slow. Maybe `commit` should run as a bgtask, like the BibTeX importer.
     #       Note `HybridIRFileSystemEventHandler` already does that.
     # TODO: `commit` is not as atomic as I'd like. If anything goes wrong, the vector index loses sync with the actual data, necessitating a full rebuild. Check if ChromaDB has transaction management.
-    def commit(self) -> None:
+    def commit(self, task_env: Optional[envcls] = None) -> None:
         """Commit pending changes (adds/deletes/updates), re-indexing the databases.
 
         An update is internally a delete, followed by an add for the updated version of the same document.
+
+        `task_env`: Optional. An `unpythonic.env`-shaped object carrying caller context. Currently inspected
+                    field is `cancelled` (bool); when it flips `True`, the per-document loop exits cleanly
+                    after the current document, partial state is persisted, and the unprocessed remainder is
+                    requeued into `_pending_edits` so a later `commit` (in the same session) picks up where
+                    this one left off. On app shutdown, that "later commit" never happens — the leftovers
+                    sit in memory until the process exits, and `bootup.rescan` re-detects the corresponding
+                    file changes via mtime on next startup. The `cancelled` attribute is read defensively
+                    via `getattr` so any env (with or without it pre-set) is accepted.
         """
         logger.info("HybridIR.commit: entered.")
         with self._indexing_lock:
             self._indexing_count += 1
         try:
-            self._commit_body()
+            self._commit_body(task_env=task_env)
         finally:
             with self._indexing_lock:
                 self._indexing_count -= 1
 
-    def _commit_body(self) -> None:
+    def _commit_body(self, task_env: Optional[envcls]) -> None:
         with self.datastore_lock:
             with self._pending_edits_lock:
                 if not self._pending_edits:
@@ -476,8 +485,17 @@ class HybridIR:
             # There is no "update" operation - to do that, first "delete", then "add".
             logger.info("HybridIR.commit: Applying pending changes.")
             errors_occurred = 0
+            cancelled_at = None  # set to the 1-based edit number of the iteration that observed cancellation
             eta_estimator = ETAEstimator(total=len(pending_edits), keep_last=50)
             for edit_num, (edit_kind, data) in enumerate(pending_edits, start=1):
+                if task_env is not None and getattr(task_env, "cancelled", False):
+                    cancelled_at = edit_num
+                    remainder = pending_edits[edit_num - 1:]
+                    with self._pending_edits_lock:
+                        self._pending_edits[0:0] = remainder  # prepend, preserving original order
+                    logger.info(f"HybridIR.commit: Cancelled before edit {edit_num} of {len(pending_edits)}; "
+                                f"{len(remainder)} pending change(s) requeued for a later commit.")
+                    break
                 logger.info(f"HybridIR.commit: Applying change {edit_num} out of {len(pending_edits)}; {eta_estimator.formatted_eta}")
                 try:
                     if edit_kind == "add":
@@ -514,10 +532,15 @@ class HybridIR:
                     logger.info("Attempting to continue with remaining edits, if any.")
                 eta_estimator.tick()
 
+            # Partial save: persist whatever was applied. The keyword index rebuilds from `self.documents`
+            # (now reflecting the partial state); the vector index has been updated incrementally inside
+            # the loop. Cheap for ~1k small docs; see TODO_DEFERRED for the segmented-backend story at scale.
             self._rebuild_keyword_search_index()
             self._save_datastore()
 
-            if errors_occurred:
+            if cancelled_at is not None:
+                logger.info(f"HybridIR.commit: Partial commit persisted ({cancelled_at - 1} of {len(pending_edits)} edit(s) applied before cancellation).")
+            elif errors_occurred:
                 plural_s = "s" if errors_occurred != 1 else ""
                 logger.error(f"Error{plural_s} occurred while pending changes were being applied. This may cause the semantic search index to go out of sync with the actual data. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")
             else:
@@ -923,8 +946,8 @@ class HybridIRFileSystemEventHandler(watchdog.events.FileSystemEventHandler):
             if task_env.cancelled:  # while waiting in queue
                 logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Cancelled.")
                 return
-            logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Committing changes to HybridIR (may take a while; this step cannot be cancelled).")
-            self.retriever.commit()
+            logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Committing changes to HybridIR (may take a while; cancellable at per-document granularity).")
+            self.retriever.commit(task_env=task_env)
             logger.debug(f"HybridIRFileSystemEventHandler.commit: {task_env.task_name}: Done.")
         self.uuid = str(uuid.uuid4())
         self.commit_task = bgtask.ManagedTask(category=f"raven_librarian_HybridIRFileSystemEventHandler_{self.uuid}_commit",
