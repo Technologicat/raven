@@ -202,11 +202,11 @@ with timer() as tim:
     db_dir = pathlib.Path(librarian_config.llm_database_dir).expanduser().resolve()  # RAG search indices datastore
 
     # Load RAG database (it will auto-persist at app exit).
-    retriever, _unused_scanner = hybridir.setup(docs_dir=docs_dir,
-                                                recursive=librarian_config.llm_docs_dir_recursive,
-                                                db_dir=db_dir,
-                                                embedding_model_name=librarian_config.qa_embedding_model,
-                                                local_model_loader_fallback=False)  # Librarian requires Raven-server for other reasons, too
+    retriever, scanner = hybridir.setup(docs_dir=docs_dir,
+                                        recursive=librarian_config.llm_docs_dir_recursive,
+                                        db_dir=db_dir,
+                                        embedding_model_name=librarian_config.qa_embedding_model,
+                                        local_model_loader_fallback=False)  # Librarian requires Raven-server for other reasons, too
 
     logger.info(f"RAG document store is at '{str(librarian_config.llm_docs_dir)}' (put your plain-text documents here).")
     # The retriever's `documents` attribute must be locked before accessing.
@@ -984,6 +984,19 @@ def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
+    # Stop the watchdog observer first so no new ingest/commit tasks land while we're tearing down.
+    # Then cancel any in-flight RAG indexing — `commit()` exits its per-doc loop on the next iteration,
+    # the partial-save tail persists what was applied, and `datastore_lock` is released. This must run
+    # before `chat_controller.shutdown()`: any chat task blocked inside `retriever.search` waits on
+    # that same `datastore_lock`, so leaving hybridir running here would deadlock the wait=True drain.
+    #
+    # Iteration order matters: dicts preserve insertion order, and `task_managers` is populated
+    # ingest-then-commit. Drain ingest first — a still-running ingest task submits a new commit on
+    # completion, so commits must be drained *after* ingests have finished, or we'd return from the
+    # commit drain only to have a fresh commit task slip in behind us.
+    scanner.shutdown()
+    for task_manager in hybridir.task_managers.values():
+        task_manager.clear(wait=True)
     gui_resize_task_manager.clear(wait=True)
     chat_controller.shutdown()
     avatar_controller.shutdown()
