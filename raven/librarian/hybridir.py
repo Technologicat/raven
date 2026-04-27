@@ -332,14 +332,13 @@ class HybridIR:
         self._indexing_lock = threading.Lock()
         self._indexing_count = 0
 
-        # Human-readable progress message for the GUI to mirror — set per-iteration during commit, "Saving…"
-        # during the rebuild + datastore save tail, set per-phase during query, "" otherwise. String reads
-        # and writes are atomic under the GIL, so no lock is needed; the GUI side polls and re-sets a DPG
-        # text widget on change. Currently `commit()` and `query()` are mutually exclusive at
-        # `datastore_lock`, so they don't fight over this channel. When/if lock granularity is loosened,
-        # the channel needs splitting (or a priority rule: query progress wins over indexing progress
-        # since the search indicator is typically shorter-lived).
-        self._progress_text: str = ""
+        # Human-readable progress messages for the GUI to mirror. Two independent channels — `commit()` and
+        # `query()` can run concurrently (each acquires `datastore_lock` only briefly), so they need
+        # separate strings to drive separate indicators in the GUI. String reads and writes are atomic
+        # under the GIL; no lock needed. The GUI side polls each channel and re-sets the corresponding
+        # DPG text widget on change.
+        self._indexing_progress_text: str = ""  # set per-iteration in commit; "Saving…" during the tail
+        self._query_progress_text: str = ""     # set per-phase in query (Tokenizing/Embedding/…)
 
     def is_indexing(self) -> bool:
         """Return whether this instance is currently inside `commit()`.
@@ -350,23 +349,29 @@ class HybridIR:
         # int read is atomic under the GIL; no need to acquire the lock for a snapshot.
         return self._indexing_count > 0
 
-    def get_progress_text(self) -> str:
-        """Return the current human-readable progress message, or `""` if no work is in progress.
+    def get_indexing_progress_text(self) -> str:
+        """Return the current human-readable indexing progress message, or `""` if not indexing.
 
-        Set during both `commit()` and `query()`:
+        Per-document during commit: `"[14 / 186] | 2106.01345v2.bib | elapsed 6s, ETA 01:14, total 01:20"`
+        (the trailing chunk is `unpythonic.ETAEstimator.formatted_eta`). The "INDEXING" verb sits in the
+        indicator's static label, so the progress text doesn't repeat it. During the rebuild + datastore
+        save tail: `"Saving…"`. Outside of commit: `""`.
 
-          - Per-document during commit: `"[14 / 186] | 2106.01345v2.bib | elapsed 6s, ETA 01:14, total 01:20"`
-            (the trailing chunk is `unpythonic.ETAEstimator.formatted_eta`).
-          - During the commit's rebuild + datastore save tail: `"Saving…"`.
-          - During query, per-phase: `"Tokenizing query…"`, `"Embedding query…"`, `"Keyword search…"`,
-            `"Semantic search…"`, `"Merging results…"`.
-          - Outside of `commit()` and `query()`: `""`.
-
-        Intended for GUI clients that poll once per frame and mirror the value into a DPG text widget. The
-        underlying string is set from the worker thread that runs `commit()` or `query()`; GIL-atomic,
-        no lock needed.
+        Intended for GUI clients that poll once per frame and mirror the value into a DPG text widget.
+        The underlying string is set from the worker thread that runs `commit()`; GIL-atomic, no lock.
         """
-        return self._progress_text
+        return self._indexing_progress_text
+
+    def get_query_progress_text(self) -> str:
+        """Return the current human-readable query progress message, or `""` if no query is running.
+
+        Per-phase during query: `"Tokenizing query…"`, `"Embedding query…"`, `"Keyword search…"`,
+        `"Semantic search…"`, `"Merging results…"`. Outside of query: `""`.
+
+        Intended for GUI clients that poll once per frame and mirror the value into a DPG text widget.
+        The underlying string is set from the worker thread that runs `query()`; GIL-atomic, no lock.
+        """
+        return self._query_progress_text
 
     def _tokenize(self, text: str) -> List[str]:
         """Apply lowercasing, tokenization, stemming, stopword removal.
@@ -496,7 +501,7 @@ class HybridIR:
         try:
             self._commit_body(task_env=task_env)
         finally:
-            self._progress_text = ""
+            self._indexing_progress_text = ""
             with self._indexing_lock:
                 self._indexing_count -= 1
 
@@ -531,7 +536,7 @@ class HybridIR:
                 break
             # Both add and delete data shapes carry `document_id` (made uniform when the edit was queued).
             document_id = data["document_id"] if isinstance(data, dict) else "?"
-            self._progress_text = f"Indexing… [{edit_num} / {len(pending_edits)}] | {document_id} | {eta_estimator.formatted_eta}"
+            self._indexing_progress_text = f"[{edit_num} / {len(pending_edits)}] | {document_id} | {eta_estimator.formatted_eta}"
             logger.info(f"HybridIR.commit: Applying change {edit_num} out of {len(pending_edits)}; {eta_estimator.formatted_eta}")
             try:
                 if edit_kind == "add":
@@ -576,7 +581,7 @@ class HybridIR:
         # (now reflecting the partial state); the vector index has been updated incrementally inside
         # the loop. Cheap for ~1k small docs; see TODO_DEFERRED for the segmented-backend story at scale.
         # Both methods take `datastore_lock` themselves, so the tail does serialize against `query()`.
-        self._progress_text = "Saving…"
+        self._indexing_progress_text = "Saving…"
         self._rebuild_keyword_search_index()
         self._save_datastore()
 
@@ -785,7 +790,7 @@ class HybridIR:
                                     include_documents=include_documents,
                                     return_extra_info=return_extra_info)
         finally:
-            self._progress_text = ""
+            self._query_progress_text = ""
 
     def _query_body(self,
                     query: str,
@@ -797,11 +802,11 @@ class HybridIR:
                     include_documents: Optional[List[str]],
                     return_extra_info: bool):
         # Prepare query for keyword search (slow — runs the spaCy NLP pipeline; no datastore access).
-        self._progress_text = "Tokenizing query…"
+        self._query_progress_text = "Tokenizing query…"
         query_tokens = self._tokenize(query)
 
         # Prepare query for vector search (slow — server roundtrip; no datastore access).
-        self._progress_text = "Embedding query…"
+        self._query_progress_text = "Embedding query…"
         query_embedding = self.embedder.encode([query])[0]
 
         # Pin the index references atomically and run both searches under the *same* `datastore_lock`
@@ -827,14 +832,14 @@ class HybridIR:
                 keyword_k = len(keyword_retriever.corpus)
 
             # BM25 search
-            self._progress_text = "Keyword search…"
+            self._query_progress_text = "Keyword search…"
             logger.info("HybridIR.query: keyword search")
             # Here we always search all documents; we filter afterward, if needed.
             raw_keyword_results, raw_keyword_scores = keyword_retriever.retrieve([query_tokens],  # list of list of tokens (outer list = one element per query; can run multiple queries at once)
                                                                                   k=keyword_k)
 
             # Vector search
-            self._progress_text = "Semantic search…"
+            self._query_progress_text = "Semantic search…"
             logger.info("HybridIR.query: semantic search")
             if include_documents is not None:  # search only documents with given IDs
                 chroma_results = vector_collection.query(query_embeddings=[query_embedding],
@@ -907,7 +912,7 @@ class HybridIR:
         # NOTE: Merged results don't have a "chunk_id" or "full_id" (design choice; multiple chunks may
         #       have been merged into each result, so chunk-specific fields wouldn't make sense), but only
         #       "document_id", "offset", "text", and "score" (RRF score).
-        self._progress_text = "Merging results…"
+        self._query_progress_text = "Merging results…"
         logger.info("HybridIR.query: merging contiguous spans in results")
         merged = merge_contiguous_spans(fused_results)
 
