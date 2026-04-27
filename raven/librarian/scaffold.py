@@ -433,24 +433,30 @@ def ai_turn(llm_settings: env,
     if retriever is not None and docs_query is not None:
         if on_docs_start is not None:
             on_docs_start()
-        docs_result = _search_docs_with_bypass(llm_settings=llm_settings,
-                                               datastore=datastore,
-                                               retriever=retriever,
-                                               head_node_id=head_node_id,
-                                               speculate=speculate,
-                                               query=docs_query,
-                                               k=docs_num_results)
-        if docs_result["action"] is action_done:  # no-match bypass triggered, we have a response chat node already
-            head_node_id = docs_result["new_head_node_id"]
+        docs_matches_to_report: List[Dict] = []  # captured for the `finally` so `on_docs_done` always fires
+        try:
+            docs_result = _search_docs_with_bypass(llm_settings=llm_settings,
+                                                   datastore=datastore,
+                                                   retriever=retriever,
+                                                   head_node_id=head_node_id,
+                                                   speculate=speculate,
+                                                   query=docs_query,
+                                                   k=docs_num_results)
+            if docs_result["action"] is action_done:  # no-match bypass triggered, we have a response chat node already
+                head_node_id = docs_result["new_head_node_id"]
+                if on_nomatch_done is not None:
+                    on_nomatch_done(head_node_id)
+                return head_node_id
+            else:
+                docs_matches = docs_result["matches"]
+                docs_matches_to_report = docs_matches
+        finally:
+            # Ensure `on_docs_done` always fires — including when the search raises mid-flight or when
+            # the no-match-bypass `return` exits early — so GUI state (e.g. `_docs_reading`) recovers
+            # cleanly. With this finally in place, leaving `on_docs_done` out of the bypass branch
+            # above is intentional: the finally calls it on the way out.
             if on_docs_done is not None:
-                on_docs_done([])  # no matches
-            if on_nomatch_done is not None:
-                on_nomatch_done(head_node_id)
-            return head_node_id
-        else:
-            docs_matches = docs_result["matches"]
-            if on_docs_done is not None:
-                on_docs_done(docs_matches)
+                on_docs_done(docs_matches_to_report)
     else:
         if retriever is None and docs_query is not None:
             logger.warning("ai_turn: A `docs_query` was supplied without a `retriever` to search with. Ignoring the query.")

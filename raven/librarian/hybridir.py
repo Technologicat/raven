@@ -888,6 +888,15 @@ class HybridIR:
         for full_id, rrf_score in rrf_results:
             # Use the pinned references — `self._keyword_retriever` / `self.full_id_to_record_index` may
             # have been replaced by a concurrent `commit()` since we released the lock.
+            #
+            # Skip chunks unknown to the pinned BM25 corpus. ChromaDB is updated incrementally during
+            # commit's per-doc loop, but the BM25 corpus is rebuilt only at commit's *end* — so during
+            # a commit, chromadb may carry chunks for newly-added docs that aren't yet in BM25's index
+            # (and so aren't in `full_id_to_record_index` either). Those chunks will become searchable
+            # after the next commit's BM25 rebuild; skipping them here lets the search return promptly
+            # with stable-corpus results instead of raising KeyError.
+            if full_id not in full_id_to_record_index:
+                continue
             record = copy.copy(keyword_retriever.corpus[full_id_to_record_index[full_id]])
             record["score"] = rrf_score
             fused_results.append(record)
