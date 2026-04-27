@@ -530,6 +530,26 @@ source run-on-internal-gpu.sh
 
 Then for the rest of the command prompt session, any Raven commands (such as `raven-visualizer`) will only see the internal GPU, and `"cuda:0"` in the device settings will point to the only visible GPU.
 
+### Pin vsync to the right display on multi-monitor setups (NVIDIA + X11)
+
+If you use multiple displays at different refresh rates (e.g. a 60 Hz external monitor alongside a 144 Hz laptop panel), Raven's GUI apps may run at the wrong refresh rate even though vsync is enabled. The symptom: `raven-librarian` (or any other Raven app) reports e.g. 144 FPS while its window is actually on a 60 Hz display, wasting CPU and GPU.
+
+This is a quirk of the NVIDIA proprietary driver under X11: it picks **one** display to vsync to (by default the X11 primary), regardless of which display the window is actually on. Wayland handles per-output refresh rates correctly.
+
+To pin vsync to the right display, set `__GL_SYNC_DISPLAY_DEVICE` to the output name (as reported by `xrandr --query`) before launching the app:
+
+```bash
+__GL_SYNC_DISPLAY_DEVICE=DP-1 raven-librarian
+```
+
+Alternatively, make the desired display your X11 primary:
+
+```bash
+xrandr --output DP-1 --primary
+```
+
+The 4K external desktop monitor is a common case where this matters; on a single-display setup, no action needed.
+
 ### Exit from the Raven venv (optional, to end the session)
 
 :exclamation: *There is usually no need to do this. You can just close the terminal window.* :exclamation:
