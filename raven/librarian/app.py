@@ -124,6 +124,13 @@ with timer() as tim:
                                                                theme_color_widget=pulsating_red_docs_color)
         gui_animation.animator.add(pulsating_red_docs_glow)
 
+    # Steady (non-pulsating) red theme for the long indexing-progress text. The icon and the "DOCS" label
+    # carry the "recording" pulsation cue; the progress label is too long for the eye to read inside one
+    # pulsation cycle, so it gets a calm full-alpha variant of the same color.
+    with dpg.theme(tag="my_steady_red_docs_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+
     if platform.system().upper() == "WINDOWS":
         icon_ext = "ico"
     else:
@@ -404,6 +411,12 @@ with timer() as tim:
                         # `chat_controller._refresh_docs_indicator`, so both the icon and the "DOCS" label
                         # inherit the same pulsating color.
                         dpg.add_text("DOCS", tag="docs_access_text")
+                        # Mirrors `retriever.get_indexing_progress_text()`. Empty when the LLM is reading
+                        # (white DOCS) or when nothing is happening; non-empty during indexing (red DOCS).
+                        # Bound to a steady (non-pulsating) red theme so the long label is always readable;
+                        # the icon and "DOCS" label provide the pulsating "recording" cue.
+                        dpg.add_text("", tag="docs_progress_text")
+                        dpg.bind_item_theme("docs_progress_text", "my_steady_red_docs_theme")  # tag
 
                     with dpg.group(pos=(16, 16), show=False, horizontal=True) as web_indicator_group:
                         dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
@@ -977,6 +990,7 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     docs_indexing_theme_tag="my_pulsating_red_docs_theme",
                                     llm_indicator_widget=llm_indicator_group,
                                     docs_indicator_widget=docs_indicator_group,
+                                    docs_progress_text_widget="docs_progress_text",
                                     web_indicator_widget=web_indicator_group,
                                     executor=bg)
 

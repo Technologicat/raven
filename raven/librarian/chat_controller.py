@@ -1261,6 +1261,7 @@ class DPGChatController:
                  docs_indexing_theme_tag: str,
                  llm_indicator_widget: Union[str, int],
                  docs_indicator_widget: Union[str, int],
+                 docs_progress_text_widget: Union[str, int],
                  web_indicator_widget: Union[str, int],
                  executor: Optional[concurrent.futures.Executor] = None):
         """Controller for LLM scaffold to GUI integration.
@@ -1316,6 +1317,11 @@ class DPGChatController:
 
         `doca_indicator_widget`: DPG tag or ID of the widget to show while the document database is being searched.
 
+        `docs_progress_text_widget`: DPG tag or ID of a text widget inside `docs_indicator_widget` whose value
+                                     mirrors `retriever.get_indexing_progress_text()`. Empty while consulting
+                                     the database (white indicator); per-doc progress, then `"Saving…"`, while
+                                     indexing (red indicator).
+
         `web_indicator_widget`: DPG tag or ID of the widget to show while a "websearch" tool call is in progress.
 
         `executor`: A `ThreadPoolExecutor` or something duck-compatible with it. Used for background tasks.
@@ -1336,6 +1342,7 @@ class DPGChatController:
         self.docs_indexing_theme_tag = docs_indexing_theme_tag
         self.llm_indicator_widget = llm_indicator_widget
         self.docs_indicator_widget = docs_indicator_widget
+        self.docs_progress_text_widget = docs_progress_text_widget
         self.web_indicator_widget = web_indicator_widget
 
         # DOCS indicator state machine. Two independent input flags drive a single visual state:
@@ -1346,6 +1353,7 @@ class DPGChatController:
         self._docs_reading = False
         self._docs_indexing = False
         self._docs_visual_state: Optional[str] = None  # one of: None (hidden), "reading", "indexing"
+        self._docs_progress_text_last = ""  # change detection for the per-frame progress poll
         self.current_chat_history = []
         self.current_chat_history_lock = threading.RLock()
 
@@ -1409,14 +1417,23 @@ class DPGChatController:
         """Poll the retriever's indexing state and refresh the DOCS indicator on change.
 
         Intended to be called once per frame from the app's `update_animations` tick. Cheap when nothing
-        is changing (a bool comparison), only does work on transitions.
+        is changing (bool + string comparisons), only does GUI work on transitions.
+
+        Also mirrors `retriever.get_indexing_progress_text()` into the DOCS progress text widget — empty
+        while reading or idle; per-doc progress, then `"Saving…"`, while indexing.
         """
         if self.retriever is None:
+            return
+        if not self.gui_updates_safe:
             return
         indexing_now = self.retriever.is_indexing()
         if indexing_now != self._docs_indexing:
             self._docs_indexing = indexing_now
             self._refresh_docs_indicator()
+        progress_now = self.retriever.get_indexing_progress_text()
+        if progress_now != self._docs_progress_text_last:
+            dpg.set_value(self.docs_progress_text_widget, progress_now)
+            self._docs_progress_text_last = progress_now
 
     def is_generating(self) -> bool:
         """Return whether an AI turn is currently in flight (LLM streaming or tool calls).

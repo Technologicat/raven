@@ -332,6 +332,11 @@ class HybridIR:
         self._indexing_lock = threading.Lock()
         self._indexing_count = 0
 
+        # Human-readable progress message for the GUI to mirror — set per-iteration during commit, "Saving…"
+        # during the rebuild + datastore save tail, "" otherwise. String reads/writes are atomic under the
+        # GIL, so no lock needed; the GUI side polls and re-sets a DPG text widget on change.
+        self._indexing_progress_text: str = ""
+
     def is_indexing(self) -> bool:
         """Return whether this instance is currently inside `commit()`.
 
@@ -340,6 +345,18 @@ class HybridIR:
         """
         # int read is atomic under the GIL; no need to acquire the lock for a snapshot.
         return self._indexing_count > 0
+
+    def get_indexing_progress_text(self) -> str:
+        """Return the current human-readable indexing progress message, or `""` if not indexing.
+
+        Per-iteration during commit: `"[14 / 186] | 2106.01345v2.bib | elapsed 6s, ETA 01:14, total 01:20"`
+        (the trailing chunk is `unpythonic.ETAEstimator.formatted_eta`). During the rebuild + datastore save
+        tail: `"Saving…"`. Outside of commit: `""`.
+
+        Intended for GUI clients that poll once per frame and mirror the value into a DPG text widget. The
+        underlying string is set from the worker thread that runs `commit()`; GIL-atomic, no lock needed.
+        """
+        return self._indexing_progress_text
 
     def _tokenize(self, text: str) -> List[str]:
         """Apply lowercasing, tokenization, stemming, stopword removal.
@@ -469,6 +486,7 @@ class HybridIR:
         try:
             self._commit_body(task_env=task_env)
         finally:
+            self._indexing_progress_text = ""
             with self._indexing_lock:
                 self._indexing_count -= 1
 
@@ -499,6 +517,9 @@ class HybridIR:
                     logger.info(f"HybridIR.commit: Cancelled before edit {edit_num} of {len(pending_edits)}; "
                                 f"{len(remainder)} pending change(s) requeued for a later commit.")
                     break
+                # Both add and delete data shapes carry `document_id` (made uniform when the edit was queued).
+                document_id = data["document_id"] if isinstance(data, dict) else "?"
+                self._indexing_progress_text = f"[{edit_num} / {len(pending_edits)}] | {document_id} | {eta_estimator.formatted_eta}"
                 logger.info(f"HybridIR.commit: Applying change {edit_num} out of {len(pending_edits)}; {eta_estimator.formatted_eta}")
                 try:
                     if edit_kind == "add":
@@ -538,6 +559,7 @@ class HybridIR:
             # Partial save: persist whatever was applied. The keyword index rebuilds from `self.documents`
             # (now reflecting the partial state); the vector index has been updated incrementally inside
             # the loop. Cheap for ~1k small docs; see TODO_DEFERRED for the segmented-backend story at scale.
+            self._indexing_progress_text = "Saving…"
             self._rebuild_keyword_search_index()
             self._save_datastore()
 

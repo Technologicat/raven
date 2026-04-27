@@ -385,11 +385,21 @@ The watchdog-driven flow (tmpdir + `Path.touch` / `unlink` to drive `HybridIRFil
 
 Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
 
-## Hybridir: GUI progress display while indexing
+## Hybridir: search blocked while indexing (lock-granularity)
 
-The DOCS indicator pulses red while indexing, but offers no detail. The log already has everything useful: per-document filename, "Applying change N out of M", elapsed/ETA via `ETAEstimator`. Surface that in the GUI — a small text line near the DOCS indicator, or a tooltip on hover, showing `31/206 — 2106.04647v2.bib` and ETA. Requires plumbing a progress callback out of `HybridIR.commit()` (per-document) up through `HybridIRFileSystemEventHandler.commit` to a controller-side handler that updates a DPG text widget. The bgtask layer doesn't currently propagate progress info — the natural place is a callback parameter on `HybridIR.commit()` that fires per `(current, total, document_id)`, mirroring the existing `on_docs_start`/`on_docs_done` hook style in `chat_controller`.
+`HybridIR.commit()` holds `self.datastore_lock` (RLock) for the entire `_commit_body`, and `query()` acquires the same lock. So a user query during indexing waits for commit to finish (or be cancelled) — for a fresh-install batch of hundreds of documents that's many seconds to minutes of GUI hang.
 
-Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
+Fix is fine-grained locking. The per-document mutations (`self.documents[id] = ...`, `self._vector_collection.add/delete`, BM25 retriever swap at the end) are already individually atomic or chromadb-internal-atomic. Releasing `datastore_lock` between iterations and re-acquiring only for the brief mutation lets `query()` interleave between iterations and return whatever subset of `self.documents` happens to be present. Transient incomplete results are fine — strictly better than waiting.
+
+Care points:
+
+- `self._keyword_retriever` is rebuilt at the end (`_rebuild_keyword_search_index`) and replaces atomically. During the per-doc loop, mid-commit search uses the *stale* retriever (reflects state at commit start). Acceptable.
+- `query()` reads `self._keyword_retriever.corpus` size *before* taking the lock (current code at line 743). With finer-grained locking, that read needs to be inside the lock too, or the corpus reference needs to be captured atomically.
+- Cancellation requeue logic interacts with `_pending_edits_lock`, not `datastore_lock`, so it's unaffected.
+
+Worth doing alongside the BM25 backend migration item — both touch the keyword-retriever lifecycle.
+
+Discovered during DOCS progress-display smoke test (2026-04-27).
 
 ## Hybridir: BM25 backend migration for larger corpora
 
