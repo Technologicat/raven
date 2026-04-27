@@ -1312,8 +1312,7 @@ def _update_info_panel(*, task_env=None, env=None):
                         entry_title_text = re.sub(maybe_regex_case_sensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
                 if search_string and entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
                     header = f"<font color='{title_color}'>{entry.author} ({entry.year}): {entry_title_text}</font>"
-                    entry_title_group = dpg_markdown.add_text(header, wrap=gui_config.title_wrap_w, parent=entry_title_container_group)  # MD renderer renders into its own group
-                    dpg.set_item_alias(entry_title_group, f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}")  # tag  # MD renderer has no `tag` parameter, so set alias after.
+                    entry_title_group = dpg_markdown.add_text(header, wrap=gui_config.title_wrap_w, parent=entry_title_container_group, tag=f"cluster_{cluster_id}_entry_{data_idx}_title_build{env.internal_build_number}")  # MD renderer renders into its own group
                     if is_search_match:
                         search_result_widgets_new.append(entry_title_container_group)
                         search_result_widget_to_display_idx_new[entry_title_container_group] = len(search_result_widgets_new) - 1

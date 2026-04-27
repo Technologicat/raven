@@ -278,8 +278,7 @@ def _render_worker(*, task_env, env=None):
                                 entry_title_text = re.sub(maybe_regex_case_sensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
                         if search_string and entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
                             header = f"<font color='{title_color}'>{entry_title_text}</font>"
-                            title_widget = dpg_markdown.add_text(header, wrap=gui_config.annotation_tooltip_w, parent=item_group)  # MD renderer renders into its own group
-                            dpg.set_item_alias(title_widget, f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}")  # tag  # MD renderer has no `tag` parameter, so set alias after.
+                            dpg_markdown.add_text(header, wrap=gui_config.annotation_tooltip_w, parent=item_group, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}")  # MD renderer renders into its own group
                         else:  # plain text (much faster) when no highlighting needed
                             dpg.add_text(entry.title, color=title_color, wrap=0, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", parent=item_group)  # "A study of stuff..."
 

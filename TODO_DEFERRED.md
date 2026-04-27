@@ -352,14 +352,6 @@ raven-server boots without complaint even when NVRTC is broken (missing `libnvrt
 
 Discovered during demo prep (2026-03-26).
 
-## dpg_markdown: add a `tag` parameter to `add_text`
-
-Vendored `raven/vendor/DearPyGui_Markdown/` doesn't accept a `tag` kwarg on `add_text`, forcing every call site that wants a tag to do a `dpg.set_item_alias(widget, "...")` immediately after creation. Multiple sites in `raven/visualizer/info_panel.py` and `raven/visualizer/annotation.py` carry the explanatory comment "MD renderer has no `tag` parameter, so set alias after."
-
-Fix in the vendored module: accept `tag=None` in `add_text` and pass it through to the top-level `dpg.add_group` call that wraps the rendered MD content — i.e. set the tag at *creation time*, not via post-hoc `dpg.set_item_alias`. The latter has the pitfalls documented as DPG Pitfall #6 in `CLAUDE.md` (alias→ID mapping ends up in an inconsistent state when the aliased item is later deleted and the alias rebound). Then strip the comments and the manual alias calls fleet-wide.
-
-Discovered during visualizer refactoring step 6 (2026-04-27).
-
 ## raven.papers user manual
 
 The `raven.papers` tool collection has grown to the point where it deserves its own user manual, like Visualizer, Librarian and Server already have.
