@@ -20,9 +20,10 @@ indices currently shown in the tooltip — read by the right-click handler in
 Cross-module state this module reads via `app_state`:
 `{dataset, selection_data_idxs_box, themes_and_fonts, bg}` from the
 shared-namespace fields; `{is_any_modal_window_visible, mouse_inside_plot_widget,
-search_string_box, search_result_data_idxs_box, get_entries_for_selection}`
-registered by `app.py` during startup. The info panel's content lock and
-entry-title widget map are accessed directly via `from . import info_panel`.
+search_string_box, search_result_data_idxs_box}` registered by `app.py` during
+startup. Data gathering goes through `entry_renderer.get_entries_for_selection`.
+The info panel's content lock and entry-title widget map are accessed directly
+via `from . import info_panel`.
 """
 
 __all__ = ["content_lock",
@@ -34,6 +35,7 @@ __all__ = ["content_lock",
 
 import gc
 import logging
+import re
 import threading
 logger = logging.getLogger(__name__)
 
@@ -46,8 +48,10 @@ from ..common import bgtask
 from ..common.gui import utils as guiutils
 
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
+from ..vendor import DearPyGui_Markdown as dpg_markdown
 
 from . import config as visualizer_config
+from . import entry_renderer
 from . import info_panel
 from . import plotter
 from .app_state import app_state
@@ -193,12 +197,11 @@ def _render_worker(*, task_env, env=None):
             search_string = unbox(app_state.search_string_box)
             search_result_data_idxs = unbox(app_state.search_result_data_idxs_box)
             selection_data_idxs = unbox(app_state.selection_data_idxs_box)
+            maybe_regex_case_sensitive, maybe_regex_case_insensitive = entry_renderer.compile_search_highlight_regexes(search_string)
 
             # Actual content
-            entries_by_cluster, formatter = app_state.get_entries_for_selection(at_mouse, max_n=gui_config.max_titles_in_tooltip)
-            clusters_at_mouse = list(sorted(set(entries_by_cluster.keys())))
-            if clusters_at_mouse and clusters_at_mouse[0] == -1:  # move the misc group (if it's there) to the end
-                clusters_at_mouse = clusters_at_mouse[1:] + [-1]
+            entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(at_mouse, max_n=gui_config.max_titles_in_tooltip)
+            clusters_at_mouse = entry_renderer.order_cluster_ids(entries_by_cluster.keys())
 
             have_jumpable_item = False  # for whether we should show the help for that
             item_ininfo = sym("ininfo")
@@ -263,7 +266,23 @@ def _render_worker(*, task_env, env=None):
                         else:  # no search active
                             item_search_status = item_searchoff
 
-                        dpg.add_text(entry.title, color=title_color, wrap=0, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", parent=item_group)  # "A study of stuff..."
+                        # Per-fragment search highlighting in the title (when matched).
+                        # Mirrors the info panel's MD highlighting; see `info_panel._update_info_panel`
+                        # for the rationale (font tags don't stack — close + reopen the surrounding
+                        # color tag at every highlight; case-insensitive first so "col" can't match
+                        # the "<font color=...>" inserted by an earlier substitution).
+                        entry_title_text = entry.title
+                        if search_string:
+                            if maybe_regex_case_insensitive:
+                                entry_title_text = re.sub(maybe_regex_case_insensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
+                            if maybe_regex_case_sensitive:
+                                entry_title_text = re.sub(maybe_regex_case_sensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
+                        if search_string and entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
+                            header = f"<font color='{title_color}'>{entry_title_text}</font>"
+                            title_widget = dpg_markdown.add_text(header, wrap=gui_config.annotation_tooltip_w, parent=item_group)  # MD renderer renders into its own group
+                            dpg.set_item_alias(title_widget, f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}")  # tag  # MD renderer has no `tag` parameter, so set alias after.
+                        else:  # plain text (much faster) when no highlighting needed
+                            dpg.add_text(entry.title, color=title_color, wrap=0, tag=f"cluster_{cluster_id}_item_{data_idx}_annotation_title_build{env.internal_build_number}", parent=item_group)  # "A study of stuff..."
 
                         if item_selection_status is item_ininfo and (not search_string or item_search_status is item_match):
                             have_jumpable_item = True

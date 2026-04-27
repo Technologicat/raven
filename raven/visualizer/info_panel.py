@@ -51,7 +51,8 @@ Cross-module state read via `app_state`:
   `{dataset, selection_data_idxs_box, selection_changed,
   selection_anchor_data_idxs_set, themes_and_fonts, bg,
   search_string_box, search_result_data_idxs_box, is_any_modal_window_visible,
-  get_entries_for_selection, update_mouse_hover, update_search}`.
+  update_mouse_hover, update_search}`. Data gathering and search-highlight
+  regex compilation go through `entry_renderer`.
 """
 
 __all__ = ["content_lock",
@@ -117,7 +118,6 @@ from unpythonic.env import env as envcls
 
 from ..common import bgtask
 from ..common import numutils
-from ..common import utils as common_utils
 
 from ..common.gui import animation as gui_animation
 from ..common.gui import utils as guiutils
@@ -127,6 +127,7 @@ from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from ..vendor import DearPyGui_Markdown as dpg_markdown
 
 from . import config as visualizer_config
+from . import entry_renderer
 from . import selection
 from .app_state import app_state
 
@@ -933,20 +934,7 @@ def _update_info_panel(*, task_env=None, env=None):
     selection_data_idxs = unbox(app_state.selection_data_idxs_box)
     search_result_data_idxs = unbox(app_state.search_result_data_idxs_box)
     search_string = unbox(app_state.search_string_box)
-    if search_string:
-        # Same approach as SillyTavern-Timelines: sort so longest fragments match first (prefers
-        # longest match when fragments share substrings, e.g. "laser las").
-        case_sensitive_fragments, case_insensitive_fragments = common_utils.search_string_to_fragments(search_string, sort=True)
-
-        case_sensitive_fragments = [common_utils.search_fragment_to_highlight_regex_fragment(x) for x in case_sensitive_fragments]
-        case_insensitive_fragments = [common_utils.search_fragment_to_highlight_regex_fragment(x) for x in case_insensitive_fragments]
-
-        # All fragments must match simultaneously, to avoid e.g. "col" matching the "<font color=...>"
-        # inserted by this highlighter when it first highlights "col".
-        if case_sensitive_fragments:
-            regex_case_sensitive = re.compile(f"({'|'.join(case_sensitive_fragments)})")
-        if case_insensitive_fragments:
-            regex_case_insensitive = re.compile(f"({'|'.join(case_insensitive_fragments)})", re.IGNORECASE)
+    maybe_regex_case_sensitive, maybe_regex_case_insensitive = entry_renderer.compile_search_highlight_regexes(search_string)
 
     # --------------------------------------------------------------------------------
     # Preserve scroll position across the update when possible.
@@ -1131,13 +1119,11 @@ def _update_info_panel(*, task_env=None, env=None):
         cluster_ids_in_selection_new = []
         cluster_id_to_display_idx_new = {}
 
-        entries_by_cluster, formatter = app_state.get_entries_for_selection(selection_data_idxs, max_n=gui_config.max_items_in_info_panel)
+        entries_by_cluster, formatter = entry_renderer.get_entries_for_selection(selection_data_idxs, max_n=gui_config.max_items_in_info_panel)
 
         cluster_ids_in_selection_new.clear()
         cluster_id_to_display_idx_new.clear()
-        cluster_ids = list(sorted(set(entries_by_cluster.keys())))
-        if cluster_ids and cluster_ids[0] == -1:  # move the misc group (if any) to the end
-            cluster_ids = cluster_ids[1:] + [-1]
+        cluster_ids = entry_renderer.order_cluster_ids(entries_by_cluster.keys())
         cluster_ids_in_selection_new.extend(cluster_ids)
         cluster_id_to_display_idx_new.update({cluster_id: display_idx for display_idx, cluster_id in enumerate(cluster_ids_in_selection_new)})
 
@@ -1320,12 +1306,12 @@ def _update_info_panel(*, task_env=None, env=None):
                 # Item authors, year, title (with search result highlight, if any)
                 entry_title_text = entry.title
                 if search_string:
-                    if case_insensitive_fragments:  # case-insensitive first so a fragment like "col" won't match the "<font color=...>"
+                    if maybe_regex_case_insensitive:  # case-insensitive first so a fragment like "col" won't match the "<font color=...>"
                         # The font tags don't stack in the MD renderer, so close the surrounding
                         # tag (for title color) when the highlight starts, and re-open it after.
-                        entry_title_text = re.sub(regex_case_insensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
-                    if case_sensitive_fragments:  # case-sensitive fragments contain at least one uppercase letter -> safe (won't match anything the case-insensitive pass added)
-                        entry_title_text = re.sub(regex_case_sensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
+                        entry_title_text = re.sub(maybe_regex_case_insensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
+                    if maybe_regex_case_sensitive:  # case-sensitive fragments contain at least one uppercase letter -> safe (won't match anything the case-insensitive pass added)
+                        entry_title_text = re.sub(maybe_regex_case_sensitive, f"</font>**<font color='#ff0000'>\\1</font>**<font color='{title_color}'>", entry_title_text)
                 if search_string and entry_title_text != entry.title:  # substitutions changed the text -> render as Markdown to enable highlighting
                     header = f"<font color='{title_color}'>{entry.author} ({entry.year}): {entry_title_text}</font>"
                     entry_title_group = dpg_markdown.add_text(header, wrap=gui_config.title_wrap_w, parent=entry_title_container_group)  # MD renderer renders into its own group

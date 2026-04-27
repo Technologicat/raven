@@ -38,7 +38,6 @@ or undefined until initialized.)
 | `search_result_data_idxs_box`    | `box(np.ndarray)`           | `app.py` search section               | Boxed indices (into `sorted_*`) of items matching the search.  |
 | `info_panel_content_lock`        | `threading.RLock`           | `app.py` info-panel section           | Guards the info-panel content swap (will move into info_panel).|
 | `info_panel_entry_title_widgets` | `dict[int, int]`            | `app.py` info-panel section           | `data_idx` → DPG entry-title group (will move into info_panel).|
-| `get_entries_for_selection`      | callable                    | `app.py` shared-helpers section       | Gather items by cluster; shared by annotation and info panel.  |
 | `update_mouse_hover`             | callable                    | `raven.visualizer.annotation.update`  | Submit a plotter-tooltip refresh. Published by `annotation`.   |
 
 Subsystems that own their own task managers or per-subsystem state keep those

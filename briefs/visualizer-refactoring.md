@@ -12,9 +12,9 @@ Living document for the Visualizer's monolithic-`app.py` split-up. Updated as mo
 | 3 | `plotter.py` | ✓ landed | 158d52f | 266 |
 | 4 | `annotation.py` (tooltip) | ✓ landed | 9526347 | 420 |
 | 5 | `info_panel.py` | ✓ landed | — | 1531 |
-| 6 | `entry_renderer.py` (dedup pass) | pending | — | — |
+| 6 | `entry_renderer.py` (dedup pass) | ✓ landed | — | 151 |
 
-`app.py` line count: 4421 → 1944 (−2477 lines / −56%) after five extractions.
+`app.py` line count: 4421 → 1885 (−2536 lines / −57%) after six extractions.
 
 Actual order differs from the brief's priority order: we went smallest-first (word_cloud → selection → plotter) to validate the extraction workflow on low-risk pieces before tackling the larger annotation/info-panel pair.
 
@@ -53,6 +53,9 @@ Functions extracted into a module `foo.py` drop any `foo_` prefix they carried w
 - `info_panel_scroll_end_flasher.show_by_position(y)` → `info_panel.flash_scroll_end_by_position(y)` (tiny wrapper; the flasher instance is module-private)
 - `_info_panel_scroll_position_changed` → `info_panel.scroll_position_changed` (public: called from `enter_modal_mode`/`exit_modal_mode`)
 - `update_search` registered on `app_state` as a new field, so `info_panel._search_or_select_entry` can reach it without importing `app.py`
+- `get_entries_for_selection` (and its inner `format_cluster_annotation` closure) → `entry_renderer.get_entries_for_selection` (no longer published on `app_state`; both consumers import `entry_renderer` directly)
+- "Move misc cluster (`-1`) to end of cluster-id list" inline reorder, duplicated in annotation + info_panel → `entry_renderer.order_cluster_ids`
+- Search-fragment regex compilation, previously inline in `info_panel._update_info_panel` → `entry_renderer.compile_search_highlight_regexes`. Now also used by `annotation._render_worker` to add MD-rendered per-fragment highlighting in tooltip titles (strict upgrade — the pre-refactor tooltip only dimmed/brightened whole titles)
 
 ### Direct cross-module imports between submodules
 

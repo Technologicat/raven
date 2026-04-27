@@ -23,7 +23,6 @@ logger.info("Loading libraries...")
 from unpythonic import timer, UnionFilter
 with timer() as tim:
     import argparse
-    import collections
     import concurrent.futures
     from copy import deepcopy
     import math
@@ -1321,71 +1320,7 @@ with timer() as tim:
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
-# Helpers common for the annotation tooltip and the info panel
-
-def get_entries_for_selection(data_idxs, *, sort_field="title", max_n=None):
-    """Gather item data for visualization, sorting by cluster.
-
-    `data_idxs`: `list`, the selection of items to include in the report. Item indices into `sorted_xxx`.
-    `sort_field`: `str`, the field to sort by within each cluster. The name of one of the attributes of an entry in `sorted_entries`.
-    `max_n`: `int`, how many entries can be displayed reasonably. Default `None` means no limit.
-
-    Return value is... complicated, see `annotation._render_worker` and `_update_info_panel` for usage examples.
-    """
-
-    # Gather the relevant entries from the vis data.
-    entries_by_cluster = collections.defaultdict(lambda: list())
-    for data_idx in data_idxs:  # item indices into `sorted_xxx`
-        entry = app_state.dataset.sorted_entries[data_idx]
-        entries_by_cluster[entry.cluster_id].append((data_idx, entry))
-
-    # Alphabetize by `sort_field` (e.g. `title`) within each cluster, much faster to glance at.
-    for entries_in_this_cluster in entries_by_cluster.values():
-        entries_in_this_cluster.sort(key=lambda e: getattr(e[1], sort_field).strip().lower())  # e: `(data_idx, entry)`
-
-    # If `max_n` is enabled, determine how many entries we can display from each cluster to approximately match the total count.
-    # But display at least one entry from each cluster.
-    if max_n is not None:
-        n_clusters_in_selection = len(entries_by_cluster)
-        if n_clusters_in_selection > 0:
-            max_entries_per_cluster = math.ceil(max_n / n_clusters_in_selection)
-        else:
-            max_n = None
-
-    def format_cluster_annotation(cluster_id):
-        # The metadata for the cluster.
-        if cluster_id != -1:  # the outlier set doesn't have a set of common keywords computed
-            if app_state.dataset.file_content.keywords_available:
-                cluster_title = f"#{cluster_id}"
-                cluster_keywords = f"[{', '.join(app_state.dataset.file_content.vis_keywords_by_cluster[cluster_id])}]\n"
-            else:
-                cluster_title = f"#{cluster_id}"
-                cluster_keywords = ""
-        else:
-            cluster_title = "Misc"
-            cluster_keywords = ""
-
-        # The entries themselves. Leave only the first few if there are too many to display.
-        entries = entries_by_cluster[cluster_id]
-        if max_n is not None:
-            # TODO: How to compact this in the worst case? Many clusters, with 3 data points in each -> will render 3 * n_clusters entries.
-            n_extra_entries = len(entries) - max_entries_per_cluster
-            more = ""
-            if n_extra_entries > 0:
-                if n_extra_entries < 3:  # less pedantic to avoid cutting if there are just 1 or 2 more entries than the limit would allow
-                    pass
-                else:  # >=3 extra entries, cut at the original limit
-                    entries = entries[:max_entries_per_cluster]
-                    more = f"[...{n_extra_entries} more entries in {cluster_title}...]"
-        cluster_content = entries
-
-        return cluster_title, cluster_keywords, cluster_content, more
-
-    return entries_by_cluster, format_cluster_annotation
-
-# Publish on `app_state` so the annotation tooltip (and later the info panel) can call it.
-app_state.get_entries_for_selection = get_entries_for_selection
-
+# Shared helpers (`get_entries_for_selection`, `format_cluster_annotation`) — extracted to `raven.visualizer.entry_renderer` (2026-04-27).
 # --------------------------------------------------------------------------------
 # Annotation tooltip — extracted to `raven.visualizer.annotation` (2026-04-23).
 annotation.build_window()
