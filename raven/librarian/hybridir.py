@@ -15,7 +15,7 @@ laptops have enough RAM for this not to be an issue with the dataset sizes neede
 QwQ-32B wrote a very first initial rough draft outline, from which this was then manually coded.
 """
 
-__all__ = ["init", "HybridIR", "HybridIRFileSystemEventHandler", "setup"]
+__all__ = ["init", "shutdown", "HybridIR", "HybridIRFileSystemEventHandler", "setup"]
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -881,14 +881,35 @@ def init(executor):
         task_managers["commit"] = bgtask.TaskManager(name="hybridir_commit",
                                                      mode="sequential",  # for the auto-cancel mechanism
                                                      executor=bg)
-        def clear_background_tasks():
-            for task_manager in task_managers.values():
-                task_manager.clear(wait=False)  # signal background tasks to exit
-        atexit.register(clear_background_tasks)
+        # Belt-and-suspenders: also signal cancellation via atexit, in case the app exits via a path that
+        # doesn't go through `shutdown` (crashes, KeyboardInterrupt during startup, etc.). `wait=False` lets
+        # this return immediately; the actual thread join happens later via concurrent.futures' `_python_exit`.
+        atexit.register(lambda: shutdown(wait=False))
     except Exception:
         bg = None
         task_managers.clear()
         raise
+
+
+def shutdown(wait: bool = True) -> None:
+    """Cancel any in-flight RAG indexing and ingestion tasks.
+
+    On `wait=True` (default), block until the running `commit()` has observed the cancellation flag, exited
+    its per-document loop, and finished its partial-save tail. Use this on app shutdown to ensure that
+    whatever indexing work was applied before cancellation is persisted before the process exits.
+
+    On `wait=False`, return immediately after signalling. The flag is set on each task's env, but the
+    join happens later — at app exit, via `concurrent.futures._python_exit`. This is the right call from
+    a crash-path atexit hook where blocking is undesirable.
+
+    Drain order is **ingest before commit** (preserved by the dict's insertion-order semantics): a
+    finishing ingest task submits a new commit on its way out, so commits must be drained *after* every
+    ingest has exited or a fresh commit task could slip in behind us. Also worth noting: this only
+    cancels module-level task work. Watchdog observers are owned by individual `HybridIRFileSystemEventHandler`
+    instances; stop them via the instance's own `shutdown` method (also registered via `atexit`).
+    """
+    for task_manager in task_managers.values():
+        task_manager.clear(wait=wait)
 
 # --------------------------------------------------------------------------------
 
