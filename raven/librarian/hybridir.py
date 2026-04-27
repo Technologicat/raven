@@ -451,14 +451,17 @@ class HybridIR:
 
         An update is internally a delete, followed by an add for the updated version of the same document.
 
-        `task_env`: Optional. An `unpythonic.env`-shaped object carrying caller context. Currently inspected
-                    field is `cancelled` (bool); when it flips `True`, the per-document loop exits cleanly
-                    after the current document, partial state is persisted, and the unprocessed remainder is
-                    requeued into `_pending_edits` so a later `commit` (in the same session) picks up where
-                    this one left off. On app shutdown, that "later commit" never happens — the leftovers
-                    sit in memory until the process exits, and `bootup.rescan` re-detects the corresponding
-                    file changes via mtime on next startup. The `cancelled` attribute is read defensively
-                    via `getattr` so any env (with or without it pre-set) is accepted.
+        `task_env`: Optional. A namespace carrying caller context — `unpythonic.env` is the typical
+                    Raven-side carrier (it predates `types.SimpleNamespace` from the stdlib but plays the
+                    same role). Any object with attribute access works. Currently inspected field is
+                    `cancelled` (bool); when it flips `True`, the per-document loop exits cleanly after
+                    the current document, partial state is persisted, and the unprocessed remainder is
+                    requeued into `_pending_edits` so a later `commit` (in the same session) picks up
+                    where this one left off. On app shutdown, that "later commit" never happens — the
+                    leftovers sit in memory until the process exits, and `bootup.rescan` re-detects the
+                    corresponding file changes via mtime on next startup. The `cancelled` attribute is
+                    read defensively via `getattr`, so a namespace without it pre-set is accepted (and
+                    treated as not-cancelled).
         """
         logger.info("HybridIR.commit: entered.")
         with self._indexing_lock:
