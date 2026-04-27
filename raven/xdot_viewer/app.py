@@ -24,10 +24,11 @@ from unpythonic import timer
 with timer() as tim:
     import argparse
     import os
+    import pathlib
+    import platform
     import subprocess
     import sys
     import time
-    import pathlib
     import webbrowser
 
     import dearpygui.dearpygui as dpg
@@ -588,8 +589,12 @@ def main() -> int:
 
     themes_and_fonts = guiutils.bootup(font_size=config.FONT_SIZE)
 
+    icon_ext = "ico" if platform.system().upper() == "WINDOWS" else "png"
+    icons_dir = pathlib.Path(os.path.dirname(__file__), "..", "icons")
     dpg.create_viewport(
         title=f"Raven XDot Viewer {__version__}",
+        small_icon=str((icons_dir / f"app_128_notext.{icon_ext}").resolve()),
+        large_icon=str((icons_dir / f"app_256.{icon_ext}").resolve()),
         width=args.width,
         height=args.height
     )

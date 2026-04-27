@@ -21,6 +21,9 @@ from unpythonic import timer
 with timer() as tim:
     import argparse
     import math
+    import os
+    import pathlib
+    import platform
     import sys
     import time
 
@@ -145,8 +148,12 @@ def main() -> int:
     # Start with a small viewport — the startup callback resizes it after
     # measuring the text.  The text widget is positioned offscreen during
     # setup so the user doesn't see intermediate states.
+    icon_ext = "ico" if platform.system().upper() == "WINDOWS" else "png"
+    icons_dir = pathlib.Path(os.path.dirname(__file__), "..", "icons")
     dpg.create_viewport(
         title=f"Raven Conference Timer {__version__}",
+        small_icon=str((icons_dir / f"app_128_notext.{icon_ext}").resolve()),
+        large_icon=str((icons_dir / f"app_256.{icon_ext}").resolve()),
         width=config.INITIAL_WIDTH,
         height=config.INITIAL_HEIGHT,
     )

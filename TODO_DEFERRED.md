@@ -360,12 +360,6 @@ Fix in the vendored module: accept `tag=None` in `add_text` and pass it through 
 
 Discovered during visualizer refactoring step 6 (2026-04-27).
 
-## raven-xdot-viewer and raven-conference-timer: missing Raven icon in OS taskbar / task switcher
-
-Both apps are likely missing the icon-loading call at startup. `raven-cherrypick` has the working pattern; copy from there.
-
-Discovered during visualizer refactoring step 6 (2026-04-27).
-
 ## raven-xdot-viewer: hangs on zero-size input file
 
 Loading a zero-size file (at least when given on the CLI) hangs the viewer. Should detect the empty input and show an error dialog instead. Same `set_frame_callback` deferral pattern as the Visualizer / avatar settings editor handles for startup-time error dialogs (see DPG Pitfall #4 in `CLAUDE.md`) is the natural fix.
