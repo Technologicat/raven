@@ -1,9 +1,8 @@
 """Selection management for the Visualizer's plotter.
 
-Extracted from `app.py` (2026-04-17) as the second step of the refactoring plan in
-`briefs/visualizer-refactoring.md`. Handles the undo/redo stack, the four selection
-combine modes (`replace`, `add`, `subtract`, `intersect`), the highlight scatter
-series update, and the keyboard-modifier → mode mapping.
+Handles the undo/redo stack, the four selection combine modes (`replace`, `add`,
+`subtract`, `intersect`), the highlight scatter series update, and the
+keyboard-modifier → mode mapping.
 
 Module-local state (the undo stack and the undo cursor) stays encapsulated here —
 only `app_state.selection_data_idxs_box` (the current selection) and

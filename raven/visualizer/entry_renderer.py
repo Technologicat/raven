@@ -1,10 +1,8 @@
 """Shared rendering vocabulary for the annotation tooltip and the info panel.
 
-Extracted from `app.py` (2026-04-27) as the sixth and final step of the
-refactoring plan in `briefs/visualizer-refactoring.md`. The annotation tooltip
-(`annotation.py`) and the item information panel (`info_panel.py`) share the
-data-gathering and search-highlighting layer; this module collects what they
-have in common.
+The annotation tooltip (`annotation.py`) and the item information panel
+(`info_panel.py`) share the data-gathering and search-highlighting layer;
+this module collects what they have in common.
 
 The two consumers diverge on *what* they render per item — the tooltip shows
 compact icon-decorated titles, the info panel shows full per-item button rows

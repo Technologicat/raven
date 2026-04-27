@@ -1,18 +1,16 @@
 """Shared app-level state for the Visualizer.
 
-During the ongoing refactor (splitting `app.py` into focused submodules), this
-module holds what used to be module-level globals in `app.py` that need to be
-read or written by multiple extracted submodules. A central namespace beats
-`from .app import name` / circular-import gymnastics, and matches the Zen of
-Python's *explicit is better than implicit*: every cross-module access is
-`app_state.foo`, not a bare name whose origin is ambiguous.
+A single namespace for state that needs to be read or written by multiple
+submodules. Beats `from .app import name` / circular-import gymnastics, and
+matches the Zen of Python's *explicit is better than implicit*: every
+cross-module access is `app_state.foo`, not a bare name whose origin is
+ambiguous.
 
-Entries get added as each submodule extraction surfaces a new cross-module
-dependency. Entries leave once a later refactor pass wraps related state into
-a class whose instance can live here under a single name.
+Entries get added when a new cross-module dependency surfaces, and can leave
+when their state finds a more natural home elsewhere.
 
-Module-local state (state that only one submodule needs to read or write)
-stays in that submodule as module-level variables — not here.
+Module-local state (state only one submodule needs to read or write) stays in
+that submodule as module-level variables — not here.
 
 ## Expected fields (populated by `app.py` during startup)
 

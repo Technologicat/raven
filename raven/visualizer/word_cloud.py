@@ -1,9 +1,8 @@
 """Word cloud rendering, display, and PNG save for the Visualizer.
 
-Extracted from `app.py` (2026-04-17) as the first step of the app-refactoring
-plan in `briefs/visualizer-refactoring.md`. Fairly self-contained: the only
-cross-module dependencies are `app_state.{dataset, bg, filedialog_save,
-themes_and_fonts, selection_data_idxs_box, enter_modal_mode, exit_modal_mode}`.
+Fairly self-contained: the only cross-module dependencies are
+`app_state.{dataset, bg, filedialog_save, themes_and_fonts,
+selection_data_idxs_box, enter_modal_mode, exit_modal_mode}`.
 
 Public API is registered in `__all__`. Internal state — the last-rendered
 dataset id, the last-rendered selection, the texture array, the last

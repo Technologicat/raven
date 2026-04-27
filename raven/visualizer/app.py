@@ -86,9 +86,7 @@ with timer() as tim:
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
-# Plotter utilities — extracted to `raven.visualizer.plotter` (2026-04-17).
-# --------------------------------------------------------------------------------
-# Selection management — extracted to `raven.visualizer.selection` (2026-04-17).
+# Selection management subsystem wire-up
 selection.reset_undo_history(_update_gui=False)  # GUI not initialized yet. This is the only time the flag should be set to `False`!
 
 
@@ -117,7 +115,7 @@ def exit_modal_mode():
     info_panel.scroll_position_changed(reset=True)  # force update of current item in `update_current_search_result_status`, so `CurrentItemControlsGlow` enables its highlight
     app_state.update_mouse_hover(force=True, wait=False)  # show annotation if relevant
 
-# Register the modal-mode helpers on `app_state` so extracted submodules can reach them.
+# Register the modal-mode helpers on `app_state` so submodules can reach them.
 app_state.enter_modal_mode = enter_modal_mode
 app_state.exit_modal_mode = exit_modal_mode
 
@@ -130,7 +128,7 @@ def is_any_modal_window_visible():
             is_open_import_dialog_visible() or is_save_import_dialog_visible() or
             help_window.is_visible())
 
-# Register on `app_state` so extracted submodules (e.g. `annotation`) can call it.
+# Register on `app_state` so submodules (e.g. `annotation`) can call it.
 app_state.is_any_modal_window_visible = is_any_modal_window_visible
 
 # --------------------------------------------------------------------------------
@@ -179,8 +177,6 @@ logger.info(f"    Done in {tim.dt:0.6g}s.")
 # Dataset loading
 
 app_state.dataset = None  # currently loaded dataset (as an `unpythonic.env.env`)
-
-# Dataset parsing and plotter rendering — extracted to `raven.visualizer.plotter` (2026-04-17).
 
 
 def clear_background_tasks(wait: bool):
@@ -558,7 +554,7 @@ def update_search(wait=True):
     app_state.update_info_panel(wait=wait)
     app_state.update_mouse_hover(force=True, wait=wait)
 
-# Register on `app_state` so extracted submodules (e.g. `info_panel`) can call it.
+# Register on `app_state` so submodules (e.g. `info_panel`) can call it.
 app_state.update_search = update_search
 
 
@@ -1320,14 +1316,12 @@ with timer() as tim:
 logger.info(f"    Done in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
-# Shared helpers (`get_entries_for_selection`, `format_cluster_annotation`) — extracted to `raven.visualizer.entry_renderer` (2026-04-27).
-# --------------------------------------------------------------------------------
-# Annotation tooltip — extracted to `raven.visualizer.annotation` (2026-04-23).
+# Annotation tooltip subsystem wire-up
 annotation.build_window()
 app_state.update_mouse_hover = annotation.update  # Published here (not inside the module) so cross-module callers can reach it via `app_state`.
 
 # --------------------------------------------------------------------------------
-# Item information panel — extracted to `raven.visualizer.info_panel` (2026-04-24).
+# Item information panel subsystem wire-up
 info_panel.build_window()
 app_state.update_info_panel = info_panel.update  # Published here so cross-module callers (selection, update_search) can reach it via `app_state`.
 
@@ -1526,7 +1520,7 @@ def draw_select_radius_indicator():
 def mouse_inside_plot_widget():
     """Return whether the mouse cursor is inside the plot widget."""
     return guiutils.is_mouse_inside_widget("plot")  # tag
-app_state.mouse_inside_plot_widget = mouse_inside_plot_widget  # so extracted submodules (e.g. `annotation`) can reach it
+app_state.mouse_inside_plot_widget = mouse_inside_plot_widget  # so submodules (e.g. `annotation`) can reach it
 
 def mouse_inside_info_panel():
     """Return whether the mouse cursor is inside the info panel."""

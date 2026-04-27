@@ -26,7 +26,7 @@ Unlike xdot_viewer and cherrypick (where shared state is a dict inside their sin
 
 `raven/visualizer/app_state.py` holds a single `unpythonic.env.env` instance, imported by every submodule as `from .app_state import app_state`. Every cross-module reference becomes `app_state.foo` — explicit, greppable, no circular imports. The docstring in `app_state.py` lists the currently-expected fields and their owners.
 
-Entries get added as each extraction surfaces a new cross-module dependency (each extraction so far added 0–4 entries). Entries leave once a later class-wrap pass bundles related state under a single instance.
+Entries get added as each extraction surfaces a new cross-module dependency (each extraction so far added 0–4 entries), and can leave when their state finds a more natural home elsewhere.
 
 ### Naming: drop the redundant prefix
 

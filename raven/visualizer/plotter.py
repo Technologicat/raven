@@ -1,12 +1,10 @@
 """Plotter: the semantic map / scatterplot at the core of the Visualizer.
 
-Extracted from `app.py` (2026-04-17) as the third step of the refactoring plan in
-`briefs/visualizer-refactoring.md`. Owns dataset loading (from a Raven-visualizer
-`.pickle` file), dataset parsing and preprocessing (cluster sort, kd-tree, keyword
-normalization), rendering data into the DPG scatter plot (one series per cluster,
-colored via the configured colormap), plotter-space queries (visible datapoints,
-datapoints near the mouse cursor), zoom reset, and lifecycle cleanup of the
-cluster-colour themes.
+Owns dataset loading (from a Raven-visualizer dataset), dataset parsing
+and preprocessing (cluster sort, kd-tree, keyword normalization), rendering data
+into the DPG scatter plot (one series per cluster, colored via the configured
+colormap), plotter-space queries (visible datapoints, datapoints near the mouse
+cursor), zoom reset, and lifecycle cleanup of the cluster-colour themes.
 
 The three "highlight" scatter series (`my_mouse_hover_scatter_series`,
 `my_selection_scatter_series`, `my_search_results_scatter_series`) are also

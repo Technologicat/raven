@@ -1,16 +1,14 @@
 """Item information panel for the Visualizer.
 
-Extracted from `app.py` (2026-04-24) as the fifth step of the refactoring plan
-in `briefs/visualizer-refactoring.md`. Owns the info panel: the background task
-that rebuilds the panel's content on selection/search changes, the double-
-buffered content swap, scroll anchoring, clipboard/report generation, search-
-match navigation, cluster navigation, the "current item" highlight, the dimmer
-overlay, and the scroll-end flasher.
+Owns the info panel: the background task that rebuilds the panel's content on
+selection/search changes, the double-buffered content swap, scroll anchoring,
+clipboard/report generation, search-match navigation, cluster navigation, the
+"current item" highlight, the dimmer overlay, and the scroll-end flasher.
 
 The info panel is the largest single subsystem in the Visualizer (~1450 lines,
 roughly half the program). It shares a rendering vocabulary with the annotation
-tooltip (`annotation.py`); deduplicating that into an `entry_renderer.py` is
-the next (and final) extraction step — see the refactoring brief.
+tooltip (`annotation.py`); the data-gathering and search-fragment regex
+compilation common to both live in `entry_renderer.py`.
 
 Public API (all called from `app.py` after the GUI layout exists):
 

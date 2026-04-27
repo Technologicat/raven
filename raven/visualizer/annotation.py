@@ -1,9 +1,8 @@
 """Mouse-hover annotation tooltip for the plotter.
 
-Extracted from `app.py` (2026-04-23) as the fourth step of the refactoring plan
-in `briefs/visualizer-refactoring.md`. Owns the plotter tooltip: the window, the
-background task that rebuilds its content on mouse movement, the double-buffered
-content swap, and the mouse-hover scatter-series highlight on the plot.
+Owns the plotter tooltip: the window, the background task that rebuilds its
+content on mouse movement, the double-buffered content swap, and the mouse-hover
+scatter-series highlight on the plot.
 
 The tooltip lists the items currently under the mouse cursor, grouped by
 cluster, with per-item icons showing selection/search status, plus a small help
