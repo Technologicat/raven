@@ -114,6 +114,16 @@ with timer() as tim:
                                                                theme_color_widget=pulsating_red_color)
         gui_animation.animator.add(pulsating_red_text_glow)
 
+    # animation for the DOCS indicator while RAG is *indexing* (cyclic, runs in the background).
+    # Same color as the mic-recording theme — semantically both are "recording" — but a separate theme
+    # and pulsator, so resetting the mic phase on recording start doesn't yank the DOCS-indexing pulsation.
+    with dpg.theme(tag="my_pulsating_red_docs_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            pulsating_red_docs_color = dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+        pulsating_red_docs_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
+                                                               theme_color_widget=pulsating_red_docs_color)
+        gui_animation.animator.add(pulsating_red_docs_glow)
+
     if platform.system().upper() == "WINDOWS":
         icon_ext = "ico"
     else:
@@ -136,12 +146,12 @@ print()
 # win is the avatar-paused window: while the user is reading, the avatar pauses after
 # `idle_timeout`, and from there onward we coast at the throttled rate.
 #
-# Ambient animator caveat: the two startup `PulsatingColor` cycles (gray for the LLM /
-# DOCS / WEB indicators, red for the mic button) run continuously and stay registered
-# for the lifetime of the app. They show up in `gui_animation.animator.active_count`
-# even when idle. We snapshot the count here as the baseline; only animations *above*
-# baseline (button flashes, smooth scrolls) count as "busy". A more elegant ambient/
-# transient split is in TODO_DEFERRED.
+# Ambient animator caveat: the startup `PulsatingColor` cycles (gray for the LLM / DOCS /
+# WEB indicators, red for the mic button, red for the DOCS indicator while indexing) run
+# continuously and stay registered for the lifetime of the app. They show up in
+# `gui_animation.animator.active_count` even when idle. We snapshot the count here as the
+# baseline; only animations *above* baseline (button flashes, smooth scrolls) count as
+# "busy". A more elegant ambient/transient split is in TODO_DEFERRED.
 
 IDLE_SLEEP_S = 0.08   # ~12 fps when idle
 INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
@@ -625,6 +635,9 @@ with timer() as tim:
 
 def update_animations():
     gui_animation.animator.render_frame()
+    # RAG indexing happens on a background thread (via watchdog), invisible to the chat scaffold.
+    # Pulse the DOCS indicator red while it's running, so heavy CPU/GPU work has a UI representation.
+    chat_controller.update_docs_indicator_from_indexing_state()
 
 # --------------------------------------------------------------------------------
 # Built-in help window
@@ -957,6 +970,9 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     chat_panel_widget=chat_panel_widget,
                                     chat_stop_generation_button_widget=stop_generation_button,
                                     indicator_glow_animation=pulsating_gray_text_glow,
+                                    docs_indexing_glow_animation=pulsating_red_docs_glow,
+                                    docs_reading_theme_tag="my_pulsating_gray_text_theme",
+                                    docs_indexing_theme_tag="my_pulsating_red_docs_theme",
                                     llm_indicator_widget=llm_indicator_group,
                                     docs_indicator_widget=docs_indicator_group,
                                     web_indicator_widget=web_indicator_group,

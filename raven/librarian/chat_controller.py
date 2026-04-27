@@ -1256,6 +1256,9 @@ class DPGChatController:
                  chat_panel_widget: Union[str, int],
                  chat_stop_generation_button_widget: Union[str, int],
                  indicator_glow_animation: Optional[gui_animation.PulsatingColor],
+                 docs_indexing_glow_animation: Optional[gui_animation.PulsatingColor],
+                 docs_reading_theme_tag: str,
+                 docs_indexing_theme_tag: str,
                  llm_indicator_widget: Union[str, int],
                  docs_indicator_widget: Union[str, int],
                  web_indicator_widget: Union[str, int],
@@ -1298,6 +1301,15 @@ class DPGChatController:
 
                                     See `PulsatingColor` in `raven.common.gui.animation`.
 
+        `docs_indexing_glow_animation`: Pulsator for the DOCS indicator while the RAG database is being *indexed*
+                                        (as opposed to consulted). Phase-reset on transition into the indexing state.
+
+        `docs_reading_theme_tag`: DPG theme tag bound to the DOCS indicator while the database is being consulted
+                                  (read) by the LLM. Pulsates in the `indicator_glow_animation` color.
+
+        `docs_indexing_theme_tag`: DPG theme tag bound to the DOCS indicator while the database is being indexed.
+                                   Pulsates in the `docs_indexing_glow_animation` color.
+
         `llm_indicator_widget`: DPG tag or ID of the widget to show while the prompt is being processed by the LLM backend.
                                 Typically, a DPG group with items bound to the theme whose color `indicator_glow_animation`
                                 pulsates.
@@ -1319,9 +1331,21 @@ class DPGChatController:
         self.avatar_record = avatar_record
         self.chat_stop_generation_button_widget = chat_stop_generation_button_widget
         self.indicator_glow_animation = indicator_glow_animation
+        self.docs_indexing_glow_animation = docs_indexing_glow_animation
+        self.docs_reading_theme_tag = docs_reading_theme_tag
+        self.docs_indexing_theme_tag = docs_indexing_theme_tag
         self.llm_indicator_widget = llm_indicator_widget
         self.docs_indicator_widget = docs_indicator_widget
         self.web_indicator_widget = web_indicator_widget
+
+        # DOCS indicator state machine. Two independent input flags drive a single visual state:
+        #   - reading: set by on_docs_start/on_docs_done in `ai_turn` (LLM consulting the database).
+        #   - indexing: polled from `retriever.is_indexing()` in `update_docs_indicator_from_indexing_state`.
+        # Resolution: reading wins (white) > indexing (red) > hidden. Theme rebind + pulsator phase reset
+        # only on transitions, so the visible cycle stays clean.
+        self._docs_reading = False
+        self._docs_indexing = False
+        self._docs_visual_state: Optional[str] = None  # one of: None (hidden), "reading", "indexing"
         self.current_chat_history = []
         self.current_chat_history_lock = threading.RLock()
 
@@ -1349,6 +1373,50 @@ class DPGChatController:
         self.gui_updates_safe = False
         self.task_manager.clear(wait=True)
         self.ai_turn_task_manager.clear(wait=True)
+
+    def _refresh_docs_indicator(self) -> None:
+        """Resolve the DOCS indicator's visual state from `_docs_reading` and `_docs_indexing`.
+
+        Reading wins (white pulse) > indexing (red pulse) > hidden. Rebinds theme and resets the pulsator
+        only on actual transitions, so the visible cycle stays clean.
+        """
+        if not self.gui_updates_safe:
+            return
+        if self._docs_reading:
+            new_state = "reading"
+        elif self._docs_indexing:
+            new_state = "indexing"
+        else:
+            new_state = None
+        if new_state == self._docs_visual_state:
+            return  # nothing to do
+
+        if new_state == "reading":
+            dpg.bind_item_theme(self.docs_indicator_widget, self.docs_reading_theme_tag)
+            if self.indicator_glow_animation is not None:
+                self.indicator_glow_animation.reset()
+            dpg.show_item(self.docs_indicator_widget)
+        elif new_state == "indexing":
+            dpg.bind_item_theme(self.docs_indicator_widget, self.docs_indexing_theme_tag)
+            if self.docs_indexing_glow_animation is not None:
+                self.docs_indexing_glow_animation.reset()
+            dpg.show_item(self.docs_indicator_widget)
+        else:
+            dpg.hide_item(self.docs_indicator_widget)
+        self._docs_visual_state = new_state
+
+    def update_docs_indicator_from_indexing_state(self) -> None:
+        """Poll the retriever's indexing state and refresh the DOCS indicator on change.
+
+        Intended to be called once per frame from the app's `update_animations` tick. Cheap when nothing
+        is changing (a bool comparison), only does work on transitions.
+        """
+        if self.retriever is None:
+            return
+        indexing_now = self.retriever.is_indexing()
+        if indexing_now != self._docs_indexing:
+            self._docs_indexing = indexing_now
+            self._refresh_docs_indicator()
 
     def is_generating(self) -> bool:
         """Return whether an AI turn is currently in flight (LLM streaming or tool calls).
@@ -1454,13 +1522,13 @@ class DPGChatController:
                 def on_docs_start() -> None:
                     if self.gui_updates_safe:
                         self.avatar_controller.start_data_eyes(config=self.avatar_record)
-                        if self.indicator_glow_animation is not None:
-                            self.indicator_glow_animation.reset()  # start new pulsation cycle
-                        dpg.show_item(self.docs_indicator_widget)
+                        self._docs_reading = True
+                        self._refresh_docs_indicator()
 
                 def on_docs_done(matches: List[Dict]) -> None:
                     if self.gui_updates_safe:
-                        dpg.hide_item(self.docs_indicator_widget)
+                        self._docs_reading = False
+                        self._refresh_docs_indicator()
                         self.avatar_controller.stop_data_eyes(config=self.avatar_record)
 
                 def on_llm_start() -> None:
