@@ -325,6 +325,22 @@ class HybridIR:
         # Pending-edit mechanism so that we can add/update/delete a set of documents at once, and *then* rebuild the indices.
         self._pending_edits = []
 
+        # Per-instance "currently indexing" reference counter, polled by GUI clients (e.g. Librarian's idle
+        # throttle and DOCS indicator). A counter rather than a bool because `commit()` may run concurrently
+        # from multiple threads — the outermost invocation's `finally` is the one that must zero the state.
+        # Same-thread re-entry is also possible in principle, since `datastore_lock` is an RLock.
+        self._indexing_lock = threading.Lock()
+        self._indexing_count = 0
+
+    def is_indexing(self) -> bool:
+        """Return whether this instance is currently inside `commit()`.
+
+        Per-instance: multiple `HybridIR`s report independently. Intended for GUI clients that want to surface
+        index-rebuild activity (currently invisible heavy CPU/GPU work) and to gate idle-throttle predicates.
+        """
+        # int read is atomic under the GIL; no need to acquire the lock for a snapshot.
+        return self._indexing_count > 0
+
     def _tokenize(self, text: str) -> List[str]:
         """Apply lowercasing, tokenization, stemming, stopword removal.
 
@@ -435,6 +451,15 @@ class HybridIR:
         An update is internally a delete, followed by an add for the updated version of the same document.
         """
         logger.info("HybridIR.commit: entered.")
+        with self._indexing_lock:
+            self._indexing_count += 1
+        try:
+            self._commit_body()
+        finally:
+            with self._indexing_lock:
+                self._indexing_count -= 1
+
+    def _commit_body(self) -> None:
         with self.datastore_lock:
             with self._pending_edits_lock:
                 if not self._pending_edits:

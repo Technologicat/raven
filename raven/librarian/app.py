@@ -129,6 +129,44 @@ logger.info(f"    Done in {tim.dt:0.6g}s.")
 print()
 
 # --------------------------------------------------------------------------------
+# Idle throttle
+#
+# When nothing is happening — avatar paused (idle auto-off), no LLM streaming, no RAG
+# indexing, no recent user input — drop to ~12 fps to conserve CPU/GPU. The headline
+# win is the avatar-paused window: while the user is reading, the avatar pauses after
+# `idle_timeout`, and from there onward we coast at the throttled rate.
+#
+# Ambient animator caveat: the two startup `PulsatingColor` cycles (gray for the LLM /
+# DOCS / WEB indicators, red for the mic button) run continuously and stay registered
+# for the lifetime of the app. They show up in `gui_animation.animator.active_count`
+# even when idle. We snapshot the count here as the baseline; only animations *above*
+# baseline (button flashes, smooth scrolls) count as "busy". A more elegant ambient/
+# transient split is in TODO_DEFERRED.
+
+IDLE_SLEEP_S = 0.08   # ~12 fps when idle
+INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
+
+_AMBIENT_ANIMATOR_COUNT = gui_animation.animator.active_count
+
+_last_input_ns: int = 0  # monotonic_ns timestamp of last user input
+
+def _is_busy() -> bool:
+    """True when the render loop should run at full frame rate."""
+    if (time.monotonic_ns() - _last_input_ns) < INPUT_ACTIVE_S * 1e9:
+        return True
+    if "dpg_avatar_renderer" in globals() and dpg_avatar_renderer.animator_running:
+        return True
+    if "chat_controller" in globals() and chat_controller.is_generating():
+        return True
+    if "retriever" in globals() and retriever.is_indexing():
+        return True
+    return gui_animation.animator.active_count > _AMBIENT_ANIMATOR_COUNT
+
+def _on_any_input(*_args) -> None:
+    global _last_input_ns
+    _last_input_ns = time.monotonic_ns()
+
+# --------------------------------------------------------------------------------
 # Connect to servers, load datastores
 
 if not api.test_connection():
@@ -751,6 +789,9 @@ dpg.set_viewport_resize_callback(_resize_gui)
 
 combobox_choice_map = None   # DPG tag or ID -> (choice_strings, callback)
 def librarian_hotkeys_callback(sender, app_data):
+    global _last_input_ns
+    _last_input_ns = time.monotonic_ns()
+
     # # Hotkeys while an "open file" or "save as" dialog is shown - fdialog handles its own hotkeys
     # if is_any_modal_window_visible():
     #     return
@@ -872,6 +913,10 @@ def librarian_hotkeys_callback(sender, app_data):
         #         browse(focused_item, combobox_choice_map[focused_item])
 with dpg.handler_registry(tag="librarian_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="librarian_hotkeys_handler", callback=librarian_hotkeys_callback)
+    # Input tracking for idle throttle. Mouse-move covers slider drags, scrolling, and general activity.
+    dpg.add_mouse_move_handler(callback=_on_any_input)
+    dpg.add_mouse_click_handler(callback=_on_any_input)
+    dpg.add_mouse_wheel_handler(callback=_on_any_input)
 
 # --------------------------------------------------------------------------------
 # Start the app
@@ -997,6 +1042,10 @@ try:
     while dpg.is_dearpygui_running():
         update_animations()
         dpg.render_dearpygui_frame()
+
+        # Idle throttle: sleep when nothing needs updating (avatar paused, no LLM streaming, no RAG indexing, no recent input).
+        if not _is_busy():
+            time.sleep(IDLE_SLEEP_S)
     # dpg.start_dearpygui()  # automatic render loop
 except KeyboardInterrupt:
     pass  # cleanup will be handled by our DPG exit handler

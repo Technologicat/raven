@@ -1350,6 +1350,13 @@ class DPGChatController:
         self.task_manager.clear(wait=True)
         self.ai_turn_task_manager.clear(wait=True)
 
+    def is_generating(self) -> bool:
+        """Return whether an AI turn is currently in flight (LLM streaming or tool calls).
+
+        Intended for GUI clients that gate an idle-throttle predicate on "something is happening".
+        """
+        return self.ai_turn_task_manager.has_tasks()
+
     def get_last_message(self) -> Optional[DPGChatMessage]:
         """Return the `DPGChatMessage` for the last currently displayed message. Return `None` if the view is empty."""
         if not self.current_chat_history:
