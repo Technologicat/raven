@@ -400,7 +400,9 @@ with timer() as tim:
                     with dpg.group(pos=(16, 16), show=False, horizontal=True) as docs_indicator_group:
                         dpg.add_text(fa.ICON_DATABASE, tag="docs_access_symbol")
                         dpg.bind_item_font("docs_access_symbol", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("docs_access_symbol", "my_pulsating_gray_text_theme")  # tag
+                        # Theme is bound at the group level (and re-bound on read/index transitions) by
+                        # `chat_controller._refresh_docs_indicator`, so both the icon and the "DOCS" label
+                        # inherit the same pulsating color.
                         dpg.add_text("DOCS", tag="docs_access_text")
 
                     with dpg.group(pos=(16, 16), show=False, horizontal=True) as web_indicator_group:
