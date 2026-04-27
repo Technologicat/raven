@@ -5,6 +5,8 @@
 **Added**:
 
 - *Raven-avatar* settings editor: `Clear` and `Default` buttons on the postprocessor section header. `Clear` disables every filter for a blank-slate starting point; `Default` reloads the postprocessor chain from `animator.json`. Per-filter `Reset` buttons now have tooltips.
+- *Raven-avatar* settings editor: idle CPU/GPU throttle in the render loop. When the avatar is paused (Ctrl+P) and there has been no recent user input, the GUI drops to ~12 fps; live playback runs at full fps as before. Brings the settings editor in line with the rest of the constellation.
+
 - *Raven-librarian*: idle CPU/GPU throttle in the render loop. When the avatar is paused (auto-off after the configured idle timeout), no LLM turn is in flight, no RAG indexing is running, and there has been no recent user input, the GUI drops to ~12 fps instead of running flat-out. Same pattern as `raven-cherrypick`, `raven-xdot-viewer`, and `raven-avatar-pose-editor`.
 - *Raven-librarian*: new INDEXING indicator (red, pulsating) shows while the RAG document database is being updated in the background — previously silent CPU/GPU work that read as "the app is broken". Includes per-document progress (`[14 / 186] | filename | elapsed 6 seconds, ETA 01:14, total 01:20`) and `Saving…` during the rebuild + datastore save tail. Mnemonic borrowed from audio/video apps: red = recording.
 - *Raven-librarian*: the DOCS indicator (during RAG search) now reports per-phase progress — `Tokenizing query…`, `Embedding query…`, `Keyword search…`, `Semantic search…`, `Merging results…`.
@@ -16,7 +18,9 @@
 
 - *Raven-librarian* RAG: the documents directory is now auto-created at startup if missing. Previously, a fresh install or moved-aside docs dir crashed the app with `FileNotFoundError` from `inotify_add_watch` before the GUI came up.
 - *Raven-librarian* RAG: rapid sequences of file adds and updates no longer crash the indexing pipeline with `TypeError: string indices must be integers`. The pending-edits queue now stores delete entries in the same shape as add/update entries, so the dedup pass can run uniformly.
+
 - *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.
+
 - `dpg_markdown` bullet lists and blockquotes now render correctly inside tooltips (and any other initially-hidden container). Previously every bullet glyph in a tooltip stacked at the top-left, because DPG reports `get_item_pos() == (0, 0)` for children of a hidden container; the bullet drawlists are now deferred until their row has been laid out.
 
 ---

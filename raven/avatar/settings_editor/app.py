@@ -31,6 +31,7 @@ with timer() as tim:
     import requests
     import sys
     import threading
+    import time
     import traceback
     from typing import Any, Dict, Optional, Union
 
@@ -99,6 +100,38 @@ with dpg.theme(tag="my_pulsating_red_text_theme"):
     pulsating_red_text_glow = gui_animation.PulsatingColor(cycle_duration=2.0,
                                                            theme_color_widget=pulsating_red_color)
     gui_animation.animator.add(pulsating_red_text_glow)
+
+# --------------------------------------------------------------------------------
+# Idle throttle (same pattern as librarian, pose_editor, xdot_viewer, cherrypick)
+#
+# The settings editor's whole point is to view the live avatar while tweaking
+# settings, so the render loop normally runs at full fps. But when the user
+# pauses the avatar (Ctrl+P), the scene is static — we can sleep between
+# frames in that case, matching the rest of the constellation.
+#
+# Ambient cyclic animations (the REC indicator's pulsating red glow) run
+# continuously and stay registered for the lifetime of the app. Snapshot the
+# count here as the baseline; only animations *above* baseline (e.g. fdialog
+# button flash) count as "busy".
+
+IDLE_SLEEP_S = 0.08   # ~12 fps when idle
+INPUT_ACTIVE_S = 0.5  # stay at full fps for this long after last user input
+
+_AMBIENT_ANIMATOR_COUNT = gui_animation.animator.active_count
+
+_last_input_ns: int = 0  # monotonic_ns timestamp of last user input
+
+def _is_busy() -> bool:
+    """True when the render loop should run at full frame rate."""
+    if (time.monotonic_ns() - _last_input_ns) < INPUT_ACTIVE_S * 1e9:
+        return True
+    if gui_instance is not None and gui_instance.dpg_avatar_renderer.animator_running:
+        return True
+    return gui_animation.animator.active_count > _AMBIENT_ANIMATOR_COUNT
+
+def _on_any_input(*_args) -> None:
+    global _last_input_ns
+    _last_input_ns = time.monotonic_ns()
 
 if platform.system().upper() == "WINDOWS":
     icon_ext = "ico"
@@ -1601,6 +1634,10 @@ def avatar_settings_editor_hotkeys_callback(sender, app_data):
                 browse(focused_item, combobox_choice_map[focused_item])
 with dpg.handler_registry(tag="avatar_settings_editor_handler_registry"):  # global (whole viewport)
     dpg.add_key_press_handler(tag="avatar_settings_editor_hotkeys_handler", callback=avatar_settings_editor_hotkeys_callback)
+    # Input tracking for idle throttle. Mouse-move covers slider drags, scrolling, and general activity.
+    dpg.add_mouse_move_handler(callback=_on_any_input)
+    dpg.add_mouse_click_handler(callback=_on_any_input)
+    dpg.add_mouse_wheel_handler(callback=_on_any_input)
 
 # --------------------------------------------------------------------------------
 # Help card (F1)
@@ -1784,6 +1821,10 @@ try:
                 gui_instance.dpg_avatar_renderer.set_overlay_suppressed(modal_visible)
                 _last_modal_state = modal_visible
         dpg.render_dearpygui_frame()
+
+        # Idle throttle: sleep when nothing needs updating (avatar paused, no recent input, no transient animation).
+        if not _is_busy():
+            time.sleep(IDLE_SLEEP_S)
     # dpg.start_dearpygui()  # automatic render loop
 except KeyboardInterrupt:
     pass  # cleanup will be handled by our DPG exit handler
