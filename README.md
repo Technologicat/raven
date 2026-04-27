@@ -36,6 +36,7 @@
         - [Stopgap: run Raven commands from any terminal (bash functions)](#stopgap-run-raven-commands-from-any-terminal-bash-functions)
         - [Activate GPU compute support (optional)](#activate-gpu-compute-support-optional)
         - [Choose which GPU to use (optional)](#choose-which-gpu-to-use-optional)
+        - [Pin vsync to the right display on multi-monitor setups (NVIDIA + X11)](#pin-vsync-to-the-right-display-on-multi-monitor-setups-nvidia--x11)
         - [Exit from the Raven venv (optional, to end the session)](#exit-from-the-raven-venv-optional-to-end-the-session)
 - [Configuration](#configuration)
 - [Uninstall](#uninstall)
@@ -532,11 +533,11 @@ Then for the rest of the command prompt session, any Raven commands (such as `ra
 
 ### Pin vsync to the right display on multi-monitor setups (NVIDIA + X11)
 
-If you use multiple displays at different refresh rates (e.g. a 60 Hz external monitor alongside a 144 Hz laptop panel), Raven's GUI apps may run at the wrong refresh rate even though vsync is enabled. The symptom: `raven-librarian` (or any other Raven app) reports e.g. 144 FPS while its window is actually on a 60 Hz display, wasting CPU and GPU.
+If you use multiple displays at different refresh rates (e.g. a 60 Hz external monitor alongside a 144 Hz laptop panel), Raven's GUI apps may run at the wrong refresh rate even though vsync is enabled. The symptom: `raven-librarian` (or any other Raven app) reports e.g. 144 FPS (in its `Ctrl+Shift+M` metrics debug window) while its window is actually on a 60 Hz display, wasting large amounts of CPU and GPU.
 
 This is a quirk of the NVIDIA proprietary driver under X11: it picks **one** display to vsync to (by default the X11 primary), regardless of which display the window is actually on. Wayland handles per-output refresh rates correctly.
 
-To pin vsync to the right display, set `__GL_SYNC_DISPLAY_DEVICE` to the output name (as reported by `xrandr --query`) before launching the app:
+To pin vsync to the right display on X11, set `__GL_SYNC_DISPLAY_DEVICE` to the output name (as reported by `xrandr --query`) before launching the app:
 
 ```bash
 __GL_SYNC_DISPLAY_DEVICE=DP-1 raven-librarian
