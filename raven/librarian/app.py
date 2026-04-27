@@ -668,9 +668,9 @@ with timer() as tim:
 
 def update_animations():
     gui_animation.animator.render_frame()
-    # RAG indexing happens on a background thread (via watchdog), invisible to the chat scaffold.
-    # Pulse the DOCS indicator red while it's running, so heavy CPU/GPU work has a UI representation.
-    chat_controller.update_docs_indicator_from_retriever_state()
+    # Mirror the retriever's progress-text channels (indexing + search) into their DPG widgets.
+    # Indicator visibility is push-driven via callbacks; only the progress text strings are polled.
+    chat_controller.update_docs_indicator_progress_text()
 
 # --------------------------------------------------------------------------------
 # Built-in help window

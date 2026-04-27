@@ -340,6 +340,12 @@ class HybridIR:
         self._indexing_progress_text: str = ""  # set per-iteration in commit; "Saving…" during the tail
         self._query_progress_text: str = ""     # set per-phase in query (Tokenizing/Embedding/…)
 
+        # Indexing lifecycle callbacks. Fired on the 0↔1 transitions of `_indexing_count`, so nested or
+        # concurrent commits don't fire `start`/`done` multiple times — only the outermost invocation
+        # triggers the visual events. See `set_indexing_callbacks`.
+        self._on_indexing_start: Optional[Callable[[], None]] = None
+        self._on_indexing_done: Optional[Callable[[], None]] = None
+
     def is_indexing(self) -> bool:
         """Return whether this instance is currently inside `commit()`.
 
@@ -361,6 +367,30 @@ class HybridIR:
         The underlying string is set from the worker thread that runs `commit()`; GIL-atomic, no lock.
         """
         return self._indexing_progress_text
+
+    def set_indexing_callbacks(self,
+                               *,
+                               on_start: Optional[Callable[[], None]] = None,
+                               on_done: Optional[Callable[[], None]] = None) -> None:
+        """Register callbacks fired on the indexing-busy state transitions.
+
+        `on_start` fires (once) when an outermost `commit()` enters and `_indexing_count` goes 0→1.
+        `on_done` fires (once) when the outermost `commit()` exits and `_indexing_count` goes 1→0. Nested or
+        concurrent commits do not fire either callback — only the outer-edge transitions do.
+
+        Both callbacks are invoked from the worker thread that runs `commit()`. Callees must be safe to
+        call from a background thread. Exceptions raised by a callback are logged and swallowed; they
+        never abort the indexing pipeline.
+
+        Pass `on_start=None` / `on_done=None` (the defaults) to clear a previously registered callback.
+
+        Why a setter rather than constructor arguments: `HybridIR` is constructed before its GUI client
+        (`DPGChatController`) exists, so the natural Raven style of passing handlers at construction time
+        isn't available here. The setter is the next-cleanest shape — handlers flow in via a single method
+        call, no caller-side attribute mutation.
+        """
+        self._on_indexing_start = on_start
+        self._on_indexing_done = on_done
 
     def get_query_progress_text(self) -> str:
         """Return the current human-readable query progress message, or `""` if no query is running.
@@ -496,14 +526,28 @@ class HybridIR:
                     treated as not-cancelled).
         """
         logger.info("HybridIR.commit: entered.")
+        # Fire callbacks *outside* the lock — user code shouldn't run while we hold an internal lock,
+        # in case it re-enters HybridIR. Capture the transition under the lock, fire after release.
         with self._indexing_lock:
+            fire_start = (self._indexing_count == 0)
             self._indexing_count += 1
+        if fire_start and self._on_indexing_start is not None:
+            try:
+                self._on_indexing_start()
+            except Exception as exc:
+                logger.error(f"HybridIR.commit: on_indexing_start raised: {type(exc)}: {exc}")
         try:
             self._commit_body(task_env=task_env)
         finally:
             self._indexing_progress_text = ""
             with self._indexing_lock:
                 self._indexing_count -= 1
+                fire_done = (self._indexing_count == 0)
+            if fire_done and self._on_indexing_done is not None:
+                try:
+                    self._on_indexing_done()
+                except Exception as exc:
+                    logger.error(f"HybridIR.commit: on_indexing_done raised: {type(exc)}: {exc}")
 
     def _commit_body(self, task_env: Optional[envcls]) -> None:
         # Pop pending edits without `datastore_lock` — only `_pending_edits_lock` guards that list.

@@ -1347,13 +1347,16 @@ class DPGChatController:
         self.docs_search_progress_text_widget = docs_search_progress_text_widget
         self.web_indicator_widget = web_indicator_widget
 
-        # Per-frame poll state for the indexing indicator + progress texts. Indexing and search are
-        # independent: the search indicator is driven directly by `on_docs_start`/`on_docs_done` callbacks,
-        # the indexing indicator is driven by polling `retriever.is_indexing()`. Both progress text
-        # channels poll their respective `retriever.get_*_progress_text()` getters.
-        self._docs_indexing = False
+        # Indicator wiring. Show/hide events are pushed via callbacks (symmetric across all four
+        # indicators: on_docs_start/done from the chat scaffold drive DOCS / SYSTEM / WEB; the new
+        # on_indexing_start/done on the retriever drive INDEXING). Progress text remains polled —
+        # it's a continuously-updated state, not a discrete event, and polling models that shape
+        # naturally with no per-update callback overhead.
         self._docs_indexing_progress_last = ""
         self._docs_search_progress_last = ""
+        if self.retriever is not None:
+            self.retriever.set_indexing_callbacks(on_start=self._on_indexing_start,
+                                                  on_done=self._on_indexing_done)
         self.current_chat_history = []
         self.current_chat_history_lock = threading.RLock()
 
@@ -1379,37 +1382,37 @@ class DPGChatController:
         This signals the background tasks to exit.
         """
         self.gui_updates_safe = False
+        if self.retriever is not None:
+            self.retriever.set_indexing_callbacks(on_start=None, on_done=None)
         self.task_manager.clear(wait=True)
         self.ai_turn_task_manager.clear(wait=True)
 
-    def update_docs_indicator_from_retriever_state(self) -> None:
-        """Poll the retriever for indexing state and progress texts; refresh indicators on change.
+    def _on_indexing_start(self) -> None:
+        """Show the INDEXING indicator. Called from `HybridIR.commit()`'s worker thread."""
+        if self.gui_updates_safe:
+            if self.docs_indexing_glow_animation is not None:
+                self.docs_indexing_glow_animation.reset()  # crisp phase on appear
+            dpg.show_item(self.docs_indexing_indicator_widget)
+
+    def _on_indexing_done(self) -> None:
+        """Hide the INDEXING indicator. Called from `HybridIR.commit()`'s worker thread."""
+        if self.gui_updates_safe:
+            dpg.hide_item(self.docs_indexing_indicator_widget)
+
+    def update_docs_indicator_progress_text(self) -> None:
+        """Poll the retriever's two progress-text channels; mirror changes to the DPG widgets.
 
         Intended to be called once per frame from the app's `update_animations` tick. Cheap when nothing
-        is changing (bool + string comparisons), only does GUI work on transitions.
+        is changing (two string comparisons), only does GUI work on change.
 
-        Three channels are polled:
-
-          - `is_indexing()` toggles the INDEXING indicator's visibility (and resets its pulsator phase
-            on appear). Independent from the search indicator, which is driven by `on_docs_start` /
-            `on_docs_done` callbacks fired by the chat scaffold.
-          - `get_indexing_progress_text()` is mirrored verbatim into the indexing progress text widget.
-          - `get_query_progress_text()` is mirrored verbatim into the search progress text widget.
+        Indicator visibility is push-driven via callbacks — `on_docs_start`/`on_docs_done` from the chat
+        scaffold for DOCS, `on_indexing_start`/`on_indexing_done` from the retriever for INDEXING. Only
+        the progress texts (continuously-updated state, not discrete events) remain polled.
         """
         if self.retriever is None:
             return
         if not self.gui_updates_safe:
             return
-
-        indexing_now = self.retriever.is_indexing()
-        if indexing_now != self._docs_indexing:
-            self._docs_indexing = indexing_now
-            if indexing_now:
-                if self.docs_indexing_glow_animation is not None:
-                    self.docs_indexing_glow_animation.reset()  # crisp phase on appear
-                dpg.show_item(self.docs_indexing_indicator_widget)
-            else:
-                dpg.hide_item(self.docs_indexing_indicator_widget)
 
         indexing_progress = self.retriever.get_indexing_progress_text()
         if indexing_progress != self._docs_indexing_progress_last:
