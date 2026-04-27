@@ -368,3 +368,36 @@ For the others, some instructions are scattered in Raven's main `README.md`.
 
 Some instructions don't yet exist, and need to be written.
 
+## Hybridir: cover the edit-queueing layer with tests
+
+`raven/librarian/tests/test_hybridir.py` has 18 tests but they all target the post-commit query side — corpus is added once, committed, queried. The edit-queueing layer (`_pend_edit` dedup, update/delete paths, the add-then-update-same-doc race) is untested. A latent shape-mismatch bug in `_pend_edit` survived this gap until it was triggered by dropping ~200 .bib files into the docs dir at once (watchdog burst → multiple concurrent `scheduled_add` / `scheduled_update` tasks).
+
+Concrete coverage to add:
+
+- `update()` on an existing document (internally delete + add).
+- `delete()` on an existing document.
+- Dedup behavior: queue add then update same `document_id` before commit; queue delete then add same id; queue add for two docs and update one; etc.
+- Idempotency of `commit()` on empty queue.
+- `is_indexing()` reference-counting under threaded concurrent `commit()` calls — mock the slow inner work, have two threads enter, verify `is_indexing` stays True throughout and goes False only when both have exited (also covers same-thread re-entry under the existing `datastore_lock` RLock).
+- BM25 + semantic search is becoming the de-facto standard hybrid retrieval shape, so the layer is worth investing in regardless.
+
+The watchdog-driven flow (tmpdir + `Path.touch` / `unlink` to drive `HybridIRFileSystemEventHandler`) crosses into bgtask scheduling and is harder to make deterministic — separate, lower-priority follow-up.
+
+Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
+
+## Hybridir: GUI progress display while indexing
+
+The DOCS indicator pulses red while indexing, but offers no detail. The log already has everything useful: per-document filename, "Applying change N out of M", elapsed/ETA via `ETAEstimator`. Surface that in the GUI — a small text line near the DOCS indicator, or a tooltip on hover, showing `31/206 — 2106.04647v2.bib` and ETA. Requires plumbing a progress callback out of `HybridIR.commit()` (per-document) up through `HybridIRFileSystemEventHandler.commit` to a controller-side handler that updates a DPG text widget. The bgtask layer doesn't currently propagate progress info — the natural place is a callback parameter on `HybridIR.commit()` that fires per `(current, total, document_id)`, mirroring the existing `on_docs_start`/`on_docs_done` hook style in `chat_controller`.
+
+Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
+
+## Hybridir: cooperative-cancel commit on app shutdown
+
+If the user closes Librarian while indexing is running, the app refuses to close until `commit()` finishes — currently `task_managers["commit"].clear(wait=True)` is called at shutdown, blocking on the long-running embedding/index work. Better behavior: drop the remaining pending edits and exit, but persist whatever partial work has already been applied so the next app start has a smaller backlog.
+
+`commit()`'s outer loop iterates over `pending_edits`; a cancellation flag check at the top of each iteration is straightforward. The slow `_prepare_document_for_indexing` (chunkify + tokenize + embed) is per-document and not interruptible mid-document, but a per-iteration check is granular enough — worst case the user waits one document. After cancellation, run `_save_datastore()` + `_rebuild_keyword_search_index()` on whatever was applied so far, and let any not-yet-processed pending edits go on the floor (they'll re-trigger from the watchdog rescan on next startup).
+
+Touches the bgtask cancellation contract — `bgtask.ManagedTask` already has a `cancelled` flag mechanism; just needs `commit()` to read it. The `init()`-installed atexit handler that calls `task_managers["commit"].clear(wait=False)` should switch to `wait=True` *after* setting the cancel flag, so partial-save work has time to land.
+
+Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
+
