@@ -501,54 +501,60 @@ class HybridIR:
                 self._indexing_count -= 1
 
     def _commit_body(self, task_env: Optional[envcls]) -> None:
-        with self.datastore_lock:
-            with self._pending_edits_lock:
-                if not self._pending_edits:
-                    logger.info("HybridIR.commit: No pending changes, exiting.")
-                    return
-                pending_edits = copy.copy(self._pending_edits)
-                self._pending_edits.clear()
-            # Now we can release the lock on the original pending edits list,
-            # so that `add`/`update`/`delete` are available in case another thread
-            # wants to queue new edits while we're committing the previous ones.
+        # Pop pending edits without `datastore_lock` — only `_pending_edits_lock` guards that list.
+        with self._pending_edits_lock:
+            if not self._pending_edits:
+                logger.info("HybridIR.commit: No pending changes, exiting.")
+                return
+            pending_edits = copy.copy(self._pending_edits)
+            self._pending_edits.clear()
 
-            # Update `self.documents` and the semantic search index.
-            # There is no "update" operation - to do that, first "delete", then "add".
-            logger.info("HybridIR.commit: Applying pending changes.")
-            errors_occurred = 0
-            cancelled_at = None  # set to the 1-based edit number of the iteration that observed cancellation
-            eta_estimator = ETAEstimator(total=len(pending_edits), keep_last=50)
-            for edit_num, (edit_kind, data) in enumerate(pending_edits, start=1):
-                if task_env is not None and getattr(task_env, "cancelled", False):
-                    cancelled_at = edit_num
-                    remainder = pending_edits[edit_num - 1:]
-                    with self._pending_edits_lock:
-                        self._pending_edits[0:0] = remainder  # prepend, preserving original order
-                    logger.info(f"HybridIR.commit: Cancelled before edit {edit_num} of {len(pending_edits)}; "
-                                f"{len(remainder)} pending change(s) requeued for a later commit.")
-                    break
-                # Both add and delete data shapes carry `document_id` (made uniform when the edit was queued).
-                document_id = data["document_id"] if isinstance(data, dict) else "?"
-                self._progress_text = f"[{edit_num} / {len(pending_edits)}] | {document_id} | {eta_estimator.formatted_eta}"
-                logger.info(f"HybridIR.commit: Applying change {edit_num} out of {len(pending_edits)}; {eta_estimator.formatted_eta}")
-                try:
-                    if edit_kind == "add":
-                        doc = data
-                        document_id = doc["document_id"]
-                        logger.info(f"HybridIR.commit: Adding document '{document_id}'.")
+        # Update `self.documents` and the semantic search index.
+        # There is no "update" operation - to do that, first "delete", then "add".
+        #
+        # Lock granularity: we hold `datastore_lock` only briefly per iteration, around the actual
+        # mutations. The slow `_prepare_document_for_indexing` (chunkify + tokenize + embed) is pure
+        # — returns a new dict, doesn't touch self — and runs *outside* the lock. This lets a
+        # concurrent `query()` interleave between iterations instead of blocking on the entire commit.
+        logger.info("HybridIR.commit: Applying pending changes.")
+        errors_occurred = 0
+        cancelled_at = None  # set to the 1-based edit number of the iteration that observed cancellation
+        eta_estimator = ETAEstimator(total=len(pending_edits), keep_last=50)
+        for edit_num, (edit_kind, data) in enumerate(pending_edits, start=1):
+            if task_env is not None and getattr(task_env, "cancelled", False):
+                cancelled_at = edit_num
+                remainder = pending_edits[edit_num - 1:]
+                with self._pending_edits_lock:
+                    self._pending_edits[0:0] = remainder  # prepend, preserving original order
+                logger.info(f"HybridIR.commit: Cancelled before edit {edit_num} of {len(pending_edits)}; "
+                            f"{len(remainder)} pending change(s) requeued for a later commit.")
+                break
+            # Both add and delete data shapes carry `document_id` (made uniform when the edit was queued).
+            document_id = data["document_id"] if isinstance(data, dict) else "?"
+            self._progress_text = f"Indexing… [{edit_num} / {len(pending_edits)}] | {document_id} | {eta_estimator.formatted_eta}"
+            logger.info(f"HybridIR.commit: Applying change {edit_num} out of {len(pending_edits)}; {eta_estimator.formatted_eta}")
+            try:
+                if edit_kind == "add":
+                    doc = data
+                    document_id = doc["document_id"]
+                    logger.info(f"HybridIR.commit: Adding document '{document_id}'.")
 
+                    # The slow part runs *outside* `datastore_lock`. Pure: returns a new dict; no self-state mutation.
+                    prepared = self._prepare_document_for_indexing(doc)
+
+                    # Brief lock for the actual mutation. The dup check is here too so the check + insert is atomic.
+                    with self.datastore_lock:
                         if document_id in self.documents:
                             logger.warning(f"HybridIR.commit: Document with ID '{document_id}' already exists in index; ignoring. If you meant to update, first delete, then add.")
                             continue
-
-                        doc.update(self._prepare_document_for_indexing(doc))  # the slow part: chunkify, tokenize, embed
-
+                        doc.update(prepared)
                         self.documents[document_id] = doc
                         self._add_document_to_vector_collection(doc)
 
-                    elif edit_kind == "delete":
-                        document_id = data["document_id"]
-                        logger.info(f"HybridIR.commit: Deleting document '{document_id}'.")
+                elif edit_kind == "delete":
+                    document_id = data["document_id"]
+                    logger.info(f"HybridIR.commit: Deleting document '{document_id}'.")
+                    with self.datastore_lock:
                         try:
                             doc = self.documents[document_id]
                             old_chunk_ids = [format_chunk_full_id(document_id, chunk["chunk_id"]) for chunk in doc["chunks"]]
@@ -557,31 +563,32 @@ class HybridIR:
                         except KeyError as exc:
                             logger.warning(f"HybridIR.commit: Ignoring error: While deleting document with ID '{document_id}': {type(exc)}: {exc}")
 
-                    else:  # should not happen, but let's log it
-                        msg = f"HybridIR.commit: Unknown pending change type '{edit_kind}'. Ignoring."
-                        logger.warning(msg)
-                except Exception as exc:
-                    errors_occurred += 1
-                    logger.error(f"While applying changes: {type(exc)}: {exc}")
-                    logger.info("Attempting to continue with remaining edits, if any.")
-                eta_estimator.tick()
+                else:  # should not happen, but let's log it
+                    msg = f"HybridIR.commit: Unknown pending change type '{edit_kind}'. Ignoring."
+                    logger.warning(msg)
+            except Exception as exc:
+                errors_occurred += 1
+                logger.error(f"While applying changes: {type(exc)}: {exc}")
+                logger.info("Attempting to continue with remaining edits, if any.")
+            eta_estimator.tick()
 
-            # Partial save: persist whatever was applied. The keyword index rebuilds from `self.documents`
-            # (now reflecting the partial state); the vector index has been updated incrementally inside
-            # the loop. Cheap for ~1k small docs; see TODO_DEFERRED for the segmented-backend story at scale.
-            self._progress_text = "Saving…"
-            self._rebuild_keyword_search_index()
-            self._save_datastore()
+        # Partial save: persist whatever was applied. The keyword index rebuilds from `self.documents`
+        # (now reflecting the partial state); the vector index has been updated incrementally inside
+        # the loop. Cheap for ~1k small docs; see TODO_DEFERRED for the segmented-backend story at scale.
+        # Both methods take `datastore_lock` themselves, so the tail does serialize against `query()`.
+        self._progress_text = "Saving…"
+        self._rebuild_keyword_search_index()
+        self._save_datastore()
 
-            if cancelled_at is not None:
-                logger.info(f"HybridIR.commit: Partial commit persisted ({cancelled_at - 1} of {len(pending_edits)} edit(s) applied before cancellation).")
-            elif errors_occurred:
-                plural_s = "s" if errors_occurred != 1 else ""
-                logger.error(f"Error{plural_s} occurred while pending changes were being applied. This may cause the semantic search index to go out of sync with the actual data. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")
-            else:
-                logger.info("HybridIR.commit: All pending changes applied successfully.")
+        if cancelled_at is not None:
+            logger.info(f"HybridIR.commit: Partial commit persisted ({cancelled_at - 1} of {len(pending_edits)} edit(s) applied before cancellation).")
+        elif errors_occurred:
+            plural_s = "s" if errors_occurred != 1 else ""
+            logger.error(f"Error{plural_s} occurred while pending changes were being applied. This may cause the semantic search index to go out of sync with the actual data. Recommend deleting '{self.semantic_index_path}' and restarting the app to perform a full reindex.")
+        else:
+            logger.info("HybridIR.commit: All pending changes applied successfully.")
 
-            logger.info("HybridIR.commit: Commit finished, exiting.")
+        logger.info("HybridIR.commit: Commit finished, exiting.")
 
     def _save_datastore(self) -> None:
         # We save embeddings separately, as compressed NumPy arrays, to save disk space.
@@ -789,53 +796,60 @@ class HybridIR:
                     semantic_distance_threshold: float,
                     include_documents: Optional[List[str]],
                     return_extra_info: bool):
-        # Prepare anything we can before locking the datastore
-        internal_k = min(int(alpha * k),
-                         len(self._keyword_retriever.corpus))  # `bm25s` library requires `k ≤ corpus size`
-        if include_documents is None:
-            keyword_k = internal_k
-        else:  # return score for *every record in database*, for manual metadata-based filtering (document ID)
-            keyword_k = len(self._keyword_retriever.corpus)
-
-        # Prepare query for keyword search
+        # Prepare query for keyword search (slow — runs the spaCy NLP pipeline; no datastore access).
         self._progress_text = "Tokenizing query…"
         query_tokens = self._tokenize(query)
 
-        # Prepare query for vector search
+        # Prepare query for vector search (slow — server roundtrip; no datastore access).
         self._progress_text = "Embedding query…"
         query_embedding = self.embedder.encode([query])[0]
 
+        # Pin the index references atomically and run both searches under the *same* `datastore_lock`
+        # acquisition, so the keyword corpus and the chromadb state agree on the snapshot. A concurrent
+        # `commit()` releases `datastore_lock` between iterations, so the wait here is bounded by one
+        # iteration's mutation block (microseconds), not the whole commit.
         with self.datastore_lock:
             if not self.documents:
                 logger.info("HybridIR.query: No documents in index, returning empty result.")
                 return []
             if self._keyword_retriever is None:
                 assert False  # we should have `self._keyword_retriever` as soon as we have at least one document
+            keyword_retriever = self._keyword_retriever
+            vector_collection = self._vector_collection
+            full_id_to_record_index = self.full_id_to_record_index
+
+            # `bm25s` requires `k ≤ corpus size`. Pinning above plus computing here keeps the size and the
+            # subsequent `.retrieve` consistent.
+            internal_k = min(int(alpha * k), len(keyword_retriever.corpus))
+            if include_documents is None:
+                keyword_k = internal_k
+            else:  # return score for *every record in database*, for manual metadata-based filtering (document ID)
+                keyword_k = len(keyword_retriever.corpus)
 
             # BM25 search
             self._progress_text = "Keyword search…"
             logger.info("HybridIR.query: keyword search")
             # Here we always search all documents; we filter afterward, if needed.
-            raw_keyword_results, raw_keyword_scores = self._keyword_retriever.retrieve([query_tokens],  # list of list of tokens (outer list = one element per query; can run multiple queries at once)
-                                                                                       k=keyword_k)
+            raw_keyword_results, raw_keyword_scores = keyword_retriever.retrieve([query_tokens],  # list of list of tokens (outer list = one element per query; can run multiple queries at once)
+                                                                                  k=keyword_k)
 
             # Vector search
             self._progress_text = "Semantic search…"
             logger.info("HybridIR.query: semantic search")
             if include_documents is not None:  # search only documents with given IDs
-                chroma_results = self._vector_collection.query(query_embeddings=[query_embedding],
-                                                               n_results=internal_k,
-                                                               include=["metadatas", "distances"],
-                                                               where={"document_id": {"$in": include_documents}})
+                chroma_results = vector_collection.query(query_embeddings=[query_embedding],
+                                                         n_results=internal_k,
+                                                         include=["metadatas", "distances"],
+                                                         where={"document_id": {"$in": include_documents}})
             else:  # search all documents
-                chroma_results = self._vector_collection.query(query_embeddings=[query_embedding],
-                                                               n_results=internal_k,
-                                                               include=["metadatas", "distances"])
+                chroma_results = vector_collection.query(query_embeddings=[query_embedding],
+                                                         n_results=internal_k,
+                                                         include=["metadatas", "distances"])
             # list of list of metadatas (outer list = one element per query?)
             # https://github.com/chroma-core/chroma/blob/main/chromadb/api/types.py
             raw_vector_results = chroma_results["metadatas"][0]  # -> list of metadatas
             raw_vector_distances = chroma_results["distances"][0]  # -> list of float
-        # Now we no longer need datastore access to complete the search
+        # Now we no longer need datastore access; the rest of the function uses the pinned references.
 
         # Filter keyword results by threshold (and by `include_documents`, if specified)
         keyword_results = []
@@ -872,7 +886,9 @@ class HybridIR:
         # keyword-search corpus, regardless of which backend actually returned any specific result.
         fused_results = []
         for full_id, rrf_score in rrf_results:
-            record = copy.copy(self._keyword_retriever.corpus[self.full_id_to_record_index[full_id]])
+            # Use the pinned references — `self._keyword_retriever` / `self.full_id_to_record_index` may
+            # have been replaced by a concurrent `commit()` since we released the lock.
+            record = copy.copy(keyword_retriever.corpus[full_id_to_record_index[full_id]])
             record["score"] = rrf_score
             fused_results.append(record)
 

@@ -401,32 +401,39 @@ with timer() as tim:
                     _initial_image_size = int(librarian_config.avatar_config.animator_settings_overrides["upscale"] * librarian_config.avatar_config.source_image_size)
                     dpg_avatar_renderer.configure_live_texture(_initial_image_size, _initial_image_size)
 
-                    with dpg.group(pos=(16, 16), show=False, horizontal=True) as llm_indicator_group:
-                        dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")
-                        dpg.bind_item_font("llm_prompt_process_symbol", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("llm_prompt_process_symbol", "my_pulsating_gray_text_theme")  # tag
-                        dpg.add_text("SYSTEM", tag="llm_prompt_process_text")
+                    # Status indicators stack top-down via a vertical parent group anchored at (16, 16).
+                    # Order — DOCS, SYSTEM, WEB — mirrors the typical processing order of a query, and
+                    # places the longest-lived indicator (DOCS during indexing) at the top so it stays
+                    # in place when shorter-lived siblings (SYSTEM, WEB) appear below it. DPG's vertical
+                    # group naturally hides any child whose `show=False`, so the visible siblings just
+                    # repack with no overlap.
+                    with dpg.group(pos=(16, 16)):
+                        with dpg.group(show=False, horizontal=True) as docs_indicator_group:
+                            dpg.add_text(fa.ICON_DATABASE, tag="docs_access_symbol")
+                            dpg.bind_item_font("docs_access_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            # Theme is bound at the group level (and re-bound on read/index transitions) by
+                            # `chat_controller._refresh_docs_indicator`, so both the icon and the "DOCS" label
+                            # inherit the same pulsating color.
+                            dpg.add_text("DOCS", tag="docs_access_text")
+                            # Mirrors `retriever.get_progress_text()`. Empty when nothing is happening; otherwise
+                            # carries per-phase status during search (gray DOCS) or per-document progress during
+                            # indexing (red DOCS). The widget-level theme is rebound by chat_controller's
+                            # `_refresh_docs_indicator` to a steady (non-pulsating) gray or red color matching
+                            # the active state — pulsation kills readability for a long label, so only the icon
+                            # and "DOCS" label pulse.
+                            dpg.add_text("", tag="docs_progress_text")
 
-                    with dpg.group(pos=(16, 16), show=False, horizontal=True) as docs_indicator_group:
-                        dpg.add_text(fa.ICON_DATABASE, tag="docs_access_symbol")
-                        dpg.bind_item_font("docs_access_symbol", themes_and_fonts.icon_font_solid)  # tag
-                        # Theme is bound at the group level (and re-bound on read/index transitions) by
-                        # `chat_controller._refresh_docs_indicator`, so both the icon and the "DOCS" label
-                        # inherit the same pulsating color.
-                        dpg.add_text("DOCS", tag="docs_access_text")
-                        # Mirrors `retriever.get_progress_text()`. Empty when nothing is happening; otherwise
-                        # carries per-phase status during search (gray DOCS) or per-document progress during
-                        # indexing (red DOCS). The widget-level theme is rebound by chat_controller's
-                        # `_refresh_docs_indicator` to a steady (non-pulsating) gray or red color matching
-                        # the active state — pulsation kills readability for a long label, so only the icon
-                        # and "DOCS" label pulse.
-                        dpg.add_text("", tag="docs_progress_text")
+                        with dpg.group(show=False, horizontal=True) as llm_indicator_group:
+                            dpg.add_text(fa.ICON_MICROCHIP, tag="llm_prompt_process_symbol")
+                            dpg.bind_item_font("llm_prompt_process_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("llm_prompt_process_symbol", "my_pulsating_gray_text_theme")  # tag
+                            dpg.add_text("SYSTEM", tag="llm_prompt_process_text")
 
-                    with dpg.group(pos=(16, 16), show=False, horizontal=True) as web_indicator_group:
-                        dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
-                        dpg.bind_item_font("web_access_symbol", themes_and_fonts.icon_font_solid)  # tag
-                        dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
-                        dpg.add_text("WEB", tag="web_access_text")
+                        with dpg.group(show=False, horizontal=True) as web_indicator_group:
+                            dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
+                            dpg.bind_item_font("web_access_symbol", themes_and_fonts.icon_font_solid)  # tag
+                            dpg.bind_item_theme("web_access_symbol", "my_pulsating_gray_text_theme")  # tag
+                            dpg.add_text("WEB", tag="web_access_text")
 
                     dpg.add_text("",
                                  pos=(gui_config.subtitle_x0,

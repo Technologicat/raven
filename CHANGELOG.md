@@ -10,6 +10,8 @@
 - *Raven-librarian* RAG: closing the app while indexing is in progress no longer blocks until the full backlog is processed. The commit loop now exits cleanly after the current document on cancellation, persists whatever was applied, and requeues the unprocessed remainder; on the next app start, `bootup`'s rescan re-detects the corresponding file changes via mtime.
 - *Raven-librarian*: the DOCS indicator now shows per-document indexing progress (`[14 / 186] | filename | elapsed 6 seconds, ETA 01:14, total 01:20`), and `Saving…` during the index-rebuild and datastore-save tail.
 - *Raven-librarian*: the DOCS indicator also reports per-phase progress during a RAG search — `Tokenizing query…`, `Embedding query…`, `Keyword search…`, `Semantic search…`, `Merging results…` — in steady gray to match the icon, alongside the existing white pulsation.
+- *Raven-librarian* RAG: a search now interleaves cleanly with an in-flight indexing commit instead of blocking until the commit finishes. The slow per-document work (chunkify + tokenize + embed) runs outside the lock, so a query waits at most one document's worth of mutation time to start.
+- *Raven-librarian*: the DOCS, SYSTEM, and WEB indicators are now stacked vertically (in that processing order) instead of overlapping at the same screen position. The longest-lived one (DOCS during indexing) sits on top so it stays put when shorter-lived siblings appear and disappear below it.
 
 **Fixed**:
 
