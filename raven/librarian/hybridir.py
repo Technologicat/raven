@@ -1184,6 +1184,13 @@ def setup(docs_dir: Union[pathlib.Path, str],
                          chunk_size=chunk_size,
                          overlap_fraction=overlap_fraction)
 
+    # The watchdog observer can't watch a non-existent directory; without this, a fresh-install or
+    # docs-dir-moved-aside startup raises FileNotFoundError from `inotify_add_watch` during `bootup()`.
+    docs_dir_path = pathlib.Path(docs_dir).expanduser().resolve()
+    if not docs_dir_path.is_dir():
+        logger.info(f"setup: Documents directory '{str(docs_dir_path)}' does not exist; creating it.")
+        common_utils.create_directory(docs_dir_path)
+
     scanner = HybridIRFileSystemEventHandler(docs_dir=docs_dir,
                                              recursive=recursive,
                                              retriever=retriever,
