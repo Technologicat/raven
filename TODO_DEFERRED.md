@@ -280,6 +280,12 @@ Librarian has an avatar idle auto-off, and a no-avatar mode is under considerati
 
 Discovered during idle throttle discussion (2026-04-05).
 
+## Idle throttle for avatar settings editor
+
+The settings editor's whole point is to view the live avatar while tweaking settings, so at first glance it looks unthrottle-able. But it has a pause mode that switches the avatar video off — and *that* is the state where, for consistency with the rest of the constellation (cherrypick, xdot-viewer, pose editor, and Librarian once landed), it should conserve CPU/GPU. Same `_is_busy()` + sleep pattern as the others; the busy predicate gates on `dpg_avatar_renderer.animator_running` so unpaused playback keeps full fps.
+
+Discovered during Librarian idle throttle implementation (2026-04-27).
+
 
 ## raven-cherrypick: low FPS with large images
 
