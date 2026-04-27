@@ -132,6 +132,10 @@ def _load_file(filepath: Union[pathlib.Path, str]) -> Optional[str]:
         _show_error("File Not Found", f"File not found: '{filepath}'")
         return None
 
+    if os.path.getsize(filepath) == 0:  # otherwise GraphViz hangs on empty stdin / parser hangs on empty xdot
+        _show_error("Empty File", f"File is empty: '{filepath}'")
+        return None
+
     ext = os.path.splitext(filepath)[1].lower()
     current_filter = _app_state["current_filter"]
 

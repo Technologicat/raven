@@ -360,12 +360,6 @@ Fix in the vendored module: accept `tag=None` in `add_text` and pass it through 
 
 Discovered during visualizer refactoring step 6 (2026-04-27).
 
-## raven-xdot-viewer: hangs on zero-size input file
-
-Loading a zero-size file (at least when given on the CLI) hangs the viewer. Should detect the empty input and show an error dialog instead. Same `set_frame_callback` deferral pattern as the Visualizer / avatar settings editor handles for startup-time error dialogs (see DPG Pitfall #4 in `CLAUDE.md`) is the natural fix.
-
-Discovered during visualizer refactoring step 6 (2026-04-27).
-
 ## raven.papers user manual
 
 The `raven.papers` tool collection has grown to the point where it deserves its own user manual, like Visualizer, Librarian and Server already have.
