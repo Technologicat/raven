@@ -9,6 +9,7 @@
 - *Raven-librarian*: idle CPU/GPU throttle in the render loop. When the avatar is paused (auto-off after the configured idle timeout), no LLM turn is in flight, no RAG indexing is running, and there has been no recent user input, the GUI drops to ~12 fps instead of running flat-out. Same pattern as `raven-cherrypick`, `raven-xdot-viewer`, and `raven-avatar-pose-editor`.
 - *Raven-librarian* RAG: closing the app while indexing is in progress no longer blocks until the full backlog is processed. The commit loop now exits cleanly after the current document on cancellation, persists whatever was applied, and requeues the unprocessed remainder; on the next app start, `bootup`'s rescan re-detects the corresponding file changes via mtime.
 - *Raven-librarian*: the DOCS indicator now shows per-document indexing progress (`[14 / 186] | filename | elapsed 6 seconds, ETA 01:14, total 01:20`), and `Saving…` during the index-rebuild and datastore-save tail.
+- *Raven-librarian*: the DOCS indicator also reports per-phase progress during a RAG search — `Tokenizing query…`, `Embedding query…`, `Keyword search…`, `Semantic search…`, `Merging results…` — in steady gray to match the icon, alongside the existing white pulsation.
 
 **Fixed**:
 

@@ -1259,6 +1259,8 @@ class DPGChatController:
                  docs_indexing_glow_animation: Optional[gui_animation.PulsatingColor],
                  docs_reading_theme_tag: str,
                  docs_indexing_theme_tag: str,
+                 docs_reading_progress_theme_tag: str,
+                 docs_indexing_progress_theme_tag: str,
                  llm_indicator_widget: Union[str, int],
                  docs_indicator_widget: Union[str, int],
                  docs_progress_text_widget: Union[str, int],
@@ -1311,6 +1313,13 @@ class DPGChatController:
         `docs_indexing_theme_tag`: DPG theme tag bound to the DOCS indicator while the database is being indexed.
                                    Pulsates in the `docs_indexing_glow_animation` color.
 
+        `docs_reading_progress_theme_tag`: DPG theme tag for the DOCS progress text widget during reading.
+                                           Steady (non-pulsating) variant of the reading color, since the
+                                           long progress label is unreadable across one pulsation cycle.
+
+        `docs_indexing_progress_theme_tag`: DPG theme tag for the DOCS progress text widget during indexing.
+                                            Steady (non-pulsating) variant of the indexing color.
+
         `llm_indicator_widget`: DPG tag or ID of the widget to show while the prompt is being processed by the LLM backend.
                                 Typically, a DPG group with items bound to the theme whose color `indicator_glow_animation`
                                 pulsates.
@@ -1318,7 +1327,7 @@ class DPGChatController:
         `doca_indicator_widget`: DPG tag or ID of the widget to show while the document database is being searched.
 
         `docs_progress_text_widget`: DPG tag or ID of a text widget inside `docs_indicator_widget` whose value
-                                     mirrors `retriever.get_indexing_progress_text()`. Empty while consulting
+                                     mirrors `retriever.get_progress_text()`. Empty while consulting
                                      the database (white indicator); per-doc progress, then `"Saving…"`, while
                                      indexing (red indicator).
 
@@ -1340,6 +1349,8 @@ class DPGChatController:
         self.docs_indexing_glow_animation = docs_indexing_glow_animation
         self.docs_reading_theme_tag = docs_reading_theme_tag
         self.docs_indexing_theme_tag = docs_indexing_theme_tag
+        self.docs_reading_progress_theme_tag = docs_reading_progress_theme_tag
+        self.docs_indexing_progress_theme_tag = docs_indexing_progress_theme_tag
         self.llm_indicator_widget = llm_indicator_widget
         self.docs_indicator_widget = docs_indicator_widget
         self.docs_progress_text_widget = docs_progress_text_widget
@@ -1347,7 +1358,7 @@ class DPGChatController:
 
         # DOCS indicator state machine. Two independent input flags drive a single visual state:
         #   - reading: set by on_docs_start/on_docs_done in `ai_turn` (LLM consulting the database).
-        #   - indexing: polled from `retriever.is_indexing()` in `update_docs_indicator_from_indexing_state`.
+        #   - indexing: polled from `retriever.is_indexing()` in `update_docs_indicator_from_retriever_state`.
         # Resolution: reading wins (white) > indexing (red) > hidden. Theme rebind + pulsator phase reset
         # only on transitions, so the visible cycle stays clean.
         self._docs_reading = False
@@ -1401,11 +1412,13 @@ class DPGChatController:
 
         if new_state == "reading":
             dpg.bind_item_theme(self.docs_indicator_widget, self.docs_reading_theme_tag)
+            dpg.bind_item_theme(self.docs_progress_text_widget, self.docs_reading_progress_theme_tag)
             if self.indicator_glow_animation is not None:
                 self.indicator_glow_animation.reset()
             dpg.show_item(self.docs_indicator_widget)
         elif new_state == "indexing":
             dpg.bind_item_theme(self.docs_indicator_widget, self.docs_indexing_theme_tag)
+            dpg.bind_item_theme(self.docs_progress_text_widget, self.docs_indexing_progress_theme_tag)
             if self.docs_indexing_glow_animation is not None:
                 self.docs_indexing_glow_animation.reset()
             dpg.show_item(self.docs_indicator_widget)
@@ -1413,14 +1426,18 @@ class DPGChatController:
             dpg.hide_item(self.docs_indicator_widget)
         self._docs_visual_state = new_state
 
-    def update_docs_indicator_from_indexing_state(self) -> None:
-        """Poll the retriever's indexing state and refresh the DOCS indicator on change.
+    def update_docs_indicator_from_retriever_state(self) -> None:
+        """Poll the retriever for indexing state and progress text, refresh the DOCS indicator on change.
 
         Intended to be called once per frame from the app's `update_animations` tick. Cheap when nothing
         is changing (bool + string comparisons), only does GUI work on transitions.
 
-        Also mirrors `retriever.get_indexing_progress_text()` into the DOCS progress text widget — empty
-        while reading or idle; per-doc progress, then `"Saving…"`, while indexing.
+        Two channels are polled:
+
+          - `is_indexing()` drives the red/visible/hidden state of the indicator group. The reading state
+            is driven separately by `on_docs_start`/`on_docs_done` callbacks fired by the chat scaffold.
+          - `get_progress_text()` is mirrored verbatim into the DOCS progress text widget — empty when
+            idle, per-document during indexing (red), per-phase during search (gray).
         """
         if self.retriever is None:
             return
@@ -1430,7 +1447,7 @@ class DPGChatController:
         if indexing_now != self._docs_indexing:
             self._docs_indexing = indexing_now
             self._refresh_docs_indicator()
-        progress_now = self.retriever.get_indexing_progress_text()
+        progress_now = self.retriever.get_progress_text()
         if progress_now != self._docs_progress_text_last:
             dpg.set_value(self.docs_progress_text_widget, progress_now)
             self._docs_progress_text_last = progress_now

@@ -124,12 +124,15 @@ with timer() as tim:
                                                                theme_color_widget=pulsating_red_docs_color)
         gui_animation.animator.add(pulsating_red_docs_glow)
 
-    # Steady (non-pulsating) red theme for the long indexing-progress text. The icon and the "DOCS" label
-    # carry the "recording" pulsation cue; the progress label is too long for the eye to read inside one
-    # pulsation cycle, so it gets a calm full-alpha variant of the same color.
+    # Steady (non-pulsating) themes for the long DOCS progress label. The icon and the "DOCS" label carry
+    # the recording/reading pulsation cue; the progress label is too long for the eye to read inside one
+    # pulsation cycle, so it gets a calm full-alpha variant matching the active state's color.
     with dpg.theme(tag="my_steady_red_docs_theme"):
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 96, 96))
+    with dpg.theme(tag="my_steady_gray_docs_theme"):
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (180, 180, 180))
 
     if platform.system().upper() == "WINDOWS":
         icon_ext = "ico"
@@ -411,12 +414,13 @@ with timer() as tim:
                         # `chat_controller._refresh_docs_indicator`, so both the icon and the "DOCS" label
                         # inherit the same pulsating color.
                         dpg.add_text("DOCS", tag="docs_access_text")
-                        # Mirrors `retriever.get_indexing_progress_text()`. Empty when the LLM is reading
-                        # (white DOCS) or when nothing is happening; non-empty during indexing (red DOCS).
-                        # Bound to a steady (non-pulsating) red theme so the long label is always readable;
-                        # the icon and "DOCS" label provide the pulsating "recording" cue.
+                        # Mirrors `retriever.get_progress_text()`. Empty when nothing is happening; otherwise
+                        # carries per-phase status during search (gray DOCS) or per-document progress during
+                        # indexing (red DOCS). The widget-level theme is rebound by chat_controller's
+                        # `_refresh_docs_indicator` to a steady (non-pulsating) gray or red color matching
+                        # the active state — pulsation kills readability for a long label, so only the icon
+                        # and "DOCS" label pulse.
                         dpg.add_text("", tag="docs_progress_text")
-                        dpg.bind_item_theme("docs_progress_text", "my_steady_red_docs_theme")  # tag
 
                     with dpg.group(pos=(16, 16), show=False, horizontal=True) as web_indicator_group:
                         dpg.add_text(fa.ICON_GLOBE, tag="web_access_symbol")
@@ -652,7 +656,7 @@ def update_animations():
     gui_animation.animator.render_frame()
     # RAG indexing happens on a background thread (via watchdog), invisible to the chat scaffold.
     # Pulse the DOCS indicator red while it's running, so heavy CPU/GPU work has a UI representation.
-    chat_controller.update_docs_indicator_from_indexing_state()
+    chat_controller.update_docs_indicator_from_retriever_state()
 
 # --------------------------------------------------------------------------------
 # Built-in help window
@@ -988,6 +992,8 @@ chat_controller = DPGChatController(llm_settings=llm_settings,
                                     docs_indexing_glow_animation=pulsating_red_docs_glow,
                                     docs_reading_theme_tag="my_pulsating_gray_text_theme",
                                     docs_indexing_theme_tag="my_pulsating_red_docs_theme",
+                                    docs_reading_progress_theme_tag="my_steady_gray_docs_theme",
+                                    docs_indexing_progress_theme_tag="my_steady_red_docs_theme",
                                     llm_indicator_widget=llm_indicator_group,
                                     docs_indicator_widget=docs_indicator_group,
                                     docs_progress_text_widget="docs_progress_text",
