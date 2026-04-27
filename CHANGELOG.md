@@ -5,10 +5,13 @@
 **Added**:
 
 - *Raven-avatar* settings editor: `Clear` and `Default` buttons on the postprocessor section header. `Clear` disables every filter for a blank-slate starting point; `Default` reloads the postprocessor chain from `animator.json`. Per-filter `Reset` buttons now have tooltips.
+- *Raven-librarian*: the DOCS indicator now pulses red while the RAG document database is being indexed (background CPU/GPU work that was previously silent). The existing white pulse during LLM consultation is unchanged; if both happen at once, the white "reading" pulse wins. Mnemonic borrowed from audio/video apps: red = recording.
+- *Raven-librarian*: idle CPU/GPU throttle in the render loop. When the avatar is paused (auto-off after the configured idle timeout), no LLM turn is in flight, no RAG indexing is running, and there has been no recent user input, the GUI drops to ~12 fps instead of running flat-out. Same pattern as `raven-cherrypick`, `raven-xdot-viewer`, and `raven-avatar-pose-editor`.
 
 **Fixed**:
 
 - *Raven-librarian* RAG: the documents directory is now auto-created at startup if missing. Previously, a fresh install or moved-aside docs dir crashed the app with `FileNotFoundError` from `inotify_add_watch` before the GUI came up.
+- *Raven-librarian* RAG: rapid sequences of file adds and updates no longer crash the indexing pipeline with `TypeError: string indices must be integers`. The pending-edits queue now stores delete entries in the same shape as add/update entries, so the dedup pass can run uniformly.
 - *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.
 - `dpg_markdown` bullet lists and blockquotes now render correctly inside tooltips (and any other initially-hidden container). Previously every bullet glyph in a tooltip stacked at the top-left, because DPG reports `get_item_pos() == (0, 0)` for children of a hidden container; the bullet drawlists are now deferred until their row has been laid out.
 

@@ -432,14 +432,15 @@ class HybridIR:
             self._pending_edits.clear()
             self._pending_edits.extend(new_edits)
 
-            # Pend the requested edit.
+            # Pend the requested edit. Each queued entry is `(action, doc)` where `doc` is at minimum
+            # a dict with a `document_id` key — the dedup pass above relies on that uniform shape.
             if action == "add":
                 self._pending_edits.append((action, document))
             elif action == "delete":
-                self._pending_edits.append((action, document_id))
+                self._pending_edits.append((action, {"document_id": document_id}))
             else:  # action == "update":
                 # Update = delete, then add.
-                self._pending_edits.append(("delete", document_id))
+                self._pending_edits.append(("delete", {"document_id": document_id}))
                 self._pending_edits.append(("add", document))
 
     # TODO: Index rebuilding is slow. Maybe `commit` should run as a bgtask, like the BibTeX importer.
@@ -494,7 +495,7 @@ class HybridIR:
                         self._add_document_to_vector_collection(doc)
 
                     elif edit_kind == "delete":
-                        document_id = data
+                        document_id = data["document_id"]
                         logger.info(f"HybridIR.commit: Deleting document '{document_id}'.")
                         try:
                             doc = self.documents[document_id]
