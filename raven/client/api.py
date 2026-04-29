@@ -63,7 +63,6 @@ __all__ = ["initialize",
            "require"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import copy

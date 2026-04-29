@@ -10,18 +10,35 @@ The `tts` module is new, based on Kokoro-82M. All old TTS options are gone. This
 
 # TODO: convert prints to use logger where appropriate
 
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import argparse
 
 from .. import __version__
+
+parser = argparse.ArgumentParser(prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras")
+parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
+parser.add_argument("--config", metavar='some.python.module', default="raven.server.config", type=str, help="Python module containing the server config (default is 'raven.server.config')")
+parser.add_argument("--port", type=int, help="Specify the port on which the application is hosted (default is set in the server config module)")
+parser.add_argument("--listen", action="store_true", help="Host the app on the local network (if not set, the server is visible to localhost only)")
+parser.add_argument("--secure", action="store_true", help="Require an API key (will be auto-created first time, and printed to console each time on server startup)")
+parser.add_argument("--max-content-length", help="Set the max content length for the Flask app config.")
+parser.add_argument('--log', metavar='PATH', default=None,
+                    help='mirror stderr log to this file (overwritten each run)')
+parser.add_argument('--log-level', default='INFO',
+                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                    help='root logger level (default: INFO)')
+args = parser.parse_args()
+
+import logging
+from ..common import logsetup
+logsetup.configure(level=getattr(logging, args.log_level),
+                   logfile=args.log)
+logger = logging.getLogger(__name__)
 
 logger.info(f"Raven-server {__version__} starting.")
 
 logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
-    import argparse
     import gc
     import importlib
     import os
@@ -67,9 +84,6 @@ colorama_init()
 app = Flask(__name__)
 CORS(app)  # allow cross-domain requests
 Compress(app)  # compress responses
-
-# will be populated later
-args = []  # command-line args
 
 api_key = None  # secure mode
 ignore_auth = []  # endpoints (Python functions) whose web API we want not to require an API key
@@ -1486,18 +1500,7 @@ def api_websearch2():
 
 # NOTE SillyTavern-Extras users: settings for module enable/disable and which compute device to use for each module have been moved to `raven/server/config.py`.
 
-# ----------------------------------------
-# Parse command-line arguments
-
-parser = argparse.ArgumentParser(prog="Raven-server", description="Server for specialized local AI models, based on the discontinued SillyTavern-extras")
-parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
-parser.add_argument("--config", metavar='some.python.module', default="raven.server.config", type=str, help="Python module containing the server config (default is 'raven.server.config')")
-parser.add_argument("--port", type=int, help="Specify the port on which the application is hosted (default is set in the server config module)")
-parser.add_argument("--listen", action="store_true", help="Host the app on the local network (if not set, the server is visible to localhost only)")
-parser.add_argument("--secure", action="store_true", help="Require an API key (will be auto-created first time, and printed to console each time on server startup)")
-parser.add_argument("--max-content-length", help="Set the max content length for the Flask app config.")
-
-args = parser.parse_args()
+# `args` was parsed at module top, before heavy imports — see top of file.
 
 # Switchable config module, so the user can load different configs e.g. when running with an eGPU vs. just a laptop's internal GPU.
 #

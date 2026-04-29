@@ -8,7 +8,6 @@ This module is shared between `minichat` (command-line app) and `app` (Raven-lib
 __all__ = ["load", "save"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import atexit

@@ -9,7 +9,6 @@ This module is intended for situations where it is preferred to use the server's
 __all__ = ["init_module", "is_available", "analyze"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import traceback

@@ -3,7 +3,6 @@
 __all__ = ["linear_to_dBFS", "dBFS_to_linear"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from typing import Union

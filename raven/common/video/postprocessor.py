@@ -29,7 +29,6 @@ import torchvision
 from .colorspace import rgb_to_yuv, yuv_to_rgb, luminance
 from .upscaler import Upscaler
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")

@@ -7,18 +7,36 @@ and tool-calling support.
 This module demonstrates how to build an LLM client using `raven.librarian.llmclient`.
 """
 
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import argparse
 
 from .. import __version__
+
+# Argparse runs at module top so logging is configured before heavy imports.
+# `librarian_config` isn't loaded yet (it's a heavy import), so the default for
+# the positional `backend_url` resolves later inside `main()`.
+parser = argparse.ArgumentParser(description="""Minimal LLM chat client, for testing/debugging. You can use this for testing that Raven can connect to your LLM.""",
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
+parser.add_argument(dest="backend_url", nargs="?", default=None, type=str, metavar="url",
+                    help="where to access the LLM API (default: from `raven/librarian/config.py`)")
+parser.add_argument('--log', metavar='PATH', default=None,
+                    help='mirror stderr log to this file (overwritten each run)')
+parser.add_argument('--log-level', default='INFO',
+                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                    help='root logger level (default: INFO)')
+opts = parser.parse_args()
+
+import logging
+from ..common import logsetup
+logsetup.configure(level=getattr(logging, opts.log_level),
+                   logfile=opts.log)
+logger = logging.getLogger(__name__)
 
 logger.info(f"Raven-minichat version {__version__} starting.")
 
 logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
-    import argparse
     import atexit
     import os
     import pathlib
@@ -635,15 +653,9 @@ def minimal_chat_client(backend_url) -> None:
         print()
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="""Minimal LLM chat client, for testing/debugging. You can use this for testing that Raven can connect to your LLM.""",
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-
-    parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
-    parser.add_argument(dest="backend_url", nargs="?", default=librarian_config.llm_backend_url, type=str, metavar="url", help=f"where to access the LLM API (default, currently '{librarian_config.llm_backend_url}', is set in `raven/librarian/config.py`)")
-    opts = parser.parse_args()
-
+    backend_url = opts.backend_url if opts.backend_url is not None else librarian_config.llm_backend_url
     # print(llmclient.websearch_wrapper("what is the airspeed velocity of an unladen swallow"))  # DEBUG
-    minimal_chat_client(opts.backend_url)
+    minimal_chat_client(backend_url)
 
 if __name__ == "__main__":
     main()

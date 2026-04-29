@@ -3,9 +3,7 @@ __all__ = ["TaskManager",
            "status_stopped", "status_pending", "status_running"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
 
 import collections
 import concurrent.futures
@@ -129,7 +127,7 @@ class TaskManager:
             future = self.executor.submit(function, env)
             self.tasks[env.task_name] = (future, env)  # store a reference to `env` so we have access to the `cancelled` flag and the custom `done_callback`, if any
             future.add_done_callback(self._done_callback)  # autoremove the task when it exits (and let the user handle its return value, if any)
-            logger.info(f"TaskManager.submit: instance '{self.name}': task '{env.task_name}' submitted.")
+            logger.debug(f"TaskManager.submit: instance '{self.name}': task '{env.task_name}' submitted.")
             return env.task_name
 
     def has_tasks(self) -> bool:
@@ -168,7 +166,7 @@ class TaskManager:
             task_name = self._find_task_by_future(future)
             logger.debug(f"TaskManager._done_callback: instance '{self.name}': task lookup for future '{future}' returned '{task_name}'.")
             if task_name is not None:  # not removed already? (`cancel` might have removed it)
-                logger.info(f"TaskManager._done_callback: instance '{self.name}': '{task_name}' finalizing.")
+                logger.debug(f"TaskManager._done_callback: instance '{self.name}': '{task_name}' finalizing.")
 
                 # Call the custom done callback if provided.
                 #
@@ -178,7 +176,7 @@ class TaskManager:
                 try:
                     future, e = self.tasks[task_name]
                     if "done_callback" in e and e.done_callback is not None:
-                        logger.info(f"TaskManager._done_callback: instance '{self.name}': {task_name}: custom `done_callback` exists, calling it now.")
+                        logger.debug(f"TaskManager._done_callback: instance '{self.name}': {task_name}: custom `done_callback` exists, calling it now.")
                         e.done_callback(e)
                 finally:
                     self.tasks.pop(task_name)
@@ -195,7 +193,7 @@ class TaskManager:
 
         Raises `ValueError` if no task with `task_name` was found.
         """
-        logger.info(f"TaskManager.cancel: instance '{self.name}': cancelling task '{task_name}'.")
+        logger.debug(f"TaskManager.cancel: instance '{self.name}': cancelling task '{task_name}'.")
         with self.lock:
             if task_name not in self.tasks:
                 raise ValueError(f"TaskManager.cancel_task: instance '{self.name}': no such task '{task_name}'")

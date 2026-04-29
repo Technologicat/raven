@@ -5,10 +5,6 @@ Useful for setting up the TTS (speech synthesize) audio device, if you want to u
 You can use one of these as `tts_playback_audio_device` in `raven.client.config`.
 """
 
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 from typing import List
 
 from mcpyrate import colorizer
@@ -18,7 +14,7 @@ from .. import __version__
 from ..common.audio import player as audio_player
 from ..common.audio import recorder as audio_recorder
 
-logger.info(f"Raven-check-audio-devices version {__version__}")
+print(f"Raven-check-audio-devices version {__version__}")
 
 def get_available_devices(role: str) -> List[str]:
     if role == "playback":

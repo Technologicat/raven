@@ -379,17 +379,39 @@ The watchdog-driven flow (tmpdir + `Path.touch` / `unlink` to drive `HybridIRFil
 Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
 
 
-## `--log <file>` option for Raven apps
+## Easy install with a chosen CUDA version (and a sensible CPU default)
 
-All Raven CLI apps currently log to stderr only. Useful would be a uniform `--log <path>` (or `--log-file`) option that mirrors stderr output to a file, so users can capture session logs for bug reports without having to redirect their terminal. Especially handy for debugging the GUI apps (Librarian, Visualizer, avatar editors), where the originating terminal is often a side window the user has already closed.
+Raven's `[cuda]` extra currently pulls a torch / torchaudio / torchvision combo pinned to one CUDA toolchain (currently `+cu128`). The PyTorch project ships these via `--index-url https://download.pytorch.org/whl/cuXXX`, and the matching `nvidia-cuda-runtime-cuYY` runtime is also installable as a Python package — so a Raven install could in principle bundle a complete CUDA stack from PyPI without touching the host's toolchain.
 
-Discovered during INDEXING-indicator debugging (2026-04-28) — we wanted to inspect a previous run's log and found `raven-librarian.log` was stale (the process only writes to stderr).
+Today, switching machines (e.g. between maia at CUDA 12.8 and electra at CUDA 13) requires hand-editing `pyproject.toml` and re-running `pdm install`. Worse, a plain `pdm install` quietly upgraded `torchaudio` from `2.10.0+cu128` to `2.11.0` (the latter wants CUDA 13 and silently broke imports on the CUDA-12.8 machine). The fix: pin torch + torchaudio + torchvision together as a CUDA-version-matched group, expose `pdm install -G cuda12` / `-G cuda13` extras, and document the per-machine choice.
 
-## Logging is misconfigured fleet-wide: individual modules reconfigure the root logger
+In particular, `torchaudio` should be part of the CUDA dep set, pinned to the matching CUDA version — not a free-floating dep that PDM resolves to whatever's latest.
 
-Multiple modules across Raven call `logging.basicConfig` (or equivalent) at import time, each clobbering whichever level/handlers a previous import had set. The end result is that bumping a logger to `DEBUG` from the entry point doesn't take, because some later import resets it. Needs a proper design: a single `raven.common.logsetup` (or similar) that owns root configuration, called exactly once from each app entry point, with everything else doing only `logger = logging.getLogger(__name__)`. Until this lands, "dormant" debug-level instrumentation is effectively invisible — diagnostic logs have to be at `info` (visible by default) or removed.
+CPU-only path: someone who just wants Raven-visualizer on a laptop without a GPU shouldn't have to learn about extra-dep groups. The default install (`pdm install` with no extras) should pull the CPU build of torch/torchaudio/torchvision; the `-G cudaXX` extras only add CUDA-build alternates. Today GPU support being opt-in is fine (it's the heavy/optional capability), but the CPU torch build still has to *appear*, otherwise `import torch` fails outright. Probably means listing the CPU-build versions in the base `[project] dependencies` (with PyTorch's CPU index URL) and having the `-G cudaXX` extras override the base pins via a higher-priority constraint.
 
-Discovered during INDEXING-indicator debugging (2026-04-28).
+Discovered during the logsetup smoke test (2026-04-29) when a routine `pdm install` (run to refresh a console-script entry point) bumped torchaudio and broke the visualizer's import path.
+
+## Convert startup `print()`s to `logger.info()` where appropriate
+
+`raven/server/app.py:11` has had a standing `# TODO: convert prints to use logger where appropriate` for a while; the smoke tests for the new `--log` flag made it concrete. Server startup currently does much of its progress via `print()` ("Server config loaded from '…'", "No API key, accepting all requests", "Initializing avatar on device 'cuda:0' …", etc.) — all log-worthy, none captured by `--log` today. Same pattern in a few other apps where startup status got `print()` instead of `logger.info()` historically.
+
+Pass: grep `print(` in each app's startup region, decide per-call whether it's user-facing tool output (keep as `print`, e.g. `raven-check-cuda`'s ✅/❌ markers) or app status (promote to `logger.info`). The pre-PR `--log` smoke-test diff (`stderr - logfile`) is the easiest way to find candidates.
+
+Vendored prints (e.g. THA3's "Loading the eyebrow decomposer … DONE!!!" at `raven/vendor/tha3/poser/modes/load_poser.py`) are judgment calls — leave alone unless we're already touching the file.
+
+Discovered during the logsetup smoke test (2026-04-30).
+
+## Pre-existing ruff errors in three modified files
+
+After the logsetup sweep, three files surfaced ruff errors that pre-date this work and aren't regressions:
+
+- `raven/common/gui/utils.py:374` — SIM103 (`if X: return True; return False` could be `return X`).
+- `raven/vendor/anime4k/anime4k.py:137` — E721 (`type(stack_list) == int` should be `isinstance(stack_list, int)`); vendored, treat carefully.
+- `raven/vendor/file_dialog/fdialog.py` — `if not file_size_bytes == "-":` could be `!=`; vendored.
+
+Per the project style guide, "Don't rewrite working code to satisfy a linter" — for the vendored ones, a `# noqa: CODE -- reason` at the call site is preferred over a refactor. The `gui/utils.py` one is fine to inline. Quick cleanup, ~5 min total.
+
+Discovered during the logsetup sweep (2026-04-29).
 
 ## Hybridir: BM25 backend migration for larger corpora
 

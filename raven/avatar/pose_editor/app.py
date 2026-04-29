@@ -39,11 +39,33 @@ This module was part of the old Talkinghead, and is licensed under the GNU AGPL,
 # The parts of GUI code that look common to this and `raven.avatar.settings_editor.app` are actually originally adapted from Raven-visualizer,
 # which is BSD-licensed.
 
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import argparse
 
 from ... import __version__
+
+parser = argparse.ArgumentParser(description="THA 3 Manual Poser. Pose a character image manually. Useful for generating static expression images and for editing the emotion templates.")
+parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
+parser.add_argument("--device", type=str, required=False, default="cuda", choices=["cpu", "cuda"],
+                    help='The device to use for PyTorch ("cuda" for GPU, "cpu" for CPU).')
+parser.add_argument("--model", type=str, required=False, default="separable_float",
+                    choices=["standard_float", "separable_float", "standard_half", "separable_half"],
+                    help="The model to use. 'float' means fp32, 'half' means fp16.")
+parser.add_argument("--factory-reset", metavar="EMOTION", type=str, default="",
+                    help="Overwrite the emotion preset EMOTION with its factory default, and exit. This CANNOT be undone!")
+parser.add_argument("--factory-reset-all", action="store_true",
+                    help="Overwrite ALL emotion presets with their factory defaults, and exit. This CANNOT be undone!")
+parser.add_argument('--log', metavar='PATH', default=None,
+                    help='mirror stderr log to this file (overwritten each run)')
+parser.add_argument('--log-level', default='INFO',
+                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                    help='root logger level (default: INFO)')
+args = parser.parse_args()
+
+import logging
+from ...common import logsetup
+logsetup.configure(level=getattr(logging, args.log_level),
+                   logfile=args.log)
+logger = logging.getLogger(__name__)
 
 logger.info(f"Raven-avatar-pose-editor version {__version__} starting.")
 
@@ -51,10 +73,8 @@ logger.info("Loading libraries...")
 from unpythonic import timer
 from unpythonic.env import env
 with timer() as tim:
-    import argparse
     import functools
     import json
-    import logging
     import os
     import pathlib
     import platform
@@ -1443,28 +1463,7 @@ _help_window = helpcard.HelpWindow(hotkey_info=hotkey_info,
 # --------------------------------------------------------------------------------
 # Start the app
 
-parser = argparse.ArgumentParser(description="THA 3 Manual Poser. Pose a character image manually. Useful for generating static expression images and for editing the emotion templates.")
-parser.add_argument("--device",
-                    type=str,
-                    required=False,
-                    default="cuda",
-                    choices=["cpu", "cuda"],
-                    help='The device to use for PyTorch ("cuda" for GPU, "cpu" for CPU).')
-parser.add_argument("--model",
-                    type=str,
-                    required=False,
-                    default="separable_float",
-                    choices=["standard_float", "separable_float", "standard_half", "separable_half"],
-                    help="The model to use. 'float' means fp32, 'half' means fp16.")
-parser.add_argument("--factory-reset",
-                    metavar="EMOTION",
-                    type=str,
-                    help="Overwrite the emotion preset EMOTION with its factory default, and exit. This CANNOT be undone!",
-                    default="")
-parser.add_argument("--factory-reset-all",
-                    action="store_true",
-                    help="Overwrite ALL emotion presets with their factory defaults, and exit. This CANNOT be undone!")
-args = parser.parse_args()
+# `args` was parsed at module top, before heavy imports — see top of file.
 
 # Blunder recovery options
 if args.factory_reset_all:

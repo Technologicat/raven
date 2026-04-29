@@ -7,19 +7,40 @@ Usage:
     python -m raven.conference_timer 15:00
 """
 
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import argparse
 
 from .. import __version__
+from . import config
+
+parser = argparse.ArgumentParser(description="Raven Conference Timer - Countdown timer for talks")
+parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
+parser.add_argument("duration", metavar="mm:ss",
+                    help="Countdown duration (e.g. 15:00, or bare minutes like 15)")
+parser.add_argument("--yellow", metavar="mm:ss", default=None,
+                    help=f"Yellow threshold time (default: {config.YELLOW_THRESHOLD // 60}:{config.YELLOW_THRESHOLD % 60:02d})")
+parser.add_argument("--red", metavar="mm:ss", default=None,
+                    help=f"Red threshold time (default: {config.RED_THRESHOLD // 60}:{config.RED_THRESHOLD % 60:02d})")
+parser.add_argument("--size", metavar="PIXELS", default=None, type=int,
+                    help=(f"Font size in pixels (default: {config.COUNTDOWN_FONT_SIZE},"
+                          f" max: {config.MAX_COUNTDOWN_FONT_SIZE})"))
+parser.add_argument('--log', metavar='PATH', default=None,
+                    help='mirror stderr log to this file (overwritten each run)')
+parser.add_argument('--log-level', default='INFO',
+                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                    help='root logger level (default: INFO)')
+args = parser.parse_args()
+
+import logging
+from ..common import logsetup
+logsetup.configure(level=getattr(logging, args.log_level),
+                   logfile=args.log)
+logger = logging.getLogger(__name__)
 
 logger.info(f"Raven Conference Timer version {__version__} starting.")
 
 logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
-    import argparse
     import math
     import os
     import pathlib
@@ -34,8 +55,6 @@ with timer() as tim:
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
     from ..common.gui import utils as guiutils
-
-    from . import config
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 
@@ -59,30 +78,7 @@ def _parse_duration(text: str) -> int:
 
 def main() -> int:
     """Main entry point for the application."""
-    parser = argparse.ArgumentParser(
-        description="Raven Conference Timer - Countdown timer for talks"
-    )
-    parser.add_argument('-v', '--version', action='version',
-                        version=('%(prog)s ' + __version__))
-    parser.add_argument(
-        "duration", metavar="mm:ss",
-        help="Countdown duration (e.g. 15:00, or bare minutes like 15)"
-    )
-    parser.add_argument(
-        "--yellow", metavar="mm:ss", default=None,
-        help=f"Yellow threshold time (default: {config.YELLOW_THRESHOLD // 60}:{config.YELLOW_THRESHOLD % 60:02d})"
-    )
-    parser.add_argument(
-        "--red", metavar="mm:ss", default=None,
-        help=f"Red threshold time (default: {config.RED_THRESHOLD // 60}:{config.RED_THRESHOLD % 60:02d})"
-    )
-    parser.add_argument(
-        "--size", metavar="PIXELS", default=None, type=int,
-        help=(f"Font size in pixels (default: {config.COUNTDOWN_FONT_SIZE},"
-              f" max: {config.MAX_COUNTDOWN_FONT_SIZE})")
-    )
-    args = parser.parse_args()
-
+    # `args` was parsed at module top, before heavy imports — see top of file.
     try:
         total_seconds = _parse_duration(args.duration)
         yellow_threshold = _parse_duration(args.yellow) if args.yellow else config.YELLOW_THRESHOLD

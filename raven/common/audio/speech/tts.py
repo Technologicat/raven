@@ -37,7 +37,6 @@ __all__ = ["SAMPLE_RATE",
 
 import functools
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import io

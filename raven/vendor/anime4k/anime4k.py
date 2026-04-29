@@ -87,7 +87,6 @@ AutoDownscalePre_x2
 """
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import os

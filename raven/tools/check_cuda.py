@@ -1,16 +1,12 @@
 # Check CUDA setup.
 # Modified from draft written by QwQ-32B.
 
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 import subprocess
 import platform
 
 from .. import __version__
 
-logger.info(f"Raven-check-cuda version {__version__}")
+print(f"Raven-check-cuda version {__version__}")
 
 def print_error(msg):
     print(f"\033[91m[ERROR] {msg}\033[0m")

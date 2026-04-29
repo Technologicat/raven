@@ -10,7 +10,6 @@ __all__ = ["is_completely_below_target_y", "is_completely_above_target_y",
            "find_widget_depth_first", "binary_search_widget"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import functools

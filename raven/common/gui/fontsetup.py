@@ -4,7 +4,6 @@ __all__ = ["setup_font_ranges",
            "markdown_add_font_callback"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import dearpygui.dearpygui as dpg
