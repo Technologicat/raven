@@ -20,7 +20,6 @@ This also supports setting an optional backdrop image, shown behind the avatar. 
 __all__ = ["DPGAvatarRenderer"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import concurrent.futures

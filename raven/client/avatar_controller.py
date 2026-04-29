@@ -26,7 +26,6 @@ end-of-speaking, it is better to use the `on_stop_speaking` event of `dpg_avatar
 __all__ = ["DPGAvatarController"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import concurrent.futures

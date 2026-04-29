@@ -9,7 +9,6 @@ that controls chatting with the AI.
 __all__ = ["DPGChatController"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import collections

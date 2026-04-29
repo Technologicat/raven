@@ -1,68 +1,51 @@
-#!/usr/bin/env python
 """Extract BibTeX data for visualization. This can put an entire field of science into one picture.
 
-This script performs analysis and writes the visualization data file. See `app.py` to plot the results.
+Performs the analysis and writes the visualization data file. See `app.py` to plot the results.
 
-This module is both a standalone command-line app, as well as an importable module for Raven-visualizer,
-used by its *Import BibTeX* window.
+Library module — used both by the visualizer GUI (via the *Import BibTeX* window) and by
+the `raven-importer` CLI shell. The CLI entry point lives in `importer_cli.py`; this
+module stays free of argparse and logging configuration so the GUI can host it safely.
 """
 
 __all__ = ["init",
            "start_task", "has_task", "cancel_task",
-           "result_successful", "result_cancelled", "result_errored"]
+           "result_successful", "result_cancelled", "result_errored",
+           "import_bibtex"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from .. import __version__
+import atexit
+import collections
+import copy
+import itertools
+import math
+import os
+import pathlib
+import pickle
+import sys
+import threading
+from typing import Optional
 
-logger.info(f"Raven-importer version {__version__} loading.")
+import bibtexparser
 
-logger.info("Loading libraries...")
-from unpythonic import timer
-with timer() as tim:
-    import argparse
-    import atexit
-    import collections
-    import copy
-    import itertools
-    import math
-    import os
-    import pathlib
-    import pickle
-    import sys
-    import threading
-    import traceback
-    from typing import Optional
+from unpythonic.env import env
+from unpythonic import box, dyn, ETAEstimator, islice, make_dynvar, sym, timer, uniqify
 
-    import bibtexparser
+import numpy as np
 
-    from unpythonic.env import env
-    from unpythonic import box, dyn, ETAEstimator, islice, make_dynvar, sym, timer, uniqify
+import torch
 
-    # # To connect to the live REPL:  python -m unpythonic.net.client localhost
-    # from unpythonic.net import server
-    # server.start(locals={"main": sys.modules["__main__"]})
+from sklearn.cluster import HDBSCAN
 
-    import numpy as np
-    # import pandas as pd
+from ..client import mayberemote
 
-    import torch
+from ..common import bgtask
+from ..common import deviceinfo
+from ..common import nlptools
+from ..common import utils as common_utils
 
-    from sklearn.cluster import HDBSCAN
-
-    from ..client import api
-    from ..client import config as client_config
-    from ..client import mayberemote
-
-    from ..common import bgtask
-    from ..common import deviceinfo
-    from ..common import nlptools
-    from ..common import utils as common_utils
-
-    from . import config as visualizer_config
-logger.info(f"    Done in {tim.dt:0.6g}s.")
+from . import config as visualizer_config
 
 if visualizer_config.clusters_keyword_method == "llm" or visualizer_config.summarize:
     logger.info("LLM backend needed (for cluster keywords and/or summarization). Setting up connection.")
@@ -1247,40 +1230,3 @@ def import_bibtex(status_update_callback, output_filename, *input_filenames) -> 
         logger.info(f"    Done in {tim.dt:0.6g}s.")
 
         return True
-
-# --------------------------------------------------------------------------------
-# Main program (when run as a standalone command-line tool)
-
-def main() -> None:
-    api.initialize(raven_server_url=client_config.raven_server_url,
-                   raven_api_key_file=client_config.raven_api_key_file)
-
-    logger.info("Settings (for LOCAL models):")
-    logger.info(f"    Embedding model: {visualizer_config.embedding_model}")
-    logger.info(f"        Dimension reduction method: {visualizer_config.vis_method}")
-    logger.info(f"    Extract keywords: {visualizer_config.extract_keywords}")
-    logger.info(f"        NLP model (spaCy): {visualizer_config.spacy_model}")
-    logger.info(f"    Summarize via LLM: {visualizer_config.summarize}")
-
-    parser = argparse.ArgumentParser(description="""Convert BibTeX file(s) into a Raven-visualizer dataset file.""",
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
-    parser.add_argument(dest="output_filename", type=str, metavar="out", help="Output, Raven-visualizer dataset file")
-    parser.add_argument(dest="input_filenames", nargs="+", default=None, type=str, metavar="bib", help="Input, BibTeX file(s) to parse")
-    opts = parser.parse_args()
-
-    if opts.output_filename.endswith(".bib"):
-        print(f"Output filename '{opts.output_filename}' looks like an input filename. Cancelling. Please check usage summary by running this program with the '-h' (or '--help') option.")
-        sys.exit(1)
-
-    try:
-        with timer() as tim:
-            import_bibtex(None, opts.output_filename, *opts.input_filenames)
-    except Exception:
-        logger.warning(f"Error after {tim.dt:0.6g}s total:")
-        traceback.print_exc()
-    else:
-        logger.info(f"All done in {tim.dt:0.6g}s total.")
-
-if __name__ == "__main__":
-    main()

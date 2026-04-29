@@ -12,7 +12,6 @@ and its old Python implementation:
 __all__ = ["init_module", "is_available", "search"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import atexit

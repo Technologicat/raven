@@ -15,7 +15,6 @@ response header.
 __all__ = ["init_module", "is_available", "get_info", "get_voices", "text_to_speech"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import importlib

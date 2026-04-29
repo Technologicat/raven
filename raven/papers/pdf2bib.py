@@ -15,13 +15,7 @@ successfully processed, AFTER printing its bibtex entry.
 
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Output log messages only from this module. Handy for debugging.
-# https://stackoverflow.com/questions/17275334/what-is-a-correct-way-to-filter-different-loggers-using-python-logging
-for handler in logging.root.handlers:
-    handler.addFilter(logging.Filter(__name__))
 
 from .. import __version__
 
@@ -996,12 +990,20 @@ def main():
     parser.add_argument("-s", "--success", dest="success_filename", type=str, metavar="success.bib", help="Output BibTeX file for successful entries (default stdout). Will be appended to.")
     parser.add_argument("-f", "--failed", dest="failed_filename", type=str, metavar="failed.bib", help="Output BibTeX file for failed entries (default: send these too to the success output). Will be appended to. As detected by heuristics, requiring manual verification/fixes.")
     parser.add_argument("-r", "--retries", dest="retries", default=3, type=int, metavar="x", help="Up to this many attempts (default: 3) will be made at the various processing steps for author extraction, when the processing fails. The number set here includes the initial attempt, so '-r 3' means 'try, and then retry up to twice if needed'. Attempts are counted separately for each processing step; each step gets this many retries if needed. This often helps get the LLM unstuck, especially if it starts overthinking and fails to produce a final response within the maximum token limit for a reply.")
-    parser.add_argument("-l", "--log", dest="log_filename", type=str, metavar="log.txt", help="Output logfile, for a copy of the console log. Will be appended to. Useful for seeing what went wrong in each specific failed entry.")
+    parser.add_argument("-l", "--log", metavar="log.txt", default=None, help="Output logfile, for a copy of the console log (overwritten each run). Useful for seeing what went wrong in each specific failed entry.")
+    parser.add_argument('--log-level', default='INFO',
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='root logger level (default: INFO)')
     parser.add_argument("-o", "--output-dir", dest="output_dir", default=None, type=str, metavar="dir", help="directory to move done files into (optional; allows easily continuing later). If also `-of` is specified, then only successful files will be moved to the `-o` directory; failed files will be moved to the `-of` directory.")
     parser.add_argument("-of", "--failed-output-dir", dest="failed_output_dir", default=None, type=str, metavar="dir", help="directory to move failed done files into (optional; allows easily continuing later)")
     parser.add_argument("-i", "--input-dir", dest="input_dir", default=None, type=str, metavar="input_dir", help="Input directory containing PDF file(s) to import (will be scanned recursively, skipping output dirs)")
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     opts = parser.parse_args()
+
+    from ..common import logsetup
+    logsetup.configure(level=getattr(logging, opts.log_level),
+                       logfile=opts.log,
+                       allow=[__name__])  # match the original "module-only" filter intent
 
     if opts.retries < 1:
         logger.info(f"-r, --retries: At least one attempt is required, got {opts.retries}. Setting to 1.")
@@ -1018,10 +1020,6 @@ def main():
         failed_bib_dir = failed_filename.parent
         common_utils.create_directory(failed_bib_dir)
         opts.failed_filename = str(failed_filename)
-
-    if opts.log_filename is not None:
-        opts.log_filename = str(pathlib.Path(opts.log_filename).expanduser().resolve())
-        logger.addHandler(logging.FileHandler(opts.log_filename))
 
     if opts.input_dir is None:
         opts.input_dir = "."

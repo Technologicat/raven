@@ -3,7 +3,6 @@
 __all__ = ["init_module", "is_available", "dehyphenate"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import traceback

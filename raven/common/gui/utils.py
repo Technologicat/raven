@@ -19,7 +19,6 @@ __all__ = ["bootup", "load_extra_font",  # high-level bootup API, you usually wa
            "get_pixels_per_plotter_data_unit"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import os

@@ -12,9 +12,39 @@ if platform.system().upper() == "LINUX":
     os.environ["__GLVND_DISALLOW_PATCHING"] = "1"
 
 import argparse
+
+from .. import __version__
+
+# Argparse runs before heavy imports so logging is configured early. Config-derived
+# defaults (DEFAULT_WIDTH etc.) resolve inside `main()` because `cherrypick.config`
+# imports torch.
+parser = argparse.ArgumentParser(
+    description="raven-cherrypick — everyone's favorite mining tool",
+    epilog="Fast image triage: sort a folder of images into "
+           "cherries (keepers), lemons (rejects), and neutral.",
+)
+parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
+parser.add_argument("folder", nargs="?", default=os.getcwd(),
+                    help="Folder of images to open (default: current directory)")
+parser.add_argument("--width", type=int, default=None, help="Window width (default: from config)")
+parser.add_argument("--height", type=int, default=None, help="Window height (default: from config)")
+parser.add_argument("--tile-size", type=int, default=None, help="Initial thumbnail size (default: from config)")
+parser.add_argument("--device", type=str, default=None,
+                    help="Torch device override (e.g. cuda:1, cpu)")
+parser.add_argument("--debug", action="store_true",
+                    help="Show debug overlays (pan/zoom coordinates, click positions)")
+parser.add_argument('--log', metavar='PATH', default=None,
+                    help='mirror stderr log to this file (overwritten each run)')
+parser.add_argument('--log-level', default='INFO',
+                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                    help='root logger level (default: INFO)')
+args = parser.parse_args()
+
 import logging
 import math
-logging.basicConfig(level=logging.INFO)
+from ..common import logsetup
+logsetup.configure(level=getattr(logging, args.log_level),
+                   logfile=args.log)
 logger = logging.getLogger(__name__)
 
 import pathlib
@@ -22,8 +52,6 @@ import time
 from typing import List
 
 import numpy as np
-
-from .. import __version__
 
 logger.info(f"raven-cherrypick version {__version__} starting.")
 logger.info("Loading libraries...")
@@ -1058,26 +1086,14 @@ def _gui_shutdown() -> None:
 
 def main() -> int:
     """Entry point for raven-cherrypick."""
-    parser = argparse.ArgumentParser(
-        description="raven-cherrypick \u2014 everyone's favorite mining tool",
-        epilog="Fast image triage: sort a folder of images into "
-               "cherries (keepers), lemons (rejects), and neutral.",
-    )
-    parser.add_argument("-v", "--version", action="version",
-                        version=f"%(prog)s {__version__}")
-    parser.add_argument("folder", nargs="?", default=os.getcwd(),
-                        help="Folder of images to open (default: current directory)")
-    parser.add_argument("--width", type=int, default=config.DEFAULT_WIDTH,
-                        help=f"Window width (default: {config.DEFAULT_WIDTH})")
-    parser.add_argument("--height", type=int, default=config.DEFAULT_HEIGHT,
-                        help=f"Window height (default: {config.DEFAULT_HEIGHT})")
-    parser.add_argument("--tile-size", type=int, default=config.DEFAULT_TILE_SIZE,
-                        help=f"Initial thumbnail size (default: {config.DEFAULT_TILE_SIZE})")
-    parser.add_argument("--device", type=str, default=None,
-                        help="Torch device override (e.g. cuda:1, cpu)")
-    parser.add_argument("--debug", action="store_true",
-                        help="Show debug overlays (pan/zoom coordinates, click positions)")
-    args = parser.parse_args()
+    # `args` was parsed at module top, before heavy imports \u2014 see top of file.
+    # Resolve config-derived defaults now that `config` (which imports torch) is loaded.
+    if args.width is None:
+        args.width = config.DEFAULT_WIDTH
+    if args.height is None:
+        args.height = config.DEFAULT_HEIGHT
+    if args.tile_size is None:
+        args.tile_size = config.DEFAULT_TILE_SIZE
 
     global _debug
     _debug = args.debug

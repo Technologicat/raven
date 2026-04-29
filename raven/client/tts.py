@@ -14,7 +14,6 @@ __all__ = ["tts_info",
            "tts_speak_lipsynced"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import copy

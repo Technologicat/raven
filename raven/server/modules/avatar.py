@@ -66,7 +66,6 @@ from ...vendor.tha3.util import torch_linear_to_srgb
 
 from . import avatarutil
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------------

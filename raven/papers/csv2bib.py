@@ -34,7 +34,6 @@ from __future__ import annotations
 __all__ = ["rows_to_library", "main"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from .. import __version__
@@ -79,7 +78,16 @@ def main() -> None:  # pragma: no cover
     parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
     parser.add_argument(dest="filenames", nargs="+", default=None, type=str, metavar="csv", help="CSV file(s) to parse")
     parser.add_argument('-d', '--delimiter', dest="delimiter", type=str, metavar="x", default=None, help="Column delimiter. If omitted, autodetects tab/semicolon.")
+    parser.add_argument('--log', metavar='PATH', default=None,
+                        help='mirror stderr log to this file (overwritten each run)')
+    parser.add_argument('--log-level', default='INFO',
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='root logger level (default: INFO)')
     opts = parser.parse_args()
+
+    from ..common import logsetup
+    logsetup.configure(level=getattr(logging, opts.log_level),
+                       logfile=opts.log)
 
     logger.info(f"Reading input file{'s' if len(opts.filenames) != 1 else ''} {opts.filenames}...")
     all_rows: list[dict] = []

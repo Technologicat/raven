@@ -4,7 +4,6 @@ __all__ = ["user_turn",
            "ai_turn", "action_ack", "action_stop"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING

@@ -3,7 +3,6 @@
 __all__ = ["init_module", "is_available", "translate_text"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import importlib

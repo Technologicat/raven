@@ -9,20 +9,38 @@ Usage:
     python -m raven.xdot_viewer [file.xdot|file.dot]
 """
 
+import argparse
+
+from .. import __version__
+from . import config
+
+parser = argparse.ArgumentParser(description="Raven XDot Viewer - View xdot/dot graph files")
+parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
+parser.add_argument("file", nargs="?", help="GraphViz graph file to open (.xdot, .dot, or .gv)")
+parser.add_argument("--width", type=int, default=config.DEFAULT_WIDTH,
+                    help=f"Window width (default: {config.DEFAULT_WIDTH})")
+parser.add_argument("--height", type=int, default=config.DEFAULT_HEIGHT,
+                    help=f"Window height (default: {config.DEFAULT_HEIGHT})")
+parser.add_argument('--log', metavar='PATH', default=None,
+                    help='mirror stderr log to this file (overwritten each run)')
+parser.add_argument('--log-level', default='INFO',
+                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                    help='root logger level (default: INFO)')
+args = parser.parse_args()
+
 import logging
 from typing import Optional, Union
 
-logging.basicConfig(level=logging.INFO)
+from ..common import logsetup
+logsetup.configure(level=getattr(logging, args.log_level),
+                   logfile=args.log)
 logger = logging.getLogger(__name__)
-
-from .. import __version__
 
 logger.info(f"Raven-xdot-viewer version {__version__} starting.")
 
 logger.info("Loading libraries...")
 from unpythonic import timer
 with timer() as tim:
-    import argparse
     import os
     import pathlib
     import platform
@@ -46,7 +64,6 @@ with timer() as tim:
     from ..vendor import DearPyGui_Markdown as dpg_markdown
     from ..vendor.file_dialog.fdialog import FileDialog
 
-    from . import config
     from .dot_utils import _strip_xdot_layout_attrs
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
@@ -564,28 +581,7 @@ def _gui_shutdown() -> None:
 
 def main() -> int:
     """Main entry point for the application."""
-    parser = argparse.ArgumentParser(
-        description="Raven XDot Viewer - View xdot/dot graph files"
-    )
-    parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
-    parser.add_argument(
-        "file",
-        nargs="?",
-        help="GraphViz graph file to open (.xdot, .dot, or .gv)"
-    )
-    parser.add_argument(
-        "--width",
-        type=int,
-        default=config.DEFAULT_WIDTH,
-        help=f"Window width (default: {config.DEFAULT_WIDTH})"
-    )
-    parser.add_argument(
-        "--height",
-        type=int,
-        default=config.DEFAULT_HEIGHT,
-        help=f"Window height (default: {config.DEFAULT_HEIGHT})"
-    )
-    args = parser.parse_args()
+    # `args` was parsed at module top, before heavy imports — see top of file.
 
     # --- DPG bootup ---
     # Order matters: create_context -> bootup (fonts/themes) -> create_viewport -> setup. See `guiutils.bootup`.

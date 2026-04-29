@@ -16,7 +16,6 @@ Also useful more generally — the `quality` preset covers both speech-grade
 __all__ = ["Quality", "AudioT", "resample"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from typing import Literal, TypeVar

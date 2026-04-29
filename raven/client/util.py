@@ -6,7 +6,6 @@ __all__ = ["api_config",  # configuration namespace
            "yell_on_error"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import atexit

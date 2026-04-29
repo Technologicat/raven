@@ -10,7 +10,6 @@ __all__ = ["posedict_keys", "posedict_key_to_index",
            "supported_cels", "scan_addon_cels"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import json

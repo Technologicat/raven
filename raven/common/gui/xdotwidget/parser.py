@@ -9,7 +9,6 @@ Adapted from xdottir (https://github.com/Technologicat/xdottir).
 __all__ = ["parse_xdot", "XDotParser", "ParseError"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import colorsys

@@ -6,7 +6,6 @@ Used as branching chat history for Raven's LLM client.
 __all__ = ["Forest", "PersistentForest"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import atexit

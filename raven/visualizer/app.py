@@ -11,18 +11,47 @@
 # Any line with at least one string-literal reference to any DPG GUI widget tag is commented with "tag" (no quotes), to facilitate searching.
 # To find all, search for both "# tag" (the comment) and "tag=" (widget definitions).
 
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import argparse
 
 from .. import __version__
+
+parser = argparse.ArgumentParser(description="""Visualize BibTeX data.""",
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
+parser.add_argument(dest='filename', nargs='?', default=None, type=str, metavar='file',
+                    help='dataset to open at startup (optional)')
+parser.add_argument('--log', metavar='PATH', default=None,
+                    help='mirror stderr log to this file (overwritten each run)')
+parser.add_argument('--log-level', default='INFO',
+                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                    help='root logger level (default: INFO)')
+opts = parser.parse_args()
+
+import logging
+from ..common import logsetup
+logsetup.configure(level=getattr(logging, opts.log_level),
+                   logfile=opts.log,
+                   allow=[__name__,
+                          "raven.client.mayberemote",
+                          "raven.client.api",
+                          "raven.client.util",
+                          "raven.common.bgtask",
+                          "raven.common.deviceinfo",
+                          "raven.common.gui.animation",
+                          "raven.common.gui.fontsetup",
+                          "raven.common.gui.utils",
+                          "raven.common.gui.widgetfinder",
+                          "raven.common.utils",
+                          "raven.librarian.llmclient",
+                          "raven.visualizer.importer",
+                          "raven.vendor.file_dialog.fdialog"])
+logger = logging.getLogger(__name__)
 
 logger.info(f"Raven-visualizer version {__version__} starting.")
 
 logger.info("Loading libraries...")
-from unpythonic import timer, UnionFilter
+from unpythonic import timer
 with timer() as tim:
-    import argparse
     import concurrent.futures
     from copy import deepcopy
     import math
@@ -66,23 +95,6 @@ with timer() as tim:
     from . import word_cloud
 
     gui_config = visualizer_config.gui_config  # shorthand, this is used a lot
-
-    # Emit further log messages only from a few select modules (our own plus some vendored)
-    for handler in logging.root.handlers:
-        handler.addFilter(UnionFilter(logging.Filter(__name__),
-                                      logging.Filter("raven.client.mayberemote"),
-                                      logging.Filter("raven.client.api"),
-                                      logging.Filter("raven.client.util"),
-                                      logging.Filter("raven.common.bgtask"),
-                                      logging.Filter("raven.common.deviceinfo"),
-                                      logging.Filter("raven.common.gui.animation"),
-                                      logging.Filter("raven.common.gui.fontsetup"),
-                                      logging.Filter("raven.common.gui.utils"),
-                                      logging.Filter("raven.common.gui.widgetfinder"),
-                                      logging.Filter("raven.common.utils"),
-                                      logging.Filter("raven.librarian.llmclient"),
-                                      logging.Filter("raven.visualizer.importer"),
-                                      logging.Filter("raven.vendor.file_dialog.fdialog")))
 logger.info(f"Libraries loaded in {tim.dt:0.6g}s.")
 
 # --------------------------------------------------------------------------------
@@ -1820,14 +1832,6 @@ dpg.set_exit_callback(gui_shutdown)
 # Start the app
 
 logger.info("App bootup...")
-
-parser = argparse.ArgumentParser(description="""Visualize BibTeX data.""",
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-
-parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
-parser.add_argument(dest='filename', nargs='?', default=None, type=str, metavar='file',
-                    help='dataset to open at startup (optional)')
-opts = parser.parse_args()
 
 # `raven.client.api` must be initialized before any mayberemote call. The BibTeX importer uses
 # mayberemote for NLP during the import pipeline, so it needs this. No server connection is

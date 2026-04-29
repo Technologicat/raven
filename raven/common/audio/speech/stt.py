@@ -8,7 +8,6 @@ Client-side remote/local dispatch lives in `raven.client.mayberemote.STT`.
 __all__ = ["STTModel", "load_stt_model", "transcribe"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from dataclasses import dataclass

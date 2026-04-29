@@ -15,7 +15,6 @@ __all__ = ["get_available_devices",
            "require"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from typing import BinaryIO, List, Optional

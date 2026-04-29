@@ -18,7 +18,6 @@ QwQ-32B wrote a very first initial rough draft outline, from which this was then
 __all__ = ["init", "shutdown", "HybridIR", "HybridIRFileSystemEventHandler", "setup"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import atexit

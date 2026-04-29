@@ -10,11 +10,25 @@ To edit the emotion templates, see the separate app `raven.avatar.pose_editor.ap
 This module is licensed under the 2-clause BSD license.
 """
 
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import argparse
 
 from ... import __version__
+
+parser = argparse.ArgumentParser(description="""Raven-avatar settings editor — standalone renderer for the AI avatar character with live postprocessor settings editing.""",
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + __version__))
+parser.add_argument('--log', metavar='PATH', default=None,
+                    help='mirror stderr log to this file (overwritten each run)')
+parser.add_argument('--log-level', default='INFO',
+                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                    help='root logger level (default: INFO)')
+opts = parser.parse_args()
+
+import logging
+from ...common import logsetup
+logsetup.configure(level=getattr(logging, opts.log_level),
+                   logfile=opts.log)
+logger = logging.getLogger(__name__)
 
 logger.info(f"Raven-avatar-settings-editor version {__version__} starting.")
 

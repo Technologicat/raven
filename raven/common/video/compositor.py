@@ -18,7 +18,6 @@ __all__ = ["render_celstack", "get_cel_index_in_stack",
            "animate_cel_cycle_with_fadeout", "animate_cel_sequence_with_fadeout"]
 
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import copy
