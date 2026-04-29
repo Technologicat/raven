@@ -119,6 +119,16 @@ class TestAllowlist:
         for handler in logging.root.handlers:
             assert handler.filters, f"handler {handler!r} has no filters"
 
+    def test_empty_allow_raises(self, restore_logging):
+        # Empty allowlist would silently drop every record — fail fast instead.
+        with pytest.raises(ValueError, match="empty"):
+            logsetup.configure(level=logging.INFO, allow=[])
+        with pytest.raises(ValueError, match="empty"):
+            logsetup.configure(level=logging.INFO, allow=())
+        with pytest.raises(ValueError, match="empty"):
+            # Exhausted generator: also empty when materialized.
+            logsetup.configure(level=logging.INFO, allow=iter([]))
+
 
 # ---------------------------------------------------------------------------
 # Logfile mirroring

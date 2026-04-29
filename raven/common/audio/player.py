@@ -218,11 +218,11 @@ def initialize(frequency: int = DEFAULT_FREQUENCY,
         return instance
 
     if device_name == "system-default":
-        logger.info("initialize: Using system's current default audio playback device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+        logger.info("initialize: Using system's current default audio playback device. If you want to use another device, see `raven/client/config.py`, and run `raven-check-audio-devices` to get available choices.")
     elif device_name is not None:
         logger.info(f"initialize: Validating audio playback device '{device_name}'.")
     else:
-        logger.info("initialize: Using first available audio playback device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+        logger.info("initialize: Using first available audio playback device. If you want to use another device, see `raven/client/config.py`, and run `raven-check-audio-devices` to get available choices.")
 
     instance = Player(frequency=frequency,
                       channels=channels,

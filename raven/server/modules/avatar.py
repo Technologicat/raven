@@ -316,7 +316,7 @@ def load_animator_settings(instance_id: str, settings: Optional[Dict[str, Any]] 
                 Optional dict of settings. The type and semantics of each value depends on each
                 particular setting.
 
-    For available settings, see `animator_defaults` in `raven/server/config.py`.
+    For available settings, see `animator_defaults` in `raven.server.config`.
 
     Particularly for the setting `"postprocessor_chain"` (pixel-space glitch artistry),
     see `postprocessor.py`.
@@ -816,7 +816,7 @@ class Animator:
                     Optional dict of settings. The type and semantics of each value depends on each
                     particular setting.
 
-        For available settings, see `animator_defaults` in `raven/server/config.py`.
+        For available settings, see `animator_defaults` in `raven.server.config`.
 
         Particularly for the setting `"postprocessor_chain"` (pixel-space glitch artistry),
         see `postprocessor.py`.

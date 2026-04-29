@@ -26,9 +26,9 @@ parser = argparse.ArgumentParser(
 parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
 parser.add_argument("folder", nargs="?", default=os.getcwd(),
                     help="Folder of images to open (default: current directory)")
-parser.add_argument("--width", type=int, default=None, help="Window width (default: from config)")
-parser.add_argument("--height", type=int, default=None, help="Window height (default: from config)")
-parser.add_argument("--tile-size", type=int, default=None, help="Initial thumbnail size (default: from config)")
+parser.add_argument("--width", type=int, default=None, help="Window width (default: from raven/cherrypick/config.py)")
+parser.add_argument("--height", type=int, default=None, help="Window height (default: from raven/cherrypick/config.py)")
+parser.add_argument("--tile-size", type=int, default=None, help="Initial thumbnail size (default: from raven/cherrypick/config.py)")
 parser.add_argument("--device", type=str, default=None,
                     help="Torch device override (e.g. cuda:1, cpu)")
 parser.add_argument("--debug", action="store_true",
