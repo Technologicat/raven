@@ -2,7 +2,7 @@
 
 Useful for setting up the TTS (speech synthesize) audio device, if you want to use a non-default device.
 
-You can use one of these as `tts_playback_audio_device` in `raven.client.config`.
+You can use one of these as `tts_playback_audio_device` in `raven/client/config.py`.
 """
 
 from typing import List

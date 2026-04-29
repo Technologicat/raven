@@ -1,7 +1,20 @@
 """Single owner of root-logger configuration for Raven app entry points.
 
-Each Raven CLI/GUI app calls `configure(...)` exactly once per session, before
-heavy imports. The 65 modules across `raven/` that historically called
+Each Raven CLI/GUI app calls `configure(...)` exactly once per session. Two
+placement patterns are in use:
+
+- **Before heavy imports** — used by the GUI/server family (`raven-visualizer`,
+  `raven-librarian`, `raven-server`, `raven-importer`, `raven-minichat`,
+  `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`,
+  `raven-avatar-pose-editor`, `raven-avatar-settings-editor`). Captures
+  import-time records from heavy ML deps in `--log` output.
+- **Inside `main()` after heavy imports** — used by the smaller bibliography
+  tools (`raven-pdf2bib`, `raven-wos2bib`, `raven-csv2bib`). Import-time
+  records from third parties go to Python's `lastResort` (WARNING+ only),
+  which is fine for these tools because they curate via `allow=[__name__]`
+  anyway and only care about their own application-level logging.
+
+Either way, the 65 modules across `raven/` that historically called
 `logging.basicConfig(level=logging.INFO)` at import time should do only
 ``logger = logging.getLogger(__name__)`` — they don't own root configuration.
 
@@ -31,9 +44,17 @@ def configure(*,
               fmt: Optional[str] = None) -> None:
     """Configure the root logger for a Raven app entry point.
 
-    Call exactly once per app session, before heavy imports. Idempotent —
-    uses ``force=True`` so re-entry from tests is safe (the previous call's
-    handlers are removed and closed before new ones install).
+    Call exactly once per app session. Place the call before heavy imports
+    if you want their import-time records captured by `--log` and the
+    configured handlers (the GUI/server family does this); place it inside
+    `main()` after heavy imports if you only care about your own
+    application-level logging (the bibliography tools do this — records
+    that emit before `configure(...)` runs go through Python's `lastResort`
+    handler, visible at WARNING+, dropped silently below). The module
+    docstring lists which apps use which placement.
+
+    Idempotent — uses ``force=True`` so re-entry from tests is safe (the
+    previous call's handlers are removed and closed before new ones install).
 
     `level`: root logger level (e.g. `logging.INFO`, `logging.DEBUG`).
     `logfile`: if given, also write to this file. Truncated at configure
@@ -47,6 +68,10 @@ def configure(*,
              attached to every root handler.
     `fmt`: logging format string. Defaults to `DEFAULT_FORMAT`
            (timestamp + level + name + message).
+
+    Raises `ValueError` if `allow` is given but empty (an empty allowlist
+    would silently drop every record — almost certainly a mistake; use
+    `allow=None` instead to emit everything).
 
     Why filtering is per-handler, not per-logger: Python's propagation rules
     consult only ancestor *handlers'* filters during propagation, not
@@ -76,6 +101,16 @@ def configure(*,
     by the GUI app) must not — they would clobber the host's configuration.
     See `raven.visualizer.importer_cli` for the dual-use split pattern.
     """
+    if allow is not None:
+        # Materialize once: a generator would be consumed by the empty-check
+        # below before the UnionFilter constructor could see it.
+        allow = list(allow)
+        if not allow:
+            raise ValueError("logsetup.configure: `allow` must be either `None` "
+                             "(emit everything) or a non-empty iterable of "
+                             "logger-name prefixes; got an empty iterable, which "
+                             "would silently drop every record.")
+
     handlers = [logging.StreamHandler(sys.stderr)]
     if logfile is not None:
         # Normalize: expand `~`, resolve symlinks and `..`. Matches the path-handling

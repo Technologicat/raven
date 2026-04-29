@@ -19,7 +19,7 @@ from ..client import mayberemote
 from ..visualizer import config as visualizer_config
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="""Dehyphenate text bro-ken by hyp-he-na-tion. (You can configure the model in `raven.visualizer.config`.)""",
+    parser = argparse.ArgumentParser(description="""Dehyphenate text bro-ken by hyp-he-na-tion. (You can configure the model in `raven/visualizer/config.py`.)""",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest="filenames", nargs="*", default=None, type=str, metavar="txt", help="Text file(s) to dehyphenate. Defaults to reading input from stdin.")
     parser.add_argument("-o", "--output-suffix", dest="output_suffix", default=None, type=str, metavar="out", help="Suffix for naming output files (file.txt -> file_out.txt). Only used if at least one filename is given. Default (if this option is not given) is to concatenate all output to stdout.")

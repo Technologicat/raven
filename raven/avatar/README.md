@@ -223,7 +223,7 @@ The cel subsystem is powered by two kinds of extra cels (512x512 PNG RGBA images
   - Default animefx cels have filenames beginning with `fx_`. They are used by default by all characters in the same directory.
   - A per-character override is supported, but currently unused: e.g. `aria1_fx_exclaim1.png` would be frame 1 of the `exclaim` effect specifically for the character `aria1` (while other characters that do not have an override would still use `fx_exclaim1.png`).
 
-The animefx are configured in [`raven.server.config`](../server/config.py). Animefx are triggered when the character enters a specific emotion. The animator configuration sets which effect goes with which emotion(s).
+The animefx are configured in [`raven/server/config.py`](../server/config.py). Animefx are triggered when the character enters a specific emotion. The animator configuration sets which effect goes with which emotion(s).
 
 The default animefx configuration is as follows:
 
@@ -283,7 +283,7 @@ The final cels (each exported to 512x512 RGBA PNG) are in [`raven/avatar/assets/
 
 The THA3 poser is a deep-learning model. Each animation frame requires an inference pass. This requires lots of compute.
 
-If you have a CUDA-capable GPU, enable GPU support in `raven.server.config`, by setting up the desired server modules to run on a CUDA device. Be sure to install the CUDA optional dependencies of Raven (see [main README](../../README.md)).
+If you have a CUDA-capable GPU, enable GPU support in `raven/server/config.py`, by setting up the desired server modules to run on a CUDA device. Be sure to install the CUDA optional dependencies of Raven (see [main README](../../README.md)).
 
 CPU mode is very slow, and without a redesign of the AI model (or distillation, like in the newer [THA4 paper](https://arxiv.org/abs/2311.17409)), there is not much that can be done. It is already running as fast as PyTorch can go.
 

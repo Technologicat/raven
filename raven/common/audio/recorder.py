@@ -418,7 +418,7 @@ def initialize(frame_length: int = DEFAULT_FRAME_LENGTH,
     if device_name is not None:
         logger.info(f"initialize: Validating audio capture device '{device_name}'.")
     else:
-        logger.info("initialize: Using first available audio capture device. If you want to use another device, see `raven.client.config`, and run `raven-check-audio-devices` to get available choices.")
+        logger.info("initialize: Using first available audio capture device. If you want to use another device, see `raven/client/config.py`, and run `raven-check-audio-devices` to get available choices.")
 
     instance = Recorder(frame_length=frame_length,
                         device_name=device_name,

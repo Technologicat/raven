@@ -737,7 +737,7 @@ def render_help_extras(self: helpcard.HelpWindow,
     dpg_markdown.add_text(f"{self.c_hed}**Document database**{self.c_end} (retrieval-augmented generation, RAG)", parent=gui_parent)
     g = dpg.add_group(horizontal=True, parent=gui_parent)
     g1 = dpg.add_group(horizontal=False, parent=g)
-    dpg_markdown.add_text(f'{self.c_txt}You can put *.txt* documents for the AI to access in *{librarian_config.llm_docs_dir}*. The path can be configured in *raven.librarian.config*.{self.c_end}',
+    dpg_markdown.add_text(f'{self.c_txt}You can put *.txt* documents for the AI to access in *{librarian_config.llm_docs_dir}*. The path can be configured in *raven/librarian/config.py*.{self.c_end}',
                           parent=g1)
     dpg_markdown.add_text(f'{self.c_txt}The documents are search-indexed automatically. The index is automatically kept up to date. The search index is stored in *{librarian_config.llm_database_dir}*. If you ever need to clear it manually, just delete that directory.{self.c_end}',
                           parent=g1)
