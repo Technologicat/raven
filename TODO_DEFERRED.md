@@ -379,6 +379,18 @@ The watchdog-driven flow (tmpdir + `Path.touch` / `unlink` to drive `HybridIRFil
 Discovered during DOCS-indexing-indicator smoke test (2026-04-27).
 
 
+## `--log <file>` option for Raven apps
+
+All Raven CLI apps currently log to stderr only. Useful would be a uniform `--log <path>` (or `--log-file`) option that mirrors stderr output to a file, so users can capture session logs for bug reports without having to redirect their terminal. Especially handy for debugging the GUI apps (Librarian, Visualizer, avatar editors), where the originating terminal is often a side window the user has already closed.
+
+Discovered during INDEXING-indicator debugging (2026-04-28) — we wanted to inspect a previous run's log and found `raven-librarian.log` was stale (the process only writes to stderr).
+
+## Logging is misconfigured fleet-wide: individual modules reconfigure the root logger
+
+Multiple modules across Raven call `logging.basicConfig` (or equivalent) at import time, each clobbering whichever level/handlers a previous import had set. The end result is that bumping a logger to `DEBUG` from the entry point doesn't take, because some later import resets it. Needs a proper design: a single `raven.common.logsetup` (or similar) that owns root configuration, called exactly once from each app entry point, with everything else doing only `logger = logging.getLogger(__name__)`. Until this lands, "dormant" debug-level instrumentation is effectively invisible — diagnostic logs have to be at `info` (visible by default) or removed.
+
+Discovered during INDEXING-indicator debugging (2026-04-28).
+
 ## Hybridir: BM25 backend migration for larger corpora
 
 `bm25s` rebuilds the entire keyword index on every commit (full corpus → full reindex; IDF changes mean it can't be incremental in this design). Sub-second on ~1k small documents, so a non-issue today. Will start to pinch around the 10k–100k mark.

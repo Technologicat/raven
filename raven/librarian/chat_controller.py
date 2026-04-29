@@ -1376,26 +1376,54 @@ class DPGChatController:
                                                        mode="concurrent",
                                                        executor=executor)  # same thread pool
 
-    def shutdown(self):
-        """Prepare module for app shutdown.
+    def disable_gui_updates(self) -> None:
+        """Stop the controller from firing GUI events.
 
-        This signals the background tasks to exit.
+        After this call:
+          - `gui_updates_safe` is `False`, so any callback that gates on it (the on_docs_*,
+            on_llm_*, on_tools_*, on_indexing_* handlers) becomes a no-op.
+          - The retriever's indexing-lifecycle callbacks are cleared, so a cancelled `commit()`'s
+            `finally` won't even reach the controller.
+
+        Idempotent. Use as the first phase of app shutdown — run *before* `hybridir.shutdown()`
+        and DPG teardown. The cancelled commit's `finally` block fires `on_indexing_done` from a
+        worker thread, and any in-flight chat task can fire `on_docs_done` similarly; if those
+        run while DPG widgets are already being torn down, `dpg.show/hide_item` raises against
+        deleted widgets. Disabling the GUI-side hooks first sidesteps that race.
+
+        The second phase is `shutdown()`, which drains background tasks. That has to run *after*
+        `hybridir.shutdown()` because chat tasks blocked in `retriever.search` need
+        `datastore_lock` to be released first.
         """
         self.gui_updates_safe = False
         if self.retriever is not None:
             self.retriever.set_indexing_callbacks(on_start=None, on_done=None)
+
+    def shutdown(self):
+        """Prepare module for app shutdown.
+
+        Second phase of shutdown: signal the background tasks to exit and wait for them.
+        Calls `disable_gui_updates()` first (idempotent), so callers that haven't already
+        invoked the first phase still get safe semantics.
+        """
+        self.disable_gui_updates()
         self.task_manager.clear(wait=True)
         self.ai_turn_task_manager.clear(wait=True)
 
     def _on_indexing_start(self) -> None:
         """Show the INDEXING indicator. Called from `HybridIR.commit()`'s worker thread."""
+        # TEMP INSTRUMENTATION: INDEXING indicator debugging (2026-04-28)
+        logger.info(f"DPGChatController._on_indexing_start: INSTR entered: gui_updates_safe={self.gui_updates_safe}, widget={self.docs_indexing_indicator_widget!r}, exists={dpg.does_item_exist(self.docs_indexing_indicator_widget)}")
         if self.gui_updates_safe:
             if self.docs_indexing_glow_animation is not None:
                 self.docs_indexing_glow_animation.reset()  # crisp phase on appear
             dpg.show_item(self.docs_indexing_indicator_widget)
+            logger.info(f"DPGChatController._on_indexing_start: INSTR after show: visible={dpg.is_item_shown(self.docs_indexing_indicator_widget)}")
 
     def _on_indexing_done(self) -> None:
         """Hide the INDEXING indicator. Called from `HybridIR.commit()`'s worker thread."""
+        # TEMP INSTRUMENTATION: INDEXING indicator debugging (2026-04-28)
+        logger.info(f"DPGChatController._on_indexing_done: INSTR entered: gui_updates_safe={self.gui_updates_safe}, widget={self.docs_indexing_indicator_widget!r}, exists={dpg.does_item_exist(self.docs_indexing_indicator_widget)}")
         if self.gui_updates_safe:
             dpg.hide_item(self.docs_indexing_indicator_widget)
 

@@ -1016,6 +1016,11 @@ def gui_shutdown() -> None:
     """App exit: gracefully shut down parts that access DPG."""
     avatar_controller.stop_tts()  # Stop the TTS speaking so that the speech background thread (if any) exits.
     logger.info("gui_shutdown: entered")
+    # Phase 1: silence the GUI side. The cancelled commit's `finally` will fire `on_indexing_done`
+    # from a worker thread, and in-flight chat tasks can fire `on_docs_done` similarly — both would
+    # then call `dpg.show/hide_item` on widgets that are already being torn down. Disabling the
+    # controller's GUI hooks here sidesteps that race.
+    chat_controller.disable_gui_updates()
     # Stop the watchdog observer first so no new ingest/commit tasks land while we're tearing down,
     # then cancel any in-flight RAG indexing. `hybridir.shutdown` waits for the running commit to exit
     # its per-doc loop, partial-save what was applied, and release `datastore_lock`. This must run
