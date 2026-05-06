@@ -1,5 +1,45 @@
 # Deferred TODOs
 
+## `deviceinfo` rework: `"gpu"` autodetect alias + multi-backend coverage
+
+Two related issues in `raven/common/deviceinfo.py`, surfaced together while reviewing it during the NVRTC sanity-check work. Design landed; implementation deferred.
+
+**Issue 1 — the labeling block in `validate()` is half-implemented.** The original intent was that a config string of `"cuda"` should mean "use whatever GPU is available", with a CUDA-not-available-but-MPS-available fallback labeled `"MPS"` in the startup log. Today `get_device_and_dtype` only does a `cuda → cpu` fallback — there's no `cuda → mps` translation — so the second `elif` branch in `validate()` is unreachable. Net consequence: an MPS-configured run on a Mac (`device_string = "mps"`) where MPS is healthy gets `device_name = "CPU"` in the "Compute device for ..." log line. The compute itself runs on MPS correctly; only the label is wrong.
+
+**Issue 2 — DWIM tension.** A Mac user shouldn't have to s/cuda/mps/g across the config modules for Raven to Just Work; equally, magic remapping of explicit names is a Perl-flavored move. Resolved by adding a separate alias rather than overloading `"cuda"`.
+
+**Issue 3 — other Torch backends.** When `deviceinfo.py` was written, only CUDA + MPS were on the radar. PyTorch now also has `xpu` (Intel Arc / Battlemage), `vulkan` (experimental, used by mobile-GPU paths including Adreno), and others. Worth surveying so they aren't silently mislabeled.
+
+### Design
+
+**`"gpu"` is the new autodetect alias.** Named explicit backends keep their literal meaning; `"gpu"` is the only string that carries DWIM behavior. Symmetry across backends is preserved — no backend-name is privileged as the secret-autodetect default.
+
+**Resolution rules (in `get_device_and_dtype`):**
+
+- `"cuda[:N]"` — use CUDA if available; else fall back to CPU (warn). Unchanged.
+- `"mps"`, `"xpu"`, `"vulkan"` — use that backend if available; else fall back to CPU (warn). Symmetric to `"cuda"` — explicit choices are honored, no cross-backend fallback.
+- `"gpu"` — autodetect: try CUDA → MPS → XPU → Vulkan in order. Single match wins (info-level log of which one was picked). Multiple distinct backends present → error out with "multiple GPU backends detected, specify exactly one of: …" (rare in practice; forcing an explicit pick is fine when it does happen). No GPU available → fall back to CPU (info-level log).
+- `"cpu"` — unchanged.
+
+**Device-index handling.** When `"gpu"` resolves to CUDA, the implicit index is `0` (matches the existing CUDA_VISIBLE_DEVICES + always-`cuda:0` convention). When it resolves to MPS / Vulkan, no index — those backends don't have one. When falling back across backends (e.g. `"cuda:1"` → MPS), drop the index — `"mps:1"` is meaningless.
+
+**Labeling block in `validate()`:** cover all post-fallback states explicitly. Per-backend branch (`startswith("cuda") and cuda.is_available()` → CUDA device name, `== "mps" and mps.is_available()` → "MPS", and so on for xpu/vulkan), terminating in a CPU `else`.
+
+**Out of scope:**
+
+- `xla` (TPU): different placement model (lazy graphs / JIT-compiled) that doesn't slot into Raven's eager-mode architecture.
+- Adreno / Mali / mobile GPUs as an end-to-end target: handled in PyTorch via Vulkan compute or PyTorch Mobile / ExecuTorch — recognizing `"vulkan"` as a backend name is cheap, but actual Android support would be a port (model export pipeline, op-coverage audit), not a backend addition.
+
+### Implementation tasks
+
+- `get_device_and_dtype`: implement the resolution rules above. Probe order for `"gpu"`: CUDA → MPS → XPU → Vulkan → CPU.
+- `validate()` labeling block: rewrite per-backend with explicit branches.
+- `cuda_sanity_check` already in place; consider whether `"gpu"` resolved to non-CUDA needs an info-level log that no NVRTC probe ran.
+- Switch the device-string defaults from `"cuda:0"` to `"gpu"` in the tracked config files: at minimum `raven/server/config.py`, plus the Visualizer and Librarian client configs (and any other places `"cuda:0"` appears as a default choice — grep the fleet, don't trust this list). **Hazard: the client-side `config.py` files double as the local-override surface, and on the user's dev machines they routinely show as `M` in `git status` with NVIDIA-specific tweaks. When editing these files for the default switch, change *only* the device-string lines, review `git diff` carefully before staging, and stage hunk-by-hunk (`git add -p`) — never `git add <file>` wholesale.
+- Tests: at minimum, `test_deviceinfo.py` should mock `cuda.is_available()` / `backends.mps.is_available()` / `xpu.is_available()` permutations and assert the expected resolutions and labels.
+
+Discovered during NVRTC sanity-check review (2026-05-06).
+
 ## Audit fleet for dict constants that should be `frozendict`
 
 Several modules across Raven hold module-level dict constants that are used as immutable defaults or lookup tables, relying on "don't mutate this" by convention. `unpythonic.frozendict` (already a Raven dep) enforces it with teeth and costs nothing extra; Python 3.15 will also ship a stdlib `frozendict`.
