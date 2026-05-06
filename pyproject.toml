@@ -90,6 +90,14 @@ classifiers = [
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    # Coverage instrumentation, used by .github/workflows/coverage.yml.
+    # NOTE: raven's CI workflows deliberately do NOT use `pdm install` —
+    # the full dependency tree pulls in torch/torchvision (multi-GB) and
+    # the Python-version-pinned kokoro/misaki stack, neither of which the
+    # test suite needs. Workflows install a hand-picked dep subset via
+    # `pip install` directly. `pytest-cov` is declared here anyway so a
+    # local `pdm install` for development matches what CI exercises.
+    "pytest-cov>=7.0",
     "ruff>=0.14.0",
     "flake8",
     "autopep8",
@@ -172,6 +180,21 @@ pythonpath = ["."]
 addopts = "--import-mode=importlib"
 markers = [
     "ml: tests that require the full ML stack (spaCy, Flair, torch models). Skipped on CI; run locally by default.",
+]
+
+[tool.coverage.run]
+# Coverage signal is about which lines of *production code* run.
+# pytest already reports pass/fail per test, so coverage of the test
+# files themselves would just add rows without insight. The omit glob
+# uses `*/tests/*` (plural) to catch all the scattered `tests/` dirs
+# under raven/<subpkg>/tests/. We also omit `*/vendor/*` to mirror
+# ruff's existing exclusion of `raven/vendor` (third-party code we
+# carry, but don't develop or own — coverage of those lines is not
+# our signal).
+source = ["raven"]
+omit = [
+    "*/tests/*",
+    "*/vendor/*",
 ]
 
 [tool.ruff]

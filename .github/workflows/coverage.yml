@@ -16,6 +16,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install CI test dependencies
+        # Why hand-pick deps instead of `pdm install`? raven's full dep tree
+        # pulls in torch+torchvision (multi-GB) and the Python-version-pinned
+        # kokoro/misaki TTS stack — none of which the test suite needs.
+        # We install pytest, pytest-cov, a minimal subset of runtime deps,
+        # the CPU-only PyTorch wheels, and finally the package itself with
+        # `--no-deps` so pip doesn't re-resolve the full tree.
         run: |
           python -m pip install --upgrade pip
           pip install pytest pytest-cov numpy "bibtexparser>=2.0.0b8" unpythonic Pillow tqdm requests feedparser wosfile
