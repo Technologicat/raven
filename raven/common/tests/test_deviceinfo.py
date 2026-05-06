@@ -17,14 +17,19 @@ from raven.common import deviceinfo
 def _mock_backends(*, cuda: bool = False, mps: bool = False, xpu: bool = False, vulkan: bool = False):
     """Context manager that pins all four backend probes to fixed boolean states.
 
-    Patches both the real probe functions on the `torch` namespace and a fake CUDA
-    device-name lookup, so tests can assert label outputs without depending on the
-    host machine.
+    Patches the probe functions on the `torch` namespace plus the CUDA-side metadata
+    lookups that `validate` invokes in its post-loop "Device info for CUDA GPU ..."
+    section. The metadata patches matter on CPU-only PyTorch builds (e.g. CI runners),
+    where unmocked `get_device_properties` / `get_device_capability` raise
+    `AssertionError("Torch not compiled with CUDA enabled")` even when
+    `cuda.is_available()` has been mocked to return True.
     """
     patches = [
         patch.object(torch.cuda, "is_available", return_value=cuda),
         patch.object(torch.backends.mps, "is_available", return_value=mps),
         patch.object(torch.cuda, "get_device_name", return_value="MOCK GPU"),
+        patch.object(torch.cuda, "get_device_properties", return_value="MOCK GPU PROPERTIES"),
+        patch.object(torch.cuda, "get_device_capability", return_value=(8, 6)),
     ]
     if hasattr(torch, "xpu"):
         patches.append(patch.object(torch.xpu, "is_available", return_value=xpu))
