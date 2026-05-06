@@ -13,12 +13,12 @@ from .config import *  # Use the default config as a base.  # noqa: F401, F403
 
 # We override just this.
 enabled_modules = {
-    "avatar": {"device_string": "cuda:0",
+    "avatar": {"device_string": "gpu",
                "dtype": torch.float16},
-    "classify": {"device_string": "cuda:0",
+    "classify": {"device_string": "gpu",
                  "dtype": torch.float16},
-    "imagefx": {"device_string": "cuda:0",
+    "imagefx": {"device_string": "gpu",
                 "dtype": torch.float16},
-    "natlang": {"device_string": "cuda:0"},  # this module has no dtype setting
-    "tts": {"device_string": "cuda:0"},
+    "natlang": {"device_string": "gpu"},  # this module has no dtype setting
+    "tts": {"device_string": "gpu"},
 }

@@ -15,7 +15,7 @@ from .config import *  # Use the default config as a base.  # noqa: F401, F403
 # at 4bit and decent context size needs ~6GB VRAM by itself, so when running with low VRAM, we can't afford
 # to put anything else on the GPU, except possibly the avatar.
 enabled_modules = {
-    "avatar": {"device_string": "cuda:0",
+    "avatar": {"device_string": "gpu",
                "dtype": torch.float16},
     "classify": {"device_string": "cpu",
                  "dtype": torch.float32},

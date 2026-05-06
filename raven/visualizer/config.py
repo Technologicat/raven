@@ -21,10 +21,10 @@ import dearpygui.dearpygui as dpg
 # Which GPU to use in the BibTeX importer, if available. If not available, CPU fallback is used automatically.
 # See also `run-on-internal-gpu.sh` for another way to select the GPU when starting the app, without modifying any files.
 devices = {
-    "embeddings": {"device_string": "cuda:0",
+    "embeddings": {"device_string": "gpu",
                    "dtype": torch.float16},
-    "nlp": {"device_string": "cuda:0"},  # no configurable dtype
-    "sanitize": {"device_string": "cuda:0"},  # used for dehyphenation; no configurable dtype
+    "nlp": {"device_string": "gpu"},  # no configurable dtype
+    "sanitize": {"device_string": "gpu"},  # used for dehyphenation; no configurable dtype
 }
 
 # --------------------------------------------------------------------------------

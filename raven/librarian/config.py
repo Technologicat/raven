@@ -56,9 +56,9 @@ hybridir_demo_save_dir = global_config.toplevel_userdata_dir / "hybridir_demo"
 # NOTE: These are used only as a local fallback when Raven-server is not running.
 # The RAG backend (`hybridir.HybridIR`) automatically prefers the server when it is available.
 devices = {
-    "embeddings": {"device_string": "cuda:0",
+    "embeddings": {"device_string": "gpu",
                    "dtype": torch.float16},
-    "nlp": {"device_string": "cuda:0"},  # no configurable dtype
+    "nlp": {"device_string": "gpu"},  # no configurable dtype
 }
 
 # NLP model for spaCy, used for tokenization in keyword search (RAG backend `raven.librarian.hybridir`).

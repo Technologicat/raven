@@ -18,6 +18,8 @@
 
 - *Raven-server*: NVRTC sanity check at startup. Compiles a trivial element-wise kernel via the jiterator path right after device validation, so a broken NVRTC runtime (missing `libnvrtc-builtins.so`, version skew between bundled and host CUDA) surfaces as a clear startup warning instead of an opaque crash the first time a JIT-compiled path runs. Adds ~300 ms to startup on healthy CUDA setups, nothing on CPU-only ones.
 
+- New `"gpu"` device string in config files: an explicit autodetect token that picks whichever GPU backend (CUDA / MPS / XPU / Vulkan) is available, falling back to CPU if none. Replaces the implicit autodetect that was meant to live inside the `"cuda"` string with a clearly-named alias — `"cuda"` now means exactly CUDA. The defaults in the server (`raven/server/config.py`, `config_avatar_only.py`, `config_lowvram.py`) and the Visualizer / Librarian client configs now use `"gpu"`. Explicit names like `"cuda:0"` or `"mps"` are still honored as deliberate choices — no cross-backend fallback. On a machine with multiple distinct GPU backends active simultaneously (rare — e.g. NVIDIA + Intel Arc), startup raises `RuntimeError` and asks for an explicit pick.
+
 - New `--log <path>` and `--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}` CLI options on all major apps (`raven-visualizer`, `raven-importer`, `raven-librarian`, `raven-server`, `raven-minichat`, `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`) plus the bibliography tools that emit log records (`raven-pdf2bib`, `raven-wos2bib`, `raven-csv2bib`). `--log` mirrors stderr to a file (overwritten each run) so users can capture session logs for bug reports without redirecting their terminal — especially useful for the GUI apps where the launching terminal is often a side window. The logfile path accepts `~` and is resolved to an absolute path. The mirroring survives third-party libraries (notably `flair`) that call `logging.shutdown()` on import.
 
 **Fixed**:
@@ -28,6 +30,8 @@
 - *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.
 
 - `dpg_markdown` bullet lists and blockquotes now render correctly inside tooltips (and any other initially-hidden container). Previously every bullet glyph in a tooltip stacked at the top-left, because DPG reports `get_item_pos() == (0, 0)` for children of a hidden container; the bullet drawlists are now deferred until their row has been laid out.
+
+- `deviceinfo.validate`: `device_name` label now reflects the actual running backend. Previously a working MPS / XPU / Vulkan setup was logged as `'CPU'` in the startup "Compute device for ..." line because the labeling block was tied to a CUDA-prefix check it shouldn't have been. Cosmetic — the actual compute device was always correct.
 
 ---
 

@@ -22,22 +22,27 @@ server_api_key_file = server_userdata_dir / "api_key.txt"
 #
 # NOTE: This configures the server-side devices.
 #
+# The default `device_string` is `"gpu"`, which autodetects the available GPU backend
+# (CUDA / MPS / XPU / Vulkan), or falls back to CPU. To pin a specific backend, use the
+# corresponding device string: `"cuda:0"` for an explicit NVIDIA / ROCm GPU, `"mps"` for
+# Apple Silicon, `"xpu"` for Intel Arc, etc.
+#
 enabled_modules = {
-    "avatar": {"device_string": "cuda:0",
+    "avatar": {"device_string": "gpu",
                "dtype": torch.float16},
-    "classify": {"device_string": "cuda:0",
+    "classify": {"device_string": "gpu",
                  "dtype": torch.float16},
-    "embeddings": {"device_string": "cuda:0",
+    "embeddings": {"device_string": "gpu",
                    "dtype": torch.float16},
-    "imagefx": {"device_string": "cuda:0",
+    "imagefx": {"device_string": "gpu",
                 "dtype": torch.float16},
-    "natlang": {"device_string": "cuda:0"},  # this module has no dtype setting
-    "sanitize": {"device_string": "cuda:0"},  # this module has no dtype setting
-    "stt": {"device_string": "cuda:0",
+    "natlang": {"device_string": "gpu"},  # this module has no dtype setting
+    "sanitize": {"device_string": "gpu"},  # this module has no dtype setting
+    "stt": {"device_string": "gpu",
             "dtype": torch.float16},
-    "translate": {"device_string": "cuda:0",
+    "translate": {"device_string": "gpu",
                   "dtype": torch.float16},
-    "tts": {"device_string": "cuda:0"},
+    "tts": {"device_string": "gpu"},
     "websearch": {},  # websearch doesn't use any heavy compute; this is here only to provide the option to turn the module off.
 }
 

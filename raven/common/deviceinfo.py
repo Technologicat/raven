@@ -1,4 +1,4 @@
-"""A very simple PyTorch GPU configuration validator with automatic CPU fallback."""
+"""PyTorch device configuration validator with `gpu` autodetect alias and CPU fallback."""
 
 __all__ = ["get_device_and_dtype",
            "validate",
@@ -7,66 +7,149 @@ __all__ = ["get_device_and_dtype",
 import logging
 logger = logging.getLogger(__name__)
 
-from typing import Any, Dict
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 
-def get_device_and_dtype(record: Dict[str, Any]) -> (str, torch.dtype):
-    """Validate a single GPU configuration record.
+# Recognized GPU backends, in the priority order tried by the `"gpu"` autodetect alias.
+# Each entry: (prefix used in device strings, human-readable label, probe callable).
+#
+# Every probe begins with a `hasattr` check on the namespace before calling its
+# `is_available()`. `torch.cuda` and `torch.backends.mps` are reliably present in
+# Raven's supported PyTorch range (>=2.4) even on builds without those backends
+# compiled in, but the gates are kept for symmetry — a future PyTorch could rename
+# or reorganize, and gating all four lines costs essentially nothing. `torch.xpu`
+# (Intel Arc) and `torch.is_vulkan_available` are newer / build-conditional, so the
+# gate matters there. ROCm (AMD) presents to PyTorch as `cuda` and is covered by
+# that entry. `xla` (TPU) is intentionally absent: its lazy-graph placement model
+# doesn't slot into Raven's eager-mode architecture, so silently mapping `"gpu"`
+# onto it would be misleading.
+_GPU_BACKENDS: List[Tuple[str, str, Callable[[], bool]]] = [
+    ("cuda",   "CUDA",   lambda: hasattr(torch, "cuda") and torch.cuda.is_available()),
+    ("mps",    "MPS",    lambda: hasattr(torch.backends, "mps") and torch.backends.mps.is_available()),
+    ("xpu",    "XPU",    lambda: hasattr(torch, "xpu") and torch.xpu.is_available()),
+    ("vulkan", "Vulkan", lambda: hasattr(torch, "is_vulkan_available") and torch.is_vulkan_available()),
+]
 
-    Input format is::
+def _backend_for(device_string: str) -> Optional[Tuple[str, str, Callable[[], bool]]]:
+    """If `device_string` names a recognized GPU backend (with or without index), return
+    its `_GPU_BACKENDS` row. Else `None` (covers `"cpu"`, `"gpu"`, and unrecognized strings)."""
+    for entry in _GPU_BACKENDS:
+        prefix = entry[0]
+        if device_string == prefix or device_string.startswith(prefix + ":"):
+            return entry
+    return None
 
-        {"device_string": "cuda:0",
+def _autodetect_gpu() -> str:
+    """Resolve `device_string == "gpu"`: pick the single available GPU backend, or fall back to CPU.
+
+    Probes each entry in `_GPU_BACKENDS` in declaration order. Single match wins. Multiple
+    matches raise `RuntimeError` — the only way to land here is a machine with two distinct
+    GPU vendors active simultaneously (e.g. NVIDIA + Intel Arc), which is rare enough that
+    forcing an explicit pick is the right move. No match → CPU with an info-level log.
+
+    Returns the resolved literal device string.
+    """
+    available = [(prefix, label) for prefix, label, probe in _GPU_BACKENDS if probe()]
+    if len(available) == 0:
+        logger.info("get_device_and_dtype: 'gpu' autodetect found no GPU backend; using CPU.")
+        return "cpu"
+    if len(available) > 1:
+        labels = ", ".join(label for _, label in available)
+        prefixes = ", ".join(prefix for prefix, _ in available)
+        raise RuntimeError(
+            f"get_device_and_dtype: 'gpu' autodetect found multiple GPU backends ({labels}). "
+            f"Specify exactly one in the config (one of: {prefixes})."
+        )
+    prefix, label = available[0]
+    # Only CUDA carries a meaningful index — pin to `:0` so the resolved string is unambiguous,
+    # matching the existing CUDA_VISIBLE_DEVICES + always-`cuda:0` convention. Other backends
+    # have no per-device index in PyTorch's device-string vocabulary, so they stay bare.
+    resolved = f"{prefix}:0" if prefix == "cuda" else prefix
+    logger.info(f"get_device_and_dtype: 'gpu' autodetect resolved to {label} (device_string='{resolved}').")
+    return resolved
+
+def _device_label(device_string: str) -> str:
+    """Return a human-readable label for a (post-resolution) device string."""
+    if device_string == "cpu":
+        return "CPU"
+    backend = _backend_for(device_string)
+    if backend is None:
+        return device_string  # unrecognized; surface as-is so the user can see what got through
+    prefix, label, probe = backend
+    if not probe():
+        # Shouldn't happen post-resolution (the resolver would've fallen back to CPU), but if
+        # the caller passed an unresolved record straight in, don't lie about the device.
+        return "CPU"
+    if prefix == "cuda":
+        return torch.cuda.get_device_name(device_string)
+    return label
+
+def get_device_and_dtype(record: Dict[str, Any]) -> Tuple[str, torch.dtype]:
+    """Validate and resolve a single device-configuration record.
+
+    Input format::
+
+        {"device_string": "gpu",
          "dtype": torch.float16}
 
-    where::
+    `device_string` is one of:
 
-      device_string is a Torch device string, and
-      dtype is a Torch dtype or None (to indicate that the software component this record belongs to has no configurable dtype).
+      - `"gpu"`: autodetect — pick whichever GPU backend is available. Tries CUDA, MPS,
+        XPU, Vulkan in that order. Single match wins; multiple distinct backends present
+        raises `RuntimeError` (specify one explicitly). No GPU available falls back to CPU.
+      - `"cuda"` / `"cuda:N"` / `"mps"` / `"xpu"` / `"vulkan"`: use that backend if
+        available; else fall back to CPU with a warning. Explicit choices are honored —
+        no cross-backend fallback (an explicit `"mps"` on a non-Mac with CUDA goes to
+        CPU, not CUDA, because the user picked MPS deliberately).
+      - `"cpu"`: unchanged.
 
-    Return the tuple `device_string, dtype` after validation.
+    `dtype` is a Torch dtype, or `None` for components without a configurable dtype.
+    If the resolved device is CPU but `torch.float16` was requested, falls back to
+    `torch.float32` (CPU does not support half precision).
+
+    Returns `(resolved_device_string, possibly_coerced_dtype)`.
     """
     device_string = record["device_string"]
     dtype = record.get("dtype", None)  # not all components have a specifiable dtype
 
-    if device_string.startswith("cuda"):  # Nvidia
-        if not torch.cuda.is_available():
-            logger.warning(f"CUDA backend specified in config (device string '{device_string}'), but CUDA not available. Using CPU instead.")
-            device_string = "cpu"
+    if device_string == "gpu":
+        device_string = _autodetect_gpu()
+    else:
+        backend = _backend_for(device_string)
+        if backend is not None:
+            prefix, label, probe = backend
+            if not probe():
+                logger.warning(f"get_device_and_dtype: {label} backend specified in config (device string '{device_string}'), but {label} not available. Using CPU instead.")
+                device_string = "cpu"
+        # Else: `"cpu"` or an unrecognized string — pass through. Unrecognized strings
+        # will surface immediately when `torch.device()` is called downstream.
 
-    elif device_string.startswith("mps"):  # Mac, Apple Metal Performance Shaders
-        if not torch.backends.mps.is_available():
-            logger.warning(f"MPS backend specified in config (device string '{device_string}'), but MPS not available. Using CPU instead.")
-            device_string = "cpu"
-
-    if device_string == "cpu":  # no "elif" because also as fallback if CUDA/MPS wasn't available
-        if dtype is torch.float16:
-            logger.warning("dtype is set to torch.float16, but device 'cpu' does not support half precision. Using torch.float32 instead.")
-            dtype = torch.float32
+    if device_string == "cpu" and dtype is torch.float16:
+        logger.warning("get_device_and_dtype: dtype is set to torch.float16, but device 'cpu' does not support half precision. Using torch.float32 instead.")
+        dtype = torch.float32
 
     return device_string, dtype
 
-def validate(device_config):
-    """Validate a GPU configuration.
+def validate(device_config: Dict[str, Dict[str, Any]]) -> None:
+    """Validate every device-configuration record in `device_config`. Modifies in-place.
 
-    The GPU configuration records are modified in-place.
+    Input format::
 
-    Input format is::
-
-        {"my_component_name": {"device_string": "cuda:0",
+        {"my_component_name": {"device_string": "gpu",
                                "dtype": torch.float16},
          ...}
 
     where `"my_component_name"` is arbitrary.
 
-    This checks that CUDA/MPS is available (if it was requested), and if not, falls back to CPU.
+    For each record:
 
-    The dtype is checked so that if, after the fallback logic, a component is running on CPU
-    but `torch.float16` was requested, the dtype is set to `torch.float32` (because CPU
-    does not support `float16`).
-
-    Additionally, each record gets the field "device_name" injected. For CUDA devices, this is
-    the human-readable GPU name. For MPS devices, it is always "MPS", and for CPU, "CPU".
+      - Resolves `device_string` per `get_device_and_dtype` (autodetect / backend-availability
+        check / CPU fallback).
+      - Coerces `dtype` to `torch.float32` if the resolved device is CPU and `torch.float16`
+        was requested (CPU has no half precision).
+      - Injects a `device_name` field with a human-readable label: the GPU model name for
+        CUDA, the backend name (`"MPS"`, `"XPU"`, `"Vulkan"`) for the rest, `"CPU"` otherwise.
     """
     unique_cuda_gpus = set()
     for component, record in device_config.items():
@@ -77,19 +160,13 @@ def validate(device_config):
 
         record["device_string"] = device_string
         record["dtype"] = dtype
+        record["device_name"] = _device_label(device_string)
 
-        if device_string.startswith("cuda") and torch.cuda.is_available():
-            record["device_name"] = torch.cuda.get_device_name(record["device_string"])
-        elif device_string.startswith("cuda") and torch.backends.mps.is_available():
-            record["device_name"] = "MPS"
-        else:
-            record["device_name"] = "CPU"
+        if device_string.startswith("cuda"):
+            unique_cuda_gpus.add((device_string, record["device_name"]))
 
-        if record["device_string"].startswith("cuda"):
-            unique_cuda_gpus.add((record["device_string"], record["device_name"]))
-
-        dtype_string = f", dtype {record['dtype']}" if record['dtype'] is not None else ""
-        logger.info(f"Compute device for '{component}' is '{record['device_string']}'{dtype_string}")
+        dtype_string = f", dtype {dtype}" if dtype is not None else ""
+        logger.info(f"Compute device for '{component}' is '{device_string}'{dtype_string}")
 
     if torch.cuda.is_available():
         for device_string, device_name in sorted(unique_cuda_gpus):
@@ -97,7 +174,7 @@ def validate(device_config):
             logger.info(f"    {torch.cuda.get_device_properties(device_string)}")
             logger.info(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(device_string))}")
             logger.info(f"    Detected CUDA version {torch.version.cuda}")
-    # TODO: Torch MPS backend info? There doesn't seem to be anything useful in `torch.backends.mps`.
+    # TODO: per-backend info for MPS / XPU / Vulkan? Their public APIs don't seem to expose anything analogous to `torch.cuda.get_device_properties` yet.
 
 def cuda_sanity_check() -> bool:
     """Probe CUDA + NVRTC at startup; warn loudly on a known silent-failure mode.
