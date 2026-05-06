@@ -217,7 +217,7 @@ class FileDialog:
             ]
 
             # Determine the appropriate unit for formatting
-            if not file_size_bytes == "-":
+            if not file_size_bytes == "-":  # noqa: SIM201 -- vendored upstream code, leave as-is
                 for unit, size_limit in size_units:
                     if file_size_bytes >= size_limit:
                         # Calculate the size in the selected unit

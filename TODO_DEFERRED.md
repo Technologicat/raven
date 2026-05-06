@@ -401,18 +401,6 @@ Vendored prints (e.g. THA3's "Loading the eyebrow decomposer … DONE!!!" at `ra
 
 Discovered during the logsetup smoke test (2026-04-30).
 
-## Pre-existing ruff errors in three modified files
-
-After the logsetup sweep, three files surfaced ruff errors that pre-date this work and aren't regressions:
-
-- `raven/common/gui/utils.py:374` — SIM103 (`if X: return True; return False` could be `return X`).
-- `raven/vendor/anime4k/anime4k.py:137` — E721 (`type(stack_list) == int` should be `isinstance(stack_list, int)`); vendored, treat carefully.
-- `raven/vendor/file_dialog/fdialog.py` — `if not file_size_bytes == "-":` could be `!=`; vendored.
-
-Per the project style guide, "Don't rewrite working code to satisfy a linter" — for the vendored ones, a `# noqa: CODE -- reason` at the call site is preferred over a refactor. The `gui/utils.py` one is fine to inline. Quick cleanup, ~5 min total.
-
-Discovered during the logsetup sweep (2026-04-29).
-
 ## Hybridir: BM25 backend migration for larger corpora
 
 `bm25s` rebuilds the entire keyword index on every commit (full corpus → full reindex; IDF changes mean it can't be incremental in this design). Sub-second on ~1k small documents, so a non-issue today. Will start to pinch around the 10k–100k mark.

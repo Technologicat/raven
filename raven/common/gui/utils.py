@@ -371,7 +371,7 @@ class nonexistent_ok:
     def __exit__(self, exctype, excvalue, traceback):
         if exctype is not None:
             self.errored = True
-            if _is_dpg_item_not_found(excvalue):
+            if _is_dpg_item_not_found(excvalue):  # noqa: SIM103 -- True/False are the context-manager protocol's suppress/reraise signals, not a generic boolean return
                 return True  # suppress
             return False  # reraise
 

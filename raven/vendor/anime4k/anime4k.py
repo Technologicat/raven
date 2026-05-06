@@ -134,7 +134,7 @@ class anime4k(nn.Module):
         """
         super(anime4k, self).__init__()
         self.act = CReLU()
-        if type(stack_list) == int:
+        if type(stack_list) == int:  # noqa: E721 -- vendored upstream code, leave as-is
             stack_list = list(range(-stack_list, 0))
         self.stack_list = stack_list
         self.scale = scale
