@@ -1,6 +1,6 @@
 """Semantic embedding / sentence embedding / text vectorization for Raven-server."""
 
-__all__ = ["init_module", "is_available", "embed_sentences"]
+__all__ = ["init_module", "is_available", "get_info", "embed_sentences"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -44,6 +44,28 @@ def init_module(config_module_name: str, device_string: str, dtype: Union[str, t
 def is_available() -> bool:
     """Return whether this module is up and running."""
     return (server_config is not None)
+
+def get_info() -> dict:
+    """Return engine metadata as a JSON-serializable dict.
+
+    Embeddings differ from STT/TTS in that the server can host several models
+    simultaneously (one per role; see `embedding_models` in the server config),
+    so the shape is keyed by role::
+
+        {"models": {"<role>": {"model": "<HF repo id>",
+                               "dimension": <int>},
+                    ...}}
+
+    `dimension` is the output vector length of the loaded model.
+    """
+    if server_config is None:
+        raise RuntimeError("get_info: module not initialized (did `init_module` succeed?)")
+    models = {}
+    for role, model_name in server_config.embedding_models.items():
+        embedder = embedders[role]
+        models[role] = {"model": model_name,
+                        "dimension": embedder.get_sentence_embedding_dimension()}
+    return {"models": models}
 
 def embed_sentences(text: Union[str, List[str]], model: str = "default") -> Union[List[float], List[List[float]]]:
     if model not in embedders:

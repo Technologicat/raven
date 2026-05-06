@@ -43,6 +43,7 @@ __all__ = ["initialize",
            "avatar_result_feed",  # this reads the AI avatar video stream
            "avatar_get_available_filters",  # shared between "avatar" and "imagefx" modules
            "classify_labels", "classify",
+           "embeddings_info",
            "embeddings_compute",
            "imagefx_process", "imagefx_process_file", "imagefx_process_array",
            "imagefx_upscale", "imagefx_upscale_file", "imagefx_upscale_array",
@@ -419,6 +420,26 @@ def classify(text: str) -> Dict[str, float]:
 
 # --------------------------------------------------------------------------------
 # Embeddings
+
+def embeddings_info() -> Dict[str, Any]:
+    """Get metadata about the loaded embedding models (per-role HF repo name and vector dimension).
+
+    Embeddings differ from STT/TTS in that the server can host several models
+    simultaneously (one per role; see `embedding_models` in the server config),
+    so the shape is keyed by role::
+
+        {"models": {"<role>": {"model": "<HF repo id>",
+                               "dimension": <int>},
+                    ...}}
+
+    Clients use this to size storage and to avoid hardcoding canonical values
+    that might drift if the server config changes.
+    """
+    util.require()
+    headers = copy.copy(util.api_config.raven_default_headers)
+    response = requests.get(f"{util.api_config.raven_server_url}/api/embeddings/info", headers=headers)
+    util.yell_on_error(response)
+    return response.json()
 
 def embeddings_compute(text: Union[str, List[str]],
                        model: str = "default") -> np.array:

@@ -8,10 +8,6 @@ Worth a pass across the fleet to find these and convert them. Low-risk (any call
 
 Discovered during avatar-client-crop brief review (2026-04-20).
 
-## `/api/embeddings/info` endpoint
-
-Parallel to the `/api/{stt,tts}/info` endpoints. Should expose at least model name and embedding dimension; add other engine metadata as use cases appear. Discovered during STT/TTS info-endpoint work (2026-04-21).
-
 ## Split `raven.common.nlptools` per backend (reduce import weight)
 
 `raven.common.nlptools` is a hub module: it imports `torch`, `transformers`, `sentence_transformers`, `flair`, `dehyphen`, and `spacy`. All five ML-engine loaders (spaCy, classifier, dehyphenator, embedder, translator) live in it, so importing the module drags the entire ML stack into any process that touches it.

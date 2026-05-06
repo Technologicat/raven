@@ -735,6 +735,32 @@ def api_classify_labels():
 # ----------------------------------------
 # module: embeddings
 
+@app.route("/api/embeddings/info")
+def api_embeddings_info():
+    """Return metadata about the loaded embedding models.
+
+    No inputs.
+
+    Output is JSON::
+
+        {"models": {"default": {"model": "Snowflake/snowflake-arctic-embed-l",
+                                "dimension": 1024},
+                    ...}}
+
+    The keys of `models` are roles (the keys of `embedding_models` in the server
+    config). For each role, `model` is the HuggingFace repo identifier the server
+    loaded for that role, and `dimension` is the output vector length. Clients use
+    this to size storage and to avoid hardcoding canonical values that might drift
+    if the server config changes.
+    """
+    if not embeddings.is_available():
+        abort(403, "Module 'embeddings' not running")
+    try:
+        return jsonify(embeddings.get_info())
+    except Exception as exc:
+        traceback.print_exc()
+        abort(400, f"api_embeddings_info: failed, reason: {type(exc)}: {exc}")
+
 @app.route("/api/embeddings/compute", methods=["POST"])
 def api_embeddings_compute():
     """Compute the vector embedding of one or more sentences of text.
