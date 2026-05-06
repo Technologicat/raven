@@ -1548,6 +1548,7 @@ try:
 except AttributeError:  # very basic sanity check while at it
     print(f"{Fore.RED}{Style.BRIGHT}Server config '{args.config}' (Python module) does not seem to be a Raven server config module.{Style.RESET_ALL}")
     raise
+deviceinfo.cuda_sanity_check()  # surfaces broken NVRTC up-front instead of letting it explode mid-request
 
 port = args.port if args.port else server_config.default_port
 host = "0.0.0.0" if args.listen else "localhost"

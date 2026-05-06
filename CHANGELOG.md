@@ -16,6 +16,8 @@
 
 - HTTP API: new `/api/embeddings/info` endpoint returns the loaded embedding models keyed by role (HF repo name and output vector dimension). Parallel to the existing `/api/stt/info` and `/api/tts/info`; lets clients size storage and avoid hardcoding values that drift when the server config changes.
 
+- *Raven-server*: NVRTC sanity check at startup. Compiles a trivial element-wise kernel via the jiterator path right after device validation, so a broken NVRTC runtime (missing `libnvrtc-builtins.so`, version skew between bundled and host CUDA) surfaces as a clear startup warning instead of an opaque crash the first time a JIT-compiled path runs. Adds ~300 ms to startup on healthy CUDA setups, nothing on CPU-only ones.
+
 - New `--log <path>` and `--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}` CLI options on all major apps (`raven-visualizer`, `raven-importer`, `raven-librarian`, `raven-server`, `raven-minichat`, `raven-xdot-viewer`, `raven-cherrypick`, `raven-conference-timer`, `raven-avatar-pose-editor`, `raven-avatar-settings-editor`) plus the bibliography tools that emit log records (`raven-pdf2bib`, `raven-wos2bib`, `raven-csv2bib`). `--log` mirrors stderr to a file (overwritten each run) so users can capture session logs for bug reports without redirecting their terminal — especially useful for the GUI apps where the launching terminal is often a side window. The logfile path accepts `~` and is resolved to an absolute path. The mirroring survives third-party libraries (notably `flair`) that call `logging.shutdown()` on import.
 
 **Fixed**:

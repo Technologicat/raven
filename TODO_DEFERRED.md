@@ -343,12 +343,6 @@ The settings editor currently presents filters in a fixed priority order, with a
 
 Discovered during postprocessor chain ordering redesign (2026-04-09).
 
-## raven-server: CUDA sanity check at startup
-
-raven-server boots without complaint even when NVRTC is broken (missing `libnvrtc-builtins.so`). The error only surfaces later when something triggers JIT compilation. Server startup should probe CUDA early (e.g. a trivial JIT-compiled kernel or `torch.cuda.is_available()` + an NVRTC smoke test) and log a clear warning/error if the environment is misconfigured.
-
-Discovered during demo prep (2026-03-26).
-
 ## raven.papers user manual
 
 The `raven.papers` tool collection has grown to the point where it deserves its own user manual, like Visualizer, Librarian and Server already have.

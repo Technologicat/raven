@@ -1,7 +1,8 @@
 """A very simple PyTorch GPU configuration validator with automatic CPU fallback."""
 
 __all__ = ["get_device_and_dtype",
-           "validate"]
+           "validate",
+           "cuda_sanity_check"]
 
 import logging
 logger = logging.getLogger(__name__)
@@ -97,3 +98,52 @@ def validate(device_config):
             logger.info(f"    Compute capability {'.'.join(str(x) for x in torch.cuda.get_device_capability(device_string))}")
             logger.info(f"    Detected CUDA version {torch.version.cuda}")
     # TODO: Torch MPS backend info? There doesn't seem to be anything useful in `torch.backends.mps`.
+
+def cuda_sanity_check() -> bool:
+    """Probe CUDA + NVRTC at startup; warn loudly on a known silent-failure mode.
+
+    `torch.cuda.is_available()` returns True even when JIT-compilation paths are
+    broken — most commonly a misconfigured or missing NVRTC runtime (e.g.
+    `libnvrtc-builtins.so` not on the loader path, or a CUDA-version skew between
+    the bundled and host NVRTC). The error then surfaces only when something
+    triggers JIT compilation (postprocessor warm-up, `torch.compile`, jiterator
+    paths, …), typically well after the server has reported itself ready.
+
+    Compile a trivial element-wise kernel via the jiterator path, which exercises
+    NVRTC end-to-end. ~300 ms one-shot at the first call in a process; cheap on
+    subsequent calls.
+
+    Returns True if CUDA + NVRTC are healthy, or if no CUDA backend was reported
+    available (CPU-only setups bypass the NVRTC stack entirely and need no
+    probe). Returns False if a probe was attempted and failed; the caller may
+    use this to abort or downgrade.
+
+    There is no MPS counterpart to this probe — not because MPS failures are eager
+    (they aren't; they surface when the offending op runs, same as the NVRTC class
+    of CUDA failures) but because there's no analogous infra-layer split that a
+    startup probe could exercise. CUDA splits cleanly into "is the device there"
+    (`cuda.is_available()`) and "does JIT compilation work" (NVRTC), and a tiny
+    fixed kernel exercises NVRTC for any CUDA workload, so a single startup probe
+    catches the gap. On MPS there's no equivalent shared component that can be
+    silently broken while `mps.is_available()` returns True; the failures that
+    matter (this op has no MPS implementation, this dtype is unsupported) depend
+    entirely on which ops the actual workload calls, so a generic probe wouldn't
+    catch anything `validate()` doesn't already catch — only running the real
+    workload does.
+    """
+    if not torch.cuda.is_available():
+        return True
+    try:
+        fn = torch.cuda.jiterator._create_jit_fn(
+            "template <typename T> T raven_probe(T a) { return a + T(1); }"
+        )
+        x = torch.zeros(1, device="cuda")
+        fn(x).cpu()  # `.cpu()` forces a sync so a launch failure is observed here, not later
+    except Exception as exc:
+        logger.warning(
+            f"cuda_sanity_check: CUDA reports available, but the NVRTC smoke test failed. "
+            f"JIT-compiled code paths will likely error later. Reason: {type(exc)}: {exc}"
+        )
+        return False
+    logger.info("cuda_sanity_check: CUDA + NVRTC OK.")
+    return True
