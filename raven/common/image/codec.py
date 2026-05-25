@@ -12,9 +12,12 @@ separately via `raven.common.image.utils.ensure_rgba`.
 
 __all__ = ["IMAGE_EXTENSIONS", "encode", "decode"]
 
+import ctypes.util
 import io
 import logging
 import pathlib
+import platform
+import subprocess
 from typing import BinaryIO, Optional, Union
 
 import numpy as np
@@ -34,7 +37,13 @@ _turbojpeg_instance = None
 
 try:
     from turbojpeg import TurboJPEG, TJPF_RGB
-    _turbojpeg_instance = TurboJPEG()
+    if platform.system() == "Darwin":  # macOS
+        _turbojpeg_path = f"{subprocess.check_output(['brew', '--prefix', 'jpeg-turbo']).decode().strip()}/lib/libturbojpeg.dylib"  # concretely on M-series: /opt/homebrew/opt/jpeg-turbo/lib/libturbojpeg.dylib
+    else:  # Linux, Windows
+        _turbojpeg_path = ctypes.util.find_library('turbojpeg')
+    if _turbojpeg_path is not None:
+        logger.info(f"codec: detected turbojpeg library '{_turbojpeg_path}'")
+    _turbojpeg_instance = TurboJPEG(_turbojpeg_path)
     _HAS_TURBOJPEG = True
     logger.info("codec: turbojpeg available — fast JPEG decode enabled")
 except ImportError:
