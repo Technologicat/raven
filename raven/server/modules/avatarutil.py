@@ -289,7 +289,10 @@ def torch_load_rgba_image(filename: str, target_w: int, target_h: int, device: s
     arr = np.asarray(pil_image.convert("RGBA"))  # [h, w, c], uint8, SRGB (gamma-corrected)
     arr = np.array(arr, dtype=np.float32) / 255  # uint8 -> [0, 1]
     numpy_image = _preprocess_poser_image(arr)  # -> [c, h, w], SRGB to linear, zero out transparent pixels
-    torch_image = torch.from_numpy(numpy_image).to(device).to(dtype)
+    # CPU doesn't support float16, while MPS (macOS) doesn't support float64.
+    # So before sending to device, convert to float32, which is available on all devices;
+    # and after sending, then convert to the final dtype.
+    torch_image = torch.from_numpy(numpy_image).to(torch.float32).to(device).to(dtype)
     return torch_image
 
 def torch_image_to_numpy(image: torch.tensor) -> np.array:
