@@ -211,18 +211,18 @@ class TaskManager:
 
         `wait`: Whether to wait for all tasks to exit before returning.
         """
-        logger.info(f"TaskManager.clear: instance '{self.name}': cancelling all tasks.")
+        logger.debug(f"TaskManager.clear: instance '{self.name}': cancelling all tasks.")
         with self.lock:
             for task_name in list(self.tasks.keys()):
                 self.cancel(task_name, pop=False)
         # Release the lock while we wait so that `_done_callback` can access the task list before we clear it.
         # TODO: We assume that `Future` will call the `done_callback` before marking itself as `done`. Should check the docs or source code for whether this is the case.
         if wait:
-            logger.info(f"TaskManager.clear: instance '{self.name}': waiting for tasks to exit.")
+            logger.debug(f"TaskManager.clear: instance '{self.name}': waiting for tasks to exit.")
             while not all(future.done() for future, e in self.tasks.values()):
                 time.sleep(0.01)
         with self.lock:
-            logger.info(f"TaskManager.clear: instance '{self.name}': clearing task list.")
+            logger.debug(f"TaskManager.clear: instance '{self.name}': clearing task list.")
             self.tasks.clear()
 
 class ManagedTask:
