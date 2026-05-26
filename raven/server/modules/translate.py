@@ -6,7 +6,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 import importlib
-import traceback
 from typing import List, Optional, Union
 
 from colorama import Fore, Style
@@ -51,10 +50,9 @@ def init_module(config_module_name: str,
         nlp_pipe = nlptools.load_spacy_pipeline(spacy_model_name,
                                                 spacy_device_string)
 
-    except Exception as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'translate'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+    except Exception:
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'translate'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("init_module: failed")
         server_config = None
         translators.clear()
         nlp_pipe = None

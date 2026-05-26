@@ -36,7 +36,6 @@ import time
 import numpy as np
 import sys
 import threading
-import traceback
 from typing import Any, BinaryIO, Dict, List, Mapping, Optional, Tuple
 import uuid
 
@@ -129,10 +128,9 @@ def init_module(config_module_name: str, device: str, model: str) -> None:
         _model = model
         module_initialized = True
 
-    except RuntimeError as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'avatar'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+    except RuntimeError:
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'avatar'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("init_module: failed")
 
         _server_config = None
         _poser = None
@@ -171,9 +169,8 @@ def load(stream: BinaryIO, cel_streams: Dict[str, BinaryIO]) -> str:
         while instance_id in _avatar_instances:  # guarantee no conflict even if UUID generation fails (very low chance)
             instance_id = str(uuid.uuid4())
         assert instance_id is not None
-    except Exception as exc:
-        traceback.print_exc()
-        logger.error(f"load: failed: {type(exc)}: {exc}")
+    except Exception:
+        logger.exception("load: failed")
         raise
 
     encoder = None
@@ -188,9 +185,8 @@ def load(stream: BinaryIO, cel_streams: Dict[str, BinaryIO]) -> str:
         encoder.start()
 
         reload(instance_id, stream, cel_streams)  # delegate; actually load the image(s)
-    except Exception as exc:
-        traceback.print_exc()
-        logger.error(f"load: failed: {type(exc)}: {exc}")
+    except Exception:
+        logger.exception("load: failed")
 
         # Tear down anything that started before the error occurred.
         if encoder:
@@ -742,9 +738,8 @@ class Animator:
             while not self._terminated:
                 try:
                     self.render_animation_frame()
-                except Exception as exc:
-                    logger.error(exc)
-                    traceback.print_exc()
+                except Exception:
+                    logger.exception("Animator.start")
                     raise  # let the animator stop so we won't spam the log
                 time.sleep(0.01)  # rate-limit the renderer to 100 FPS maximum (this could be adjusted later)
         self.animator_thread = threading.Thread(target=animator_update, daemon=True)
@@ -830,8 +825,8 @@ class Animator:
         try:
             with open(animator_settings_path / "animator.json", "r", encoding="utf-8") as json_file:
                 server_settings = json.load(json_file)
-        except Exception as exc:
-            logger.warning(f"load_animator_settings: skipping server settings, reason: {type(exc)}: {exc}")
+        except Exception:
+            logger.warning("load_animator_settings: caught exception, skipping server settings", exc_info=True)
             server_settings = {}
 
         # Validation and filling helpers. Each recurses into nested dicts when the corresponding
@@ -966,12 +961,11 @@ class Animator:
             plural_s = "s" if len(self.data_eyes_celnames) != 1 else ""
             logger.info(f"load_image: This character has {len(self.data_eyes_celnames)} cel{plural_s} for the scifi 'data eyes' effect.")
             self._warmup_pending = True
-        except Exception as exc:
+        except Exception:
             self.source_image = None
             self.torch_cels = {}
-            print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (details below)")
-            traceback.print_exc()
-            logger.error(f"load_image: {type(exc)}: {exc}")
+            print(f"{Fore.RED}{Style.BRIGHT}ERROR{Style.RESET_ALL} (see server log for details)")
+            logger.exception("load_image")
         finally:
             self.animation_running = old_animation_running
 
@@ -1814,9 +1808,8 @@ class Encoder:
                             wait_elapsed_sec = 0.0
 
                         self.current_frame = current_frame  # atomic replace so no need for a lock
-                    except Exception as exc:
-                        logger.error(exc)
-                        traceback.print_exc()
+                    except Exception:
+                        logger.exception("Encoder.start")
                         raise  # let the encoder shut down so we won't spam the log
 
                     # Update FPS counter.

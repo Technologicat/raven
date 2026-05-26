@@ -171,8 +171,8 @@ def minimal_chat_client(backend_url) -> None:
             try:
                 new_chat_node_id = app_state["new_chat_HEAD"]
                 system_prompt_node_id = datastore.get_parent(new_chat_node_id)
-            except KeyError as exc:
-                logger.warning(f"During app shutdown: while pruning chat forest: {type(exc)}: {exc}")
+            except KeyError:
+                logger.warning("During app shutdown: while pruning chat forest", exc_info=True)
             else:
                 datastore.prune_unreachable_nodes(system_prompt_node_id)
                 datastore.prune_dead_links(system_prompt_node_id)

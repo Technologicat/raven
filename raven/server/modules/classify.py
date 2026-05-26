@@ -5,7 +5,6 @@ __all__ = ["init_module", "is_available", "classify_text"]
 import logging
 logger = logging.getLogger(__name__)
 
-import traceback
 from typing import Union
 
 from colorama import Fore, Style
@@ -23,10 +22,9 @@ def init_module(model_name: str, device_string: str, dtype: Union[str, torch.dty
         classifier = nlptools.load_classifier(model_name,
                                               device_string,
                                               dtype)
-    except Exception as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'classify'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+    except Exception:
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'classify'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("init_module: failed")
         classifier = None
 
 def is_available() -> bool:

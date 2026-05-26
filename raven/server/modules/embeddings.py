@@ -6,7 +6,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 import importlib
-import traceback
 from typing import List, Union
 
 from colorama import Fore, Style
@@ -34,10 +33,9 @@ def init_module(config_module_name: str, device_string: str, dtype: Union[str, t
                                                      device_string,
                                                      dtype)
             embedders[model_name] = embedders[role]  # also provide each model under its HuggingFace model name; this is convenient for HybridIR when it loads a database from disk.
-    except Exception as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'embeddings'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+    except Exception:
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'embeddings'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("init_module: failed")
         server_config = None
         embedders.clear()
 

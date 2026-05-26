@@ -113,8 +113,8 @@ def raven_server_available() -> bool:
     headers = copy.copy(util.api_config.raven_default_headers)
     try:
         response = requests.get(f"{util.api_config.raven_server_url}/health", headers=headers)
-    except requests.exceptions.ConnectionError as exc:
-        logger.error(f"raven_server_available: {type(exc)}: {exc}")
+    except requests.exceptions.ConnectionError:
+        logger.exception("raven_server_available")
         return False
     return response.status_code == 200
 

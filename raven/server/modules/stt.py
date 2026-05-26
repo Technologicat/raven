@@ -12,7 +12,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 import importlib
-import traceback
 from typing import BinaryIO, Optional, Union
 
 from colorama import Fore, Style
@@ -36,11 +35,10 @@ def init_module(config_module_name: str, device_string: str, dtype: Union[str, t
 
         logger.info(f"init_module: loading model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}' on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'.")
         _stt_model = speech_stt.load_stt_model(model_name, device_string, dtype)
-    except Exception as exc:
+    except Exception:
         _stt_model = None
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'stt'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'stt'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("init_module: failed")
 
 def is_available() -> bool:
     """Return whether this module is up and running."""

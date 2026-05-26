@@ -12,7 +12,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 import threading
-import traceback
 from typing import Any, BinaryIO, Dict, List, Union
 
 from colorama import Fore, Style
@@ -36,10 +35,9 @@ def init_module(device_string: str, dtype: Union[str, torch.dtype]) -> None:
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}imagefx{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}'...")
     try:
         postprocessor = Postprocessor(device_string, dtype, chain=[])
-    except Exception as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'imagefx'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+    except Exception:
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'imagefx'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("init_module: failed")
         postprocessor = None
 
 def is_available() -> bool:
@@ -76,10 +74,9 @@ def process(input_stream: BinaryIO,
         encoded_image_bytes = imagecodec.encode(image_rgba, output_format)
 
         logger.info("process: all done")
-    except Exception as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during `process` in module 'imagefx'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"process: failed: {type(exc)}: {exc}")
+    except Exception:
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during `process` in module 'imagefx'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("process: failed")
         raise
 
     return encoded_image_bytes
@@ -137,10 +134,9 @@ def upscale(input_stream: BinaryIO,
         encoded_image_bytes = imagecodec.encode(image_rgba, output_format)
 
         logger.info("upscale: all done")
-    except Exception as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during `upscale` in module 'imagefx'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"upscale: failed: {type(exc)}: {exc}")
+    except Exception:
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during `upscale` in module 'imagefx'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("upscale: failed")
         raise
 
     return encoded_image_bytes

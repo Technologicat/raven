@@ -81,7 +81,6 @@ with timer() as tim:
     import sys
     import threading
     import time
-    import traceback
     from typing import Dict, List, Tuple, Optional, Union
 
     import PIL.Image
@@ -998,8 +997,7 @@ class PoseEditorGUI:
 
             logger.info(f"PoseEditorGUI.load_image: Loaded image '{image_file_name}'.")
         except Exception as exc:
-            traceback.print_exc()
-            logger.error(f"PoseEditorGUI.load_image: Could not load image '{image_file_name}', reason: {type(exc)}: {exc}")
+            logger.exception(f"PoseEditorGUI.load_image: Could not load image '{image_file_name}'")
             self.torch_base_image = None
             self.render_needed = True
             messagebox.modal_dialog(window_title="Error",
@@ -1038,8 +1036,7 @@ class PoseEditorGUI:
             # Apply the loaded emotion
             self.set_current_pose(pose, celstack)
         except Exception as exc:
-            traceback.print_exc()
-            logger.error(f"PoseEditorGUI.load_json: Could not load emotion file '{json_file_name}', reason: {type(exc)}: {exc}")
+            logger.exception(f"PoseEditorGUI.load_json: Could not load emotion file '{json_file_name}'")
             messagebox.modal_dialog(window_title="Error",
                                     message=f"Could not load emotion file '{json_file_name}', reason {type(exc)}: {exc}",
                                     buttons=["Close"],
@@ -1161,10 +1158,9 @@ class PoseEditorGUI:
 
                 self.last_output_numpy_image = numpy_output_image  # for file saving
             except Exception as exc:
-                traceback.print_exc()
                 dpg.set_value(self.result_image_texture, self.blank_texture)
                 dpg.show_item("result_no_image_loaded_text")
-                logger.error(f"Could not render, reason: {type(exc)}: {exc}")
+                logger.exception("Could not render, caught exception")
                 messagebox.modal_dialog(window_title="Error",
                                         message=f"Could not render, reason {type(exc)}: {exc}",
                                         buttons=["Close"],
@@ -1251,8 +1247,8 @@ class PoseEditorGUI:
                                       celstack,
                                       posedict,
                                       image_file_name)
-            except Exception as exc:
-                logger.error(f"Could not save '{image_file_name}', reason: {type(exc)}: {exc}")
+            except Exception:
+                logger.exception(f"Could not save '{image_file_name}'")  # TODO: This may need an error dialog (gathering all errors first), too?
 
         # Save `_emotions.json`, for use as customized emotion templates.
         #
@@ -1307,8 +1303,8 @@ class PoseEditorGUI:
             pil_image = PIL.Image.fromarray(numpy_image, mode="RGBA")
             os.makedirs(os.path.dirname(image_file_name), exist_ok=True)
             pil_image.save(image_file_name)
-        except Exception as exc:
-            logger.error(f"Could not save '{image_file_name}', reason: {type(exc)}: {exc}")
+        except Exception:
+            logger.exception(f"Could not save '{image_file_name}'")
         else:
             logger.info(f"Saved image '{image_file_name}'")
 
@@ -1322,8 +1318,8 @@ class PoseEditorGUI:
         try:
             with open(json_file_path, "w", encoding="utf-8") as file:
                 json.dump(data_dict_with_filename, file, indent=4)
-        except Exception as exc:
-            logger.error(f"Could not save '{json_file_path}', reason: {type(exc)}: {exc}")
+        except Exception:
+            logger.exception(f"Could not save '{json_file_path}'")
         else:
             logger.info(f"Saved emotion file '{json_file_path}'")
 

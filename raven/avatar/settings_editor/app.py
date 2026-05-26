@@ -46,7 +46,6 @@ with timer() as tim:
     import sys
     import threading
     import time
-    import traceback
     from typing import Any, Dict, Optional, Union
 
     from colorama import Fore, Style, init as colorama_init
@@ -1123,8 +1122,7 @@ class PostprocessorSettingsEditorGUI:
             api.avatar_reload(avatar_instance_id, filename)
             self.current_input_image_path = filename
         except Exception as exc:
-            logger.error(f"PostprocessorSettingsEditorGUI.load_input_image: {type(exc)}: {exc}")
-            traceback.print_exc()
+            logger.exception("PostprocessorSettingsEditorGUI.load_input_image")
             messagebox.modal_dialog(window_title="Error",
                                     message=f"Could not load image '{filename}', reason {type(exc)}: {exc}",
                                     buttons=["Close"],
@@ -1144,8 +1142,7 @@ class PostprocessorSettingsEditorGUI:
             logger.info(f"PostprocessorSettingsEditorGUI.load_json: loading emotion templates '{filename}'")
             api.avatar_load_emotion_templates_from_file(avatar_instance_id, filename)
         except Exception as exc:
-            logger.error(f"PostprocessorSettingsEditorGUI.load_json: {type(exc)}: {exc}")
-            traceback.print_exc()
+            logger.exception("PostprocessorSettingsEditorGUI.load_json")
             messagebox.modal_dialog(window_title="Error",
                                     message=f"Could not load emotion templates '{filename}', reason {type(exc)}: {exc}",
                                     buttons=["Close"],
@@ -1177,8 +1174,7 @@ class PostprocessorSettingsEditorGUI:
             with open(animator_json_path, "r", encoding="utf-8") as json_file:
                 animator_settings = json.load(json_file)
         except Exception as exc:
-            logger.error(f"PostprocessorSettingsEditorGUI.on_load_postprocessor_defaults: {type(exc)}: {exc}")
-            traceback.print_exc()
+            logger.exception("PostprocessorSettingsEditorGUI.on_load_postprocessor_defaults")
             messagebox.modal_dialog(window_title="Error",
                                     message=f"Could not read defaults from '{str(animator_json_path)}', reason {type(exc)}: {exc}",
                                     buttons=["Close"],
@@ -1271,9 +1267,8 @@ class PostprocessorSettingsEditorGUI:
 
             # Send to server
             api.avatar_load_animator_settings(avatar_instance_id, self.animator_settings)
-        except Exception as exc:
-            logger.error(f"PostprocessorSettingsEditorGUI.on_gui_settings_change: {type(exc)}: {exc}")
-            traceback.print_exc()
+        except Exception:
+            logger.exception("PostprocessorSettingsEditorGUI.on_gui_settings_change")
 
     def load_animator_settings(self, filename: Union[pathlib.Path, str]) -> None:
         """Load an animator settings JSON file and send the settings both to the GUI and to Raven-server."""
@@ -1352,8 +1347,7 @@ class PostprocessorSettingsEditorGUI:
             # ...and only if that is successful, remember the settings.
             self.animator_settings = animator_settings
         except Exception as exc:
-            logger.error(f"PostprocessorSettingsEditorGUI.load_animator_settings: {type(exc)}: {exc}")
-            traceback.print_exc()
+            logger.exception("PostprocessorSettingsEditorGUI.load_animator_settings")
             messagebox.modal_dialog(window_title="Error",
                                     message=f"Could not load animator settings '{str(filename)}', reason {type(exc)}: {exc}",
                                     buttons=["Close"],
@@ -1376,8 +1370,7 @@ class PostprocessorSettingsEditorGUI:
             with open(filename, "w", encoding="utf-8") as json_file:
                 json.dump(self.animator_settings, json_file, indent=4)
         except Exception as exc:
-            logger.error(f"PostprocessorSettingsEditorGUI.save_animator_settings: {type(exc)}: {exc}")
-            traceback.print_exc()
+            logger.exception("PostprocessorSettingsEditorGUI.save_animator_settings")
             messagebox.modal_dialog(window_title="Error",
                                     message=f"Could not save animator settings '{str(filename)}', reason {type(exc)}: {exc}",
                                     buttons=["Close"],
@@ -1793,9 +1786,8 @@ def _load_initial_animator_settings():
             animator_settings.update(custom_animator_settings)
             with open(animator_json_path, "w", encoding="utf-8") as json_file:
                 json.dump(animator_settings, json_file, indent=4)
-        except Exception as exc:
-            logger.error(f"_load_initial_animator_settings: Failed to write default config, bailing out: {type(exc)}: {exc}")
-            traceback.print_exc()
+        except Exception:
+            logger.exception("_load_initial_animator_settings: Failed to write default config, bailing out")
             raise
 
     gui_instance.load_animator_settings(animator_json_path)

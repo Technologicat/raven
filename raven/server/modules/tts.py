@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 import importlib
 import json
-import traceback
 from typing import List, Optional
 import urllib.parse
 
@@ -52,11 +51,10 @@ def init_module(config_module_name: str, device_string: str, lang_code: str = "a
         _pipeline = speech_tts.load_tts_pipeline(model_name=server_config.kokoro_models,
                                                  device_string=device_string,
                                                  lang_code=lang_code)
-    except Exception as exc:
+    except Exception:
         _pipeline = None
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'tts'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'tts'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("init_module: failed")
 
 def is_available() -> bool:
     """Return whether this module is up and running."""

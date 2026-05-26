@@ -5,7 +5,6 @@ __all__ = ["init_module", "is_available", "dehyphenate"]
 import logging
 logger = logging.getLogger(__name__)
 
-import traceback
 from typing import List, Union
 
 from colorama import Fore, Style
@@ -20,10 +19,9 @@ def init_module(model_name: str,
     print(f"Initializing {Fore.GREEN}{Style.BRIGHT}sanitize{Style.RESET_ALL} on device '{Fore.GREEN}{Style.BRIGHT}{device_string}{Style.RESET_ALL}' with model '{Fore.GREEN}{Style.BRIGHT}{model_name}{Style.RESET_ALL}'...")
     try:
         dehyphenator = nlptools.load_dehyphenator(model_name, device_string)
-    except Exception as exc:
-        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'sanitize'.{Style.RESET_ALL} Details follow.")
-        traceback.print_exc()
-        logger.error(f"init_module: failed: {type(exc)}: {exc}")
+    except Exception:
+        print(f"{Fore.RED}{Style.BRIGHT}Internal server error during init of module 'sanitize'.{Style.RESET_ALL} See server log for details.")
+        logger.exception("init_module: failed")
         dehyphenator = None
 
 def is_available() -> bool:

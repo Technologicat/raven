@@ -62,13 +62,11 @@ def main() -> None:
     logger.info(f"        NLP model (spaCy): {visualizer_config.spacy_model}")
     logger.info(f"    Summarize via LLM: {visualizer_config.summarize}")
 
-    import traceback
     try:
         with timer() as tim:
             importer.import_bibtex(None, opts.output_filename, *opts.input_filenames)
     except Exception:
-        logger.warning(f"Error after {tim.dt:0.6g}s total:")
-        traceback.print_exc()
+        logger.warning(f"Error after {tim.dt:0.6g}s total", exc_info=True)
     else:
         logger.info(f"All done in {tim.dt:0.6g}s total.")
 

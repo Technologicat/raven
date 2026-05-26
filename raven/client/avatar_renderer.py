@@ -31,7 +31,6 @@ import platform
 import qoi
 import threading
 import time
-import traceback
 from typing import Any, Callable, Mapping, Optional, Tuple, Union
 
 import PIL.Image
@@ -871,9 +870,8 @@ class DPGAvatarRenderer:
                     maybe_set_fps_counter(describe_performance(mimetype, h, w, server_stats))
             except EOFError:  # `result_feed` has shut down (normal at app exit, after we call `api.avatar_unload`)
                 logger.info("DPGAvatarRenderer.start.update_live_texture: Stream closed, shutting down.")
-            except Exception as exc:
-                traceback.print_exc()
-                logger.error(f"DPGAvatarRenderer.start.update_live_texture: {type(exc)}: {exc}")
+            except Exception:
+                logger.exception("DPGAvatarRenderer.start.update_live_texture")
 
                 # TODO: recovery if the server comes back online
                 dpg.set_value(self.paused_text_gui_widget, "[Connection lost]")

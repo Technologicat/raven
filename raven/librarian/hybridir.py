@@ -290,8 +290,8 @@ class HybridIR:
                                                         settings=chromadb.Settings(anonymized_telemetry=False))
         try:
             self._vector_collection = self._vector_client.get_collection(name="embeddings")  # try loading existing vector index
-        except Exception as exc:  # vector index missing
-            logger.warning(f"HybridIR.__init__: While loading vector index from '{str(self.semantic_index_path)}': {type(exc)}: {exc}")
+        except Exception:  # vector index missing
+            logger.warning(f"HybridIR.__init__: Caught exception while loading vector index from '{str(self.semantic_index_path)}'", exc_info=True)
 
             logger.info(f"HybridIR.__init__: Vector index not found. Creating new (blank) vector index at '{str(self.semantic_index_path)}'.")
             self._vector_collection = self._vector_client.create_collection(name="embeddings",
@@ -311,7 +311,7 @@ class HybridIR:
                                                       load_corpus=True)
             self._build_full_id_to_record_index()
         except Exception as exc:  # keyword index missing
-            logger.warning(f"HybridIR.__init__: While loading keyword index from '{str(self.keyword_index_path)}': {type(exc)}: {exc}")
+            logger.warning(f"HybridIR.__init__: Caught exception while loading keyword index from '{str(self.keyword_index_path)}'", exc_info=True)
             logger.info(f"HybridIR.__init__: Keyword index not found. Will create keyword index at '{str(self.keyword_index_path)}'.")
 
             if self.documents:  # suppress log message when no documents to process
@@ -535,8 +535,8 @@ class HybridIR:
         if fire_start and self._on_indexing_start is not None:
             try:
                 self._on_indexing_start()
-            except Exception as exc:
-                logger.error(f"HybridIR.commit: on_indexing_start raised: {type(exc)}: {exc}")
+            except Exception:
+                logger.exception("HybridIR.commit: on_indexing_start raised")
         try:
             self._commit_body(task_env=task_env)
         finally:
@@ -549,8 +549,8 @@ class HybridIR:
             if fire_done and self._on_indexing_done is not None:
                 try:
                     self._on_indexing_done()
-                except Exception as exc:
-                    logger.error(f"HybridIR.commit: on_indexing_done raised: {type(exc)}: {exc}")
+                except Exception:
+                    logger.exception("HybridIR.commit: on_indexing_done raised")
 
     def _commit_body(self, task_env: Optional[envcls]) -> None:
         # Pop pending edits without `datastore_lock` — only `_pending_edits_lock` guards that list.
@@ -612,16 +612,15 @@ class HybridIR:
                             old_chunk_ids = [format_chunk_full_id(document_id, chunk["chunk_id"]) for chunk in doc["chunks"]]
                             self.documents.pop(document_id)
                             self._vector_collection.delete(ids=old_chunk_ids)
-                        except KeyError as exc:
-                            logger.warning(f"HybridIR.commit: Ignoring error: While deleting document with ID '{document_id}': {type(exc)}: {exc}")
+                        except KeyError:
+                            logger.warning(f"HybridIR.commit: Ignoring error: While deleting document with ID '{document_id}'", exc_info=True)
 
                 else:  # should not happen, but let's log it
                     msg = f"HybridIR.commit: Unknown pending change type '{edit_kind}'. Ignoring."
                     logger.warning(msg)
-            except Exception as exc:
+            except Exception:
                 errors_occurred += 1
-                logger.error(f"While applying changes: {type(exc)}: {exc}")
-                logger.info("Attempting to continue with remaining edits, if any.")
+                logger.exception("HybridIR.commit: Caught exception while applying changes. Attempting to continue with remaining edits, if any.")
             eta_estimator.tick()
 
         # Partial save: persist whatever was applied. The keyword index rebuilds from `self.documents`
@@ -691,8 +690,8 @@ class HybridIR:
                 plural_s = "s" if len(documents) != 1 else ""
                 logger.info(f"HybridIR._load_datastore: Loaded datastore with embedding model '{stored_embedding_model_name}' from '{str(self.fulldocs_path)}' ({len(documents)} document{plural_s}).")
                 return stored_embedding_model_name, documents
-            except Exception as exc:  # likely datastore not created yet
-                logger.warning(f"HybridIR._load_datastore: While loading datastore from '{str(self.fulldocs_path)}': {type(exc)}: {exc}")
+            except Exception:  # likely datastore not created yet
+                logger.warning(f"HybridIR._load_datastore: While loading datastore from '{str(self.fulldocs_path)}'", exc_info=True)
                 return None, None
 
     # TODO: support other media such as images (semantic embedding via `clip-ViT-L-14`, available in `sentence_transformers`; and keyword extraction by CLIP/Deepbooru)

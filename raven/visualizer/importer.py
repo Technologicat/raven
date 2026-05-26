@@ -1043,8 +1043,7 @@ def start_task(started_callback, done_callback, output_filename, *input_filename
         # But now `TaskManager._done_callback` does this. However, we need to update the GUI with the
         # error message.
         except Exception as exc:
-            logger.warning(f"importer_task: {task_env.task_name}: exited with exception {type(exc)}: {exc}")
-            # traceback.print_exc()  # DEBUG; `TaskManager._done_callback` now does this.
+            logger.warning(f"importer_task: {task_env.task_name}: exited with exception", exc_info=True)
             exc_msg = exc.args[0] if (hasattr(exc, "args") and exc.args and exc.args[0]) else f"{type(exc)} (see log for details)"  # show exception message if available, else the type
             update_status(f"Error during import: {exc_msg}")
             task_env.result_code = result_errored

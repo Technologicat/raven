@@ -29,7 +29,6 @@ __all__ = ["play_encoded", "play_encoded_with_lipsync"]
 import io
 import logging
 import time
-import traceback
 from typing import Callable, Optional
 
 from unpythonic import sym
@@ -51,9 +50,8 @@ def _fire(callback: Optional[Callable], label: str) -> None:
         return
     try:
         callback()
-    except Exception as exc:
-        logger.error(f"{label}: {type(exc)}: {exc}")
-        traceback.print_exc()
+    except Exception:
+        logger.exception(label)
 
 
 def play_encoded(audio_bytes: bytes,
@@ -92,9 +90,8 @@ def play_encoded(audio_bytes: bytes,
     if on_audio_ready is not None:
         try:
             on_audio_ready(audio_bytes)
-        except Exception as exc:
-            logger.error(f"play_encoded: in on_audio_ready: {type(exc)}: {exc}")
-            traceback.print_exc()
+        except Exception:
+            logger.exception("play_encoded: in on_audio_ready")
 
     logger.info("play_encoded: loading audio into mixer")
     if player.is_playing():
@@ -102,8 +99,8 @@ def play_encoded(audio_bytes: bytes,
     audio_buffer = io.BytesIO(audio_bytes)
     try:
         player.load(audio_buffer)
-    except RuntimeError as exc:
-        logger.error(f"play_encoded: failed to load audio into mixer, reason {type(exc)}: {exc}")
+    except RuntimeError:
+        logger.exception("play_encoded: failed to load audio into mixer")
         return
 
     # Fire-and-forget shortcut: with `on_stop=None`, don't wait for playback to finish.
@@ -165,9 +162,8 @@ def play_encoded_with_lipsync(audio_bytes: bytes,
     if on_audio_ready is not None:
         try:
             on_audio_ready(audio_bytes)
-        except Exception as exc:
-            logger.error(f"play_encoded_with_lipsync: in on_audio_ready: {type(exc)}: {exc}")
-            traceback.print_exc()
+        except Exception:
+            logger.exception("play_encoded_with_lipsync: in on_audio_ready")
 
     logger.info("play_encoded_with_lipsync: loading audio into mixer")
     if player.is_playing():
@@ -175,8 +171,8 @@ def play_encoded_with_lipsync(audio_bytes: bytes,
     audio_buffer = io.BytesIO(audio_bytes)
     try:
         player.load(audio_buffer)
-    except RuntimeError as exc:
-        logger.error(f"play_encoded_with_lipsync: failed to load audio into mixer, reason {type(exc)}: {exc}")
+    except RuntimeError:
+        logger.exception("play_encoded_with_lipsync: failed to load audio into mixer")
         return
 
     if clock is None:

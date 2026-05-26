@@ -765,8 +765,8 @@ class PersistentForest(Forest):
             try:
                 with open(absolute_path, "r", encoding="utf-8") as json_file:
                     data = json.load(json_file)
-            except Exception as exc:
-                logger.warning(f"PersistentForest._load: While loading datastore from '{str(absolute_path)}': {type(exc)}: {exc}")
+            except Exception:
+                logger.warning(f"PersistentForest._load: Caught exception while loading datastore from '{str(absolute_path)}'", exc_info=True)
                 logger.info(f"PersistentForest._load: Will create new datastore at '{str(absolute_path)}', at app shutdown.")
             else:
                 self._upgrade(data)

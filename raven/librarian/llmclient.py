@@ -518,9 +518,8 @@ def invoke(settings: env,
     except KeyboardInterrupt:  # on Ctrl+C, stop generating, and let the exception propagate
         stop_generating()
         raise
-    except requests.exceptions.ChunkedEncodingError as exc:
-        logger.error(f"invoke: Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
-        logger.error(f"{type(exc)}: {exc}")
+    except requests.exceptions.ChunkedEncodingError:
+        logger.exception(f"invoke: Connection lost. Please check if your LLM backend is still alive (was at {settings.backend_url}). Original error message follows.")
         raise
     llm_output_text = llm_output_text.getvalue()
 
@@ -778,8 +777,8 @@ def perform_tool_calls(settings: env,
         if on_call_done is not None:
             try:
                 on_call_done(toolcall_id, function_name, status, text)
-            except Exception as exc:
-                logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': ignoring exception from event handler `on_call_done`: {type(exc)}: {exc}")
+            except Exception:
+                logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': ignoring exception from event handler `on_call_done`", exc_info=True)
 
     for request_record in tool_calls:
         toolcall_id = request_record.get("id", None)
@@ -815,8 +814,8 @@ def perform_tool_calls(settings: env,
         if "arguments" in function_record:
             try:
                 kwargs = json.loads(function_record["arguments"])
-            except Exception as exc:
-                logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': failed to parse JSON for arguments: {type(exc)}: {exc}")
+            except Exception:
+                logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': failed to parse JSON for arguments", exc_info=True)
                 add_tool_response_record(f"Tool call failed. When calling '{function_name}', failed to parse the request's JSON for the function arguments.", status="error", toolcall_id=toolcall_id, function_name=function_name)
                 continue
             else:
@@ -829,13 +828,13 @@ def perform_tool_calls(settings: env,
         try:
             if on_call_start is not None:
                 on_call_start(toolcall_id, function_name, kwargs)
-        except Exception as exc:
-            logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': ignoring exception from event handler `on_call_start`: {type(exc)}: {exc}")
+        except Exception:
+            logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': ignoring exception from event handler `on_call_start`", exc_info=True)
         try:
             with timer() as tim:
                 tool_output_text = function(**kwargs)
         except Exception as exc:
-            logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': exited with exception {type(exc)}: {exc}")
+            logger.warning(f"perform_tool_calls: {toolcall_id}: function '{function_name}': exited with exception", exc_info=True)
             add_tool_response_record(f"Tool call failed. Function '{function_name}' exited with exception {type(exc)}: {exc}", status="error", toolcall_id=toolcall_id, function_name=function_name, dt=tim.dt)
         else:  # success!
             logger.debug(f"perform_tool_calls: {toolcall_id}: Function '{function_name}' returned successfully.")

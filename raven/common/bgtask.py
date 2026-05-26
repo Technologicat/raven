@@ -9,7 +9,6 @@ import collections
 import concurrent.futures
 import threading
 import time
-import traceback
 from typing import Callable
 
 from unpythonic import box, gensym, sym, Symbol, unbox
@@ -117,6 +116,9 @@ class TaskManager:
                `done_callback`, upon the completion or cancellation of that task, the reference
                to that task is only removed from the manager *after* the `done_callback` exits.
 
+               NOTE: The `done_callback` is run under the task manager's lock, so it **must not**
+                     call into the task manager; doing so will deadlock.
+
         Returns an `unpythonic.gsym` representing the task name. Task names are unique.
         """
         with self.lock:
@@ -152,6 +154,13 @@ class TaskManager:
         logger.debug(f"TaskManager._done_callback: instance '{self.name}': called for future '{future}'.")
         logger.debug(f"TaskManager._done_callback: instance '{self.name}': task list now: {self.tasks}.")
 
+        with self.lock:
+            task_name = self._find_task_by_future(future)
+            if task_name is not None:
+                logger.debug(f"TaskManager._done_callback: instance '{self.name}': future '{future}' belongs to task '{task_name}'.")
+            else:
+                logger.debug(f"TaskManager._done_callback: instance '{self.name}': future '{future}' has no task (likely already removed by `cancel`).")
+
         # Avoid silently swallowing exceptions from background tasks
         try:
             exc = future.exception()  # the future exited already, so we don't need to set a timeout
@@ -159,13 +168,11 @@ class TaskManager:
             pass
         else:
             if exc is not None:
-                logger.error(f"TaskManager._done_callback: instance '{self.name}': future '{future}' exited with exception {type(exc)}: {exc}")
-                traceback.print_exc()
+                logger.exception(f"TaskManager._done_callback: instance '{self.name}': future '{future}' for task '{task_name}' exited with exception")
 
         with self.lock:
-            task_name = self._find_task_by_future(future)
-            logger.debug(f"TaskManager._done_callback: instance '{self.name}': task lookup for future '{future}' returned '{task_name}'.")
-            if task_name is not None:  # not removed already? (`cancel` might have removed it)
+            task = self.tasks.get(task_name)  # re-validate: lock released across future.exception(), task may be gone
+            if task is not None:
                 logger.debug(f"TaskManager._done_callback: instance '{self.name}': '{task_name}' finalizing.")
 
                 # Call the custom done callback if provided.
@@ -173,13 +180,17 @@ class TaskManager:
                 # NOTE: We remove the task *after* calling the custom `done_callback`, so that the task still shows as running
                 # in our status until the `done_callback` has exited. The `done_callback` is considered to be part of the task.
                 # Strictly speaking, it is - it's a CPS continuation.
+                future, e = task
                 try:
-                    future, e = self.tasks[task_name]
                     if "done_callback" in e and e.done_callback is not None:
                         logger.debug(f"TaskManager._done_callback: instance '{self.name}': {task_name}: custom `done_callback` exists, calling it now.")
-                        e.done_callback(e)
+                        try:
+                            # NOTE: done_callback runs under lock; a re-entrant TaskManager call from it will deadlock. So please don't do that in your code.
+                            e.done_callback(e)
+                        except Exception:
+                            logger.exception(f"TaskManager._done_callback: instance '{self.name}': {task_name}: custom `done_callback` raised")
                 finally:
-                    self.tasks.pop(task_name)
+                    self.tasks.pop(task_name, None)
 
     def cancel(self, task_name: Symbol, pop: bool = True) -> None:
         """Cancel a specific task, by name.
@@ -371,8 +382,7 @@ def make_managed_task(*,
             # # Used to be VERY IMPORTANT, to not silently swallow uncaught exceptions from background task.
             # # But now `TaskManager._done_callback` does this.
             # except Exception as exc:
-            #     logger.warning(f"_managed_task: {env.task_name}: exited with exception {type(exc)}: {exc}")
-            #     traceback.print_exc()  # DEBUG; `TaskManager._done_callback` now does this.
+            #     logger.warning(f"_managed_task: {env.task_name}: exited with exception", exc_info=True)
             #     raise
             # else:
             #     logger.debug(f"_managed_task: {env.task_name}: exited with status {'OK' if not env.cancelled else 'CANCELLED (from running state)'}")

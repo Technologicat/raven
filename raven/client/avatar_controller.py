@@ -34,7 +34,6 @@ import functools
 import queue
 import threading
 import time
-import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import emoji
@@ -322,9 +321,8 @@ class DPGAvatarController:
                             try:
                                 if config.avatar_renderer is not None:
                                     config.avatar_renderer.pause(action="pause")
-                            except Exception as exc:
-                                logger.error(f"emotion_autoreset_task: instance {task_env.task_name}: during `avatar_renderer.pause`: {type(exc)}: {exc}")
-                                traceback.print_exc()
+                            except Exception:
+                                logger.exception(f"emotion_autoreset_task: instance {task_env.task_name}: caught exception during `avatar_renderer.pause`")
                             config._idle_detector_t0 = time_now  # reset the timeout last, so that the old timestamp is available during `on_idle`.
                 time.sleep(0.1)
         # Save the env and the task handle for possible cancellation.
@@ -709,9 +707,8 @@ class DPGAvatarController:
 
                 try:
                     process_item(input_record)
-                except Exception as exc:
-                    logger.error(f"preprocess_task: instance {task_env.task_name}: during `process_item`: {type(exc)}: {exc}")
-                    traceback.print_exc()
+                except Exception:
+                    logger.exception(f"preprocess_task: instance {task_env.task_name}: caught exception during `process_item`")
         finally:
             logger.info(f"preprocess_task: instance {task_env.task_name}: TTS input preprocessor exiting")
 
@@ -828,8 +825,7 @@ class DPGAvatarController:
 
                 try:
                     process_item(output_record)
-                except Exception as exc:
-                    logger.error(f"speak_task: instance {task_env.task_name}: during `process_item`: {type(exc)}: {exc}")
-                    traceback.print_exc()
+                except Exception:
+                    logger.exception(f"speak_task: instance {task_env.task_name}: caught exception during `process_item`")
         finally:
             logger.info(f"speak_task: instance {task_env.task_name}: TTS playback controller exiting")

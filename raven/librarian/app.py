@@ -35,7 +35,6 @@ with timer() as tim:
     import requests
     import sys
     import time
-    import traceback
     from typing import Tuple, Union
 
     # WORKAROUND: Deleting a texture or image widget causes DPG to segfault on Nvidia/Linux.
@@ -1087,10 +1086,9 @@ def _load_initial_animator_settings() -> None:
         print(colorizer.colorize(f"AI avatar animator default config file not found at '{animator_json_path}'.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Please run `raven-avatar-settings-editor` once to create it.")
         logger.error(f"_load_initial_animator_settings: AI avatar animator default config file not found at '{animator_json_path}'. Please run `raven-avatar-settings-editor` once to create it.")
         sys.exit(255)
-    except BaseException as exc:  # yes, also Ctrl+C
-        print(colorizer.colorize("Failed to load AI avatar animator default config file.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " Details follow.")
-        logger.error(f"_load_initial_animator_settings: Failed, reason {type(exc)}: {exc}")
-        traceback.print_exc()
+    except BaseException:  # yes, also Ctrl+C
+        print(colorizer.colorize("Failed to load AI avatar animator default config file.", colorizer.Style.BRIGHT, colorizer.Fore.RED) + " See the Librarian log for details.")
+        logger.exception("_load_initial_animator_settings: Failed")
         sys.exit(255)
 
     animator_settings.update(librarian_config.avatar_config.animator_settings_overrides)

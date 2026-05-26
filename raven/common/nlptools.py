@@ -98,8 +98,8 @@ def load_spacy_pipeline(model_name: str, device_string: str) -> spacy.Language:
         try:
             spacy.require_gpu(gpu_id=gpu_id)
             logger.info("load_spacy_pipeline: spaCy will run on GPU (if possible).")
-        except Exception as exc:
-            logger.warning(f"load_spacy_pipeline: exception while enabling GPU for spaCy: {type(exc)}: {exc}")
+        except Exception:
+            logger.warning("load_spacy_pipeline: exception while enabling GPU for spaCy", exc_info=True)
             spacy.require_cpu()
             logger.info("load_spacy_pipeline: spaCy will run on CPU.")
             device_string = "cpu"
@@ -317,8 +317,8 @@ def load_classifier(model_name: str, device_string: str, dtype: Union[str, torch
                               top_k=None,
                               device=device,
                               dtype=dtype)
-    except RuntimeError as exc:
-        logger.warning(f"load_classifier: exception while loading classifier (will try again in CPU mode): {type(exc)}: {exc}")
+    except RuntimeError:
+        logger.warning("load_classifier: exception while loading classifier (will try again in CPU mode)", exc_info=True)
         try:
             device_string = "cpu"
             dtype = "float32"
@@ -328,8 +328,8 @@ def load_classifier(model_name: str, device_string: str, dtype: Union[str, torch
                                   top_k=None,
                                   device=device,
                                   dtype=dtype)
-        except RuntimeError as exc:
-            logger.warning(f"load_classifier: failed to load classifier: {type(exc)}: {exc}")
+        except RuntimeError:
+            logger.warning("load_classifier: failed to load classifier", exc_info=True)
             raise
     logger.info(f"load_classifier: Loaded model '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
     _classifiers[cache_key] = classifier
@@ -396,15 +396,15 @@ def load_dehyphenator(model_name: str, device_string: str) -> dehyphen.FlairScor
             #   https://github.com/flairNLP/flair/issues/464
             flair.device = device_string  # TODO, FIXME, UGH!
             scorer = dehyphen.FlairScorer(lang=model_name)
-        except RuntimeError as exc:
-            logger.warning(f"load_dehyphenator: exception while loading dehyphenator (will try again in CPU mode): {type(exc)}: {exc}")
+        except RuntimeError:
+            logger.warning("load_dehyphenator: exception while loading dehyphenator (will try again in CPU mode)", exc_info=True)
             try:
                 device_string = "cpu"
                 cache_key = (model_name, device_string)
                 flair.device = device_string  # TODO, FIXME, UGH!
                 scorer = dehyphen.FlairScorer(lang=model_name)
-            except Exception as exc:
-                logger.warning(f"load_dehyphenator: failed to load dehyphenator: {type(exc)}: {exc}")
+            except Exception:
+                logger.warning("load_dehyphenator: failed to load dehyphenator", exc_info=True)
                 raise
     logger.info(f"load_dehyphenator: Loaded model '{model_name}' on device '{device_string}'.")
     _dehyphenators[cache_key] = scorer
@@ -551,8 +551,8 @@ def load_embedder(model_name: str, device_string: str, dtype: Union[str, torch.d
         embedder = SentenceTransformer(model_name,
                                        device=device_string,
                                        model_kwargs={"dtype": dtype})
-    except RuntimeError as exc:
-        logger.warning(f"load_embedder: exception while loading SentenceTransformer (will try again in CPU mode): {type(exc)}: {exc}")
+    except RuntimeError:
+        logger.warning("load_embedder: exception while loading SentenceTransformer (will try again in CPU mode)", exc_info=True)
         try:
             device_string = "cpu"
             dtype = "float32"  # probably (we need a cache key, so let's use this)
@@ -560,8 +560,8 @@ def load_embedder(model_name: str, device_string: str, dtype: Union[str, torch.d
             embedder = SentenceTransformer(model_name,
                                            device=device_string,
                                            model_kwargs={"dtype": dtype})
-        except RuntimeError as exc:
-            logger.warning(f"load_embedder: failed to load SentenceTransformer: {type(exc)}: {exc}")
+        except RuntimeError:
+            logger.warning("load_embedder: failed to load SentenceTransformer", exc_info=True)
             raise
     logger.info(f"load_embedder: Loaded model '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")
     _embedders[cache_key] = embedder
@@ -648,8 +648,8 @@ def load_translator(model_name: str, device_string: str, dtype: Union[str, torch
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name,
                                                       dtype=dtype).to(device)
         translator = _Translator(model, tokenizer, device)
-    except RuntimeError as exc:
-        logger.warning(f"load_translator: exception while loading translator (will try again in CPU mode): {type(exc)}: {exc}")
+    except RuntimeError:
+        logger.warning("load_translator: exception while loading translator (will try again in CPU mode)", exc_info=True)
         try:
             device_string = "cpu"
             dtype = "float32"
@@ -659,8 +659,8 @@ def load_translator(model_name: str, device_string: str, dtype: Union[str, torch
             model = AutoModelForSeq2SeqLM.from_pretrained(model_name,
                                                           torch_dtype=dtype).to(device)
             translator = _Translator(model, tokenizer, device)
-        except RuntimeError as exc:
-            logger.warning(f"load_translator: failed to load translator: {type(exc)}: {exc}")
+        except RuntimeError:
+            logger.warning("load_translator: failed to load translator", exc_info=True)
             raise
     logger.info(f"load_translator: model '{model_name}' context window is {translator.tokenizer.model_max_length} tokens.")
     logger.info(f"load_translator: Loaded model '{model_name}' (with dtype '{str(dtype)}') on device '{device_string}'.")

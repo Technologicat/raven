@@ -29,7 +29,6 @@ import shutil
 import subprocess
 import sys
 from textwrap import dedent
-import traceback
 from typing import Dict, List
 
 from unpythonic import sym, timer, ETAEstimator, maybe_open, uniqify
@@ -922,8 +921,7 @@ def process_abstracts(paths: List[str], opts: argparse.Namespace) -> None:
                             completed = subprocess.run(cmd, check=True,
                                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                         except subprocess.CalledProcessError as err:
-                            logger.error(f"When processing {fullpath}: subprocess returned non-zero exit status")
-                            traceback.print_exc()
+                            logger.exception("When processing {fullpath}: subprocess returned non-zero exit status. Stderr dump below, after the exception trace.")
                             logger.error(err.stderr.decode("utf-8"))
                             raise
 
