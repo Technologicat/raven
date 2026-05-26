@@ -310,7 +310,7 @@ class HybridIR:
             self._keyword_retriever = bm25s.BM25.load(str(self.keyword_index_path),
                                                       load_corpus=True)
             self._build_full_id_to_record_index()
-        except Exception as exc:  # keyword index missing
+        except Exception:  # keyword index missing
             logger.warning(f"HybridIR.__init__: Caught exception while loading keyword index from '{str(self.keyword_index_path)}'", exc_info=True)
             logger.info(f"HybridIR.__init__: Keyword index not found. Will create keyword index at '{str(self.keyword_index_path)}'.")
 
