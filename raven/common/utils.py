@@ -198,10 +198,10 @@ _latex_ligatures = {
     r"\aa": "å", r"\AA": "Å",
     r"\ae": "æ", r"\AE": "Æ",
     r"\oe": "œ", r"\OE": "Œ",
-    r"\o":  "ø", r"\O":  "Ø",
-    r"\l":  "ł", r"\L":  "Ł",
+    r"\o": "ø", r"\O": "Ø",
+    r"\l": "ł", r"\L": "Ł",
     r"\ss": "ß",
-    r"\i":  "ı", r"\j":  "ȷ",
+    r"\i": "ı", r"\j": "ȷ",
 }
 
 def _apply_latex_accent(match_obj):
