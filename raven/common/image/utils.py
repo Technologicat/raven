@@ -46,7 +46,8 @@ def ensure_rgba(image: np.ndarray) -> np.ndarray:
     if image.ndim != 3 or image.shape[2] not in (3, 4):
         raise ValueError(f"ensure_rgba: expected shape (h, w, 3|4), got {image.shape}")
     if image.shape[2] == 4:
-        return image
+        # This makes all code paths always return a writable array.
+        return image if image.flags.writeable else image.copy()
     # Append an opaque alpha channel in the input's own dtype range.
     if np.issubdtype(image.dtype, np.integer):
         alpha_value = np.iinfo(image.dtype).max
@@ -70,10 +71,17 @@ def np_to_tensor(arr: np.ndarray,
     when False.  Combines dtype conversion and device transfer in one
     ``.to()`` call to minimize intermediate copies.
     """
+    if arr.dtype != np.uint8:
+        raise ValueError(f"np_to_tensor: expected uint8 array, got an array with dtype {arr.dtype}")
     t = torch.from_numpy(arr).permute(2, 0, 1)
     if batch:
         t = t.unsqueeze(0)
-    return t.to(dtype=dtype, device=device) / 255.0
+    # Normalize in float32 — universally supported across CPU/CUDA/MPS, and
+    # avoids float16-on-CPU op gaps and float64-on-MPS (MPS has no float64).
+    # Cast to the requested dtype last, after all arithmetic, so nothing runs
+    # in a dtype the target device can't execute.
+    t = t.to(device=device, dtype=torch.float32)
+    return (t / 255.0).to(dtype)
 
 
 def tensor_to_np(tensor: torch.Tensor) -> np.ndarray:
@@ -88,10 +96,10 @@ def tensor_to_np(tensor: torch.Tensor) -> np.ndarray:
     return (tensor
             .clamp(0.0, 1.0)
             .permute(1, 2, 0)
-            .cpu()
             .mul(255.0)
             .round()
             .to(torch.uint8)
+            .cpu()           # transfer uint8, not float32 — 4x less PCIe/unified traffic
             .numpy())
 
 

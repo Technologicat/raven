@@ -258,9 +258,8 @@ def _preprocess_poser_image(image: np.array) -> np.array:
     """
     h, w, c = image.shape
     if c == 4:  # alpha channel present?
-        # search for transparent pixels(alpha==0) and change them to [0 0 0 0] to avoid the color influence to the model
-        mask = np.where(image[:, :, 3] == 0, 0, 1)
-        mask = np.expand_dims(mask, 2)  # unsqueeze
+        # zero fully-transparent pixels to avoid their RGB value from influencing the poser model; bool mask keeps float32 dtype.
+        mask = (image[:, :, 3:4] != 0)
         image = image * mask
     else:
         image = image.copy()
