@@ -1224,10 +1224,10 @@ class PostprocessorSettingsEditorGUI:
         track the sliders in real time even while the server push is still debounced.
         """
         bbox = {"enabled": dpg.get_value("crop_enabled_checkbox"),
-                "left":    dpg.get_value("crop_left_slider"),
-                "top":     dpg.get_value("crop_top_slider"),
-                "right":   dpg.get_value("crop_right_slider"),
-                "bottom":  dpg.get_value("crop_bottom_slider")}
+                "left": dpg.get_value("crop_left_slider"),
+                "top": dpg.get_value("crop_top_slider"),
+                "right": dpg.get_value("crop_right_slider"),
+                "bottom": dpg.get_value("crop_bottom_slider")}
         self.dpg_avatar_renderer.set_overlay_bbox_preview(bbox)
         if debounce_server_push:
             self.crop_push_task_manager.submit(self.crop_push_task, env(wait=True))
@@ -1263,10 +1263,10 @@ class PostprocessorSettingsEditorGUI:
                                         "upscale_quality": self.upscale_quality,
                                         "animefx_enabled": dpg.get_value("animefx_checkbox"),
                                         "crop": {"enabled": dpg.get_value("crop_enabled_checkbox"),
-                                                 "left":    dpg.get_value("crop_left_slider"),
-                                                 "top":     dpg.get_value("crop_top_slider"),
-                                                 "right":   dpg.get_value("crop_right_slider"),
-                                                 "bottom":  dpg.get_value("crop_bottom_slider")}}
+                                                 "left": dpg.get_value("crop_left_slider"),
+                                                 "top": dpg.get_value("crop_top_slider"),
+                                                 "right": dpg.get_value("crop_right_slider"),
+                                                 "bottom": dpg.get_value("crop_bottom_slider")}}
             self.animator_settings.update(custom_animator_settings)
 
             # Send to server
@@ -1312,9 +1312,9 @@ class PostprocessorSettingsEditorGUI:
             # The `Show` overlay toggle is a UI preference, not saved, so it's not touched here.
             crop = animator_settings.get("crop", {"enabled": False, "left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0})
             dpg.set_value("crop_enabled_checkbox", crop["enabled"])
-            dpg.set_value("crop_left_slider",   crop["left"])
-            dpg.set_value("crop_top_slider",    crop["top"])
-            dpg.set_value("crop_right_slider",  crop["right"])
+            dpg.set_value("crop_left_slider", crop["left"])
+            dpg.set_value("crop_top_slider", crop["top"])
+            dpg.set_value("crop_right_slider", crop["right"])
             dpg.set_value("crop_bottom_slider", crop["bottom"])
 
             backdrop_path = animator_settings.get("backdrop_path", None)  # Default to no backdrop image if the file doesn't have this key.
@@ -1335,10 +1335,10 @@ class PostprocessorSettingsEditorGUI:
                                         "upscale_quality": self.upscale_quality,
                                         "animefx_enabled": dpg.get_value("animefx_checkbox"),
                                         "crop": {"enabled": dpg.get_value("crop_enabled_checkbox"),
-                                                 "left":    dpg.get_value("crop_left_slider"),
-                                                 "top":     dpg.get_value("crop_top_slider"),
-                                                 "right":   dpg.get_value("crop_right_slider"),
-                                                 "bottom":  dpg.get_value("crop_bottom_slider")},
+                                                 "left": dpg.get_value("crop_left_slider"),
+                                                 "top": dpg.get_value("crop_top_slider"),
+                                                 "right": dpg.get_value("crop_right_slider"),
+                                                 "bottom": dpg.get_value("crop_bottom_slider")},
                                         "backdrop_path": backdrop_path,
                                         "backdrop_blur": dpg.get_value("backdrop_blur_checkbox")}
             animator_settings.update(custom_animator_settings)
