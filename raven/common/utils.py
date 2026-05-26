@@ -1,7 +1,7 @@
 """Miscellaneous general utilities."""
 
 __all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_cache_mtime", "create_directory",
-           "make_blank_index_array",
+           "make_blank_index_array", "bail",
            "format_bibtex_author", "format_bibtex_authors",
            "normalize_whitespace", "normalize_unicode",
            "unicodize_basic_markup",
@@ -11,12 +11,14 @@ __all__ = ["absolutize_filename", "strip_ext", "make_cache_filename", "validate_
 import logging
 logger = logging.getLogger(__name__)
 
+import atexit
 import functools
 import io
 import os
 import pathlib
 import re
-from typing import Callable, Dict, List, Optional, Union
+import sys
+from typing import Callable, Dict, List, NoReturn, Optional, Union
 import unicodedata
 
 import numpy as np
@@ -89,6 +91,21 @@ def create_directory(path: Union[str, pathlib.Path]) -> None:
 def make_blank_index_array() -> np.array:
     """Make a blank array of the same type as that used for slicing an array in NumPy."""
     return np.array([], dtype=np.int64)
+
+def bail(exitcode: int = 0) -> NoReturn:
+    """Terminate the calling process immediately, skipping interpreter finalization.
+
+    Runs registered `atexit` handlers explicitly (Librarian chat persistence,
+    `logging.shutdown`, ...), then hard-exits via `os._exit`.
+
+    This sidesteps C-extension teardown, which SIGBUSes on macOS during DearPyGui's
+    static destructor / dlclose phase — the SIGBUS otherwise triggers the macOS crash
+    reporter dialog.
+    """
+    atexit._run_exitfuncs()   # honor the atexit contract before bailing
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(exitcode)
 
 # --------------------------------------------------------------------------------
 # BibTeX utilities
