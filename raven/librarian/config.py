@@ -164,6 +164,8 @@ gui_config = env(  # ----------------------------------------
 avatar_config = env(source_image_size=512,  # THA3 engine hardcoded input image size (512x512); this and "upscale" below are used for determining the pixel-perfect texture size for the client.
                     image_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "characters", "other", "aria1.png")).expanduser().resolve(),
                     voice="af_nova",  # See `raven-avatar-settings-editor`.
+                    # image_path=pathlib.Path(os.path.join(os.path.dirname(__file__), "..", "avatar", "assets", "characters", "scientists", "jj1.png")).expanduser().resolve(),
+                    # voice="am_echo",
                     voice_speed=1.0,  # Nominal = 1.0. Too high causes skipped words. If you want to change it, find a good value with `raven-avatar-settings-editor`.
                     video_offset=-0.8,  # TTS AV sync setting, seconds. Positive = shift video later w.r.t. audio. Find a good value for your system with `raven-avatar-settings-editor`.
                     emotion_blacklist=["desire", "love"],  # TODO: debug why Qwen3 2507 goes into "desire" while writing thoughts about history of AI. Jury-rigging this for SFW live demo now.
@@ -234,6 +236,7 @@ llm_send_toolcall_instructions = False  # for QwQ-32B, Qwen3, ...
 #
 llm_user_name = "User"
 llm_char_name = "Aria"
+# llm_char_name = "Juha"  # DT researcher
 
 # The AI's initial greeting. Used when a new chat is started.
 llm_greeting = "How can I help you today?"
@@ -278,6 +281,7 @@ def setup_system_prompt(template_vars: env) -> str:
 #
 def setup_character_card(template_vars: env) -> str:
     return setup_character_card_aria(template_vars)
+    # return setup_character_card_juha(template_vars)
 
 # You can have several characters pre-defined here.
 # Choose by calling the relevant function in `setup_character_card`, as shown in the example.
@@ -291,6 +295,21 @@ def setup_character_card_aria(template_vars: env) -> str:
     **About {char}**
 
     You are {char} (she/her), an AI assistant. You are highly intelligent. You have been trained to answer questions, provide recommendations, and help with decision making.
+
+    {setup_interaction_style(template_vars)}
+    """).strip()
+
+def setup_character_card_juha(template_vars: env) -> str:
+    user = template_vars.user
+    char = template_vars.char
+    return textwrap.dedent(f"""
+    Note that {user} cannot see this introductory text; it is only used internally, to initialize the LLM (large language model).
+
+    **About {char}**
+
+    You are {char} (he/him), an AI-based digital twin of the real {char}, a researcher. You are highly intelligent. You have been trained to answer questions, provide recommendations, and help with decision making.
+
+    You work at JAMK University of Applied Sciences in Jyväskylä, Finland; specifically, at the Institute of New Industry. The institute studies, for example, digital twins, green hydrogen, and atomic layer deposition.
 
     {setup_interaction_style(template_vars)}
     """).strip()
