@@ -1812,6 +1812,9 @@ def update_animations():
     #         dpg.disable_item(gui_instance.voice_choice)
     #         dpg.disable_item("speak_button")
 
+logger.info("App render loop starting.")
+
+exitcode = 0
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
     # Also, the crop overlay lives in a `front=True` viewport drawlist that DPG renders above all
@@ -1832,10 +1835,19 @@ try:
         if not _is_busy():
             time.sleep(IDLE_SLEEP_S)
     # dpg.start_dearpygui()  # automatic render loop
+except Exception:
+    exitcode = 1
+    logger.exception("Unhandled exception in render loop")
 except KeyboardInterrupt:
     pass  # cleanup will be handled by our DPG exit handler
+finally:
+    logger.info("App render loop exited.")
 
-dpg.destroy_context()
+    try:
+        dpg.destroy_context()
+    except BaseException:
+        logger.exception("dpg.destroy_context() failed")
+    common_utils.bail(exitcode)
 
 def main():  # TODO: we don't really need this; it's just for console_scripts.
     pass

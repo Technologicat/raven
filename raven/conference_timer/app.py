@@ -52,6 +52,7 @@ with timer() as tim:
 
     from unpythonic.env import env
 
+    from ..common import utils as common_utils
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
     from ..common.gui import utils as guiutils
@@ -391,6 +392,8 @@ def main() -> int:
     )
 
     # --- Render loop ---
+    logger.info("App render loop starting.")
+    exitcode = 0
     try:
         while dpg.is_dearpygui_running():
             if start_time is None or paused:
@@ -420,13 +423,21 @@ def main() -> int:
 
             gui_animation.animator.render_frame()
             dpg.render_dearpygui_frame()
+    except Exception:
+        exitcode = 1
+        logger.exception("Unhandled exception in render loop")
     except KeyboardInterrupt:
         pass
+    finally:
+        logger.info("App render loop exited.")
 
-    gui_animation.animator.clear()
-    dpg.destroy_context()
-    return 0
+        gui_animation.animator.clear()
 
+        try:
+            dpg.destroy_context()
+        except BaseException:
+            logger.exception("dpg.destroy_context() failed")
+        common_utils.bail(exitcode)
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

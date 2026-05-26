@@ -45,7 +45,6 @@ with timer() as tim:
     import pathlib
     import platform
     import subprocess
-    import sys
     import time
     import webbrowser
 
@@ -822,6 +821,8 @@ def main() -> int:
     dpg.set_frame_callback(10, _initial_startup)
 
     # --- Render loop ---
+    logger.info("App render loop starting.")
+    exitcode = 0
     last_check = time.monotonic()
     def _poll_reload():
         nonlocal last_check
@@ -838,12 +839,19 @@ def main() -> int:
             # Idle throttle: sleep when nothing needs updating.
             if not _is_busy():
                 time.sleep(config.IDLE_SLEEP_S)
+    except Exception:
+        exitcode = 1
+        logger.exception("Unhandled exception in render loop")
     except KeyboardInterrupt:
         pass
+    finally:
+        logger.info("App render loop exited.")
 
-    dpg.destroy_context()
-    return 0
-
+        try:
+            dpg.destroy_context()
+        except BaseException:
+            logger.exception("dpg.destroy_context() failed")
+        common_utils.bail(exitcode)
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

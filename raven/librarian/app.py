@@ -61,6 +61,7 @@ with timer() as tim:
     from ..common.audio import player as audio_player
     from ..common.audio import recorder as audio_recorder
     from ..common import bgtask
+    from ..common import utils as common_utils
 
     from ..common.gui import animation as gui_animation
     from ..common.gui import helpcard
@@ -1111,6 +1112,7 @@ dpg.set_frame_callback(3, _build_initial_chat_view)
 
 logger.info("App render loop starting.")
 
+exitcode = 0
 try:
     # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
     while dpg.is_dearpygui_running():
@@ -1123,10 +1125,17 @@ try:
     # dpg.start_dearpygui()  # automatic render loop
 except KeyboardInterrupt:
     pass  # cleanup will be handled by our DPG exit handler
+except Exception:
+    exitcode = 1
+    logger.exception("Unhandled exception in render loop")
+finally:
+    logger.info("App render loop exited.")
 
-logger.info("App render loop exited.")
-
-dpg.destroy_context()
+    try:
+        dpg.destroy_context()
+    except BaseException:
+        logger.exception("dpg.destroy_context() failed")
+    common_utils.bail(exitcode)
 
 def main() -> None:  # TODO: we don't really need this; it's just for console_scripts.
     pass

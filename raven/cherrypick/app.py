@@ -62,6 +62,7 @@ from ..common import deviceinfo
 from ..common.gui import utils as guiutils
 from ..common.gui import helpcard
 from ..common.gui import animation as gui_animation
+from ..common import utils as common_utils
 from ..vendor.file_dialog.fdialog import FileDialog
 from ..vendor.IconsFontAwesome6 import IconsFontAwesome6 as fa
 from ..vendor.tha3.util import torch_linear_to_srgb
@@ -1510,6 +1511,8 @@ def main() -> int:
     dpg.set_frame_callback(10, _initial_resize)
 
     # --- Render loop ---
+    logger.info("App render loop starting.")
+    exitcode = 0
     try:
         while dpg.is_dearpygui_running():
             # Poll thumbnail pipeline.
@@ -1572,16 +1575,24 @@ def main() -> int:
             # Cuts GPU/CPU usage when the user is just looking at an image.
             if not _is_busy():
                 time.sleep(config.IDLE_SLEEP_S)
+    except Exception:
+        exitcode = 1
+        logger.exception("Unhandled exception in render loop")
     except KeyboardInterrupt:
         pass
+    finally:
+        logger.info("App render loop exited.")
 
-    # The exit callback cancelled tasks without waiting.  The last
-    # render_dearpygui_frame() unblocked any split_frame() waiters.
-    # Now it's safe to wait for threads and clean up.
-    _gui_shutdown()
-    dpg.destroy_context()
-    return 0
+        # The exit callback cancelled tasks without waiting.  The last
+        # render_dearpygui_frame() unblocked any split_frame() waiters.
+        # Now it's safe to wait for threads and clean up.
+        _gui_shutdown()
 
+        try:
+            dpg.destroy_context()
+        except BaseException:
+            logger.exception("dpg.destroy_context() failed")
+        common_utils.bail(exitcode)
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

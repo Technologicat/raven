@@ -97,6 +97,7 @@ with timer() as tim:
     from ...vendor.tha3.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
     from ...vendor.tha3.util import torch_linear_to_srgb
 
+    from ...common import utils as common_utils
     from ...common.gui import animation as gui_animation  # Raven's GUI animation system, nothing to do with the AI avatar.
     from ...common.gui import fontsetup
     from ...common.gui import helpcard
@@ -1523,17 +1524,31 @@ dpg.set_frame_callback(10, tune_viewport)
 def update_animations():
     gui_animation.animator.render_frame()  # Our customized fdialog needs this for its overwrite confirm button flash.
 
-# We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
-while dpg.is_dearpygui_running():
-    update_animations()
-    dpg.render_dearpygui_frame()
+logger.info("App render loop starting.")
+exitcode = 0
+try:
+    # We control the render loop manually to have a convenient place to update our GUI animations just before rendering each frame.
+    while dpg.is_dearpygui_running():
+        update_animations()
+        dpg.render_dearpygui_frame()
 
-    # Idle throttle: sleep when nothing needs updating.
-    if not _is_busy():
-        time.sleep(IDLE_SLEEP_S)
-# dpg.start_dearpygui()  # automatic render loop
+        # Idle throttle: sleep when nothing needs updating.
+        if not _is_busy():
+            time.sleep(IDLE_SLEEP_S)
+    # dpg.start_dearpygui()  # automatic render loop
+except Exception:
+    exitcode = 1
+    logger.exception("Unhandled exception in render loop")
+except KeyboardInterrupt:
+    pass
+finally:
+    logger.info("App render loop exited.")
 
-dpg.destroy_context()
+    try:
+        dpg.destroy_context()
+    except BaseException:
+        logger.exception("dpg.destroy_context() failed")
+    common_utils.bail(exitcode)
 
 def main():  # TODO: we don't really need this; it's just for console_scripts so that we can provide a command-line entrypoint.
     pass
