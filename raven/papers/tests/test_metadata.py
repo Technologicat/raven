@@ -78,6 +78,7 @@ def _mock_response(content: bytes) -> MagicMock:
     """Create a mock requests.Response with the given XML content."""
     resp = MagicMock()
     resp.content = content
+    resp.status_code = 200
     resp.raise_for_status = MagicMock()
     return resp
 
@@ -86,7 +87,7 @@ class TestGetPaperMetadata:
     """Verify metadata extraction from arXiv API XML responses."""
 
     def _fetch(self, arxiv_id: str, content: bytes, **kwargs) -> dict:
-        with patch("raven.papers.download.requests.get", return_value=_mock_response(content)):
+        with patch("raven.papers.httpfetch.requests.get", return_value=_mock_response(content)):
             return get_paper_metadata(arxiv_id, **kwargs)
 
     # -- Basic field extraction --

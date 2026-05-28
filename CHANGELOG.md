@@ -29,6 +29,8 @@
 
 - *Raven-visualizer* importer: BibTeX case-preservation grouping braces (`{Word}`, `{ACRONYM}`, `{{nested}}`) are now stripped from titles and abstracts, and common LaTeX diacritics (`\"o` → ö, `\'e` → é, `\c{c}` → ç, `\ae`, `\o`, …) are rendered as Unicode. Escaped literal braces (`\{`, `\}`) are preserved.
 
+- *Raven-arxiv-download* / *raven-arxiv-search*: HTTP 429 responses from the arXiv API no longer abort the run. Both tools now retry up to three attempts with backoff (honoring `Retry-After` when set, else exponential 3/6 s) and send an identifying `User-Agent` per arXiv's API TOU. Triggered occasionally on cache-miss bursts even when the caller is within the published 3 s rate limit; `raven-arxiv-download` also now goes straight to HTTPS instead of getting redirected from HTTP.
+
 - `dpg_markdown` bullet lists and blockquotes now render correctly inside tooltips (and any other initially-hidden container). Previously every bullet glyph in a tooltip stacked at the top-left, because DPG reports `get_item_pos() == (0, 0)` for children of a hidden container; the bullet drawlists are now deferred until their row has been laid out.
 
 - `deviceinfo.validate`: `device_name` label now reflects the actual running backend. Previously a working MPS / XPU / Vulkan setup was logged as `'CPU'` in the startup "Compute device for ..." line because the labeling block was tied to a CUDA-prefix check it shouldn't have been. Cosmetic — the actual compute device was always correct.

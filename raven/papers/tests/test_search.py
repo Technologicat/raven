@@ -155,9 +155,9 @@ class TestSearchFunction:
     """Exercise ``search()`` against a canned ``requests.get``."""
 
     def _patch(self, pages, rate_limiter=None):
-        """Context manager: patch ``requests.get`` to return *pages* sequentially.
+        """Context manager: patch ``httpfetch.arxiv_get`` to return *pages* sequentially.
 
-        Each call to ``requests.get`` pops the next item from *pages*.  Also
+        Each call to ``arxiv_get`` pops the next item from *pages*.  Also
         bypasses the arXiv rate limit by default so tests stay fast.
         """
         if rate_limiter is None:
@@ -165,7 +165,7 @@ class TestSearchFunction:
         responses = iter(pages)
         return patch.multiple(
             search_module,
-            requests=_FakeRequests(lambda: next(responses)),
+            httpfetch=_FakeHttpfetch(lambda: next(responses)),
             RateLimiter=rate_limiter,
         )
 
@@ -217,21 +217,21 @@ class TestSearchFunction:
 
         with patch.multiple(
             search_module,
-            requests=_FakeRequests(None, get_fn=capture),
+            httpfetch=_FakeHttpfetch(None, get_fn=capture),
             RateLimiter=_no_wait_rate_limiter,
         ):
             search("foo", max_results=1)
         assert captured["max_results"] == 1
 
 
-class _FakeRequests:
-    """Stand-in for the ``requests`` module inside ``search.py``."""
+class _FakeHttpfetch:
+    """Stand-in for the ``httpfetch`` module inside ``search.py``."""
 
     def __init__(self, response_fn, get_fn=None):
         self._response_fn = response_fn
         self._get_fn = get_fn
 
-    def get(self, url, params, timeout):
+    def arxiv_get(self, url, params, timeout):
         if self._get_fn is not None:
             return self._get_fn(url, params, timeout)
         return self._response_fn()

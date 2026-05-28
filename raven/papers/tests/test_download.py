@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from raven.papers import download as download_module
+from raven.papers import httpfetch as httpfetch_module
 from raven.papers.download import (
     download_papers,
     extract_ids_from_bib,
@@ -311,11 +312,12 @@ class TestParseMetadataResponse:
 class _FakeResponse:
     def __init__(self, content, status=200):
         self.content = content
-        self._status = status
+        self.status_code = status
+        self.headers: dict = {}
 
     def raise_for_status(self):
-        if self._status >= 400:
-            raise RuntimeError(f"HTTP {self._status}")
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
 
 
 class TestGetPaperMetadata:
@@ -323,14 +325,14 @@ class TestGetPaperMetadata:
 
     def test_happy_path(self):
         xml = _atom_response()
-        with patch.object(download_module.requests, "get", return_value=_FakeResponse(xml)) as mock_get:
+        with patch.object(httpfetch_module.requests, "get", return_value=_FakeResponse(xml)) as mock_get:
             md = get_paper_metadata("2301.12345")
         assert md["title"] == "A Study of Widgets"
         # Built the expected API URL
         assert "id_list=2301.12345" in mock_get.call_args[0][0]
 
     def test_http_error_propagates(self):
-        with patch.object(download_module.requests, "get", return_value=_FakeResponse(b"", status=500)):
+        with patch.object(httpfetch_module.requests, "get", return_value=_FakeResponse(b"", status=500)):
             with pytest.raises(RuntimeError, match="HTTP 500"):
                 get_paper_metadata("2301.12345")
 
@@ -371,7 +373,7 @@ class TestDownloadPapers:
     def test_downloads_single_paper(self, tmp_path):
         xml = _atom_response()
         with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
-             patch.object(download_module.requests, "get",
+             patch.object(httpfetch_module.requests, "get",
                           side_effect=_mock_requests_get({"2301.12345": xml})):
             download_papers(["2301.12345"], output_dir=str(tmp_path))
         pdfs = list(tmp_path.glob("*.pdf"))
@@ -386,7 +388,7 @@ class TestDownloadPapers:
         existing.write_bytes(b"old content, do not overwrite")
         xml = _atom_response()
         with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
-             patch.object(download_module.requests, "get",
+             patch.object(httpfetch_module.requests, "get",
                           side_effect=_mock_requests_get({"2301.12345": xml})):
             download_papers(["2301.12345"], output_dir=str(tmp_path))
         # Still only one PDF, still original content
@@ -398,7 +400,7 @@ class TestDownloadPapers:
         """When the Atom entry has no PDF link, no file is created."""
         xml = _atom_response(include_pdf_link=False)
         with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
-             patch.object(download_module.requests, "get",
+             patch.object(httpfetch_module.requests, "get",
                           side_effect=_mock_requests_get({"2301.12345": xml})):
             download_papers(["2301.12345"], output_dir=str(tmp_path))
         assert list(tmp_path.glob("*.pdf")) == []
@@ -413,7 +415,7 @@ class TestDownloadPapers:
             return _mock_requests_get({"2301.12345": xml})(url, *a, **kw)
 
         with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
-             patch.object(download_module.requests, "get", side_effect=tracking_get):
+             patch.object(httpfetch_module.requests, "get", side_effect=tracking_get):
             download_papers(["2301.12345", "2301.12345"], output_dir=str(tmp_path))
         pdf_calls = [u for u in calls if "/pdf/" in u]
         assert len(pdf_calls) == 1  # PDF fetched once, even though ID repeated
@@ -428,7 +430,7 @@ class TestDownloadPapers:
             return _mock_requests_get({"2301.00002": xml_good})(url, *a, **kw)
 
         with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
-             patch.object(download_module.requests, "get", side_effect=flaky_get):
+             patch.object(httpfetch_module.requests, "get", side_effect=flaky_get):
             download_papers(["2301.00001", "2301.00002"], output_dir=str(tmp_path))
         # The good one still lands
         pdfs = list(tmp_path.glob("*.pdf"))
@@ -441,7 +443,7 @@ class TestDownloadPapers:
         assert not out.exists()
         xml = _atom_response()
         with patch.object(download_module, "RateLimiter", _NoWaitRateLimiter), \
-             patch.object(download_module.requests, "get",
+             patch.object(httpfetch_module.requests, "get",
                           side_effect=_mock_requests_get({"2301.12345": xml})):
             download_papers(["2301.12345"], output_dir=str(out))
         assert out.is_dir()

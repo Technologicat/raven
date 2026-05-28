@@ -22,9 +22,9 @@ import sys
 from pathlib import Path
 
 import feedparser
-import requests
 
 from .. import __version__
+from . import httpfetch
 from .bibtex import entries_to_bibtex
 from .query import node_to_query, parse_query
 from .ratelimit import RateLimiter
@@ -106,7 +106,7 @@ def search(query: str, max_results: int | None = None) -> list[dict]:
         }
 
         rate_limiter.wait()
-        resp = requests.get(ARXIV_API_URL, params=params, timeout=30)
+        resp = httpfetch.arxiv_get(ARXIV_API_URL, params=params, timeout=30)
         resp.raise_for_status()
 
         feed = feedparser.parse(resp.text)

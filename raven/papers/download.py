@@ -24,7 +24,6 @@ import os
 import pathlib
 import sys
 
-import requests
 import traceback
 from typing import Dict, List
 import xml.etree.ElementTree as ET
@@ -35,6 +34,7 @@ from mcpyrate import colorizer
 
 from .. import __version__
 from ..common import stringmaps
+from . import httpfetch
 from . import identifiers
 from .ratelimit import RateLimiter
 from .utils import deduplicate_arxiv_ids
@@ -154,8 +154,8 @@ def parse_metadata_response(xml_content: bytes,
 def get_paper_metadata(arxiv_id: str,
                        title_length_limit: int = 128) -> Dict[str, str]:
     """Fetch and parse metadata from arXiv API, including PDF link."""
-    api_url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
-    response = requests.get(api_url)
+    api_url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
+    response = httpfetch.arxiv_get(api_url)
     response.raise_for_status()
     return parse_metadata_response(response.content, arxiv_id, title_length_limit)
 
@@ -210,7 +210,7 @@ def download_papers(arxiv_ids: List[str],
                         if pdf_url is not None:
                             print(f"{colorizer.colorize(GLOBE, colorizer.Style.BRIGHT, colorizer.Fore.BLUE)} {arxiv_id}{resolved_id_str}: downloading PDF")
                             rate_limiter.wait()
-                            pdf_response = requests.get(pdf_url)
+                            pdf_response = httpfetch.arxiv_get(pdf_url)
                             pdf_response.raise_for_status()
                             with open(save_path, "wb") as f:
                                 f.write(pdf_response.content)
