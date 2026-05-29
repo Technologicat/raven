@@ -616,7 +616,7 @@ class DPGChatMessage:
             dpg.bind_item_font(f"message_reroll_button_{self.gui_uuid}", self.parent_view.themes_and_fonts.icon_font_solid)  # tag
             dpg.bind_item_theme(f"message_reroll_button_{self.gui_uuid}", "disablable_widget_theme")  # tag
             reroll_tooltip = dpg.add_tooltip(f"message_reroll_button_{self.gui_uuid}")  # tag
-            dpg.add_text("Reroll AI response (create new sibling) [Ctrl+R]", parent=reroll_tooltip)
+            dpg.add_text("Reroll on a new branch [Ctrl+R]", parent=reroll_tooltip)
         else:
             dpg.add_spacer(width=gui_config.toolbutton_w, height=1, parent=g)
 
