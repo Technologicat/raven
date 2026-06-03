@@ -154,6 +154,10 @@ class TestFormatFetchedResult:
 
 class TestExtractTitle:
     def test_extracts_and_normalizes_title(self):
+        # `_extract_title` lazily imports trafilatura (a heavy dep present in the full install but not in
+        # the CI coverage job's dep subset). The colorama importorskip at module top doesn't cover it
+        # (trafilatura is imported lazily inside the function, not at module load), so guard here.
+        pytest.importorskip("trafilatura", reason="webfetch._extract_title lazily imports trafilatura")
         html = "<html><head><title>My Title | Some Site</title></head><body><h1>My Title</h1><p>" + ("word " * 60) + "</p></body></html>"
         assert webfetch._extract_title(html) == "My Title"  # trafilatura strips the site suffix
 
